@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+
+      - name: Build tarball
+        run: |
+          mkdir -p dist/hestiare-${VERSION}
+          rsync -a --exclude='.git' --exclude='dist' --exclude='.github' \
+            . dist/hestiare-${VERSION}/
+          tar -czf dist/hestiare-${VERSION}.tar.gz -C dist hestiare-${VERSION}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/hestiare-${{ env.VERSION }}.tar.gz
+          generate_release_notes: false
+          body: |
+            HestiaRE ${{ env.VERSION }}
+            
+            Install:
+              curl -fsSL https://hestiare.com/install.sh | bash
