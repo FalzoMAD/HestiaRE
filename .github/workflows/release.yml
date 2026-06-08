@@ -19,6 +19,9 @@ jobs:
 
       - name: Build tarball
         run: |
+          # VERSION aus dem Tag in die Datei schreiben
+          echo "${VERSION}" > VERSION
+          
           mkdir -p dist/hestiare-${VERSION}
           rsync -a \
             --exclude='.git' \
