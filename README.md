@@ -1,3 +1,3 @@
 # HestiaRE
 
-Retro. Reduced. Refined.
+Retro. Reduced. Refined..
