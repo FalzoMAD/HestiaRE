@@ -8,6 +8,8 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,7 +20,11 @@ jobs:
       - name: Build tarball
         run: |
           mkdir -p dist/hestiare-${VERSION}
-          rsync -a --exclude='.git' --exclude='dist' --exclude='.github' \
+          rsync -a \
+            --exclude='.git' \
+            --exclude='dist' \
+            --exclude='.github' \
+            --exclude='.gitea' \
             . dist/hestiare-${VERSION}/
           tar -czf dist/hestiare-${VERSION}.tar.gz -C dist hestiare-${VERSION}
 
@@ -29,6 +35,7 @@ jobs:
           generate_release_notes: false
           body: |
             HestiaRE ${{ env.VERSION }}
-            
+
             Install:
-              curl -fsSL https://hestiare.com/install.sh | bash
+              curl -fsSL https://hestiare.com/install.sh 
+              bash install.sh
