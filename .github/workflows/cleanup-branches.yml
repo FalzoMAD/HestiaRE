@@ -9,7 +9,8 @@ on:
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    contents: write
+    permissions:
+      contents: write
     steps:
       - name: Delete non-main branch
         env:
