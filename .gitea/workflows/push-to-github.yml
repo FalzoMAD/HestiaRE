@@ -5,6 +5,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:  # manueller Button im UI
 
 jobs:
   mirror:
