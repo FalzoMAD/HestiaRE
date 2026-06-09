@@ -1,0 +1,74 @@
+#!/bin/bash
+# info: change webmail alias url
+# options: WEBMAIL
+#
+# example: v-change-sys-webmail YourtrickyURLhere
+#
+# This function changes the webmail url in apache2 or nginx configuration.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Get existing system webmail alias
+export WEBMAIL_ALIAS="$WEBMAIL_ALIAS"
+
+# Define aliases
+OLD_ALIAS=$WEBMAIL_ALIAS
+NEW_ALIAS=$1
+
+restart=${2-yes}
+
+check_args '1' "$#" 'ALIAS [RESTART]'
+is_common_format_valid "$NEW_ALIAS" "Alias"
+is_restart_format_valid "$restart"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Delete old webmail configuration
+for user in $("$BIN/v-list-users" list); do
+	for domain in $($BIN/v-list-mail-domains "$user" plain | cut -f 1); do
+		$BIN/v-delete-mail-domain-webmail "$user" "$domain"
+	done
+done
+
+# Set new webmail alias
+$BIN/v-change-sys-config-value 'WEBMAIL_ALIAS' $NEW_ALIAS
+
+# Add new webmail configuration
+for user in $("$BIN/v-list-users" list); do
+	for domain in $($BIN/v-list-mail-domains "$user" plain | cut -f 1); do
+		$BIN/v-add-mail-domain-webmail "$user" "$domain"
+	done
+done
+
+if [ -s /etc/apache2/apache2.conf ]; then
+	sed -i "s/IncludeOptional conf.d\/domains\/$WEBMAIL_ALIAS.*.conf/IncludeOptional conf.d\/domains\/$NEW_ALIAS.*.conf/g" /etc/apache2/apache2.conf
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Restart services
+$BIN/v-restart-web "$restart"
+$BIN/v-restart-proxy "$restart"
+
+# Logging
+$BIN/v-log-action "system" "Info" "System" "Webmail access alias changed (Value: $NEW_ALIAS, Previous: $OLD_ALIAS)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

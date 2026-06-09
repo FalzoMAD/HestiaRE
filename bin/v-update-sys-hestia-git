@@ -1,0 +1,337 @@
+#!/bin/bash
+# info: Install update from Git repository
+# options: REPOSITORY BRANCH INSTALL
+#
+# example: v-update-sys-hestia-git hestiacp staging/beta install
+#          # Will download from the hestiacp repository
+#          # Pulls code from staging/beta branch
+#          # install: installs package immediately
+#          # install-auto: installs package and schedules automatic updates from Git
+#
+# Downloads and compiles/installs packages from GitHub repositories
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+# Detect and install Node.js if necessary
+if [ -z $(which "node") ]; then
+	echo "Installing Node.js $node_v"
+	apt="/etc/apt/sources.list.d"
+	node_v="20"
+	if [ $(uname -m) = "x86_64" ]; then
+		ARCH=amd64
+	elif [ $(uname -m) = "aarch64" ]; then
+		ARCH=arm64
+	fi
+	echo "deb [arch=$ARCH signed-by=/usr/share/keyrings/nodejs.gpg] https://deb.nodesource.com/node_$node_v.x nodistro main" > $apt/nodejs.list
+	curl -s https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor | tee /usr/share/keyrings/nodejs.gpg > /dev/null 2>&1
+	apt-get -qq install nodejs -y
+fi
+
+# Define download function
+download_file() {
+	local url=$1
+	local destination=$2
+	local force=$3
+
+	# Default destination is the current working directory
+	local dstopt=""
+
+	if [ ! -z "$(echo "$url" | grep -E "\.(gz|gzip|bz2|zip|xz)$")" ]; then
+		# When an archive file is downloaded it will be first saved localy
+		dstopt="--directory-prefix=$ARCHIVE_DIR"
+		local is_archive="true"
+		local filename="${url##*/}"
+		if [ -z "$filename" ]; then
+			echo >&2 "[!] No filename was found in url, exiting ($url)"
+			exit 1
+		fi
+		if [ ! -z "$force" ] && [ -f "$ARCHIVE_DIR/$filename" ]; then
+			rm -f $ARCHIVE_DIR/$filename
+		fi
+	elif [ ! -z "$destination" ]; then
+		# Plain files will be written to specified location
+		dstopt="-O $destination"
+	fi
+	# check for corrupted archive
+	if [ -f "$ARCHIVE_DIR/$filename" ] && [ "$is_archive" = "true" ]; then
+		tar -tzf "$ARCHIVE_DIR/$filename" > /dev/null 2>&1
+		if [ $? -ne 0 ]; then
+			echo >&2 "[!] Archive $ARCHIVE_DIR/$filename is corrupted, redownloading"
+			rm -f $ARCHIVE_DIR/$filename
+		fi
+	fi
+
+	if [ ! -f "$ARCHIVE_DIR/$filename" ]; then
+		[ "$HESTIA_DEBUG" ] && echo >&2 DEBUG: wget $url -q $dstopt --show-progress --progress=bar:force --limit-rate=3m
+		wget $url -q $dstopt --show-progress --progress=bar:force --limit-rate=3m
+		if [ $? -ne 0 ]; then
+			echo >&2 "[!] Archive $ARCHIVE_DIR/$filename is corrupted and exit script"
+			rm -f $ARCHIVE_DIR/$filename
+			exit 1
+		fi
+	fi
+
+	if [ ! -z "$destination" ] && [ "$is_archive" = "true" ]; then
+		if [ "$destination" = "-" ]; then
+			cat "$ARCHIVE_DIR/$filename"
+		elif [ -d "$(dirname $destination)" ]; then
+			cp "$ARCHIVE_DIR/$filename" "$destination"
+		fi
+	fi
+}
+
+get_branch_file() {
+	local filename=$1
+	local destination=$2
+	[ "$HESTIA_DEBUG" ] && echo >&2 DEBUG: Get branch file "$filename" to "$destination"
+	if [ "$use_src_folder" == 'true' ]; then
+		if [ -z "$destination" ]; then
+			[ "$HESTIA_DEBUG" ] && echo >&2 DEBUG: cp -f "$SRC_DIR/$filename" ./
+			cp -f "$SRC_DIR/$filename" ./
+		else
+			[ "$HESTIA_DEBUG" ] && echo >&2 DEBUG: cp -f "$SRC_DIR/$filename" "$destination"
+			cp -f "$SRC_DIR/$filename" "$destination"
+		fi
+	else
+		download_file "https://raw.githubusercontent.com/$REPO/$branch/$filename" "$destination" $3
+	fi
+}
+
+# Set compiling directory
+BUILD_DIR='/tmp/hestiacp-src'
+INSTALL_DIR='/tmp/hestia-src'
+SRC_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ARCHIVE_DIR="/tmp/hestia-src/archive/"
+architecture="$(arch)"
+if [ $architecture == 'aarch64' ]; then
+	BUILD_ARCH='arm64'
+else
+	BUILD_ARCH='amd64'
+fi
+DEB_DIR="$BUILD_DIR/deb/"
+
+# Set command variables
+fork=$1
+branch=$2
+install=$3
+
+# Allow the use of username:branch instead of username branch
+# Both fork and branch names can't contain a : anyway
+if [ -z "$branch" ]; then
+	branch=$(echo "$fork" | cut -d ":" -f2)
+	fork=$(echo "$fork" | cut -d ":" -f1)
+fi
+
+# Set Version for compiling
+BUILD_VER=$(curl -s https://raw.githubusercontent.com/$fork/hestiacp/$branch/src/deb/hestia/control | grep "Version:" | cut -d' ' -f2)
+HESTIA_V="${BUILD_VER}_${BUILD_ARCH}"
+
+# Create build directories
+rm -rf $BUILD_DIR
+mkdir -p $DEB_DIR
+mkdir -p $ARCHIVE_DIR
+
+# Set package dependencies for compiling
+SOFTWARE='build-essential libxml2-dev libz-dev libcurl4-gnutls-dev unzip openssl libssl-dev pkg-config setpriv'
+
+# Define a timestamp function
+timestamp() {
+	date +%s
+}
+
+# Warning prompt to be used if auto-install flag is not specified
+warning_message() {
+	echo ""
+	echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+	echo "WARNING - Development builds should not be installed on"
+	echo "systems with live production data without understanding"
+	echo "the potential risks that are involved!"
+	echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+	echo ""
+}
+
+# Build installation
+install_build() {
+	# Install all available packages
+	echo "Installing packages..."
+	for i in $DEB_DIR/*.deb; do
+		dpkg -i $i
+		if [ $? -ne 0 ]; then
+			exit 1
+		fi
+	done
+	unset $answer
+	# Remove temporary files
+	rm -rf $BUILD_DIR
+}
+
+# Set install flags
+if [ -n "$fork" ]; then
+	fork_check=$(curl -s --head -w %{http_code} https://raw.githubusercontent.com/$fork/hestiacp/main/src/deb/hestia/control -o /dev/null)
+	if [ "$fork_check" -ne "200" ]; then
+		echo "ERROR: invalid repository name specified."
+		exit 1
+	else
+		echo "[!] Download code from GitHub repository: $fork"
+	fi
+else
+	fork="hestiacp"
+fi
+
+if [ -n "$branch" ]; then
+	echo https://raw.githubusercontent.com/$fork/hestiacp/$branch/src/deb/hestia/control
+	branch_check=$(curl -s --head -w %{http_code} https://raw.githubusercontent.com/$fork/hestiacp/$branch/src/deb/hestia/control -o /dev/null)
+	if [ $branch_check -ne "200" ]; then
+		echo "ERROR: invalid branch name specified."
+		exit 1
+	else
+		$BIN/v-change-sys-config-value 'RELEASE_BRANCH' "$branch"
+		echo "[!] Changed system release branch to: $branch."
+	fi
+else
+	source /usr/local/hestia/conf/hestia.conf
+	branch=$RELEASE_BRANCH
+	branch_check=$(curl -s --head -w %{http_code} https://raw.githubusercontent.com/$fork/hestiacp/$branch/src/deb/hestia/control -o /dev/null)
+	if [ "$branch_check" -ne "200" ]; then
+		echo "ERROR: invalid branch name specified."
+		exit 1
+	fi
+fi
+
+if [ -z "$branch" ]; then
+	echo "ERROR: No branch detected."
+	exit
+fi
+REPO="$fork/hestiacp"
+# Forward slashes in branchname are replaced with dashes to match foldername in github archive.
+branch_dash=$(echo "$branch" | sed 's/\//-/g')
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Install needed software
+# Set package dependencies for compiling
+SOFTWARE='build-essential wget tar git curl unzip'
+
+echo "Updating system APT repositories..."
+apt-get -qq update > /dev/null 2>&1
+echo "Installing dependencies for compilation..."
+apt-get -qq install -y $SOFTWARE > /dev/null 2>&1
+
+# Fix for Debian PHP environment
+if [ $BUILD_ARCH == "amd64" ]; then
+	if [ ! -L /usr/local/include/curl ]; then
+		ln -s /usr/include/x86_64-linux-gnu/curl /usr/local/include/curl
+	fi
+fi
+
+# Set git repository raw path
+GIT_REP='https://raw.githubusercontent.com/'$REPO'/'$branch'/src/deb'
+
+# Generate Links for sourcecode
+HESTIA_ARCHIVE_LINK='https://github.com/'$REPO'/archive/'$branch'.tar.gz'
+echo $HESTIA_ARCHIVE_LINK
+
+echo "Building Hestia Control Panel package..."
+
+BUILD_DIR_HESTIA=$BUILD_DIR/hestia_$HESTIA_V
+
+# Change to build directory
+cd $BUILD_DIR
+
+if [ "$KEEPBUILD" != 'true' ] || [ ! -d "$BUILD_DIR_HESTIA" ]; then
+	# Check if target directory exist
+	if [ -d $BUILD_DIR_HESTIA ]; then
+		rm -r $BUILD_DIR_HESTIA
+	fi
+
+	# Create directory
+	mkdir -p $BUILD_DIR_HESTIA
+fi
+
+cd $BUILD_DIR
+rm -rf $BUILD_DIR/hestiacp-$branch_dash
+# Download and unpack source files
+if [ "$use_src_folder" == 'true' ]; then
+	[ "$HESTIA_DEBUG" ] && echo DEBUG: cp -rf "$SRC_DIR/" $BUILD_DIR/hestiacp-$branch_dash
+	cp -rf "$SRC_DIR/" $BUILD_DIR/hestiacp-$branch_dash
+elif [ -d $SRC_DIR ]; then
+	download_file $HESTIA_ARCHIVE_LINK '-' 'fresh' | tar xz
+fi
+
+mkdir -p $BUILD_DIR_HESTIA/usr/local/hestia
+
+# Move needed directories
+cd $BUILD_DIR/hestiacp-$branch_dash
+
+npm ci
+npm run build
+
+cp -rf bin func install web $BUILD_DIR_HESTIA/usr/local/hestia/
+
+# Set permissions
+find $BUILD_DIR_HESTIA/usr/local/hestia/ -type f -exec chmod -x {} \;
+
+# Allow send email via /usr/local/hestia/web/inc/mail-wrapper.php via cli
+chmod +x $BUILD_DIR_HESTIA/usr/local/hestia/web/inc/mail-wrapper.php
+# Allow the executable to be executed
+chmod +x $BUILD_DIR_HESTIA/usr/local/hestia/bin/*
+find $BUILD_DIR_HESTIA/usr/local/hestia/install/ \( -name '*.sh' \) -exec chmod +x {} \;
+chmod -x $BUILD_DIR_HESTIA/usr/local/hestia/install/*.sh
+chown -R root:root $BUILD_DIR_HESTIA
+
+# Get Debian package files
+mkdir -p $BUILD_DIR_HESTIA/DEBIAN
+get_branch_file 'src/deb/hestia/control' "$BUILD_DIR_HESTIA/DEBIAN/control"
+if [ "$BUILD_ARCH" != "amd64" ]; then
+	sed -i "s/amd64/${BUILD_ARCH}/g" "$BUILD_DIR_HESTIA/DEBIAN/control"
+fi
+get_branch_file 'src/deb/hestia/copyright' "$BUILD_DIR_HESTIA/DEBIAN/copyright"
+get_branch_file 'src/deb/hestia/preinst' "$BUILD_DIR_HESTIA/DEBIAN/preinst"
+get_branch_file 'src/deb/hestia/postinst' "$BUILD_DIR_HESTIA/DEBIAN/postinst"
+chmod +x $BUILD_DIR_HESTIA/DEBIAN/postinst
+chmod +x $BUILD_DIR_HESTIA/DEBIAN/preinst
+
+echo Building Hestia DEB
+dpkg-deb -Zxz --build $BUILD_DIR_HESTIA $DEB_DIR
+
+# clear up the source folder
+if [ "$KEEPBUILD" != 'true' ]; then
+	rm -r $BUILD_DIR_HESTIA
+	rm -rf hestiacp-$branch_dash
+fi
+cd $BUILD_DIR/hestiacp-$branch_dash
+
+# Installation steps
+if [ "$install" = "install" ] || [ "$install" = "yes" ] || [ "$install" = "install-auto" ]; then
+	install_build
+	if [ "$install" = "install-auto" ]; then
+		$BIN/v-add-cron-hestia-autoupdate git
+	fi
+else
+	warning_message
+	read -p "Do you wish to proceed with the installation? [y/n] " answer
+	if [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; then
+		install_build
+		unset $answer
+	else
+		echo "Installation of development build aborted."
+		echo "Removing temporary files..."
+		rm -rf $BUILD_DIR
+		unset "$answer"
+		echo ""
+	fi
+fi

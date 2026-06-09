@@ -1,0 +1,103 @@
+#!/bin/bash
+# info: add composer (php dependency manager) for a user
+# options: USER
+#
+# example: v-add-user-composer user [version]
+#
+# This function adds support for composer (php dependency manager)
+# Homepage: <https://getcomposer.org/>
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+version=${2-2}
+update=$3
+
+if [ -z "$HESTIA" ]; then
+	HESTIA="/usr/local/hestia"
+fi
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'USER [VERSION] [UPDATE]'
+is_format_valid 'user'
+is_number_format_valid "$version" "version"
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+
+[ -z "$HOMEDIR" ] && check_result "$E_NOTEXIST" "Hestia environment vars not present"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+COMPOSER_DIR="$HOMEDIR/$user/.composer"
+COMPOSER_BIN="$COMPOSER_DIR/composer"
+
+if [ -f "$COMPOSER_BIN" ]; then
+	if [ -f "$update" ]; then
+		user_exec $COMPOSER_BIN selfupdate
+		exit
+	fi
+	echo "Composer already available"
+	exit
+fi
+
+[ -z "$(readlink -m "$COMPOSER_DIR" | egrep "^$HOMEDIR/$user/")" ] && check_result "$E_FORBIDEN" "Path outside of user homedir (Composer dir)"
+[ -z "$(readlink -m "$COMPOSER_BIN" | egrep "^$HOMEDIR/$user/")" ] && check_result "$E_FORBIDEN" "Path outside of user homedir (Composer bin)"
+[ -z "$(readlink -m "$HOMEDIR/$user/.config/" | egrep "^$HOMEDIR/$user/")" ] && check_result "$E_FORBIDEN" "Path outside of user homedir (.conf)"
+
+mkdir -p "$COMPOSER_DIR"
+chown $user: "$COMPOSER_DIR"
+mkdir -p "$HOMEDIR/$user/.config"
+chown $user: "$HOMEDIR/$user/.config"
+if [[ -f "/home/$user/.bash_aliases" ]]; then
+	sed -i '/^alias composer=/d' "/home/$user/.bash_aliases"
+fi
+echo "alias composer='php /home/$user/.composer/composer'" >> "/home/$user/.bash_aliases"
+
+COMPOSER_SETUP_FILE=$(mktemp)
+check_result $? "Create temp file"
+chown $user: "$COMPOSER_SETUP_FILE"
+
+signature="$(curl --silent --show-error https://composer.github.io/installer.sig)"
+check_result $? "Download signature"
+
+user_exec wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache https://getcomposer.org/installer --quiet -O "$COMPOSER_SETUP_FILE"
+check_result $? "Download composer installer"
+
+if [[ "$signature" != $(sha384sum "$COMPOSER_SETUP_FILE" | cut -f 1 -d " ") ]]; then
+	rm -f "$COMPOSER_SETUP_FILE"
+	check_result "$E_INVALID" "Composer signature does not match"
+fi
+
+COMPOSER_HOME="$HOMEDIR/$user/.config/composer" user_exec /usr/bin/php "$COMPOSER_SETUP_FILE" --quiet "--$version" --install-dir="$COMPOSER_DIR" --filename=composer
+check_result $? "Composer install failed"
+
+[ -f "$COMPOSER_SETUP_FILE" ] && rm -f "$COMPOSER_SETUP_FILE"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "$user" "Info" "Plugins" "Composer support enabled."
+log_event "$OK" "$ARGUMENTS"
+
+exit

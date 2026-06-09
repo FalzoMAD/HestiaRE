@@ -1,0 +1,172 @@
+#!/bin/bash
+# info: adding user package
+# options: tmpfile PACKAGE [REWRITE]
+#
+# This function adds new user package to the system.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+tmpfile=$1
+package=$2
+rewrite=$3
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+is_package_consistent() {
+	source_conf "$tmpfile"
+	if [ "$WEB_DOMAINS" != 'unlimited' ]; then
+		is_int_format_valid "$WEB_DOMAINS" 'WEB_DOMAINS'
+	fi
+	if [ "$WEB_ALIASES" != 'unlimited' ]; then
+		is_int_format_valid "$WEB_ALIASES" 'WEB_ALIASES'
+	fi
+	if [ "$DNS_DOMAINS" != 'unlimited' ]; then
+		is_int_format_valid "$DNS_DOMAINS" 'DNS_DOMAINS'
+	fi
+	if [ "$DNS_RECORDS" != 'unlimited' ]; then
+		is_int_format_valid "$DNS_RECORDS" 'DNS_RECORDS'
+	fi
+	if [ "$MAIL_DOMAINS" != 'unlimited' ]; then
+		is_int_format_valid "$MAIL_DOMAINS" 'MAIL_DOMAINS'
+	fi
+	if [ "$MAIL_ACCOUNTS" != 'unlimited' ]; then
+		is_int_format_valid "$MAIL_ACCOUNTS" 'MAIL_ACCOUNTS'
+	fi
+	if [ "$DATABASES" != 'unlimited' ]; then
+		is_int_format_valid "$DATABASES" 'DATABASES'
+	fi
+	if [ "$CRON_JOBS" != 'unlimited' ]; then
+		is_int_format_valid "$CRON_JOBS" 'CRON_JOBS'
+	fi
+
+	is_int_format_valid "$RATE_LIMIT" 'RATE_LIMIT'
+
+	if [ "$DISK_QUOTA" != 'unlimited' ]; then
+		is_int_format_valid "$DISK_QUOTA" 'DISK_QUOTA'
+	fi
+	if [ "$CPU_QUOTA" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
+		is_valid_cpu_quota "$CPU_QUOTA" 'CPU_QUOTA'
+	fi
+	if [ "$CPU_QUOTA_PERIOD" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
+		is_valid_cpu_quota_period "$CPU_QUOTA_PERIOD" 'CPU_QUOTA_PERIOD'
+	fi
+	if [ "$MEMORY_LIMIT" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
+		is_valid_memory_size "$MEMORY_LIMIT" 'MEMORY_LIMIT'
+	fi
+	if [ "$SWAP_LIMIT" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
+		is_valid_swap_size "$SWAP_LIMIT" 'SWAP_LIMIT'
+	fi
+	if [ "$BANDWIDTH" != 'unlimited' ]; then
+		is_int_format_valid "$BANDWIDTH" 'BANDWIDTH'
+	fi
+	is_int_format_valid "$BACKUPS" 'BACKUPS'
+	is_boolean_format_valid "$BACKUPS_INCREMENTAL" 'BACKUPS_INCREMENTAL'
+	if [ -n "$WEB_TEMPLATE" ]; then
+		is_web_template_valid "$WEB_TEMPLATE"
+	fi
+	if [ -n "$BACKEND_TEMPLATE" ]; then
+		is_backend_template_valid "$BACKEND_TEMPLATE"
+	fi
+	if [ -n "$PROXY_TEMPLATE" ]; then
+		is_proxy_template_valid "$PROXY_TEMPLATE"
+	fi
+	if [ -n "$DNS_TEMPLATE" ]; then
+		is_dns_template_valid "$DNS_TEMPLATE"
+	fi
+	if [ -n "$NS" ]; then
+		IFS=',' read -r -a nameservers <<< "$NS"
+		i=1
+		for ns in "${nameservers[@]}"; do
+			is_domain_format_valid "$ns" "ns$i"
+			i=$((i + 1))
+		done
+	fi
+
+	is_format_valid_shell "$SHELL"
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'PKG_DIR PACKAGE' 'rewrite'
+is_format_valid 'package'
+if [ "$rewrite" != 'yes' ]; then
+	is_package_new "$package"
+else
+	is_package_valid "$package"
+fi
+
+if [ ! -f "$tmpfile" ]; then
+	echo "$tmpfile does not exist"
+	exit "$E_NOTEXIST"
+fi
+
+is_package_consistent
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Generating timestamp
+time_n_date=$(date +'%T %F')
+time=$(echo "$time_n_date" | cut -f 1 -d \ )
+date=$(echo "$time_n_date" | cut -f 2 -d \ )
+
+SHELL=$(basename $SHELL)
+echo "WEB_TEMPLATE='$WEB_TEMPLATE'
+PROXY_TEMPLATE='$PROXY_TEMPLATE'
+BACKEND_TEMPLATE='$BACKEND_TEMPLATE'
+DNS_TEMPLATE='$DNS_TEMPLATE'
+WEB_DOMAINS='$WEB_DOMAINS'
+WEB_ALIASES='$WEB_ALIASES'
+DNS_DOMAINS='$DNS_DOMAINS'
+DNS_RECORDS='$DNS_RECORDS'
+MAIL_DOMAINS='$MAIL_DOMAINS'
+MAIL_ACCOUNTS='$MAIL_ACCOUNTS'
+RATE_LIMIT='$RATE_LIMIT'
+DATABASES='$DATABASES'
+CRON_JOBS='$CRON_JOBS'
+DISK_QUOTA='$DISK_QUOTA'
+CPU_QUOTA='$CPU_QUOTA'
+CPU_QUOTA_PERIOD='$CPU_QUOTA_PERIOD'
+MEMORY_LIMIT='$MEMORY_LIMIT'
+SWAP_LIMIT='$SWAP_LIMIT'
+BANDWIDTH='$BANDWIDTH'
+NS='$NS'
+SHELL='$SHELL'
+BACKUPS='$BACKUPS'
+BACKUPS_INCREMENTAL='$BACKUPS_INCREMENTAL'
+TIME='$time'
+DATE='$date'
+" > "$HESTIA/data/packages/$package.pkg"
+
+chmod 644 "$HESTIA/data/packages/$package.pkg"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+if [ "$rewrite" != 'yes' ]; then
+	$BIN/v-log-action "system" "Info" "Packages" "Package added (Name: $package)."
+else
+	$BIN/v-log-action "system" "Info" "Packages" "Package limits updated (Name: $package)."
+fi
+log_event "$OK" "$ARGUMENTS"
+
+exit

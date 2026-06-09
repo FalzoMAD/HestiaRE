@@ -1,0 +1,89 @@
+#!/bin/bash
+# info: delete webdomain ftp account
+# options: USER DOMAIN FTP_USER
+#
+# example: v-delete-web-domain-ftp admin wonderland.com bob_ftp
+#
+# This function deletes additional ftp account.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+domain_idn=$2
+ftp_user=$3
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Additional argument formatting
+format_domain
+format_domain_idn
+# TODO: $domain_idn not used in this script - maybe $domain should be converted to $doman_idn ?
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '3' "$#" 'USER DOMAIN FTP_USER'
+is_format_valid 'user' 'domain' 'ftp_user'
+is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+get_domain_values 'web'
+if [ -z "$(echo $FTP_USER | tr ':' '\n' | grep ^$ftp_user$)" ]; then
+	echo "Error: account $ftp_user doesn't exist"
+	log_event "$E_NOTEXIST" "$ARGUMENTS"
+	exit "$E_NOTEXIST"
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+# Deleting sftp jail
+$BIN/v-delete-user-sftp-jail "$ftp_user"
+
+# Deleting ftp user
+/usr/sbin/userdel $ftp_user >> /dev/null 2>&1
+if [ "$?" != 0 ]; then
+	sed -i "/^$ftp_user:/d" /etc/passwd
+	sed -i "/^$ftp_user:/d" /etc/shadow
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Rebuilding FTP variables
+position=$(echo $FTP_USER | tr ':' '\n' | grep -n '' | grep ":$ftp_user$" \
+	| cut -f 1 -d:)
+ftp_user=$(echo $FTP_USER | tr ':' '\n' | grep -n '' | grep -v "^$position:" \
+	| cut -f 2 -d : | sed -e "/^$/d" | sed -e ':a;N;$!ba;s/\n/:/g')
+ftp_md5=$(echo $FTP_MD5 | tr ':' '\n' | grep -n '' | grep -v "^$position:" \
+	| cut -f 2 -d : | sed -e ':a;N;$!ba;s/\n/:/g')
+ftp_path=$(echo $FTP_PATH | tr ':' '\n' | grep -n '' | grep -v "^$position:" \
+	| cut -f 2 -d : | sed -e ':a;N;$!ba;s/\n/:/g')
+
+# Update config
+update_object_value 'web' 'DOMAIN' "$domain" '$FTP_USER' "$ftp_user"
+update_object_value 'web' 'DOMAIN' "$domain" '$FTP_MD5' "$ftp_md5"
+update_object_value 'web' 'DOMAIN' "$domain" '$FTP_PATH' "$ftp_path"
+
+# Logging
+$BIN/v-log-action "$user" "Info" "Web" "Deleted FTP account (User: ${3}, Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

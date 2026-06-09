@@ -1,0 +1,105 @@
+#!/bin/bash
+# info: rebuild dns domain
+# options: USER DOMAIN [RESTART] [UPDATE_SERIAL]
+#
+# example: v-rebuild-dns-domain alice wonderland.com
+#
+# This function rebuilds DNS configuration files.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+restart=$3
+update_serial=${4-no}
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# shellcheck source=/usr/local/hestia/func/rebuild.sh
+source $HESTIA/func/rebuild.sh
+# shellcheck source=/usr/local/hestia/func/syshealth.sh
+source $HESTIA/func/syshealth.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [RESTART] [UPDATE_SERIAL]'
+is_format_valid 'user' 'domain' 'restart'
+is_system_enabled "$DNS_SYSTEM" 'DNS_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+check_user=$(is_object_unsuspended 'user' 'USER' "$user")
+if [ -n "$check_user" ]; then
+	exit
+fi
+is_object_valid 'dns' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+user_domains=0
+user_records=0
+suspended_dns=0
+conf="$USER_DATA/dns.conf"
+
+# Defining user name servers
+ns=$(get_user_value '$NS')
+i=1
+for nameserver in ${ns//,/ }; do
+	eval ns$i="$nameserver"
+	i=$((i + 1))
+done
+
+# Get dns config path
+if [ -e '/etc/named.conf' ]; then
+	dns_conf='/etc/named.conf'
+fi
+
+if [ -e '/etc/bind/named.conf' ]; then
+	dns_conf='/etc/bind/named.conf'
+fi
+
+# Deleting old user's zone
+sed -i "/\/$user\/conf\/dns\/$domain.db\"/d" $dns_conf
+
+# Updating zone serial
+if [ "$update_serial" != 'no' ]; then
+	update_domain_serial
+fi
+
+syshealth_repair_dns_config
+# Rebuiling zone config
+rebuild_dns_domain_conf
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Updating counters
+update_user_value "$user" '$U_DNS_DOMAINS' "$user_domains"
+update_user_value "$user" '$U_DNS_RECORDS' "$user_records"
+update_user_value "$user" '$SUSPENDED_DNS' "$suspended_dns"
+
+# Restarting named
+$BIN/v-restart-dns "$restart"
+check_result $? "Bind restart failed" > /dev/null
+
+# Logging
+$BIN/v-log-action "system" "Info" "System" "Rebuilt DNS domain (User: $user, Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

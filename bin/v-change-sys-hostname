@@ -1,0 +1,93 @@
+#!/bin/bash
+# info: change hostname
+# options: HOSTNAME
+#
+# example: v-change-sys-hostname mydomain.tld
+#
+# This function for changing system hostname.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+domain=$1
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'HOSTNAME'
+is_format_valid 'domain'
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+current_hostname="$(hostname)"
+if [[ "$current_hostname" == "$domain" ]]; then
+	echo "Current hostname \"$current_hostname\" is the same as the new one you want to use"
+	echo "I'm not going to change it"
+	exit
+fi
+
+hostname "$domain"
+
+# Debian/Ubuntu
+hostnamectl set-hostname "$domain"
+echo "$domain" > /etc/hostname
+
+# Update webmail's password plugin configuration
+if [ -d /etc/roundcube/ ]; then
+	sed -i "/password_hestia_host/c\$rcmail_config['password_hestia_host'] = '$domain';" /etc/roundcube/plugins/password/config.inc.php
+fi
+if [ -d /etc/rainloop/ ]; then
+	sed -i "/hestia_host/c\hestia_host = \"$domain\"" /etc/rainloop/data/_data_/_default_/configs/plugin-hestia-change-password.ini
+fi
+if [ -d /etc/snappymail/ ]; then
+	sed -i "/\"hestia_host\":/c\\\"hestia_host\": \"$domain\"," /etc/snappymail/data/_data_/_default_/configs/plugin-change-password.json
+fi
+
+# Update /etc/hosts
+if [ -f /etc/hosts ]; then
+	if grep -q -E "^127\.0\.0\.1\s{1,}${current_hostname}$" /etc/hosts; then
+		sed -i -E "s/127\.0\.0\.1\s{1,}${current_hostname}/127\.0\.0\.1 ${domain}/" /etc/hosts
+	else
+		echo "127.0.0.1 $domain" >> /etc/hosts
+	fi
+	# Check whether hostname entries are duplicated and remove all but the last one
+	ndup_hosts="$(grep -c -E "^127\.0\.0\.1\s{1,}${domain}$" /etc/hosts)"
+	if [[ "${ndup_hosts}" -gt "1" ]]; then
+		nlines_to_del="$((ndup_hosts - 1))"
+		lines_to_del="$(grep -n -E "^127\.0\.0\.1\s{1,}${domain}$" /etc/hosts | head -n${nlines_to_del} | awk -F ':' '{print $1}')"
+		for i in $lines_to_del; do
+			if [[ -z $list_lines ]]; then
+				list_lines="${i}d"
+			else
+				list_lines+=";${i}d"
+			fi
+		done
+		sed -i "${list_lines}" /etc/hosts
+	fi
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "system" "Warning" "System" "System hostname changed (Host: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

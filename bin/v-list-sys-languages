@@ -1,0 +1,88 @@
+#!/bin/bash
+# info: list system languages
+# options: [FORMAT]
+#
+# example: v-list-sys-languages json
+#
+# This function for obtaining the available languages for HestiaCP
+# Output is always in the ISO language code
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+format=${1-shell}
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# JSON list function
+json_list() {
+	objects=$(echo "$languages" | wc -l)
+	i=1
+	echo '['
+	echo -e "\t\"en\","
+	for lang in $languages; do
+		if [ "$i" -lt "$objects" ]; then
+			echo -e "\t\"$lang\","
+		else
+			echo -e "\t\"$lang\""
+		fi
+		((++i))
+	done
+	echo ']'
+}
+
+# SHELL list function
+shell_list() {
+	echo "LANGUAGE"
+	echo "--------"
+	echo "en"
+	for lang in $languages; do
+		echo "$lang"
+	done
+}
+
+# PLAIN list function
+plain_list() {
+	echo "en"
+	for lang in $languages; do
+		echo "$lang"
+	done
+}
+
+# CSV list function
+csv_list() {
+	echo "LANGUAGE"
+	echo "en"
+	for lang in $languages; do
+		echo "$lang"
+	done
+}
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Defining language list
+languages=$(ls -d $HESTIA/web/locale/*/ | awk -F'/' '{print $(NF-1)}')
+
+# Listing data
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

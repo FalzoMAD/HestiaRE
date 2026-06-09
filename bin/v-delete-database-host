@@ -1,0 +1,60 @@
+#!/bin/bash
+# info: delete database server
+# options: TYPE HOST
+#
+# example: v-delete-database-host pgsql localhost
+#
+# This function for deleting the database host from hestia configuration. It will
+# be deleted if there are no databases created on it only.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+type=$1
+host=$2
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/db.sh
+source $HESTIA/func/db.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'TYPE HOST'
+is_format_valid 'type' 'host'
+is_system_enabled "$DB_SYSTEM" 'DB_SYSTEM'
+is_type_valid "$DB_SYSTEM" "$type"
+is_object_valid "../../../conf/$type" 'HOST' "$host"
+is_dbhost_free
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Deleting server
+sed -i "/HOST='$host' /d" "$HESTIA/conf/$type.conf"
+# Delete RRD database
+rm -fr $HESTIA'/web/rrd/db/'$type'_'$host'.rrd'
+rm -fr $HESTIA'/web/rrd/db/'*-$type'_'$host'.*'
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "system" "Info" "Database" "Removed remote database host (Host: $host, Type: $type)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

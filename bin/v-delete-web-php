@@ -1,0 +1,117 @@
+#!/bin/bash
+# info: delete php fpm version
+# options: VERSION
+#
+# example: v-delete-web-php 7.3
+#
+# This function checks and delete a fpm php version if not used by any domain.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+version=$1
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'VERSION'
+
+if [ -z "$WEB_BACKEND" ]; then
+	echo "Multiple php versions are not supported for modphp"
+fi
+
+# Set file locations
+php_fpm="/etc/init.d/php$version-fpm"
+
+# Verify php version format
+if [[ ! $version =~ ^[0-9]\.[0-9]+ ]]; then
+	echo "The PHP version format is invalid, it should look like [0-9].[0-9]."
+	echo "Example:  7.0, 7.4"
+	exit
+fi
+
+# Remove backend template
+[ -f $HESTIA/data/templates/web/php-fpm/PHP-${version/\./_}.tpl ] && rm -f $HESTIA/data/templates/web/php-fpm/PHP-${version/\./_}.tpl
+
+# Check if php version exists
+version_check=$($BIN/v-list-sys-php plain | grep "$version")
+if [ -z "$version_check" ]; then
+	echo "ERROR: Specified PHP version is not installed."
+	exit "$E_INVALID"
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+mph="php$version-common php$version-mbstring php$version-bcmath php$version-cli php$version-curl
+ php$version-fpm php$version-gd php$version-intl php$version-mysql
+ php$version-soap php$version-xml php$version-zip php$version-mbstring
+ php$version-json php$version-bz2 php$version-pspell php$version-imagick php$version-pgsql
+ php$version-imap php$version-ldap php$version-apcu"
+
+# Check if version is 7.1 or below to remove mcrypt
+if [[ $(echo "$version 7.2" | awk '{print ($1 < $2)}') == 1 ]]; then
+	mph="$mph php$version-mcrypt"
+fi
+
+# Purge php packages
+apt-get -y purge $mph > /dev/null 2>&1 &
+BACK_PID=$!
+
+# Check if package removal is done, print a spinner
+echo "Removing PHP-$version, please wait..."
+spinner="/-\|"
+spin_i=1
+while kill -0 $BACK_PID > /dev/null 2>&1; do
+	printf "\b${spinner:spin_i++%${#spinner}:1}"
+	sleep 0.5
+done
+
+# Do a blank echo to get the \n back
+echo
+
+# Check if removal was successful
+if [ -f "$php_fpm" ]; then
+	echo "ERROR: Uninstallation failed, please run the following command manually for debugging:"
+	echo "apt-get purge $mph"
+	exit 1
+fi
+
+# Cleanup php folder
+[[ -d /etc/php/$version ]] && rm -rf "/etc/php/$version"
+
+if [ "$WEB_BACKEND" = "php-fpm" ]; then
+	conf=$(find /etc/php* -name www.conf)
+	# Check if www.conf exists
+	if [ -z "$conf" ]; then
+		# If not grab the "last php version
+		last=$($BIN/v-list-sys-php "shell" | tail -n1)
+		cp -f $HESTIA/install/deb/php-fpm/www.conf /etc/php/$last/fpm/pool.d/www.conf
+		$BIN/v-restart-web-backend
+	fi
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "system" "Info" "System" "Uninstalled PHP $version."
+log_event "$OK" "$ARGUMENTS"
+
+exit

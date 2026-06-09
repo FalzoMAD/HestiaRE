@@ -1,0 +1,47 @@
+#!/bin/bash
+# info: delete hestia autoupdate cron job
+# options: NONE
+#
+# This function deletes hestia autoupdate cron job.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+is_system_enabled "$CRON_SYSTEM" 'CRON_SYSTEM'
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+sed -i "/v-update-sys-hestia-all/d" "/var/spool/cron/crontabs/hestiaweb"
+sed -i "/v-update-sys-hestia-git/d" "/var/spool/cron/crontabs/hestiaweb"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Restarting crond
+$BIN/v-restart-cron
+check_result $? "Cron restart failed" > /dev/null
+
+# Logging
+$BIN/v-log-action "system" "Warning" "System" "Automatic updates disabled."
+log_event "$OK" "$ARGUMENTS"
+
+exit
