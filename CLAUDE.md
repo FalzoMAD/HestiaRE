@@ -60,7 +60,7 @@ Caddy (OS repo, port 8083) — replaces hestia-nginx.
 PHP: Sury 8.2, isolated FPM pool — replaces hestia-php.
 
 ### Always installed components
-nginx (OS), php multi (Sury 8.1–8.3), mariadb (ext repo), phpmyadmin (OS),
+nginx (OS), php multi (Sury 5.6–8.4), mariadb (ext repo), phpmyadmin (OS),
 caddy (OS), iptables, fail2ban (OS), ipset, composer (system-wide), wp-cli (system-wide)
 
 ### Standard profile adds
