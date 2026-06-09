@@ -10,14 +10,7 @@
 .vs/
 .nova/
 .idea/
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
-nbproject/project.properties
-nbproject/project.xml
+.env
 
 # macOS
 .DS_Store
@@ -25,26 +18,13 @@ nbproject/project.xml
 .LSOverride
 ._*
 
-.env
+# Composer
+composer.phar
+web/inc/vendor/
+web/src/vendor/
 
 # Distribution CSS
 web/css/themes/
 
 # Distribution JS
 web/js/dist/
-
-# Composer
-composer.phar
-test/vendor/
-# PHPMailer
-web/inc/vendor/
-# Quick install
-web/src/vendor/
-.phpunit.result.cache
-
-# vitepress build output
-**/.vitepress/dist/
-**/.vitepress/cache/
-# Node
-**/node_modules/
-npm-debug.log
