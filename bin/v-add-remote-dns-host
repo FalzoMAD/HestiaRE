@@ -1,0 +1,136 @@
+#!/bin/bash
+# info: add new remote dns host
+# options: HOST PORT USER PASSWORD [TYPE] [DNS_USER]
+#
+# example: v-add-remote-dns-host slave.your_host.com 8083 admin your_passw0rd
+#
+# example: v-add-remote-dns-host slave.your_host.com 8083 api_key ''
+#
+# This function adds remote dns server to the dns cluster.
+# As alternative api_key generated on the slave server.
+# See v-generate-api-key can be used to connect the remote dns server
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+host=$1
+HOST=$host
+port=$2
+PORT=$port
+user=$3
+USER=$user
+hash=$user
+HASH=$user
+password=$4
+HIDE=4
+PASSWORD=$password
+type=${5}
+TYPE="$type"
+dns_user=${6-dns-cluster}
+DNS_USER=$dns_user
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/remote.sh
+source $HESTIA/func/remote.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ -z "$type" ]; then
+	type='api'
+	TYPE="$type"
+fi
+
+args_usage='HOST PORT USER [PASSWORD] [TYPE] [DNS_USER]'
+check_args '3' "$#" "$args_usage"
+is_format_valid 'host' 'port' 'dns_user'
+if [ -z "$password" ]; then
+	is_format_valid 'hash'
+else
+	is_format_valid 'user'
+fi
+is_type_valid "api ssh" "$type"
+is_system_enabled "$DNS_SYSTEM" 'DNS_SYSTEM'
+is_password_valid
+is_dnshost_new
+is_dnshost_alive
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Generating timestamp
+time_n_date=$(date +'%T %F')
+time=$(echo "$time_n_date" | cut -f 1 -d \ )
+date=$(echo "$time_n_date" | cut -f 2 -d \ )
+
+if [ -z "$password" ]; then
+	# Concatentating dns host string
+	str="HOST='$host' PORT='$port' HASH='$hash'"
+	str="$str DNS_USER='$dns_user' TYPE='$type' SUSPENDED='no'"
+	str="$str TIME='$time' DATE='$date'"
+else
+	# Concatentating dns host string
+	str="HOST='$host' PORT='$port' USER='$user' PASSWORD='$password'"
+	str="$str DNS_USER='$dns_user' TYPE='$type' SUSPENDED='no'"
+	str="$str TIME='$time' DATE='$date'"
+fi
+
+# Adding host to dns-cluster.conf
+echo "$str" >> $HESTIA/conf/dns-cluster.conf
+chmod 660 $HESTIA/conf/dns-cluster.conf
+
+# Enabling DNS_CLUSTER
+if [ -z "$(grep DNS_CLUSTER= $HESTIA/conf/hestia.conf)" ]; then
+	sed -i "s/^STATS_/DNS_CLUSTER='yes'\nSTATS_/g" $HESTIA/conf/hestia.conf
+else
+	sed -i "s/DNS_CLUSTER=.*/DNS_CLUSTER='yes'/g" $HESTIA/conf/hestia.conf
+fi
+
+# Enabling remote dns-cluster queue
+cluster_cmd v-add-cron-restart-job
+check_result $? "$HOST connection failed" "$E_CONNECT"
+
+# Loop trough domains to generate new serial
+for dns_user in $("$BIN/v-list-users" list); do
+	for dns_domain in $($BIN/v-list-dns-domains $dns_user plain | cut -f1); do
+		$BIN/v-rebuild-dns-domain $dns_user $dns_domain "no" "yes"
+	done
+done
+
+# Syncing all domains
+$BIN/v-sync-dns-cluster
+check_result $? "$HOST sync failed" "$E_CONNECT"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Adding local  dns-cluster cron job
+cmd="v-update-sys-queue dns-cluster"
+check_cron=$(grep "$cmd" "/var/spool/cron/crontabs/hestiaweb" 2> /dev/null)
+if [ -z "$check_cron" ] && [ ! -z "$CRON_SYSTEM" ]; then
+	min='*/5'
+	hour='*'
+	day='*'
+	month='*'
+	wday='*'
+	sed -i -e "\$a$min $hour * * * sudo /usr/local/hestia/bin/$cmd" "/var/spool/cron/crontabs/hestiaweb"
+fi
+
+# Logging
+log_event "$OK" "$ARGUMENTS"
+
+exit

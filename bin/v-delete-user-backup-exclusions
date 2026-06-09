@@ -1,0 +1,82 @@
+#!/bin/bash
+# info: delete backup exclusion
+# options: USER [SYSTEM]
+#
+# example: v-delete-user-backup-exclusions admin
+#
+# This function for deleting backup exclusion
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+system=$(echo "$2" | tr '[:lower:]' '[:upper:]')
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'USER [SYSTEM]'
+is_format_valid 'user'
+is_object_valid 'user' 'USER' "$user"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Delete system exclusion
+if [ -z "$system" ]; then
+	WEB=''
+	DNS=''
+	MAIL=''
+	DB=''
+	CRON=''
+	USER=''
+else
+	touch "$USER_DATA/backup-excludes.conf"
+	source_conf "$USER_DATA/backup-excludes.conf"
+	case $system in
+		WEB) WEB='' ;;
+		DNS) DNS='' ;;
+		MAIL) MAIL='' ;;
+		DB) DB='' ;;
+		CRON) CRON='' ;;
+		USER) USER='' ;;
+	esac
+fi
+
+# Updating exlusion list
+echo "WEB='$WEB'" > $USER_DATA/backup-excludes.conf
+echo "DNS='$DNS'" >> $USER_DATA/backup-excludes.conf
+echo "MAIL='$MAIL'" >> $USER_DATA/backup-excludes.conf
+echo "DB='$DB'" >> $USER_DATA/backup-excludes.conf
+echo "CRON='$DB'" >> $USER_DATA/backup-excludes.conf
+echo "USER='$USER'" >> $USER_DATA/backup-excludes.conf
+chmod 660 $USER_DATA/backup-excludes.conf
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+if [ -z "$system" ]; then
+	$BIN/v-log-action "$user" "Info" "Backup" "Deleted all backup exclusions."
+else
+	$BIN/v-log-action "$user" "Info" "Backup" "Deleted backup exclusions (Service: $system)"
+fi
+log_event "$OK" "$ARGUMENTS"
+
+exit

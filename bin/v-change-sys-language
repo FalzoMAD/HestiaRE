@@ -1,0 +1,78 @@
+#!/bin/bash
+# info: change sys language
+# options: LANGUAGE [UPDATE_USERS]
+#
+# example: v-change-sys-language ru
+#
+# This function for changing system language.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+language=$1
+update_users=$2
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+is_language_valid() {
+	# English is always allowed
+	if [ "$1" != "en" ]; then
+		if ! [[ "$1" =~ ^[[:alnum:]_-]+$ ]]; then
+			echo "Error: language $1 is not valid"
+			log_event "$E_INVALID" "$ARGUMENTS"
+			exit $E_INVALID
+		fi
+		if [ ! -d "$HESTIA/web/locale/$1" ]; then
+			echo "Error: language $1 doesn't exist"
+			log_event "$E_NOTEXIST" "$ARGUMENTS"
+			exit $E_NOTEXIST
+		fi
+	fi
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'LANGUAGE [UPDATE_USERS]'
+is_format_valid 'language'
+is_language_valid "$language"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Change language
+if [ -z "$(grep LANGUAGE $HESTIA/conf/hestia.conf)" ]; then
+	echo "LANGUAGE='$language'" >> $HESTIA/conf/hestia.conf
+else
+	sed -i "s/LANGUAGE=.*/LANGUAGE='$language'/g" $HESTIA/conf/hestia.conf
+fi
+
+# Update language for all existing users if specified
+if [ "$update_users" = "yes" ]; then
+	for user in $("$BIN/v-list-users" list); do
+		$BIN/v-change-user-language "$user" "$language"
+	done
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "system" "Info" "System" "System language changed (Language: $language)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

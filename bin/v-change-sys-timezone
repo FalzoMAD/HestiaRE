@@ -1,0 +1,78 @@
+#!/bin/bash
+# info: change system timezone
+# options: TIMEZONE
+#
+# example: v-change-sys-timezone Europe/Berlin
+#
+# This function for changing system timezone.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+timezone=$1
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+is_timezone_valid() {
+	if [ ! -e "/usr/share/zoneinfo/$timezone" ]; then
+		echo "Error: tz file $timezone doesn't exist"
+		log_event "$E_NOTEXIST" "$ARGUMENTS"
+		exit "$E_NOTEXIST"
+	fi
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'TIMEZONE'
+is_timezone_valid
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Changing system timezone
+which timedatectls > /dev/null 2>&1
+if [ "$?" -eq 0 ]; then
+	timedatectl set-timezone "$timezone"
+else
+	if [ -e "/etc/sysconfig/clock" ]; then
+		sed -i "s/ZONE.*//" /etc/sysconfig/clock
+		echo "ZONE=\"$timezone\"" >> /etc/sysconfig/clock
+	fi
+	if [ -e "/etc/timezone" ]; then
+		echo "$timezone" > /etc/timezone
+	fi
+	rm -f /etc/localtime
+	ln -sf /usr/share/zoneinfo/$timezone /etc/localtime
+fi
+
+# Chaning php timezone
+if [ -n "$WEB_SYSTEM" ]; then
+	for conf in $(find /etc/php* -name php.ini); do
+		sed -i "s|;date.timezone =|date.timezone =|" $conf
+		sed -i "s|date.timezone =.*|date.timezone = $timezone|" $conf
+	done
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "system" "Info" "System" "System time zone changed (Value: $timezone)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

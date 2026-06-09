@@ -1,0 +1,95 @@
+#!/bin/bash
+# info: update host certificate for hestia
+# options: USER HOSTNAME
+#
+# example: v-update-host-certificate admin example.com
+#
+# This function updates the SSL certificate used for Hestia Control Panel.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+whoami=$(whoami)
+if [ "$whoami" != "root" ]; then
+	echo "Error: this script must be run as root."
+	exit 1
+fi
+
+# Argument definition
+user=$1
+hostname=$2
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/ip.sh
+source $HESTIA/func/ip.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" '[USER] [HOSTNAME]'
+is_format_valid 'user'
+is_domain_format_valid "$hostname" "hostname"
+is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
+is_system_enabled "$WEB_SSL" 'SSL_SUPPORT'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$hostname"
+is_object_unsuspended 'web' 'DOMAIN' "$hostname"
+
+if [ ! -f "/home/$user/conf/web/$hostname/ssl/$hostname.pem" ]; then
+	echo "Error: domain $hostname does not have an SSL certificate."
+	exit 1
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Copy hostnames certificates from user dir
+cp /home/$user/conf/web/$hostname/ssl/$hostname.pem $HESTIA/ssl/certificate.crt
+cp /home/$user/conf/web/$hostname/ssl/$hostname.key $HESTIA/ssl/certificate.key
+
+# Enable fallback support for mail domains that do not support SSL
+if [[ "$MAIL_SYSTEM" =~ exim ]]; then
+	# Checking exim username for later chowning
+	exim_user="exim"
+	check_exim_username=$(grep -c '^Debian-exim:' /etc/passwd)
+	if [ "$check_exim_username" -eq 1 ]; then
+		exim_user="Debian-exim"
+	fi
+
+	# Assign exim permissions to certificate
+	chown $exim_user:mail $HESTIA/ssl/certificate.crt
+	chown $exim_user:mail $HESTIA/ssl/certificate.key
+fi
+
+# Add UPDATE_HOSTNAME_SSL if not exist
+if [ -z "$UPDATE_HOSTNAME_SSL" ]; then
+	echo "UPDATE_HOSTNAME_SSL='yes'" >> "$HESTIA/conf/hestia.conf"
+fi
+
+# Restart services
+$BIN/v-restart-mail
+$BIN/v-restart-ftp
+$BIN/v-restart-service "hestia"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "system" "Info" "System" "System SSL certificate updated (Host: $hostname)."
+log_event "$OK" "$ARGUMENTS"
+
+exit 0

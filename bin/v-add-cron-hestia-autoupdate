@@ -1,0 +1,78 @@
+#!/bin/bash
+# info: add cron job for hestia automatic updates
+# options: MODE
+#
+# This function adds a cronjob for hestia automatic updates
+# that can be downloaded from apt or git.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+mode=$1
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+is_system_enabled "$CRON_SYSTEM" 'CRON_SYSTEM'
+check_cron_apt=$(grep 'v-update-sys-hestia-all' "/var/spool/cron/crontabs/hestiaweb")
+check_cron_git=$(grep 'v-update-sys-hestia-git' "/var/spool/cron/crontabs/hestiaweb")
+if [ -n "$check_cron_apt" ] || [ -n "$check_cron_git" ]; then
+	exit
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Generating timestamp
+time_n_date=$(date +'%T %F')
+time=$(echo "$time_n_date" | cut -f 1 -d \ )
+date=$(echo "$time_n_date" | cut -f 2 -d \ )
+
+# Define time somewhere at night
+if [ -z "$mode" ] || [ "$mode" = "apt" ]; then
+	min=$(generate_password '012345' '2')
+	hour=$(generate_password '1234567' '1')
+	day='*'
+	month='*'
+	wday='*'
+	command='v-update-sys-hestia-all'
+fi
+
+if [ "$mode" = "git" ]; then
+	min='0'
+	hour='0'
+	day='*'
+	month='*'
+	wday='*'
+	command='v-update-sys-hestia-git'
+fi
+
+sed -i -e "\$a$min $hour * * * sudo /usr/local/hestia/bin/$command" "/var/spool/cron/crontabs/hestiaweb"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+# Restarting cron
+$BIN/v-restart-cron
+check_result $? "Cron restart failed" > /dev/null
+
+# Logging
+$BIN/v-log-action "system" "Info" "Updates" "Automatic updates enabled."
+log_event "$OK" "$ARGUMENTS"
+
+exit

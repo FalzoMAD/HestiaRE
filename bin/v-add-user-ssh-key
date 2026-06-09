@@ -1,0 +1,73 @@
+#!/bin/bash
+# info: add ssh key
+# options: USER KEY
+#
+# example: v-add-user-ssh-key user 'valid ssh key'
+#
+# Function check if $user/.ssh/authorized_keys exists and create it.
+# After that it append the new key(s)
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+key=$2
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER SSH_PUBLIC_KEY'
+is_format_valid 'user'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Reading user values
+source $USER_DATA/user.conf
+
+AUTHKEY_FILE="$HOMEDIR/$user/.ssh/authorized_keys"
+[ -z "$(readlink -f "$AUTHKEY_FILE" | egrep "^$HOMEDIR/$user/.ssh/")" ] && check_result "$E_FORBIDEN" "Invalid authorized keys path"
+
+# Check if file exits
+if [ ! -f "$AUTHKEY_FILE" ]; then
+	v-add-fs-file "$user" "${AUTHKEY_FILE}"
+fi
+
+[ -z "$key" ] && check_result "$E_NOTEXIST" "Empty ssh public key"
+
+if ! echo "$key" | ssh-keygen -l -f - > /dev/null 2>&1; then
+	check_result "$E_PARSING" "Validating user private key"
+fi
+
+# Make sure authorized_keys ends with EOL
+[ -f "${AUTHKEY_FILE}" ] && sed -i '$a\' "${AUTHKEY_FILE}"
+
+# Append key data to file
+echo "$key" >> "$AUTHKEY_FILE"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "$user" "Info" "System" "Added a new SSH key."
+log_event "$OK" "$ARGUMENTS"
+
+exit

@@ -1,0 +1,69 @@
+#!/bin/bash
+# info: delete user ips
+# options: USER
+#
+# example: v-delete-user-ips admin
+#
+# This function deletes all user's ip addresses.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/ip.sh
+source $HESTIA/func/ip.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'USER'
+is_format_valid 'user'
+is_object_valid 'user' 'USER' "$user"
+if [ "$user" = "$ROOT_USER" ]; then
+	exit
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Parsing user ips
+ip_list=$(grep -H "OWNER='$user'" $HESTIA/data/ips/* | cut -f 1 -d:)
+
+for ip in $ip_list; do
+	ip=$(basename "$ip")
+
+	# Checking webdomains and users
+	is_ip_key_empty '$U_WEB_DOMAINS'
+	is_ip_key_empty '$U_SYS_USERS'
+
+	# Assig ip to main account
+	update_ip_value '$OWNER' "$ROOT_USER"
+	update_ip_value '$STATUS' 'dedicated'
+	increase_user_value "$ROOT_USER" '$IP_OWNED'
+	increase_user_value "$ROOT_USER" '$IP_AVAIL'
+	$BIN/v-log-action "system" "Info" "System" "Removed IP address from user (IP: $ip, User: $user)."
+done
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+log_event "$OK" "$ARGUMENTS"
+
+exit

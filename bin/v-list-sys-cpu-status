@@ -1,0 +1,32 @@
+#!/bin/bash
+# info: list system cpu info
+# options:
+#
+# example: v-list-sys-cpu-status
+#
+# This function lists cpu information
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Displaying top 30
+top -b -n1 | head -n 37
+echo -en "\n---------------------------------------------"
+echo -en "---------------------------------------------\n\n"
+
+# Displaying process tree
+pstree -s
+echo -en "\n---------------------------------------------"
+echo -en "---------------------------------------------\n\n"
+
+# Displaying CPU information
+grep 'model name' /proc/cpuinfo | cut -f 2 -d : | sed "s/ //"
+echo
+lscpu 2> /dev/null
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

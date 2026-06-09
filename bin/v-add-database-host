@@ -1,0 +1,169 @@
+#!/bin/bash
+# info: add new database server
+# options: TYPE HOST DBUSER DBPASS [MAX_DB] [CHARSETS] [TEMPLATE] [PORT]
+#
+# example: v-add-database-host mysql localhost alice p@$$wOrd
+#
+# This function add new database server to the server pool. It supports local
+# and remote database servers, which is useful for clusters. By adding a host
+# you can set limit for number of databases on a host. Template parameter is
+# used only for PostgreSQL and has an default value "template1". You can read
+# more about templates in official PostgreSQL documentation.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+type=$1
+host=$2
+dbuser=$3
+password=$4
+HIDE=4
+max_db=${5-500}
+charsets=${6}
+template=${7}
+port=${8}
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/db.sh
+source $HESTIA/func/db.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+is_mysql_host_alive() {
+	mycnf=$(mktemp)
+	echo "[client]" > $mycnf
+	echo "host='$host'" >> $mycnf
+	echo "user='$dbuser'" >> $mycnf
+	echo "password='$password'" >> $mycnf
+	echo "port='$port'" >> $mycnf
+
+	chmod 600 $mycnf
+	mysql_out=$(mktemp)
+	if [ -f '/usr/bin/mariadb' ]; then
+		mariadb --defaults-file=$mycnf -e 'SELECT VERSION()' > $mysql_out 2>&1
+	else
+		mysql --defaults-file=$mycnf -e 'SELECT VERSION()' > $mysql_out 2>&1
+	fi
+	if [ "$?" -ne '0' ]; then
+		echo "Error: MySQL connection to $host failed"
+		rm $mycnf
+		log_event "$E_CONNECT" "$ARGUMENTS"
+		exit "$E_CONNECT"
+	fi
+
+	if [ -f '/usr/bin/mariadb' ]; then
+		grants=$(mariadb --defaults-file=$mycnf -e 'SHOW GRANTS FOR CURRENT_USER();')
+	else
+		grants=$(mysql --defaults-file=$mycnf -e 'SHOW GRANTS FOR CURRENT_USER();')
+	fi
+
+	if [ "$?" -ne '0' ]; then
+		echo "Error: MySQL connection to $host failed"
+		rm $mycnf
+		log_event "$E_CONNECT" "$ARGUMENTS"
+		exit "$E_CONNECT"
+	fi
+
+	# Check allow to grant user
+	check_grants=$(echo $grants | grep "WITH GRANT OPTION")
+	if [ -z "$check_grants" ]; then
+		echo "Error: MySQL connection to $host failed. Unable to grant other users"
+		rm $mycnf
+		log_event "$E_CONNECT" "$ARGUMENTS"
+		exit "$E_CONNECT"
+	fi
+	rm $mycnf
+}
+
+is_pgsql_host_alive() {
+	export PGPASSWORD="$dbpass"
+	psql -h $host -U $dbuser -p $port -c "SELECT VERSION()" > /dev/null 2>&1
+	if [ "$?" -ne '0' ]; then
+		echo "Error: PostgreSQL connection to $host failed"
+		log_event "$E_CONNECT" "$ARGUMENTS"
+		exit "$E_CONNECT"
+	fi
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+args_usage='TYPE HOST DBUSER DBPASS [MAX_DB] [CHARSETS] [TPL] [PORT]'
+check_args '4' "$#" "$args_usage"
+
+if [ -z $charsets ]; then charsets="UTF8,LATIN1,WIN1250,WIN1251,WIN1252,WIN1256,WIN1258,KOI8"; fi
+if [ -z $template ]; then template="template1"; fi
+
+database_set_default_ports
+
+is_format_valid 'host' 'dbuser' 'max_db' 'charsets' 'template' 'port'
+is_system_enabled "$DB_SYSTEM" 'DB_SYSTEM'
+is_type_valid "$DB_SYSTEM" "$type"
+is_dbhost_new
+is_password_valid
+dbpass="$password"
+
+case $type in
+	mysql) is_mysql_host_alive ;;
+	pgsql) is_pgsql_host_alive ;;
+esac
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Generating timestamp
+time_n_date=$(date +'%T %F')
+time=$(echo "$time_n_date" | cut -f 1 -d \ )
+date=$(echo "$time_n_date" | cut -f 2 -d \ )
+
+# Concatenating db host string
+case $type in
+	mysql)
+		str="HOST='$host' USER='$dbuser' PASSWORD='$dbpass'"
+		str="$str CHARSETS='$charsets' MAX_DB='$max_db' U_SYS_USERS=''"
+		str="$str U_DB_BASES='0' SUSPENDED='no' TIME='$time' DATE='$date' PORT='$port'"
+		;;
+	pgsql)
+		str="HOST='$host' USER='$dbuser' PASSWORD='$dbpass'"
+		str="$str CHARSETS='$charsets' TPL='$template' MAX_DB='$max_db'"
+		str="$str U_SYS_USERS='' U_DB_BASES='0' SUSPENDED='no'"
+		str="$str TIME='$time' DATE='$date' PORT='$port'"
+		;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Adding host to conf
+echo "$str" >> $HESTIA/conf/$type.conf
+chmod 660 $HESTIA/conf/$type.conf
+
+# Updating hestia.conf
+if [ -z "$(grep DB_SYSTEM $HESTIA/conf/hestia.conf)" ]; then
+	echo "DB_SYSTEM='$type'" >> $HESTIA/conf/hestia.conf
+else
+	db=$(echo "$DB_SYSTEM,$type" \
+		| sed "s/,/\n/g" \
+		| sort -r -u \
+		| sed "/^$/d" \
+		| sed ':a;N;$!ba;s/\n/,/g')
+	sed -i "s/DB_SYSTEM=.*/DB_SYSTEM='$db'/g" $HESTIA/conf/hestia.conf
+fi
+
+# Logging
+$BIN/v-log-action "system" "Info" "Database" "Added external $type database server ($host) to the system."
+log_event "$OK" "$ARGUMENTS"
+
+exit

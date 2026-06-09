@@ -1,0 +1,158 @@
+#!/bin/bash
+# info: add php fpm version
+# options: VERSION
+#
+# example: v-add-web-php 8.0
+#
+# Install php-fpm for provided version.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+version=$1
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+source_conf "$HESTIA/install/upgrade/upgrade.conf"
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'VERSION'
+
+if [ -z "$WEB_BACKEND" ]; then
+	echo "Multiple php versions are not supported for modphp"
+fi
+
+# Set file locations
+php_fpm="/etc/init.d/php$version-fpm"
+
+# Verify php version format
+if [[ ! $version =~ ^[0-9]+\.[0-9]+ ]]; then
+	echo "The specified PHP version format is invalid, it should look like [0-9].[0-9]."
+	echo "Example: 7.0, 7.4, 8.0"
+	exit "$E_INVALID"
+fi
+
+# Check if php version already exists
+if [ -f "$php_fpm" ] && [ -f "$HESTIA/data/templates/web/php-fpm/PHP-${version/\./_}.tpl" ]; then
+	echo "ERROR: Specified PHP version is already installed."
+	exit "$E_INVALID"
+fi
+
+# Check if php version is supported
+if [[ ! "$multiphp_v" =~ $version ]]; then
+	echo "ERROR: Specified PHP version is not supported or does not exist."
+	exit "$E_INVALID"
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+mph="php$version-common php$version-mbstring php$version-bcmath php$version-cli php$version-curl
+     php$version-fpm php$version-gd php$version-intl php$version-mysql
+     php$version-soap php$version-xml php$version-zip php$version-json php$version-bz2
+     php$version-pspell php$version-imagick php$version-pgsql php$version-imap php$version-ldap php$version-apcu"
+
+# Check if version is 7.1 or below to add mcrypt
+if [[ $(echo "$version 7.2" | awk '{print ($1 < $2)}') == 1 ]]; then
+	mph="$mph php$version-mcrypt"
+fi
+
+# Check if version is 8.0 or higher and drop json
+if [[ ${version:0:1} == "8" ]]; then
+	mph=$(echo "$mph" | sed -e "s/php$version-json//")
+fi
+
+if ! echo "$DB_SYSTEM" | grep -w 'mysql' > /dev/null; then
+	mph=$(echo "$mph" | sed -e "s/php$version-mysql//")
+fi
+
+if ! echo "$DB_SYSTEM" | grep -w 'pgsql' > /dev/null; then
+	mph=$(echo "$mph" | sed -e "s/php$version-pgsql//")
+fi
+
+# Install php packages
+apt-get -qq update
+apt-get -y -qq -o Dpkg::Options::="--force-confold" install $mph > /dev/null 2>&1 &
+
+BACK_PID=$!
+
+# Check if package installation is done, print a spinner
+echo "Installing PHP-$version, please wait..."
+spinner="/-\|"
+spin_i=1
+while kill -0 $BACK_PID > /dev/null 2>&1; do
+	printf "\b${spinner:spin_i++%${#spinner}:1}"
+	sleep 0.5
+done
+
+# Do a blank echo to get the \n back
+echo
+
+# Check if installation was successful
+if [ ! -f "$php_fpm" ]; then
+	echo "ERROR: Installation failed, please run the following command manually for debugging:"
+	echo "apt-get install $mph"
+fi
+
+# Check if required modules for apache2 are enabled
+if [ "$WEB_SYSTEM" = "apache2" ]; then
+	if ! a2query -q -m proxy_fcgi; then
+		a2enmod -q proxy_fcgi
+	fi
+	if ! a2query -q -m setenvif; then
+		a2enmod -q setenvif
+	fi
+	$BIN/v-restart-web "yes"
+fi
+
+# Configure fpm
+update-rc.d php$version-fpm defaults > /dev/null 2>&1
+v_tpl=${version//./}
+rm -f /etc/php/$version/fpm/pool.d/*
+cp -f $HESTIA_INSTALL_DIR/php-fpm/dummy.conf /etc/php/$version/fpm/pool.d/
+sed -i "s/%backend_version%/$version/g" /etc/php/$version/fpm/pool.d/dummy.conf
+cp -f $HESTIA_INSTALL_DIR/php-fpm/php-fpm.conf /etc/php/$version/fpm/
+sed -i "s/fpm_v/$version/g" /etc/php/$version/fpm/php-fpm.conf
+
+# Increase max upload and max post size
+sed -i "s/upload_max_filesize = 2M/upload_max_filesize = 100M/g" /etc/php/$version/fpm/php.ini
+sed -i "s/post_max_size = 8M/post_max_size = 100M/g" /etc/php/$version/fpm/php.ini
+sed -i "s/max_execution_time = 30/max_execution_time = 60/g" /etc/php/$version/fpm/php.ini
+sed -i "s/;max_input_vars = 1000/max_input_vars = 4000/g" /etc/php/$version/fpm/php.ini
+
+# Disable exec and other harmfull php functions
+sed -i "s/disable_functions =.*/disable_functions = pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wifcontinued,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority,exec,system,passthru,shell_exec,proc_open,popen/g" /etc/php/$version/fpm/php.ini
+
+sed -i "s/disable_functions =.*/disable_functions = pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_wifexited,pcntl_wifstopped,pcntl_wifsignaled,pcntl_wifcontinued,pcntl_wexitstatus,pcntl_wtermsig,pcntl_wstopsig,pcntl_signal,pcntl_signal_dispatch,pcntl_get_last_error,pcntl_strerror,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec,pcntl_getpriority,pcntl_setpriority/g" /etc/php/$version/cli/php.ini
+
+# Other use full changes
+sed -i "s/;opcache.enable=1/opcache.enable=1/g" /etc/php/$version/fpm/php.ini
+sed -i "s/;opcache.memory_consumption=128/opcache.memory_consumption=512/g" /etc/php/$version/fpm/php.ini
+sed -i "s/;opcache.max_accelerated_files=10000/opcache.max_accelerated_files=100000/g" /etc/php/$version/fpm/php.ini
+
+# Install backend template
+cp -f $HESTIA_INSTALL_DIR/php-fpm/multiphp.tpl \
+	$HESTIA/data/templates/web/php-fpm/PHP-${version/\./_}.tpl
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "system" "Info" "System" "Installed PHP $version."
+log_event "$OK" "$ARGUMENTS"
+
+exit

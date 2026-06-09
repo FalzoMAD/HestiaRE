@@ -1,0 +1,37 @@
+#!/bin/bash
+# info: update all hestia packages
+# options: NONE
+#
+# example: v-update-sys-hestia-all
+#
+# This function of updating all hestia packages
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Starting update loop
+for package in hestia hestia-nginx hestia-php; do
+	$BIN/v-update-sys-hestia "$package"
+done
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

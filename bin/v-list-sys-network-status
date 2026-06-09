@@ -1,0 +1,30 @@
+#!/bin/bash
+# info: list system network status
+# options:
+#
+# example: v-list-sys-network-status
+#
+# This function lists network status
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Displaying network stats
+ss -s
+echo -en "\n---------------------------------------------"
+echo -en "---------------------------------------------\n\n"
+
+# Displaying network usage
+lsof -iudp -itcp -n -P
+echo -en "\n---------------------------------------------"
+echo -en "---------------------------------------------\n\n"
+
+# Displaying network interfaces
+ip addr list
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

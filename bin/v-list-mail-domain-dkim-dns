@@ -1,0 +1,86 @@
+#!/bin/bash
+# info: list mail domain dkim dns records
+# options: USER DOMAIN [FORMAT]
+#
+# example: v-list-mail-domain-dkim-dns admin example.com
+#
+# This function of obtaining domain dkim dns records for proper setup.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+format=${3-shell}
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# JSON list function
+json_list() {
+	echo '{'
+	echo -e "\n\t\"mail._domainkey\": {"
+	echo "            \"TTL\": \"3600\","
+	echo "            \"TXT\": \"'v=DKIM1; k=rsa; p=$pub'\""
+	echo -e "\t}\n}"
+}
+
+# SHELL list function
+shell_list() {
+	echo "RECORD            TTL         TYPE      VALUE"
+	echo "------            ---         ----      -----"
+	echo "mail._domainkey   3600   IN   TXT      \"v=DKIM1; k=rsa; p=$pub\""
+}
+
+# PLAIN list function
+plain_list() {
+	echo -e "mail._domainkey\t3600\tIN\tTXT\t\"v=DKIM1; k=rsa; p=$pub\""
+}
+
+# CSV list function
+csv_list() {
+	echo "RECORD,TTL,IN,TYPE,VALUE"
+	echo "mail._domainkey,3600,IN,TXT,\"\"v=DKIM1; k=rsa; p=$pub\"\""
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [FORMAT]'
+is_format_valid 'user' 'domain'
+is_object_valid 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Parsing domain keys
+if [ -e "$USER_DATA/mail/$domain.pub" ]; then
+	pub=$(cat $USER_DATA/mail/$domain.pub | grep -v "KEY-----")
+	pub=$(echo "$pub" | sed ':a;N;$!ba;s/\n//g')
+else
+	pub="DKIM-SUPPORT-IS-NOT-ACTIVATED"
+fi
+
+# Listing data
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list | column -t -s '^' ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

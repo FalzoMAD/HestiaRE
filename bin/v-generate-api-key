@@ -1,0 +1,56 @@
+#!/bin/bash
+# info: generate api key
+# options: NONE
+#
+# example: v-generate-api-key
+#
+# This function creates a key file in $HESTIA/data/keys/
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+keygen() {
+	tr < /dev/urandom -dc _A-Z-a-z-0-9 | head -c 32
+	echo
+}
+HASH=$(keygen)
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+if [ ! -d "$HESTIA/data/keys/" ]; then
+	mkdir -p $HESTIA/data/keys/
+	chown hestiaweb:root $HESTIA/data/keys/
+	chmod 750 $HESTIA/data/keys/
+fi
+
+if [[ -e "$HESTIA/data/keys/$HASH" ]]; then
+	while [[ -e "$HESTIA/data/keys/$HASH" ]]; do
+		HASH=$(keygen)
+	done
+fi
+
+touch $HESTIA/data/keys/$HASH
+echo "$HASH"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/v-log-action "system" "Warning" "System" "New system API key generated (Key: ${HASH})."
+
+exit

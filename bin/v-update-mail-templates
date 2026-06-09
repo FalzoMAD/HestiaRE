@@ -1,0 +1,56 @@
+#!/bin/bash
+# info: update mail templates
+# options: [RESTART] [SKIP]
+#
+# example: v-update-mail-templates
+#
+# This function for obtaining updated webmail templates from Hestia package.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+restart=$1
+skip=$2
+
+# Includes
+# shellcheck source=/etc/hestiacp/hestia.conf
+source /etc/hestiacp/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+check_args '1' "$#" '[RESTART]' '[SKIP]'
+is_format_valid 'restart'
+
+# Update templates
+cp -rf $HESTIA_INSTALL_DIR/templates/mail $HESTIA/data/templates/
+
+# Rebuild mail domains if mail services are enabled
+if [ -z "$skip" ]; then
+	if [ -n "$MAIL_SYSTEM" ]; then
+		for user in $("$BIN/v-list-users" list); do
+			$BIN/v-rebuild-mail-domains "$user" no
+		done
+	fi
+fi
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+if [ -n "$restart" ] || [ "$restart" == "yes" ]; then
+	# Restarting web server
+	$BIN/v-restart-web "$restart"
+	check_result $? "restart" > /dev/null 2>&1
+
+	$BIN/v-restart-proxy "$restart"
+	check_result $? "restart" > /dev/null 2>&1
+fi
+$BIN/v-log-action "system" "Info" "Updates" "Default mail domain templates updated."
+exit
