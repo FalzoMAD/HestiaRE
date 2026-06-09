@@ -1,0 +1,7 @@
+# Exclude from git archive / release tarballs
+.gitattributes export-ignore
+CLAUDE.md export-ignore
+codemap.json export-ignore
+.gitea export-ignore
+.github export-ignore
+dist export-ignore
