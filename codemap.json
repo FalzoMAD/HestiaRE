@@ -8,10 +8,13 @@
   },
 
   "install_paths": {
-    "install_root": "/usr/local/hestia-re",
-    "instance_config": "/etc/hestia-re",
+    "install_root": "/usr/local/hestia",
+    "instance_config": "/etc/hestia",
     "user_data": "/home/$user",
-    "note": "instance_config lives outside the repo and survives updates"
+    "shell_profile": "/etc/profile.d/hestia.sh",
+    "sudo_rules": "/etc/sudoers.d/hestiaweb",
+    "log_dir": "/var/log/hestia",
+    "note": "install_root is intentionally identical to HestiaCP — only instance_config changed (/etc/hestiacp → /etc/hestia). See paths.md for full reference."
   },
 
   "components": {
@@ -55,9 +58,9 @@
       "upstream_debt": {
         "file_count": 514,
         "issues": [
-          "All commands source /etc/hestiacp/hestia.conf — needs /etc/hestia-re/hestia.conf",
-          "All commands reference $HESTIA variable pointing to /usr/local/hestia",
-          "v-add-cron-hestia-autoupdate references HestiaCP update mechanism"
+          "All commands source /etc/hestiacp/hestia.conf — single line change needed: → /etc/hestia/hestia.conf",
+          "$HESTIA variable itself is unchanged (/usr/local/hestia) — no migration needed in bin/*",
+          "v-add-cron-hestia-autoupdate references HestiaCP update mechanism — remove or replace (see paths.md Q5)"
         ]
       }
     },
@@ -97,7 +100,8 @@
       "upstream_debt": {
         "file_count": 3,
         "issues": [
-          "main.sh, domain.sh, backup.sh, db.sh, syshealth.sh, upgrade.sh, remote.sh, ip.sh use $HESTIA and /etc/hestiacp paths",
+          "main.sh sources /etc/hestiacp/hestia.conf — change to /etc/hestia/hestia.conf",
+          "$HESTIA variable unchanged (/usr/local/hestia) — no path migration needed in func/*",
           "upgrade.sh contains HestiaCP version-history migrations not relevant to HestiaRE"
         ]
       }
@@ -214,7 +218,7 @@
           "hestia-web-terminal package reference — must remain removed (ground rule)",
           "install/deb/bind/ and install/deb/vsftpd/ present — must remain unused (ground rule)",
           "install/upgrade/versions/ contain HestiaCP migration history not applicable to HestiaRE",
-          "Configs still write to /etc/hestiacp/hestia.conf"
+          "Configs still write to /etc/hestiacp/hestia.conf — must become /etc/hestia/hestia.conf"
         ]
       }
     },
@@ -298,8 +302,8 @@
     "standard_profile": ["exim4", "dovecot", "rspamd", "roundcube"],
     "optional_hl_service": ["apache2", "proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
     "never_install": ["bind9", "vsftpd", "web-terminal", "spamassassin", "software-installer"],
-    "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx" },
-    "panel_php": { "service": "php8.2-fpm", "source": "sury", "pool": "isolated", "replaces": "hestia-php" }
+    "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "config_path": "TBD — see paths.md Q1" },
+    "panel_php": { "service": "php8.3-fpm", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "pool_config": "TBD — see paths.md Q2" }
   },
 
   "upstream_debt_summary": {
@@ -313,15 +317,15 @@
     "primary_issues": [
       {
         "issue": "Config path mismatch",
-        "detail": "bin/* and func/* source /etc/hestiacp/hestia.conf — must become /etc/hestia-re/hestia.conf",
+        "detail": "bin/* and func/* source /etc/hestiacp/hestia.conf — single-line change to /etc/hestia/hestia.conf per file",
         "affected": "cli_commands, func_libraries",
         "priority": "high"
       },
       {
-        "issue": "HESTIA variable points to old path",
-        "detail": "$HESTIA=/usr/local/hestia throughout — must become /usr/local/hestia-re",
-        "affected": "cli_commands, func_libraries, installer",
-        "priority": "high"
+        "issue": "$HESTIA variable — no change needed",
+        "detail": "Install root stays /usr/local/hestia — $HESTIA is already correct in all 514 bin/* files",
+        "affected": "none",
+        "priority": "resolved"
       },
       {
         "issue": "Removed packages still referenced in installer",
