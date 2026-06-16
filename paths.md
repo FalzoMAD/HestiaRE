@@ -46,14 +46,24 @@
     └── rrd/           RRD graph data files
 ```
 
-### Instance config layout (`/etc/hestia/`)
+### Instance config layout (`/etc/hestia/`) — target state
+
+This shows the **final target** after migrations planned for later issues.
+Current state and migration steps are documented in Section 5.
 
 ```
 /etc/hestia/
 ├── hestia.conf        Bootstrap file — sets $HESTIA, sources local.conf
 │                      Do not edit directly, overwritten on upgrade
 ├── local.conf         User overrides — survives upgrades, outside git
-└── source.conf        Update channel config (github/gitea, token, channel)
+├── source.conf        Update channel config (github/gitea, token, channel)
+├── conf/              Panel instance config (moved from $HESTIA/conf/)
+│   ├── hestia.conf    Active panel config (key=value pairs, generated)
+│   └── defaults/      Known-good baseline
+├── firewall/          Firewall rules and ipset data (moved from $HESTIA/data/firewall/)
+├── ips/               IP address entries (moved from $HESTIA/data/ips/)
+└── hooks/             Optional lifecycle scripts (moved from /etc/hestiacp/hooks/)
+    └── le_pre.sh      Example: LetsEncrypt pre-hook (optional, usually absent)
 ```
 
 ---
@@ -199,7 +209,62 @@ Variables set in `func/main.sh`:
 
 ---
 
-## 5. Open Questions
+## 5. /etc/hestia/ Migration Plan
+
+### 5a. Paths moving to /etc/hestia/ (decided, later issue)
+
+These directories will be migrated in a dedicated follow-up issue.
+Filenames are preserved — no renames.
+
+| Source (current) | Target | Notes |
+|------------------|--------|-------|
+| `/usr/local/hestia/conf/` | `/etc/hestia/conf/` | Panel instance config |
+| `/usr/local/hestia/conf/defaults/` | `/etc/hestia/defaults/` | Flattened one level |
+| `/usr/local/hestia/data/firewall/` | `/etc/hestia/firewall/` | Rules + ipset data |
+| `/usr/local/hestia/data/ips/` | `/etc/hestia/ips/` | IP address entries |
+| `/etc/hestiacp/hooks/` | `/etc/hestia/hooks/` | Lifecycle scripts (usually empty) |
+
+### 5b. Deliberately not moved (pending separate analysis)
+
+| Path | Reason |
+|------|--------|
+| `$HESTIA/data/users/` | Part of the backup format — requires separate analysis before any move |
+| `$HESTIA/data/queue/` | Runtime named pipes — leave untouched for now |
+| `$HESTIA/data/packages/` | Review together with `data/templates/` in a later issue |
+| `$HESTIA/data/templates/` | Review together with `data/packages/` — decision: stay or move to `/etc/hestia/` |
+
+### 5c. Known conflicts / open issues
+
+**Two files named `hestia.conf` — not yet resolved**
+
+There are currently two distinct files with similar names and different roles:
+
+1. **`/etc/hestiacp/hestia.conf`** — Bootstrap file. Sourced as the very first
+   action by every `v-*` and `hl-*` command. Sets `$HESTIA` and `$PATH`.
+   - Current content: `export HESTIA='/usr/local/hestia'` + sources `local.conf`
+   - Target: `/etc/hestia/hestia.conf` — but migration is its own issue because
+     renaming/restructuring this file involves the hestiaweb/admin user topic
+     and a decision on env-file vs. conf-file structure.
+
+2. **`/usr/local/hestia/conf/hestia.conf`** — Panel instance config. Contains all
+   active panel settings as `KEY='value'` pairs (WEB_SYSTEM, MAIL_SYSTEM, etc.).
+   - Target: `/etc/hestia/conf/hestia.conf` (migration in 5a above)
+
+These two files must not be confused. The migration in 5a moves file #2 only.
+File #1 stays at `/etc/hestiacp/hestia.conf` until its dedicated issue resolves
+the env vs. conf question and the user/account consolidation.
+
+### 5d. Deferred to later issues
+
+| Topic | Scope |
+|-------|-------|
+| Bootstrap file restructure | `/etc/hestiacp/hestia.conf` → `/etc/hestia/hestia.conf`, env vs. conf format, hestiaweb/admin user consolidation |
+| `data/packages/` + `data/templates/` | Decision: move to `/etc/hestia/` or keep under install root |
+| `data/users/` | Backup format compatibility analysis required before any move |
+
+---
+
+## 6. Open Questions
 
 These paths need a decision before the corresponding installer work begins. No implementation should proceed without resolution.
 
