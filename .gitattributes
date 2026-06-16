@@ -2,6 +2,7 @@
 .gitattributes export-ignore
 CLAUDE.md export-ignore
 codemap.json export-ignore
+paths.md export-ignore
 .gitea export-ignore
 .github export-ignore
 dist export-ignore
