@@ -174,7 +174,7 @@ prepare_web_domain_values() {
 	sdocroot="$docroot"
 	if [ "$SSL_HOME" = 'single' ]; then
 		sdocroot="$HOMEDIR/$user/web/$domain/public_shtml"
-		$BIN/v-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/public_shtml"
+		$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/public_shtml"
 		chmod 751 $HOMEDIR/$user/web/$domain/public_shtml
 		chown www-data:$user $HOMEDIR/$user/web/$domain/public_shtml
 	fi
@@ -803,7 +803,7 @@ add_mail_ssl_config() {
 
 	# Check if using custom / wildcard mail certificate
 	wildcard_domain="\\*.$(echo "$domain" | cut -f 1 -d . --complement)"
-	mail_cert_match=$($BIN/v-list-mail-domain-ssl $user $domain | awk '/SUBJECT|ALIASES/' | grep -wE " $domain| $wildcard_domain")
+	mail_cert_match=$($BIN/h-list-mail-domain-ssl $user $domain | awk '/SUBJECT|ALIASES/' | grep -wE " $domain| $wildcard_domain")
 	dovecot_version="$(dovecot --version | cut -f -2 -d .)"
 
 	if [ -n "$mail_cert_match" ]; then
@@ -859,7 +859,7 @@ add_mail_ssl_config() {
 del_mail_ssl_config() {
 	# Check to prevent accidental removal of mismatched certificate
 	wildcard_domain="\\*.$(echo "$domain" | cut -f 1 -d . --complement)"
-	mail_cert_match=$($BIN/v-list-mail-domain-ssl $user $domain | awk '/SUBJECT|ALIASES/' | grep -wE " $domain| $wildcard_domain")
+	mail_cert_match=$($BIN/h-list-mail-domain-ssl $user $domain | awk '/SUBJECT|ALIASES/' | grep -wE " $domain| $wildcard_domain")
 
 	# Remove old mail certificates
 	rm -f $HOMEDIR/$user/conf/mail/$domain/ssl/*

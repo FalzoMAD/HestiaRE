@@ -23,4 +23,4 @@ fi
 
 rm -f /etc/php/*/fpm/pool.d/www.conf
 cp -f $HESTIA/install/deb/php-fpm/www.conf /etc/php/$version/fpm/pool.d/www.conf
-$HESTIA/bin/v-restart-web-backend
+$HESTIA/bin/h-restart-web-backend

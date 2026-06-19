@@ -16,7 +16,7 @@ if ($_GET["type"] == "error") {
 // Header
 include $_SERVER["DOCUMENT_ROOT"] . "/templates/pages/list_weblog.php";
 
-exec(HESTIA_CMD . "v-list-web-domain-" . $type . "log $user " . $v_domain, $output, $return_var);
+exec(HESTIA_CMD . "h-list-web-domain-" . $type . "log $user " . $v_domain, $output, $return_var);
 
 if ($return_var == 0) {
 	foreach ($output as $file) {

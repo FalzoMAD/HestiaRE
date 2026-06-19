@@ -23,7 +23,7 @@ if ($_SESSION["userContext"] === "admin") {
 	if (!empty($_GET["package"])) {
 		$v_package = quoteshellarg($_GET["package"]);
 		exec(
-			HESTIA_CMD . "v-copy-user-package " . $v_package . " " . $v_package . "-copy",
+			HESTIA_CMD . "h-copy-user-package " . $v_package . " " . $v_package . "-copy",
 			$output,
 			$return_var,
 		);

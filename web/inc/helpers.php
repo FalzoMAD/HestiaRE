@@ -119,7 +119,7 @@ function get_real_user_ip() {
 }
 
 /**
- * Create a history log using 'v-log-action' script.
+ * Create a history log using 'h-log-action' script.
  *
  * @param string $message The message for log.
  * @param string $category A category for log. Ex: Auth, Firewall, API...
@@ -141,7 +141,7 @@ function hst_add_history_log($message, $category = "System", $level = "Info", $u
 		quoteshellarg($category) .
 		" " .
 		quoteshellarg($message);
-	exec(HESTIA_CMD . "v-log-action " . $command_args, $output, $return_var);
+	exec(HESTIA_CMD . "h-log-action " . $command_args, $output, $return_var);
 	unset($output);
 
 	return $return_var;

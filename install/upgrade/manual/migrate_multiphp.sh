@@ -22,7 +22,7 @@ source $HESTIA/conf/hestia.conf
 # apache+multiphp:
 #   Change Hestia WEB_BACKEND from null to php-fpm
 #   Create backend templates ex: PHP-7_3, PHP-5_6 (in $HESTIA/data/templates/web/php-fpm/)
-#   v-update-web-templates
+#   h-update-web-templates
 #   Loop through all web domains
 #   If official multiphp tpl is used ex: PHP-72, then change backend tpl and set app web template to default
 #       ( old default.tpl backend maps to PHP-7_3 )
@@ -47,7 +47,7 @@ if [ "$num_php_versions" -gt 1 ] && [ -z "$WEB_BACKEND" ]; then
 	sed -i "/^WEB_BACKEND=/d" $HESTIA/conf/hestia.conf
 	echo "WEB_BACKEND='php-fpm'" >> $HESTIA/conf/hestia.conf
 
-	for php_ver in $(v-list-sys-php); do
+	for php_ver in $(h-list-sys-php); do
 		[ ! -d "/etc/php/$php_ver/fpm/pool.d/" ] && continue
 		cp -f "$HESTIA_INSTALL_DIR/php-fpm/multiphp.tpl" ${WEBTPL}/php-fpm/PHP-${php_ver/\./_}.tpl
 	done
@@ -57,7 +57,7 @@ if [ "$num_php_versions" -gt 1 ] && [ -z "$WEB_BACKEND" ]; then
 	fi
 
 	# Migrate domains
-	for user in $($BIN/v-list-sys-users plain); do
+	for user in $($BIN/h-list-sys-users plain); do
 		# Define user data and get suspended status
 		USER_DATA=$HESTIA/data/users/$user
 		SUSPENDED=$(get_user_value '$SUSPENDED')
@@ -65,20 +65,20 @@ if [ "$num_php_versions" -gt 1 ] && [ -z "$WEB_BACKEND" ]; then
 		# Check if user is suspended
 		if [ "$SUSPENDED" = "yes" ]; then
 			suspended="yes"
-			$BIN/v-unsuspend-user $user
+			$BIN/h-unsuspend-user $user
 		fi
 		echo "Migrating legacy multiphp domains for user: $user"
-		for domain in $($BIN/v-list-web-domains $user plain | cut -f1); do
+		for domain in $($BIN/h-list-web-domains $user plain | cut -f1); do
 			SUSPENDED_WEB=$(get_object_value 'web' 'DOMAIN' "$domain" '$SUSPENDED')
 			# Check if web domain is suspended
 			if [ "$SUSPENDED_WEB" = "yes" ]; then
 				suspended_web="yes"
-				$BIN/v-unsuspend-web-domain $user $domain
+				$BIN/h-unsuspend-web-domain $user $domain
 			fi
 			echo "Processing domain: $domain"
 			web_tpl="default"
 			backend_tpl="$DEFAULT_BTPL"
-			domain_tpl=$($BIN/v-list-web-domain $user $domain | grep "^TEMPLATE:" | awk '{print $2;}')
+			domain_tpl=$($BIN/h-list-web-domain $user $domain | grep "^TEMPLATE:" | awk '{print $2;}')
 
 			if [ "$domain_tpl" = "PHP-56" ]; then
 				backend_tpl="PHP-5_6"
@@ -126,26 +126,26 @@ if [ "$num_php_versions" -gt 1 ] && [ -z "$WEB_BACKEND" ]; then
 			fi
 
 			echo "Parsed config: oldTPL=$domain_tpl newTPL:$web_tpl newBackTPL:$backend_tpl"
-			$BIN/v-change-web-domain-tpl "$user" "$domain" "$web_tpl" "no"
-			$BIN/v-change-web-domain-backend-tpl "$user" "$domain" "$backend_tpl" "no"
+			$BIN/h-change-web-domain-tpl "$user" "$domain" "$web_tpl" "no"
+			$BIN/h-change-web-domain-backend-tpl "$user" "$domain" "$backend_tpl" "no"
 			echo -e "--done--\n"
 
 			# Suspend domain again, if it was suspended
 			if [ "$suspended_web" = "yes" ]; then
 				unset suspended_web
-				$BIN/v-suspend-web-domain $user $domain
+				$BIN/h-suspend-web-domain $user $domain
 			fi
 		done
 
 		# Suspend user again, if he was suspended
 		if [ "$suspended" = "yes" ]; then
 			unset suspended
-			$BIN/v-suspend-user $user
+			$BIN/h-suspend-user $user
 		fi
 	done
 
 	# cleanup legacy multiphp templates
-	for php_ver in $(v-list-sys-php); do
+	for php_ver in $(h-list-sys-php); do
 		[ ! -d "/etc/php/$php_ver/fpm/pool.d/" ] && continue
 		echo "Remove legacy multiphp templates for: $php_ver"
 		[ -f "$WEBTPL/$WEB_SYSTEM/PHP-${php_ver//./}.sh" ] && rm "$WEBTPL/$WEB_SYSTEM/PHP-${php_ver//./}.sh"
@@ -158,5 +158,5 @@ if [ "$num_php_versions" -gt 1 ] && [ -z "$WEB_BACKEND" ]; then
 	[ -f "$WEBTPL/$WEB_SYSTEM/default.tpl" ] && rm "$WEBTPL/$WEB_SYSTEM/default.tpl"
 	[ -f "$WEBTPL/$WEB_SYSTEM/default.stpl" ] && rm "$WEBTPL/$WEB_SYSTEM/default.stpl"
 
-	$BIN/v-update-web-templates 'no'
+	$BIN/h-update-web-templates 'no'
 fi

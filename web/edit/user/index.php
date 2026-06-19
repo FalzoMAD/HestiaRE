@@ -40,7 +40,7 @@ if (
 verify_csrf($_GET);
 
 // List user
-exec(HESTIA_CMD . "v-list-user " . quoteshellarg($v_username) . " json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-user " . quoteshellarg($v_username) . " json", $output, $return_var);
 check_return_code_redirect($return_var, $output, "/list/user/");
 
 $data = json_decode(implode("", $output), true);
@@ -119,12 +119,12 @@ if (empty($v_phpcli)) {
 }
 
 // List packages
-exec(HESTIA_CMD . "v-list-user-packages json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-user-packages json", $output, $return_var);
 $packages = json_decode(implode("", $output), true);
 unset($output);
 
 // List languages
-exec(HESTIA_CMD . "v-list-sys-languages json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-languages json", $output, $return_var);
 $language = json_decode(implode("", $output), true);
 foreach ($language as $lang) {
 	$languages[$lang] = translate_json($lang);
@@ -133,18 +133,18 @@ asort($languages);
 unset($output);
 
 // List themes
-exec(HESTIA_CMD . "v-list-sys-themes json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-themes json", $output, $return_var);
 $themes = json_decode(implode("", $output), true);
 unset($output);
 
 // List shells
-exec(HESTIA_CMD . "v-list-sys-shells json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
 $shells = json_decode(implode("", $output), true);
 unset($output);
 
 //List PHP Versions
 // List supported php versions
-exec(HESTIA_CMD . "v-list-sys-php json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-php json", $output, $return_var);
 $php_versions = json_decode(implode("", $output), true);
 unset($output);
 
@@ -167,7 +167,7 @@ if (!empty($_POST["save"])) {
 			fclose($fp);
 			exec(
 				HESTIA_CMD .
-					"v-change-user-password " .
+					"h-change-user-password " .
 					quoteshellarg($v_username) .
 					" " .
 					$v_password,
@@ -183,13 +183,13 @@ if (!empty($_POST["save"])) {
 
 	// Enable twofa
 	if (!empty($_POST["v_twofa"]) && empty($v_twofa) && empty($_SESSION["error_msg"])) {
-		exec(HESTIA_CMD . "v-add-user-2fa " . quoteshellarg($v_username), $output, $return_var);
+		exec(HESTIA_CMD . "h-add-user-2fa " . quoteshellarg($v_username), $output, $return_var);
 		check_return_code($return_var, $output);
 		unset($output);
 
 		// List user
 		exec(
-			HESTIA_CMD . "v-list-user " . quoteshellarg($v_username) . " json",
+			HESTIA_CMD . "h-list-user " . quoteshellarg($v_username) . " json",
 			$output,
 			$return_var,
 		);
@@ -204,7 +204,7 @@ if (!empty($_POST["save"])) {
 
 	// Disable twofa
 	if (empty($_POST["v_twofa"]) && !empty($v_twofa) && empty($_SESSION["error_msg"])) {
-		exec(HESTIA_CMD . "v-delete-user-2fa " . quoteshellarg($v_username), $output, $return_var);
+		exec(HESTIA_CMD . "h-delete-user-2fa " . quoteshellarg($v_username), $output, $return_var);
 		check_return_code($return_var, $output);
 		unset($output);
 		$v_twofa = "";
@@ -216,7 +216,7 @@ if (!empty($_POST["save"])) {
 		$v_sort_order = quoteshellarg($_POST["v_sort_order"]);
 		exec(
 			HESTIA_CMD .
-				"v-change-user-sort-order " .
+				"h-change-user-sort-order " .
 				quoteshellarg($v_username) .
 				" " .
 				$v_sort_order,
@@ -242,7 +242,7 @@ if (!empty($_POST["save"])) {
 			}
 			exec(
 				HESTIA_CMD .
-					"v-change-user-config-value " .
+					"h-change-user-config-value " .
 					quoteshellarg($v_username) .
 					" LOGIN_DISABLED " .
 					quoteshellarg($_POST["v_login_disabled"]),
@@ -268,7 +268,7 @@ if (!empty($_POST["save"])) {
 			}
 			exec(
 				HESTIA_CMD .
-					"v-change-user-config-value " .
+					"h-change-user-config-value " .
 					quoteshellarg($v_username) .
 					" LOGIN_USE_IPLIST " .
 					quoteshellarg($_POST["v_login_use_iplist"]),
@@ -278,7 +278,7 @@ if (!empty($_POST["save"])) {
 			if ($_POST["v_login_use_iplist"] === "no") {
 				exec(
 					HESTIA_CMD .
-						"v-change-user-config-value " .
+						"h-change-user-config-value " .
 						quoteshellarg($v_username) .
 						" LOGIN_ALLOW_IPS ''",
 					$output,
@@ -288,7 +288,7 @@ if (!empty($_POST["save"])) {
 			} else {
 				exec(
 					HESTIA_CMD .
-						"v-change-user-config-value " .
+						"h-change-user-config-value " .
 						quoteshellarg($v_username) .
 						" LOGIN_ALLOW_IPS " .
 						quoteshellarg($_POST["v_login_allowed_ips"]),
@@ -314,7 +314,7 @@ if (!empty($_POST["save"])) {
 			$v_package = quoteshellarg($_POST["v_package"]);
 			exec(
 				HESTIA_CMD .
-					"v-change-user-package " .
+					"h-change-user-package " .
 					quoteshellarg($v_username) .
 					" " .
 					$v_package,
@@ -334,7 +334,7 @@ if (!empty($_POST["save"])) {
 			$v_phpcli = quoteshellarg($_POST["v_phpcli"]);
 			exec(
 				HESTIA_CMD .
-					"v-change-user-php-cli " .
+					"h-change-user-php-cli " .
 					quoteshellarg($v_username) .
 					" " .
 					$v_phpcli,
@@ -356,7 +356,7 @@ if (!empty($_POST["save"])) {
 			if (!empty($_POST["v_role"])) {
 				$v_role = quoteshellarg($_POST["v_role"]);
 				exec(
-					HESTIA_CMD . "v-change-user-role " . quoteshellarg($v_username) . " " . $v_role,
+					HESTIA_CMD . "h-change-user-role " . quoteshellarg($v_username) . " " . $v_role,
 					$output,
 					$return_var,
 				);
@@ -376,7 +376,7 @@ if (!empty($_POST["save"])) {
 
 				exec(
 					HESTIA_CMD .
-						"v-change-user-shell " .
+						"h-change-user-shell " .
 						quoteshellarg($v_username) .
 						" " .
 						$v_shell,
@@ -392,7 +392,7 @@ if (!empty($_POST["save"])) {
 	if ($v_language != $_POST["v_language"] && empty($_SESSION["error_msg"])) {
 		$v_language = quoteshellarg($_POST["v_language"]);
 		exec(
-			HESTIA_CMD . "v-change-user-language " . quoteshellarg($v_username) . " " . $v_language,
+			HESTIA_CMD . "h-change-user-language " . quoteshellarg($v_username) . " " . $v_language,
 			$output,
 			$return_var,
 		);
@@ -415,7 +415,7 @@ if (!empty($_POST["save"])) {
 		} else {
 			$v_email = quoteshellarg($_POST["v_email"]);
 			exec(
-				HESTIA_CMD . "v-change-user-contact " . quoteshellarg($v_username) . " " . $v_email,
+				HESTIA_CMD . "h-change-user-contact " . quoteshellarg($v_username) . " " . $v_email,
 				$output,
 				$return_var,
 			);
@@ -431,7 +431,7 @@ if (!empty($_POST["save"])) {
 		} else {
 			$v_name = quoteshellarg($_POST["v_name"]);
 			exec(
-				HESTIA_CMD . "v-change-user-name " . quoteshellarg($v_username) . " " . $v_name,
+				HESTIA_CMD . "h-change-user-name " . quoteshellarg($v_username) . " " . $v_name,
 				$output,
 				$return_var,
 			);
@@ -449,7 +449,7 @@ if (!empty($_POST["save"])) {
 		if ($_POST["v_user_theme"] != $_SESSION["userTheme"]) {
 			exec(
 				HESTIA_CMD .
-					"v-change-user-theme " .
+					"h-change-user-theme " .
 					quoteshellarg($v_username) .
 					" " .
 					quoteshellarg($_POST["v_user_theme"]),
@@ -516,7 +516,7 @@ if (!empty($_POST["save"])) {
 
 				$ns_cmd =
 					HESTIA_CMD .
-					"v-change-user-ns " .
+					"h-change-user-ns " .
 					quoteshellarg($v_username) .
 					" " .
 					$v_ns1 .

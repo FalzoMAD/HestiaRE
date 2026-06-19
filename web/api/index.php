@@ -5,7 +5,7 @@ try {
 	require_once "../inc/vendor/autoload.php";
 } catch (Throwable $ex) {
 	$errstr =
-		"Unable to load required libraries. Please run v-add-sys-dependencies in command line. Error: " .
+		"Unable to load required libraries. Please run h-add-sys-dependencies in command line. Error: " .
 		$ex->getMessage();
 	trigger_error($errstr);
 	echo $errstr;
@@ -57,7 +57,7 @@ function api_error($exit_code, $message, $hst_return, bool $add_log = false, $us
  */
 function api_legacy(array $request_data) {
 	$hst_return = ($request_data["returncode"] ?? "no") === "yes" ? "code" : "data";
-	exec(HESTIA_CMD . "v-list-sys-config json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
 	$settings = json_decode(implode("", $output), true);
 	unset($output);
 
@@ -77,7 +77,7 @@ function api_legacy(array $request_data) {
 	//This exists, so native JSON can be used without the repeating the code twice, so future code changes are easier and don't need to be replicated twice
 	// Authentication
 	if (empty($request_data["hash"])) {
-		exec(HESTIA_CMD . "v-list-sys-config json", $output, $return_var);
+		exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
 		$data = json_decode(implode("", $output), true);
 		$root_user = $data["config"]["ROOT_USER"];
 
@@ -91,7 +91,7 @@ function api_legacy(array $request_data) {
 		$v_ip = quoteshellarg(get_real_user_ip());
 		$user = quoteshellarg($root_user);
 		unset($output);
-		exec(HESTIA_CMD . "v-get-user-salt " . $user . " " . $v_ip . " json", $output, $return_var);
+		exec(HESTIA_CMD . "h-get-user-salt " . $user . " " . $v_ip . " json", $output, $return_var);
 		$pam = json_decode(implode("", $output), true);
 		$salt = $pam[$root_user]["SALT"];
 		$method = $pam[$root_user]["METHOD"];
@@ -110,7 +110,7 @@ function api_legacy(array $request_data) {
 			unset($output);
 			exec(
 				HESTIA_CMD .
-					"v-check-user-password " .
+					"h-check-user-password " .
 					quoteshellarg($root_user) .
 					" " .
 					quoteshellarg($v_password) .
@@ -136,7 +136,7 @@ function api_legacy(array $request_data) {
 
 		// Check user hash
 		exec(
-			HESTIA_CMD . "v-check-user-hash " . $user . " " . $v_hash . " " . $v_ip,
+			HESTIA_CMD . "h-check-user-hash " . $user . " " . $v_hash . " " . $v_ip,
 			$output,
 			$return_var,
 		);
@@ -153,7 +153,7 @@ function api_legacy(array $request_data) {
 		$key = "/usr/local/hestia/data/keys/" . basename($request_data["hash"]);
 		$v_ip = quoteshellarg(get_real_user_ip());
 		exec(
-			HESTIA_CMD . "v-check-api-key " . quoteshellarg($key) . " " . $v_ip,
+			HESTIA_CMD . "h-check-api-key " . quoteshellarg($key) . " " . $v_ip,
 			$output,
 			$return_var,
 		);
@@ -179,7 +179,7 @@ function api_legacy(array $request_data) {
 	}
 
 	// Check command
-	if ($hst_cmd == "v-make-tmp-file") {
+	if ($hst_cmd == "h-make-tmp-file") {
 		// Used in DNS Cluster
 		$fp = fopen("/tmp/" . basename(escapeshellcmd($hst_cmd_args["arg2"])), "w");
 		fwrite($fp, $hst_cmd_args["arg1"] . "\n");
@@ -221,7 +221,7 @@ function api_connection(array $request_data) {
 	$hst_return = ($request_data["returncode"] ?? "no") === "yes" ? "code" : "data";
 	$v_real_user_ip = get_real_user_ip();
 
-	exec(HESTIA_CMD . "v-list-sys-config json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
 	$settings = json_decode(implode("", $output), true);
 	unset($output, $return_var);
 	$root_user = $settings["config"]["ROOT_USER"];
@@ -268,7 +268,7 @@ function api_connection(array $request_data) {
 	// Authenticates the key and checks permission to run the script
 	exec(
 		HESTIA_CMD .
-			"v-check-access-key " .
+			"h-check-access-key " .
 			quoteshellarg($hst_access_key_id) .
 			" " .
 			quoteshellarg($hst_secret_access_key) .
@@ -319,8 +319,8 @@ function api_connection(array $request_data) {
 		$cmdquery .= " " . quoteshellarg($cmd_arg);
 	}
 
-	# v-make-temp files is manodory other wise some functions will break
-	if ($hst_cmd == "v-make-tmp-file") {
+	# h-make-temp files is manodory other wise some functions will break
+	if ($hst_cmd == "h-make-tmp-file") {
 		$fp = fopen("/tmp/" . basename($hst_cmd_args["arg2"]), "w");
 		fwrite($fp, $hst_cmd_args["arg1"] . "\n");
 		fclose($fp);

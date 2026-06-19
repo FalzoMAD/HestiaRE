@@ -28,7 +28,7 @@ $setname = $_POST["setname"];
 $action = $_POST["action"];
 switch ($action) {
 	case "delete":
-		$cmd = "v-delete-firewall-ipset";
+		$cmd = "h-delete-firewall-ipset";
 		break;
 	default:
 		header("Location: /list/firewall/ipset/");

@@ -36,6 +36,6 @@ if [[ "$ID" == "debian" && "$VERSION_ID" == "13" ]]; then
 	# Only create/modify the file if it doesn't already contain the correct config
 	if [[ ! -f "$_KEX_CONF" ]] || ! grep -qxF "$_KEX_LINE" "$_KEX_CONF"; then
 		echo "$_KEX_LINE" > "$_KEX_CONF"
-		"$BIN"/v-restart-service ssh
+		"$BIN"/h-restart-service ssh
 	fi
 fi

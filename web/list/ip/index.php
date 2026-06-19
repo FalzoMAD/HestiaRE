@@ -12,7 +12,7 @@ if ($_SESSION["userContext"] != "admin") {
 }
 
 // Data
-exec(HESTIA_CMD . "v-list-sys-ips json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-ips json", $output, $return_var);
 $data = json_decode(implode("", $output), true);
 if ($_SESSION["userSortOrder"] == "name") {
 	ksort($data);

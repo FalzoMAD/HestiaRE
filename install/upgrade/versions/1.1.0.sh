@@ -9,7 +9,7 @@
 # Set default theme
 if [ -z $THEME ]; then
 	echo "[ * ] Enabling support for themes..."
-	$BIN/v-change-sys-theme 'default'
+	$BIN/h-change-sys-theme 'default'
 fi
 
 # Reduce SSH login grace time
@@ -29,7 +29,7 @@ fi
 # Enable OCSP SSL stapling and harden nginx configuration for roundcube
 if [ ! -z "$IMAP_SYSTEM" ]; then
 	echo "[ * ] Hardening security of Roundcube webmail..."
-	$BIN/v-update-mail-templates > /dev/null 2>&1
+	$BIN/h-update-mail-templates > /dev/null 2>&1
 	if [ -e /etc/nginx/conf.d/webmail.inc ]; then
 		cp -f /etc/nginx/conf.d/webmail.inc $HESTIA_BACKUP/conf/
 		sed -i "s/config|temp|logs/README.md|config|temp|logs|bin|SQL|INSTALL|LICENSE|CHANGELOG|UPGRADING/g" /etc/nginx/conf.d/webmail.inc
@@ -37,9 +37,9 @@ if [ ! -z "$IMAP_SYSTEM" ]; then
 fi
 
 # Fix restart queue
-if [ -z "$($BIN/v-list-cron-jobs admin | grep 'v-update-sys-queue restart')" ]; then
-	command="sudo $BIN/v-update-sys-queue restart"
-	$BIN/v-add-cron-job 'admin' '*/2' '*' '*' '*' '*' "$command"
+if [ -z "$($BIN/h-list-cron-jobs admin | grep 'h-update-sys-queue restart')" ]; then
+	command="sudo $BIN/h-update-sys-queue restart"
+	$BIN/h-add-cron-job 'admin' '*/2' '*' '*' '*' '*' "$command"
 fi
 
 # Remove deprecated line from ClamAV configuration file
@@ -51,7 +51,7 @@ if [ -e "/etc/clamav/clamd.conf" ]; then
 	fi
 fi
 
-# Remove errornous history.log file created by certain builds due to bug in v-restart-system
+# Remove errornous history.log file created by certain builds due to bug in h-restart-system
 if [ -e $HESTIA/data/users/history.log ]; then
 	rm -f $HESTIA/data/users/history.log
 fi
@@ -80,13 +80,13 @@ fi
 # Fix sftp jail cronjob
 if [ -e "/etc/cron.d/hestia-sftp" ]; then
 	if ! cat /etc/cron.d/hestia-sftp | grep -q 'root'; then
-		echo "@reboot root /usr/local/hestia/bin/v-add-sys-sftp-jail" > /etc/cron.d/hestia-sftp
+		echo "@reboot root /usr/local/hestia/bin/h-add-sys-sftp-jail" > /etc/cron.d/hestia-sftp
 	fi
 fi
 
 # Create default writeable folders for all users
 echo "[ * ] Updating default writable folders for all users..."
-for user in $($HESTIA/bin/v-list-sys-users plain); do
+for user in $($HESTIA/bin/h-list-sys-users plain); do
 	mkdir -p \
 		$HOMEDIR/$user/.cache \
 		$HOMEDIR/$user/.config \
@@ -121,7 +121,7 @@ fi
 GZIP_LVL_CHECK=$(cat $HESTIA/conf/hestia.conf | grep BACKUP_GZIP)
 if [ -z "$GZIP_LVL_CHECK" ]; then
 	echo "[ * ] Updating backup compression level variable..."
-	$BIN/v-change-sys-config-value "BACKUP_GZIP" '9'
+	$BIN/h-change-sys-config-value "BACKUP_GZIP" '9'
 fi
 
 # Randomize Roundcube des_key for better security
@@ -182,10 +182,10 @@ if [ -e "/etc/logrotate/apache2" ]; then
 fi
 
 # Repair messed up user log permissions from the logrotate bug. Ignoring errors
-for user in $($HESTIA/bin/v-list-users plain | cut -f1); do
-	for domain in $($HESTIA/bin/v-list-web-domains $user plain | cut -f1); do
+for user in $($HESTIA/bin/h-list-users plain | cut -f1); do
+	for domain in $($HESTIA/bin/h-list-web-domains $user plain | cut -f1); do
 		chown root:$user /var/log/$WEB_SYSTEM/domains/$domain.* > /dev/null 2>&1
-		for sub_domain in $($HESTIA/bin/v-list-web-domain $user $domain plain | cut -f7 | tr ',' '\n'); do
+		for sub_domain in $($HESTIA/bin/h-list-web-domain $user $domain plain | cut -f7 | tr ',' '\n'); do
 			chown root:$user /var/log/$WEB_SYSTEM/domains/$sub_domain.* > /dev/null 2>&1
 		done
 	done

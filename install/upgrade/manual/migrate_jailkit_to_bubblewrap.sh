@@ -28,10 +28,10 @@ fi
 #----------------------------------------------------------#
 
 # Enable the bubblewrap jail for the system
-$BIN/v-add-sys-ssh-jail
+$BIN/h-add-sys-ssh-jail
 
 ## Migrate user jails to bubblewrap jails
-for user in $("$BIN/v-list-users" list); do
+for user in $("$BIN/h-list-users" list); do
 	check_jail_enabled=$(grep "SHELL_JAIL_ENABLED='yes'" $HESTIA/data/users/$user/user.conf)
 
 	# If jail enabled remove the jailkit jail first then bubblewrap the jail
@@ -53,7 +53,7 @@ for user in $("$BIN/v-list-users" list); do
 		gpasswd -d "$user" ssh-jailed > /dev/null 2>&1
 
 		# Enable bubblewrap jail for user
-		$BIN/v-change-user-shell $user jailbash
+		$BIN/h-change-user-shell $user jailbash
 
 		# Remove config line from user.conf
 		sed -i "/SHELL_JAIL_ENABLED='yes'/d" $HESTIA/data/users/$user/user.conf

@@ -15,7 +15,7 @@ if ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) {
 if (!empty($_GET["domain"])) {
 	$v_domain = quoteshellarg($_GET["domain"]);
 	exec(
-		HESTIA_CMD . "v-delete-web-domain " . $user . " " . $v_domain . " 'yes'",
+		HESTIA_CMD . "h-delete-web-domain " . $user . " " . $v_domain . " 'yes'",
 		$output,
 		$return_var,
 	);

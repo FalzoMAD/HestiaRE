@@ -8,7 +8,7 @@ verify_csrf($_GET);
 
 if (!empty($_GET["job"])) {
 	$v_job = quoteshellarg($_GET["job"]);
-	exec(HESTIA_CMD . "v-suspend-cron-job " . $user . " " . $v_job, $output, $return_var);
+	exec(HESTIA_CMD . "h-suspend-cron-job " . $user . " " . $v_job, $output, $return_var);
 	check_return_code($return_var, $output);
 	unset($output);
 }

@@ -63,7 +63,7 @@ if (!empty($_POST["ok"])) {
 	if (empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-add-sys-ip " .
+				"h-add-sys-ip " .
 				$v_ip .
 				" " .
 				$v_netmask .
@@ -104,12 +104,12 @@ if (!empty($_POST["ok"])) {
 }
 
 // List network interfaces
-exec(HESTIA_CMD . "v-list-sys-interfaces 'json'", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-interfaces 'json'", $output, $return_var);
 $interfaces = json_decode(implode("", $output), true);
 unset($output);
 
 // List users
-exec(HESTIA_CMD . "v-list-sys-users 'json'", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-users 'json'", $output, $return_var);
 $users = json_decode(implode("", $output), true);
 unset($output);
 

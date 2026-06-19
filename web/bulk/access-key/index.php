@@ -40,7 +40,7 @@ $action = $_POST["action"];
 
 switch ($action) {
 	case "delete":
-		$cmd = "v-delete-access-key";
+		$cmd = "h-delete-access-key";
 		break;
 	default:
 		header("Location: /list/access-key/");
@@ -51,7 +51,7 @@ foreach ($key as $value) {
 	$v_key = quoteshellarg(trim($value));
 
 	// Key data
-	exec(HESTIA_CMD . "v-list-access-key " . $v_key . " json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-access-key " . $v_key . " json", $output, $return_var);
 	$key_data = json_decode(implode("", $output), true);
 	unset($output);
 

@@ -29,13 +29,13 @@ $action = $_POST["action"];
 
 switch ($action) {
 	case "delete":
-		$cmd = "v-delete-firewall-rule";
+		$cmd = "h-delete-firewall-rule";
 		break;
 	case "suspend":
-		$cmd = "v-suspend-firewall-rule";
+		$cmd = "h-suspend-firewall-rule";
 		break;
 	case "unsuspend":
-		$cmd = "v-unsuspend-firewall-rule";
+		$cmd = "h-unsuspend-firewall-rule";
 		break;
 	default:
 		header("Location: /list/firewall/");

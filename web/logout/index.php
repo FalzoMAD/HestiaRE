@@ -10,7 +10,7 @@ if (!empty($_SESSION["look"])) {
 	$v_impersonator = quoteshellarg($_SESSION["user"]);
 	exec(
 		HESTIA_CMD .
-			"v-log-action system 'Warning' 'Security' 'User impersonation session ended (User: $v_user, Administrator: $v_impersonator)'",
+			"h-log-action system 'Warning' 'Security' 'User impersonation session ended (User: $v_user, Administrator: $v_impersonator)'",
 		$output,
 		$return_var,
 	);
@@ -25,7 +25,7 @@ if (!empty($_SESSION["look"])) {
 		$v_user = quoteshellarg($_SESSION["user"]);
 		$v_session_id = quoteshellarg($_SESSION["token"]);
 		exec(
-			HESTIA_CMD . "v-log-user-logout " . $v_user . " " . $v_session_id,
+			HESTIA_CMD . "h-log-user-logout " . $v_user . " " . $v_session_id,
 			$output,
 			$return_var,
 		);

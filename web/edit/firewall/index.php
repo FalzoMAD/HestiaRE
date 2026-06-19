@@ -21,7 +21,7 @@ if (empty($_GET["rule"])) {
 
 // List rule
 $v_rule = quoteshellarg($_GET["rule"]);
-exec(HESTIA_CMD . "v-list-firewall-rule " . $v_rule . " 'json'", $output, $return_var);
+exec(HESTIA_CMD . "h-list-firewall-rule " . $v_rule . " 'json'", $output, $return_var);
 check_return_code_redirect($return_var, $output, "/list/firewall");
 $data = json_decode(implode("", $output), true);
 unset($output);
@@ -43,7 +43,7 @@ if ($v_suspended == "yes") {
 }
 
 // Get ipset lists
-exec(HESTIA_CMD . "v-list-firewall-ipset 'json'", $output, $return_var);
+exec(HESTIA_CMD . "h-list-firewall-ipset 'json'", $output, $return_var);
 check_return_code($return_var, $output);
 $data = json_decode(implode("", $output), true);
 unset($output);
@@ -102,7 +102,7 @@ if (!empty($_POST["save"])) {
 		// Change Status
 		exec(
 			HESTIA_CMD .
-				"v-change-firewall-rule " .
+				"h-change-firewall-rule " .
 				$v_rule .
 				" " .
 				$v_action .

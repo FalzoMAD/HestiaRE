@@ -89,7 +89,7 @@ $v_org = quoteshellarg($_POST["v_org"]);
 
 exec(
 	HESTIA_CMD .
-		"v-generate-ssl-cert " .
+		"h-generate-ssl-cert " .
 		$v_domain .
 		" " .
 		$v_email .

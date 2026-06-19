@@ -29,8 +29,8 @@ if [ ! -f /etc/apparmor.d/abi/4.0 ]; then
 fi
 
 if [ -x /usr/sbin/jailbash ]; then
-	$HESTIA/bin/v-delete-sys-ssh-jail
-	$HESTIA/bin/v-add-sys-ssh-jail
+	$HESTIA/bin/h-delete-sys-ssh-jail
+	$HESTIA/bin/h-add-sys-ssh-jail
 fi
 
 # Fix sftp not starting in /home/[user]
@@ -41,14 +41,14 @@ if [ -f "/etc/cron.d/hestiaweb" ]; then
 	# Just remove it
 	rm -f /etc/cron.d/hestiaweb
 	# Check if not duplicate
-	if [ -z "$(grep $BIN/v-update-letsencrypt "/var/spool/cron/crontabs/hestiaweb")" ]; then
+	if [ -z "$(grep $BIN/h-update-letsencrypt "/var/spool/cron/crontabs/hestiaweb")" ]; then
 		min=$(generate_password '012345' '2')
 		hour=$(generate_password '1234567' '1')
-		sed -i -e "\$a*/5 * * * * sudo $BIN/v-update-letsencrypt" "/var/spool/cron/crontabs/hestiaweb"
+		sed -i -e "\$a*/5 * * * * sudo $BIN/h-update-letsencrypt" "/var/spool/cron/crontabs/hestiaweb"
 	fi
 fi
 
-php_versions=$($BIN/v-list-sys-php plain)
+php_versions=$($BIN/h-list-sys-php plain)
 # Substitute php-fpm service name formats
 for version in $php_versions; do
 	if [ -f "/etc/php/$version/fpm/pool.d/dummy.conf" ]; then

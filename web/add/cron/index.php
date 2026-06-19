@@ -54,7 +54,7 @@ if (!empty($_POST["ok"])) {
 	if (empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-add-cron-job " .
+				"h-add-cron-job " .
 				$user .
 				" " .
 				$v_min .
@@ -108,7 +108,7 @@ if (empty($v_min)) {
 }
 
 // Get current system time
-exec(HESTIA_CMD . "v-get-sys-timezone", $output, $return_var);
+exec(HESTIA_CMD . "h-get-sys-timezone", $output, $return_var);
 date_default_timezone_set($output[0]);
 $current_timestamp = time();
 

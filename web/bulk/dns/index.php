@@ -30,16 +30,16 @@ if ($_SESSION["userContext"] === "admin") {
 	if (empty($_POST["record"])) {
 		switch ($action) {
 			case "rebuild":
-				$cmd = "v-rebuild-dns-domain";
+				$cmd = "h-rebuild-dns-domain";
 				break;
 			case "delete":
-				$cmd = "v-delete-dns-domain";
+				$cmd = "h-delete-dns-domain";
 				break;
 			case "suspend":
-				$cmd = "v-suspend-dns-domain";
+				$cmd = "h-suspend-dns-domain";
 				break;
 			case "unsuspend":
-				$cmd = "v-unsuspend-dns-domain";
+				$cmd = "h-unsuspend-dns-domain";
 				break;
 			default:
 				header("Location: /list/dns/");
@@ -48,13 +48,13 @@ if ($_SESSION["userContext"] === "admin") {
 	} else {
 		switch ($action) {
 			case "delete":
-				$cmd = "v-delete-dns-record";
+				$cmd = "h-delete-dns-record";
 				break;
 			case "suspend":
-				$cmd = "v-suspend-dns-record";
+				$cmd = "h-suspend-dns-record";
 				break;
 			case "unsuspend":
-				$cmd = "v-unsuspend-dns-record";
+				$cmd = "h-unsuspend-dns-record";
 				break;
 			default:
 				header("Location: /list/dns/?domain=" . $domain);
@@ -65,7 +65,7 @@ if ($_SESSION["userContext"] === "admin") {
 	if (empty($_POST["record"])) {
 		switch ($action) {
 			case "delete":
-				$cmd = "v-delete-dns-domain";
+				$cmd = "h-delete-dns-domain";
 				break;
 			default:
 				header("Location: /list/dns/");
@@ -74,7 +74,7 @@ if ($_SESSION["userContext"] === "admin") {
 	} else {
 		switch ($action) {
 			case "delete":
-				$cmd = "v-delete-dns-record";
+				$cmd = "h-delete-dns-record";
 				break;
 			default:
 				header("Location: /list/dns/?domain=" . $domain);
@@ -109,7 +109,7 @@ if (empty($_POST["record"])) {
 }
 
 if (!empty($restart)) {
-	exec(HESTIA_CMD . "v-restart-dns", $output, $return_var);
+	exec(HESTIA_CMD . "h-restart-dns", $output, $return_var);
 }
 
 if (empty($_POST["record"])) {

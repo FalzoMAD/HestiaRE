@@ -27,7 +27,7 @@ if (!empty($requestPayload["service"])) {
 
 // Data
 exec(
-	HESTIA_CMD . "v-export-rrd " . quoteshellarg($service) . " " . quoteshellarg($period),
+	HESTIA_CMD . "h-export-rrd " . quoteshellarg($service) . " " . quoteshellarg($period),
 	$output,
 	$return_var,
 );

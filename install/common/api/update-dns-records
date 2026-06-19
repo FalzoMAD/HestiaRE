@@ -1,2 +1,2 @@
 ROLE='user'
-COMMANDS='v-list-dns-records,v-change-dns-record'
+COMMANDS='h-list-dns-records,h-change-dns-record'

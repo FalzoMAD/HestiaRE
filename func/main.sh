@@ -146,7 +146,7 @@ log_history() {
 	if [ "$log_user" = "system" ]; then
 		log=$HESTIA/log/activity.log
 	else
-		if ! $BIN/v-list-user "$log_user" > /dev/null; then
+		if ! $BIN/h-list-user "$log_user" > /dev/null; then
 			return $E_NOTEXIST
 		fi
 		log=$HESTIA/data/users/$log_user/history.log
@@ -1621,7 +1621,7 @@ check_access_key_cmd() {
 
 	if [[ -z "$cmd" ]]; then
 		check_result "$E_FORBIDEN" "Command not provided"
-	elif [[ "$cmd" = 'v-make-tmp-file' ]]; then
+	elif [[ "$cmd" = 'h-make-tmp-file' ]]; then
 		USER="" PERMISSIONS=""
 		source_conf "${HESTIA}/data/access-keys/${access_key_id}"
 		local allowed_commands
@@ -1782,14 +1782,14 @@ check_hestia_demo_mode() {
 }
 
 multiphp_count() {
-	$BIN/v-list-sys-php plain | wc -l
+	$BIN/h-list-sys-php plain | wc -l
 }
 
 multiphp_versions() {
 	local -a php_versions_list
 	local php_ver
 	if [ "$(multiphp_count)" -gt 0 ]; then
-		for php_ver in $($BIN/v-list-sys-php plain); do
+		for php_ver in $($BIN/h-list-sys-php plain); do
 			[ ! -d "/etc/php/$php_ver/fpm/pool.d/" ] && continue
 			php_versions_list+=($php_ver)
 		done

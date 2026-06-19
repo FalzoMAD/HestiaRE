@@ -24,8 +24,8 @@ upgrade_config_set_value 'UPGRADE_REBUILD_USERS' 'yes'
 upgrade_config_set_value 'UPGRADE_UPDATE_FILEMANAGER_CONFIG' 'true'
 
 # update config sftp jail
-$BIN/v-delete-sys-sftp-jail
-$BIN/v-add-sys-sftp-jail
+$BIN/h-delete-sys-sftp-jail
+$BIN/h-add-sys-sftp-jail
 
 # Check if hestiaweb exists
 if [ -z "$(grep ^hestiaweb: /etc/passwd)" ]; then
@@ -51,7 +51,7 @@ if [ ! -f "/var/spool/cron/crontabs/hestiaweb" ]; then
 			echo "$MIN $HOUR $DAY $MONTH $WDAY $CMD" \
 				| sed -e "s/%quote%/'/g" -e "s/%dots%/:/g" \
 					>> /var/spool/cron/crontabs/hestiaweb
-			$BIN/v-delete-cron-job admin "$JOB"
+			$BIN/h-delete-cron-job admin "$JOB"
 		fi
 	done < $HESTIA/data/users/admin/cron.conf
 	# Update permissions
@@ -93,7 +93,7 @@ if [ -s /etc/exim4/exim4.conf.template ] && ! grep -Fq "smtp_accept_max" /etc/ex
 fi
 
 # Update www.conf due security issue
-php_versions=$($BIN/v-list-sys-php plain)
+php_versions=$($BIN/h-list-sys-php plain)
 # Substitute php-fpm service name formats
 for version in $php_versions; do
 	if [ -f "/etc/php/$version/fpm/pool.d/www.conf" ]; then
@@ -104,13 +104,13 @@ done
 # Recreate PHPMYADMIN / PHPGADMIN conf correctly
 if [ -n "$DB_PMA_ALIAS" ]; then
 	old=$DB_PMA_ALIAS
-	$BIN/v-change-sys-db-alias pma "randomstring"
-	$BIN/v-change-sys-db-alias pma "$old"
+	$BIN/h-change-sys-db-alias pma "randomstring"
+	$BIN/h-change-sys-db-alias pma "$old"
 fi
 if [ -n "$DB_PGA_ALIAS" ]; then
 	old=$DB_PGA_ALIAS
-	$BIN/v-change-sys-db-alias pga "randomstring"
-	$BIN/v-change-sys-db-alias pga "$old"
+	$BIN/h-change-sys-db-alias pga "randomstring"
+	$BIN/h-change-sys-db-alias pga "$old"
 fi
 
 # Fix MySQL lc-messages-dir path for mariadb
@@ -118,7 +118,7 @@ if [ -x /usr/bin/mariadb ]; then
 	sed -i 's|/usr/share/mysql|/usr/share/mariadb|g' /etc/mysql/my.cnf
 fi
 
-$BIN/v-add-user-notification 'admin' 'Hestia security has been upgraded' ' A new user "hestiaweb" has been created and is used for login. Make sure other Hestia packages are updated as well otherwise the system may not work as expected.'
+$BIN/h-add-user-notification 'admin' 'Hestia security has been upgraded' ' A new user "hestiaweb" has been created and is used for login. Make sure other Hestia packages are updated as well otherwise the system may not work as expected.'
 add_upgrade_message 'Security has been upgraded, A new user "hestiaweb" has been created and is used for login. Make sure other Hestia packages are updated as well otherwise the system may not work as expected.'
 # Ensures proper permissions for Hestia service interactions.
 /usr/sbin/adduser hestiamail hestia-users

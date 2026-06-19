@@ -7,14 +7,14 @@
 #######################################################################################
 
 echo "[ * ] Configuring PHPMailer..."
-$HESTIA/bin/v-add-sys-phpmailer quiet
+$HESTIA/bin/h-add-sys-phpmailer quiet
 
 matches=$(grep -o 'ENFORCE_SUBDOMAIN_OWNERSHIP' $HESTIA/conf/hestia.conf | wc -l)
 if [ "$matches" -gt 1 ]; then
 	echo "[ * ] Removing double matches ENFORCE_SUBDOMAIN_OWNERSHIP key"
 	source $HESTIA/conf/hestia.conf
 	sed -i "/ENFORCE_SUBDOMAIN_OWNERSHIP='$ENFORCE_SUBDOMAIN_OWNERSHIP'/d" $HESTIA/conf/hestia.conf
-	$HESTIA/bin/v-change-sys-config-value "ENFORCE_SUBDOMAIN_OWNERSHIP" "$ENFORCE_SUBDOMAIN_OWNERSHIP"
+	$HESTIA/bin/h-change-sys-config-value "ENFORCE_SUBDOMAIN_OWNERSHIP" "$ENFORCE_SUBDOMAIN_OWNERSHIP"
 fi
 
 if [ "$IMAP_SYSTEM" = "dovecot" ]; then

@@ -30,7 +30,7 @@ class HestiaApp
     public function addDirectory(string $path): void
     {
         try {
-            $this->runUser('v-add-fs-directory', [$path]);
+            $this->runUser('h-add-fs-directory', [$path]);
         } catch (ProcessFailedException) {
             throw new RuntimeException(sprintf('Failed to add directory "%s"', $path));
         }
@@ -39,7 +39,7 @@ class HestiaApp
     public function copyDirectory(string $fromPath, string $toPath): void
     {
         try {
-            $this->runUser('v-copy-fs-directory', [$fromPath, $toPath]);
+            $this->runUser('h-copy-fs-directory', [$fromPath, $toPath]);
         } catch (ProcessFailedException) {
             throw new RuntimeException(
                 sprintf('Failed to copy directory "%s" to "%s"', $fromPath, $toPath),
@@ -50,7 +50,7 @@ class HestiaApp
     public function deleteDirectory(string $path): void
     {
         try {
-            $this->runUser('v-delete-fs-directory', [$path]);
+            $this->runUser('h-delete-fs-directory', [$path]);
         } catch (ProcessFailedException) {
             throw new RuntimeException(sprintf('Failed to remove directory "%s"', $path));
         }
@@ -63,7 +63,7 @@ class HestiaApp
     public function listFiles(string $path): array
     {
         try {
-            $result = $this->runUser('v-run-cli-cmd', ['ls', '-A', $path]);
+            $result = $this->runUser('h-run-cli-cmd', ['ls', '-A', $path]);
 
             return array_filter(explode("\n", $result->output));
         } catch (ProcessFailedException) {
@@ -74,7 +74,7 @@ class HestiaApp
     public function readFile(string $path): string
     {
         try {
-            $result = $this->runUser('v-open-fs-file', [$path]);
+            $result = $this->runUser('h-open-fs-file', [$path]);
 
             return $result->output;
         } catch (ProcessFailedException) {
@@ -96,7 +96,7 @@ class HestiaApp
 
         chmod($tmpFile, 0644);
 
-        $this->runUser('v-copy-fs-file', [$tmpFile, $path]);
+        $this->runUser('h-copy-fs-file', [$tmpFile, $path]);
 
         unlink($tmpFile);
     }
@@ -104,7 +104,7 @@ class HestiaApp
     public function moveFile(string $fromPath, string $toPath): void
     {
         try {
-            $this->runUser('v-move-fs-file', [$fromPath, $toPath]);
+            $this->runUser('h-move-fs-file', [$fromPath, $toPath]);
         } catch (ProcessFailedException) {
             throw new RuntimeException(
                 sprintf('Failed to move file "%s" to "%s"', $fromPath, $toPath),
@@ -115,7 +115,7 @@ class HestiaApp
     public function changeFilePermissions(string $filePath, string $permission): void
     {
         try {
-            $this->runUser('v-change-fs-file-permission', [$filePath, $permission]);
+            $this->runUser('h-change-fs-file-permission', [$filePath, $permission]);
         } catch (ProcessFailedException) {
             throw new RuntimeException(
                 sprintf('Failed to change file "%s" permissions to "%s"', $filePath, $permission),
@@ -126,7 +126,7 @@ class HestiaApp
     public function deleteFile(string $filePath): void
     {
         try {
-            $this->runUser('v-delete-fs-file', [$filePath]);
+            $this->runUser('h-delete-fs-file', [$filePath]);
         } catch (ProcessFailedException) {
             throw new RuntimeException(sprintf('Failed to delete file "%s"', $filePath));
         }
@@ -143,7 +143,7 @@ class HestiaApp
         }
 
         try {
-            $this->runUser('v-extract-fs-archive', [$filePath, $extractDirectoryPath, '', 1]);
+            $this->runUser('h-extract-fs-archive', [$filePath, $extractDirectoryPath, '', 1]);
 
             unlink($filePath);
         } catch (ProcessFailedException) {
@@ -154,7 +154,7 @@ class HestiaApp
     public function downloadUrl(string $url, string $path): string
     {
         try {
-            $result = $this->runUser('v-run-cli-cmd', [
+            $result = $this->runUser('h-run-cli-cmd', [
                 '/usr/bin/wget',
                 '--tries',
                 '3',
@@ -230,7 +230,7 @@ class HestiaApp
     public function userOwnsDomain(string $domain): bool
     {
         try {
-            $this->runUser('v-list-web-domain', [$domain, 'json']);
+            $this->runUser('h-list-web-domain', [$domain, 'json']);
 
             return true;
         } catch (ProcessFailedException) {
@@ -244,7 +244,7 @@ class HestiaApp
     public function getDatabaseHosts(string $type): array
     {
         try {
-            $result = $this->run('v-list-database-hosts', ['json']);
+            $result = $this->run('h-list-database-hosts', ['json']);
         } catch (ProcessFailedException) {
             throw new RuntimeException('Failed to list database hosts');
         }
@@ -260,7 +260,7 @@ class HestiaApp
     public function checkDatabaseLimit(): bool
     {
         try {
-            $result = $this->runUser('v-list-user', ['json']);
+            $result = $this->runUser('h-list-user', ['json']);
 
             $userInfo = $result->getOutputJson()[$this->user()];
 
@@ -286,7 +286,7 @@ class HestiaApp
         fclose($fp);
 
         try {
-            $this->runUser('v-add-database', [$name, $user, $passwordFile, $type, $host, $charset]);
+            $this->runUser('h-add-database', [$name, $user, $passwordFile, $type, $host, $charset]);
         } catch (ProcessFailedException) {
             throw new RuntimeException(_('Unable to add database!'));
         } finally {
@@ -297,7 +297,7 @@ class HestiaApp
     public function changeWebTemplate(string $domain, string $template): void
     {
         try {
-            $this->runUser('v-change-web-domain-tpl', [$domain, $template]);
+            $this->runUser('h-change-web-domain-tpl', [$domain, $template]);
         } catch (ProcessFailedException) {
             throw new RuntimeException(sprintf('Failed to change to template "%s"', $template));
         }
@@ -306,7 +306,7 @@ class HestiaApp
     public function changeBackendTemplate(string $domain, string $template): void
     {
         try {
-            $this->runUser('v-change-web-domain-backend-tpl', [$domain, $template]);
+            $this->runUser('h-change-web-domain-backend-tpl', [$domain, $template]);
         } catch (ProcessFailedException) {
             throw new RuntimeException(
                 sprintf('Failed to change backend template to "%s"', $template),
@@ -318,7 +318,7 @@ class HestiaApp
     {
         try {
             // Load installed PHP Versions
-            $result = $this->run('v-list-sys-php', ['json']);
+            $result = $this->run('h-list-sys-php', ['json']);
 
             $installedPHPVersions = array_filter(
                 $result->getOutputJson(),
@@ -336,7 +336,7 @@ class HestiaApp
     public function getWebDomain(string $domainName): WebDomain
     {
         try {
-            $result = $this->runUser('v-list-web-domain', [$domainName, 'json']);
+            $result = $this->runUser('h-list-web-domain', [$domainName, 'json']);
 
             return new WebDomain(
                 $domainName,
@@ -351,7 +351,7 @@ class HestiaApp
 
     public function runComposer(string $phpVersion, array $arguments): HestiaCommandResult
     {
-        $this->runUser('v-add-user-composer', ['2', 'yes']);
+        $this->runUser('h-add-user-composer', ['2', 'yes']);
 
         $composerBin = $this->getUserHomeDir() . '/.composer/composer';
 
@@ -360,7 +360,7 @@ class HestiaApp
 
     public function runWp(string $phpVersion, array $arguments): HestiaCommandResult
     {
-        $this->runUser('v-add-user-wp-cli', ['yes']);
+        $this->runUser('h-add-user-wp-cli', ['yes']);
 
         $wpCliBin = $this->getUserHomeDir() . '/.wp-cli/wp';
 
@@ -375,7 +375,7 @@ class HestiaApp
         $phpCommand = ['/usr/bin/php' . $phpVersion, $command, ...$arguments];
 
         try {
-            return $this->runUser('v-run-cli-cmd', $phpCommand);
+            return $this->runUser('h-run-cli-cmd', $phpCommand);
         } catch (ProcessFailedException $exception) {
             throw new RuntimeException(
                 sprintf(

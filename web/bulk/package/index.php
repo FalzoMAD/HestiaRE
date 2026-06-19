@@ -23,7 +23,7 @@ $action = $_POST["action"];
 if ($_SESSION["userContext"] === "admin") {
 	switch ($action) {
 		case "delete":
-			$cmd = "v-delete-user-package";
+			$cmd = "h-delete-user-package";
 			break;
 		default:
 			header("Location: /list/package/");

@@ -75,7 +75,7 @@ if (!empty($_POST["ok"])) {
 		fclose($fp);
 		exec(
 			HESTIA_CMD .
-				"v-add-database " .
+				"h-add-database " .
 				$user .
 				" " .
 				$v_database .
@@ -229,7 +229,7 @@ if (empty($v_dbuser)) {
 $db_types = explode(",", $_SESSION["DB_SYSTEM"]);
 
 // List available database servers
-exec(HESTIA_CMD . "v-list-database-hosts json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-database-hosts json", $output, $return_var);
 $db_hosts_tmp1 = json_decode(implode("", $output), true);
 $db_hosts_tmp2 = array_map(function ($host) {
 	return $host["HOST"];

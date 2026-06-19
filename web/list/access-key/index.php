@@ -25,7 +25,7 @@ if (!empty($_GET["key"])) {
 	$v_key = quoteshellarg(trim($_GET["key"]));
 
 	// Key data
-	exec(HESTIA_CMD . "v-list-access-key " . $v_key . " json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-access-key " . $v_key . " json", $output, $return_var);
 	$key_data = json_decode(implode("", $output), true);
 	unset($output);
 
@@ -35,7 +35,7 @@ if (!empty($_GET["key"])) {
 	}
 
 	// APIs
-	exec(HESTIA_CMD . "v-list-apis json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-apis json", $output, $return_var);
 	$apis = json_decode(implode("", $output), true);
 	$apis = array_filter($apis, function ($api) use ($user_plain) {
 		return $user_plain == "admin" || $api["ROLE"] == "user";
@@ -45,7 +45,7 @@ if (!empty($_GET["key"])) {
 
 	render_page($user, $TAB, "list_access_key");
 } else {
-	exec(HESTIA_CMD . "v-list-access-keys $user json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-access-keys $user json", $output, $return_var);
 	$data = json_decode(implode("", $output), true);
 
 	uasort($data, function ($a, $b) {

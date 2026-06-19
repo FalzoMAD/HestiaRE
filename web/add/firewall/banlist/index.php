@@ -42,7 +42,7 @@ if (!empty($_POST["ok"])) {
 
 	// Add firewall rule
 	if (empty($_SESSION["error_msg"])) {
-		exec(HESTIA_CMD . "v-add-firewall-ban " . $v_ip . " " . $v_chain, $output, $return_var);
+		exec(HESTIA_CMD . "h-add-firewall-ban " . $v_ip . " " . $v_chain, $output, $return_var);
 		check_return_code($return_var, $output);
 		unset($output);
 	}

@@ -32,11 +32,11 @@ if [ "$MAIL_SYSTEM" == "exim4" ]; then
 		echo "[ * ] Populating HELO/SMTP Banner value for existing IP addresses..."
 		> /etc/exim4/mailhelo.conf
 
-		for ip in $($BIN/v-list-sys-ips plain | cut -f1); do
+		for ip in $($BIN/h-list-sys-ips plain | cut -f1); do
 			helo=$(is_ip_rdns_valid $ip)
 
 			if [ ! -z "$helo" ]; then
-				$BIN/v-change-sys-ip-helo $ip $helo
+				$BIN/h-change-sys-ip-helo $ip $helo
 			fi
 		done
 
@@ -66,7 +66,7 @@ if [ "$MAIL_SYSTEM" == "exim4" ]; then
 			echo 'you will have to replace or modify your config with the one found'
 			echo 'on GitHub at https://github.com/hestiacp/hestiacp/blob/release/install/deb/exim/exim4.conf.template.'
 			echo 'Your exim config file will be found here: /etc/exim4/exim4.conf.template'
-			$HESTIA/bin/v-add-user-notification admin 'SMTP Relay upgrade failed' 'Because of the complexity of the SMTP Relay upgrade, we were unable to safely modify your existing exim config file.<br><br>If you would like to use the new SMTP Relay features, you will have to replace or modify your config with the one <a href="https://github.com/hestiacp/hestiacp/blob/release/install/deb/exim/exim4.conf.template" target="_blank">found on GitHub</a>.<br><br>Your exim config file will be found here:<br><br><code>/etc/exim4/exim4.conf.template</code>'
+			$HESTIA/bin/h-add-user-notification admin 'SMTP Relay upgrade failed' 'Because of the complexity of the SMTP Relay upgrade, we were unable to safely modify your existing exim config file.<br><br>If you would like to use the new SMTP Relay features, you will have to replace or modify your config with the one <a href="https://github.com/hestiacp/hestiacp/blob/release/install/deb/exim/exim4.conf.template" target="_blank">found on GitHub</a>.<br><br>Your exim config file will be found here:<br><br><code>/etc/exim4/exim4.conf.template</code>'
 		else
 			disable_smtp_relay=false
 		fi
@@ -115,9 +115,9 @@ fi
 
 # Set default webmail system for mail domains
 if [ -n "$WEBMAIL_SYSTEM" ]; then
-	for user in $($BIN/v-list-users plain | cut -f1); do
-		for domain in $($BIN/v-list-mail-domains $user plain | cut -f1); do
-			$BIN/v-add-mail-domain-webmail $user $domain '' no
+	for user in $($BIN/h-list-users plain | cut -f1); do
+		for domain in $($BIN/h-list-mail-domains $user plain | cut -f1); do
+			$BIN/h-add-mail-domain-webmail $user $domain '' no
 		done
 	done
 fi
@@ -132,7 +132,7 @@ fi
 if [ "$API" = "no" ]; then
 	if [ -f "$HESTIA/web/api/index.php" ]; then
 		echo "[ * ] Disabling API access..."
-		$HESTIA/bin/v-change-sys-api remove
+		$HESTIA/bin/h-change-sys-api remove
 	fi
 fi
 
@@ -148,7 +148,7 @@ fi
 if [ -f "/usr/lib/networkd-dispatcher/routable.d/50-ifup-hooks" ]; then
 	echo "[ * ] Fix potenial issue with multiple network adapters and netplan..."
 	rm "/usr/lib/networkd-dispatcher/routable.d/50-ifup-hooks"
-	$BIN/v-update-firewall
+	$BIN/h-update-firewall
 fi
 
 # Consolidate nginx (standalone) templates used by active websites
@@ -184,7 +184,7 @@ fi
 # Update ClamAV configuration file
 if [ -f "/etc/clamav/clamd.conf" ]; then
 	cp -f $HESTIA_INSTALL_DIR/clamav/clamd.conf /etc/clamav/
-	$HESTIA/bin/v-add-user-notification admin 'ClamAV config has been overwritten' 'Warning: If you have manualy changed /etc/clamav/clamd.conf and any changes you made will be lost an backup has been created in the /root/hst_backups folder with the original config. If you have not changed the config file you can ignore this message'
+	$HESTIA/bin/h-add-user-notification admin 'ClamAV config has been overwritten' 'Warning: If you have manualy changed /etc/clamav/clamd.conf and any changes you made will be lost an backup has been created in the /root/hst_backups folder with the original config. If you have not changed the config file you can ignore this message'
 fi
 
 ##### COMMANDS FOR V1.5.X
@@ -192,7 +192,7 @@ fi
 # Back up default package and install latest version
 if [ -d $HESTIA/data/packages/ ]; then
 	echo "[ * ] Migrating legacy default package for all users..."
-	$HESTIA/bin/v-rename-user-package default custom > /dev/null 2>&1
+	$HESTIA/bin/h-rename-user-package default custom > /dev/null 2>&1
 	echo "[ * ] Replacing default package..."
 	cp -f $HESTIA_INSTALL_DIR/packages/default.pkg $HESTIA/data/packages/
 fi

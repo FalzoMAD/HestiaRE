@@ -23,13 +23,13 @@ $action = $_POST["action"];
 if ($_SESSION["userContext"] === "admin") {
 	switch ($action) {
 		case "stop":
-			$cmd = "v-stop-service";
+			$cmd = "h-stop-service";
 			break;
 		case "start":
-			$cmd = "v-start-service";
+			$cmd = "h-start-service";
 			break;
 		case "restart":
-			$cmd = "v-restart-service";
+			$cmd = "h-restart-service";
 			break;
 		default:
 			header("Location: /list/server/");
@@ -38,7 +38,7 @@ if ($_SESSION["userContext"] === "admin") {
 
 	if (!empty($_POST["system"]) && $action == "restart") {
 		$_SESSION["error_srv"] = _("The system is going down for reboot NOW!");
-		exec(HESTIA_CMD . "v-restart-system yes", $output, $return_var);
+		exec(HESTIA_CMD . "h-restart-system yes", $output, $return_var);
 		unset($output);
 		header("Location: /list/server/");
 		exit();

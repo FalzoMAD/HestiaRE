@@ -52,7 +52,7 @@ if (!empty($_POST["ok"])) {
 	if (empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-add-firewall-ipset " .
+				"h-add-firewall-ipset " .
 				quoteshellarg($v_ipname) .
 				" " .
 				quoteshellarg($v_datasource) .

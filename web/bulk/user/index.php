@@ -22,42 +22,42 @@ $action = $_POST["action"];
 if ($_SESSION["userContext"] === "admin") {
 	switch ($action) {
 		case "delete":
-			$cmd = "v-delete-user";
+			$cmd = "h-delete-user";
 			$restart = "no";
 			break;
 		case "suspend":
-			$cmd = "v-suspend-user";
+			$cmd = "h-suspend-user";
 			$restart = "yes";
 			break;
 		case "unsuspend":
-			$cmd = "v-unsuspend-user";
+			$cmd = "h-unsuspend-user";
 			$restart = "yes";
 			break;
 		case "update counters":
-			$cmd = "v-update-user-counters";
+			$cmd = "h-update-user-counters";
 			break;
 		case "rebuild":
-			$cmd = "v-rebuild-all";
+			$cmd = "h-rebuild-all";
 			$restart = "no";
 			break;
 		case "rebuild user":
-			$cmd = "v-rebuild-user";
+			$cmd = "h-rebuild-user";
 			$restart = "no";
 			break;
 		case "rebuild web":
-			$cmd = "v-rebuild-web-domains";
+			$cmd = "h-rebuild-web-domains";
 			break;
 		case "rebuild dns":
-			$cmd = "v-rebuild-dns-domains";
+			$cmd = "h-rebuild-dns-domains";
 			break;
 		case "rebuild mail":
-			$cmd = "v-rebuild-mail-domains";
+			$cmd = "h-rebuild-mail-domains";
 			break;
 		case "rebuild db":
-			$cmd = "v-rebuild-databases";
+			$cmd = "h-rebuild-databases";
 			break;
 		case "rebuild cron":
-			$cmd = "v-rebuild-cron-jobs";
+			$cmd = "h-rebuild-cron-jobs";
 			break;
 		default:
 			header("Location: /list/user/");
@@ -66,7 +66,7 @@ if ($_SESSION["userContext"] === "admin") {
 } else {
 	switch ($action) {
 		case "update counters":
-			$cmd = "v-update-user-counters";
+			$cmd = "h-update-user-counters";
 			break;
 		default:
 			header("Location: /list/user/");

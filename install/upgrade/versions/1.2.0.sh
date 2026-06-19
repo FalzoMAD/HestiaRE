@@ -95,10 +95,10 @@ if [ -e "/etc/exim4/exim4.conf.template" ]; then
 fi
 
 # Add daily midnight cron
-if [ -z "$($BIN/v-list-cron-jobs admin | grep 'v-update-sys-queue daily')" ]; then
+if [ -z "$($BIN/h-list-cron-jobs admin | grep 'h-update-sys-queue daily')" ]; then
 	echo "[ * ] Updating cron jobs..."
-	command="sudo $BIN/v-update-sys-queue daily"
-	$BIN/v-add-cron-job 'admin' '01' '00' '*' '*' '*' "$command"
+	command="sudo $BIN/h-update-sys-queue daily"
+	$BIN/h-add-cron-job 'admin' '01' '00' '*' '*' '*' "$command"
 fi
 [ ! -f "touch $HESTIA/data/queue/daily.pipe" ] && touch $HESTIA/data/queue/daily.pipe
 
@@ -106,11 +106,11 @@ fi
 # - network hook will also restore ipset config during start-up
 if [ -f "/usr/lib/networkd-dispatcher/routable.d/50-ifup-hooks" ]; then
 	rm "/usr/lib/networkd-dispatcher/routable.d/50-ifup-hooks"
-	$BIN/v-update-firewall
+	$BIN/h-update-firewall
 fi
 if [ -f "/etc/network/if-pre-up.d/iptables" ]; then
 	rm "/etc/network/if-pre-up.d/iptables"
-	$BIN/v-update-firewall
+	$BIN/h-update-firewall
 fi
 
 # Add hestia-event.conf, if the server is running apache2
@@ -141,13 +141,13 @@ if [ -z "$FILE_MANAGER_CHECK" ]; then
 	if [ ! -e "$HESTIA/web/fm/configuration.php" ]; then
 		echo "[ ! ] Installing File Manager..."
 		# Install the File Manager
-		$HESTIA/bin/v-add-sys-filemanager quiet
+		$HESTIA/bin/h-add-sys-filemanager quiet
 	else
 		echo "[ * ] Updating File Manager configuration..."
 		# Update configuration.php
 		cp -f $HESTIA_INSTALL_DIR/filemanager/filegator/configuration.php $HESTIA/web/fm/configuration.php
 		# Set environment variable for interface
-		$HESTIA/bin/v-change-sys-config-value 'FILE_MANAGER' 'true'
+		$HESTIA/bin/h-change-sys-config-value 'FILE_MANAGER' 'true'
 	fi
 fi
 
@@ -165,7 +165,7 @@ fi
 
 # Fix public_(s)html group ownership
 echo "[ * ] Updating public_(s)html ownership..."
-for user in $($HESTIA/bin/v-list-sys-users plain); do
+for user in $($HESTIA/bin/h-list-sys-users plain); do
 	# skip users with missing home folder
 	[[ -d /home/${user}/ ]] || continue
 
@@ -185,7 +185,7 @@ fi
 GZIP_LVL_CHECK=$(cat $HESTIA/conf/hestia.conf | grep BACKUP_GZIP)
 if [ -z "$GZIP_LVL_CHECK" ]; then
 	echo "[ * ] Updating backup compression level variable..."
-	$BIN/v-change-sys-config-value "BACKUP_GZIP" '9'
+	$BIN/h-change-sys-config-value "BACKUP_GZIP" '9'
 fi
 
 # Update phpMyAdmin/phpPgAdmin templates and set missing alias variables if necessary
@@ -193,10 +193,10 @@ if [ -e "/var/lib/phpmyadmin" ]; then
 	PMA_ALIAS_CHECK=$(cat $HESTIA/conf/hestia.conf | grep DB_PMA_ALIAS)
 	if [ -z "$PMA_ALIAS_CHECK" ]; then
 		echo "[ * ] Updating phpMyAdmin alias..."
-		$HESTIA/bin/v-change-sys-db-alias "pma" "phpMyAdmin"
+		$HESTIA/bin/h-change-sys-db-alias "pma" "phpMyAdmin"
 	else
 		echo "[ * ] Updating phpMyAdmin configuration..."
-		$HESTIA/bin/v-change-sys-db-alias "pma" "$DB_PMA_ALIAS"
+		$HESTIA/bin/h-change-sys-db-alias "pma" "$DB_PMA_ALIAS"
 	fi
 fi
 
@@ -204,10 +204,10 @@ if [ -e "/var/lib/phppgadmin" ]; then
 	PGA_ALIAS_CHECK=$(cat $HESTIA/conf/hestia.conf | grep DB_PGA_ALIAS)
 	if [ -z "$PGA_ALIAS_CHECK" ]; then
 		echo "[ * ] Updating phpPgAdmin alias..."
-		$HESTIA/bin/v-change-sys-db-alias "pga" "phpPgAdmin"
+		$HESTIA/bin/h-change-sys-db-alias "pga" "phpPgAdmin"
 	else
 		echo "[ * ] Updating phpPgAdmin configuration..."
-		$HESTIA/bin/v-change-sys-db-alias "pga" "$DB_PGA_ALIAS"
+		$HESTIA/bin/h-change-sys-db-alias "pga" "$DB_PGA_ALIAS"
 	fi
 fi
 
@@ -215,5 +215,5 @@ fi
 GZIP_LVL_CHECK=$(cat $HESTIA/conf/hestia.conf | grep BACKUP_GZIP)
 if [ -z "$GZIP_LVL_CHECK" ]; then
 	echo "[ * ] Updating backup compression level variable..."
-	$BIN/v-change-sys-config-value "BACKUP_GZIP" '9'
+	$BIN/h-change-sys-config-value "BACKUP_GZIP" '9'
 fi

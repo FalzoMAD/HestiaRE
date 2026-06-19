@@ -69,13 +69,13 @@ function setupFiles {
 			exit 3
 		fi
 	else
-		$BIN/v-change-sys-config-value "USE_SERVER_SMTP" "${use_smtp:-}"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_HOST" "${smtp_server_host:-}"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_PORT" "${smtp_server_port:-}"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_SECURITY" "${smtp_server_security:-}"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_USER" "${smtp_server_user_name:-}"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_PASSWD" "${smtp_server_password:-}"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_ADDR" "${smtp_server_addr:-}"
+		$BIN/h-change-sys-config-value "USE_SERVER_SMTP" "${use_smtp:-}"
+		$BIN/h-change-sys-config-value "SERVER_SMTP_HOST" "${smtp_server_host:-}"
+		$BIN/h-change-sys-config-value "SERVER_SMTP_PORT" "${smtp_server_port:-}"
+		$BIN/h-change-sys-config-value "SERVER_SMTP_SECURITY" "${smtp_server_security:-}"
+		$BIN/h-change-sys-config-value "SERVER_SMTP_USER" "${smtp_server_user_name:-}"
+		$BIN/h-change-sys-config-value "SERVER_SMTP_PASSWD" "${smtp_server_password:-}"
+		$BIN/h-change-sys-config-value "SERVER_SMTP_ADDR" "${smtp_server_addr:-}"
 	fi
 }
 

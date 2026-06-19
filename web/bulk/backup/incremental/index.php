@@ -21,7 +21,7 @@ verify_csrf($_POST);
 
 switch ($action) {
 	case "delete":
-		$cmd = "v-delete-user-backup-restic";
+		$cmd = "h-delete-user-backup-restic";
 		break;
 	default:
 		header("Location: /list/backup/");
