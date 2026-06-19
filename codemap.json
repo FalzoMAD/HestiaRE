@@ -202,7 +202,6 @@
         "Panel setup (Caddy + hestia-php.service / PHP 8.3 FPM)",
         "Security hardening (fail2ban, iptables, ssl)"
       ],
-      "upgrade_versions": ["1.0.x", "1.8.x", "1.9.0-1.9.6", "1.10.0"],
       "web_templates": {
         "nginx": "install/deb/templates/web/nginx/",
         "apache2": "install/deb/templates/web/apache2/",
@@ -210,15 +209,8 @@
       },
       "dependencies": ["func_libraries", "build_tools"],
       "upstream_debt": {
-        "file_count": 45,
-        "issues": [
-          "hst-install-debian.sh and hst-install-ubuntu.sh reference HESTIA='/usr/local/hestia'",
-          "Installer fetches hestia-nginx, hestia-php external packages — replaced by Caddy/Sury FPM in HestiaRE",
-          "hestia-web-terminal package reference — must remain removed (ground rule)",
-          "install/deb/bind/ and install/deb/vsftpd/ present — must remain unused (ground rule)",
-          "install/upgrade/versions/ contain HestiaCP migration history not applicable to HestiaRE",
-          "Configs still write to /etc/hestia/hestia.conf (migrated from /etc/hestiacp)"
-        ]
+        "file_count": 0,
+        "issues": []
       }
     },
 
@@ -246,7 +238,7 @@
         "Web terminal /_shell/ location intentionally absent — ground rule"
       ],
       "required_packages": ["caddy"],
-      "note": "Installer integration deferred to Issue #26a.",
+      "note": "Installer integration completed in Issue #26a.",
       "dependencies": ["panel_php_service"],
       "upstream_debt": {
         "file_count": 0,
@@ -279,7 +271,7 @@
         "php8.3-mbstring",
         "php8.3-opcache"
       ],
-      "note": "gettext included in php8.3-common (auto dep of php8.3-fpm). Installer integration deferred to Issue #26a.",
+      "note": "gettext included in php8.3-common (auto dep of php8.3-fpm). Installer integration completed in Issue #26a.",
       "dependencies": [],
       "upstream_debt": {
         "file_count": 0,
@@ -290,13 +282,11 @@
     "build_tools": {
       "description": "Build and release tooling. Not runtime. Used during CI/CD to compile releases, generate docs, and bootstrap dev environments.",
       "entry_points": [
-        "src/hst_autocompile.sh",
         "src/lxd_build_all.sh",
         "src/lxd_compile.sh"
       ],
-      "directories": ["src/", "src/deb/"],
+      "directories": ["src/"],
       "key_files": [
-        "src/hst_autocompile.sh",
         "src/lxd_build_all.sh",
         "src/lxd_compile.sh",
         "src/hst_generate_clidocs.sh",
@@ -307,10 +297,7 @@
       "dependencies": [],
       "upstream_debt": {
         "file_count": 0,
-        "issues": [
-          "src/hst_autocompile.sh builds hestia-nginx and hestia-php — both replaced; remove in Issue #26a",
-          "src/deb/web-terminal/ and src/deb/nginx/ deleted in Issue #24"
-        ]
+        "issues": []
       }
     },
 
@@ -396,22 +383,10 @@
         "priority": "resolved"
       },
       {
-        "issue": "Removed packages still referenced in installer",
-        "detail": "hestia-nginx, hestia-php, hestia-web-terminal referenced in install scripts",
+        "issue": "Installer cleanup",
+        "detail": "hestia-nginx/php/web-terminal removed; Caddy+hestia-php.service added; bind/vsftpd/spamd removed; upgrade/versions/ deleted — completed Issue #26a",
         "affected": "installer",
-        "priority": "medium"
-      },
-      {
-        "issue": "Unused service configs present",
-        "detail": "install/deb/bind/ and install/deb/vsftpd/ exist but must never be used",
-        "affected": "installer",
-        "priority": "low"
-      },
-      {
-        "issue": "HestiaCP upgrade history in upgrade/versions/",
-        "detail": "Version scripts 1.0.x-1.9.x handle HestiaCP-specific migrations, not HestiaRE",
-        "affected": "installer",
-        "priority": "low"
+        "priority": "resolved"
       }
     ]
   }
