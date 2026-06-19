@@ -156,23 +156,19 @@
     },
 
     "installer": {
-      "description": "Full server installer for Debian 12, Ubuntu 24.04 (Debian 13 planned Q3 2026). Installs all services, configures templates, sets up HestiaRE panel.",
+      "description": "Service config templates and data distributed during install. Consumed by Makefile install-* targets. hst-install-debian.sh and hst-install-ubuntu.sh removed in Issue #26b — replaced by Makefile targets.",
       "entry_points": [
-        "install.sh",
-        "install/hst-install.sh",
-        "install/hst-install-debian.sh",
-        "install/hst-install-ubuntu.sh"
+        "install.sh"
       ],
       "directories": [
         "install/",
         "install/deb/",
         "install/common/",
-        "install/upgrade/",
-        "install/upgrade/versions/"
+        "install/panel-caddy/",
+        "install/panel-php/",
+        "install/upgrade/"
       ],
       "key_files": [
-        "install/hst-install-debian.sh",
-        "install/hst-install-ubuntu.sh",
         "install/deb/nginx/",
         "install/deb/apache2/",
         "install/deb/php-fpm/",
@@ -188,26 +184,21 @@
         "install/common/roundcube/",
         "install/common/dovecot-24/",
         "install/common/sudo/hestiaweb",
-        "install/upgrade/versions/"
+        "install/upgrade/upgrade.conf",
+        "install/panel-caddy/Caddyfile",
+        "install/panel-caddy/hestia.conf",
+        "install/panel-php/hestia-php.service",
+        "install/panel-php/php-fpm.conf"
       ],
-      "language": "bash",
+      "language": "bash / config templates",
       "supported_distros": ["Debian 12 (bookworm)", "Ubuntu 24.04 LTS (noble)", "Debian 13 (trixie, priority 2, planned June 2026+)"],
-      "install_phases": [
-        "OS detection and pre-flight checks",
-        "External repo setup (MariaDB 11.8, Sury PHP)",
-        "Package installation",
-        "Service template distribution",
-        "User/group creation (hestiaweb)",
-        "Data directory initialization",
-        "Panel setup (Caddy + hestia-php.service / PHP 8.3 FPM)",
-        "Security hardening (fail2ban, iptables, ssl)"
-      ],
+      "note": "Monolithic bash installers removed in Issue #26b. All install logic now lives in Makefile targets (see make_release component).",
       "web_templates": {
         "nginx": "install/deb/templates/web/nginx/",
         "apache2": "install/deb/templates/web/apache2/",
         "php_fpm": "install/deb/templates/web/php-fpm/"
       },
-      "dependencies": ["func_libraries", "build_tools"],
+      "dependencies": ["func_libraries", "make_release"],
       "upstream_debt": {
         "file_count": 0,
         "issues": []
@@ -302,30 +293,42 @@
     },
 
     "make_release": {
-      "description": "Top-level Makefile and bootstrap installer. Handles install, update, status, backup, and uninstall lifecycle. Already uses /usr/local/hestia-re and /etc/hestia-re paths.",
+      "description": "Top-level Makefile (full installer) and install.sh (thin bootstrap). install.sh fetches the release tarball and calls `make install OS=... PROFILE=...`. The Makefile drives the full installation via composable targets.",
       "entry_points": ["Makefile", "install.sh"],
-      "directories": ["conf/", "conf/os/"],
+      "directories": [],
       "key_files": [
         "Makefile",
         "install.sh",
-        "VERSION",
-        "CHANGELOG.md",
-        "conf/os/debian-bookworm.mk",
-        "conf/os/ubuntu-noble.mk"
+        "VERSION"
       ],
       "language": "make + bash",
       "make_targets": {
-        "install": "Install HestiaRE (OS=debian-bookworm|ubuntu-noble PROFILE=standard|...)",
-        "update": "Fetch latest release and install",
+        "install": "Full install (interactive prompts; override: H_HOSTNAME H_ADMIN H_EMAIL H_PASS)",
+        "install-base": "APT repos, base packages, system users, SSH hardening",
+        "install-panel": "Caddy + hestia-php.service (panel webserver + panel PHP-FPM)",
+        "install-web": "nginx, PHP multi (5.6–8.4 via h-add-web-php), web pool config",
+        "install-db": "MariaDB + phpMyAdmin",
+        "install-mail": "exim4 + dovecot + rspamd + roundcube (standard profile only)",
+        "install-security": "fail2ban + iptables + ipset",
+        "install-tools": "composer + wp-cli (via h-add-sys-dependencies), rclone, restic, file manager",
+        "_configure-hestia": "hestia.conf, sudoers, SSL cert, admin user, crontab, IP setup",
+        "_finalize": "Start hestia.service, final apt upgrade, print credentials",
+        "update": "Fetch latest release and reinstall",
         "check-updates": "Query latest version from GitHub or Gitea",
         "status": "Display installed version and config",
-        "backup": "Backup existing installation",
-        "uninstall": "Remove HestiaRE (interactive)"
+        "backup": "Backup existing installation (stub)",
+        "uninstall": "Remove HestiaRE (interactive, stub)"
       },
+      "profiles": {
+        "standard": "All components including mail (exim4, dovecot, rspamd, roundcube)",
+        "minimal": "All components except mail stack"
+      },
+      "bootstrap_flow": "curl | bash install.sh → OS detect → apt install curl make → download tarball → extract to /usr/local/hestia/ → make install OS=... PROFILE=...",
       "release_sources": {
         "github": "https://github.com/FalzoMAD/HestiaRE (default)",
-        "gitea": "Configurable via /etc/hestia-re/source.conf"
+        "gitea": "Configurable via /etc/hestia/source.conf"
       },
+      "install_conf": "/etc/hestia/install.conf (hostname, admin, email, pass — written by _collect-params, sourced by _configure-hestia and _finalize)",
       "dependencies": ["installer"],
       "upstream_debt": {
         "file_count": 0,
