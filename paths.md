@@ -76,9 +76,13 @@ Current state and migration steps are documented in Section 5.
 |------|------|
 | Binary | `/usr/sbin/caddy` (OS repo) |
 | Config dir | `/etc/caddy/` |
-| Panel config | TBD — see Open Questions #1 |
+| Global config | `/etc/caddy/Caddyfile` (global options + `import /etc/caddy/*.conf`) |
+| Panel site config | `/etc/caddy/hestia.conf` |
 | Port | `8083` (HTTPS) |
+| Access log | `/var/log/hestia/caddy-access.log` |
+| Error log | `/var/log/hestia/caddy-error.log` |
 | Systemd unit | `caddy.service` |
+| Install source | `install/panel-caddy/` |
 
 ### Panel PHP — Sury PHP 8.3 FPM (replaces hestia-php)
 
@@ -272,7 +276,7 @@ the env vs. conf question and the user/account consolidation.
 
 | # | Topic | Status |
 |---|-------|--------|
-| Q1 | Caddy config structure | **DECIDED** |
+| Q1 | Caddy config structure | **DONE** — Issue #24 |
 | Q2 | PHP FPM panel pool | **DECIDED** — Issue #25 |
 | Q3 | `/etc/profile.d/hestia.sh` comment | **DECIDED** + cleanup deferred |
 | Q4 | `hestiaweb` sudo wildcard scope | **OPEN** — too early, technical debt |
