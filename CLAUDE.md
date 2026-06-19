@@ -52,8 +52,13 @@ These are absolute. Never deviate, never re-suggest rejected items.
 ### CLI conventions
 ```
 h-*    HestiaRE commands (renamed from v-* in Issue #22)
-v-*    symlinks only — backwards compatibility, managed in Issue #23
+v-*    symlinks only — ease of cherry-picking HestiaCP upstream changes
 ```
+
+Symlink rules (non-negotiable):
+- Existing h-* commands: one v-* symlink each (created in Issue #23)
+- New h-* commands added after Issue #23: NO symlink — the v-* name never existed
+- When removing a h-* command: remove the v-* symlink too — no orphans
 
 ### Panel webserver
 Caddy (OS repo, port 8083) — replaces hestia-nginx.
