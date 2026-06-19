@@ -1285,6 +1285,12 @@ chmod -R 750 $HESTIA/data/queue
 chmod 660 /var/log/hestia/*
 chmod 770 $HESTIA/data/sessions
 
+# Create v-* → h-* symlinks (upstream cherry-pick compatibility)
+for hcmd in $HESTIA/bin/h-*; do
+    vcmd="$HESTIA/bin/v-${hcmd##*/h-}"
+    [ -L "$vcmd" ] || ln -s "$(basename "$hcmd")" "$vcmd"
+done
+
 # Generating Hestia configuration
 rm -f $HESTIA/conf/hestia.conf > /dev/null 2>&1
 touch $HESTIA/conf/hestia.conf
