@@ -44,8 +44,8 @@ These are absolute. Never deviate, never re-suggest rejected items.
 
 ### Paths
 ```
-/usr/local/hestia-re/     install root (bin, web, conf, data, modules)
-/etc/hestia-re/           instance config (outside git, survives updates)
+/usr/local/hestia/     install root (bin, web, conf, data, modules)
+/etc/hestia/           instance config (outside git, survives updates)
 /home/$user/              user data (HestiaCP compatible)
 ```
 
