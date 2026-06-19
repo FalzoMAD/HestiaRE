@@ -17,8 +17,8 @@ if ! id "hestiaweb" &> /dev/null; then
 fi
 
 # Check if preinstall hook exists
-if [ -e "/etc/hestiacp/hooks/php/pre_install.sh" ]; then
-	/etc/hestiacp/hooks/php/pre_install.sh
+if [ -e "/etc/hestia/hooks/php/pre_install.sh" ]; then
+	/etc/hestia/hooks/php/pre_install.sh
 fi
 
 ###############################################################
@@ -43,6 +43,6 @@ if [ -f "/etc/init.d/hestia" ]; then
 fi
 
 # Check if preinstall hook exists
-if [ -e "/etc/hestiacp/hooks/php/post_install.sh" ]; then
-	/etc/hestiacp/hooks/php/post_install.sh
+if [ -e "/etc/hestia/hooks/php/post_install.sh" ]; then
+	/etc/hestia/hooks/php/post_install.sh
 fi
