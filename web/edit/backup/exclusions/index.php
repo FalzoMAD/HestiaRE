@@ -12,7 +12,7 @@ if ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) {
 }
 
 // List backup exclustions
-exec(HESTIA_CMD . "v-list-user-backup-exclusions " . $user . " 'json'", $output, $return_var);
+exec(HESTIA_CMD . "h-list-user-backup-exclusions " . $user . " 'json'", $output, $return_var);
 check_return_code($return_var, $output);
 $data = json_decode(implode("", $output), true);
 unset($output);
@@ -112,7 +112,7 @@ if (!empty($_POST["save"])) {
 
 	// Save changes
 	exec(
-		HESTIA_CMD . "v-update-user-backup-exclusions " . $user . " " . $tmp,
+		HESTIA_CMD . "h-update-user-backup-exclusions " . $user . " " . $tmp,
 		$output,
 		$return_var,
 	);

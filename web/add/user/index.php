@@ -73,7 +73,7 @@ if (!empty($_POST["ok"])) {
 		fclose($fp);
 		exec(
 			HESTIA_CMD .
-				"v-add-user " .
+				"h-add-user " .
 				$v_username .
 				" " .
 				$v_password .
@@ -95,7 +95,7 @@ if (!empty($_POST["ok"])) {
 	// Set language
 	if (empty($_SESSION["error_msg"])) {
 		exec(
-			HESTIA_CMD . "v-change-user-language " . $v_username . " " . $v_language,
+			HESTIA_CMD . "h-change-user-language " . $v_username . " " . $v_language,
 			$output,
 			$return_var,
 		);
@@ -107,7 +107,7 @@ if (!empty($_POST["ok"])) {
 	if (empty($_SESSION["error_msg"])) {
 		$v_role = quoteshellarg($_POST["v_role"]);
 		exec(
-			HESTIA_CMD . "v-change-user-role " . $v_username . " " . $v_role,
+			HESTIA_CMD . "h-change-user-role " . $v_username . " " . $v_role,
 			$output,
 			$return_var,
 		);
@@ -121,7 +121,7 @@ if (!empty($_POST["ok"])) {
 			$_POST["v_login_disabled"] = "yes";
 			exec(
 				HESTIA_CMD .
-					"v-change-user-config-value " .
+					"h-change-user-config-value " .
 					$v_username .
 					" LOGIN_DISABLED " .
 					quoteshellarg($_POST["v_login_disabled"]),
@@ -243,13 +243,13 @@ if (!empty($_POST["ok"])) {
 }
 
 // List hosting packages
-exec(HESTIA_CMD . "v-list-user-packages json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-user-packages json", $output, $return_var);
 check_error($return_var);
 $data = json_decode(implode("", $output), true);
 unset($output);
 
 // List languages
-exec(HESTIA_CMD . "v-list-sys-languages json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-languages json", $output, $return_var);
 $language = json_decode(implode("", $output), true);
 foreach ($language as $lang) {
 	$languages[$lang] = translate_json($lang);

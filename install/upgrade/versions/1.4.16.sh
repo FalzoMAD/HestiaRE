@@ -16,5 +16,5 @@
 #######################################################################################
 
 if [ -n "$DB_PMA_ALIAS" ]; then
-	$HESTIA/bin/v-change-sys-db-alias 'pma' "$DB_PMA_ALIAS"
+	$HESTIA/bin/h-change-sys-db-alias 'pma' "$DB_PMA_ALIAS"
 fi

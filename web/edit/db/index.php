@@ -22,7 +22,7 @@ if ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) {
 // List datbase
 $v_database = $_GET["database"];
 exec(
-	HESTIA_CMD . "v-list-database " . $user . " " . quoteshellarg($v_database) . " 'json'",
+	HESTIA_CMD . "h-list-database " . $user . " " . quoteshellarg($v_database) . " 'json'",
 	$output,
 	$return_var,
 );
@@ -56,7 +56,7 @@ if (!empty($_POST["save"])) {
 	// Change database user
 	if ($v_dbuser != $_POST["v_dbuser"] && empty($_SESSION["error_msg"])) {
 		$cmd = implode(" ", [
-			HESTIA_CMD . "v-change-database-user",
+			HESTIA_CMD . "h-change-database-user",
 			// $user is already shell-quoted
 			$user,
 			quoteshellarg($v_database),
@@ -79,7 +79,7 @@ if (!empty($_POST["save"])) {
 			fclose($fp);
 			exec(
 				HESTIA_CMD .
-					"v-change-database-password " .
+					"h-change-database-password " .
 					$user .
 					" " .
 					quoteshellarg($v_database) .

@@ -13,7 +13,7 @@ if [ "$FIREWALL_SYSTEM" = "iptables" ]; then
 	rm -f /usr/lib/networkd-dispatcher/routable.d/50-ifup-hooks /etc/network/if-pre-up.d/iptables
 	# The firewall rules are loading by Systemd, the old loading script is no longer needed
 	rm -f /usr/lib/networkd-dispatcher/routable.d/10-hestia-iptables /etc/network/if-pre-up.d/hestia-iptables
-	$BIN/v-update-firewall
+	$BIN/h-update-firewall
 fi
 
 if [ -f "/etc/exim4/exim4.conf.template" ]; then

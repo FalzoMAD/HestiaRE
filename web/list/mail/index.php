@@ -7,7 +7,7 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
 // Data & Render page
 if (empty($_GET["domain"])) {
-	exec(HESTIA_CMD . "v-list-mail-domains $user json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-mail-domains $user json", $output, $return_var);
 	$data = json_decode(implode("", $output), true);
 	if ($_SESSION["userSortOrder"] == "name") {
 		ksort($data);
@@ -19,20 +19,20 @@ if (empty($_GET["domain"])) {
 	render_page($user, $TAB, "list_mail");
 } elseif (!empty($_GET["dns"])) {
 	exec(
-		HESTIA_CMD . "v-list-mail-domain " . $user . " " . quoteshellarg($_GET["domain"]) . " json",
+		HESTIA_CMD . "h-list-mail-domain " . $user . " " . quoteshellarg($_GET["domain"]) . " json",
 		$output,
 		$return_var,
 	);
 	$data = json_decode(implode("", $output), true);
 	$data = array_reverse($data, true);
 	unset($output);
-	exec(HESTIA_CMD . "v-list-user-ips " . $user . " json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-user-ips " . $user . " json", $output, $return_var);
 	$ips = json_decode(implode("", $output), true);
 	$ips = array_reverse($ips, true);
 	unset($output);
 	exec(
 		HESTIA_CMD .
-			"v-list-mail-domain-dkim-dns " .
+			"h-list-mail-domain-dkim-dns " .
 			$user .
 			" " .
 			quoteshellarg($_GET["domain"]) .
@@ -48,7 +48,7 @@ if (empty($_GET["domain"])) {
 } else {
 	exec(
 		HESTIA_CMD .
-			"v-list-mail-accounts " .
+			"h-list-mail-accounts " .
 			$user .
 			" " .
 			quoteshellarg($_GET["domain"]) .

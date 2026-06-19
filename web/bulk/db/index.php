@@ -23,16 +23,16 @@ $action = $_POST["action"];
 if ($_SESSION["userContext"] === "admin") {
 	switch ($action) {
 		case "rebuild":
-			$cmd = "v-rebuild-database";
+			$cmd = "h-rebuild-database";
 			break;
 		case "delete":
-			$cmd = "v-delete-database";
+			$cmd = "h-delete-database";
 			break;
 		case "suspend":
-			$cmd = "v-suspend-database";
+			$cmd = "h-suspend-database";
 			break;
 		case "unsuspend":
-			$cmd = "v-unsuspend-database";
+			$cmd = "h-unsuspend-database";
 			break;
 		default:
 			header("Location: /list/db/");
@@ -41,13 +41,13 @@ if ($_SESSION["userContext"] === "admin") {
 } else {
 	switch ($action) {
 		case "delete":
-			$cmd = "v-delete-database";
+			$cmd = "h-delete-database";
 			break;
 		case "suspend":
-			$cmd = "v-suspend-database";
+			$cmd = "h-suspend-database";
 			break;
 		case "unsuspend":
-			$cmd = "v-unsuspend-database";
+			$cmd = "h-unsuspend-database";
 			break;
 		default:
 			header("Location: /list/db/");

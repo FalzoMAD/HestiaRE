@@ -29,16 +29,16 @@ if ($_SESSION["userContext"] === "admin") {
 	if (empty($_POST["account"])) {
 		switch ($action) {
 			case "rebuild":
-				$cmd = "v-rebuild-mail-domain";
+				$cmd = "h-rebuild-mail-domain";
 				break;
 			case "delete":
-				$cmd = "v-delete-mail-domain";
+				$cmd = "h-delete-mail-domain";
 				break;
 			case "suspend":
-				$cmd = "v-suspend-mail-domain";
+				$cmd = "h-suspend-mail-domain";
 				break;
 			case "unsuspend":
-				$cmd = "v-unsuspend-mail-domain";
+				$cmd = "h-unsuspend-mail-domain";
 				break;
 			default:
 				header("Location: /list/mail/");
@@ -47,13 +47,13 @@ if ($_SESSION["userContext"] === "admin") {
 	} else {
 		switch ($action) {
 			case "delete":
-				$cmd = "v-delete-mail-account";
+				$cmd = "h-delete-mail-account";
 				break;
 			case "suspend":
-				$cmd = "v-suspend-mail-account";
+				$cmd = "h-suspend-mail-account";
 				break;
 			case "unsuspend":
-				$cmd = "v-unsuspend-mail-account";
+				$cmd = "h-unsuspend-mail-account";
 				break;
 			default:
 				header("Location: /list/mail/?domain=" . $domain);
@@ -64,13 +64,13 @@ if ($_SESSION["userContext"] === "admin") {
 	if (empty($_POST["account"])) {
 		switch ($action) {
 			case "delete":
-				$cmd = "v-delete-mail-domain";
+				$cmd = "h-delete-mail-domain";
 				break;
 			case "suspend":
-				$cmd = "v-suspend-mail-domain";
+				$cmd = "h-suspend-mail-domain";
 				break;
 			case "unsuspend":
-				$cmd = "v-unsuspend-mail-domain";
+				$cmd = "h-unsuspend-mail-domain";
 				break;
 			default:
 				header("Location: /list/mail/");
@@ -79,13 +79,13 @@ if ($_SESSION["userContext"] === "admin") {
 	} else {
 		switch ($action) {
 			case "delete":
-				$cmd = "v-delete-mail-account";
+				$cmd = "h-delete-mail-account";
 				break;
 			case "suspend":
-				$cmd = "v-suspend-mail-account";
+				$cmd = "h-suspend-mail-account";
 				break;
 			case "unsuspend":
-				$cmd = "v-unsuspend-mail-account";
+				$cmd = "h-unsuspend-mail-account";
 				break;
 			default:
 				header("Location: /list/mail/?domain=" . $domain);

@@ -34,8 +34,8 @@ if [ -d /etc/awstats ]; then
 	sed -i '/LoadPlugin=\"geoip GEOIP_STANDARD \/usr\/share\/GeoIP\/GeoIP.dat\"/s/^#//g' /etc/awstats/awstats.conf
 	echo "LoadPlugin=\"geoip GEOIP_STANDARD /usr/share/GeoIP/GeoIP.dat\"" >> $HESTIA/data/templates/web/awstats/awstats.tpl
 
-	for user in $($BIN/v-list-sys-users plain); do
-		$BIN/v-rebuild-web-domains $user no
+	for user in $($BIN/h-list-sys-users plain); do
+		$BIN/h-rebuild-web-domains $user no
 	done
 fi
 

@@ -53,7 +53,7 @@ source /usr/local/hestia/install/upgrade/upgrade.conf
 
 # Reset backend port
 if [ -n "$BACKEND_PORT" ]; then
-	/usr/local/hestia/bin/v-change-sys-port $BACKEND_PORT
+	/usr/local/hestia/bin/h-change-sys-port $BACKEND_PORT
 fi
 
 if [ -e "/etc/hestia/hooks/nginx/post_install.sh" ]; then

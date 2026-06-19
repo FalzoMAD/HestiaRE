@@ -5030,74 +5030,74 @@ msgstr ""
 msgid "NGINX cache has been purged successfully."
 msgstr ""
 
-#: ../../bin/v-list-sys-hestia-updates:110
+#: ../../bin/h-list-sys-hestia-updates:110
 msgid "Hestia core package"
 msgstr ""
 
-#: ../../bin/v-list-sys-hestia-updates:125
+#: ../../bin/h-list-sys-hestia-updates:125
 msgid "Hestia internal php interpreter"
 msgstr ""
 
-#: ../../bin/v-list-sys-hestia-updates:141
+#: ../../bin/h-list-sys-hestia-updates:141
 msgid "Hestia internal web server"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:167
+#: ../../bin/h-list-sys-services:167
 msgid "web server"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:178
+#: ../../bin/h-list-sys-services:178
 msgid "php interpreter"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:186
+#: ../../bin/h-list-sys-services:186
 msgid "reverse proxy"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:195
+#: ../../bin/h-list-sys-services:195
 msgid "dns server"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:202
+#: ../../bin/h-list-sys-services:202
 msgid "mail server"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:209
+#: ../../bin/h-list-sys-services:209
 msgid "imap/pop3 server"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:226
+#: ../../bin/h-list-sys-services:226
 msgid "email anti-virus"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:234
+#: ../../bin/h-list-sys-services:234
 msgid "email spam filter"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:281
+#: ../../bin/h-list-sys-services:281
 msgid "database server"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:290
+#: ../../bin/h-list-sys-services:290
 msgid "ftp server"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:297
+#: ../../bin/h-list-sys-services:297
 msgid "job scheduler"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:304
+#: ../../bin/h-list-sys-services:304
 msgid "ssh server"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:314
+#: ../../bin/h-list-sys-services:314
 msgid "firewall"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:329
+#: ../../bin/h-list-sys-services:329
 msgid "brute-force protection"
 msgstr ""
 
-#: ../../bin/v-list-sys-services:336
+#: ../../bin/h-list-sys-services:336
 msgid "web terminal backend"
 msgstr ""

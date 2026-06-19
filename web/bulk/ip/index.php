@@ -23,12 +23,12 @@ $action = $_POST["action"];
 if ($_SESSION["userContext"] === "admin") {
 	switch ($action) {
 		case "reread IP":
-			exec(HESTIA_CMD . "v-update-sys-ip", $output, $return_var);
+			exec(HESTIA_CMD . "h-update-sys-ip", $output, $return_var);
 			header("Location: /list/ip/");
 			exit();
 			break;
 		case "delete":
-			$cmd = "v-delete-sys-ip";
+			$cmd = "h-delete-sys-ip";
 			break;
 		default:
 			header("Location: /list/ip/");

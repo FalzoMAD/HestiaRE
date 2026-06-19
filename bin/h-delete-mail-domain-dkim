@@ -1,0 +1,75 @@
+#!/bin/bash
+# info: delete mail domain dkim support
+# options: USER DOMAIN
+#
+# example: h-delete-mail-domain-dkim admin mydomain.tld
+#
+# This function delete DKIM domain pem.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+domain=$(echo "$domain" | tr '[:upper:]' '[:lower:]')
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.conf
+source /etc/hestia/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN'
+is_format_valid 'user' 'domain'
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+is_object_value_exist 'mail' 'DOMAIN' "$domain" '$DKIM'
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Deleting dkim
+if [[ "$MAIL_SYSTEM" =~ exim ]]; then
+	rm -f $USER_DATA/mail/$domain.pem
+	rm -f $USER_DATA/mail/$domain.pub
+	rm -f $HOMEDIR/$user/conf/mail/$domain/dkim.pem
+fi
+
+# Deleting dns record
+if [ -n "$DNS_SYSTEM" ] && [ -e "$USER_DATA/dns/$domain.conf" ]; then
+	records=$($BIN/h-list-dns-records "$user" "$domain")
+	# Keep removing deprecated _domainkey policy entries until they are fully retired.
+	dkim_records=$(echo "$records" | grep -E "\s(mail\._domainkey|_domainkey)\s" | cut -f 1 -d ' ')
+	for id in $dkim_records; do
+		$BIN/h-delete-dns-record "$user" "$domain" "$id" 'yes'
+	done
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Updating config
+update_object_value 'mail' 'DOMAIN' "$domain" '$DKIM' 'no'
+decrease_user_value "$user" '$U_MAIL_DKIM'
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Mail" "DKIM message signing disabled (Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

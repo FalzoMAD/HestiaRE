@@ -11,7 +11,7 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 $ok = 0;
 $ip = $_SERVER["REMOTE_ADDR"];
 
-exec(HESTIA_CMD . "v-list-sys-ips json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-ips json", $output, $return_var);
 $output = implode("", $output);
 $arr = json_decode($output, true);
 foreach ($arr as $arr_key => $arr_val) {
@@ -55,7 +55,7 @@ $v_account = quoteshellarg($v_account);
 $v_password = $_POST["password"];
 
 // Get domain owner
-exec(HESTIA_CMD . "v-search-domain-owner " . $v_domain . " 'mail'", $output, $return_var);
+exec(HESTIA_CMD . "h-search-domain-owner " . $v_domain . " 'mail'", $output, $return_var);
 if ($return_var != 0 || empty($output[0])) {
 	echo "error domain owner not found";
 	exit();
@@ -66,7 +66,7 @@ unset($output);
 // Get current password hash (called "md5" for legacy reasons, it's not guaranteed to be md5)
 exec(
 	HESTIA_CMD .
-		"v-get-mail-account-value " .
+		"h-get-mail-account-value " .
 		quoteshellarg($v_user) .
 		" " .
 		$v_domain .
@@ -97,7 +97,7 @@ $new_password_file = stream_get_meta_data($fp)["uri"];
 fwrite($fp, $_POST["new"] . "\n");
 exec(
 	HESTIA_CMD .
-		"v-change-mail-account-password " .
+		"h-change-mail-account-password " .
 		quoteshellarg($v_user) .
 		" " .
 		$v_domain .
@@ -113,5 +113,5 @@ if ($return_var == 0) {
 	echo "==ok==";
 	exit();
 }
-echo "error v-change-mail-account-password returned non-zero: " . $return_var;
+echo "error h-change-mail-account-password returned non-zero: " . $return_var;
 exit();

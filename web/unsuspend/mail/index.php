@@ -11,7 +11,7 @@ verify_csrf($_GET);
 // Mail domain
 if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_domain = quoteshellarg($_GET["domain"]);
-	exec(HESTIA_CMD . "v-unsuspend-mail-domain " . $user . " " . $v_domain, $output, $return_var);
+	exec(HESTIA_CMD . "h-unsuspend-mail-domain " . $user . " " . $v_domain, $output, $return_var);
 	if ($return_var != 0) {
 		$error = implode("<br>", $output);
 		if (empty($error)) {
@@ -35,7 +35,7 @@ if (!empty($_GET["domain"]) && !empty($_GET["account"])) {
 	$v_domain = quoteshellarg($_GET["domain"]);
 	$v_account = quoteshellarg($_GET["account"]);
 	exec(
-		HESTIA_CMD . "v-unsuspend-mail-account " . $user . " " . $v_domain . " " . $v_account,
+		HESTIA_CMD . "h-unsuspend-mail-account " . $user . " " . $v_domain . " " . $v_account,
 		$output,
 		$return_var,
 	);

@@ -16,7 +16,7 @@ if (!empty($_POST)) {
 	if (!empty($_POST["v_app_name"]) && $_SESSION["APP_NAME"] != $_POST["v_app_name"]) {
 		exec(
 			HESTIA_CMD .
-				"v-change-sys-config-value APP_NAME " .
+				"h-change-sys-config-value APP_NAME " .
 				quoteshellarg($_POST["v_app_name"]),
 			$output,
 			$return_var,
@@ -24,7 +24,7 @@ if (!empty($_POST)) {
 	}
 	if (!empty($_POST["v_title"]) && $_SESSION["TITLE"] != $_POST["v_title"]) {
 		exec(
-			HESTIA_CMD . "v-change-sys-config-value TITLE " . quoteshellarg($_POST["v_title"]),
+			HESTIA_CMD . "h-change-sys-config-value TITLE " . quoteshellarg($_POST["v_title"]),
 			$output,
 			$return_var,
 		);
@@ -35,7 +35,7 @@ if (!empty($_POST)) {
 	) {
 		exec(
 			HESTIA_CMD .
-				"v-change-sys-config-value SUBJECT_EMAIL " .
+				"h-change-sys-config-value SUBJECT_EMAIL " .
 				quoteshellarg($_POST["v_subject_email"]),
 			$output,
 			$return_var,
@@ -44,7 +44,7 @@ if (!empty($_POST)) {
 	if (!empty($_POST["v_hide_docs"]) && $_SESSION["HIDE_DOCS"] != $_POST["v_hide_docs"]) {
 		exec(
 			HESTIA_CMD .
-				"v-change-sys-config-value HIDE_DOCS " .
+				"h-change-sys-config-value HIDE_DOCS " .
 				quoteshellarg($_POST["v_hide_docs"]),
 			$output,
 			$return_var,
@@ -54,7 +54,7 @@ if (!empty($_POST)) {
 	if (!empty($_POST["v_from_name"]) && $_SESSION["FROM_NAME"] != $_POST["v_from_name"]) {
 		exec(
 			HESTIA_CMD .
-				"v-change-sys-config-value FROM_NAME " .
+				"h-change-sys-config-value FROM_NAME " .
 				quoteshellarg($_POST["v_from_name"]),
 			$output,
 			$return_var,
@@ -63,7 +63,7 @@ if (!empty($_POST)) {
 	if (!empty($_POST["v_from_email"]) && $_SESSION["FROM_EMAIL"] != $_POST["v_from_email"]) {
 		exec(
 			HESTIA_CMD .
-				"v-change-sys-config-value FROM_EMAIL " .
+				"h-change-sys-config-value FROM_EMAIL " .
 				quoteshellarg($_POST["v_from_email"]),
 			$output,
 			$return_var,
@@ -72,22 +72,22 @@ if (!empty($_POST)) {
 	if (!empty($_POST["v_hide_docs"]) && $_SESSION["HIDE_DOCS"] != $_POST["v_hide_docs"]) {
 		exec(
 			HESTIA_CMD .
-				"v-change-sys-config-value HIDE_DOCS " .
+				"h-change-sys-config-value HIDE_DOCS " .
 				quoteshellarg($_POST["v_hide_docs"]),
 			$output,
 			$return_var,
 		);
 	}
 	if (!empty($_POST["v_update_logo"])) {
-		exec(HESTIA_CMD . "v-update-white-label-logo");
+		exec(HESTIA_CMD . "h-update-white-label-logo");
 	}
 	if (!empty($_POST["v_reset_logo"])) {
-		exec(HESTIA_CMD . "v-update-white-label-logo yes yes");
+		exec(HESTIA_CMD . "h-update-white-label-logo yes yes");
 	}
 }
 
 // Check system configuration
-exec(HESTIA_CMD . "v-list-sys-config json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
 $data = json_decode(implode("", $output), true);
 unset($output);
 

@@ -34,7 +34,7 @@ if (!empty($_POST["ok"])) {
 	if (empty($_SESSION["error_msg"])) {
 		if ($_POST) {
 			//key if key already exists
-			exec(HESTIA_CMD . "v-list-user-ssh-key " . $user . " json", $output, $return_var);
+			exec(HESTIA_CMD . "h-list-user-ssh-key " . $user . " json", $output, $return_var);
 			$data = json_decode(implode("", $output), true);
 			unset($output);
 			$keylist = [];
@@ -64,7 +64,7 @@ if (!empty($_POST["ok"])) {
 	}
 
 	if (empty($_SESSION["error_msg"])) {
-		exec(HESTIA_CMD . "v-add-user-ssh-key " . $user . " " . $v_key, $output, $return_var);
+		exec(HESTIA_CMD . "h-add-user-ssh-key " . $user . " " . $v_key, $output, $return_var);
 		check_return_code($return_var, $output);
 	}
 	unset($output);

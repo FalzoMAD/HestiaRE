@@ -41,7 +41,7 @@ upgrade_health_check() {
 
 	if [ -z "$VERSION" ]; then
 		export VERSION="1.1.0"
-		$BIN/v-change-sys-config-value 'VERSION' "$VERSION"
+		$BIN/h-change-sys-config-value 'VERSION' "$VERSION"
 		echo
 		echo "[ ! ] Unable to detect installed version of Hestia Control Panel."
 		echo "      Setting default version to $VERSION and processing upgrade steps."
@@ -152,7 +152,7 @@ upgrade_complete_message_log() {
 	echo "https://github.com/hestiacp/hestiacp/issues                                  "
 	echo "============================================================================="
 	echo
-	$BIN/v-log-action "system" "Info" "Updates" "Update installed (Version: $new_version)."
+	$BIN/h-log-action "system" "Info" "Updates" "Update installed (Version: $new_version)."
 }
 
 upgrade_cleanup_message() {
@@ -168,14 +168,14 @@ upgrade_get_version() {
 
 upgrade_set_version() {
 	# Set new version number in hestia.conf
-	$BIN/v-change-sys-config-value "VERSION" "$@"
+	$BIN/h-change-sys-config-value "VERSION" "$@"
 }
 
 upgrade_set_branch() {
 	# Set branch in hestia.conf
 	DISPLAY_VER=$(echo "$1" | sed "s|~alpha||g" | sed "s|~beta||g")
 	if [ "$DISPLAY_VER" = "$1" ]; then
-		$BIN/v-change-sys-config-value "RELEASE_BRANCH" "release"
+		$BIN/h-change-sys-config-value "RELEASE_BRANCH" "release"
 	fi
 }
 
@@ -187,13 +187,13 @@ upgrade_send_notification_to_panel() {
 	# Add notification to panel if variable is set to true or is not set
 	if [[ "$new_version" =~ "alpha" ]]; then
 		# Send notifications for development releases
-		$BIN/v-add-user-notification "$ROOT_USER" 'Development snapshot installed' '<p><span class="u-text-bold">Version:</span> '$new_version'<br><span class="u-text-bold">Code Branch:</span> '$RELEASE_BRANCH'</p><p>Please report any bugs by <a href="https://github.com/hestiacp/hestiacp/issues" target="_blank">opening an issue on GitHub</a>, and feel free to share your feedback on our <a href="https://forum.hestiacp.com" target="_blank">discussion forum</a>.</p><p><i class="fas fa-heart icon-red"></i> The Hestia Control Panel development team</p>'
+		$BIN/h-add-user-notification "$ROOT_USER" 'Development snapshot installed' '<p><span class="u-text-bold">Version:</span> '$new_version'<br><span class="u-text-bold">Code Branch:</span> '$RELEASE_BRANCH'</p><p>Please report any bugs by <a href="https://github.com/hestiacp/hestiacp/issues" target="_blank">opening an issue on GitHub</a>, and feel free to share your feedback on our <a href="https://forum.hestiacp.com" target="_blank">discussion forum</a>.</p><p><i class="fas fa-heart icon-red"></i> The Hestia Control Panel development team</p>'
 	elif [[ "$new_version" =~ "beta" ]]; then
 		# Send feedback notification for beta releases
-		$BIN/v-add-user-notification "$ROOT_USER" 'Thank you for testing Hestia Control Panel '$new_version'.' '<p>Please share your feedback with our development team through our <a href="https://forum.hestiacp.com" target="_blank">discussion forum</a>.</p><p>Found a bug? <a href="https://github.com/hestiacp/hestiacp/issues" target="_blank">Open an issue on GitHub</a>!</p><p><i class="fas fa-heart icon-red"></i> The Hestia Control Panel development team</p>'
+		$BIN/h-add-user-notification "$ROOT_USER" 'Thank you for testing Hestia Control Panel '$new_version'.' '<p>Please share your feedback with our development team through our <a href="https://forum.hestiacp.com" target="_blank">discussion forum</a>.</p><p>Found a bug? <a href="https://github.com/hestiacp/hestiacp/issues" target="_blank">Open an issue on GitHub</a>!</p><p><i class="fas fa-heart icon-red"></i> The Hestia Control Panel development team</p>'
 	else
 		# Send normal upgrade complete notification for stable releases
-		$BIN/v-add-user-notification "$ROOT_USER" 'Upgrade complete' '<p>Hestia Control Panel has been updated to <span class="u-text-bold">v'$new_version'</span>.</p><p><a href="https://github.com/hestiacp/hestiacp/blob/release/CHANGELOG.md" target="_blank">View release notes</a></p><p>Please report any bugs by <a href="https://github.com/hestiacp/hestiacp/issues" target="_blank">opening an issue on GitHub</a>.</p><p class="u-text-bold">Have a wonderful day!</p><p><i class="fas fa-heart icon-red"></i> The Hestia Control Panel development team</p>'
+		$BIN/h-add-user-notification "$ROOT_USER" 'Upgrade complete' '<p>Hestia Control Panel has been updated to <span class="u-text-bold">v'$new_version'</span>.</p><p><a href="https://github.com/hestiacp/hestiacp/blob/release/CHANGELOG.md" target="_blank">View release notes</a></p><p>Please report any bugs by <a href="https://github.com/hestiacp/hestiacp/issues" target="_blank">opening an issue on GitHub</a>.</p><p class="u-text-bold">Have a wonderful day!</p><p><i class="fas fa-heart icon-red"></i> The Hestia Control Panel development team</p>'
 	fi
 }
 
@@ -204,7 +204,7 @@ upgrade_send_notification_to_email() {
 	fi
 	if [ "$UPGRADE_SEND_EMAIL" = "true" ]; then
 		# Retrieve admin email address, sendmail path, and message temp file path
-		admin_email=$($BIN/v-list-user "$ROOT_USER" json | grep "CONTACT" | cut -d'"' -f4)
+		admin_email=$($BIN/h-list-user "$ROOT_USER" json | grep "CONTACT" | cut -d'"' -f4)
 		send_mail="$HESTIA/web/inc/mail-wrapper.php"
 		message_tmp_file="/tmp/hestia-upgrade-complete.txt"
 
@@ -246,7 +246,7 @@ upgrade_send_notification_to_email() {
 
 upgrade_send_log_to_email() {
 	if [ "$UPGRADE_SEND_EMAIL_LOG" = "true" ]; then
-		admin_email=$($BIN/v-list-user $ROOT_USER json | grep "CONTACT" | cut -d'"' -f4)
+		admin_email=$($BIN/h-list-user $ROOT_USER json | grep "CONTACT" | cut -d'"' -f4)
 		send_mail="$HESTIA/web/inc/mail-wrapper.php"
 		cat $LOG | $send_mail -s "Update Installation Log - v${new_version}" $admin_email
 	fi
@@ -346,14 +346,14 @@ upgrade_init_logging() {
 	touch $LOG
 
 	# Add message to system log
-	$BIN/v-log-action "system" "Info" "Updates" "Started update installation (Latest: $new_version, Previous: $VERSION)."
+	$BIN/h-log-action "system" "Info" "Updates" "Started update installation (Latest: $new_version, Previous: $VERSION)."
 
 	# Add warnings for pre-release builds
 	if [[ "$new_version" =~ "alpha" ]]; then
-		$BIN/v-log-action "system" "Warning" "Updates" "Development build for testing purposes only. Report bugs at https://github.com/hestiacp/hestiacp/issues/."
+		$BIN/h-log-action "system" "Warning" "Updates" "Development build for testing purposes only. Report bugs at https://github.com/hestiacp/hestiacp/issues/."
 	fi
 	if [[ "$new_version" =~ "beta" ]]; then
-		$BIN/v-log-action "system" "Warning" "Updates" "Beta release. Please report bugs at https://github.com/hestiacp/hestiacp/issues/."
+		$BIN/h-log-action "system" "Warning" "Updates" "Beta release. Please report bugs at https://github.com/hestiacp/hestiacp/issues/."
 	fi
 }
 
@@ -682,8 +682,8 @@ upgrade_filemanager() {
 		if ! version_ge "$fm_version" "$fm_v"; then
 			echo "[ ! ] Upgrading File Manager to version $fm_v..."
 			# Reinstall the File Manager
-			$BIN/v-delete-sys-filemanager quiet yes
-			$BIN/v-add-sys-filemanager quiet
+			$BIN/h-delete-sys-filemanager quiet yes
+			$BIN/h-add-sys-filemanager quiet
 		else
 			echo "[ * ] File Manager is up to date ($fm_v)..."
 
@@ -701,7 +701,7 @@ upgrade_filemanager() {
 					sed -i "s|\(\$dist_config\[\"frontend_config\"\]\[\"app_name\"\] = \"File Manager - \).*\";|\1${APP_NAME}\";|" "$config_file"
 
 					# Set environment variable for interface
-					$BIN/v-change-sys-config-value 'FILE_MANAGER' 'true'
+					$BIN/h-change-sys-config-value 'FILE_MANAGER' 'true'
 				fi
 			fi
 		fi
@@ -717,7 +717,7 @@ upgrade_roundcube() {
 			rc_version=$(cat /var/lib/roundcube/index.php | grep -o -E '[0-9].[0-9].[0-9]+' | head -1)
 			if ! version_ge "$rc_version" "$rc_v"; then
 				echo "[ ! ] Upgrading Roundcube to version $rc_v..."
-				$BIN/v-add-sys-roundcube
+				$BIN/h-add-sys-roundcube
 			else
 				echo "[ * ] Roundcube is up to date ($rc_v)..."
 			fi
@@ -730,7 +730,7 @@ upgrade_snappymail() {
 		sm_version=$(cat /var/lib/snappymail/data/VERSION)
 		if ! version_ge "$sm_version" "$sm_v"; then
 			echo "[ ! ] Upgrading SnappyMail to version $sm_v..."
-			$BIN/v-add-sys-snappymail
+			$BIN/h-add-sys-snappymail
 		else
 			echo "[ * ] SnappyMail is up to date ($sm_v)..."
 		fi
@@ -739,27 +739,27 @@ upgrade_snappymail() {
 
 upgrade_dependencies() {
 	echo "[ ! ] Update Hestia PHP dependencies..."
-	$BIN/v-add-sys-dependencies
+	$BIN/h-add-sys-dependencies
 }
 
 upgrade_rebuild_web_templates() {
 	if [ "$UPGRADE_UPDATE_WEB_TEMPLATES" = "true" ]; then
 		echo "[ ! ] Updating default web domain templates..."
-		$BIN/v-update-web-templates "no" "skip"
+		$BIN/h-update-web-templates "no" "skip"
 	fi
 }
 
 upgrade_rebuild_mail_templates() {
 	if [ "$UPGRADE_UPDATE_MAIL_TEMPLATES" = "true" ]; then
 		echo "[ ! ] Updating default mail domain templates..."
-		$BIN/v-update-mail-templates "no" "skip"
+		$BIN/h-update-mail-templates "no" "skip"
 	fi
 }
 
 upgrade_rebuild_dns_templates() {
 	if [ "$UPGRADE_UPDATE_DNS_TEMPLATES" = "true" ]; then
 		echo "[ ! ] Updating default DNS zone templates..."
-		$BIN/v-update-dns-templates
+		$BIN/h-update-dns-templates
 	fi
 }
 
@@ -770,7 +770,7 @@ upgrade_rebuild_users() {
 		else
 			echo "[ * ] Rebuilding user accounts and domains, this may take a few minutes..."
 		fi
-		for user in $("$BIN/v-list-users" list); do
+		for user in $("$BIN/h-list-users" list); do
 			export restart="no"
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      - $user:"
@@ -780,39 +780,39 @@ upgrade_rebuild_users() {
 			if [ -n "$WEB_SYSTEM" ]; then
 				if [ "$DEBUG_MODE" = "true" ]; then
 					echo "      ---- Web domains..."
-					$BIN/v-rebuild-web-domains "$user" 'no'
+					$BIN/h-rebuild-web-domains "$user" 'no'
 				else
-					$BIN/v-rebuild-web-domains "$user" 'no' > /dev/null 2>&1
+					$BIN/h-rebuild-web-domains "$user" 'no' > /dev/null 2>&1
 				fi
 			fi
 			if [ -n "$DNS_SYSTEM" ]; then
 				if [ "$DEBUG_MODE" = "true" ]; then
 					echo "      ---- DNS zones..."
-					$BIN/v-rebuild-dns-domains "$user" 'no'
+					$BIN/h-rebuild-dns-domains "$user" 'no'
 				else
-					$BIN/v-rebuild-dns-domains "$user" 'no' > /dev/null 2>&1
+					$BIN/h-rebuild-dns-domains "$user" 'no' > /dev/null 2>&1
 				fi
 			fi
 			if [ -n "$MAIL_SYSTEM" ]; then
 				if [ "$DEBUG_MODE" = "true" ]; then
 					echo "      ---- Mail domains..."
-					$BIN/v-rebuild-mail-domains "$user" 'no'
+					$BIN/h-rebuild-mail-domains "$user" 'no'
 				else
-					$BIN/v-rebuild-mail-domains "$user" 'no' > /dev/null 2>&1
+					$BIN/h-rebuild-mail-domains "$user" 'no' > /dev/null 2>&1
 				fi
 			fi
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      ---- User configuration..."
-				$BIN/v-rebuild-user "$user" 'no'
+				$BIN/h-rebuild-user "$user" 'no'
 			else
-				$BIN/v-rebuild-user "$user" 'no' > /dev/null 2>&1
+				$BIN/h-rebuild-user "$user" 'no' > /dev/null 2>&1
 			fi
 		done
 	fi
 }
 
 update_whitelabel_logo() {
-	$BIN/v-update-white-label-logo
+	$BIN/h-update-white-label-logo
 }
 
 upgrade_replace_default_config() {
@@ -832,69 +832,69 @@ upgrade_restart_services() {
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      - $MAIL_SYSTEM"
 			fi
-			$BIN/v-restart-mail 'yes'
+			$BIN/h-restart-mail 'yes'
 		fi
 		if [ -n "$IMAP_SYSTEM" ]; then
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      - $IMAP_SYSTEM"
 			fi
-			$BIN/v-restart-service "$IMAP_SYSTEM"
+			$BIN/h-restart-service "$IMAP_SYSTEM"
 		fi
 		if [ -n "$WEB_SYSTEM" ]; then
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      - $WEB_SYSTEM"
 			fi
-			$BIN/v-restart-web 'yes'
+			$BIN/h-restart-web 'yes'
 		fi
 		if [ -n "$PROXY_SYSTEM" ]; then
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      - $PROXY_SYSTEM"
 			fi
-			$BIN/v-restart-proxy 'yes'
+			$BIN/h-restart-proxy 'yes'
 		fi
 		if [ -n "$DNS_SYSTEM" ]; then
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      - $DNS_SYSTEM"
 			fi
-			$BIN/v-restart-dns 'yes'
+			$BIN/h-restart-dns 'yes'
 		fi
 		if [ -n "$WEB_BACKEND" ]; then
-			versions_list=$($BIN/v-list-sys-php plain)
+			versions_list=$($BIN/h-list-sys-php plain)
 			for v in $versions_list; do
 				if [ "$DEBUG_MODE" = "true" ]; then
-					echo "      - php$v-fpm"
+					echo "      - php$h-fpm"
 				fi
-				$BIN/v-restart-service "php$v-fpm" 'yes'
+				$BIN/h-restart-service "php$h-fpm" 'yes'
 			done
 		fi
 		if [ -n "$FTP_SYSTEM" ]; then
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      - $FTP_SYSTEM"
 			fi
-			$BIN/v-restart-ftp 'yes'
+			$BIN/h-restart-ftp 'yes'
 		fi
 		if [ -n "$FIREWALL_EXTENSION" ]; then
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      - $FIREWALL_EXTENSION"
 			fi
-			$BIN/v-restart-service "$FIREWALL_EXTENSION"
+			$BIN/h-restart-service "$FIREWALL_EXTENSION"
 		fi
 		if [ "$WEB_TERMINAL" = "true" ]; then
 			if [ "$DEBUG_MODE" = "true" ]; then
 				echo "      - hestia-web-terminal"
 			fi
-			$BIN/v-restart-service "hestia-web-terminal"
+			$BIN/h-restart-service "hestia-web-terminal"
 		fi
 		# Restart SSH daemon service
 		if [ "$DEBUG_MODE" = "true" ]; then
 			echo "      - sshd"
 		fi
-		$BIN/v-restart-service ssh
+		$BIN/h-restart-service ssh
 	fi
 
 	# Always restart the Hestia Control Panel service
 	if [ "$DEBUG_MODE" = "true" ]; then
 		echo "      - hestia"
 	fi
-	$BIN/v-restart-service hestia
+	$BIN/h-restart-service hestia
 }

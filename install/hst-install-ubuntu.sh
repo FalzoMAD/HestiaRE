@@ -1028,8 +1028,8 @@ if [ "$mysql" = 'no' ] && [ "$mysql8" = 'no' ]; then
 	software=$(echo "$software" | sed -e "s/php$fpm_v-mysql//")
 	if [ "$multiphp" = 'yes' ]; then
 		for v in "${multiphp_v[@]}"; do
-			software=$(echo "$software" | sed -e "s/php$v-mysql//")
-			software=$(echo "$software" | sed -e "s/php$v-bz2//")
+			software=$(echo "$software" | sed -e "s/php$h-mysql//")
+			software=$(echo "$software" | sed -e "s/php$h-bz2//")
 		done
 	fi
 fi
@@ -1498,7 +1498,7 @@ fi
 cp -rf $HESTIA_COMMON_DIR/api $HESTIA/data/
 
 # Configuring server hostname
-$HESTIA/bin/v-change-sys-hostname $servername > /dev/null 2>&1
+$HESTIA/bin/h-change-sys-hostname $servername > /dev/null 2>&1
 
 # Configuring global OpenSSL options
 echo "[ * ] Configuring OpenSSL to improve TLS performance..."
@@ -1518,7 +1518,7 @@ fi
 
 # Generating SSL certificate
 echo "[ * ] Generating default self-signed SSL certificate..."
-$HESTIA/bin/v-generate-ssl-cert $(hostname) '' 'US' 'California' \
+$HESTIA/bin/h-generate-ssl-cert $(hostname) '' 'US' 'California' \
 	'San Francisco' 'Hestia Control Panel' 'IT' > /tmp/hst.pem
 
 # Parsing certificate file
@@ -1549,22 +1549,22 @@ cp -f $HESTIA_INSTALL_DIR/ssl/dhparam.pem /etc/ssl
 
 # Enable SFTP jail
 echo "[ * ] Enabling SFTP jail..."
-$HESTIA/bin/v-add-sys-sftp-jail > /dev/null 2>&1
+$HESTIA/bin/h-add-sys-sftp-jail > /dev/null 2>&1
 check_result $? "can't enable sftp jail"
 
 # Enable SSH jail
 echo "[ * ] Enabling SSH jail..."
-$HESTIA/bin/v-add-sys-ssh-jail > /dev/null 2>&1
+$HESTIA/bin/h-add-sys-ssh-jail > /dev/null 2>&1
 check_result $? "can't enable ssh jail"
 
 # Adding Hestia admin account
 echo "[ * ] Creating default admin account..."
-$HESTIA/bin/v-add-user $username $vpass $email "default" "System Administrator"
+$HESTIA/bin/h-add-user $username $vpass $email "default" "System Administrator"
 check_result $? "can't create admin user"
-$HESTIA/bin/v-change-user-shell $username nologin no
-$HESTIA/bin/v-change-user-role $username admin
-$HESTIA/bin/v-change-user-language $username $lang
-$HESTIA/bin/v-change-sys-config-value 'POLICY_SYSTEM_PROTECTED_ADMIN' 'yes'
+$HESTIA/bin/h-change-user-shell $username nologin no
+$HESTIA/bin/h-change-user-role $username admin
+$HESTIA/bin/h-change-user-language $username $lang
+$HESTIA/bin/h-change-sys-config-value 'POLICY_SYSTEM_PROTECTED_ADMIN' 'yes'
 
 #----------------------------------------------------------#
 #                     Configure Nginx                      #
@@ -1691,11 +1691,11 @@ if [ "$phpfpm" = "yes" ]; then
 	if [ "$multiphp" = 'yes' ]; then
 		for v in "${multiphp_v[@]}"; do
 			echo "[ * ] Installing PHP $v..."
-			$HESTIA/bin/v-add-web-php "$v" > /dev/null 2>&1
+			$HESTIA/bin/h-add-web-php "$v" > /dev/null 2>&1
 		done
 	else
 		echo "[ * ] Installing PHP $fpm_v..."
-		$HESTIA/bin/v-add-web-php "$fpm_v" > /dev/null 2>&1
+		$HESTIA/bin/h-add-web-php "$fpm_v" > /dev/null 2>&1
 	fi
 
 	echo "[ * ] Configuring PHP-FPM $fpm_v..."
@@ -1891,7 +1891,7 @@ if [ "$mysql" = 'yes' ] || [ "$mysql8" = 'yes' ]; then
 	rm -f phpMyAdmin-$pma_v-all-languages.tar.gz
 
 	write_config_value "DB_PMA_ALIAS" "phpmyadmin"
-	$HESTIA/bin/v-change-sys-db-alias 'pma' "phpmyadmin"
+	$HESTIA/bin/h-change-sys-db-alias 'pma' "phpmyadmin"
 
 	# Special thanks to Pavel Galkin (https://skurudo.ru)
 	# https://github.com/skurudo/phpmyadmin-fixer
@@ -1932,7 +1932,7 @@ if [ "$postgresql" = 'yes' ]; then
 
 	rm phppgadmin-v$pga_v.tar.gz
 	write_config_value "DB_PGA_ALIAS" "phppgadmin"
-	$HESTIA/bin/v-change-sys-db-alias 'pga' "phppgadmin"
+	$HESTIA/bin/h-change-sys-db-alias 'pga' "phppgadmin"
 
 	# Limit access to /etc/phppgadmin/
 	chown -R root:hestiamail /etc/phppgadmin/
@@ -2137,12 +2137,12 @@ fi
 
 # Configuring MariaDB/MySQL host
 if [ "$mysql" = 'yes' ] || [ "$mysql8" = 'yes' ]; then
-	$HESTIA/bin/v-add-database-host mysql localhost root $mpass
+	$HESTIA/bin/h-add-database-host mysql localhost root $mpass
 fi
 
 # Configuring PostgreSQL host
 if [ "$postgresql" = 'yes' ]; then
-	$HESTIA/bin/v-add-database-host pgsql localhost postgres $ppass
+	$HESTIA/bin/h-add-database-host pgsql localhost postgres $ppass
 fi
 
 #----------------------------------------------------------#
@@ -2152,7 +2152,7 @@ fi
 # Min requirements Dovecot + Exim + Mysql
 if ([ "$mysql" == 'yes' ] || [ "$mysql8" == 'yes' ]) && [ "$dovecot" == "yes" ]; then
 	echo "[ * ] Installing Roundcube..."
-	$HESTIA/bin/v-add-sys-roundcube
+	$HESTIA/bin/h-add-sys-roundcube
 	write_config_value "WEBMAIL_ALIAS" "webmail"
 else
 	write_config_value "WEBMAIL_ALIAS" ""
@@ -2245,7 +2245,7 @@ else
 	write_config_value "API" "no"
 	write_config_value "API_SYSTEM" "0"
 	write_config_value "API_ALLOWED_IP" ""
-	$HESTIA/bin/v-change-sys-api disable
+	$HESTIA/bin/h-change-sys-api disable
 fi
 
 #----------------------------------------------------------#
@@ -2253,7 +2253,7 @@ fi
 #----------------------------------------------------------#
 
 echo "[ * ] Configuring File Manager..."
-$HESTIA/bin/v-add-sys-filemanager quiet
+$HESTIA/bin/h-add-sys-filemanager quiet
 
 #----------------------------------------------------------#
 #              Configure Web terminal                      #
@@ -2274,7 +2274,7 @@ fi
 #----------------------------------------------------------#
 
 echo "[ * ] Configuring PHP dependencies..."
-$HESTIA/bin/v-add-sys-dependencies quiet
+$HESTIA/bin/h-add-sys-dependencies quiet
 
 echo "[ * ] Installing Rclone & Update Restic ..."
 curl -s https://rclone.org/install.sh | bash > /dev/null 2>&1
@@ -2286,7 +2286,7 @@ restic self-update > /dev/null 2>&1
 
 # Configuring system IPs
 echo "[ * ] Configuring System IP..."
-$HESTIA/bin/v-update-sys-ip > /dev/null 2>&1
+$HESTIA/bin/h-update-sys-ip > /dev/null 2>&1
 
 # Get primary IP
 default_nic="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
@@ -2299,7 +2299,7 @@ local_ip="$primary_ipv4"
 
 # Configuring firewall
 if [ "$iptables" = 'yes' ]; then
-	$HESTIA/bin/v-update-firewall
+	$HESTIA/bin/h-update-firewall
 fi
 
 # Get public IP
@@ -2320,13 +2320,13 @@ if [ -n "$pub_ipv4" ] && [ "$pub_ipv4" != "$ip" ]; then
 	check_pve=$(uname -r | grep pve)
 	if [ ! -z "$check_pve" ]; then
 		echo 'hostname=$(hostname --fqdn)' >> /etc/rc.local
-		echo ""$HESTIA/bin/v-change-sys-hostname" "'"$hostname"'"" >> /etc/rc.local
+		echo ""$HESTIA/bin/h-change-sys-hostname" "'"$hostname"'"" >> /etc/rc.local
 	fi
-	echo "$HESTIA/bin/v-update-sys-ip" >> /etc/rc.local
+	echo "$HESTIA/bin/h-update-sys-ip" >> /etc/rc.local
 	echo "exit 0" >> /etc/rc.local
 	chmod +x /etc/rc.local
 	systemctl enable rc-local > /dev/null 2>&1
-	$HESTIA/bin/v-change-sys-ip-nat "$ip" "$pub_ipv4" > /dev/null 2>&1
+	$HESTIA/bin/h-change-sys-ip-nat "$ip" "$pub_ipv4" > /dev/null 2>&1
 	ip="$pub_ipv4"
 fi
 
@@ -2351,7 +2351,7 @@ if [ "$apache" = 'yes' ] && [ "$nginx" = 'yes' ]; then
 fi
 
 # Adding default domain
-$HESTIA/bin/v-add-web-domain "$username" "$servername" "$ip"
+$HESTIA/bin/h-add-web-domain "$username" "$servername" "$ip"
 check_result $? "can't create $servername domain"
 
 # Adding cron jobs
@@ -2361,38 +2361,38 @@ min=$(gen_pass '012345' '2')
 hour=$(gen_pass '1234567' '1')
 echo "MAILTO=\"\"" > /var/spool/cron/crontabs/hestiaweb
 echo "CONTENT_TYPE=\"text/plain; charset=utf-8\"" >> /var/spool/cron/crontabs/hestiaweb
-echo "*/2 * * * * sudo /usr/local/hestia/bin/v-update-sys-queue restart" >> /var/spool/cron/crontabs/hestiaweb
-echo "10 00 * * * sudo /usr/local/hestia/bin/v-update-sys-queue daily" >> /var/spool/cron/crontabs/hestiaweb
-echo "15 02 * * * sudo /usr/local/hestia/bin/v-update-sys-queue disk" >> /var/spool/cron/crontabs/hestiaweb
-echo "10 00 * * * sudo /usr/local/hestia/bin/v-update-sys-queue traffic" >> /var/spool/cron/crontabs/hestiaweb
-echo "30 03 * * * sudo /usr/local/hestia/bin/v-update-sys-queue webstats" >> /var/spool/cron/crontabs/hestiaweb
-echo "*/5 * * * * sudo /usr/local/hestia/bin/v-update-sys-queue backup" >> /var/spool/cron/crontabs/hestiaweb
-echo "10 05 * * * sudo /usr/local/hestia/bin/v-backup-users" >> /var/spool/cron/crontabs/hestiaweb
-echo "20 00 * * * sudo /usr/local/hestia/bin/v-update-user-stats" >> /var/spool/cron/crontabs/hestiaweb
-echo "*/5 * * * * sudo /usr/local/hestia/bin/v-update-sys-rrd" >> /var/spool/cron/crontabs/hestiaweb
-echo "$min $hour * * * sudo /usr/local/hestia/bin/v-update-letsencrypt-ssl" >> /var/spool/cron/crontabs/hestiaweb
-echo "41 4 * * * sudo /usr/local/hestia/bin/v-update-sys-hestia-all" >> /var/spool/cron/crontabs/hestiaweb
+echo "*/2 * * * * sudo /usr/local/hestia/bin/h-update-sys-queue restart" >> /var/spool/cron/crontabs/hestiaweb
+echo "10 00 * * * sudo /usr/local/hestia/bin/h-update-sys-queue daily" >> /var/spool/cron/crontabs/hestiaweb
+echo "15 02 * * * sudo /usr/local/hestia/bin/h-update-sys-queue disk" >> /var/spool/cron/crontabs/hestiaweb
+echo "10 00 * * * sudo /usr/local/hestia/bin/h-update-sys-queue traffic" >> /var/spool/cron/crontabs/hestiaweb
+echo "30 03 * * * sudo /usr/local/hestia/bin/h-update-sys-queue webstats" >> /var/spool/cron/crontabs/hestiaweb
+echo "*/5 * * * * sudo /usr/local/hestia/bin/h-update-sys-queue backup" >> /var/spool/cron/crontabs/hestiaweb
+echo "10 05 * * * sudo /usr/local/hestia/bin/h-backup-users" >> /var/spool/cron/crontabs/hestiaweb
+echo "20 00 * * * sudo /usr/local/hestia/bin/h-update-user-stats" >> /var/spool/cron/crontabs/hestiaweb
+echo "*/5 * * * * sudo /usr/local/hestia/bin/h-update-sys-rrd" >> /var/spool/cron/crontabs/hestiaweb
+echo "$min $hour * * * sudo /usr/local/hestia/bin/h-update-letsencrypt-ssl" >> /var/spool/cron/crontabs/hestiaweb
+echo "41 4 * * * sudo /usr/local/hestia/bin/h-update-sys-hestia-all" >> /var/spool/cron/crontabs/hestiaweb
 
 chmod 600 /var/spool/cron/crontabs/hestiaweb
 chown hestiaweb:hestiaweb /var/spool/cron/crontabs/hestiaweb
 
 # Enable automatic updates
-$HESTIA/bin/v-add-cron-hestia-autoupdate apt
+$HESTIA/bin/h-add-cron-hestia-autoupdate apt
 
 # Building initial rrd images
-$HESTIA/bin/v-update-sys-rrd
+$HESTIA/bin/h-update-sys-rrd
 
 # Enabling file system quota
 if [ "$quota" = 'yes' ]; then
 	echo "[ * ] Configuring quota..."
-	$HESTIA/bin/v-add-sys-quota
+	$HESTIA/bin/h-add-sys-quota
 fi
 
 # Set backend port
-$HESTIA/bin/v-change-sys-port $port > /dev/null 2>&1
+$HESTIA/bin/h-change-sys-port $port > /dev/null 2>&1
 
 # Create default configuration files
-$HESTIA/bin/v-update-sys-defaults
+$HESTIA/bin/h-update-sys-defaults
 
 # Update remaining packages since repositories have changed
 echo -ne "[ * ] Installing remaining software updates..."
@@ -2412,7 +2412,7 @@ mkdir -p /backup/
 chmod 755 /backup/
 
 # Create cronjob to generate ssl
-echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && /usr/local/hestia/bin/v-add-letsencrypt-host" > /etc/cron.d/hestia-ssl
+echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && /usr/local/hestia/bin/h-add-letsencrypt-host" > /etc/cron.d/hestia-ssl
 
 #----------------------------------------------------------#
 #              Set hestia.conf default values              #
@@ -2493,7 +2493,7 @@ cat $tmpfile
 rm -f $tmpfile
 
 # Add welcome message to notification panel
-$HESTIA/bin/v-add-user-notification "$username" 'Welcome to Hestia Control Panel!' '<p>You are now ready to begin adding <a href="/add/user/">user accounts</a> and <a href="/add/web/">domains</a>. For help and assistance, <a href="https://hestiacp.com/docs/" target="_blank">view the documentation</a> or <a href="https://forum.hestiacp.com/" target="_blank">visit our forum</a>.</p><p>Please <a href="https://github.com/hestiacp/hestiacp/issues" target="_blank">report any issues via GitHub</a>.</p><p class="u-text-bold">Have a wonderful day!</p><p><i class="fas fa-heart icon-red"></i> The Hestia Control Panel development team</p>'
+$HESTIA/bin/h-add-user-notification "$username" 'Welcome to Hestia Control Panel!' '<p>You are now ready to begin adding <a href="/add/user/">user accounts</a> and <a href="/add/web/">domains</a>. For help and assistance, <a href="https://hestiacp.com/docs/" target="_blank">view the documentation</a> or <a href="https://forum.hestiacp.com/" target="_blank">visit our forum</a>.</p><p>Please <a href="https://github.com/hestiacp/hestiacp/issues" target="_blank">report any issues via GitHub</a>.</p><p class="u-text-bold">Have a wonderful day!</p><p><i class="fas fa-heart icon-red"></i> The Hestia Control Panel development team</p>'
 
 # Clean-up
 # Sort final configuration file

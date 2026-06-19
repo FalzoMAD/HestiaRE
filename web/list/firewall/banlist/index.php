@@ -11,7 +11,7 @@ if ($_SESSION["userContext"] != "admin") {
 }
 
 // Data
-exec(HESTIA_CMD . "v-list-firewall-ban json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-firewall-ban json", $output, $return_var);
 $data = json_decode(implode("", $output), true);
 $data = array_reverse($data, true);
 unset($output);

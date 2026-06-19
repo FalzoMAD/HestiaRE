@@ -29,7 +29,7 @@ $action = $_POST["action"];
 
 switch ($action) {
 	case "delete":
-		$cmd = "v-delete-firewall-ban";
+		$cmd = "h-delete-firewall-ban";
 		break;
 	default:
 		header("Location: /list/firewall/banlist/");

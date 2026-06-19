@@ -22,16 +22,16 @@ $action = $_POST["action"];
 if ($_SESSION["userContext"] === "admin") {
 	switch ($action) {
 		case "delete":
-			$cmd = "v-delete-cron-job";
+			$cmd = "h-delete-cron-job";
 			break;
 		case "suspend":
-			$cmd = "v-suspend-cron-job";
+			$cmd = "h-suspend-cron-job";
 			break;
 		case "unsuspend":
-			$cmd = "v-unsuspend-cron-job";
+			$cmd = "h-unsuspend-cron-job";
 			break;
 		case "delete-cron-reports":
-			$cmd = "v-delete-cron-reports";
+			$cmd = "h-delete-cron-reports";
 			exec(HESTIA_CMD . $cmd . " " . $user, $output, $return_var);
 			$_SESSION["error_msg"] = _("Cron job email reporting has been successfully disabled.");
 			unset($output);
@@ -39,7 +39,7 @@ if ($_SESSION["userContext"] === "admin") {
 			exit();
 			break;
 		case "add-cron-reports":
-			$cmd = "v-add-cron-reports";
+			$cmd = "h-add-cron-reports";
 			exec(HESTIA_CMD . $cmd . " " . $user, $output, $return_var);
 			$_SESSION["error_msg"] = _("Cron job email reporting has been successfully enabled.");
 			unset($output);
@@ -53,10 +53,10 @@ if ($_SESSION["userContext"] === "admin") {
 } else {
 	switch ($action) {
 		case "delete":
-			$cmd = "v-delete-cron-job";
+			$cmd = "h-delete-cron-job";
 			break;
 		case "delete-cron-reports":
-			$cmd = "v-delete-cron-reports";
+			$cmd = "h-delete-cron-reports";
 			exec(HESTIA_CMD . $cmd . " " . $user, $output, $return_var);
 			$_SESSION["error_msg"] = _("Cron job email reporting has been successfully disabled.");
 			unset($output);
@@ -64,7 +64,7 @@ if ($_SESSION["userContext"] === "admin") {
 			exit();
 			break;
 		case "add-cron-reports":
-			$cmd = "v-add-cron-reports";
+			$cmd = "h-add-cron-reports";
 			exec(HESTIA_CMD . $cmd . " " . $user, $output, $return_var);
 			$_SESSION["error_msg"] = _("Cron job email reporting has been successfully enabled.");
 			unset($output);
@@ -84,7 +84,7 @@ foreach ($job as $value) {
 }
 
 if (!empty($restart)) {
-	exec(HESTIA_CMD . "v-restart-cron", $output, $return_var);
+	exec(HESTIA_CMD . "h-restart-cron", $output, $return_var);
 }
 
 header("Location: /list/cron/");

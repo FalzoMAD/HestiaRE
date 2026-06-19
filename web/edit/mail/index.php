@@ -25,12 +25,12 @@ $v_username = $user;
 if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_domain = $_GET["domain"];
 
-	exec(HESTIA_CMD . "v-list-sys-webmail json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-sys-webmail json", $output, $return_var);
 	$webmail_clients = json_decode(implode("", $output), true);
 	unset($output);
 
 	exec(
-		HESTIA_CMD . "v-list-mail-domain " . $user . " " . quoteshellarg($v_domain) . " json",
+		HESTIA_CMD . "h-list-mail-domain " . $user . " " . quoteshellarg($v_domain) . " json",
 		$output,
 		$return_var,
 	);
@@ -65,7 +65,7 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	if (!empty($v_ssl)) {
 		exec(
 			HESTIA_CMD .
-				"v-list-mail-domain-ssl " .
+				"h-list-mail-domain-ssl " .
 				$user .
 				" " .
 				quoteshellarg($v_domain) .
@@ -99,7 +99,7 @@ if (!empty($_GET["domain"]) && !empty($_GET["account"])) {
 	$v_account = $_GET["account"];
 	exec(
 		HESTIA_CMD .
-			"v-list-mail-account " .
+			"h-list-mail-account " .
 			$user .
 			" " .
 			quoteshellarg($v_domain) .
@@ -147,7 +147,7 @@ if (!empty($_GET["domain"]) && !empty($_GET["account"])) {
 	if ($v_autoreply == "yes") {
 		exec(
 			HESTIA_CMD .
-				"v-list-mail-account-autoreply " .
+				"h-list-mail-account-autoreply " .
 				$user .
 				" " .
 				quoteshellarg($v_domain) .
@@ -172,7 +172,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	verify_csrf($_POST);
 
 	exec(
-		HESTIA_CMD . "v-list-mail-domain " . $user . " " . quoteshellarg($v_domain) . " json",
+		HESTIA_CMD . "h-list-mail-domain " . $user . " " . quoteshellarg($v_domain) . " json",
 		$output,
 		$return_var,
 	);
@@ -184,7 +184,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	if ($v_antispam == "yes" && empty($_POST["v_antispam"]) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-delete-mail-domain-antispam " .
+				"h-delete-mail-domain-antispam " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain),
@@ -200,7 +200,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	if ($v_antispam == "no" && !empty($_POST["v_antispam"]) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-add-mail-domain-antispam " .
+				"h-add-mail-domain-antispam " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain),
@@ -216,7 +216,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	if ($v_antivirus == "yes" && empty($_POST["v_antivirus"]) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-delete-mail-domain-antivirus " .
+				"h-delete-mail-domain-antivirus " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain),
@@ -232,7 +232,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	if ($v_antivirus == "no" && !empty($_POST["v_antivirus"]) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-add-mail-domain-antivirus " .
+				"h-add-mail-domain-antivirus " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain),
@@ -248,7 +248,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	if ($v_dkim == "yes" && empty($_POST["v_dkim"]) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-delete-mail-domain-dkim " .
+				"h-delete-mail-domain-dkim " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain),
@@ -263,7 +263,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	// Add DKIM
 	if ($v_dkim == "no" && !empty($_POST["v_dkim"]) && empty($_SESSION["error_msg"])) {
 		exec(
-			HESTIA_CMD . "v-add-mail-domain-dkim " . $v_username . " " . quoteshellarg($v_domain),
+			HESTIA_CMD . "h-add-mail-domain-dkim " . $v_username . " " . quoteshellarg($v_domain),
 			$output,
 			$return_var,
 		);
@@ -276,7 +276,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	if (!empty($v_catchall) && empty($_POST["v_catchall"]) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-delete-mail-domain-catchall " .
+				"h-delete-mail-domain-catchall " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain),
@@ -301,7 +301,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		}
 		exec(
 			HESTIA_CMD .
-				"v-change-mail-domain-rate-limit " .
+				"h-change-mail-domain-rate-limit " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain) .
@@ -319,7 +319,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 
 	if (!empty($_POST["v_reject"]) && $v_antispam == "yes" && $v_reject != "yes") {
 		exec(
-			HESTIA_CMD . "v-add-mail-domain-reject " . $user . " " . $v_domain . " yes",
+			HESTIA_CMD . "h-add-mail-domain-reject " . $user . " " . $v_domain . " yes",
 			$output,
 			$return_var,
 		);
@@ -329,7 +329,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	}
 	if (empty($_POST["v_reject"]) && $v_reject == "yes") {
 		exec(
-			HESTIA_CMD . "v-delete-mail-domain-reject " . $user . " " . $v_domain . " yes",
+			HESTIA_CMD . "h-delete-mail-domain-reject " . $user . " " . $v_domain . " yes",
 			$output,
 			$return_var,
 		);
@@ -344,7 +344,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			$v_catchall = quoteshellarg($_POST["v_catchall"]);
 			exec(
 				HESTIA_CMD .
-					"v-change-mail-domain-catchall " .
+					"h-change-mail-domain-catchall " .
 					$v_username .
 					" " .
 					quoteshellarg($v_domain) .
@@ -363,7 +363,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		$v_catchall = quoteshellarg($_POST["v_catchall"]);
 		exec(
 			HESTIA_CMD .
-				"v-add-mail-domain-catchall " .
+				"h-add-mail-domain-catchall " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain) .
@@ -382,7 +382,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 				$v_webmail = quoteshellarg($_POST["v_webmail"]);
 				exec(
 					HESTIA_CMD .
-						"v-add-mail-domain-webmail " .
+						"h-add-mail-domain-webmail " .
 						$user .
 						" " .
 						$v_domain .
@@ -402,7 +402,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		if (empty($_POST["v_webmail"])) {
 			if (empty($_SESSION["error_msg"])) {
 				exec(
-					HESTIA_CMD . "v-delete-mail-domain-webmail " . $user . " " . $v_domain . " yes",
+					HESTIA_CMD . "h-delete-mail-domain-webmail " . $user . " " . $v_domain . " yes",
 					$output,
 					$return_var,
 				);
@@ -455,7 +455,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 
 			exec(
 				HESTIA_CMD .
-					"v-change-mail-domain-sslcert " .
+					"h-change-mail-domain-sslcert " .
 					$user .
 					" " .
 					quoteshellarg($v_domain) .
@@ -472,7 +472,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 
 			exec(
 				HESTIA_CMD .
-					"v-list-mail-domain-ssl " .
+					"h-list-mail-domain-ssl " .
 					$user .
 					" " .
 					quoteshellarg($v_domain) .
@@ -515,7 +515,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	) {
 		exec(
 			HESTIA_CMD .
-				"v-delete-letsencrypt-domain " .
+				"h-delete-letsencrypt-domain " .
 				$user .
 				" " .
 				quoteshellarg($v_domain) .
@@ -537,7 +537,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	// Delete SSL certificate
 	if ($v_ssl == "yes" && empty($_POST["v_ssl"]) && empty($_SESSION["error_msg"])) {
 		exec(
-			HESTIA_CMD . "v-delete-mail-domain-ssl " . $v_username . " " . quoteshellarg($v_domain),
+			HESTIA_CMD . "h-delete-mail-domain-ssl " . $v_username . " " . quoteshellarg($v_domain),
 			$output,
 			$return_var,
 		);
@@ -559,7 +559,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	) {
 		exec(
 			HESTIA_CMD .
-				"v-add-letsencrypt-domain " .
+				"h-add-letsencrypt-domain " .
 				$user .
 				" " .
 				quoteshellarg($v_domain) .
@@ -622,7 +622,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			}
 			exec(
 				HESTIA_CMD .
-					"v-add-mail-domain-ssl " .
+					"h-add-mail-domain-ssl " .
 					$user .
 					" " .
 					quoteshellarg($v_domain) .
@@ -640,7 +640,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 
 			exec(
 				HESTIA_CMD .
-					"v-list-mail-domain-ssl " .
+					"h-list-mail-domain-ssl " .
 					$user .
 					" " .
 					quoteshellarg($v_domain) .
@@ -695,7 +695,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 				}
 				exec(
 					HESTIA_CMD .
-						"v-add-mail-domain-smtp-relay " .
+						"h-add-mail-domain-smtp-relay " .
 						$v_username .
 						" " .
 						quoteshellarg($v_domain) .
@@ -719,7 +719,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			$v_smtp_relay_host = $v_smtp_relay_user = $v_smtp_relay_pass = $v_smtp_relay_port = "";
 			exec(
 				HESTIA_CMD .
-					"v-delete-mail-domain-smtp-relay " .
+					"h-delete-mail-domain-smtp-relay " .
 					$v_username .
 					" " .
 					quoteshellarg($v_domain),
@@ -754,7 +754,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 
 	exec(
 		HESTIA_CMD .
-			"v-list-mail-account " .
+			"h-list-mail-account " .
 			$user .
 			" " .
 			quoteshellarg($v_domain) .
@@ -779,7 +779,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 			fclose($fp);
 			exec(
 				HESTIA_CMD .
-					"v-change-mail-account-password " .
+					"h-change-mail-account-password " .
 					$v_username .
 					" " .
 					quoteshellarg($v_domain) .
@@ -806,7 +806,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 		}
 		exec(
 			HESTIA_CMD .
-				"v-change-mail-account-quota " .
+				"h-change-mail-account-quota " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain) .
@@ -833,7 +833,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 		}
 		exec(
 			HESTIA_CMD .
-				"v-change-mail-account-rate-limit " .
+				"h-change-mail-account-rate-limit " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain) .
@@ -864,7 +864,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 			if (empty($_SESSION["error_msg"]) && !empty($alias)) {
 				exec(
 					HESTIA_CMD .
-						"v-delete-mail-account-alias " .
+						"h-delete-mail-account-alias " .
 						$v_username .
 						" " .
 						quoteshellarg($v_domain) .
@@ -884,7 +884,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 			if (empty($_SESSION["error_msg"]) && !empty($alias)) {
 				exec(
 					HESTIA_CMD .
-						"v-add-mail-account-alias " .
+						"h-add-mail-account-alias " .
 						$v_username .
 						" " .
 						quoteshellarg($v_domain) .
@@ -906,7 +906,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 			if (empty($_SESSION["error_msg"]) && !empty($forward)) {
 				exec(
 					HESTIA_CMD .
-						"v-delete-mail-account-forward " .
+						"h-delete-mail-account-forward " .
 						$v_username .
 						" " .
 						quoteshellarg($v_domain) .
@@ -922,7 +922,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 			}
 			exec(
 				HESTIA_CMD .
-					"v-add-mail-account-forward " .
+					"h-add-mail-account-forward " .
 					$v_username .
 					" " .
 					quoteshellarg($v_domain) .
@@ -951,7 +951,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 			if (empty($_SESSION["error_msg"]) && !empty($forward)) {
 				exec(
 					HESTIA_CMD .
-						"v-delete-mail-account-forward " .
+						"h-delete-mail-account-forward " .
 						$v_username .
 						" " .
 						quoteshellarg($v_domain) .
@@ -971,7 +971,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 			if (empty($_SESSION["error_msg"]) && !empty($forward)) {
 				exec(
 					HESTIA_CMD .
-						"v-add-mail-account-forward " .
+						"h-add-mail-account-forward " .
 						$v_username .
 						" " .
 						quoteshellarg($v_domain) .
@@ -993,7 +993,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 	if ($v_fwd_only == "yes" && empty($_POST["v_fwd_only"]) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-delete-mail-account-fwd-only " .
+				"h-delete-mail-account-fwd-only " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain) .
@@ -1011,7 +1011,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 	if ($v_fwd_only != "yes" && !empty($_POST["v_fwd_only"]) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-add-mail-account-fwd-only " .
+				"h-add-mail-account-fwd-only " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain) .
@@ -1029,7 +1029,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 	if ($v_autoreply == "yes" && empty($_POST["v_autoreply"]) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-delete-mail-account-autoreply " .
+				"h-delete-mail-account-autoreply " .
 				$v_username .
 				" " .
 				quoteshellarg($v_domain) .
@@ -1051,7 +1051,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && !empty($_GET["account"]
 			$v_autoreply_message = quoteshellarg($v_autoreply_message);
 			exec(
 				HESTIA_CMD .
-					"v-add-mail-account-autoreply " .
+					"h-add-mail-account-autoreply " .
 					$v_username .
 					" " .
 					quoteshellarg($v_domain) .

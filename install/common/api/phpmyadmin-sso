@@ -1,2 +1,2 @@
 ROLE='admin'
-COMMANDS='v-add-database-temp-user,v-delete-database-temp-user'
+COMMANDS='h-add-database-temp-user,h-delete-database-temp-user'

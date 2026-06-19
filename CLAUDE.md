@@ -51,8 +51,8 @@ These are absolute. Never deviate, never re-suggest rejected items.
 
 ### CLI conventions
 ```
-v-*    HestiaCP-compatible commands (same names + signatures)
-hl-*   HestiaRE-specific new commands
+h-*    HestiaRE commands (renamed from v-* in Issue #22)
+v-*    symlinks only — backwards compatibility, managed in Issue #23
 ```
 
 ### Panel webserver
@@ -92,7 +92,7 @@ CLAUDE.md         this file
 
 ### Directories (HestiaCP origin, being refined)
 ```
-bin/              CLI commands (v-* and hl-*)
+bin/              CLI commands (h-*; v-* symlinks via Issue #23)
 func/             shared bash function libraries
 install/          installer data: packages, templates, configs per distro
 web/              panel UI (plain PHP, no framework)
@@ -141,7 +141,7 @@ curl -s -X POST "https://git.hestiare.com/api/v1/repos/Admin/hestiare/pulls" \
 
 This is non-negotiable and permanent:
 - Keep `/home/$user/web|mail|conf|backup` paths
-- Keep `v-*` command names and signatures exactly
+- Keep `h-*` command signatures exactly (renamed from v-*; v-* symlinks provide HestiaCP compat)
 - Keep backup format bidirectional forever
 
 When reimplementing HestiaCP functionality:

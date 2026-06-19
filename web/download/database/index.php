@@ -10,7 +10,7 @@ verify_csrf($_GET);
 $database = quoteshellarg($_GET["database"]);
 
 exec(
-	HESTIA_CMD . "v-dump-database " . $user . " " . $database . " file gzip",
+	HESTIA_CMD . "h-dump-database " . $user . " " . $database . " file gzip",
 	$output,
 	$return_var,
 );

@@ -24,15 +24,15 @@ upgrade_config_set_value 'UPGRADE_REBUILD_USERS' 'true'
 upgrade_config_set_value 'UPGRADE_UPDATE_FILEMANAGER_CONFIG' 'false'
 
 # Moved from 1.6.15.sh
-if ! (grep -q 'v-change-user-password' $HESTIA/data/api/billing); then
-	sed -i "s|v-make-tmp-file'|v-make-tmp-file,v-change-user-password'|g" $HESTIA/data/api/billing
+if ! (grep -q 'h-change-user-password' $HESTIA/data/api/billing); then
+	sed -i "s|h-make-tmp-file'|h-make-tmp-file,h-change-user-password'|g" $HESTIA/data/api/billing
 fi
 
 # Apply update for path change of built-in IPset blacklist.sh
 if [ "$FIREWALL_SYSTEM" = "iptables" ]; then
 	rm -f $HESTIA/data/firewall/ipset/blacklist.sh
 
-	if ($BIN/v-list-firewall-ipset plain | grep -q '/install/deb/firewall/ipset/blacklist.sh'); then
+	if ($BIN/h-list-firewall-ipset plain | grep -q '/install/deb/firewall/ipset/blacklist.sh'); then
 		echo "[ * ] Update the path of IPset blacklist.sh..."
 		sed -i 's|/install/deb/firewall/ipset/blacklist.sh|/install/common/firewall/ipset/blacklist.sh|g' $HESTIA/data/firewall/ipset.conf
 	fi

@@ -8,7 +8,7 @@
 
 # Add NPM to the default writeable folder list
 echo "[ * ] Updating default writable folders for all users..."
-for user in $($HESTIA/bin/v-list-sys-users plain); do
+for user in $($HESTIA/bin/h-list-sys-users plain); do
 	mkdir -p \
 		$HOMEDIR/$user/.npm
 
@@ -63,11 +63,11 @@ fi
 
 # Change backup mode to zstd.
 echo "[ * ] Setting zstd backup compression type as default..."
-$BIN/v-change-sys-config-value "BACKUP_MODE" "zstd"
+$BIN/h-change-sys-config-value "BACKUP_MODE" "zstd"
 
 # Set LOGIN_STYLE variable in hestia.conf
 echo "[ * ] Updating configuration file: hestia.conf..."
-$BIN/v-change-sys-config-value "LOGIN_STYLE" "default"
+$BIN/h-change-sys-config-value "LOGIN_STYLE" "default"
 
 # Remove old lanugage files.
 if [ -e $HESTIA/web/inc/i18n/en.php ]; then

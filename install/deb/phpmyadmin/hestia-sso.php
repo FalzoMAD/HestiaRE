@@ -1,9 +1,9 @@
 <?php
 
 /* Hestia way to enable support for SSO to PHPmyAdmin */
-/* To install please run v-add-sys-pma-sso */
+/* To install please run h-add-sys-pma-sso */
 
-/* Following keys will get replaced when calling v-add-sys-pma-sso */
+/* Following keys will get replaced when calling h-add-sys-pma-sso */
 define("PHPMYADMIN_KEY", "%PHPMYADMIN_KEY%");
 define("API_HOST_NAME", "%API_HOST_NAME%");
 define("API_HESTIA_PORT", "%API_HESTIA_PORT%");
@@ -43,7 +43,7 @@ class Hestia_API {
 		$post_request = [
 			"hash" => $this->key,
 			"returncode" => "no",
-			"cmd" => "v-add-database-temp-user",
+			"cmd" => "h-add-database-temp-user",
 			"arg1" => $user,
 			"arg2" => $database,
 			"arg3" => "mysql",
@@ -64,7 +64,7 @@ class Hestia_API {
 		$post_request = [
 			"hash" => $this->key,
 			"returncode" => "yes",
-			"cmd" => "v-delete-database-temp-user",
+			"cmd" => "h-delete-database-temp-user",
 			"arg1" => $user,
 			"arg2" => $database,
 			"arg3" => $dbuser,

@@ -34,8 +34,8 @@ if [ -d /etc/awstats ]; then
 	sed -i '/LoadPlugin=\"geoip2_country \/pathto\/GeoLite2-Country.mmdb\"/s/^#//g;s/pathto/usr\/share\/GeoIP/g' /etc/awstats/awstats.conf
 	echo "LoadPlugin=\"geoip2_country /usr/share/GeoIP/GeoLite2-Country.mmdb\"" >> $HESTIA/data/templates/web/awstats/awstats.tpl
 
-	for user in $($BIN/v-list-sys-users plain); do
-		$BIN/v-rebuild-web-domains $user no
+	for user in $($BIN/h-list-sys-users plain); do
+		$BIN/h-rebuild-web-domains $user no
 	done
 fi
 

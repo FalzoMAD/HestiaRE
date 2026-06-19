@@ -61,7 +61,7 @@ send_api_file() {
 			--data-urlencode "user=$USER" \
 			--data-urlencode "password=$PASSWORD" \
 			--data-urlencode "returncode=yes" \
-			--data-urlencode "cmd=v-make-tmp-file" \
+			--data-urlencode "cmd=h-make-tmp-file" \
 			--data-urlencode "arg1=$(cat $1)" \
 			--data-urlencode "arg2=$2" \
 			https://$HOST:$PORT/api/)
@@ -69,7 +69,7 @@ send_api_file() {
 		answer=$(curl -s -k \
 			--data-urlencode "hash=$HASH" \
 			--data-urlencode "returncode=yes" \
-			--data-urlencode "cmd=v-make-tmp-file" \
+			--data-urlencode "cmd=h-make-tmp-file" \
 			--data-urlencode "arg1=$(cat $1)" \
 			--data-urlencode "arg2=$2" \
 			https://$HOST:$PORT/api/)
@@ -123,10 +123,10 @@ is_dnshost_new() {
 }
 
 is_dnshost_alive() {
-	cluster_cmd v-list-sys-config
+	cluster_cmd h-list-sys-config
 	check_result $? "$type connection to $HOST failed" "$E_CONNECT"
 
-	cluster_cmd v-list-user "$DNS_USER"
+	cluster_cmd h-list-user "$DNS_USER"
 	check_result $? "$DNS_USER doesn't exist" "$E_CONNECT"
 }
 
@@ -144,7 +144,7 @@ remote_dns_health_check() {
 		parse_object_kv_list "$str"
 
 		# Checking host connection
-		cluster_cmd v-list-user "$DNS_USER"
+		cluster_cmd h-list-user "$DNS_USER"
 		if [ $? -ne 0 ]; then
 
 			# Creating error report
@@ -154,15 +154,15 @@ remote_dns_health_check() {
 			echo -n "Remote dns host has been suspended." >> $tmpfile
 			echo -n "After resolving issue run " >> $tmpfile
 			echo -e "following commands:\n" >> $tmpfile
-			echo "v-unsuspend-remote-dns-host $HOST" >> $tmpfile
-			echo "v-sync-dns-cluster $HOST" >> $tmpfile
+			echo "h-unsuspend-remote-dns-host $HOST" >> $tmpfile
+			echo "h-sync-dns-cluster $HOST" >> $tmpfile
 			echo -e "\n\n--\nHestia Control Panel\n$(hostname)" >> $tmpfile
 
 			if [ "$1" = 'no_email' ]; then
 				cat $tmpfile
 			else
 				subj="DNS sync failed"
-				email=$($BIN/v-get-user-value "$ROOT_USER" CONTACT)
+				email=$($BIN/h-get-user-value "$ROOT_USER" CONTACT)
 				cat $tmpfile | $SENDMAIL -s "$subj" $email
 			fi
 

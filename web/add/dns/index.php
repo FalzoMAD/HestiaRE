@@ -8,7 +8,7 @@ $TAB = "DNS";
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
 // List ip addresses
-exec(HESTIA_CMD . "v-list-user-ips " . $user . " json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-user-ips " . $user . " json", $output, $return_var);
 $v_ips = json_decode(implode("", $output), true);
 unset($output);
 
@@ -82,7 +82,7 @@ if (!empty($_POST["ok"])) {
 	if (empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-add-dns-domain " .
+				"h-add-dns-domain " .
 				$user .
 				" " .
 				$v_domain .
@@ -112,7 +112,7 @@ if (!empty($_POST["ok"])) {
 		check_return_code($return_var, $output);
 		unset($output);
 	}
-	exec(HESTIA_CMD . "v-list-user " . $user . " json", $output, $return_var);
+	exec(HESTIA_CMD . "h-list-user " . $user . " json", $output, $return_var);
 	$user_config = json_decode(implode("", $output), true);
 	unset($output);
 	$v_template = $user_config[$user_plain]["DNS_TEMPLATE"];
@@ -125,7 +125,7 @@ if (!empty($_POST["ok"])) {
 		$v_template = quoteshellarg($_POST["v_template"]);
 		exec(
 			HESTIA_CMD .
-				"v-change-dns-domain-tpl " .
+				"h-change-dns-domain-tpl " .
 				$user .
 				" " .
 				$v_domain .
@@ -145,7 +145,7 @@ if (!empty($_POST["ok"])) {
 			$v_exp = quoteshellarg($_POST["v_exp"]);
 			exec(
 				HESTIA_CMD .
-					"v-change-dns-domain-exp " .
+					"h-change-dns-domain-exp " .
 					$user .
 					" " .
 					$v_domain .
@@ -170,7 +170,7 @@ if (!empty($_POST["ok"])) {
 			$v_ttl = quoteshellarg($_POST["v_ttl"]);
 			exec(
 				HESTIA_CMD .
-					"v-change-dns-domain-ttl " .
+					"h-change-dns-domain-ttl " .
 					$user .
 					" " .
 					$v_domain .
@@ -187,7 +187,7 @@ if (!empty($_POST["ok"])) {
 
 	// Restart dns server
 	if (empty($_SESSION["error_msg"])) {
-		exec(HESTIA_CMD . "v-restart-dns", $output, $return_var);
+		exec(HESTIA_CMD . "h-restart-dns", $output, $return_var);
 		check_return_code($return_var, $output);
 		unset($output);
 	}
@@ -251,7 +251,7 @@ if (!empty($_POST["ok_rec"])) {
 	if (empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-add-dns-record " .
+				"h-add-dns-record " .
 				$user .
 				" " .
 				$v_domain .
@@ -332,11 +332,11 @@ if (empty($v_ip) && count($v_ips) > 0) {
 }
 
 // List dns templates
-exec(HESTIA_CMD . "v-list-dns-templates json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-dns-templates json", $output, $return_var);
 $templates = json_decode(implode("", $output), true);
 unset($output);
 
-exec(HESTIA_CMD . "v-list-user " . $user . " json", $output, $return_var);
+exec(HESTIA_CMD . "h-list-user " . $user . " json", $output, $return_var);
 $user_config = json_decode(implode("", $output), true);
 unset($output);
 $v_template = $user_config[$user_plain]["DNS_TEMPLATE"];
@@ -356,7 +356,7 @@ if (empty($_GET["domain"])) {
 		$v_dnssec = "";
 	}
 	if (empty($v_ns1)) {
-		exec(HESTIA_CMD . "v-list-user-ns " . $user . " json", $output, $return_var);
+		exec(HESTIA_CMD . "h-list-user-ns " . $user . " json", $output, $return_var);
 		$nameservers = json_decode(implode("", $output), true);
 		for ($i = 0; $i < 8; $i++) {
 			if (empty($nameservers[$i])) {

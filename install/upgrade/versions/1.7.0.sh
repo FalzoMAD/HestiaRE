@@ -38,8 +38,8 @@ upgrade_config_set_value 'UPGRADE_UPDATE_FILEMANAGER_CONFIG' 'false'
 # Make sure to sync install quoteshell arg
 if [ "$FILE_MANAGER" = "true" ]; then
 	echo "[ * ] Force update filemanager..."
-	$HESTIA/bin/v-delete-sys-filemanager quiet
-	$HESTIA/bin/v-add-sys-filemanager quiet
+	$HESTIA/bin/h-delete-sys-filemanager quiet
+	$HESTIA/bin/h-add-sys-filemanager quiet
 fi
 
 packages=$(ls --sort=time $HESTIA/data/packages | grep .pkg)
@@ -92,7 +92,7 @@ if [ "$FTP_SYSTEM" = 'proftpd' ]; then
 	if [ $contains_conf_d = 0 ]; then
 		sed -i 's/Include \/etc\/proftpd\/tls.conf/&\nInclude \/etc\/proftpd\/conf.d\/*.conf/' /etc/proftpd/proftpd.conf
 	fi
-	$BIN/v-restart-ftp
+	$BIN/h-restart-ftp
 fi
 
 if echo "$BACKUP_SYSTEM" | grep "google" > /dev/null; then
@@ -108,8 +108,8 @@ fi
 
 if [ "$PHPMYADMIN_KEY" != "" ]; then
 	echo "[ * ] Refresh hestia-sso for PMA..."
-	$BIN/v-delete-sys-pma-sso quiet
-	$BIN/v-add-sys-pma-sso quiet
+	$BIN/h-delete-sys-pma-sso quiet
+	$BIN/h-add-sys-pma-sso quiet
 fi
 
 if [ -f /etc/nginx/nginx.conf ] && [ ! -f /etc/nginx/conf.d/cloudflare.inc ]; then

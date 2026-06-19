@@ -272,7 +272,7 @@ the env vs. conf question and the user/account consolidation.
 | Q2 | PHP FPM panel pool | **OPEN** — Issue #25 |
 | Q3 | `/etc/profile.d/hestia.sh` comment | **DECIDED** + cleanup deferred |
 | Q4 | `hestiaweb` sudo wildcard scope | **OPEN** — too early, technical debt |
-| Q5 | `v-add-cron-hestia-autoupdate` | **DECIDED** |
+| Q5 | `h-add-cron-hestia-autoupdate` | **DECIDED** |
 
 ---
 
@@ -311,7 +311,7 @@ The entire internal user setup (`hestiaweb`, `admin`, roles) is going on the aud
 
 ---
 
-**Q5 — `v-add-cron-hestia-autoupdate`: DECIDED**
+**Q5 — `h-add-cron-hestia-autoupdate`: DECIDED**
 
 - Command stays for now — auto-update mechanism is not excluded by design
 - Auto-update is not active by default

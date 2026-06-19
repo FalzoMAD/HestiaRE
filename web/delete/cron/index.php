@@ -14,7 +14,7 @@ verify_csrf($_GET);
 if (!empty($_GET["job"])) {
 	$v_username = quoteshellarg($user);
 	$v_job = quoteshellarg($_GET["job"]);
-	exec(HESTIA_CMD . "v-delete-cron-job " . $user . " " . $v_job, $output, $return_var);
+	exec(HESTIA_CMD . "h-delete-cron-job " . $user . " " . $v_job, $output, $return_var);
 }
 check_return_code($return_var, $output);
 unset($output);

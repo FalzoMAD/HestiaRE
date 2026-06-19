@@ -14,7 +14,7 @@ if ($_SESSION["userContext"] != "admin") {
 }
 
 // Get ipset lists
-exec(HESTIA_CMD . "v-list-firewall-ipset 'json'", $output, $return_var);
+exec(HESTIA_CMD . "h-list-firewall-ipset 'json'", $output, $return_var);
 check_return_code($return_var, $output);
 $data = json_decode(implode("", $output), true);
 unset($output);
@@ -75,7 +75,7 @@ if (!empty($_POST["ok"])) {
 	if (empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
-				"v-add-firewall-rule " .
+				"h-add-firewall-rule " .
 				$v_action .
 				" " .
 				$v_ip .

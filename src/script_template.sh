@@ -2,7 +2,7 @@
 # info: command function
 # options: REQUIRED_ARGUMENT [OPTIONAL_ARGUMENT]
 #
-# example: v-new-command user dosomething
+# example: h-new-command user dosomething
 #
 # Add detailed comments about what the function does and how
 # to use it here.

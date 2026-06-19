@@ -23,19 +23,19 @@ $action = $_POST["action"];
 if ($_SESSION["userContext"] === "admin") {
 	switch ($action) {
 		case "delete":
-			$cmd = "v-delete-web-domain";
+			$cmd = "h-delete-web-domain";
 			break;
 		case "rebuild":
-			$cmd = "v-rebuild-web-domain";
+			$cmd = "h-rebuild-web-domain";
 			break;
 		case "suspend":
-			$cmd = "v-suspend-web-domain";
+			$cmd = "h-suspend-web-domain";
 			break;
 		case "unsuspend":
-			$cmd = "v-unsuspend-web-domain";
+			$cmd = "h-unsuspend-web-domain";
 			break;
 		case "purge":
-			$cmd = "v-purge-nginx-cache";
+			$cmd = "h-purge-nginx-cache";
 			break;
 		default:
 			header("Location: /list/web/");
@@ -44,16 +44,16 @@ if ($_SESSION["userContext"] === "admin") {
 } else {
 	switch ($action) {
 		case "delete":
-			$cmd = "v-delete-web-domain";
+			$cmd = "h-delete-web-domain";
 			break;
 		case "suspend":
-			$cmd = "v-suspend-web-domain";
+			$cmd = "h-suspend-web-domain";
 			break;
 		case "unsuspend":
-			$cmd = "v-unsuspend-web-domain";
+			$cmd = "h-unsuspend-web-domain";
 			break;
 		case "purge":
-			$cmd = "v-purge-nginx-cache";
+			$cmd = "h-purge-nginx-cache";
 			break;
 		default:
 			header("Location: /list/web/");
@@ -68,10 +68,10 @@ foreach ($domain as $value) {
 }
 
 if (isset($restart)) {
-	exec(HESTIA_CMD . "v-restart-web", $output, $return_var);
-	exec(HESTIA_CMD . "v-restart-proxy", $output, $return_var);
-	exec(HESTIA_CMD . "v-restart-dns", $output, $return_var);
-	exec(HESTIA_CMD . "v-restart-web-backend", $output, $return_var);
+	exec(HESTIA_CMD . "h-restart-web", $output, $return_var);
+	exec(HESTIA_CMD . "h-restart-proxy", $output, $return_var);
+	exec(HESTIA_CMD . "h-restart-dns", $output, $return_var);
+	exec(HESTIA_CMD . "h-restart-web-backend", $output, $return_var);
 }
 
 header("Location: /list/web/");

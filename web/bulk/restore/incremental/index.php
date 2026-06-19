@@ -41,7 +41,7 @@ if ($action == "restore") {
 	if (!empty($web)) {
 		exec(
 			HESTIA_CMD .
-				"v-schedule-user-restore-restic " .
+				"h-schedule-user-restore-restic " .
 				$user .
 				" " .
 				$snapshot .
@@ -56,7 +56,7 @@ if ($action == "restore") {
 	if (!empty($dns)) {
 		exec(
 			HESTIA_CMD .
-				"v-schedule-user-restore-restic " .
+				"h-schedule-user-restore-restic " .
 				$user .
 				" " .
 				$snapshot .
@@ -71,7 +71,7 @@ if ($action == "restore") {
 	if (!empty($mail)) {
 		exec(
 			HESTIA_CMD .
-				"v-schedule-user-restore-restic " .
+				"h-schedule-user-restore-restic " .
 				$user .
 				" " .
 				$snapshot .
@@ -85,7 +85,7 @@ if ($action == "restore") {
 		if (!empty($dns)) {
 			exec(
 				HESTIA_CMD .
-					"v-schedule-user-restore-restic " .
+					"h-schedule-user-restore-restic " .
 					$user .
 					" " .
 					$snapshot .
@@ -100,7 +100,7 @@ if ($action == "restore") {
 	}
 	if (!empty($cron)) {
 		exec(
-			HESTIA_CMD . "v-schedule-user-restore-restic " . $user . " " . $snapshot . " " . "cron",
+			HESTIA_CMD . "h-schedule-user-restore-restic " . $user . " " . $snapshot . " " . "cron",
 			$output,
 			$return_var,
 		);
@@ -109,7 +109,7 @@ if ($action == "restore") {
 	if (!empty($file)) {
 		exec(
 			HESTIA_CMD .
-				"v-schedule-user-restore-restic " .
+				"h-schedule-user-restore-restic " .
 				$user .
 				" " .
 				$snapshot .

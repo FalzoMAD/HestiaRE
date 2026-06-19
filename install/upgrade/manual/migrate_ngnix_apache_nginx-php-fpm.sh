@@ -62,11 +62,11 @@ cp $HESTIA/conf/hestia.conf $HESTIA/conf/defaults/hestia.conf
 
 # Rebuild web config
 
-for user in $($BIN/v-list-users plain | cut -f1); do
+for user in $($BIN/h-list-users plain | cut -f1); do
 	echo $user
-	for domain in $($BIN/v-list-web-domains $user plain | cut -f1); do
-		$BIN/v-change-web-domain-tpl $user $domain 'default'
-		$BIN/v-rebuild-web-domain $user $domain no
+	for domain in $($BIN/h-list-web-domains $user plain | cut -f1); do
+		$BIN/h-change-web-domain-tpl $user $domain 'default'
+		$BIN/h-rebuild-web-domain $user $domain no
 	done
 done
 

@@ -75,19 +75,19 @@ done
 if [[ -n "$ANTISPAM_SYSTEM" ]]; then
 	installed_services="$(systemctl list-units --type=service 2>&1)"
 	if [[ $installed_services == *spamassassin.service* ]]; then
-		"$BIN/v-change-sys-config-value" "ANTISPAM_SYSTEM" "spamassassin"
+		"$BIN/h-change-sys-config-value" "ANTISPAM_SYSTEM" "spamassassin"
 	elif [[ $installed_services == *spamd.service* ]]; then
-		"$BIN/v-change-sys-config-value" "ANTISPAM_SYSTEM" "spamd"
+		"$BIN/h-change-sys-config-value" "ANTISPAM_SYSTEM" "spamd"
 	fi
 fi
 
 # Fix: update quotas and cgroup for existing users
-for user in $("$HESTIA"/bin/v-list-users list); do
+for user in $("$HESTIA"/bin/h-list-users list); do
 	if [[ "$RESOURCES_LIMIT" == "yes" ]]; then
-		"$HESTIA"/bin/v-update-user-cgroup "$user"
+		"$HESTIA"/bin/h-update-user-cgroup "$user"
 	fi
 
 	if [[ "$DISK_QUOTA" == "yes" ]]; then
-		"$HESTIA"/bin/v-update-user-quota "$user"
+		"$HESTIA"/bin/h-update-user-quota "$user"
 	fi
 done

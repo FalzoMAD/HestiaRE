@@ -227,13 +227,13 @@ function syshealth_repair_system_config() {
 	# Release branch
 	if [[ -z $(check_key_exists 'RELEASE_BRANCH') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: RELEASE_BRANCH ('release')"
-		$BIN/v-change-sys-config-value 'RELEASE_BRANCH' 'release'
+		$BIN/h-change-sys-config-value 'RELEASE_BRANCH' 'release'
 	fi
 	# Webmail alias
 	if [ -n "$IMAP_SYSTEM" ]; then
 		if [[ -z $(check_key_exists 'WEBMAIL_ALIAS') ]]; then
 			echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_ALIAS ('webmail')"
-			$BIN/v-change-sys-config-value 'WEBMAIL_ALIAS' 'webmail'
+			$BIN/h-change-sys-config-value 'WEBMAIL_ALIAS' 'webmail'
 		fi
 	fi
 
@@ -242,13 +242,13 @@ function syshealth_repair_system_config() {
 		if [ "$DB_SYSTEM" = "mysql" ]; then
 			if [[ -z $(check_key_exists 'DB_PMA_ALIAS') ]]; then
 				echo "[ ! ] Adding missing variable to hestia.conf: DB_PMA_ALIAS ('phpmyadmin)"
-				$BIN/v-change-sys-config-value 'DB_PMA_ALIAS' 'phpmyadmin'
+				$BIN/h-change-sys-config-value 'DB_PMA_ALIAS' 'phpmyadmin'
 			fi
 		fi
 		if [ "$DB_SYSTEM" = "pgsql" ]; then
 			if [[ -z $(check_key_exists 'DB_PGA_ALIAS') ]]; then
 				echo "[ ! ] Adding missing variable to hestia.conf: DB_PGA_ALIAS ('phppgadmin')"
-				$BIN/v-change-sys-config-value 'DB_PGA_ALIAS' 'phppgadmin'
+				$BIN/h-change-sys-config-value 'DB_PGA_ALIAS' 'phppgadmin'
 			fi
 		fi
 	fi
@@ -256,102 +256,102 @@ function syshealth_repair_system_config() {
 	# Backup compression level
 	if [[ -z $(check_key_exists 'BACKUP_GZIP') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: BACKUP_GZIP ('4')"
-		$BIN/v-change-sys-config-value 'BACKUP_GZIP' '4'
+		$BIN/h-change-sys-config-value 'BACKUP_GZIP' '4'
 	fi
 
 	# Theme
 	if [[ -z $(check_key_exists 'THEME') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: THEME ('dark')"
-		$BIN/v-change-sys-config-value 'THEME' 'dark'
+		$BIN/h-change-sys-config-value 'THEME' 'dark'
 	fi
 
 	# Default language
 	if [[ -z $(check_key_exists 'LANGUAGE') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: LANGUAGE ('en')"
-		$BIN/v-change-sys-language 'LANGUAGE' 'en'
+		$BIN/h-change-sys-language 'LANGUAGE' 'en'
 	fi
 
 	# Disk Quota
 	if [[ -z $(check_key_exists 'DISK_QUOTA') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: DISK_QUOTA ('no')"
-		$BIN/v-change-sys-config-value 'DISK_QUOTA' 'no'
+		$BIN/h-change-sys-config-value 'DISK_QUOTA' 'no'
 	fi
 
 	# CRON daemon
 	if [[ -z $(check_key_exists 'CRON_SYSTEM') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: CRON_SYSTEM ('cron')"
-		$BIN/v-change-sys-config-value 'CRON_SYSTEM' 'cron'
+		$BIN/h-change-sys-config-value 'CRON_SYSTEM' 'cron'
 	fi
 
 	# Backend port
 	if [[ -z $(check_key_exists 'BACKEND_PORT') ]]; then
 		ORIGINAL_PORT=$(sed -ne "/listen/{s/.*listen[^0-9]*\([0-9][0-9]*\)[ \t]*ssl\;/\1/p;q}" "$HESTIA/nginx/conf/nginx.conf")
 		echo "[ ! ] Adding missing variable to hestia.conf: BACKEND_PORT ('$ORIGINAL_PORT')"
-		$BIN/v-change-sys-config-value 'BACKEND_PORT' $ORIGINAL_PORT
+		$BIN/h-change-sys-config-value 'BACKEND_PORT' $ORIGINAL_PORT
 	fi
 
 	# Upgrade: Send email notification
 	if [[ -z $(check_key_exists 'UPGRADE_SEND_EMAIL') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: UPGRADE_SEND_EMAIL ('true')"
-		$BIN/v-change-sys-config-value 'UPGRADE_SEND_EMAIL' 'true'
+		$BIN/h-change-sys-config-value 'UPGRADE_SEND_EMAIL' 'true'
 	fi
 
 	# Upgrade: Send email notification
 	if [[ -z $(check_key_exists 'UPGRADE_SEND_EMAIL_LOG') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: UPGRADE_SEND_EMAIL_LOG ('false')"
-		$BIN/v-change-sys-config-value 'UPGRADE_SEND_EMAIL_LOG' 'false'
+		$BIN/h-change-sys-config-value 'UPGRADE_SEND_EMAIL_LOG' 'false'
 	fi
 
 	# File Manager
 	if [[ -z $(check_key_exists 'FILE_MANAGER') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: FILE_MANAGER ('true')"
-		$BIN/v-add-sys-filemanager quiet
+		$BIN/h-add-sys-filemanager quiet
 	fi
 
 	# Support for ZSTD / GZIP Change
 	if [[ -z $(check_key_exists 'BACKUP_MODE') ]]; then
 		echo "[ ! ] Setting zstd backup compression type as default..."
-		$BIN/v-change-sys-config-value "BACKUP_MODE" "zstd"
+		$BIN/h-change-sys-config-value "BACKUP_MODE" "zstd"
 	fi
 
 	# Login style switcher
 	if [[ -z $(check_key_exists 'LOGIN_STYLE') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: LOGIN_STYLE ('default')"
-		$BIN/v-change-sys-config-value "LOGIN_STYLE" "default"
+		$BIN/h-change-sys-config-value "LOGIN_STYLE" "default"
 	fi
 
 	# Webmail clients
 	if [[ -z $(check_key_exists 'WEBMAIL_SYSTEM') ]]; then
 		if [ -d "/var/lib/roundcube" ]; then
 			echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_SYSTEM ('roundcube')"
-			$BIN/v-change-sys-config-value "WEBMAIL_SYSTEM" "roundcube"
+			$BIN/h-change-sys-config-value "WEBMAIL_SYSTEM" "roundcube"
 		else
 			echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_SYSTEM ('')"
-			$BIN/v-change-sys-config-value "WEBMAIL_SYSTEM" ""
+			$BIN/h-change-sys-config-value "WEBMAIL_SYSTEM" ""
 		fi
 	fi
 
 	# Inactive session timeout
 	if [[ -z $(check_key_exists 'INACTIVE_SESSION_TIMEOUT') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: INACTIVE_SESSION_TIMEOUT ('60')"
-		$BIN/v-change-sys-config-value "INACTIVE_SESSION_TIMEOUT" "60"
+		$BIN/h-change-sys-config-value "INACTIVE_SESSION_TIMEOUT" "60"
 	fi
 
 	# Enforce subdomain ownership
 	if [[ -z $(check_key_exists 'ENFORCE_SUBDOMAIN_OWNERSHIP') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: ENFORCE_SUBDOMAIN_OWNERSHIP ('yes')"
-		$BIN/v-change-sys-config-value "ENFORCE_SUBDOMAIN_OWNERSHIP" "yes"
+		$BIN/h-change-sys-config-value "ENFORCE_SUBDOMAIN_OWNERSHIP" "yes"
 	fi
 
 	if [[ -z $(check_key_exists 'API') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: API ('no')"
-		$BIN/v-change-sys-config-value "API" "no"
+		$BIN/h-change-sys-config-value "API" "no"
 	fi
 
 	# Enable API V2
 	if [[ -z $(check_key_exists 'API_SYSTEM') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: API_SYSTEM ('0')"
-		$BIN/v-change-sys-config-value "API_SYSTEM" "0"
+		$BIN/h-change-sys-config-value "API_SYSTEM" "0"
 	fi
 
 	# API access allowed IP's
@@ -360,7 +360,7 @@ function syshealth_repair_system_config() {
 		if [ -z "$check_api_key" ]; then
 			if [[ -z $(check_key_exists 'API_ALLOWED_IP') ]]; then
 				echo "[ ! ] Adding missing variable to hestia.conf: API_ALLOWED_IP ('allow-all')"
-				$BIN/v-change-sys-config-value "API_ALLOWED_IP" "allow-all"
+				$BIN/h-change-sys-config-value "API_ALLOWED_IP" "allow-all"
 			fi
 		fi
 	fi
@@ -368,184 +368,184 @@ function syshealth_repair_system_config() {
 	# Debug mode
 	if [[ -z $(check_key_exists 'DEBUG_MODE') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: DEBUG_MODE ('false')"
-		$BIN/v-change-sys-config-value "DEBUG_MODE" "false"
+		$BIN/h-change-sys-config-value "DEBUG_MODE" "false"
 	fi
 	# Quick install plugin
 	if [[ -z $(check_key_exists 'PLUGIN_APP_INSTALLER') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: PLUGIN_APP_INSTALLER ('true')"
-		$BIN/v-change-sys-config-value "PLUGIN_APP_INSTALLER" "true"
+		$BIN/h-change-sys-config-value "PLUGIN_APP_INSTALLER" "true"
 	fi
 	# Web Terminal
 	if [[ -z $(check_key_exists 'WEB_TERMINAL') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: WEB_TERMINAL ('false')"
-		$BIN/v-change-sys-config-value "WEB_TERMINAL" "false"
+		$BIN/h-change-sys-config-value "WEB_TERMINAL" "false"
 	fi
 	if [[ -z $(check_key_exists 'WEB_TERMINAL_PORT') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: WEB_TERMINAL_PORT ('8085')"
-		$BIN/v-change-sys-config-value "WEB_TERMINAL_PORT" "8085"
+		$BIN/h-change-sys-config-value "WEB_TERMINAL_PORT" "8085"
 	fi
 	# Enable preview mode
 	if [[ -z $(check_key_exists 'POLICY_SYSTEM_ENABLE_BACON') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_ENABLE_BACON ('false')"
-		$BIN/v-change-sys-config-value "POLICY_SYSTEM_ENABLE_BACON" "false"
+		$BIN/h-change-sys-config-value "POLICY_SYSTEM_ENABLE_BACON" "false"
 	fi
 	# Hide system services
 	if [[ -z $(check_key_exists 'POLICY_SYSTEM_HIDE_SERVICES') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_HIDE_SERVICES ('no')"
-		$BIN/v-change-sys-config-value "POLICY_SYSTEM_HIDE_SERVICES" "no"
+		$BIN/h-change-sys-config-value "POLICY_SYSTEM_HIDE_SERVICES" "no"
 	fi
 	# Password reset
 	if [[ -z $(check_key_exists 'POLICY_SYSTEM_PASSWORD_RESET') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_PASSWORD_RESET ('no')"
-		$BIN/v-change-sys-config-value "POLICY_SYSTEM_PASSWORD_RESET" "no"
+		$BIN/h-change-sys-config-value "POLICY_SYSTEM_PASSWORD_RESET" "no"
 	fi
 
 	# Theme editor
 	if [[ -z $(check_key_exists 'POLICY_USER_CHANGE_THEME') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_CHANGE_THEME ('yes')"
-		$BIN/v-change-sys-config-value "POLICY_USER_CHANGE_THEME" "yes"
+		$BIN/h-change-sys-config-value "POLICY_USER_CHANGE_THEME" "yes"
 	fi
 	# Protect admin user
 	if [[ -z $(check_key_exists 'POLICY_SYSTEM_PROTECTED_ADMIN') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_PROTECTED_ADMIN ('no')"
-		$BIN/v-change-sys-config-value "POLICY_SYSTEM_PROTECTED_ADMIN" "no"
+		$BIN/h-change-sys-config-value "POLICY_SYSTEM_PROTECTED_ADMIN" "no"
 	fi
 	# Allow user delete logs
 	if [[ -z $(check_key_exists 'POLICY_USER_DELETE_LOGS') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_DELETE_LOGS ('yes')"
-		$BIN/v-change-sys-config-value "POLICY_USER_DELETE_LOGS" "yes"
+		$BIN/h-change-sys-config-value "POLICY_USER_DELETE_LOGS" "yes"
 	fi
 	# Allow users to delete details
 	if [[ -z $(check_key_exists 'POLICY_USER_EDIT_DETAILS') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_EDIT_DETAILS ('yes')"
-		$BIN/v-change-sys-config-value "POLICY_USER_EDIT_DETAILS" "yes"
+		$BIN/h-change-sys-config-value "POLICY_USER_EDIT_DETAILS" "yes"
 	fi
 	# Allow users to edit DNS templates
 	if [[ -z $(check_key_exists 'POLICY_USER_EDIT_DNS_TEMPLATES') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_EDIT_DNS_TEMPLATES ('yes')"
-		$BIN/v-change-sys-config-value "POLICY_USER_EDIT_DNS_TEMPLATES" "yes"
+		$BIN/h-change-sys-config-value "POLICY_USER_EDIT_DNS_TEMPLATES" "yes"
 	fi
 	# Allow users to edit web templates
 	if [[ -z $(check_key_exists 'POLICY_USER_EDIT_WEB_TEMPLATES') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_EDIT_WEB_TEMPLATES ('yes')"
-		$BIN/v-change-sys-config-value "POLICY_USER_EDIT_WEB_TEMPLATES" "yes"
+		$BIN/h-change-sys-config-value "POLICY_USER_EDIT_WEB_TEMPLATES" "yes"
 	fi
 	# View user logs
 	if [[ -z $(check_key_exists 'POLICY_USER_VIEW_LOGS') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_VIEW_LOGS ('yes')"
-		$BIN/v-change-sys-config-value "POLICY_USER_VIEW_LOGS" "yes"
+		$BIN/h-change-sys-config-value "POLICY_USER_VIEW_LOGS" "yes"
 	fi
 	# Allow users to login (read only) when suspended
 	if [[ -z $(check_key_exists 'POLICY_USER_VIEW_SUSPENDED') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_VIEW_SUSPENDED ('no')"
-		$BIN/v-change-sys-config-value "POLICY_USER_VIEW_SUSPENDED" "no"
+		$BIN/h-change-sys-config-value "POLICY_USER_VIEW_SUSPENDED" "no"
 	fi
 	# PHPMyadmin SSO key
 	if [[ -z $(check_key_exists 'PHPMYADMIN_KEY') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: PHPMYADMIN_KEY ('')"
-		$BIN/v-change-sys-config-value "PHPMYADMIN_KEY" ""
+		$BIN/h-change-sys-config-value "PHPMYADMIN_KEY" ""
 	fi
 	# Use SMTP server for hestia internal mail
 	if [[ -z $(check_key_exists 'USE_SERVER_SMTP') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: USE_SERVER_SMTP ('')"
-		$BIN/v-change-sys-config-value "USE_SERVER_SMTP" "false"
+		$BIN/h-change-sys-config-value "USE_SERVER_SMTP" "false"
 	fi
 
 	if [[ -z $(check_key_exists 'SERVER_SMTP_PORT') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_PORT ('')"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_PORT" ""
+		$BIN/h-change-sys-config-value "SERVER_SMTP_PORT" ""
 	fi
 
 	if [[ -z $(check_key_exists 'SERVER_SMTP_HOST') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_HOST ('')"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_HOST" ""
+		$BIN/h-change-sys-config-value "SERVER_SMTP_HOST" ""
 	fi
 
 	if [[ -z $(check_key_exists 'SERVER_SMTP_SECURITY') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_SECURITY ('')"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_SECURITY" ""
+		$BIN/h-change-sys-config-value "SERVER_SMTP_SECURITY" ""
 	fi
 
 	if [[ -z $(check_key_exists 'SERVER_SMTP_USER') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_USER ('')"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_USER" ""
+		$BIN/h-change-sys-config-value "SERVER_SMTP_USER" ""
 	fi
 
 	if [[ -z $(check_key_exists 'SERVER_SMTP_PASSWD') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_PASSWD ('')"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_PASSWD" ""
+		$BIN/h-change-sys-config-value "SERVER_SMTP_PASSWD" ""
 	fi
 
 	if [[ -z $(check_key_exists 'SERVER_SMTP_ADDR') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_ADDR ('')"
-		$BIN/v-change-sys-config-value "SERVER_SMTP_ADDR" ""
+		$BIN/h-change-sys-config-value "SERVER_SMTP_ADDR" ""
 	fi
 	if [[ -z $(check_key_exists 'POLICY_CSRF_STRICTNESS') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_CSRF_STRICTNESS ('')"
-		$BIN/v-change-sys-config-value "POLICY_CSRF_STRICTNESS" "1"
+		$BIN/h-change-sys-config-value "POLICY_CSRF_STRICTNESS" "1"
 	fi
 	if [[ -z $(check_key_exists 'DNS_CLUSTER_SYSTEM') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: DNS_CLUSTER_SYSTEM ('hestia')"
-		$BIN/v-change-sys-config-value "DNS_CLUSTER_SYSTEM" "hestia"
+		$BIN/h-change-sys-config-value "DNS_CLUSTER_SYSTEM" "hestia"
 	fi
 	if [[ -z $(check_key_exists 'DISABLE_IP_CHECK') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: DISABLE_IP_CHECK ('no')"
-		$BIN/v-change-sys-config-value "DISABLE_IP_CHECK" "no"
+		$BIN/h-change-sys-config-value "DISABLE_IP_CHECK" "no"
 	fi
 	if [[ -z $(check_key_exists 'APP_NAME') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: APP_NAME ('Hestia Control Panel')"
-		$BIN/v-change-sys-config-value "APP_NAME" "Hestia Control Panel"
+		$BIN/h-change-sys-config-value "APP_NAME" "Hestia Control Panel"
 	fi
 	if [[ -z $(check_key_exists 'FROM_NAME') ]]; then
 		# Default is always APP_NAME
 		echo "[ ! ] Adding missing variable to hestia.conf: FROM_NAME ('')"
-		$BIN/v-change-sys-config-value "FROM_NAME" ""
+		$BIN/h-change-sys-config-value "FROM_NAME" ""
 	fi
 	if [[ -z $(check_key_exists 'FROM_EMAIL') ]]; then
 		# Default is always noreply@hostname.com
 		echo "[ ! ] Adding missing variable to hestia.conf: FROM_EMAIL ('')"
-		$BIN/v-change-sys-config-value "FROM_EMAIL" ""
+		$BIN/h-change-sys-config-value "FROM_EMAIL" ""
 	fi
 	if [[ -z $(check_key_exists 'SUBJECT_EMAIL') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: SUBJECT_EMAIL ('{{subject}}')"
-		$BIN/v-change-sys-config-value "SUBJECT_EMAIL" "{{subject}}"
+		$BIN/h-change-sys-config-value "SUBJECT_EMAIL" "{{subject}}"
 	fi
 
 	if [[ -z $(check_key_exists 'BACKUP_INCREMENTAL') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: BACKUP_INCREMENTAL ('no')"
-		$BIN/v-change-sys-config-value "BACKUP_INCREMENTAL" "no"
+		$BIN/h-change-sys-config-value "BACKUP_INCREMENTAL" "no"
 	fi
 
 	if [[ -z $(check_key_exists 'TITLE') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: TITLE ('{{page}} - {{hostname}} - {{appname}}')"
-		$BIN/v-change-sys-config-value "TITLE" "{{page}} - {{hostname}} - {{appname}}"
+		$BIN/h-change-sys-config-value "TITLE" "{{page}} - {{hostname}} - {{appname}}"
 	fi
 
 	if [[ -z $(check_key_exists 'HIDE_DOCS') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: HIDE_DOCS ('no')"
-		$BIN/v-change-sys-config-value "HIDE_DOCS" "no"
+		$BIN/h-change-sys-config-value "HIDE_DOCS" "no"
 	fi
 
 	if [[ -z $(check_key_exists 'POLICY_SYNC_ERROR_DOCUMENTS') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYNC_ERROR_DOCUMENTS ('yes')"
-		$BIN/v-change-sys-config-value "POLICY_SYNC_ERROR_DOCUMENTS" "yes"
+		$BIN/h-change-sys-config-value "POLICY_SYNC_ERROR_DOCUMENTS" "yes"
 	fi
 
 	if [[ -z $(check_key_exists 'POLICY_SYNC_SKELETON') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYNC_SKELETON ('yes')"
-		$BIN/v-change-sys-config-value "POLICY_SYNC_SKELETON" "yes"
+		$BIN/h-change-sys-config-value "POLICY_SYNC_SKELETON" "yes"
 	fi
 	if [[ -z $(check_key_exists 'POLICY_BACKUP_SUSPENDED_USERS') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_BACKUP_SUSPENDED_USERS ('no')"
-		$BIN/v-change-sys-config-value "POLICY_BACKUP_SUSPENDED_USERS" "no"
+		$BIN/h-change-sys-config-value "POLICY_BACKUP_SUSPENDED_USERS" "no"
 	fi
 	if [[ -z $(check_key_exists 'ROOT_USER') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: ROOT_USER ('admin')"
-		$BIN/v-change-sys-config-value "ROOT_USER" "admin"
+		$BIN/h-change-sys-config-value "ROOT_USER" "admin"
 	fi
 	if [[ -z $(check_key_exists 'DOMAINDIR_WRITABLE') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: DOMAINDIR_WRITABLE ('no')"
-		$BIN/v-change-sys-config-value "DOMAINDIR_WRITABLE" "no"
+		$BIN/h-change-sys-config-value "DOMAINDIR_WRITABLE" "no"
 	fi
 
 	touch $HESTIA/conf/hestia.conf.new
@@ -583,17 +583,17 @@ function syshealth_repair_system_cronjobs() {
 	hour=$(gen_pass '1234567' '1')
 	echo "MAILTO=$email" > /var/spool/cron/crontabs/hestiaweb
 	echo "CONTENT_TYPE=\"text/plain; charset=utf-8\"" >> /var/spool/cron/crontabs/hestiaweb
-	echo "*/2 * * * * sudo /usr/local/hestia/bin/v-update-sys-queue restart" >> /var/spool/cron/crontabs/hestiaweb
-	echo "10 00 * * * sudo /usr/local/hestia/bin/v-update-sys-queue daily" >> /var/spool/cron/crontabs/hestiaweb
-	echo "15 02 * * * sudo /usr/local/hestia/bin/v-update-sys-queue disk" >> /var/spool/cron/crontabs/hestiaweb
-	echo "10 00 * * * sudo /usr/local/hestia/bin/v-update-sys-queue traffic" >> /var/spool/cron/crontabs/hestiaweb
-	echo "30 03 * * * sudo /usr/local/hestia/bin/v-update-sys-queue webstats" >> /var/spool/cron/crontabs/hestiaweb
-	echo "*/5 * * * * sudo /usr/local/hestia/bin/v-update-sys-queue backup" >> /var/spool/cron/crontabs/hestiaweb
-	echo "10 05 * * * sudo /usr/local/hestia/bin/v-backup-users" >> /var/spool/cron/crontabs/hestiaweb
-	echo "20 00 * * * sudo /usr/local/hestia/bin/v-update-user-stats" >> /var/spool/cron/crontabs/hestiaweb
-	echo "*/5 * * * * sudo /usr/local/hestia/bin/v-update-sys-rrd" >> /var/spool/cron/crontabs/hestiaweb
-	echo "$min $hour * * * sudo /usr/local/hestia/bin/v-update-letsencrypt-ssl" >> /var/spool/cron/crontabs/hestiaweb
-	echo "41 4 * * * sudo /usr/local/hestia/bin/v-update-sys-hestia-all" >> /var/spool/cron/crontabs/hestiaweb
+	echo "*/2 * * * * sudo /usr/local/hestia/bin/h-update-sys-queue restart" >> /var/spool/cron/crontabs/hestiaweb
+	echo "10 00 * * * sudo /usr/local/hestia/bin/h-update-sys-queue daily" >> /var/spool/cron/crontabs/hestiaweb
+	echo "15 02 * * * sudo /usr/local/hestia/bin/h-update-sys-queue disk" >> /var/spool/cron/crontabs/hestiaweb
+	echo "10 00 * * * sudo /usr/local/hestia/bin/h-update-sys-queue traffic" >> /var/spool/cron/crontabs/hestiaweb
+	echo "30 03 * * * sudo /usr/local/hestia/bin/h-update-sys-queue webstats" >> /var/spool/cron/crontabs/hestiaweb
+	echo "*/5 * * * * sudo /usr/local/hestia/bin/h-update-sys-queue backup" >> /var/spool/cron/crontabs/hestiaweb
+	echo "10 05 * * * sudo /usr/local/hestia/bin/h-backup-users" >> /var/spool/cron/crontabs/hestiaweb
+	echo "20 00 * * * sudo /usr/local/hestia/bin/h-update-user-stats" >> /var/spool/cron/crontabs/hestiaweb
+	echo "*/5 * * * * sudo /usr/local/hestia/bin/h-update-sys-rrd" >> /var/spool/cron/crontabs/hestiaweb
+	echo "$min $hour * * * sudo /usr/local/hestia/bin/h-update-letsencrypt-ssl" >> /var/spool/cron/crontabs/hestiaweb
+	echo "41 4 * * * sudo /usr/local/hestia/bin/h-update-sys-hestia-all" >> /var/spool/cron/crontabs/hestiaweb
 }
 
 # Adapt Port Listing in HESTIA NGINX Backend

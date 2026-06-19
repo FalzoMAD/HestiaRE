@@ -28,6 +28,6 @@ fi
 # Fixed firewall loading failed after reboot, applying update to hestia-iptables Systemd unit.
 if [ "$FIREWALL_SYSTEM" = "iptables" ]; then
 	echo "[ * ] Update loading firewall rules service..."
-	$BIN/v-delete-sys-firewall
-	$BIN/v-add-sys-firewall
+	$BIN/h-delete-sys-firewall
+	$BIN/h-add-sys-firewall
 fi

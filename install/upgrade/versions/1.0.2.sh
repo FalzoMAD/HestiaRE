@@ -44,7 +44,7 @@ fi
 WEBALIZER_CHECK=$(cat $HESTIA/conf/hestia.conf | grep webalizer)
 if [ ! -z "$WEBALIZER_CHECK" ]; then
 	echo "[ * ] Set awstats as default web statistics backend..."
-	$HESTIA/bin/v-change-sys-config-value 'STATS_SYSTEM' 'awstats'
+	$HESTIA/bin/h-change-sys-config-value 'STATS_SYSTEM' 'awstats'
 fi
 
 # Remove old hestia.conf files from Apache & NGINX if they exist
@@ -60,7 +60,7 @@ fi
 # Update webmail templates to enable OCSP/SSL stapling
 if [ ! -z "$IMAP_SYSTEM" ]; then
 	echo "[ * ] Enabling OCSP stapling support for webmail services..."
-	$BIN/v-update-mail-templates > /dev/null 2>&1
+	$BIN/h-update-mail-templates > /dev/null 2>&1
 fi
 
 # Enhance webmail security

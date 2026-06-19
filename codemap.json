@@ -20,46 +20,46 @@
   "components": {
 
     "cli_commands": {
-      "description": "All CLI commands. v-* are HestiaCP-compatible (same names + signatures). No hl-* (HestiaRE-native) commands exist yet.",
-      "entry_points": ["bin/v-*"],
+      "description": "All CLI commands. h-* prefix is HestiaRE-native (renamed from v-* in Issue #22). v-* symlinks for HestiaCP compatibility added in Issue #23. No hl-* commands.",
+      "entry_points": ["bin/h-*"],
       "directories": ["bin/"],
       "key_files": [
-        "bin/v-add-user",
-        "bin/v-delete-user",
-        "bin/v-add-web-domain",
-        "bin/v-delete-web-domain",
-        "bin/v-add-mail-domain",
-        "bin/v-add-dns-domain",
-        "bin/v-add-database",
-        "bin/v-backup-user",
-        "bin/v-add-firewall-rule",
-        "bin/v-update-sys-queue"
+        "bin/h-add-user",
+        "bin/h-delete-user",
+        "bin/h-add-web-domain",
+        "bin/h-delete-web-domain",
+        "bin/h-add-mail-domain",
+        "bin/h-add-dns-domain",
+        "bin/h-add-database",
+        "bin/h-backup-user",
+        "bin/h-add-firewall-rule",
+        "bin/h-update-sys-queue"
       ],
       "language": "bash",
       "total_commands": 519,
       "command_prefixes": {
-        "v-*": 519,
-        "hl-*": 0
+        "h-*": 519,
+        "v-*": "symlinks only — see Issue #23"
       },
       "domains": {
-        "user": { "count": 99, "pattern": "bin/v-*-user*" },
-        "sys": { "count": 105, "pattern": "bin/v-*-sys*" },
-        "web": { "count": 80, "pattern": "bin/v-*-web*" },
-        "mail": { "count": 66, "pattern": "bin/v-*-mail*" },
-        "dns": { "count": 54, "pattern": "bin/v-*-dns*" },
-        "database": { "count": 30, "pattern": "bin/v-*-database*" },
-        "firewall": { "count": 21, "pattern": "bin/v-*-firewall*" },
-        "cron": { "count": 20, "pattern": "bin/v-*-cron*" },
-        "backup": { "count": 19, "pattern": "bin/v-*-backup*" },
-        "letsencrypt": { "count": 8, "pattern": "bin/v-*-letsencrypt*" },
-        "other": { "count": 17, "pattern": "bin/v-{acknowledge,add-domain,add-fastcgi-cache,...}" }
+        "user": { "count": 99, "pattern": "bin/h-*-user*" },
+        "sys": { "count": 105, "pattern": "bin/h-*-sys*" },
+        "web": { "count": 80, "pattern": "bin/h-*-web*" },
+        "mail": { "count": 66, "pattern": "bin/h-*-mail*" },
+        "dns": { "count": 54, "pattern": "bin/h-*-dns*" },
+        "database": { "count": 30, "pattern": "bin/h-*-database*" },
+        "firewall": { "count": 21, "pattern": "bin/h-*-firewall*" },
+        "cron": { "count": 20, "pattern": "bin/h-*-cron*" },
+        "backup": { "count": 19, "pattern": "bin/h-*-backup*" },
+        "letsencrypt": { "count": 8, "pattern": "bin/h-*-letsencrypt*" },
+        "other": { "count": 17, "pattern": "bin/h-{acknowledge,add-domain,add-fastcgi-cache,...}" }
       },
       "dependencies": ["func_libraries", "instance_config"],
       "upstream_debt": {
         "file_count": 512,
         "issues": [
           "$HESTIA variable itself is unchanged (/usr/local/hestia) — no migration needed in bin/*",
-          "v-add-cron-hestia-autoupdate references HestiaCP update mechanism — remove or replace (see paths.md Q5)"
+          "h-add-cron-hestia-autoupdate references HestiaCP update mechanism — remove or replace (see paths.md Q5)"
         ]
       }
     },

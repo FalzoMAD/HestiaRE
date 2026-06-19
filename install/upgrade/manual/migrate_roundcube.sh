@@ -43,7 +43,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
 	rm -f -r /var/lib/roundcube/
 
 	# Install Roundcube
-	$BIN/v-add-sys-roundcube
+	$BIN/h-add-sys-roundcube
 	# restore backup
 	echo "SET FOREIGN_KEY_CHECKS = 0;" > ~/drop_all_tables.sql
 	(mysqldump --add-drop-table --no-data -u root roundcube | grep 'DROP TABLE') >> ./drop_all_tables.sql

@@ -124,11 +124,11 @@ rebuild_user_conf() {
 		$HOMEDIR/$user/.wp-cli
 	chown root:root $HOMEDIR/$user/conf
 
-	$BIN/v-add-user-sftp-jail "$user"
+	$BIN/h-add-user-sftp-jail "$user"
 
 	# Update disk pipe
 	sed -i "/ $user$/d" $HESTIA/data/queue/disk.pipe
-	echo "$BIN/v-update-user-disk $user" >> $HESTIA/data/queue/disk.pipe
+	echo "$BIN/h-update-user-disk $user" >> $HESTIA/data/queue/disk.pipe
 
 	# WEB
 	if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != 'no' ]; then
@@ -137,10 +137,10 @@ rebuild_user_conf() {
 		touch $USER_DATA/web.conf
 		chmod 660 $USER_DATA/web.conf
 		if [ "$(grep -w $user $HESTIA/data/queue/traffic.pipe)" ]; then
-			echo "$BIN/v-update-web-domains-traff $user" \
+			echo "$BIN/h-update-web-domains-traff $user" \
 				>> $HESTIA/data/queue/traffic.pipe
 		fi
-		echo "$BIN/v-update-web-domains-disk $user" \
+		echo "$BIN/h-update-web-domains-disk $user" \
 			>> $HESTIA/data/queue/disk.pipe
 
 		if [[ -L "$HOMEDIR/$user/web" ]]; then
@@ -154,7 +154,7 @@ rebuild_user_conf() {
 		chmod 771 $HOMEDIR/$user/tmp
 		chown --no-dereference $root:$user $HOMEDIR/$user/web
 		if [ "$create_user" = "yes" ]; then
-			$BIN/v-rebuild-web-domains $user $restart
+			$BIN/h-rebuild-web-domains $user $restart
 		fi
 	fi
 
@@ -174,7 +174,7 @@ rebuild_user_conf() {
 		fi
 		chown $dns_group:$dns_group $HOMEDIR/$user/conf/dns
 		if [ "$create_user" = "yes" ]; then
-			$BIN/v-rebuild-dns-domains $user $restart
+			$BIN/h-rebuild-dns-domains $user $restart
 		fi
 	fi
 
@@ -183,7 +183,7 @@ rebuild_user_conf() {
 		chmod 770 $USER_DATA/mail
 		touch $USER_DATA/mail.conf
 		chmod 660 $USER_DATA/mail.conf
-		echo "$BIN/v-update-mail-domains-disk $user" \
+		echo "$BIN/h-update-mail-domains-disk $user" \
 			>> $HESTIA/data/queue/disk.pipe
 
 		if [[ -L "$HOMEDIR/$user/mail" ]]; then
@@ -194,17 +194,17 @@ rebuild_user_conf() {
 		chmod 751 $HOMEDIR/$user/mail
 		chmod 751 $HOMEDIR/$user/conf/mail
 		if [ "$create_user" = "yes" ]; then
-			$BIN/v-rebuild-mail-domains $user
+			$BIN/h-rebuild-mail-domains $user
 		fi
 	fi
 
 	if [ -n "$DB_SYSTEM" ] && [ "$DB_SYSTEM" != 'no' ]; then
 		touch $USER_DATA/db.conf
 		chmod 660 $USER_DATA/db.conf
-		echo "$BIN/v-update-databases-disk $user" >> $HESTIA/data/queue/disk.pipe
+		echo "$BIN/h-update-databases-disk $user" >> $HESTIA/data/queue/disk.pipe
 
 		if [ "$create_user" = "yes" ]; then
-			$BIN/v-rebuild-databases $user
+			$BIN/h-rebuild-databases $user
 		fi
 	fi
 
@@ -213,7 +213,7 @@ rebuild_user_conf() {
 		chmod 660 $USER_DATA/cron.conf
 
 		if [ "$create_user" = "yes" ]; then
-			$BIN/v-rebuild-cron-jobs $user $restart
+			$BIN/h-rebuild-cron-jobs $user $restart
 		fi
 	fi
 
@@ -251,7 +251,7 @@ rebuild_web_domain_conf() {
 	# Rebuilding domain directories
 	if [ -d "$HOMEDIR/$user/web/$domain/document_errors" ]; then
 		if [ "$POLICY_SYNC_ERROR_DOCUMENTS" != "no" ]; then
-			$BIN/v-delete-fs-directory "$user" "$HOMEDIR/$user/web/$domain/document_errors"
+			$BIN/h-delete-fs-directory "$user" "$HOMEDIR/$user/web/$domain/document_errors"
 		fi
 	fi
 
@@ -259,16 +259,16 @@ rebuild_web_domain_conf() {
 		mkdir $HOMEDIR/$user/web/$domain
 	fi
 	chown --no-dereference $user:$user $HOMEDIR/$user/web/$domain
-	$BIN/v-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/public_html"
+	$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/public_html"
 	if [ ! -d "$HOMEDIR/$user/web/$domain/document_errors" ]; then
-		$BIN/v-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/document_errors"
+		$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/document_errors"
 		# Propagating html skeleton
 		user_exec cp -r "$WEBTPL/skel/document_errors/" "$HOMEDIR/$user/web/$domain/"
 	fi
-	$BIN/v-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/cgi-bin"
-	$BIN/v-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/private"
-	$BIN/v-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/stats"
-	$BIN/v-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/logs"
+	$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/cgi-bin"
+	$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/private"
+	$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/stats"
+	$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/logs"
 
 	# Creating domain logs
 	if [ ! -e "/var/log/$WEB_SYSTEM/domains" ]; then
@@ -320,17 +320,17 @@ rebuild_web_domain_conf() {
 
 	# Refresh HTTPS redirection if previously enabled
 	if [ "$SSL_FORCE" = 'yes' ]; then
-		$BIN/v-delete-web-domain-ssl-force $user $domain no yes
-		$BIN/v-add-web-domain-ssl-force $user $domain no yes
+		$BIN/h-delete-web-domain-ssl-force $user $domain no yes
+		$BIN/h-add-web-domain-ssl-force $user $domain no yes
 	fi
 
 	if [ "$SSL_HSTS" = 'yes' ]; then
-		$BIN/v-delete-web-domain-ssl-hsts $user $domain no yes
-		$BIN/v-add-web-domain-ssl-hsts $user $domain no yes
+		$BIN/h-delete-web-domain-ssl-hsts $user $domain no yes
+		$BIN/h-add-web-domain-ssl-hsts $user $domain no yes
 	fi
 	if [ "$FASTCGI_CACHE" = 'yes' ]; then
-		$BIN/v-delete-fastcgi-cache $user $domain
-		$BIN/v-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
+		$BIN/h-delete-fastcgi-cache $user $domain
+		$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
 	fi
 
 	# Adding proxy configuration
@@ -365,7 +365,7 @@ rebuild_web_domain_conf() {
 				/etc/awstats/$STATS.$domain_idn.conf
 		fi
 
-		webstats="$BIN/v-update-web-domain-stat $user $domain"
+		webstats="$BIN/h-update-web-domain-stat $user $domain"
 		check_webstats=$(grep "$webstats" $HESTIA/data/queue/webstats.pipe)
 		if [ -z "$check_webstats" ]; then
 			echo "$webstats" >> $HESTIA/data/queue/webstats.pipe
@@ -404,10 +404,10 @@ rebuild_web_domain_conf() {
 			ftp_md5=$(echo $FTP_MD5 | tr ':' '\n' | grep -n '' \
 				| grep "^$position:" | cut -f 2 -d :)
 			# rebuild S/FTP users
-			$BIN/v-delete-web-domain-ftp "$user" "$domain" "$ftp_user"
+			$BIN/h-delete-web-domain-ftp "$user" "$domain" "$ftp_user"
 			# Generate temporary password to add user but update afterwards
 			temp_password=$(generate_password)
-			$BIN/v-add-web-domain-ftp "$user" "$domain" "${ftp_user##*_}" "$temp_password" "$ftp_path"
+			$BIN/h-add-web-domain-ftp "$user" "$domain" "${ftp_user##*_}" "$temp_password" "$ftp_path"
 			# Updating ftp user password
 			chmod u+w /etc/shadow
 			sed -i "s|^$ftp_user:[^:]*:|$ftp_user:$ftp_md5:|" /etc/shadow
@@ -657,7 +657,7 @@ rebuild_mail_domain_conf() {
 
 		# Rebuild SMTP Relay configuration
 		if [ "$U_SMTP_RELAY" = 'true' ]; then
-			$BIN/v-add-mail-domain-smtp-relay $user $domain "$U_SMTP_RELAY_HOST" "$U_SMTP_RELAY_USERNAME" "$U_SMTP_RELAY_PASSWORD" "$U_SMTP_RELAY_PORT"
+			$BIN/h-add-mail-domain-smtp-relay $user $domain "$U_SMTP_RELAY_HOST" "$U_SMTP_RELAY_USERNAME" "$U_SMTP_RELAY_PASSWORD" "$U_SMTP_RELAY_PORT"
 		fi
 
 		# Removing configuration files if domain is suspended
@@ -673,7 +673,7 @@ rebuild_mail_domain_conf() {
 
 		# Webamil client
 		if [ "$WEBMAIL" = '' ]; then
-			$BIN/v-add-mail-domain-webmail $user $domain 'roundcube' 'no'
+			$BIN/h-add-mail-domain-webmail $user $domain 'roundcube' 'no'
 		fi
 
 		# Adding catchall email

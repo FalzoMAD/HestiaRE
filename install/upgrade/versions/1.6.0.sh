@@ -64,11 +64,11 @@ if [ -f "/etc/default/spamassassin" ]; then
 fi
 
 # Adding LE autorenew cronjob if there are none
-if [ -z "$(grep v-update-lets $HESTIA/data/users/admin/cron.conf)" ]; then
+if [ -z "$(grep h-update-lets $HESTIA/data/users/admin/cron.conf)" ]; then
 	min=$(generate_password '012345' '2')
 	hour=$(generate_password '1234567' '1')
-	command="sudo $BIN/v-update-letsencrypt-ssl"
-	$BIN/v-add-cron-job 'admin' "$min" "$hour" '*' '*' '*' "$command"
+	command="sudo $BIN/h-update-letsencrypt-ssl"
+	$BIN/h-add-cron-job 'admin' "$min" "$hour" '*' '*' '*' "$command"
 fi
 
 # Add apis if they don't exist
@@ -88,8 +88,8 @@ fi
 
 if [ -n "$PHPMYADMIN_KEY" ]; then
 	echo "[ * ] Refresh PMA SSO key due to update phpmyadmin"
-	$BIN/v-delete-sys-pma-sso quiet
-	$BIN/v-add-sys-pma-sso quiet
+	$BIN/h-delete-sys-pma-sso quiet
+	$BIN/h-add-sys-pma-sso quiet
 fi
 
 #Fixed an issue with Exim4 and Ubutnu22.04 in beta version
@@ -108,10 +108,10 @@ if [ "$release" = "22.04" ]; then
 	fi
 fi
 
-# Mute output v-add-sys-sftp-jail out put then enabling sftp on boot
+# Mute output h-add-sys-sftp-jail out put then enabling sftp on boot
 if [ -f "/etc/cron.d/hestia-sftp" ]; then
 	rm /etc/cron.d/hestia-sftp
-	echo "@reboot root sleep 60 && /usr/local/hestia/bin/v-add-sys-sftp-jail > /dev/null" > /etc/cron.d/hestia-sftp
+	echo "@reboot root sleep 60 && /usr/local/hestia/bin/h-add-sys-sftp-jail > /dev/null" > /etc/cron.d/hestia-sftp
 fi
 
 ips=$(ls /usr/local/hestia/data/ips/ | wc -l)
@@ -119,7 +119,7 @@ release=$(lsb_release -s -i)
 if [ $release = 'Ubuntu' ]; then
 	if [ $ips -gt 1 ]; then
 		add_upgrade_message "Warning: Please check your network configuration!\n\n A bug has been discovered that might affect your setup and can lead to issues after a system reboot. Please review your network configuration. See https://github.com/hestiacp/hestiacp/pull/2612#issuecomment-1135571835 for more info regarding this issue!"
-		$HESTIA/bin/v-add-user-notification admin "Warning: Please check your network configuration!\n\n A bug has been discovered that might affect your setup and can lead to issues after a system reboot. Please review your network configuration. <a href='https://github.com/hestiacp/hestiacp/pull/2612#issuecomment-1135571835'>More info</a>"
+		$HESTIA/bin/h-add-user-notification admin "Warning: Please check your network configuration!\n\n A bug has been discovered that might affect your setup and can lead to issues after a system reboot. Please review your network configuration. <a href='https://github.com/hestiacp/hestiacp/pull/2612#issuecomment-1135571835'>More info</a>"
 	fi
 fi
 

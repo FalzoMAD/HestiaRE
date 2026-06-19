@@ -12,7 +12,7 @@ $backup = $_GET["backup"];
 if (!file_exists("/backup/" . $backup)) {
 	$backup = quoteshellarg($_GET["backup"]);
 	exec(
-		HESTIA_CMD . "v-schedule-user-backup-download " . $user . " " . $backup,
+		HESTIA_CMD . "h-schedule-user-backup-download " . $user . " " . $backup,
 		$output,
 		$return_var,
 	);

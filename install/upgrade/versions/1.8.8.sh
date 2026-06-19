@@ -32,7 +32,7 @@ hestia_defaults_conf="$HESTIA/conf/defaults/hestia.conf"
 for i in POLICY_USER_CHANGE_THEME POLICY_USER_EDIT_WEB_TEMPLATES POLICY_USER_VIEW_LOGS; do
 	if [[ -f "$hestia_conf" ]]; then
 		if grep "$i" "$hestia_conf" | grep -q 'true'; then
-			if "$BIN/v-change-sys-config-value" "$i" 'yes'; then
+			if "$BIN/h-change-sys-config-value" "$i" 'yes'; then
 				echo "[ * ] Success: ${i} value changed from true to yes in hestia.conf"
 			else
 				echo "[ ! ] Error: Couldn't change ${i} value from true to yes in hestia.conf"

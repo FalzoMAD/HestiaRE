@@ -9,7 +9,7 @@
 # Add webmail alias variable to system configuration if non-existent
 if [ -z "$WEBMAIL_ALIAS" ]; then
 	echo "[ * ] Updating webmail alias configuration..."
-	$HESTIA/bin/v-change-sys-config-value 'WEBMAIL_ALIAS' "webmail"
+	$HESTIA/bin/h-change-sys-config-value 'WEBMAIL_ALIAS' "webmail"
 fi
 
 # Update Apache and Nginx configuration to support new file structure
@@ -68,9 +68,9 @@ cp -rf $HESTIA_INSTALL_DIR/templates/web/skel/document_errors/* /var/www/documen
 chmod 644 /var/www/html/*
 chmod 644 /var/www/document_errors/*
 
-for user in $($BIN/v-list-users plain | cut -f1); do
+for user in $($BIN/h-list-users plain | cut -f1); do
 	USER_DATA=$HESTIA/data/users/$user
-	for domain in $($BIN/v-list-web-domains $user plain | cut -f 1); do
+	for domain in $($BIN/h-list-web-domains $user plain | cut -f 1); do
 		WEBFOLDER="/home/$user/web/$domain/public_html"
 		folderchecksum=$(find "$WEBFOLDER/css" "$WEBFOLDER/js" "$WEBFOLDER/webfonts" -type f -print0 2> /dev/null | sort -z | xargs -r0 cat | md5sum | cut -d" " -f1)
 		if [ "$folderchecksum" = "926feacc51384fe13598631f9d1360c3" ]; then
@@ -102,7 +102,7 @@ if [ -z "$(grep ^hestia-users: /etc/group)" ]; then
 fi
 
 # Make sure non-admin users belong to correct Hestia group
-for user in $($BIN/v-list-users plain | cut -f1); do
+for user in $($BIN/h-list-users plain | cut -f1); do
 	if [ "$user" != "admin" ]; then
 		usermod -a -G "hestia-users" "$user"
 		setfacl -m "u:$user:r-x" "$HOMEDIR/$user"
@@ -117,7 +117,7 @@ for user in $($BIN/v-list-users plain | cut -f1); do
 done
 
 # Add unassigned hosts configuration to Nginx and Apache
-for ipaddr in $($BIN/v-list-sys-ips plain | cut -f1); do
+for ipaddr in $($BIN/h-list-sys-ips plain | cut -f1); do
 
 	web_conf="/etc/$WEB_SYSTEM/conf.d/$ipaddr.conf"
 	rm -f $web_conf
@@ -167,7 +167,7 @@ chmod 755 /etc/cron.daily/php-session-cleanup
 php_versions=$(ls /etc/php/*/fpm -d 2> /dev/null | wc -l)
 if [ "$php_versions" -gt 1 ]; then
 	echo "[ * ] Updating Multi-PHP configuration..."
-	for v in $($BIN/v-list-sys-php plain); do
+	for v in $($BIN/h-list-sys-php plain); do
 		if [ ! -d "/etc/php/$v/fpm/pool.d/" ]; then
 			continue
 		fi
@@ -236,7 +236,7 @@ if [ -z "$IMAP_SYSTEM" ]; then
 fi
 
 # Run sftp jail once
-$HESTIA/bin/v-add-sys-sftp-jail
+$HESTIA/bin/h-add-sys-sftp-jail
 
 # Enable SFTP subsystem for SSH
 sftp_subsys_enabled=$(grep -iE "^#?.*subsystem.+(sftp )?sftp-server" /etc/ssh/sshd_config)
@@ -247,11 +247,11 @@ if [ ! -z "$sftp_subsys_enabled" ]; then
 fi
 
 # Remove and migrate obsolete object keys
-for user in $($BIN/v-list-users plain | cut -f1); do
+for user in $($BIN/h-list-users plain | cut -f1); do
 	USER_DATA=$HESTIA/data/users/$user
 
 	# Web keys
-	for domain in $($BIN/v-list-web-domains $user plain | cut -f 1); do
+	for domain in $($BIN/h-list-web-domains $user plain | cut -f 1); do
 		obskey=$(get_object_value 'web' 'DOMAIN' "$domain" '$FORCESSL')
 		if [ ! -z "$obskey" ]; then
 			echo "[ * ] Fixing HTTP-to-HTTPS redirection for $domain"

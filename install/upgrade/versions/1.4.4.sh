@@ -32,6 +32,6 @@ fi
 # Reset PMA SSO to fix bug with Nginx + Apache2
 if [ "$PHPMYADMIN_KEY" != "" ]; then
 	echo "[ * ] Refressh hestia-sso for PMA..."
-	$BIN/v-delete-sys-pma-sso quiet
-	$BIN/v-add-sys-pma-sso quiet
+	$BIN/h-delete-sys-pma-sso quiet
+	$BIN/h-add-sys-pma-sso quiet
 fi

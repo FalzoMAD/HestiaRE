@@ -103,7 +103,7 @@
 				</div>
 			</div>
 			<div class="u-pl30 js-stats-auth">
-				<div x-cloak x-show="statsAuthEnabled" name="v-add-web-domain-stats-user">
+				<div x-cloak x-show="statsAuthEnabled" name="h-add-web-domain-stats-user">
 					<div class="u-mb10">
 						<label for="v_stats_user" class="form-label"><?= tohtml( _("Username")) ?></label>
 						<input type="text" class="form-control" name="v_stats_user" id="v_stats_user" value="<?= tohtml(trim($v_stats_user, "'")) ?>">
@@ -122,38 +122,38 @@
 				</div>
 			</div>
 			<div class="form-check u-mb10">
-				<input x-model="redirectEnabled" class="form-check-input" type="checkbox" name="v-redirect-checkbox" id="v-redirect-checkbox">
-				<label for="v-redirect-checkbox">
+				<input x-model="redirectEnabled" class="form-check-input" type="checkbox" name="h-redirect-checkbox" id="h-redirect-checkbox">
+				<label for="h-redirect-checkbox">
 					<?= tohtml( _("Enable domain redirection")) ?>
 				</label>
 			</div>
 			<div x-cloak x-show="redirectEnabled" id="v_redirect" class="u-pl30 u-mb10">
 				<div class="form-check">
-					<input class="form-check-input js-redirect-custom-value" type="radio" name="v-redirect" id="v-redirect-radio-1" value="<?= tohtml('www.'.$v_domain) ?>" <?php if ($v_redirect == "www.".$v_domain) echo 'checked'; ?>>
-					<label for="v-redirect-radio-1">
+					<input class="form-check-input js-redirect-custom-value" type="radio" name="h-redirect" id="h-redirect-radio-1" value="<?= tohtml('www.'.$v_domain) ?>" <?php if ($v_redirect == "www.".$v_domain) echo 'checked'; ?>>
+					<label for="h-redirect-radio-1">
 						<?= tohtml(sprintf(_("Redirect visitors to %s"), "www." . $v_domain)) ?>
 					</label>
 				</div>
 				<div class="form-check">
-					<input class="form-check-input js-redirect-custom-value" type="radio" name="v-redirect" id="v-redirect-radio-2" value="<?= tohtml($v_domain) ?>" <?php if ( $v_redirect == $v_domain) echo 'checked'; ?>>
-					<label for="v-redirect-radio-2">
+					<input class="form-check-input js-redirect-custom-value" type="radio" name="h-redirect" id="h-redirect-radio-2" value="<?= tohtml($v_domain) ?>" <?php if ( $v_redirect == $v_domain) echo 'checked'; ?>>
+					<label for="h-redirect-radio-2">
 						<?= tohtml(sprintf(_("Redirect visitors to %s"), $v_domain)) ?>
 					</label>
 				</div>
 				<div class="form-check">
-					<input class="form-check-input js-redirect-custom-value" type="radio" name="v-redirect" id="v-redirect-radio-3" value="custom" <?php if ( !empty($v_redirect_custom)) echo 'checked'; ?>>
-					<label for="v-redirect-radio-3">
+					<input class="form-check-input js-redirect-custom-value" type="radio" name="h-redirect" id="h-redirect-radio-3" value="custom" <?php if ( !empty($v_redirect_custom)) echo 'checked'; ?>>
+					<label for="h-redirect-radio-3">
 						<?= tohtml( _("Redirect visitors to a custom domain or web address")) ?>
 					</label>
 				</div>
 				<div class="u-pl30 js-custom-redirect-fields <?php if (empty($v_redirect_custom)) { echo 'u-hidden'; } ?>">
 					<div class="u-mt15 u-mb10">
-						<label for="v-redirect-custom" class="form-label"><?= tohtml( _("Target domain or URL")) ?></label>
-						<input type="text" class="form-control" name="v-redirect-custom" id="v-redirect-custom" value="<?= tohtml($v_redirect_custom) ?>">
+						<label for="h-redirect-custom" class="form-label"><?= tohtml( _("Target domain or URL")) ?></label>
+						<input type="text" class="form-control" name="h-redirect-custom" id="h-redirect-custom" value="<?= tohtml($v_redirect_custom) ?>">
 					</div>
 					<div class="u-mb20">
-						<label for="v-redirect-code" class="form-label"><?= tohtml( _("Status code")) ?>:</label>
-						<select class="form-select" name="v-redirect-code" id="v-redirect-code">
+						<label for="h-redirect-code" class="form-label"><?= tohtml( _("Status code")) ?>:</label>
+						<select class="form-select" name="h-redirect-code" id="h-redirect-code">
 							<?php foreach ($redirect_code_options as $status_code): ?>
 								<option value="<?= tohtml($status_code) ?>" <?php if ((int) $v_redirect_code === (int) $status_code) echo 'selected="selected"'; ?>>
 								<?= tohtml($status_code) ?>
@@ -363,9 +363,9 @@
 				</div>
 				<div x-cloak x-show="customDocumentRootEnabled" id="v_custom_doc_root" class="u-pl30">
 					<div class="u-mb10">
-						<label for="v-custom-doc-domain" class="form-label"><?= tohtml( _("Point to")) ?></label>
-						<input type="hidden" class="js-custom-docroot-prepath" name="v-custom-doc-root_prepath" value="<?= tohtml($v_custom_doc_root_prepath) ?>">
-						<select class="form-select js-custom-docroot-domain" name="v-custom-doc-domain" id="v-custom-doc-domain">
+						<label for="h-custom-doc-domain" class="form-label"><?= tohtml( _("Point to")) ?></label>
+						<input type="hidden" class="js-custom-docroot-prepath" name="h-custom-doc-root_prepath" value="<?= tohtml($v_custom_doc_root_prepath) ?>">
+						<select class="form-select js-custom-docroot-domain" name="h-custom-doc-domain" id="h-custom-doc-domain">
 							<?php foreach ($user_domains as $domain): ?>
 							<option value="<?= tohtml($domain) ?>"
 								<?php if ($v_custom_doc_domain === $domain || (empty($v_custom_doc_domain) && $domain === $v_domain)) echo 'selected="selected"'; ?>>
@@ -375,10 +375,10 @@
 						</select>
 					</div>
 					<div class="u-mb10">
-						<label for="v-custom-doc-folder" class="form-label">
+						<label for="h-custom-doc-folder" class="form-label">
 							<?= tohtml( _("Directory")) ?> <span class="optional">(<?= tohtml( _("Optional")) ?>)</span>
 						</label>
-						<input type="text" class="form-control js-custom-docroot-dir" name="v-custom-doc-folder" id="v-custom-doc-folder" value="<?= tohtml(trim($v_custom_doc_folder, "'")) ?>">
+						<input type="text" class="form-control js-custom-docroot-dir" name="h-custom-doc-folder" id="h-custom-doc-folder" value="<?= tohtml(trim($v_custom_doc_folder, "'")) ?>">
 						<small class="js-custom-docroot-hint"></small>
 					</div>
 				</div>
