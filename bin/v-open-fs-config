@@ -10,8 +10,8 @@
 #                Variables & Functions                     #
 #----------------------------------------------------------#
 
-# shellcheck source=/etc/hestiacp/hestia.conf
-source /etc/hestiacp/hestia.conf
+# shellcheck source=/etc/hestia/hestia.conf
+source /etc/hestia/hestia.conf
 src_file=$1
 
 # Checking arguments

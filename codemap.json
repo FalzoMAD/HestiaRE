@@ -56,9 +56,8 @@
       },
       "dependencies": ["func_libraries", "instance_config"],
       "upstream_debt": {
-        "file_count": 514,
+        "file_count": 512,
         "issues": [
-          "All commands source /etc/hestiacp/hestia.conf — single line change needed: → /etc/hestia/hestia.conf",
           "$HESTIA variable itself is unchanged (/usr/local/hestia) — no migration needed in bin/*",
           "v-add-cron-hestia-autoupdate references HestiaCP update mechanism — remove or replace (see paths.md Q5)"
         ]
@@ -100,7 +99,6 @@
       "upstream_debt": {
         "file_count": 3,
         "issues": [
-          "main.sh sources /etc/hestiacp/hestia.conf — change to /etc/hestia/hestia.conf",
           "$HESTIA variable unchanged (/usr/local/hestia) — no path migration needed in func/*",
           "upgrade.sh contains HestiaCP version-history migrations not relevant to HestiaRE"
         ]
@@ -149,7 +147,8 @@
       "upstream_debt": {
         "file_count": 9,
         "issues": [
-          "PHP files reference /usr/local/hestia paths in includes",
+          "PHP files reference /usr/local/hestia paths in includes — install root is unchanged so paths are correct, but hardcoded (not using a constant)",
+          "web/inc/mail-wrapper.php shebang: #!/usr/local/hestia/php/bin/php references removed hestia-php binary — must change to Sury PHP 8.3, deferred to Issue #25",
           "web/list/terminal/ — Web Terminal UI present, must not be re-enabled (ground rule)",
           "Panel branding still references HestiaCP in some locale strings"
         ]
@@ -218,7 +217,7 @@
           "hestia-web-terminal package reference — must remain removed (ground rule)",
           "install/deb/bind/ and install/deb/vsftpd/ present — must remain unused (ground rule)",
           "install/upgrade/versions/ contain HestiaCP migration history not applicable to HestiaRE",
-          "Configs still write to /etc/hestiacp/hestia.conf — must become /etc/hestia/hestia.conf"
+          "Configs still write to /etc/hestia/hestia.conf (migrated from /etc/hestiacp)"
         ]
       }
     },
@@ -308,22 +307,25 @@
 
   "upstream_debt_summary": {
     "total_affected_files": 571,
+    "resolved_in_issue_30": 563,
+    "note": "571 total flagged files; 563 had /etc/hestiacp references migrated to /etc/hestia in Issue #30 (512 bin/, 45 install/, 4 src/deb/, 1 func/, 1 build_tools/src/deb/); 9 web/ files remain — /usr/local/hestia refs are structurally correct (install root unchanged) except mail-wrapper shebang (deferred Issue #25)",
     "by_component": {
-      "cli_commands": 514,
+      "cli_commands": 512,
       "installer": 45,
       "web_panel": 9,
-      "func_libraries": 3
+      "func_libraries": 1,
+      "build_tools_deb": 4
     },
     "primary_issues": [
       {
         "issue": "Config path mismatch",
-        "detail": "bin/* and func/* source /etc/hestiacp/hestia.conf — single-line change to /etc/hestia/hestia.conf per file",
+        "detail": "bin/* and func/* sourced /etc/hestiacp/hestia.conf — migrated to /etc/hestia/hestia.conf in Issue #30",
         "affected": "cli_commands, func_libraries",
-        "priority": "high"
+        "priority": "resolved"
       },
       {
         "issue": "$HESTIA variable — no change needed",
-        "detail": "Install root stays /usr/local/hestia — $HESTIA is already correct in all 514 bin/* files",
+        "detail": "Install root stays /usr/local/hestia — $HESTIA is already correct in all bin/* files",
         "affected": "none",
         "priority": "resolved"
       },

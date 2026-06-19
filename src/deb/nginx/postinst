@@ -41,8 +41,8 @@ if [ -z "$HESTIA" ]; then
 fi
 
 # Check if preinstall hook exists
-if [ -e "/etc/hestiacp/hooks/nginx/pre_install.sh" ]; then
-	/etc/hestiacp/hooks/nginx/pre_install.sh
+if [ -e "/etc/hestia/hooks/nginx/pre_install.sh" ]; then
+	/etc/hestia/hooks/nginx/pre_install.sh
 fi
 
 # Load upgrade functions and variables
@@ -56,8 +56,8 @@ if [ -n "$BACKEND_PORT" ]; then
 	/usr/local/hestia/bin/v-change-sys-port $BACKEND_PORT
 fi
 
-if [ -e "/etc/hestiacp/hooks/nginx/post_install.sh" ]; then
-	/etc/hestiacp/hooks/nginx/post_install.sh
+if [ -e "/etc/hestia/hooks/nginx/post_install.sh" ]; then
+	/etc/hestia/hooks/nginx/post_install.sh
 fi
 
 # Restart hestia service

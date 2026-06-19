@@ -22,8 +22,8 @@ deleted_redirect=0
 deleted_force_ssl=0
 
 # Includes
-# shellcheck source=/etc/hestiacp/hestia.conf
-source /etc/hestiacp/hestia.conf
+# shellcheck source=/etc/hestia/hestia.conf
+source /etc/hestia/hestia.conf
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
 # shellcheck source=/usr/local/hestia/func/domain.sh
@@ -39,8 +39,8 @@ if [[ "$LE_STAGING" = 'yes' ]]; then
 fi
 
 # LE Pre-Hook
-if [ -x "/etc/hestiacp/hooks/le_pre.sh" ]; then
-	/etc/hestiacp/hooks/le_pre.sh "$user" "$domain" "$aliases" "$mail"
+if [ -x "/etc/hestia/hooks/le_pre.sh" ]; then
+	/etc/hestia/hooks/le_pre.sh "$user" "$domain" "$aliases" "$mail"
 fi
 
 # encode base64
@@ -645,8 +645,8 @@ else
 fi
 
 # LE Post-Hook
-if [ -x "/etc/hestiacp/hooks/le_post.sh" ]; then
-	/etc/hestiacp/hooks/le_post.sh "$user" "$domain" "$aliases" "$mail"
+if [ -x "/etc/hestia/hooks/le_post.sh" ]; then
+	/etc/hestia/hooks/le_post.sh "$user" "$domain" "$aliases" "$mail"
 fi
 
 # Remove challenge folder if exist

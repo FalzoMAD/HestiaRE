@@ -8,7 +8,7 @@ fi
 #                Initialize functions/variables               #
 ###############################################################
 
-source /etc/hestiacp/hestia.conf
+source /etc/hestia/hestia.conf
 
 # Load upgrade functions and variables
 # shellcheck source=/usr/local/hestia/func/main.sh
@@ -43,8 +43,8 @@ upgrade_init_backup
 upgrade_init_logging
 
 # Check if preinstall hook exists
-if [ -e "/etc/hestiacp/hooks/pre_install.sh" ]; then
-	/etc/hestiacp/hooks/pre_install.sh
+if [ -e "/etc/hestia/hooks/pre_install.sh" ]; then
+	/etc/hestia/hooks/pre_install.sh
 fi
 
 # Set up console display and welcome message
@@ -119,8 +119,8 @@ upgrade_send_notification_to_panel
 upgrade_send_notification_to_email
 upgrade_send_log_to_email
 
-if [ -e "/etc/hestiacp/hooks/post_install.sh" ]; then
-	/etc/hestiacp/hooks/post_install.sh
+if [ -e "/etc/hestia/hooks/post_install.sh" ]; then
+	/etc/hestia/hooks/post_install.sh
 fi
 
 exit 0
