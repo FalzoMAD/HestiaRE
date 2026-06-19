@@ -192,7 +192,7 @@
       ],
       "language": "bash / config templates",
       "supported_distros": ["Debian 12 (bookworm)", "Ubuntu 24.04 LTS (noble)", "Debian 13 (trixie, priority 2, planned June 2026+)"],
-      "note": "Monolithic bash installers removed in Issue #26b. All install logic now lives in Makefile targets (see make_release component).",
+      "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. All install logic now lives in make/*.mk files (see make_release component).",
       "web_templates": {
         "nginx": "install/deb/templates/web/nginx/",
         "apache2": "install/deb/templates/web/apache2/",
@@ -270,65 +270,70 @@
       }
     },
 
-    "build_tools": {
-      "description": "Build and release tooling. Not runtime. Used during CI/CD to compile releases, generate docs, and bootstrap dev environments.",
-      "entry_points": [
-        "src/lxd_build_all.sh",
-        "src/lxd_compile.sh"
-      ],
-      "directories": ["src/"],
-      "key_files": [
-        "src/lxd_build_all.sh",
-        "src/lxd_compile.sh",
-        "src/hst_generate_clidocs.sh",
-        "src/hst_bootstrap_install.sh",
-        "src/script_template.sh"
-      ],
-      "language": "bash",
-      "dependencies": [],
-      "upstream_debt": {
-        "file_count": 0,
-        "issues": []
-      }
-    },
-
     "make_release": {
-      "description": "Top-level Makefile (full installer) and install.sh (thin bootstrap). install.sh fetches the release tarball and calls `make install OS=... PROFILE=...`. The Makefile drives the full installation via composable targets.",
+      "description": "Slim orchestrator Makefile (~120 lines) + make/*.mk component files + install.sh bootstrap. All install logic is in make/*.mk. Makefile includes them and exposes only public targets. Restructured in Issue #26d.",
       "entry_points": ["Makefile", "install.sh"],
-      "directories": [],
+      "directories": ["make/"],
       "key_files": [
         "Makefile",
         "install.sh",
-        "VERSION"
+        "VERSION",
+        "make/debian-bookworm.mk",
+        "make/ubuntu-noble.mk",
+        "make/base.mk",
+        "make/panel.mk",
+        "make/web.mk",
+        "make/db.mk",
+        "make/mail.mk",
+        "make/security.mk",
+        "make/tools.mk",
+        "make/configure.mk"
       ],
       "language": "make + bash",
-      "make_targets": {
-        "install": "Full install (interactive prompts; override: H_HOSTNAME H_ADMIN H_EMAIL H_PASS)",
-        "install-base": "APT repos, base packages, system users, SSH hardening",
-        "install-panel": "Caddy + hestia-php.service (panel webserver + panel PHP-FPM)",
-        "install-web": "nginx, PHP multi (5.6–8.4 via h-add-web-php), web pool config",
-        "install-db": "MariaDB + phpMyAdmin",
-        "install-mail": "exim4 + dovecot + rspamd + roundcube (standard profile only)",
-        "install-security": "fail2ban + iptables + ipset",
-        "install-tools": "composer + wp-cli (via h-add-sys-dependencies), rclone, restic, file manager",
-        "_configure-hestia": "hestia.conf, sudoers, SSL cert, admin user, crontab, IP setup",
-        "_finalize": "Start hestia.service, final apt upgrade, print credentials",
-        "update": "Fetch latest release and reinstall",
-        "check-updates": "Query latest version from GitHub or Gitea",
-        "status": "Display installed version and config",
-        "backup": "Backup existing installation (stub)",
-        "uninstall": "Remove HestiaRE (interactive, stub)"
+      "make_structure": {
+        "Makefile": "Orchestrator — global vars, -include make/$(OS).mk, include make/*.mk, public targets only",
+        "make/$(OS).mk": "OS-specific vars: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA",
+        "make/base.mk": "_install-base — APT repos (nginx, sury, mariadb), base packages, system users, SSH hardening",
+        "make/panel.mk": "_install-panel — Caddy + hestia-php.service",
+        "make/web.mk": "_install-web — nginx, PHP multi (5.6–8.4), web pool config",
+        "make/db.mk": "_install-db — MariaDB + phpMyAdmin",
+        "make/mail.mk": "_install-mail — exim4, dovecot, rspamd, roundcube (standard profile only)",
+        "make/security.mk": "_install-security — fail2ban, iptables, ipset",
+        "make/tools.mk": "add-tools — composer, wp-cli; TOOLS_SET=hestia|sysadmin|full",
+        "make/configure.mk": "_check-root, _collect-params, _configure-hestia, _finalize"
       },
+      "make_targets": {
+        "install": "Full install (interactive; override via H_HOSTNAME H_ADMIN H_EMAIL H_PASS)",
+        "add-tools": "Standalone tool installer, always re-runnable. TOOLS_SET=hestia|sysadmin|full",
+        "update": "Fetch latest release tarball and apply",
+        "check-updates": "Query latest version from GitHub or Gitea",
+        "status": "Show version, config, and completed install phases",
+        "backup": "Backup stub",
+        "uninstall": "Interactive uninstall stub"
+      },
+      "internal_targets": {
+        "_install-*": "Component install targets — each guarded by /etc/hestia/.done.COMPONENT sentinel",
+        "_check-root": "Verify root, OS known, not already installed",
+        "_collect-params": "Prompt or accept H_* vars, write /etc/hestia/install.conf",
+        "_configure-hestia": "hestia.conf, sudoers, SSL cert, admin user, crontab, IP; writes .done.configure",
+        "_finalize": "Start hestia.service, final apt upgrade, print credentials"
+      },
+      "sentinel_files": "/etc/hestia/.done.{base,panel,web,db,mail,security,configure} — presence skips that phase",
       "profiles": {
         "standard": "All components including mail (exim4, dovecot, rspamd, roundcube)",
         "minimal": "All components except mail stack"
+      },
+      "tools_sets": {
+        "hestia": "composer + wp-cli (default)",
+        "sysadmin": "hestia + htop, ncdu, tmux, mtr-tiny, nmap, iotop, traceroute",
+        "full": "sysadmin + rclone, restic"
       },
       "bootstrap_flow": "curl | bash install.sh → OS detect → apt install curl make → download tarball → extract to /usr/local/hestia/ → make install OS=... PROFILE=...",
       "release_sources": {
         "github": "https://github.com/FalzoMAD/HestiaRE (default)",
         "gitea": "Configurable via /etc/hestia/source.conf"
       },
-      "install_conf": "/etc/hestia/install.conf (hostname, admin, email, pass — written by _collect-params, sourced by _configure-hestia and _finalize)",
+      "install_conf": "/etc/hestia/install.conf — written by _collect-params, sourced by _configure-hestia and _finalize",
       "dependencies": ["installer"],
       "upstream_debt": {
         "file_count": 0,
@@ -364,13 +369,12 @@
   "upstream_debt_summary": {
     "total_affected_files": 571,
     "resolved_in_issue_30": 563,
-    "note": "571 total flagged files; 563 had /etc/hestiacp references migrated to /etc/hestia in Issue #30 (512 bin/, 45 install/, 4 src/deb/, 1 func/, 1 build_tools/src/deb/); 9 web/ files remain — /usr/local/hestia refs are structurally correct (install root unchanged) except mail-wrapper shebang (deferred Issue #25)",
+    "note": "571 total flagged files; 563 had /etc/hestiacp references migrated to /etc/hestia in Issue #30; src/ directory and install/hst-install.sh deleted in Issue #26d — build_tools component removed. 9 web/ files remain — /usr/local/hestia refs are structurally correct (install root unchanged) except mail-wrapper shebang (deferred Issue #25)",
     "by_component": {
       "cli_commands": 512,
       "installer": 45,
       "web_panel": 9,
-      "func_libraries": 1,
-      "build_tools_deb": 4
+      "func_libraries": 1
     },
     "primary_issues": [
       {
