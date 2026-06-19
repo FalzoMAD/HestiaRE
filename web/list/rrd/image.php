@@ -12,7 +12,7 @@ $dir_name = dirname($dir_name);
 if ($dir_name != $_SERVER["DOCUMENT_ROOT"] . "/rrd") {
 	exit();
 }
-header("X-Accel-Redirect: " . $_SERVER["QUERY_STRING"]);
+header("X-Accel-Redirect: " . $real_path);
 header("Content-Type: image/png");
 
 ?>

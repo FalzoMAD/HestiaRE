@@ -222,6 +222,38 @@
       }
     },
 
+    "panel_caddy_service": {
+      "description": "Caddy config for the HestiaRE admin panel on port 8083. Replaces the compiled hestia-nginx package. Handles PHP via FastCGI and X-Accel-Redirect for file downloads.",
+      "entry_points": ["install/panel-caddy/Caddyfile"],
+      "directories": ["install/panel-caddy/"],
+      "key_files": [
+        "install/panel-caddy/Caddyfile",
+        "install/panel-caddy/hestia.conf"
+      ],
+      "language": "caddyfile",
+      "runtime_paths": {
+        "caddyfile": "/etc/caddy/Caddyfile",
+        "site_config": "/etc/caddy/hestia.conf",
+        "access_log": "/var/log/hestia/caddy-access.log",
+        "error_log": "/var/log/hestia/caddy-error.log"
+      },
+      "notes": [
+        "Caddyfile: global options + import /etc/caddy/*.conf",
+        "hestia.conf: site block only (https://:8083)",
+        "X-Accel-Redirect handled via handle_response in reverse_proxy block",
+        "web/list/rrd/image.php updated to send absolute path for X-Accel-Redirect",
+        "File manager /fm/* served via handle block with uri strip_prefix",
+        "Web terminal /_shell/ location intentionally absent — ground rule"
+      ],
+      "required_packages": ["caddy"],
+      "note": "Installer integration deferred to Issue #26a.",
+      "dependencies": ["panel_php_service"],
+      "upstream_debt": {
+        "file_count": 0,
+        "issues": []
+      }
+    },
+
     "panel_php_service": {
       "description": "Dedicated PHP-FPM service for the HestiaRE panel. Runs as hestia-php.service using Sury php8.3-fpm binary with an isolated pool. Replaces compiled hestia-php package.",
       "entry_points": ["install/panel-php/hestia-php.service"],
@@ -277,7 +309,7 @@
         "file_count": 0,
         "issues": [
           "src/hst_autocompile.sh builds hestia-nginx and hestia-php — both replaced; remove in Issue #26a",
-          "src/deb/nginx/ — hestia-nginx deb source, kept as reference for Issue #24 Caddy translation, delete in that PR"
+          "src/deb/web-terminal/ and src/deb/nginx/ deleted in Issue #24"
         ]
       }
     },
@@ -335,7 +367,7 @@
     "standard_profile": ["exim4", "dovecot", "rspamd", "roundcube"],
     "optional_hl_service": ["apache2", "proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
     "never_install": ["bind9", "vsftpd", "web-terminal", "spamassassin", "software-installer"],
-    "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "config_path": "TBD — see paths.md Q1" },
+    "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "caddyfile": "/etc/caddy/Caddyfile", "site_config": "/etc/caddy/hestia.conf", "install_source": "install/panel-caddy/" },
     "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "install/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock" }
   },
 
