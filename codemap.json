@@ -106,7 +106,7 @@
     },
 
     "web_panel": {
-      "description": "Plain-PHP control panel UI. No framework. Action-based routing via directory structure. Served by Caddy + PHP 8.2 FPM on port 8083.",
+      "description": "Plain-PHP control panel UI. No framework. Action-based routing via directory structure. Served by Caddy + PHP 8.3 FPM (hestia-php.service) on port 8083.",
       "entry_points": ["web/index.php"],
       "directories": [
         "web/",
@@ -148,7 +148,7 @@
         "file_count": 9,
         "issues": [
           "PHP files reference /usr/local/hestia paths in includes — install root is unchanged so paths are correct, but hardcoded (not using a constant)",
-          "web/inc/mail-wrapper.php shebang: #!/usr/local/hestia/php/bin/php references removed hestia-php binary — must change to Sury PHP 8.3, deferred to Issue #25",
+          "web/inc/mail-wrapper.php shebang: updated to #!/usr/bin/php8.3 in Issue #25",
           "web/list/terminal/ — Web Terminal UI present, must not be re-enabled (ground rule)",
           "Panel branding still references HestiaCP in some locale strings"
         ]
@@ -199,7 +199,7 @@
         "Service template distribution",
         "User/group creation (hestiaweb)",
         "Data directory initialization",
-        "Panel setup (Caddy + PHP 8.2 FPM)",
+        "Panel setup (Caddy + hestia-php.service / PHP 8.3 FPM)",
         "Security hardening (fail2ban, iptables, ssl)"
       ],
       "upgrade_versions": ["1.0.x", "1.8.x", "1.9.0-1.9.6", "1.10.0"],
@@ -219,6 +219,39 @@
           "install/upgrade/versions/ contain HestiaCP migration history not applicable to HestiaRE",
           "Configs still write to /etc/hestia/hestia.conf (migrated from /etc/hestiacp)"
         ]
+      }
+    },
+
+    "panel_php_service": {
+      "description": "Dedicated PHP-FPM service for the HestiaRE panel. Runs as hestia-php.service using Sury php8.3-fpm binary with an isolated pool. Replaces compiled hestia-php package.",
+      "entry_points": ["install/panel-php/hestia-php.service"],
+      "directories": ["install/panel-php/"],
+      "key_files": [
+        "install/panel-php/hestia-php.service",
+        "install/panel-php/php-fpm.conf",
+        "install/panel-php/pool.d/panel.conf"
+      ],
+      "language": "ini",
+      "runtime_paths": {
+        "config_dir": "/etc/php/hestia/fpm/",
+        "socket": "/run/hestia-php.sock",
+        "pid": "/run/hestia-php.pid",
+        "log": "/var/log/hestia/php-fpm.log"
+      },
+      "required_packages": [
+        "php8.3-fpm",
+        "php8.3-mysql",
+        "php8.3-curl",
+        "php8.3-zip",
+        "php8.3-gmp",
+        "php8.3-mbstring",
+        "php8.3-opcache"
+      ],
+      "note": "gettext included in php8.3-common (auto dep of php8.3-fpm). Installer integration deferred to Issue #26a.",
+      "dependencies": [],
+      "upstream_debt": {
+        "file_count": 0,
+        "issues": []
       }
     },
 
@@ -243,7 +276,8 @@
       "upstream_debt": {
         "file_count": 0,
         "issues": [
-          "src/hst_autocompile.sh may reference HestiaCP GitHub release URLs — verify before use"
+          "src/hst_autocompile.sh builds hestia-nginx and hestia-php — both replaced; remove in Issue #26a",
+          "src/deb/nginx/ — hestia-nginx deb source, kept as reference for Issue #24 Caddy translation, delete in that PR"
         ]
       }
     },
@@ -302,7 +336,7 @@
     "optional_hl_service": ["apache2", "proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
     "never_install": ["bind9", "vsftpd", "web-terminal", "spamassassin", "software-installer"],
     "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "config_path": "TBD — see paths.md Q1" },
-    "panel_php": { "service": "php8.3-fpm", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "pool_config": "TBD — see paths.md Q2" }
+    "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "install/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock" }
   },
 
   "upstream_debt_summary": {

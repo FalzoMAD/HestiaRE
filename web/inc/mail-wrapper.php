@@ -1,4 +1,4 @@
-#!/usr/local/hestia/php/bin/php
+#!/usr/bin/php8.3
 <?php
 if (empty($argv[1])) {
 	echo "ERROR: not enough arguments\n";

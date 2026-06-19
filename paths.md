@@ -84,11 +84,15 @@ Current state and migration steps are documented in Section 5.
 
 | Item | Path |
 |------|------|
-| Binary | `/usr/bin/php8.3` (Sury repo) |
-| FPM config | `/etc/php/8.3/fpm/php-fpm.conf` |
-| Panel pool | TBD — see Open Questions #2 |
-| Pool socket | TBD — see Open Questions #2 |
-| Systemd unit | `php8.3-fpm.service` |
+| Binary | `/usr/sbin/php-fpm8.3` (Sury repo) |
+| FPM config | `/etc/php/hestia/fpm/php-fpm.conf` (version-independent) |
+| Panel pool | `/etc/php/hestia/fpm/pool.d/panel.conf` |
+| Pool socket | `/run/hestia-php.sock` (unchanged — interface contract with Caddy) |
+| PID file | `/run/hestia-php.pid` |
+| Error log | `/var/log/hestia/php-fpm.log` |
+| Systemd unit | `hestia-php.service` (independent of standard php8.3-fpm.service) |
+| Install source | `install/panel-php/` |
+| Required packages | `php8.3-fpm php8.3-mysql php8.3-curl php8.3-zip php8.3-gmp php8.3-mbstring php8.3-opcache` |
 
 ### nginx (frontend proxy / webserver)
 
@@ -200,7 +204,7 @@ Variables set in `func/main.sh`:
 | Install root | `/usr/local/hestia` | `/usr/local/hestia` | Unchanged — intentional |
 | `$HESTIA` variable | `/usr/local/hestia` | `/usr/local/hestia` | Unchanged — no migration needed |
 | Panel webserver | `hestia-nginx` package, `/usr/local/hestia-nginx/` | Caddy (OS repo), `/etc/caddy/hestia.conf` | **Decided** — see Q1 |
-| Panel PHP | `hestia-php` package, `/usr/local/hestia-php/` | `php8.3-fpm` (Sury), `/etc/php/hestia/fpm/` | **Decided structure**, pool details in Issue #25 |
+| Panel PHP | `hestia-php` package, `/usr/local/hestia-php/` | `hestia-php.service` (Sury php8.3-fpm), `/etc/php/hestia/fpm/` | **Decided** — Issue #25 |
 | Shell profile comment | references `/etc/hestiacp/local.conf` | must reference `/etc/hestia/local.conf` | Fix in Issue #26; existence of file questioned (later issue) |
 | Log dir name | `/var/log/hestia` | `/var/log/hestia` | Unchanged — OS path, no rebrand needed |
 | Apt repo | `apt.hestiacp.com` | removed — no external hestia packages | **Decided** |
@@ -269,7 +273,7 @@ the env vs. conf question and the user/account consolidation.
 | # | Topic | Status |
 |---|-------|--------|
 | Q1 | Caddy config structure | **DECIDED** |
-| Q2 | PHP FPM panel pool | **OPEN** — Issue #25 |
+| Q2 | PHP FPM panel pool | **DECIDED** — Issue #25 |
 | Q3 | `/etc/profile.d/hestia.sh` comment | **DECIDED** + cleanup deferred |
 | Q4 | `hestiaweb` sudo wildcard scope | **OPEN** — too early, technical debt |
 | Q5 | `h-add-cron-hestia-autoupdate` | **DECIDED** |
@@ -285,11 +289,15 @@ the env vs. conf question and the user/account consolidation.
 
 ---
 
-**Q2 — PHP FPM panel pool: OPEN — Issue #25**
+**Q2 — PHP FPM panel pool: DECIDED — Issue #25**
 
-- Dedicated systemd service required, independent of the Sury standard FPM instance
-- Path convention: `/etc/php/hestia/fpm/` (version-independent)
-- Full details (pool config, socket, user/group) to be worked out in Issue #25 (Replace hestia-php)
+- Dedicated `hestia-php.service` unit using `/usr/sbin/php-fpm8.3` (Sury), independent of `php8.3-fpm.service`
+- Config dir: `/etc/php/hestia/fpm/` (version-independent — survives PHP version bumps)
+- Pool socket: `/run/hestia-php.sock` (unchanged from hestia-php — no Caddy config change needed)
+- Pool name: `panel`, user/group: `hestiaweb`
+- `pm=ondemand`, 4 children max (panel has low concurrent load)
+- opcache enabled (Sury ships it; old hestia-php had none)
+- Installer integration deferred to Issue #26a
 
 ---
 
