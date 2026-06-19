@@ -44,16 +44,17 @@ mariadb_v="11.8"
 node_v="24"
 
 # Defining software pack for all distros
-software="acl apache2 apache2.2-common apache2-suexec-custom apache2-utils apparmor-utils at awstats bc bind9 bsdmainutils bsdutils
-  clamav-daemon cron curl dnsutils dovecot-imapd dovecot-managesieved dovecot-pop3d dovecot-sieve e2fslibs e2fsprogs
-  exim4 exim4-daemon-heavy expect fail2ban flex ftp git hestia=${HESTIA_INSTALL_VER} hestia-nginx hestia-php hestia-web-terminal
+software="acl apache2 apache2.2-common apache2-suexec-custom apache2-utils apparmor-utils at awstats bc bsdmainutils bsdutils
+  caddy clamav-daemon cron curl dnsutils dovecot-imapd dovecot-managesieved dovecot-pop3d dovecot-sieve e2fslibs e2fsprogs
+  exim4 exim4-daemon-heavy expect fail2ban flex ftp git hestia=${HESTIA_INSTALL_VER}
   idn2 imagemagick ipset jq libapache2-mod-fcgid libapache2-mod-php$fpm_v libapache2-mod-rpaf libonig5 libzip4 lsb-release
-  lsof mariadb-client mariadb-common mariadb-server mc mysql-client mysql-common mysql-server nginx nodejs openssh-server
+  lsof mariadb-client mariadb-common mariadb-server mc mysql-client mysql-common mysql-server nginx openssh-server
   php$fpm_v php$fpm_v-apcu php$fpm_v-bz2 php$fpm_v-cgi php$fpm_v-cli php$fpm_v-common php$fpm_v-curl php$fpm_v-gd
   php$fpm_v-imagick php$fpm_v-imap php$fpm_v-intl php$fpm_v-ldap php$fpm_v-mbstring php$fpm_v-mysql
-  php$fpm_v-pgsql php$fpm_v-pspell php$fpm_v-readline php$fpm_v-xml php$fpm_v-zip postgresql postgresql-contrib
-  proftpd-core proftpd-mod-crypto quota rrdtool rsyslog util-linux spamassassin
-  sysstat unzip vim-common vsftpd whois zip zstd bubblewrap restic"
+  php$fpm_v-pgsql php$fpm_v-pspell php$fpm_v-readline php$fpm_v-xml php$fpm_v-zip
+  php8.3-fpm php8.3-mysql php8.3-curl php8.3-zip php8.3-gmp php8.3-mbstring php8.3-opcache
+  postgresql postgresql-contrib proftpd-core proftpd-mod-crypto quota rrdtool rsyslog util-linux
+  sysstat unzip vim-common whois zip zstd bubblewrap restic"
 
 installer_dependencies="apt-transport-https ca-certificates curl dirmngr gnupg openssl software-properties-common wget sudo"
 
@@ -362,9 +363,9 @@ set_default_value 'nginx' 'yes'
 set_default_value 'apache' 'yes'
 set_default_value 'phpfpm' 'yes'
 set_default_value 'multiphp' 'no'
-set_default_value 'vsftpd' 'yes'
+set_default_value 'vsftpd' 'no'
 set_default_value 'proftpd' 'no'
-set_default_value 'named' 'yes'
+set_default_value 'named' 'no'
 set_default_value 'mysql' 'yes'
 set_default_value 'mysql8' 'no'
 set_default_value 'postgresql' 'no'
@@ -373,14 +374,10 @@ set_default_value 'dovecot' 'yes'
 set_default_value 'sieve' 'no'
 if [ $memory -lt 1500000 ]; then
 	set_default_value 'clamd' 'no'
-	set_default_value 'spamd' 'no'
-elif [ $memory -lt 3000000 ]; then
-	set_default_value 'clamd' 'no'
-	set_default_value 'spamd' 'yes'
 else
 	set_default_value 'clamd' 'yes'
-	set_default_value 'spamd' 'yes'
 fi
+set_default_value 'spamd' 'no'
 set_default_value 'iptables' 'yes'
 set_default_value 'fail2ban' 'yes'
 set_default_value 'quota' 'no'
@@ -614,25 +611,11 @@ if [ "$multiphp" = 'yes' ]; then
 	echo ''
 fi
 
-# DNS stack
-if [ "$named" = 'yes' ]; then
-	echo '   - Bind DNS Server'
-fi
-
 # Mail stack
 if [ "$exim" = 'yes' ]; then
 	echo -n '   - Exim Mail Server'
-	if [ "$clamd" = 'yes' ] || [ "$spamd" = 'yes' ]; then
-		echo -n ' + '
-		if [ "$clamd" = 'yes' ]; then
-			echo -n 'ClamAV '
-		fi
-		if [ "$spamd" = 'yes' ]; then
-			if [ "$clamd" = 'yes' ]; then
-				echo -n '+ '
-			fi
-			echo -n 'SpamAssassin'
-		fi
+	if [ "$clamd" = 'yes' ]; then
+		echo -n ' + ClamAV'
 	fi
 	echo
 	if [ "$dovecot" = 'yes' ]; then
@@ -657,15 +640,8 @@ if [ "$postgresql" = 'yes' ]; then
 fi
 
 # FTP stack
-if [ "$vsftpd" = 'yes' ]; then
-	echo '   - Vsftpd FTP Server'
-fi
 if [ "$proftpd" = 'yes' ]; then
 	echo '   - ProFTPD FTP Server'
-fi
-
-if [ "$webterminal" = 'yes' ]; then
-	echo '   - Web terminal'
 fi
 
 # Firewall stack
@@ -843,14 +819,6 @@ echo "[ * ] Hestia Control Panel"
 echo "deb [arch=$ARCH signed-by=/usr/share/keyrings/hestia-keyring.gpg] https://$RHOST/ $codename main" > $apt/hestia.list
 gpg --no-default-keyring --keyring /usr/share/keyrings/hestia-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys A189E93654F0B0E5 > /dev/null 2>&1
 
-# Installing Node.js repo
-if [ "$webterminal" = 'yes' ]; then
-	echo "[ * ] Node.js $node_v"
-	echo "deb [arch=$ARCH signed-by=/usr/share/keyrings/nodejs.gpg] https://deb.nodesource.com/node_$node_v.x nodistro main" > $apt/nodejs.list
-	curl -s https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor | tee /usr/share/keyrings/nodejs.gpg > /dev/null 2>&1
-	apt-get -y install nodejs >> $LOG
-fi
-
 # Installing PostgreSQL repo
 if [ "$postgresql" = 'yes' ]; then
 	echo "[ * ] PostgreSQL"
@@ -946,7 +914,7 @@ mv -f /root/.my.cnf $hst_backups/mysql > /dev/null 2>&1
 # Backup Hestia
 systemctl stop hestia > /dev/null 2>&1
 cp -r $HESTIA/* $hst_backups/hestia > /dev/null 2>&1
-apt-get -y purge hestia hestia-nginx hestia-php > /dev/null 2>&1
+apt-get -y purge hestia > /dev/null 2>&1
 rm -rf $HESTIA > /dev/null 2>&1
 
 #----------------------------------------------------------#
@@ -979,16 +947,10 @@ if [ "$apache" = 'no' ]; then
 	software=$(echo "$software" | sed -e "s/libapache2-mod-fcgid//")
 	software=$(echo "$software" | sed -e "s/libapache2-mod-php$fpm_v//")
 fi
-if [ "$vsftpd" = 'no' ]; then
-	software=$(echo "$software" | sed -e "s/vsftpd//")
-fi
 if [ "$proftpd" = 'no' ]; then
 	software=$(echo "$software" | sed -e "s/proftpd-core//")
 	software=$(echo "$software" | sed -e "s/proftpd-mod-vroot//")
 	software=$(echo "$software" | sed -e "s/proftpd-mod-crypto//")
-fi
-if [ "$named" = 'no' ]; then
-	software=$(echo "$software" | sed -e "s/bind9//")
 fi
 if [ "$exim" = 'no' ]; then
 	software=$(echo "$software" | sed -e "s/exim4 //")
@@ -1002,9 +964,6 @@ if [ "$exim" = 'no' ]; then
 fi
 if [ "$clamd" = 'no' ]; then
 	software=$(echo "$software" | sed -e "s/clamav-daemon//")
-fi
-if [ "$spamd" = 'no' ]; then
-	software=$(echo "$software" | sed -e "s/spamassassin//")
 fi
 if [ "$dovecot" = 'no' ]; then
 	software=$(echo "$software" | sed -e "s/dovecot-imapd//")
@@ -1045,19 +1004,12 @@ if [ "$iptables" = 'no' ]; then
 	software=$(echo "$software" | sed -e "s/ipset//")
 	software=$(echo "$software" | sed -e "s/fail2ban//")
 fi
-if [ "$webterminal" = 'no' ]; then
-	software=$(echo "$software" | sed -e "s/nodejs//")
-	software=$(echo "$software" | sed -e "s/hestia-web-terminal//")
-fi
 if [ "$phpfpm" = 'yes' ]; then
 	software=$(echo "$software" | sed -e "s/php$fpm_v-cgi//")
 	software=$(echo "$software" | sed -e "s/libapache2-mod-ruid2//")
 	software=$(echo "$software" | sed -e "s/libapache2-mod-php$fpm_v//")
 fi
 if [ -d "$withdebs" ]; then
-	software=$(echo "$software" | sed -e "s/hestia-nginx//")
-	software=$(echo "$software" | sed -e "s/hestia-php//")
-	software=$(echo "$software" | sed -e "s/hestia-web-terminal//")
 	software=$(echo "$software" | sed -e "s/hestia=${HESTIA_INSTALL_VER}//")
 fi
 if [ "$release" = '24.04' ]; then
@@ -1117,37 +1069,11 @@ echo
 echo "========================================================================"
 echo
 
-# Install Hestia packages from local folder
+# Install Hestia core package from local folder
 if [ -n "$withdebs" ] && [ -d "$withdebs" ]; then
 	echo "[ * ] Installing local package files..."
 	echo "    - hestia core package"
 	dpkg -i $withdebs/hestia_*.deb > /dev/null 2>&1
-
-	if [ -z $(ls $withdebs/hestia-php_*.deb 2> /dev/null) ]; then
-		echo "    - hestia-php backend package (from apt)"
-		apt-get -y install hestia-php > /dev/null 2>&1
-	else
-		echo "    - hestia-php backend package"
-		dpkg -i $withdebs/hestia-php_*.deb > /dev/null 2>&1
-	fi
-
-	if [ -z $(ls $withdebs/hestia-nginx_*.deb 2> /dev/null) ]; then
-		echo "    - hestia-nginx backend package (from apt)"
-		apt-get -y install hestia-nginx > /dev/null 2>&1
-	else
-		echo "    - hestia-nginx backend package"
-		dpkg -i $withdebs/hestia-nginx_*.deb > /dev/null 2>&1
-	fi
-
-	if [ "$webterminal" = "yes" ]; then
-		if [ -z $(ls $withdebs/hestia-web-terminal_*.deb 2> /dev/null) ]; then
-			echo "    - hestia-web-terminal package (from apt)"
-			apt-get -y install hestia-web-terminal > /dev/null 2>&1
-		else
-			echo "    - hestia-web-terminal"
-			dpkg -i $withdebs/hestia-web-terminal_*.deb > /dev/null 2>&1
-		fi
-	fi
 fi
 
 # Restoring autostart policy
@@ -1305,7 +1231,7 @@ mkdir -p $HESTIA/conf $HESTIA/ssl $HESTIA/data/ips \
 touch $HESTIA/data/queue/backup.pipe $HESTIA/data/queue/disk.pipe \
 	$HESTIA/data/queue/webstats.pipe $HESTIA/data/queue/restart.pipe \
 	$HESTIA/data/queue/traffic.pipe $HESTIA/data/queue/daily.pipe $HESTIA/log/system.log \
-	$HESTIA/log/nginx-error.log $HESTIA/log/auth.log $HESTIA/log/backup.log
+	$HESTIA/log/auth.log $HESTIA/log/backup.log
 chmod 750 $HESTIA/conf $HESTIA/data/users $HESTIA/data/ips $HESTIA/log
 chmod -R 750 $HESTIA/data/queue
 chmod 660 /var/log/hestia/*
@@ -1366,16 +1292,8 @@ if [ -n "$installed_db_types" ]; then
 fi
 
 # FTP stack
-if [ "$vsftpd" = 'yes' ]; then
-	write_config_value "FTP_SYSTEM" "vsftpd"
-fi
 if [ "$proftpd" = 'yes' ]; then
 	write_config_value "FTP_SYSTEM" "proftpd"
-fi
-
-# DNS stack
-if [ "$named" = 'yes' ]; then
-	write_config_value "DNS_SYSTEM" "bind9"
 fi
 
 # Mail stack
@@ -1383,14 +1301,6 @@ if [ "$exim" = 'yes' ]; then
 	write_config_value "MAIL_SYSTEM" "exim4"
 	if [ "$clamd" = 'yes' ]; then
 		write_config_value "ANTIVIRUS_SYSTEM" "clamav-daemon"
-	fi
-	if [ "$spamd" = 'yes' ]; then
-		release_short="$(cut -d '.' -f1 <<< "$release")"
-		if [[ -n "$release_short" ]] && [[ $release_short -lt 24 ]]; then
-			write_config_value "ANTISPAM_SYSTEM" "spamassassin"
-		else
-			write_config_value "ANTISPAM_SYSTEM" "spamd"
-		fi
 	fi
 	if [ "$dovecot" = 'yes' ]; then
 		write_config_value "IMAP_SYSTEM" "dovecot"
@@ -1424,8 +1334,6 @@ if [ "$resourcelimit" = 'yes' ]; then
 else
 	write_config_value "RESOURCES_LIMIT" "no"
 fi
-
-write_config_value "WEB_TERMINAL_PORT" "8085"
 
 # Backups
 write_config_value "BACKUP_SYSTEM" "local"
@@ -1571,6 +1479,31 @@ $HESTIA/bin/h-change-user-shell $username nologin no
 $HESTIA/bin/h-change-user-role $username admin
 $HESTIA/bin/h-change-user-language $username $lang
 $HESTIA/bin/h-change-sys-config-value 'POLICY_SYSTEM_PROTECTED_ADMIN' 'yes'
+
+#----------------------------------------------------------#
+#                 Configure panel PHP-FPM                  #
+#----------------------------------------------------------#
+
+echo "[ * ] Configuring panel PHP-FPM..."
+mkdir -p /etc/php/hestia/fpm/pool.d
+cp -f $HESTIA/install/panel-php/php-fpm.conf /etc/php/hestia/fpm/
+cp -f $HESTIA/install/panel-php/pool.d/panel.conf /etc/php/hestia/fpm/pool.d/
+cp -f $HESTIA/install/panel-php/hestia-php.service /etc/systemd/system/
+systemctl daemon-reload > /dev/null 2>&1
+systemctl enable hestia-php > /dev/null 2>&1
+systemctl start hestia-php >> $LOG
+check_result $? "hestia-php start failed"
+
+#----------------------------------------------------------#
+#                     Configure Caddy                      #
+#----------------------------------------------------------#
+
+echo "[ * ] Configuring Caddy panel..."
+cp -f $HESTIA/install/panel-caddy/Caddyfile /etc/caddy/Caddyfile
+cp -f $HESTIA/install/panel-caddy/hestia.conf /etc/caddy/hestia.conf
+systemctl enable caddy > /dev/null 2>&1
+systemctl start caddy >> $LOG
+check_result $? "caddy start failed"
 
 #----------------------------------------------------------#
 #                     Configure Nginx                      #
@@ -1733,27 +1666,6 @@ echo '#!/bin/sh' > /etc/cron.daily/php-session-cleanup
 echo "find -O3 /home/*/tmp/ -ignore_readdir_race -depth -mindepth 1 -name 'sess_*' -type f -cmin '+10080' -delete > /dev/null 2>&1" >> /etc/cron.daily/php-session-cleanup
 echo "find -O3 $HESTIA/data/sessions/ -ignore_readdir_race -depth -mindepth 1 -name 'sess_*' -type f -cmin '+10080' -delete > /dev/null 2>&1" >> /etc/cron.daily/php-session-cleanup
 chmod 755 /etc/cron.daily/php-session-cleanup
-
-#----------------------------------------------------------#
-#                    Configure Vsftpd                      #
-#----------------------------------------------------------#
-
-if [ "$vsftpd" = 'yes' ]; then
-	echo "[ * ] Configuring Vsftpd server..."
-	cp -f $HESTIA_INSTALL_DIR/vsftpd/vsftpd.conf /etc/
-	touch /var/log/vsftpd.log
-	chown root:adm /var/log/vsftpd.log
-	chmod 640 /var/log/vsftpd.log
-	touch /var/log/xferlog
-	chown root:adm /var/log/xferlog
-	chmod 640 /var/log/xferlog
-	if [ -s /etc/logrotate.d/vsftpd ] && ! grep -Fq "/var/log/xferlog" /etc/logrotate.d/vsftpd; then
-		sed -i 's|/var/log/vsftpd.log|/var/log/vsftpd.log /var/log/xferlog|g' /etc/logrotate.d/vsftpd
-	fi
-	update-rc.d vsftpd defaults > /dev/null 2>&1
-	systemctl start vsftpd >> $LOG
-	check_result $? "vsftpd start failed"
-fi
 
 #----------------------------------------------------------#
 #                    Configure ProFTPD                     #
@@ -1943,37 +1855,6 @@ if [ "$postgresql" = 'yes' ]; then
 	# Limit access to /etc/phppgadmin/
 	chown -R root:hestiamail /etc/phppgadmin/
 	chmod 640 /etc/phppgadmin/config.inc.php
-fi
-
-#----------------------------------------------------------#
-#                      Configure Bind                      #
-#----------------------------------------------------------#
-
-if [ "$named" = 'yes' ]; then
-	echo "[ * ] Configuring Bind DNS server..."
-	cp -f $HESTIA_INSTALL_DIR/bind/named.conf /etc/bind/
-	cp -f $HESTIA_INSTALL_DIR/bind/named.conf.options /etc/bind/
-	chown root:bind /etc/bind/named.conf
-	chown root:bind /etc/bind/named.conf.options
-	chown bind:bind /var/cache/bind
-	chmod 640 /etc/bind/named.conf
-	chmod 640 /etc/bind/named.conf.options
-	aa-complain /usr/sbin/named > /dev/null 2>&1
-	echo "/home/** rwm," >> /etc/apparmor.d/local/usr.sbin.named 2> /dev/null
-	if ! grep --quiet lxc /proc/1/environ; then
-		systemctl status apparmor > /dev/null 2>&1
-		if [ $? -ne 0 ]; then
-			systemctl restart apparmor >> $LOG
-		fi
-	fi
-	update-rc.d bind9 defaults > /dev/null 2>&1
-	systemctl start bind9
-	check_result $? "bind9 start failed"
-
-	# Workaround for OpenVZ/Virtuozzo
-	if [ -e "/proc/vz/veinfo" ] && [ -e "/etc/rc.local" ]; then
-		sed -i "s/^exit 0/service bind9 restart\nexit 0/" /etc/rc.local
-	fi
 fi
 
 #----------------------------------------------------------#
@@ -2260,20 +2141,6 @@ fi
 
 echo "[ * ] Configuring File Manager..."
 $HESTIA/bin/h-add-sys-filemanager quiet
-
-#----------------------------------------------------------#
-#              Configure Web terminal                      #
-#----------------------------------------------------------#
-
-# Web terminal
-if [ "$webterminal" = 'yes' ]; then
-	write_config_value "WEB_TERMINAL" "true"
-	systemctl daemon-reload > /dev/null 2>&1
-	systemctl enable hestia-web-terminal > /dev/null 2>&1
-	systemctl restart hestia-web-terminal > /dev/null 2>&1
-else
-	write_config_value "WEB_TERMINAL" "false"
-fi
 
 #----------------------------------------------------------#
 #                  Configure dependencies                  #
