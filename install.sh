@@ -101,8 +101,11 @@ echo ""
 
 # -- Dependencies ----------------------------------------
 
-apt-get update -qq
-apt-get install -y -qq curl make gnupg ca-certificates
+LOG="/var/log/hestia/install.log"
+mkdir -p /var/log/hestia
+echo "[ * ] Installing prerequisites..."
+DEBIAN_FRONTEND=noninteractive apt-get -qq update
+DEBIAN_FRONTEND=noninteractive apt-get -y install curl make gnupg ca-certificates >> "$LOG" 2>&1
 
 # -- Fetch latest release --------------------------------
 
