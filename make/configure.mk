@@ -48,14 +48,14 @@ _collect-params:
 	if [ -z "$$HPASS" ]; then \
 	    HPASS=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16); \
 	fi
-	cat > "$(INSTALL_CONF)" << HEREDOC
-HESTIA_HOSTNAME="$$HNAME"
-HESTIA_ADMIN="$$HADMIN"
-HESTIA_EMAIL="$$HEMAIL"
-HESTIA_PASS="$$HPASS"
-HESTIA_OS="$(OS)"
-HESTIA_PROFILE="$(PROFILE)"
-HEREDOC
+	{ \
+	    echo "HESTIA_HOSTNAME=\"$$HNAME\""; \
+	    echo "HESTIA_ADMIN=\"$$HADMIN\""; \
+	    echo "HESTIA_EMAIL=\"$$HEMAIL\""; \
+	    echo "HESTIA_PASS=\"$$HPASS\""; \
+	    echo "HESTIA_OS=\"$(OS)\""; \
+	    echo "HESTIA_PROFILE=\"$(PROFILE)\""; \
+	} > "$(INSTALL_CONF)"
 	chmod 600 "$(INSTALL_CONF)"
 	echo "[ * ] Install parameters saved."
 
@@ -230,21 +230,21 @@ _configure-hestia:
 	MIN=$$(tr -dc '012345' < /dev/urandom | head -c 2)
 	HOUR=$$(tr -dc '1234567' < /dev/urandom | head -c 1)
 	mkdir -p /var/spool/cron/crontabs
-	cat > /var/spool/cron/crontabs/hestiaweb << CRONTAB
-MAILTO=""
-CONTENT_TYPE="text/plain; charset=utf-8"
-*/2 * * * * sudo $(HESTIA)/bin/h-update-sys-queue restart
-10 00 * * * sudo $(HESTIA)/bin/h-update-sys-queue daily
-15 02 * * * sudo $(HESTIA)/bin/h-update-sys-queue disk
-10 00 * * * sudo $(HESTIA)/bin/h-update-sys-queue traffic
-30 03 * * * sudo $(HESTIA)/bin/h-update-sys-queue webstats
-*/5 * * * * sudo $(HESTIA)/bin/h-update-sys-queue backup
-10 05 * * * sudo $(HESTIA)/bin/h-backup-users
-20 00 * * * sudo $(HESTIA)/bin/h-update-user-stats
-*/5 * * * * sudo $(HESTIA)/bin/h-update-sys-rrd
-$$MIN $$HOUR * * * sudo $(HESTIA)/bin/h-update-letsencrypt-ssl
-41 4 * * * sudo $(HESTIA)/bin/h-update-sys-hestia-all
-CRONTAB
+	{ \
+	    echo "MAILTO=\"\""; \
+	    echo "CONTENT_TYPE=\"text/plain; charset=utf-8\""; \
+	    echo "*/2 * * * * sudo $(HESTIA)/bin/h-update-sys-queue restart"; \
+	    echo "10 00 * * * sudo $(HESTIA)/bin/h-update-sys-queue daily"; \
+	    echo "15 02 * * * sudo $(HESTIA)/bin/h-update-sys-queue disk"; \
+	    echo "10 00 * * * sudo $(HESTIA)/bin/h-update-sys-queue traffic"; \
+	    echo "30 03 * * * sudo $(HESTIA)/bin/h-update-sys-queue webstats"; \
+	    echo "*/5 * * * * sudo $(HESTIA)/bin/h-update-sys-queue backup"; \
+	    echo "10 05 * * * sudo $(HESTIA)/bin/h-backup-users"; \
+	    echo "20 00 * * * sudo $(HESTIA)/bin/h-update-user-stats"; \
+	    echo "*/5 * * * * sudo $(HESTIA)/bin/h-update-sys-rrd"; \
+	    echo "$$MIN $$HOUR * * * sudo $(HESTIA)/bin/h-update-letsencrypt-ssl"; \
+	    echo "41 4 * * * sudo $(HESTIA)/bin/h-update-sys-hestia-all"; \
+	} > /var/spool/cron/crontabs/hestiaweb
 	chmod 600 /var/spool/cron/crontabs/hestiaweb
 	chown hestiaweb:hestiaweb /var/spool/cron/crontabs/hestiaweb
 	$(HESTIA)/bin/h-add-cron-hestia-autoupdate apt > /dev/null 2>&1 || true
