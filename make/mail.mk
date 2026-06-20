@@ -21,7 +21,7 @@ _install-mail:
 	cp -f $(HESTIA_INSTALL_DIR)/exim/limit.conf /etc/exim4/
 	cp -f $(HESTIA_INSTALL_DIR)/exim/system.filter /etc/exim4/
 	touch /etc/exim4/white-blocks.conf
-	SRS=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
+	SRS=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 || true)
 	echo "$$SRS" > /etc/exim4/srs.conf
 	chmod 640 /etc/exim4/srs.conf /etc/exim4/exim4.conf.template
 	chown root:$(EXIM_USR) /etc/exim4/srs.conf

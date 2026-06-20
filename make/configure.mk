@@ -46,7 +46,7 @@ _collect-params:
 	    HEMAIL="$${input:-admin@$$HNAME}"; \
 	fi
 	if [ -z "$$HPASS" ]; then \
-	    HPASS=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16); \
+	    HPASS=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16 || true); \
 	fi
 	{ \
 	    echo "HESTIA_HOSTNAME=\"$$HNAME\""; \
@@ -227,8 +227,8 @@ _configure-hestia:
 	echo "[ * ] Adding default domain..."
 	$(HESTIA)/bin/h-add-web-domain "$$HESTIA_ADMIN" "$$HESTIA_HOSTNAME" "$$IP"
 	echo "[ * ] Creating hestiaweb crontab..."
-	MIN=$$(tr -dc '012345' < /dev/urandom | head -c 2)
-	HOUR=$$(tr -dc '1234567' < /dev/urandom | head -c 1)
+	MIN=$$(tr -dc '012345' < /dev/urandom | head -c 2 || true)
+	HOUR=$$(tr -dc '1234567' < /dev/urandom | head -c 1 || true)
 	mkdir -p /var/spool/cron/crontabs
 	{ \
 	    echo "MAILTO=\"\""; \

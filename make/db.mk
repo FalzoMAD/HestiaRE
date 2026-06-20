@@ -22,7 +22,7 @@ _install-db:
 	systemctl -q enable mariadb
 	systemctl start mariadb
 	echo "[ * ] Securing MariaDB..."
-	MPASS=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+	MPASS=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16 || true)
 	printf '[client]\npassword='"'"'%s'"'"'\n' "$$MPASS" > /root/.my.cnf
 	chmod 600 /root/.my.cnf
 	mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$$MPASS'; FLUSH PRIVILEGES;"
@@ -44,7 +44,7 @@ _install-db:
 	cp -f $(HESTIA_INSTALL_DIR)/phpmyadmin/config.inc.php /etc/phpmyadmin/
 	sed -i "s|'configFile' => ROOT_PATH . 'config.inc.php',|'configFile' => '/etc/phpmyadmin/config.inc.php',|g" \
 	    /usr/share/phpmyadmin/libraries/vendor_config.php 2>/dev/null || true
-	BLOWFISH=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32)
+	BLOWFISH=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 || true)
 	sed -i "s|%blowfish_secret%|$$BLOWFISH|" /etc/phpmyadmin/config.inc.php
 	chown -R hestiamail:www-data /usr/share/phpmyadmin/tmp/
 	chmod 770 /var/lib/phpmyadmin/tmp
