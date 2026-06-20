@@ -18,17 +18,38 @@ _install-base:
 	printf 'deb [arch=%s signed-by=/usr/share/keyrings/nginx-keyring.gpg] https://nginx.org/packages/mainline/%s/ %s nginx\n' \
 	    "$(ARCH)" "$(OS_ID)" "$(CODENAME)" > /etc/apt/sources.list.d/nginx.list
 	curl -fsSL https://nginx.org/keys/nginx_signing.key \
-	    | gpg --dearmor | tee /usr/share/keyrings/nginx-keyring.gpg > /dev/null
+	    -o /tmp/nginx_signing.key \
+	    || { echo "ERROR: failed to download nginx signing key"; exit 1; }
+	gpg --dearmor < /tmp/nginx_signing.key \
+	    > /usr/share/keyrings/nginx-keyring.gpg \
+	    || { echo "ERROR: failed to dearmor nginx signing key"; exit 1; }
+	[ -s /usr/share/keyrings/nginx-keyring.gpg ] \
+	    || { echo "ERROR: nginx keyring file is empty"; exit 1; }
+	rm -f /tmp/nginx_signing.key
 	echo "[ * ] Adding Sury PHP repo..."
 	printf 'deb [arch=%s signed-by=/usr/share/keyrings/sury-keyring.gpg] https://packages.sury.org/php/ %s main\n' \
 	    "$(ARCH)" "$(CODENAME)" > /etc/apt/sources.list.d/php.list
 	curl -fsSL https://packages.sury.org/php/apt.gpg \
-	    | gpg --dearmor | tee /usr/share/keyrings/sury-keyring.gpg > /dev/null
+	    -o /tmp/sury_apt.gpg \
+	    || { echo "ERROR: failed to download Sury PHP signing key"; exit 1; }
+	gpg --dearmor < /tmp/sury_apt.gpg \
+	    > /usr/share/keyrings/sury-keyring.gpg \
+	    || { echo "ERROR: failed to dearmor Sury PHP signing key"; exit 1; }
+	[ -s /usr/share/keyrings/sury-keyring.gpg ] \
+	    || { echo "ERROR: Sury PHP keyring file is empty"; exit 1; }
+	rm -f /tmp/sury_apt.gpg
 	echo "[ * ] Adding MariaDB $(MARIADB_VER) repo..."
 	printf 'deb [arch=%s signed-by=/usr/share/keyrings/mariadb-keyring.gpg] https://dlm.mariadb.com/repo/mariadb-server/%s/repo/%s %s main\n' \
 	    "$(ARCH)" "$(MARIADB_VER)" "$(OS_ID)" "$(CODENAME)" > /etc/apt/sources.list.d/mariadb.list
 	curl -fsSL https://mariadb.org/mariadb_release_signing_key.asc \
-	    | gpg --dearmor | tee /usr/share/keyrings/mariadb-keyring.gpg > /dev/null
+	    -o /tmp/mariadb_signing.asc \
+	    || { echo "ERROR: failed to download MariaDB signing key"; exit 1; }
+	gpg --dearmor < /tmp/mariadb_signing.asc \
+	    > /usr/share/keyrings/mariadb-keyring.gpg \
+	    || { echo "ERROR: failed to dearmor MariaDB signing key"; exit 1; }
+	[ -s /usr/share/keyrings/mariadb-keyring.gpg ] \
+	    || { echo "ERROR: MariaDB keyring file is empty"; exit 1; }
+	rm -f /tmp/mariadb_signing.asc
 	echo "[ * ] Installing base packages..."
 	apt-get -qq update
 	DEBIAN_FRONTEND=noninteractive apt-get -y install \
