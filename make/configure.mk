@@ -28,6 +28,7 @@ _check-root:
 _collect-params:
 	@mkdir -p "$(CONF_DIR)"
 	chmod 700 "$(CONF_DIR)"
+	mkdir -p /var/log/hestia
 	HNAME="$(H_HOSTNAME)"
 	HADMIN="$(H_ADMIN)"
 	HEMAIL="$(H_EMAIL)"
@@ -46,7 +47,7 @@ _collect-params:
 	    HEMAIL="$${input:-admin@$$HNAME}"; \
 	fi
 	if [ -z "$$HPASS" ]; then \
-	    HPASS=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16); \
+	    HPASS=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16 || true); \
 	fi
 	{ \
 	    echo "HESTIA_HOSTNAME=\"$$HNAME\""; \
@@ -79,7 +80,7 @@ _configure-hestia:
 	chmod 755 /etc/profile.d/hestia.sh
 	source /etc/profile.d/hestia.sh
 	cp -f $(HESTIA_INSTALL_DIR)/logrotate/hestia /etc/logrotate.d/hestia 2>/dev/null || true
-	rm -f /var/log/hestia
+	[ -L /var/log/hestia ] && rm -f /var/log/hestia || true
 	mkdir -p /var/log/hestia
 	ln -sf /var/log/hestia $(HESTIA)/log
 	mkdir -p $(HESTIA)/conf $(HESTIA)/ssl \
@@ -227,8 +228,8 @@ _configure-hestia:
 	echo "[ * ] Adding default domain..."
 	$(HESTIA)/bin/h-add-web-domain "$$HESTIA_ADMIN" "$$HESTIA_HOSTNAME" "$$IP"
 	echo "[ * ] Creating hestiaweb crontab..."
-	MIN=$$(tr -dc '012345' < /dev/urandom | head -c 2)
-	HOUR=$$(tr -dc '1234567' < /dev/urandom | head -c 1)
+	MIN=$$(tr -dc '012345' < /dev/urandom | head -c 2 || true)
+	HOUR=$$(tr -dc '1234567' < /dev/urandom | head -c 1 || true)
 	mkdir -p /var/spool/cron/crontabs
 	{ \
 	    echo "MAILTO=\"\""; \
