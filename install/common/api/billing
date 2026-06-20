@@ -1,0 +1,2 @@
+ROLE='admin'
+COMMANDS='h-add-user,h-delete-user,h-suspend-user,h-unsuspend-user,h-change-user-shell,h-list-user,h-list-users,h-make-tmp-file,h-add-domain,h-change-user-package,h-make-tmp-file,h-change-user-password'

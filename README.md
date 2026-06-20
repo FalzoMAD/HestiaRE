@@ -1,3 +1,5 @@
-# HestiaRE
+# Hestia R* Edition
 
-Retro. Reduced. Refined.
+Rethink. Rebuild. Reboot.
+
+_*pick your **R**_

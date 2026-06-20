@@ -1,0 +1,30 @@
+# Packages
+*.tar
+*.zip
+*.gzip
+*.gz
+*.bz2
+*.deb
+
+# Editors
+.vs/
+.nova/
+.idea/
+.env
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Composer
+composer.phar
+web/inc/vendor/
+web/src/vendor/
+
+# Distribution CSS
+web/css/themes/
+
+# Distribution JS
+web/js/dist/

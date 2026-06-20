@@ -1,0 +1,11 @@
+/var/log/hestia/*.log {
+    rotate 12
+    monthly
+    missingok
+    notifempty
+    create 0600 root root
+    sharedscripts
+    postrotate
+        systemctl restart hestia.service >/dev/null 2>&1 || true
+    endscript
+}

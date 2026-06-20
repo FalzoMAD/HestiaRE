@@ -1,0 +1,7 @@
+/var/log/roundcube/*.log {
+    rotate 12
+    monthly
+    missingok
+    notifempty
+    create 0640 hestiamail www-data
+}

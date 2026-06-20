@@ -19,8 +19,8 @@ GITHUB_REPO="FalzoMAD/HestiaRE"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}"
 GITHUB_RAW="https://github.com/${GITHUB_REPO}/releases/download"
 
-SOURCE_CONF="/etc/hestia-re/source.conf"
-INSTALL_DIR="/usr/local/hestia-re"
+SOURCE_CONF="/etc/hestia/source.conf"
+INSTALL_DIR="/usr/local/hestia"
 PROFILE="standard"
 DEV_MODE=false
 

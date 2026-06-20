@@ -1,0 +1,49 @@
+#!/bin/bash
+# info: add IP address to API allow list
+# options: IP
+#
+# example: h-add-sys-api-ip 1.1.1.1
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+ip46=${1// /}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.conf
+source /etc/hestia/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/ip.sh
+source $HESTIA/func/ip.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'IP'
+is_format_valid 'ip46'
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+if [ "$API_ALLOWED_IP" != "" ]; then
+	$BIN/h-change-sys-config-value 'API_ALLOWED_IP' "$API_ALLOWED_IP,$ip46"
+else
+	$BIN/h-change-sys-config-value 'API_ALLOWED_IP' "$ip46"
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "system" "Warning" "System" "Added new IP address added to Allowed IP API (IP: $ip46)"
+log_event "$OK" "$ARGUMENTS"

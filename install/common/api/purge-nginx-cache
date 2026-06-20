@@ -1,0 +1,2 @@
+ROLE='user'
+COMMANDS='h-purge-nginx-cache,h-list-web-domains,h-list-web-domain'
