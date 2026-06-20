@@ -14,6 +14,7 @@
 .ONESHELL:
 SHELL        := /bin/bash
 .SHELLFLAGS  := -euo pipefail -c
+MAKEFLAGS    += --no-print-directory
 
 HESTIA             := /usr/local/hestia
 CONF_DIR           := /etc/hestia
