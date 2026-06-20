@@ -28,6 +28,7 @@ _check-root:
 _collect-params:
 	@mkdir -p "$(CONF_DIR)"
 	chmod 700 "$(CONF_DIR)"
+	mkdir -p /var/log/hestia
 	HNAME="$(H_HOSTNAME)"
 	HADMIN="$(H_ADMIN)"
 	HEMAIL="$(H_EMAIL)"
@@ -79,7 +80,7 @@ _configure-hestia:
 	chmod 755 /etc/profile.d/hestia.sh
 	source /etc/profile.d/hestia.sh
 	cp -f $(HESTIA_INSTALL_DIR)/logrotate/hestia /etc/logrotate.d/hestia 2>/dev/null || true
-	rm -f /var/log/hestia
+	[ -L /var/log/hestia ] && rm -f /var/log/hestia || true
 	mkdir -p /var/log/hestia
 	ln -sf /var/log/hestia $(HESTIA)/log
 	mkdir -p $(HESTIA)/conf $(HESTIA)/ssl \
