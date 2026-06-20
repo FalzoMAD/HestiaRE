@@ -26,7 +26,7 @@ _install-db:
 	printf '[client]\npassword='"'"'%s'"'"'\n' "$$MPASS" > /root/.my.cnf
 	chmod 600 /root/.my.cnf
 	mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$$MPASS'; FLUSH PRIVILEGES;"
-	mariadb -e "UPDATE mysql.global_priv SET priv=json_set(priv, '$.password_last_changed', UNIX_TIMESTAMP(), '$.plugin', 'mysql_native_password', '$.authentication_string', 'invalid', '$.auth_or', json_array(json_object(), json_object('plugin', 'unix_socket'))) WHERE User='root';"
+	mariadb -e "UPDATE mysql.global_priv SET priv=json_set(priv, '$$.password_last_changed', UNIX_TIMESTAMP(), '$$.plugin', 'mysql_native_password', '$$.authentication_string', 'invalid', '$$.auth_or', json_array(json_object(), json_object('plugin', 'unix_socket'))) WHERE User='root';"
 	mariadb -e "DELETE FROM mysql.global_priv WHERE User='';"
 	mariadb -e "DROP DATABASE IF EXISTS test;"
 	mariadb -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
