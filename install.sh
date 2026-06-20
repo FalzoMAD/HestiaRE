@@ -102,7 +102,7 @@ echo ""
 # -- Dependencies ----------------------------------------
 
 apt-get update -qq
-apt-get install -y -qq curl make
+apt-get install -y -qq curl make gnupg ca-certificates
 
 # -- Fetch latest release --------------------------------
 
