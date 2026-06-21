@@ -142,8 +142,10 @@
       "panel_vendor": {
         "strategy": "Build-Time-Vendoring — vendor/ committed to git, no Composer at install time",
         "manifest": "VENDORED.json",
+        "os_packages": {
+          "libphp-phpmailer": "deb12=6.6.3 / ub24=6.8.1 / deb13=6.9.3 — panel email sending — LGPL-2.1-only — installed by make/panel.mk"
+        },
         "packages": {
-          "phpmailer/phpmailer": "7.0.2 — panel email sending (password reset, alerts) — LGPL-2.1-only",
           "robthree/twofactorauth": "3.0.3 — TOTP 2FA secret generation and code verification — MIT"
         },
         "inline_libs": {
@@ -152,6 +154,7 @@
           "web/inc/cloudflare-ip.php": "Eigenbau: static Cloudflare CIDR list. Update from cloudflare.com/ips-v4 and /ips-v6 when ranges change."
         },
         "removed": [
+          "phpmailer/phpmailer — removed in Issue #56, replaced by OS package libphp-phpmailer (make/panel.mk)",
           "chillerlan/php-qrcode + php-settings-container — removed in Issue #56, replaced by web/inc/lib/qrcode.php (Eigenbau)",
           "web/src/ (Quick-Install feature) — removed in Issue #56",
           "web/add/webapp/ — removed in Issue #56",

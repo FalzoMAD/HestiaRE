@@ -7,6 +7,7 @@ use PHPMailer\PHPMailer\Exception;
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 require_once __DIR__ . '/lib/quoteshellarg.php';
+require_once '/usr/share/php/libphp-phpmailer/autoload.php';
 
 try {
 	require_once __DIR__ . "/vendor/autoload.php";
@@ -437,7 +438,7 @@ function send_email($to, $subject, $mailtext, $from, $from_name, $to_name = "") 
 			}
 		}
 
-		$mail->IsSMTP();
+		$mail->isSMTP();
 		$mail->Mailer = "smtp";
 		$mail->SMTPDebug = 0;
 		$mail->SMTPAuth = true;
@@ -448,21 +449,21 @@ function send_email($to, $subject, $mailtext, $from, $from_name, $to_name = "") 
 		$mail->Password = $_SESSION["SERVER_SMTP_PASSWD"];
 	}
 
-	$mail->IsHTML(true);
-	$mail->ClearReplyTos();
+	$mail->isHTML(true);
+	$mail->clearReplyTos();
 	if (empty($to_name)) {
-		$mail->AddAddress($to);
+		$mail->addAddress($to);
 	} else {
-		$mail->AddAddress($to, $to_name);
+		$mail->addAddress($to, $to_name);
 	}
-	$mail->SetFrom($from, $from_name);
+	$mail->setFrom($from, $from_name);
 
 	$mail->CharSet = "utf-8";
 	$mail->Subject = $subject;
 	$content = $mailtext;
 	$content = nl2br($content);
-	$mail->MsgHTML($content);
-	$mail->Send();
+	$mail->msgHTML($content);
+	$mail->send();
 }
 
 function list_timezones() {

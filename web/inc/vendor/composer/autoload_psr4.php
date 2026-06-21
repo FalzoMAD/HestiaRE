@@ -7,5 +7,4 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'RobThree\\Auth\\' => array($vendorDir . '/robthree/twofactorauth/lib'),
-    'PHPMailer\\PHPMailer\\' => array($vendorDir . '/phpmailer/phpmailer/src'),
 );

@@ -17,18 +17,6 @@
       "last_verified": "2026-06-21"
     },
     {
-      "name": "phpmailer/phpmailer",
-      "type": "vendor-tree",
-      "path": "web/inc/vendor/phpmailer",
-      "upstream_repo": "https://github.com/PHPMailer/PHPMailer",
-      "upstream_version": "7.0.2",
-      "license": "LGPL-2.1-only",
-      "license_note": "LGPL-2.1-only is compatible with GPL-3.0 per FSF guidance. License file at web/inc/vendor/phpmailer/phpmailer/LICENSE.",
-      "reason": "Panel email delivery (password reset, 2FA notifications, admin alerts). Build-time vendored to remove Composer as a runtime install dependency.",
-      "transitive_deps": [],
-      "last_verified": "2026-06-21"
-    },
-    {
       "name": "robthree/twofactorauth",
       "type": "vendor-tree",
       "path": "web/inc/vendor/robthree",
@@ -38,6 +26,23 @@
       "reason": "TOTP secret generation and code verification for 2FA. QR code rendering is handled by the HestiaRE Eigenbau (web/inc/lib/qrcode.php), not by this library.",
       "transitive_deps": [],
       "last_verified": "2026-06-21"
+    }
+  ],
+
+  "os_packages": [
+    {
+      "name": "libphp-phpmailer",
+      "upstream_repo": "https://github.com/PHPMailer/PHPMailer",
+      "license": "LGPL-2.1-only",
+      "license_note": "LGPL-2.1-only is compatible with GPL-3.0 per FSF guidance.",
+      "autoload_path": "/usr/share/php/libphp-phpmailer/autoload.php",
+      "versions": {
+        "debian-12": "6.6.3",
+        "ubuntu-24.04": "6.8.1",
+        "debian-13": "6.9.3"
+      },
+      "reason": "Panel email delivery (password reset, 2FA notifications, admin alerts). Installed via apt — not vendored into the repo.",
+      "installed_by": "make/panel.mk"
     }
   ]
 }

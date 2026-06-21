@@ -11,20 +11,12 @@ class ComposerStaticInitf7e17f2588b5ff52d964d7c8247d4f79
         array (
             'RobThree\\Auth\\' => 14,
         ),
-        'P' => 
-        array (
-            'PHPMailer\\PHPMailer\\' => 20,
-        ),
     );
 
     public static $prefixDirsPsr4 = array (
         'RobThree\\Auth\\' => 
         array (
             0 => __DIR__ . '/..' . '/robthree/twofactorauth/lib',
-        ),
-        'PHPMailer\\PHPMailer\\' => 
-        array (
-            0 => __DIR__ . '/..' . '/phpmailer/phpmailer/src',
         ),
     );
 

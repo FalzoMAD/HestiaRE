@@ -1,6 +1,5 @@
 {
     "require": {
-        "phpmailer/phpmailer": "7.0.2",
         "robthree/twofactorauth": "3.0.3"
     }
 }
