@@ -1,6 +1,6 @@
 # CLAUDE.md – HestiaRE Development Instructions
 
-> Load this file first. Then read `codemap.json` to identify relevant files
+> Load this file first. Then read `CODEMAP.json` to identify relevant files
 > before opening anything else. Never read the entire codebase blindly.
 
 ---
@@ -109,7 +109,7 @@ conf/             service configuration templates
 
 ## WORKFLOW — EVERY TASK
 
-1. Read `codemap.json` → identify relevant files only
+1. Read `CODEMAP.json` → identify relevant files only
 2. Create branch: `git checkout -b feature/N-short-desc`
 3. Make changes, commit with: `[#N] type: description`
 4. Push: `git push origin feature/N-short-desc`
@@ -158,7 +158,7 @@ When reimplementing HestiaCP functionality:
 
 ## CODEMAP
 
-Before exploring files, read `codemap.json` in the repo root.
+Before exploring files, read `CODEMAP.json` in the repo root.
 It maps components to their entry points and related files.
 If a component you need is missing from the map, note it — the map
 should be updated as part of the feature branch.
