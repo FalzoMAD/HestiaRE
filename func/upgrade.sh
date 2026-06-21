@@ -879,12 +879,6 @@ upgrade_restart_services() {
 			fi
 			$BIN/h-restart-service "$FIREWALL_EXTENSION"
 		fi
-		if [ "$WEB_TERMINAL" = "true" ]; then
-			if [ "$DEBUG_MODE" = "true" ]; then
-				echo "      - hestia-web-terminal"
-			fi
-			$BIN/h-restart-service "hestia-web-terminal"
-		fi
 		# Restart SSH daemon service
 		if [ "$DEBUG_MODE" = "true" ]; then
 			echo "      - sshd"

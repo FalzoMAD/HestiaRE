@@ -1486,19 +1486,7 @@
 							</option>
 						</select>
 					</div>
-					<div class="u-mb10">
-						<label for="v_web_terminal" class="form-label">
-							<?= tohtml( _("Web Terminal")) ?>
-						</label>
-						<select class="form-select" name="v_web_terminal" id="v_web_terminal">
-							<option value="false">
-								<?= tohtml( _("No")) ?>
-							</option>
-							<option value="true" <?= tohtml($_SESSION["WEB_TERMINAL"] == "true" ? "selected" : "") ?>>
-								<?= tohtml( _("Yes")) ?>
-							</option>
-						</select>
-					</div>
+
 					<div class="u-mb10">
 						<label for="v_resources_limit" class="form-label">
 							<?= tohtml( _("Limit System Resources")) ?>
