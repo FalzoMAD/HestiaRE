@@ -298,9 +298,6 @@ upgrade_init_backup() {
 	if [ -n "$MAIL_SYSTEM" ]; then
 		mkdir -p $HESTIA_BACKUP/conf/$MAIL_SYSTEM/
 	fi
-	if [ -n "$DNS_SYSTEM" ]; then
-		mkdir -p $HESTIA_BACKUP/conf/$DNS_SYSTEM/
-	fi
 	if [ -n "$PROXY_SYSTEM" ]; then
 		mkdir -p $HESTIA_BACKUP/conf/$PROXY_SYSTEM/
 	fi
@@ -410,14 +407,6 @@ upgrade_start_backup() {
 			echo "      ---- $MAIL_SYSTEM"
 		fi
 		cp -fr /etc/$MAIL_SYSTEM/* $HESTIA_BACKUP/conf/$MAIL_SYSTEM/
-	fi
-	if [ -n "$DNS_SYSTEM" ]; then
-		if [ "$DNS_SYSTEM" = "bind9" ]; then
-			if [ "$DEBUG_MODE" = "true" ]; then
-				echo "      ---- $DNS_SYSTEM"
-			fi
-			cp -fr /etc/bind/* $HESTIA_BACKUP/conf/$DNS_SYSTEM/
-		fi
 	fi
 	if [ -n "$DB_SYSTEM" ]; then
 		if [[ "$DB_SYSTEM" =~ "mysql" ]]; then
@@ -756,13 +745,6 @@ upgrade_rebuild_mail_templates() {
 	fi
 }
 
-upgrade_rebuild_dns_templates() {
-	if [ "$UPGRADE_UPDATE_DNS_TEMPLATES" = "true" ]; then
-		echo "[ ! ] Updating default DNS zone templates..."
-		$BIN/h-update-dns-templates
-	fi
-}
-
 upgrade_rebuild_users() {
 	if [ "$UPGRADE_REBUILD_USERS" = "true" ]; then
 		if [ "$DEBUG_MODE" = "true" ]; then
@@ -783,14 +765,6 @@ upgrade_rebuild_users() {
 					$BIN/h-rebuild-web-domains "$user" 'no'
 				else
 					$BIN/h-rebuild-web-domains "$user" 'no' > /dev/null 2>&1
-				fi
-			fi
-			if [ -n "$DNS_SYSTEM" ]; then
-				if [ "$DEBUG_MODE" = "true" ]; then
-					echo "      ---- DNS zones..."
-					$BIN/h-rebuild-dns-domains "$user" 'no'
-				else
-					$BIN/h-rebuild-dns-domains "$user" 'no' > /dev/null 2>&1
 				fi
 			fi
 			if [ -n "$MAIL_SYSTEM" ]; then
@@ -819,7 +793,6 @@ upgrade_replace_default_config() {
 	syshealth_update_web_config_format
 	syshealth_update_mail_config_format
 	syshealth_update_mail_account_config_format
-	syshealth_update_dns_config_format
 	syshealth_update_db_config_format
 	syshealth_update_user_config_format
 }
@@ -851,12 +824,6 @@ upgrade_restart_services() {
 				echo "      - $PROXY_SYSTEM"
 			fi
 			$BIN/h-restart-proxy 'yes'
-		fi
-		if [ -n "$DNS_SYSTEM" ]; then
-			if [ "$DEBUG_MODE" = "true" ]; then
-				echo "      - $DNS_SYSTEM"
-			fi
-			$BIN/h-restart-dns 'yes'
 		fi
 		if [ -n "$WEB_BACKEND" ]; then
 			versions_list=$($BIN/h-list-sys-php plain)

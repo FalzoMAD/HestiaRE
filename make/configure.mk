@@ -150,7 +150,6 @@ _configure-hestia:
 	fi
 	cp -rf $(HESTIA_INSTALL_DIR)/templates $(HESTIA)/data/
 	cp -rf $(HESTIA_COMMON_DIR)/templates/web/ $(HESTIA)/data/templates
-	cp -rf $(HESTIA_COMMON_DIR)/templates/dns/ $(HESTIA)/data/templates
 	cp -rf $(HESTIA_COMMON_DIR)/firewall $(HESTIA)/data/
 	rm -f $(HESTIA)/data/firewall/ipset/blacklist.sh \
 	    $(HESTIA)/data/firewall/ipset/blacklist.ipv6.sh
@@ -160,7 +159,6 @@ _configure-hestia:
 	    sed -i "/COMMENT='POP3'/d"  $(HESTIA)/data/firewall/rules.conf 2>/dev/null || true; \
 	fi
 	sed -i "/COMMENT='FTP'/d" $(HESTIA)/data/firewall/rules.conf 2>/dev/null || true
-	sed -i "/COMMENT='DNS'/d" $(HESTIA)/data/firewall/rules.conf 2>/dev/null || true
 	cp -rf $(HESTIA_COMMON_DIR)/api $(HESTIA)/data/
 	echo "[ * ] Setting hostname..."
 	$(HESTIA)/bin/h-change-sys-hostname "$$HESTIA_HOSTNAME" > /dev/null 2>&1 || true

@@ -333,32 +333,6 @@
 					<?php } ?>
 				<?php } ?>
 
-				<!-- DNS tab -->
-				<?php if (isset($_SESSION["DNS_SYSTEM"]) && !empty($_SESSION["DNS_SYSTEM"])) { ?>
-					<?php if ($panel[$user]["DNS_DOMAINS"] != "0") { ?>
-						<li class="main-menu-item">
-							<a class="main-menu-item-link <?php if ($TAB == "DNS") {
-       	echo "active";
-       } ?>" href="/list/dns/" title="<?= _("Domains") ?>: <?= $panel[$user]["U_DNS_DOMAINS"] ?>&#13;<?= _("Limit") ?>: <?= $panel[$user]["DNS_DOMAINS"] == "unlimited"
-	? "∞"
-	: $panel[$user]["DNS_DOMAINS"] ?>&#13;<?= _("Suspended") ?>: <?= $panel[$user]["SUSPENDED_DNS"] ?>">
-								<p class="main-menu-item-label"><?= _("DNS") ?><i class="fas fa-book-atlas"></i></p>
-								<ul class="main-menu-stats">
-									<li>
-										<?= _("Zones") ?>: <?= $panel[$user]["U_DNS_DOMAINS"] ?> / <?= $panel[$user]["DNS_DOMAINS"] == "unlimited" ? "<span class=\"u-text-bold\">∞</span>" : $panel[$user]["DNS_DOMAINS"] ?> (<?= $panel[
- 	$user
- ]["SUSPENDED_DNS"] ?>)
-									</li>
-									<li>
-										<?= _("Records") ?>: <?= $panel[$user]["U_DNS_RECORDS"] ?> / <?= $panel[$user]["DNS_RECORDS"] == "unlimited" || $panel[$user]["DNS_DOMAINS"] == "unlimited"
- 	? "<span class=\"u-text-bold\">∞</span>"
- 	: $panel[$user]["DNS_RECORDS"] * $panel[$user]["DNS_DOMAINS"] ?>
-									</li>
-								</ul>
-							</a>
-						</li>
-					<?php } ?>
-				<?php } ?>
 
 				<!-- Mail tab -->
 				<?php if (isset($_SESSION["MAIL_SYSTEM"]) && !empty($_SESSION["MAIL_SYSTEM"])) { ?>

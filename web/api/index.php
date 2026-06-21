@@ -178,25 +178,16 @@ function api_legacy(array $request_data) {
 		api_error(E_INVALID, "$hst_cmd command invalid", $hst_return);
 	}
 
-	// Check command
-	if ($hst_cmd == "h-make-tmp-file") {
-		// Used in DNS Cluster
-		$fp = fopen("/tmp/" . basename(escapeshellcmd($hst_cmd_args["arg2"])), "w");
-		fwrite($fp, $hst_cmd_args["arg1"] . "\n");
-		fclose($fp);
-		$return_var = 0;
-	} else {
-		// Prepare command
-		$cmdquery = HESTIA_CMD . escapeshellcmd($hst_cmd);
+	// Prepare command
+	$cmdquery = HESTIA_CMD . escapeshellcmd($hst_cmd);
 
-		// Prepare arguments
-		foreach ($hst_cmd_args as $cmd_arg) {
-			$cmdquery .= " " . quoteshellarg($cmd_arg);
-		}
-
-		// Run cmd query
-		exec($cmdquery, $output, $cmd_exit_code);
+	// Prepare arguments
+	foreach ($hst_cmd_args as $cmd_arg) {
+		$cmdquery .= " " . quoteshellarg($cmd_arg);
 	}
+
+	// Run cmd query
+	exec($cmdquery, $output, $cmd_exit_code);
 
 	if (!empty($hst_return) && $hst_return == "code") {
 		echo $cmd_exit_code;

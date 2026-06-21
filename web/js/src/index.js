@@ -7,7 +7,6 @@ import handleCopyCreds from './copyCreds';
 import handleCronGenerator from './cronGenerator';
 import handleDatabaseHints from './databaseHints';
 import handleDiscardAllMail from './discardAllMail';
-import handleDnsRecordHint from './dnsRecordHint';
 import handleDocRootHint from './docRootHint';
 import handleEditWebListeners from './editWebListeners';
 import handleErrorMessage from './errorHandler';
@@ -39,7 +38,6 @@ function initListeners() {
 	handleClipboardCopy();
 	handleCronGenerator();
 	handleDiscardAllMail();
-	handleDnsRecordHint();
 	handleDocRootHint();
 	handleEditWebListeners();
 	handleFormSubmit();

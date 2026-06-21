@@ -38,11 +38,8 @@ $v_package_new = $_GET["package"];
 $v_web_template = $data[$v_package]["WEB_TEMPLATE"];
 $v_backend_template = $data[$v_package]["BACKEND_TEMPLATE"];
 $v_proxy_template = $data[$v_package]["PROXY_TEMPLATE"];
-$v_dns_template = $data[$v_package]["DNS_TEMPLATE"];
 $v_web_domains = $data[$v_package]["WEB_DOMAINS"];
 $v_web_aliases = $data[$v_package]["WEB_ALIASES"];
-$v_dns_domains = $data[$v_package]["DNS_DOMAINS"];
-$v_dns_records = $data[$v_package]["DNS_RECORDS"];
 $v_mail_domains = $data[$v_package]["MAIL_DOMAINS"];
 $v_mail_accounts = $data[$v_package]["MAIL_ACCOUNTS"];
 $v_ratelimit = $data[$v_package]["RATE_LIMIT"];
@@ -55,48 +52,6 @@ $v_cpu_quota = $data[$v_package]["CPU_QUOTA"];
 $v_cpu_quota_period = $data[$v_package]["CPU_QUOTA_PERIOD"];
 $v_memory_limit = $data[$v_package]["MEMORY_LIMIT"];
 $v_swap_limit = $data[$v_package]["SWAP_LIMIT"];
-$v_ns = $data[$v_package]["NS"];
-$nameservers = explode(",", $v_ns);
-if (empty($nameservers[0])) {
-	$v_ns1 = "";
-} else {
-	$v_ns1 = $nameservers[0];
-}
-if (empty($nameservers[1])) {
-	$v_ns2 = "";
-} else {
-	$v_ns2 = $nameservers[1];
-}
-if (empty($nameservers[2])) {
-	$v_ns3 = "";
-} else {
-	$v_ns3 = $nameservers[2];
-}
-if (empty($nameservers[3])) {
-	$v_ns4 = "";
-} else {
-	$v_ns4 = $nameservers[3];
-}
-if (empty($nameservers[4])) {
-	$v_ns5 = "";
-} else {
-	$v_ns5 = $nameservers[4];
-}
-if (empty($nameservers[5])) {
-	$v_ns6 = "";
-} else {
-	$v_ns6 = $nameservers[5];
-}
-if (empty($nameservers[6])) {
-	$v_ns7 = "";
-} else {
-	$v_ns7 = $nameservers[6];
-}
-if (empty($nameservers[7])) {
-	$v_ns8 = "";
-} else {
-	$v_ns8 = $nameservers[7];
-}
 $v_backups = $data[$v_package]["BACKUPS"];
 $v_backups_incremental = $data[$v_package]["BACKUPS_INCREMENTAL"];
 $v_date = $data[$v_package]["DATE"];
@@ -121,11 +76,6 @@ if (!empty($_SESSION["PROXY_SYSTEM"])) {
 	$proxy_templates = json_decode(implode("", $output), true);
 	unset($output);
 }
-
-// List dns templates
-exec(HESTIA_CMD . "h-list-dns-templates json", $output, $return_var);
-$dns_templates = json_decode(implode("", $output), true);
-unset($output);
 
 // List shels
 exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
@@ -154,9 +104,6 @@ if (!empty($_POST["save"])) {
 			$errors[] = _("Proxy Template");
 		}
 	}
-	if (empty($_POST["v_dns_template"])) {
-		$errors[] = _("DNS Template");
-	}
 	if (empty($_POST["v_shell"])) {
 		$errrors[] = _("Shell");
 	}
@@ -165,12 +112,6 @@ if (!empty($_POST["save"])) {
 	}
 	if (!isset($_POST["v_web_aliases"])) {
 		$errors[] = _("Web Aliases");
-	}
-	if (!isset($_POST["v_dns_domains"])) {
-		$errors[] = _("DNS Zones");
-	}
-	if (!isset($_POST["v_dns_records"])) {
-		$errors[] = _("DNS Records");
 	}
 	if (!isset($_POST["v_mail_domains"])) {
 		$errors[] = _("Mail Domains");
@@ -215,16 +156,6 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Check if name server entries are blank if DNS server is installed
-	if (isset($_SESSION["DNS_SYSTEM"]) && !empty($_SESSION["DNS_SYSTEM"])) {
-		if (empty($_POST["v_ns1"])) {
-			$errors[] = _("Nameserver 1");
-		}
-		if (empty($_POST["v_ns2"])) {
-			$errors[] = _("Nameserver 2");
-		}
-	}
-
 	if (!empty($errors[0])) {
 		foreach ($errors as $i => $error) {
 			if ($i == 0) {
@@ -246,7 +177,6 @@ if (!empty($_POST["save"])) {
 	if (!empty($_SESSION["PROXY_SYSTEM"])) {
 		$v_proxy_template = quoteshellarg($_POST["v_proxy_template"]);
 	}
-	$v_dns_template = quoteshellarg($_POST["v_dns_template"]);
 	if (!empty($_POST["v_shell"])) {
 		$v_shell = quoteshellarg($_POST["v_shell"]);
 	} else {
@@ -254,8 +184,6 @@ if (!empty($_POST["save"])) {
 	}
 	$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
 	$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
-	$v_dns_domains = quoteshellarg($_POST["v_dns_domains"]);
-	$v_dns_records = quoteshellarg($_POST["v_dns_records"]);
 	$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
 	$v_mail_accounts = quoteshellarg($_POST["v_mail_accounts"]);
 	$v_ratelimit = quoteshellarg($_POST["v_ratelimit"]);
@@ -275,34 +203,6 @@ if (!empty($_POST["save"])) {
 	$v_swap_limit =
 		$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_swap_limit"]) : "";
 
-	$v_ns1 = !empty($_POST["v_ns1"]) ? trim($_POST["v_ns1"], ".") : "";
-	$v_ns2 = !empty($_POST["v_ns2"]) ? trim($_POST["v_ns2"], ".") : "";
-	$v_ns3 = !empty($_POST["v_ns3"]) ? trim($_POST["v_ns3"], ".") : "";
-	$v_ns4 = !empty($_POST["v_ns4"]) ? trim($_POST["v_ns4"], ".") : "";
-	$v_ns5 = !empty($_POST["v_ns5"]) ? trim($_POST["v_ns5"], ".") : "";
-	$v_ns6 = !empty($_POST["v_ns6"]) ? trim($_POST["v_ns6"], ".") : "";
-	$v_ns7 = !empty($_POST["v_ns7"]) ? trim($_POST["v_ns7"], ".") : "";
-	$v_ns8 = !empty($_POST["v_ns8"]) ? trim($_POST["v_ns8"], ".") : "";
-	$v_ns = $v_ns1 . "," . $v_ns2;
-	if (!empty($v_ns3)) {
-		$v_ns .= "," . $v_ns3;
-	}
-	if (!empty($v_ns4)) {
-		$v_ns .= "," . $v_ns4;
-	}
-	if (!empty($v_ns5)) {
-		$v_ns .= "," . $v_ns5;
-	}
-	if (!empty($v_ns6)) {
-		$v_ns .= "," . $v_ns6;
-	}
-	if (!empty($v_ns7)) {
-		$v_ns .= "," . $v_ns7;
-	}
-	if (!empty($v_ns8)) {
-		$v_ns .= "," . $v_ns8;
-	}
-	$v_ns = quoteshellarg($v_ns);
 	$v_time = quoteshellarg(date("H:i:s"));
 	$v_date = quoteshellarg(date("Y-m-d"));
 
@@ -310,11 +210,8 @@ if (!empty($_POST["save"])) {
 	$pkg = "WEB_TEMPLATE=" . $v_web_template . "\n";
 	$pkg .= "BACKEND_TEMPLATE=" . $v_backend_template . "\n";
 	$pkg .= "PROXY_TEMPLATE=" . $v_proxy_template . "\n";
-	$pkg .= "DNS_TEMPLATE=" . $v_dns_template . "\n";
 	$pkg .= "WEB_DOMAINS=" . $v_web_domains . "\n";
 	$pkg .= "WEB_ALIASES=" . $v_web_aliases . "\n";
-	$pkg .= "DNS_DOMAINS=" . $v_dns_domains . "\n";
-	$pkg .= "DNS_RECORDS=" . $v_dns_records . "\n";
 	$pkg .= "MAIL_DOMAINS=" . $v_mail_domains . "\n";
 	$pkg .= "MAIL_ACCOUNTS=" . $v_mail_accounts . "\n";
 	$pkg .= "RATE_LIMIT=" . $v_ratelimit . "\n";
@@ -326,7 +223,6 @@ if (!empty($_POST["save"])) {
 	$pkg .= "MEMORY_LIMIT=" . $v_memory_limit . "\n";
 	$pkg .= "SWAP_LIMIT=" . $v_swap_limit . "\n";
 	$pkg .= "BANDWIDTH=" . $v_bandwidth . "\n";
-	$pkg .= "NS=" . $v_ns . "\n";
 	$pkg .= "SHELL=" . $v_shell . "\n";
 	$pkg .= "BACKUPS=" . $v_backups . "\n";
 	$pkg .= "BACKUPS_INCREMENTAL=" . $v_backups_incremental . "\n";

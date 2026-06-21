@@ -29,16 +29,15 @@
         "bin/h-add-web-domain",
         "bin/h-delete-web-domain",
         "bin/h-add-mail-domain",
-        "bin/h-add-dns-domain",
         "bin/h-add-database",
         "bin/h-backup-user",
         "bin/h-add-firewall-rule",
         "bin/h-update-sys-queue"
       ],
       "language": "bash",
-      "total_commands": 519,
+      "total_commands": 466,
       "command_prefixes": {
-        "h-*": 519,
+        "h-*": 466,
         "v-*": "symlinks only — see Issue #23"
       },
       "domains": {
@@ -46,7 +45,7 @@
         "sys": { "count": 105, "pattern": "bin/h-*-sys*" },
         "web": { "count": 80, "pattern": "bin/h-*-web*" },
         "mail": { "count": 66, "pattern": "bin/h-*-mail*" },
-        "dns": { "count": 54, "pattern": "bin/h-*-dns*" },
+        "dns": { "count": 1, "pattern": "bin/h-*-dns*", "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58" },
         "database": { "count": 30, "pattern": "bin/h-*-database*" },
         "firewall": { "count": 21, "pattern": "bin/h-*-firewall*" },
         "cron": { "count": 20, "pattern": "bin/h-*-cron*" },
@@ -76,24 +75,20 @@
         "func/db.sh",
         "func/backup.sh",
         "func/upgrade.sh",
-        "func/remote.sh",
         "func/ip.sh",
-        "func/firewall.sh",
-        "func/internal/dns_record_validator.php"
+        "func/firewall.sh"
       ],
-      "language": "bash (+ php for dns_record_validator)",
+      "language": "bash",
       "file_roles": {
         "main.sh": "Core utilities: source_conf(), check_result(), output formatting, logging, JSON/shell serialization",
-        "domain.sh": "Domain validation and template checking for web, mail, DNS",
+        "domain.sh": "Domain validation and template checking for web and mail",
         "rebuild.sh": "User and domain rebuild logic — regenerates service configs from HestiaRE data",
         "syshealth.sh": "System health monitoring, RRD graph generation, service status checks",
         "db.sh": "MySQL/MariaDB and PostgreSQL connection helpers, host configuration",
         "backup.sh": "Local, FTP, and Restic backup/restore handlers with retention logic",
         "upgrade.sh": "Version-specific migration procedures called by upgrade scripts",
-        "remote.sh": "Remote DNS cluster synchronization",
         "ip.sh": "IP address validation, RDNS checking, IPv4/IPv6 utilities",
-        "firewall.sh": "iptables symlink healing helper",
-        "internal/dns_record_validator.php": "PHP DNS record validation helper (called from bash)"
+        "firewall.sh": "iptables symlink healing helper"
       },
       "dependencies": ["instance_config"],
       "upstream_debt": {
@@ -132,7 +127,7 @@
         "web/locale/languages.json"
       ],
       "language": "php",
-      "routing": "directory-based: /list/user/, /add/web/, /edit/mail/, /delete/dns/ etc.",
+      "routing": "directory-based: /list/user/, /add/web/, /edit/mail/ etc.",
       "features": [
         "2FA (TOTP)",
         "CSRF protection",
@@ -149,7 +144,6 @@
         "issues": [
           "PHP files reference /usr/local/hestia paths in includes — install root is unchanged so paths are correct, but hardcoded (not using a constant)",
           "web/inc/mail-wrapper.php shebang: updated to #!/usr/bin/php8.3 in Issue #25",
-          "web/list/terminal/ — Web Terminal UI present, must not be re-enabled (ground rule)",
           "Panel branding still references HestiaCP in some locale strings"
         ]
       }
@@ -179,7 +173,6 @@
         "install/deb/templates/web/",
         "install/common/packages/default.pkg",
         "install/common/packages/system.pkg",
-        "install/common/templates/dns/",
         "install/common/templates/email/",
         "install/common/roundcube/",
         "install/common/dovecot-24/",
@@ -226,7 +219,7 @@
         "X-Accel-Redirect handled via handle_response in reverse_proxy block",
         "web/list/rrd/image.php updated to send absolute path for X-Accel-Redirect",
         "File manager /fm/* served via handle block with uri strip_prefix",
-        "Web terminal /_shell/ location intentionally absent — ground rule"
+        "Web terminal removed in Issue #59 — /_shell/ location absent by design"
       ],
       "required_packages": ["caddy"],
       "note": "Installer integration completed in Issue #26a.",

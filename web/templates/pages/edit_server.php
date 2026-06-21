@@ -318,51 +318,6 @@
 				</div>
 			</details>
 
-			<!-- DNS Server section -->
-			<?php if (!empty($_SESSION["DNS_SYSTEM"])) { ?>
-				<details class="box-collapse u-mb10">
-					<summary class="box-collapse-header">
-						<i class="fas fa-book-atlas u-mr10"></i><?= tohtml( _("DNS Server")) ?>
-					</summary>
-					<div class="box-collapse-content">
-						<p>
-							<?= tohtml( _("DNS Server")) ?>:
-							<span class="u-ml5">
-								<?= tohtml($_SESSION["DNS_SYSTEM"]) ?>
-							</span>
-							<a href="/edit/server/<?= tohtml(rawurlencode($_SESSION["DNS_SYSTEM"])) ?>/" class="u-ml5">
-								<i class="fas fa-pencil icon-orange"></i>
-							</a>
-						</p>
-						<p>
-							<?= tohtml( _("DNS Cluster")) ?>:
-							<span class="u-ml5">
-								<?= tohtml($v_dns_cluster == "yes" ? _("Yes") : _("No")) ?>
-							</span>
-						</p>
-						<?php if ($v_dns_cluster == "yes") {
-							$i = 0;
-							foreach ($dns_cluster as $key => $value) {
-								$i++;
-							?>
-							<div>
-								<label for="v_dns_remote_host" class="form-label">
-									<?= tohtml( _("Host") . " #" . $i) ?>
-								</label>
-								<input
-									type="text"
-									class="form-control"
-									name="v_dns_remote_host"
-									id="v_dns_remote_host"
-									value="<?= tohtml($key) ?>"
-									disabled
-								>
-							</div>
-						<?php } } ?>
-					</div>
-				</details>
-			<?php } ?>
-
 			<!-- Mail Server section -->
 			<?php if (!empty($_SESSION["MAIL_SYSTEM"])) { ?>
 				<details class="box-collapse u-mb10">
@@ -1302,23 +1257,6 @@
 										<?= tohtml( _("Yes")) ?>
 									</option>
 									<option value="no" <?= tohtml($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] == "no" ? "selected" : "") ?>>
-										<?= tohtml( _("No")) ?>
-									</option>
-								</select>
-							</div>
-							<div class="u-mb10">
-								<label for="v_policy_user_edit_dns_templates" class="form-label">
-									<?= tohtml( _("Allow users to change templates when editing DNS zones")) ?>
-								</label>
-								<select
-									class="form-select"
-									name="v_policy_user_edit_dns_templates"
-									id="v_policy_user_edit_dns_templates"
-								>
-									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
-									</option>
-									<option value="no" <?= tohtml($_SESSION["POLICY_USER_EDIT_DNS_TEMPLATES"] == "no" ? "selected" : "") ?>>
 										<?= tohtml( _("No")) ?>
 									</option>
 								</select>

@@ -191,26 +191,10 @@
 						</li>
 						<li class="stats-item-list-item">
 							<span class="stats-item-list-item-label">
-								<?= tohtml( _("DNS Zones")) ?>:
-							</span>
-							<span class="stats-item-list-item-value">
-								<?= tohtml($data[$key]["U_DNS_DOMAINS"]) ?>
-							</span>
-						</li>
-						<li class="stats-item-list-item">
-							<span class="stats-item-list-item-label">
 								<?= tohtml( _("Cron Jobs")) ?>:
 							</span>
 							<span class="stats-item-list-item-value">
 								<?= tohtml($data[$key]["U_CRON_JOBS"]) ?>
-							</span>
-						</li>
-						<li class="stats-item-list-item">
-							<span class="stats-item-list-item-label">
-								<?= tohtml( _("DNS Records")) ?>:
-							</span>
-							<span class="stats-item-list-item-value">
-								<?= tohtml($data[$key]["U_DNS_RECORDS"]) ?>
 							</span>
 						</li>
 						<li class="stats-item-list-item">

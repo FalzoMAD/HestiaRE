@@ -221,61 +221,6 @@ if (!empty($_POST["save"])) {
 		unset($output);
 	}
 
-	// Change dns domain IP
-	if ($v_ip != $_POST["v_ip"] && empty($_SESSION["error_msg"])) {
-		exec(
-			HESTIA_CMD . "h-list-dns-domain " . $user . " " . quoteshellarg($v_domain) . " json",
-			$output,
-			$return_var,
-		);
-		unset($output);
-		if ($return_var == 0) {
-			exec(
-				HESTIA_CMD .
-					"h-change-dns-domain-ip " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" " .
-					quoteshellarg($v_newip_public) .
-					" 'no'",
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			$restart_dns = "yes";
-		}
-	}
-
-	// Change dns ip for each alias
-	if ($v_ip != $_POST["v_ip"] && empty($_SESSION["error_msg"])) {
-		foreach ($valiases as $v_alias) {
-			exec(
-				HESTIA_CMD . "h-list-dns-domain " . $user . " " . quoteshellarg($v_alias) . " json",
-				$output,
-				$return_var,
-			);
-			unset($output);
-			if ($return_var == 0) {
-				exec(
-					HESTIA_CMD .
-						"h-change-dns-domain-ip " .
-						$user .
-						" " .
-						quoteshellarg($v_alias) .
-						" " .
-						quoteshellarg($v_newip_public),
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
-				$restart_dns = "yes";
-			}
-		}
-	}
-
 	// Change mail domain IP
 	if ($v_ip != $_POST["v_ip"] && empty($_SESSION["error_msg"])) {
 		exec(
@@ -508,31 +453,6 @@ if (!empty($_POST["save"])) {
 				check_return_code($return_var, $output);
 				unset($output);
 
-				if (empty($_SESSION["error_msg"])) {
-					exec(
-						HESTIA_CMD . "h-list-dns-domain " . $user . " " . quoteshellarg($v_domain),
-						$output,
-						$return_var,
-					);
-					unset($output);
-					if ($return_var == 0) {
-						exec(
-							HESTIA_CMD .
-								"h-delete-dns-on-web-alias " .
-								$user .
-								" " .
-								quoteshellarg($v_domain) .
-								" " .
-								quoteshellarg($alias) .
-								" 'no'",
-							$output,
-							$return_var,
-						);
-						check_return_code($return_var, $output);
-						unset($output);
-						$restart_dns = "yes";
-					}
-				}
 			}
 		}
 
@@ -555,31 +475,6 @@ if (!empty($_POST["save"])) {
 				);
 				check_return_code($return_var, $output);
 				unset($output);
-				if (empty($_SESSION["error_msg"])) {
-					exec(
-						HESTIA_CMD . "h-list-dns-domain " . $user . " " . quoteshellarg($v_domain),
-						$output,
-						$return_var,
-					);
-					unset($output);
-					if ($return_var == 0) {
-						exec(
-							HESTIA_CMD .
-								"h-add-dns-on-web-alias " .
-								$user .
-								" " .
-								quoteshellarg($alias) .
-								" " .
-								quoteshellarg($v_newip_public ?: $v_ip_public) .
-								" no",
-							$output,
-							$return_var,
-						);
-						check_return_code($return_var, $output);
-						unset($output);
-						$restart_dns = "yes";
-					}
-				}
 			}
 		}
 
@@ -1610,13 +1505,6 @@ if (!empty($_POST["save"])) {
 		empty($_SESSION["error_msg"])
 	) {
 		exec(HESTIA_CMD . "h-restart-proxy", $output, $return_var);
-		check_return_code($return_var, $output);
-		unset($output);
-	}
-
-	// Restart dns server
-	if (!empty($restart_dns) && empty($_SESSION["error_msg"])) {
-		exec(HESTIA_CMD . "h-restart-dns", $output, $return_var);
 		check_return_code($return_var, $output);
 		unset($output);
 	}

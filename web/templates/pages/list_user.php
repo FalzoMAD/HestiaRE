@@ -42,7 +42,6 @@
 						<option value="rebuild"><?= tohtml( _("Rebuild All")) ?></option>
 						<option value="rebuild user"><?= tohtml( _("Rebuild User Profile")) ?></option>
 						<option value="rebuild web"><?= tohtml( _("Rebuild Web Domains")) ?></option>
-						<option value="rebuild dns"><?= tohtml( _("Rebuild DNS Zones")) ?></option>
 						<option value="rebuild mail"><?= tohtml( _("Rebuild Mail Domains")) ?></option>
 						<option value="rebuild db"><?= tohtml( _("Rebuild Databases")) ?></option>
 						<option value="rebuild cron"><?= tohtml( _("Rebuild Cron Jobs")) ?></option>
@@ -94,10 +93,6 @@
 			<div class="units-table-cell compact u-text-center">
 				<i class="fas fa-earth-americas" title="<?= tohtml( _("Web Domains")) ?>"></i>
 				<span class="u-hidden-visually"><?= tohtml( _("Web Domains")) ?></span>
-			</div>
-			<div class="units-table-cell compact u-text-center">
-				<i class="fas fa-book-atlas" title="<?= tohtml( _("DNS Zones")) ?>"></i>
-				<span class="u-hidden-visually"><?= tohtml( _("DNS Zones")) ?></span>
 			</div>
 			<div class="units-table-cell compact u-text-center">
 				<i class="fas fa-envelopes-bulk" title="<?= tohtml( _("Mail Domains")) ?>"></i>
@@ -274,12 +269,6 @@
 					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("Web Domains")) ?>:</span>
 					<span class="units-table-badge">
 						<?= tohtml($data[$key]["U_WEB_DOMAINS"]) ?>
-					</span>
-				</div>
-				<div class="units-table-cell compact u-text-center-desktop">
-					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("DNS Zones")) ?>:</span>
-					<span class="units-table-badge">
-						<?= tohtml($data[$key]["U_DNS_DOMAINS"]) ?>
 					</span>
 				</div>
 				<div class="units-table-cell compact u-text-center-desktop">
