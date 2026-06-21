@@ -1,0 +1,229 @@
+HESTIARE — SYSTEMUSER-ARCHITEKTUR: ANALYSE
+==========================================
+Erstellt: 2026-06-20
+Branch: feature/26d-makefile-structure (nach Merge)
+
+
+DAS MODELL
+----------
+
+Caddy (root/caddy)
+  └─→ PHP-FPM Socket /run/hestia-php.sock (owned hestiaweb:hestiaweb)
+        └─→ PHP Panel (user: hestiaweb)
+              └─→ sudo /usr/local/hestia/bin/h-* → root
+                                    ↑
+                        gleiche Sudo-Regel gilt auch für
+                              Cron (hestiaweb)
+
+Drei konzeptuelle Ebenen:
+
+  Ebene              | User         | Shell   | Sudo
+  -------------------|--------------|---------|---------------------
+  Panel-Prozess      | hestiaweb    | nologin | NOPASSWD: bin/*
+  Cronjobs           | hestiaweb    | (cron)  | NOPASSWD: bin/*
+  Admin-Account      | $ROOT_USER   | nologin | keine
+  Mail-Services      | hestiamail   | nologin | keine
+
+
+BENUTZER IM DETAIL
+------------------
+
+1. hestiaweb
+
+  Erstellt in:
+    make/base.mk:44-45
+    useradd hestiaweb -c "HestiaRE Web" --no-create-home -s /sbin/nologin
+
+  Eigentümer von:
+    /var/spool/cron/crontabs/hestiaweb     (mode 600, cron jobs)
+    /usr/local/hestia/data/sessions/       (mode 770, PHP sessions)
+    /run/hestia-php.sock                   (listen.owner + user in pool.conf)
+
+  Sudo-Regel (/etc/sudoers.d/hestiaweb):
+    Defaults:root !requiretty
+    hestiaweb   ALL=NOPASSWD:/usr/local/hestia/bin/*
+
+  Cron-Jobs (alle via sudo, aus make/configure.mk:229-249):
+    */2 * * * *    sudo h-update-sys-queue restart
+    10 00 * * *    sudo h-update-sys-queue daily
+    15 02 * * *    sudo h-update-sys-queue disk
+    10 00 * * *    sudo h-update-sys-queue traffic
+    30 03 * * *    sudo h-update-sys-queue webstats
+    */5 * * * *    sudo h-update-sys-queue backup
+    10 05 * * *    sudo h-backup-users
+    20 00 * * *    sudo h-update-user-stats
+    */5 * * * *    sudo h-update-sys-rrd
+    $MIN $HOUR * * *  sudo h-update-letsencrypt-ssl  (zufällig)
+    41 4 * * *     sudo h-update-sys-hestia-all
+
+  PHP-FPM Pool (install/panel-php/pool.d/panel.conf):
+    user = hestiaweb
+    group = hestiaweb
+    listen = /run/hestia-php.sock
+    listen.owner = hestiaweb
+    listen.group = hestiaweb
+    listen.mode = 0660
+    session.save_path = /usr/local/hestia/data/sessions
+
+  Befehlsausführung im Panel (web/inc/main.php:21):
+    define("HESTIA_CMD", "/usr/bin/sudo /usr/local/hestia/bin/");
+    Jeder Panel-Request ruft exec(HESTIA_CMD . "h-*") auf.
+
+  Weitere Referenzen:
+    func/backup.sh:44       — Backup-Eigentümer: hestiaweb:$user
+    func/syshealth.sh       — liest/schreibt hestiaweb-Crontab bei Repair
+
+
+2. hestiamail
+
+  Erstellt in:
+    make/base.mk:46-47
+    useradd hestiamail -c "HestiaRE Mail" --no-create-home -s /sbin/nologin
+
+  Eigentümer von:
+    /usr/share/phpmyadmin/tmp/   (owned hestiamail:www-data)
+    /etc/phpmyadmin/             (owned root:hestiamail, mode 640/750)
+    /etc/roundcube/              (owned hestiamail:www-data per install_sieve.sh)
+
+  Sudo-Regel: keine
+  Cron-Jobs: keine
+
+  Rolle: reiner Ownership-Placeholder für Mail-Webinterfaces.
+  Kein aktiver Prozess läuft als hestiamail.
+
+
+3. ROOT_USER (konfigurierbarer Admin-Account)
+
+  Kein Unix-System-User. Nur Panel-Account.
+  Gespeichert in /usr/local/hestia/data/users/$ADMIN_NAME/user.conf
+
+  Erstellt in make/configure.mk:
+    Zeile 142: wcv "ROOT_USER" "$HESTIA_ADMIN"
+    Zeile 196: h-add-user "$HESTIA_ADMIN" "$HESTIA_PASS" ...
+    Zeile 197: h-change-user-shell "$HESTIA_ADMIN" nologin
+    Zeile 198: h-change-user-role "$HESTIA_ADMIN" admin
+
+  Sudo-Regel: keine (kein System-User)
+  Login-Shell: nologin
+
+  Verwendet in:
+    func/main.sh:22-30       — Default-User wenn $user leer
+    func/remote.sh           — Admin-Kontakt
+    func/db.sh               — Benachrichtigungen bei DB-Fehlern
+    func/upgrade.sh          — Upgrade-Benachrichtigungen
+    web/api/index.php:82     — Legacy-API authentifiziert nur gegen ROOT_USER
+
+
+4. hestia-users (Gruppe)
+
+  Erstellt in make/base.mk:48
+  Mitglieder: hestiaweb, hestiamail, alle Panel-User (via rebuild.sh:84)
+
+  Zweck: ACL-Verwaltung
+    setfacl -m "g:hestia-users:---" "$HOMEDIR/$user"  (rebuild.sh:87)
+    → Gruppenausschluss von User-Home-Verzeichnissen
+
+
+WAS FUNKTIONIERT GUT
+--------------------
+
+Panel-Prozess-Isolation:
+  PHP-FPM läuft als hestiaweb, nicht als root. PHP-Code kann nichts direkt
+  am System ändern — jede Aktion muss durch sudo h-*. Richtiger Ansatz.
+
+ROOT_USER ist kein System-User:
+  Gestohlene Panel-Credentials liefern keinen Unix-Login, keinen sudo-Zugang.
+  Kompromittierter Panel-Account ≠ kompromittiertes System.
+
+hestiamail-Trennung:
+  Mail-Webinterfaces (PMA, Roundcube) gehören hestiamail. Keine sudo-Rechte —
+  kompromittierter Mail-Stack hat keinen Eskalationspfad.
+
+
+SCHWACHSTELLEN UND OFFENE FRAGEN
+---------------------------------
+
+1. Sudo-Wildcard ist faktisch root-equivalent
+
+  hestiaweb   ALL=NOPASSWD:/usr/local/hestia/bin/*
+
+  Jedes der 519 h-*-Scripts läuft als root. Die Regel schützt gegen arbiträre
+  Befehle, aber nicht gegen Shell-Injection *innerhalb* der erlaubten Scripts.
+  Unsaubere Parameter-Verarbeitung (unquoted $VAR, eval, etc.) in einem
+  h-*-Script = direkte root-Eskalation.
+
+  Wichtig: Das Risiko ist beherrschbar, aber es hängt vollständig von der
+  Input-Validierung in allen 519 bin/-Scripts ab.
+
+
+2. hestiaweb trägt zwei getrennte Verantwortlichkeiten
+
+  - Panel-PHP-FPM: reaktiv, netzwerkseitig exponiert via Caddy
+  - Alle Cron-Jobs: proaktiv, zeitgesteuert
+
+  Ein kompromittierter Panel-Request hat dieselben sudo-Rechte wie ein
+  legitimer Cron-Job, weil es der gleiche User ist. Sauberere Trennung:
+  kompromittierter Panel-Prozess kann keine Backup-/Statistik-Jobs manipulieren.
+
+
+3. Cron-Jobs via Benutzer-Crontab statt /etc/cron.d/
+
+  Aktuell: /var/spool/cron/crontabs/hestiaweb (user-owned, modifizierbar)
+  Alternative: /etc/cron.d/hestiare (root-owned, nicht user-modifizierbar)
+
+  Vorteil der user-Crontab: syshealth_repair_system_config kann sie ohne
+  root-Rechte reparieren/neu schreiben. h-add-cron-hestia-autoupdate ebenfalls.
+  Das ist der bewusste Trade-off in der aktuellen Architektur.
+
+  Vorteil von /etc/cron.d/: Kein sudo-Overhead, auditierbar, nicht durch
+  hestiaweb selbst modifizierbar.
+
+
+4. Session-Pfad liegt im Install-Tree
+
+  php_admin_value[session.save_path] = /usr/local/hestia/data/sessions
+
+  /usr/local/hestia/ ist der Tarball-basierte Install-Tree (wird bei Updates
+  überschrieben). Sessions überleben ein Update nur wenn man darauf achtet.
+  Sauberer wäre /var/lib/hestia/sessions/ oder /run/hestia/sessions/.
+
+
+5. hestiamail wird nicht aktiv genutzt
+
+  Derzeit nur Ownership-Placeholder. Wenn Roundcube oder rspamd einen eigenen
+  FPM-Pool bekämen, wäre hestiamail der natürliche User — aber das ist nicht
+  implementiert. Unklar ob der Account in Zukunft mehr Verantwortung bekommt.
+
+
+KONKRETE PUNKTE FÜR ZUKÜNFTIGE ISSUES
+--------------------------------------
+
+A) Cron-Jobs nach /etc/cron.d/hestiare verschieben (root, kein sudo)
+   → schärfere Trennung zwischen Panel-sudo und System-Maintenance
+   → hestiaweb-sudo-Scope könnte für Crons entfernt werden
+
+B) Session-Pfad nach /var/lib/hestia/sessions/ verschieben
+   → überlebt Update-Tarballs ohne Sonderbehandlung
+
+C) hestiamail aktiv nutzen
+   → eigenen PHP-FPM-Pool für Roundcube/SnappyMail als hestiamail
+   → klare Rollentrennung: hestiaweb = Panel, hestiamail = Mail-UI
+
+D) Sudo-Scope bei möglicher Cron-Verschiebung enger fassen
+   → wenn Crons als root laufen, braucht hestiaweb sudo nur für Panel-Aktionen
+   → eventuell explizite Allowlist statt Wildcard (bei stabiler Command-Menge)
+
+
+REFERENZ-DATEIEN
+----------------
+
+  make/base.mk:44-50          User/Gruppen-Erstellung
+  make/configure.mk:229-249   hestiaweb-Crontab-Setup
+  make/configure.mk:142-199   ROOT_USER-Erstellung und hestia.conf
+  install/common/sudo/hestiaweb   Sudo-Regel
+  install/panel-php/pool.d/panel.conf   PHP-FPM Pool
+  install/panel-php/hestia-php.service  Systemd-Service
+  web/inc/main.php:21         HESTIA_CMD = sudo + bin/
+  func/rebuild.sh:76-87       hestia-users Gruppe + ACL
+  func/syshealth.sh           Crontab-Repair
+  func/backup.sh:44           Backup-Ownership

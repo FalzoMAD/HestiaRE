@@ -41,9 +41,6 @@ if (!empty($_POST["ok"])) {
 		# when nginx only is enabled
 		$_POST["v_proxy_template"] = "default";
 	}
-	if (!isset($_POST["v_dns_template"])) {
-		$errors[] = _("DNS Template");
-	}
 	if (!isset($_POST["v_shell"])) {
 		$errors[] = _("Shell");
 	}
@@ -52,12 +49,6 @@ if (!empty($_POST["ok"])) {
 	}
 	if (!isset($_POST["v_web_aliases"])) {
 		$errors[] = _("Web Aliases");
-	}
-	if (!isset($_POST["v_dns_domains"])) {
-		$errors[] = _("DNS Zones");
-	}
-	if (!isset($_POST["v_dns_records"])) {
-		$errors[] = _("DNS Records");
 	}
 	if (!isset($_POST["v_mail_domains"])) {
 		$errors[] = _("Mail Domains");
@@ -102,15 +93,6 @@ if (!empty($_POST["ok"])) {
 		}
 	}
 
-	// Check if name server entries are blank if DNS server is installed
-	if (isset($_SESSION["DNS_SYSTEM"]) && !empty($_SESSION["DNS_SYSTEM"])) {
-		if (empty($_POST["v_ns1"])) {
-			$errors[] = _("Nameserver 1");
-		}
-		if (empty($_POST["v_ns2"])) {
-			$errors[] = _("Nameserver 2");
-		}
-	}
 	if (!empty($errors[0])) {
 		foreach ($errors as $i => $error) {
 			if ($i == 0) {
@@ -126,12 +108,9 @@ if (!empty($_POST["ok"])) {
 		$v_web_template = quoteshellarg($_POST["v_web_template"]);
 		$v_backend_template = quoteshellarg($_POST["v_backend_template"]);
 		$v_proxy_template = quoteshellarg($_POST["v_proxy_template"]);
-		$v_dns_template = quoteshellarg($_POST["v_dns_template"]);
 		$v_shell = quoteshellarg($_POST["v_shell"]);
 		$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
 		$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
-		$v_dns_domains = quoteshellarg($_POST["v_dns_domains"]);
-		$v_dns_records = quoteshellarg($_POST["v_dns_records"]);
 		$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
 		$v_mail_accounts = quoteshellarg($_POST["v_mail_accounts"]);
 		$v_databases = quoteshellarg($_POST["v_databases"]);
@@ -153,35 +132,6 @@ if (!empty($_POST["ok"])) {
 		$v_swap_limit =
 			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_swap_limit"]) : "";
 
-		$v_ns1 = !empty($_POST["v_ns1"]) ? trim($_POST["v_ns1"], ".") : "";
-		$v_ns2 = !empty($_POST["v_ns2"]) ? trim($_POST["v_ns2"], ".") : "";
-		$v_ns3 = !empty($_POST["v_ns3"]) ? trim($_POST["v_ns3"], ".") : "";
-		$v_ns4 = !empty($_POST["v_ns4"]) ? trim($_POST["v_ns4"], ".") : "";
-		$v_ns5 = !empty($_POST["v_ns5"]) ? trim($_POST["v_ns5"], ".") : "";
-		$v_ns6 = !empty($_POST["v_ns6"]) ? trim($_POST["v_ns6"], ".") : "";
-		$v_ns7 = !empty($_POST["v_ns7"]) ? trim($_POST["v_ns7"], ".") : "";
-		$v_ns8 = !empty($_POST["v_ns8"]) ? trim($_POST["v_ns8"], ".") : "";
-
-		$v_ns = $v_ns1 . "," . $v_ns2;
-		if (!empty($v_ns3)) {
-			$v_ns .= "," . $v_ns3;
-		}
-		if (!empty($v_ns4)) {
-			$v_ns .= "," . $v_ns4;
-		}
-		if (!empty($v_ns5)) {
-			$v_ns .= "," . $v_ns5;
-		}
-		if (!empty($v_ns6)) {
-			$v_ns .= "," . $v_ns6;
-		}
-		if (!empty($v_ns7)) {
-			$v_ns .= "," . $v_ns7;
-		}
-		if (!empty($v_ns8)) {
-			$v_ns .= "," . $v_ns8;
-		}
-		$v_ns = quoteshellarg($v_ns);
 		$v_time = quoteshellarg(date("H:i:s"));
 		$v_date = quoteshellarg(date("Y-m-d"));
 
@@ -194,11 +144,8 @@ if (!empty($_POST["ok"])) {
 			if (!empty($_SESSION["PROXY_SYSTEM"])) {
 				$pkg .= "PROXY_TEMPLATE=" . $v_proxy_template . "\n";
 			}
-			$pkg .= "DNS_TEMPLATE=" . $v_dns_template . "\n";
 			$pkg .= "WEB_DOMAINS=" . $v_web_domains . "\n";
 			$pkg .= "WEB_ALIASES=" . $v_web_aliases . "\n";
-			$pkg .= "DNS_DOMAINS=" . $v_dns_domains . "\n";
-			$pkg .= "DNS_RECORDS=" . $v_dns_records . "\n";
 			$pkg .= "MAIL_DOMAINS=" . $v_mail_domains . "\n";
 			$pkg .= "MAIL_ACCOUNTS=" . $v_mail_accounts . "\n";
 			$pkg .= "DATABASES=" . $v_databases . "\n";
@@ -210,7 +157,6 @@ if (!empty($_POST["ok"])) {
 			$pkg .= "SWAP_LIMIT=" . $v_swap_limit . "\n";
 			$pkg .= "BANDWIDTH=" . $v_bandwidth . "\n";
 			$pkg .= "RATE_LIMIT=" . $v_ratelimit . "\n";
-			$pkg .= "NS=" . $v_ns . "\n";
 			$pkg .= "SHELL=" . $v_shell . "\n";
 			$pkg .= "BACKUPS=" . $v_backups . "\n";
 			$pkg .= "BACKUPS_INCREMENTAL=" . $v_backups_incremental . "\n";
@@ -265,11 +211,6 @@ if (!empty($_SESSION["PROXY_SYSTEM"])) {
 	unset($output);
 }
 
-// List DNS templates
-exec(HESTIA_CMD . "h-list-dns-templates json", $output, $return_var);
-$dns_templates = json_decode(implode("", $output), true);
-unset($output);
-
 // List system shells
 exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
 $shells = json_decode(implode("", $output), true);
@@ -288,9 +229,6 @@ if (empty($v_backend_template)) {
 if (empty($v_proxy_template)) {
 	$v_proxy_template = "default";
 }
-if (empty($v_dns_template)) {
-	$v_dns_template = "default";
-}
 if (empty($v_shell)) {
 	$v_shell = "nologin";
 }
@@ -299,12 +237,6 @@ if (empty($v_web_domains)) {
 }
 if (empty($v_web_aliases)) {
 	$v_web_aliases = "'5'";
-}
-if (empty($v_dns_domains)) {
-	$v_dns_domains = "'1'";
-}
-if (empty($v_dns_records)) {
-	$v_dns_records = "'unlimited'";
 }
 if (empty($v_mail_domains)) {
 	$v_mail_domains = "'1'";
@@ -344,30 +276,6 @@ if (empty($v_swap_limit)) {
 	$v_swap_limit = "'unlimited'";
 }
 
-if (empty($v_ns1)) {
-	$v_ns1 = "ns1.example.tld";
-}
-if (empty($v_ns2)) {
-	$v_ns2 = "ns2.example.tld";
-}
-if (empty($v_ns3)) {
-	$v_ns3 = "";
-}
-if (empty($v_ns4)) {
-	$v_ns4 = "";
-}
-if (empty($v_ns5)) {
-	$v_ns5 = "";
-}
-if (empty($v_ns6)) {
-	$v_ns6 = "";
-}
-if (empty($v_ns7)) {
-	$v_ns7 = "";
-}
-if (empty($v_ns8)) {
-	$v_ns8 = "";
-}
 // Render page
 render_page($user, $TAB, "add_package");
 

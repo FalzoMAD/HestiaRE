@@ -146,62 +146,6 @@
 						<?php } ?>
 				</div>
 			</details>
-			<details class="collapse" id="dns-options">
-				<summary class="collapse-header">
-					<?= tohtml( _("DNS")) ?>
-				</summary>
-				<div class="collapse-content">
-					<div class="u-mb10">
-						<label for="v_dns_template" class="form-label">
-							<?= tohtml( _("DNS Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["DNS_SYSTEM"])) ?></span>
-						</label>
-						<select class="form-select" name="v_dns_template" id="v_dns_template">
-								<?php
-									foreach ($dns_templates as $key => $value) {
-										echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
-										if ((!empty($v_dns_template)) && ( $value == trim($v_dns_template, "'"))){
-											echo ' selected' ;
-										}
-										echo ">" . tohtml($value) . "</option>\n";
-									}
-								?>
-						</select>
-					</div>
-					<div class="u-mb10">
-						<label for="v_dns_domains" class="form-label"><?= tohtml( _("DNS Zones")) ?></label>
-						<div class="u-pos-relative">
-							<input type="text" class="form-control" name="v_dns_domains" id="v_dns_domains" value="<?= tohtml(trim($v_dns_domains, "'")) ?>">
-							<button type="button" class="unlimited-toggle js-unlimited-toggle" title="<?= tohtml( _("Unlimited")) ?>">
-								<i class="fas fa-infinity"></i>
-							</button>
-						</div>
-					</div>
-					<div class="u-mb10">
-						<label for="v_dns_records" class="form-label">
-							<?= tohtml( _("DNS Records")) ?> <span class="optional">(<?= tohtml( _("per domain")) ?>)</span>
-						</label>
-						<div class="u-pos-relative">
-							<input type="text" class="form-control" name="v_dns_records" id="v_dns_records" value="<?= tohtml(trim($v_dns_records, "'")) ?>">
-							<button type="button" class="unlimited-toggle js-unlimited-toggle" title="<?= tohtml( _("Unlimited")) ?>">
-								<i class="fas fa-infinity"></i>
-							</button>
-						</div>
-					</div>
-					<?php if (isset($_SESSION["DNS_SYSTEM"]) && !empty($_SESSION["DNS_SYSTEM"])) { ?>
-						<p class="form-label u-mb10"><?= tohtml( _("Name Servers")) ?></p>
-						<div class="u-mb5">
-							<input type="text" class="form-control" name="v_ns1" value="<?= tohtml(trim($v_ns1, "'")) ?>">
-						</div>
-						<div class="u-mb5">
-							<input type="text" class="form-control" name="v_ns2" value="<?= tohtml(trim($v_ns2, "'")) ?>">
-						</div>
-						<?php require $_SERVER["HESTIA"] . "/web/templates/includes/extra-ns-fields.php"; ?>
-						<button type="button" class="form-link u-mt20 js-add-ns" <?php if ($v_ns8) echo 'style="display:none;"'; ?>>
-							<?= tohtml( _("Add Name Server")) ?>
-						</button>
-					<?php } ?>
-				</div>
-			</details>
 			<details class="collapse" id="mail-options">
 				<summary class="collapse-header">
 					<?= tohtml( _("MAIL")) ?>

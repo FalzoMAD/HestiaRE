@@ -104,11 +104,6 @@ if [ -n "$mail" ]; then
 	is_boolean_format_valid "$mail" 'mail'
 fi
 
-# Set DNS CAA record retrieval commands
-if [ -n "$DNS_SYSTEM" ]; then
-	dns_domain=$($BIN/h-list-dns-domains "$user" | grep "$domain" | cut -d' ' -f1)
-	caa_record=$($BIN/h-list-dns-records "$user" "$domain" | grep -i "CAA" | grep -i "letsencrypt.org" | cut -d' ' -f1)
-fi
 
 if [ -z "$mail" ] || [ "$mail" = 'no' ]; then
 	mail=''
@@ -194,11 +189,10 @@ source $USER_DATA/ssl/le.conf
 
 # Checking wildcard alias
 if [ "$aliases" = "*.$domain" ]; then
-	wildcard='yes'
-	proto="dns-01"
-	if [ ! -e "$HESTIA/data/users/$user/dns/$domain.conf" ]; then
-		check_result "$E_NOTEXIST" "DNS domain $domain doesn't exist"
-	fi
+	# Wildcard certificates require DNS-01 challenge which depends on DNS zone management.
+	# DNS zone management is not part of HestiaRE — manage DNS at your external provider.
+	# See: https://git.hestiare.com/Admin/HestiaRE/issues/58
+	check_result "$E_NOTEXIST" "Wildcard certificates (DNS-01) are not supported — HestiaRE has no DNS zone management. Request a non-wildcard certificate or complete DNS-01 manually."
 else
 	proto="http-01"
 fi
@@ -224,20 +218,6 @@ if [ "$proto" = "http-01" ]; then
 	done
 fi
 
-# Ensure DNS CAA record exists for Let's Encrypt before requesting certificate
-if [ -n "$DNS_SYSTEM" ]; then
-	# Check for DNS zone
-	if [ "$dns_domain" = "$domain" ]; then
-		# Replace DNS domain CAA records with Let's Encrypt values
-		if [ -z "$caa_record" ]; then
-			$BIN/h-add-dns-record "$user" "$domain" '@' 'CAA' '0 issue "letsencrypt.org"'
-		else
-			$BIN/h-delete-dns-record "$user" "$domain" "$caa_record"
-			$BIN/h-add-dns-record "$user" "$domain" '@' 'CAA' '0 issue "letsencrypt.org"'
-		fi
-	fi
-fi
-
 # Requesting nonce / STEP 1
 answer=$(curl --user-agent "HestiaCP" -s -I "$LE_API/directory")
 nonce=$(echo "$answer" | grep -i nonce | cut -f2 -d \  | tr -d '\r\n')
@@ -246,14 +226,6 @@ status=$(echo "$answer" | grep HTTP/ | tail -n1 | cut -f 2 -d ' ')
 debug_log "Step 1" "- status: ${status}\n- nonce: ${nonce}\n- answer: ${answer}"
 
 if [[ "$status" -ne 200 ]]; then
-	# Delete DNS CAA record
-	if [ -n "$DNS_SYSTEM" ]; then
-		if [ "$dns_domain" = "$domain" ]; then
-			if [ -n "$caa_record" ]; then
-				$BIN/h-delete-dns-record "$user" "$domain" "$caa_record"
-			fi
-		fi
-	fi
 	check_result "$E_CONNECT" "Let's Encrypt nonce request status $status ($domain)"
 fi
 
@@ -278,14 +250,6 @@ order=$(echo -e "$answer" | grep -i location | cut -f2 -d \  | tr -d '\r\n')
 debug_log "Step 2" "- status: ${status}\n- nonce: ${nonce}\n- authz: ${authz}\n- finalize: ${finalize}\n- payload: ${payload}\n- answer: ${answer}\n order: ${order}"
 
 if [[ "$status" -ne 201 ]]; then
-	# Delete DNS CAA record
-	if [ -n "$DNS_SYSTEM" ]; then
-		if [ "$dns_domain" = "$domain" ]; then
-			if [ -n "$caa_record" ]; then
-				$BIN/h-delete-dns-record "$user" "$domain" "$caa_record"
-			fi
-		fi
-	fi
 	check_result $E_CONNECT "Let's Encrypt new auth status $status ($domain)"
 fi
 
@@ -301,33 +265,11 @@ for auth in $authz; do
 	debug_log "Step 3" "- status: ${status}\n- nonce: ${nonce}\n- url: ${url}\n- token: ${token}\n- answer: ${answer}"
 
 	if [[ "$status" -ne 200 ]]; then
-		# Delete DNS CAA record
-		if [ -n "$DNS_SYSTEM" ]; then
-			dns_domain=$($BIN/h-list-dns-domains "$user" | grep "$domain" | cut -d' ' -f1)
-			caa_record=$($BIN/h-list-dns-records "$user" "$domain" | grep -i "letsencrypt" | cut -d' ' -f1)
-
-			if [ "$dns_domain" = "$domain" ]; then
-				if [ -n "$caa_record" ]; then
-					$BIN/h-delete-dns-record "$user" "$domain" "$caa_record"
-				fi
-			fi
-		fi
 		check_result "$E_CONNECT" "Let's Encrypt acme/authz bad status $status ($domain)"
 	fi
 
 	# Accepting challenge / STEP 4
-	if [ "$wildcard" = 'yes' ]; then
-		record=$(printf "%s" "$token.$THUMB" \
-			| openssl dgst -sha256 -binary | encode_base64)
-		old_records=$($BIN/h-list-dns-records "$user" "$domain" plain | grep 'TXT')
-		old_records=$(echo "$old_records" | grep _acme-challenge | cut -f 1)
-		for old_record in $old_records; do
-			$BIN/h-delete-dns-record "$user" "$domain" "$old_record"
-		done
-		$BIN/h-add-dns-record "$user" "$domain" "_acme-challenge" "TXT" "$record"
-		check_result $? "DNS _acme-challenge record wasn't created ($domain)"
-	else
-		if [ -z "$mail" ]; then
+	if [ -z "$mail" ]; then
 			if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
 				conf="$HOMEDIR/$user/conf/web/$domain/nginx.conf_letsencrypt"
 				sconf="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_letsencrypt"
@@ -391,11 +333,6 @@ for auth in $authz; do
 			$BIN/h-restart-web
 			check_result $? "Web restart failed" > /dev/null
 		fi
-	fi
-
-	if [ "$DNS_CLUSTER" = "yes" ]; then
-		$BIN/h-update-sys-queue dns-cluster
-	fi
 
 	# Requesting ACME validation / STEP 5
 	validation_check=$(echo "$answer" | grep '"valid"')
@@ -430,17 +367,6 @@ for auth in $authz; do
 		debug_log "Step 5" "- status: ${status}\n- url: ${url}\n- nonce: ${nonce}\n- validation: ${validation}\n- details: ${details}\n- answer: ${answer}"
 
 		if [[ "$status" -ne 200 ]]; then
-			# Delete DNS CAA record
-			if [ -n "$DNS_SYSTEM" ]; then
-				dns_domain=$($BIN/h-list-dns-domains "$user" | grep "$domain" | cut -d' ' -f1)
-				caa_record=$($BIN/h-list-dns-records "$user" "$domain" | grep -i "letsencrypt" | cut -d' ' -f1)
-
-				if [ "$dns_domain" = "$domain" ]; then
-					if [ -n "$caa_record" ]; then
-						$BIN/h-delete-dns-record "$user" "$domain" "$caa_record"
-					fi
-				fi
-			fi
 			# Download debug info from LE server
 			result=$(wget -qO- $url)
 			debug_log "Debug information Step 5" "$result"
@@ -453,34 +379,12 @@ for auth in $authz; do
 
 		i=$((i + 1))
 		if [ "$i" -gt 10 ]; then
-			# Delete DNS CAA record
-			if [ -n "$DNS_SYSTEM" ]; then
-				dns_domain=$($BIN/h-list-dns-domains "$user" | grep "$domain" | cut -d' ' -f1)
-				caa_record=$($BIN/h-list-dns-records "$user" "$domain" | grep -i "letsencrypt" | cut -d' ' -f1)
-
-				if [ "$dns_domain" = "$domain" ]; then
-					if [ -n "$caa_record" ]; then
-						$BIN/h-delete-dns-record "$user" "$domain" "$caa_record"
-					fi
-				fi
-			fi
 			debug_log "Abort Step 5" "=> Too many validation retries"
 			check_result "$E_CONNECT" "Let's Encrypt domain validation timeout ($domain)"
 		fi
 		sleep $((i * 2))
 	done
 	if [ "$validation" = 'invalid' ]; then
-		# Delete DNS CAA record
-		if [ -n "$DNS_SYSTEM" ]; then
-			dns_domain=$($BIN/h-list-dns-domains "$user" | grep "$domain" | cut -d' ' -f1)
-			caa_record=$($BIN/h-list-dns-records "$user" "$domain" | grep -i "letsencrypt" | cut -d' ' -f1)
-
-			if [ "$dns_domain" = "$domain" ]; then
-				if [ -n "$caa_record" ]; then
-					$BIN/h-delete-dns-record "$user" "$domain" "$caa_record"
-				fi
-			fi
-		fi
 		check_result "$E_CONNECT" "Let's Encrypt domain verification failed ($domain)"
 	fi
 done

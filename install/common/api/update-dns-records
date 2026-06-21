@@ -1,2 +1,0 @@
-ROLE='user'
-COMMANDS='h-list-dns-records,h-change-dns-record'

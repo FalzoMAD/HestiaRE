@@ -208,8 +208,6 @@ is_package_full() {
 	case "$1" in
 		WEB_DOMAINS) used=$(wc -l $USER_DATA/web.conf) ;;
 		WEB_ALIASES) used=$(echo $aliases | tr ',' '\n' | wc -l) ;;
-		DNS_DOMAINS) used=$(wc -l $USER_DATA/dns.conf) ;;
-		DNS_RECORDS) used=$(wc -l $USER_DATA/dns/$domain.conf) ;;
 		MAIL_DOMAINS) used=$(wc -l $USER_DATA/mail.conf) ;;
 		MAIL_ACCOUNTS) used=$(wc -l $USER_DATA/mail/$domain.conf) ;;
 		DATABASES) used=$(wc -l $USER_DATA/db.conf) ;;
@@ -1189,33 +1187,6 @@ EOPHP
 	fi
 }
 
-# DNS record validator
-is_dns_record_format_valid() {
-	is_no_new_line_format "$1"
-
-	json_from_php=$(
-		$HESTIA_PHP "$HESTIA/func/internal/dns_record_validator.php" "$1" "$rtype" "$priority"
-	)
-	check_result $? "dns record validation failed :: $1" "$E_INVALID"
-
-	is_valid=$(jq -er '.valid' <<< "$json_from_php")
-	if [ $? -ne 0 ]; then
-		check_result "$E_INVALID" "dns record validation failed :: $1"
-	fi
-	if [ "$is_valid" != 'true' ]; then
-		error_message=$(jq -r '.error_message // "invalid dns record format"' <<< "$json_from_php")
-		check_result "$E_INVALID" "$error_message :: $1"
-	fi
-	cleaned_record=$(jq -r '.cleaned_record // empty' <<< "$json_from_php")
-	if [ -n "$cleaned_record" ]; then
-		dvalue="$cleaned_record"
-	fi
-	updated_priority=$(jq -r '.new_priority // empty' <<< "$json_from_php")
-	if [ -n "$updated_priority" ]; then
-		priority="$updated_priority"
-	fi
-}
-
 # Email format validator
 is_email_format_valid() {
 	if [[ ! "$1" =~ ^[A-Za-z0-9._%+-]+@[[:alnum:].-]+\.[A-Za-z]{2,63}$ ]]; then
@@ -1387,7 +1358,7 @@ is_object_format_valid() {
 
 # Role validator
 is_role_valid() {
-	if ! [[ "$1" =~ ^admin$|^user$|^dns-cluster$ ]]; then
+	if ! [[ "$1" =~ ^admin$|^user$ ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
 	fi
 }
@@ -1451,7 +1422,6 @@ is_format_valid() {
 				dkim_size) is_int_format_valid "$arg" ;;
 				domain) is_domain_format_valid "$arg" ;;
 				dom_alias) is_alias_format_valid "$arg" ;;
-				dvalue) is_dns_record_format_valid "$arg" ;;
 				email) is_email_format_valid "$arg" ;;
 				email_forward) is_email_format_valid "$arg" ;;
 				exp) is_date_format_valid "$arg" ;;

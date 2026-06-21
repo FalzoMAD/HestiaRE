@@ -106,18 +106,6 @@ exec(HESTIA_CMD . "h-list-sys-themes json", $output, $return_var);
 $theme = json_decode(implode("", $output), true);
 unset($output);
 
-// List dns cluster hosts
-exec(HESTIA_CMD . "h-list-remote-dns-hosts json", $output, $return_var);
-$dns_cluster = json_decode(implode("", $output), true);
-unset($output);
-if (is_array($dns_cluster)) {
-	foreach ($dns_cluster as $key => $value) {
-		$v_dns_cluster = "yes";
-	}
-}
-if (empty($v_dns_cluster)) {
-	$v_dns_cluster = "";
-}
 $v_release_branch = $_SESSION["RELEASE_BRANCH"];
 
 // List smtp relay settings
@@ -1451,27 +1439,6 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Change POLICY_USER_EDIT_DNS_TEMPLATES
-	if (empty($_SESSION["error_msg"])) {
-		if (
-			$_POST["v_policy_user_edit_dns_templates"] !=
-			$_SESSION["POLICY_USER_EDIT_DNS_TEMPLATES"]
-		) {
-			exec(
-				HESTIA_CMD .
-					"h-change-sys-config-value POLICY_USER_EDIT_DNS_TEMPLATES " .
-					quoteshellarg($_POST["v_policy_user_edit_dns_templates"]),
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			if (empty($_SESSION["error_msg"])) {
-				$v_policy_user_edit_details = $_POST["v_policy_user_edit_dns_templates"];
-			}
-			$v_security_adv = "yes";
-		}
-	}
 
 	if (
 		$_POST["v_api_system"] != $_SESSION["API_SYSTEM"] ||

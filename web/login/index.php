@@ -84,8 +84,6 @@ if (isset($_SESSION["user"])) {
 		// Determine package features and land user at the first available page
 		if ($data[$user_plain]["WEB_DOMAINS"] !== "0") {
 			header("Location: /list/web/");
-		} elseif ($data[$user_plain]["DNS_DOMAINS"] !== "0") {
-			header("Location: /list/dns/");
 		} elseif ($data[$user_plain]["MAIL_DOMAINS"] !== "0") {
 			header("Location: /list/mail/");
 		} elseif ($data[$user_plain]["DATABASES"] !== "0") {
@@ -371,8 +369,6 @@ function authenticate_user($user, $password, $twofa = "") {
 					} else {
 						if ($data[$user]["WEB_DOMAINS"] != "0") {
 							header("Location: /list/web/");
-						} elseif ($data[$user]["DNS_DOMAINS"] != "0") {
-							header("Location: /list/dns/");
 						} elseif ($data[$user]["MAIL_DOMAINS"] != "0") {
 							header("Location: /list/mail/");
 						} elseif ($data[$user]["DATABASES"] != "0") {

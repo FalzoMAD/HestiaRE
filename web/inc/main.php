@@ -292,8 +292,6 @@ function top_panel($user, $TAB) {
 		// Set home location URL based on available package features from account
 		if ($panel[$user]["WEB_DOMAINS"] != "0") {
 			$home_url = "/list/web/";
-		} elseif ($panel[$user]["DNS_DOMAINS"] != "0") {
-			$home_url = "/list/dns/";
 		} elseif ($panel[$user]["MAIL_DOMAINS"] != "0") {
 			$home_url = "/list/mail/";
 		} elseif ($panel[$user]["DATABASES"] != "0") {

@@ -74,14 +74,6 @@
 				<span class="u-hidden-visually"><?= tohtml( _("Web Aliases")) ?></span>
 			</div>
 			<div class="units-table-cell compact u-text-center">
-				<i class="fas fa-book-atlas" title="<?= tohtml( _("DNS Zones")) ?>"></i>
-				<span class="u-hidden-visually"><?= tohtml( _("DNS Zones")) ?></span>
-			</div>
-			<div class="units-table-cell compact u-text-center">
-				<i class="fas fa-globe" title="<?= tohtml( _("DNS Records")) ?>"></i>
-				<span class="u-hidden-visually"><?= tohtml( _("DNS Records")) ?></span>
-			</div>
-			<div class="units-table-cell compact u-text-center">
 				<i class="fas fa-envelopes-bulk" title="<?= tohtml( _("Mail Domains")) ?>"></i>
 				<span class="u-hidden-visually"><?= tohtml( _("Mail Domains")) ?></span>
 			</div>
@@ -228,26 +220,6 @@
 							&infin;
 						<?php } else { ?>
 							<?= tohtml($data[$key]["WEB_ALIASES"]) ?>
-						<?php } ?>
-					</span>
-				</div>
-				<div class="units-table-cell compact u-text-bold u-text-center-desktop">
-					<span class="u-hide-desktop"><?= tohtml( _("DNS Zones")) ?>:</span>
-					<span class="units-table-badge" title="<?= tohtml( _("DNS Zones")) ?>: <?= tohtml($data[$key]["DNS_DOMAINS"]) ?>">
-						<?php if ($data[$key]["DNS_DOMAINS"] == "unlimited") { ?>
-							&infin;
-						<?php } else { ?>
-							<?= tohtml($data[$key]["DNS_DOMAINS"]) ?>
-						<?php } ?>
-					</span>
-				</div>
-				<div class="units-table-cell compact u-text-bold u-text-center-desktop">
-					<span class="u-hide-desktop"><?= tohtml( _("DNS Records")) ?>:</span>
-					<span class="units-table-badge" title="<?= tohtml( _("DNS Records")) ?>: <?= tohtml($data[$key]["DNS_RECORDS"]) ?>">
-						<?php if ($data[$key]["DNS_RECORDS"] == "unlimited") { ?>
-							&infin;
-						<?php } else { ?>
-							<?= tohtml($data[$key]["DNS_RECORDS"]) ?>
 						<?php } ?>
 					</span>
 				</div>
