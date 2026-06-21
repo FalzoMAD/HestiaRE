@@ -33,7 +33,6 @@ H_PASS             ?=
 
 MARIADB_VER        := 11.8
 PHP_VER            := 8.3
-PMA_VER            := 5.2.3
 MULTIPHP_VER       := 5.6 7.0 7.1 7.2 7.3 7.4 8.0 8.1 8.2 8.3 8.4 8.5
 TOOLS_SET          ?= hestia
 

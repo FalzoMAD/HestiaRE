@@ -1,0 +1,117 @@
+#!/bin/bash
+# info: Install phpMyAdmin database administration tool
+# options: NONE
+#
+# This function installs phpMyAdmin from OS repositories, sets up the
+# configuration storage database, and integrates with the panel.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.conf
+source /etc/hestia/hestia.conf
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+PMA_CONFIG="/etc/phpmyadmin"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "$(id -u)" != '0' ]; then
+	echo "ERROR: h-add-sys-phpmyadmin must be run as root"
+	exit 10
+fi
+
+if [ -z "$HESTIA" ]; then HESTIA="/usr/local/hestia"; fi
+
+if ! echo "$DB_SYSTEM" | grep -qw 'mysql'; then
+	echo "ERROR: MySQL not available. Installation aborted."
+	exit 2
+fi
+
+check_hestia_demo_mode
+
+# Already installed?
+if [ -f "$PMA_CONFIG/config-db.php" ] && [ -f "/var/lib/phpmyadmin/blowfish_secret.inc.php" ]; then
+	echo "INFO: phpMyAdmin is already installed and configured."
+	exit 0
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Prevent dbconfig-common from auto-configuring database
+echo "phpmyadmin phpmyadmin/dbconfig-install boolean false" \
+	| debconf-set-selections
+
+DEBIAN_FRONTEND=noninteractive apt-get -y install phpmyadmin
+
+# Generate blowfish secret and write to expected location
+blowfish="$(openssl rand -base64 32 | tr -d '/+=' | cut -c1-32)"
+mkdir -p /var/lib/phpmyadmin
+cat > /var/lib/phpmyadmin/blowfish_secret.inc.php <<'PHP'
+<?php
+$cfg['blowfish_secret'] = '_BLOWFISH_';
+PHP
+sed -i "s/_BLOWFISH_/$blowfish/" /var/lib/phpmyadmin/blowfish_secret.inc.php
+chmod 640 /var/lib/phpmyadmin/blowfish_secret.inc.php
+chown root:www-data /var/lib/phpmyadmin/blowfish_secret.inc.php
+
+# Ensure tmp directory is writable
+mkdir -p /var/lib/phpmyadmin/tmp
+chown www-data:www-data /var/lib/phpmyadmin/tmp
+chmod 770 /var/lib/phpmyadmin/tmp
+
+# Create configuration storage database and user
+dbpass=$(generate_password)
+db_client="mysql"
+[ -x /usr/bin/mariadb ] && db_client="mariadb"
+
+$db_client -e "CREATE DATABASE IF NOT EXISTS \`phpmyadmin\` DEFAULT CHARACTER SET utf8 COLLATE utf8_bin" \
+	|| { echo "ERROR: Failed to create phpmyadmin database"; exit 1; }
+$db_client -e "CREATE USER IF NOT EXISTS 'pma'@'localhost' IDENTIFIED BY '$dbpass'" \
+	|| { echo "ERROR: Failed to create pma database user"; exit 1; }
+$db_client -e "GRANT ALL ON \`phpmyadmin\`.* TO 'pma'@'localhost'" \
+	|| { echo "ERROR: Failed to grant pma privileges"; exit 1; }
+$db_client -e "FLUSH PRIVILEGES"
+$db_client phpmyadmin < /usr/share/phpmyadmin/sql/create_tables.sql \
+	|| { echo "ERROR: Failed to initialize phpMyAdmin config storage schema"; exit 1; }
+
+# Write config-db.php (bypasses dbconfig-common).
+# OS package config.inc.php reads this file to configure config storage.
+mkdir -p "$PMA_CONFIG"
+cat > "$PMA_CONFIG/config-db.php" <<'PHP'
+<?php
+$dbserver='localhost';
+$dbport='';
+$dbname='phpmyadmin';
+$dbuser='pma';
+$dbpass='_PMAPASS_';
+PHP
+sed -i "s/_PMAPASS_/$dbpass/" "$PMA_CONFIG/config-db.php"
+chmod 640 "$PMA_CONFIG/config-db.php"
+chown root:www-data "$PMA_CONFIG/config-db.php"
+
+# Ensure conf.d directory exists for SSO and future extensions
+mkdir -p "$PMA_CONFIG/conf.d"
+chmod 750 "$PMA_CONFIG/conf.d"
+chown root:www-data "$PMA_CONFIG/conf.d"
+
+# Set panel alias
+if [ -z "$(grep DB_PMA_ALIAS "$HESTIA/conf/hestia.conf")" ]; then
+	$BIN/h-change-sys-config-value 'DB_PMA_ALIAS' 'phpmyadmin'
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "Plugins" "phpMyAdmin installed (OS package)."
+log_event "$OK" "$ARGUMENTS"
