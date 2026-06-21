@@ -21,6 +21,11 @@
 
     "cli_commands": {
       "description": "All CLI commands. h-* prefix is HestiaRE-native (renamed from v-* in Issue #22). v-* symlinks for HestiaCP compatibility added in Issue #23. No hl-* commands.",
+      "symlink_policy": {
+        "baseline": "Each h-* command that predated Issue #23 has one v-* symlink. New h-* commands created after Issue #23 get NO v-* symlink — the v-* name never existed.",
+        "escalation_rule": "When a command is substantially rewritten and diverges significantly from its HestiaCP upstream equivalent, its v-* symlink is removed. Rationale: prevent accidental upstream cherry-picks onto an internally incompatible implementation. Applied in Issue #54 (v-add-sys-roundcube removed after total rewrite for OS-package migration).",
+        "deletion": "When removing an h-* command: remove its v-* symlink too — no orphans."
+      },
       "entry_points": ["bin/h-*"],
       "directories": ["bin/"],
       "key_files": [
