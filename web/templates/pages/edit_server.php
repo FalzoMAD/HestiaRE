@@ -1399,19 +1399,6 @@
 				</summary>
 				<div class="box-collapse-content">
 					<div class="u-mb10">
-						<label for="v_plugin_app_installer" class="form-label">
-							<?= tohtml( _("Quick App Installer")) ?>
-						</label>
-						<select class="form-select" name="v_plugin_app_installer" id="v_plugin_app_installer">
-							<option value="false">
-								<?= tohtml( _("No")) ?>
-							</option>
-							<option value="true" <?= tohtml($_SESSION["PLUGIN_APP_INSTALLER"] == "true" ? "selected" : "") ?>>
-								<?= tohtml( _("Yes")) ?>
-							</option>
-						</select>
-					</div>
-					<div class="u-mb10">
 						<label for="v_filemanager" class="form-label">
 							<?= tohtml( _("File Manager")) ?>
 						</label>

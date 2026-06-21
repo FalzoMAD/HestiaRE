@@ -1,6 +1,7 @@
 <?php
-use Divinity76\CloudflareIpValidator\CloudflareIpValidator;
 use function Hestiacp\quoteshellarg\quoteshellarg;
+
+require_once __DIR__ . '/cloudflare-ip.php';
 
 # Return codes
 const E_ARGS = 1;
@@ -106,7 +107,7 @@ function get_real_user_ip() {
 		!empty($_SERVER["HTTP_CF_CONNECTING_IP"]) &&
 		filter_var($_SERVER["HTTP_CF_CONNECTING_IP"], FILTER_VALIDATE_IP) &&
 		!empty($ip) &&
-		CloudflareIpValidator::isCloudflareIp($ip)
+		hestia_is_cloudflare_ip($ip)
 	) {
 		$ip = $_SERVER["HTTP_CF_CONNECTING_IP"];
 	}

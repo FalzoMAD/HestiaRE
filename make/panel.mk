@@ -9,6 +9,7 @@ _install-panel:
 	echo "[ * ] Installing panel packages (Caddy, PHP $(PHP_VER) FPM)..."
 	DEBIAN_FRONTEND=noninteractive apt-get -y install \
 	    caddy \
+	    libphp-phpmailer \
 	    php$(PHP_VER)-fpm php$(PHP_VER)-mysql php$(PHP_VER)-curl \
 	    php$(PHP_VER)-zip php$(PHP_VER)-gmp php$(PHP_VER)-mbstring \
 	    php$(PHP_VER)-opcache >> $(LOG)

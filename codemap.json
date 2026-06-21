@@ -40,14 +40,14 @@
         "bin/h-update-sys-queue"
       ],
       "language": "bash",
-      "total_commands": 466,
+      "total_commands": 465,
       "command_prefixes": {
-        "h-*": 466,
+        "h-*": 465,
         "v-*": "symlinks only — see Issue #23"
       },
       "domains": {
         "user": { "count": 99, "pattern": "bin/h-*-user*" },
-        "sys": { "count": 104, "pattern": "bin/h-*-sys*" },
+        "sys": { "count": 103, "pattern": "bin/h-*-sys*" },
         "web": { "count": 80, "pattern": "bin/h-*-web*" },
         "mail": { "count": 66, "pattern": "bin/h-*-mail*" },
         "dns": { "count": 1, "pattern": "bin/h-*-dns*", "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58" },
@@ -129,6 +129,9 @@
         "web/inc/policies.php",
         "web/inc/mail-wrapper.php",
         "web/inc/2fa/",
+        "web/inc/lib/quoteshellarg.php",
+        "web/inc/cloudflare-ip.php",
+        "web/inc/vendor/",
         "web/locale/languages.json"
       ],
       "language": "php",
@@ -141,6 +144,29 @@
         "Bulk operations",
         "File manager integration (optional)"
       ],
+      "panel_vendor": {
+        "strategy": "No Composer at install time. No vendor/ in repo. OS packages and Eigenbau only.",
+        "manifest": "VENDORED.json",
+        "os_packages": {
+          "libphp-phpmailer": "deb12=6.6.3 / ub24=6.8.1 / deb13=6.9.3 — panel email sending — LGPL-2.1-only — installed by make/panel.mk"
+        },
+        "packages": {},
+        "inline_libs": {
+          "web/inc/lib/quoteshellarg.php": "Third-party: inlined from hestiacp/phpquoteshellarg v1.1.0 (Unlicense). Keeps namespace Hestiacp\\quoteshellarg intact. See VENDORED.json and security note in file header.",
+          "web/inc/lib/totp.php": "Eigenbau: RFC 6238 TOTP (secret gen, URI builder, verify). No upstream, no deps.",
+          "web/inc/lib/qrcode.php": "Eigenbau: single-file SVG QR code generator (byte mode, ECC-M, v1-10). No upstream, no deps.",
+          "web/inc/cloudflare-ip.php": "Eigenbau: static Cloudflare CIDR list. Update from cloudflare.com/ips-v4 and /ips-v6 when ranges change."
+        },
+        "removed": [
+          "robthree/twofactorauth — removed in Issue #56, replaced by web/inc/lib/totp.php (Eigenbau)",
+          "phpmailer/phpmailer — removed in Issue #56, replaced by OS package libphp-phpmailer (make/panel.mk)",
+          "chillerlan/php-qrcode + php-settings-container — removed in Issue #56, replaced by web/inc/lib/qrcode.php (Eigenbau)",
+          "web/src/ (Quick-Install feature) — removed in Issue #56",
+          "web/add/webapp/ — removed in Issue #56",
+          "web/templates/pages/list_webapps.php — removed in Issue #56",
+          "web/templates/pages/setup_webapp.php — removed in Issue #56"
+        ]
+      },
       "locales": 42,
       "action_dirs": ["add", "edit", "delete", "list", "bulk", "copy", "move", "suspend", "unsuspend", "restart", "stop", "start", "schedule", "update", "generate", "download", "search", "reset", "reset2fa"],
       "dependencies": ["cli_commands", "func_libraries"],

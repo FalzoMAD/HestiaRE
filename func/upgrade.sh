@@ -727,8 +727,8 @@ upgrade_snappymail() {
 }
 
 upgrade_dependencies() {
-	echo "[ ! ] Update Hestia PHP dependencies..."
-	$BIN/h-add-sys-dependencies
+	# vendor/ is bundled in releases (Build-Time-Vendoring) — no Composer at install time
+	:
 }
 
 upgrade_rebuild_web_templates() {
