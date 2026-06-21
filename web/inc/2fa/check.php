@@ -1,23 +1,18 @@
 <?php
-use RobThree\Auth\TwoFactorAuth;
-require_once __DIR__ . "/../vendor/autoload.php";
+
+require_once __DIR__ . '/../lib/totp.php';
 
 if (isset($argv[1]) && isset($argv[2])) {
 	$secret = $argv[1];
-	$token = $argv[2];
-} elseif (isset($_GET["secret"]) && isset($_GET["token"])) {
-	$secret = htmlspecialchars($_GET["secret"]);
-	$token = htmlspecialchars($_GET["token"]);
+	$token  = $argv[2];
+} elseif (isset($_GET['secret']) && isset($_GET['token'])) {
+	$secret = htmlspecialchars($_GET['secret']);
+	$token  = htmlspecialchars($_GET['token']);
 } else {
-	echo "ERROR: Secret or Token is not set as argument!";
+	echo 'ERROR: Secret or Token is not set as argument!';
 	exit();
 }
 
-$tfa = new TwoFactorAuth(issuer: "Hestia Control Panel");
-
-// Verify code
-$result = $tfa->verifyCode($secret, $token);
-
-if ($result) {
-	echo "ok";
+if (hestia_totp_verify($secret, $token)) {
+	echo 'ok';
 }

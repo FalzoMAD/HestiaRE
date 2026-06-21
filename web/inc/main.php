@@ -9,15 +9,6 @@ use function Hestiacp\quoteshellarg\quoteshellarg;
 require_once __DIR__ . '/lib/quoteshellarg.php';
 require_once '/usr/share/php/libphp-phpmailer/autoload.php';
 
-try {
-	require_once __DIR__ . "/vendor/autoload.php";
-} catch (Throwable $ex) {
-	$errstr = "Unable to load required libraries (vendor/ missing). Re-run the HestiaRE installer. Error: " . $ex->getMessage();
-	trigger_error($errstr);
-	echo $errstr;
-	exit(1);
-}
-
 define("HESTIA_DIR_BIN", "/usr/local/hestia/bin/");
 define("HESTIA_CMD", "/usr/bin/sudo /usr/local/hestia/bin/");
 define("DEFAULT_PHP_VERSION", "php-" . exec('php -r "echo substr(phpversion(),0,3);"'));

@@ -1,16 +1,7 @@
 <?php
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
-try {
-	require_once "../inc/vendor/autoload.php";
-} catch (Throwable $ex) {
-	$errstr =
-		"Unable to load required libraries. Please run h-add-sys-dependencies in command line. Error: " .
-		$ex->getMessage();
-	trigger_error($errstr);
-	echo $errstr;
-	exit(1);
-}
+require_once __DIR__ . '/../inc/lib/quoteshellarg.php';
 
 //die("Error: Disabled");
 define("HESTIA_DIR_BIN", "/usr/local/hestia/bin/");

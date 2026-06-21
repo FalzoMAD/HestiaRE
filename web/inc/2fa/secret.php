@@ -1,14 +1,10 @@
 <?php
 
-use RobThree\Auth\TwoFactorAuth;
+require_once __DIR__ . '/../lib/totp.php';
+require_once __DIR__ . '/../lib/qrcode.php';
 
-require_once __DIR__ . "/../vendor/autoload.php";
-require_once __DIR__ . "/../lib/qrcode.php";
-
-$tfa = new TwoFactorAuth(issuer: "Hestia Control Panel");
-$secret = $tfa->createSecret(160);
-
-$otpUri = $tfa->getQRText(gethostname(), $secret);
+$secret = hestia_totp_secret(160);
+$otpUri = hestia_totp_uri(gethostname(), $secret, 'Hestia Control Panel');
 $qrcode = hestia_qrcode_data_uri($otpUri);
 
-echo $secret . "-" . $qrcode;
+echo $secret . '-' . $qrcode;

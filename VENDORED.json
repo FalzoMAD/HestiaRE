@@ -15,17 +15,6 @@
       "reason": "Security-hardened shell argument quoting. PHP's native escapeshellarg() corrupts UTF-8 input (e.g. æøå) in processes running a non-UTF-8 locale. This implementation avoids the locale-dependent code path on Unix by wrapping in single quotes unconditionally.",
       "transitive_deps": [],
       "last_verified": "2026-06-21"
-    },
-    {
-      "name": "robthree/twofactorauth",
-      "type": "vendor-tree",
-      "path": "web/inc/vendor/robthree",
-      "upstream_repo": "https://github.com/RobThree/TwoFactorAuth",
-      "upstream_version": "3.0.3",
-      "license": "MIT",
-      "reason": "TOTP secret generation and code verification for 2FA. QR code rendering is handled by the HestiaRE Eigenbau (web/inc/lib/qrcode.php), not by this library.",
-      "transitive_deps": [],
-      "last_verified": "2026-06-21"
     }
   ],
 
