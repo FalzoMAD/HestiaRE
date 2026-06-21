@@ -14,18 +14,6 @@ _install-base:
 	    || echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
 	echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/90nolang
 	mkdir -p /root/.gnupg && chmod 700 /root/.gnupg
-	echo "[ * ] Adding nginx mainline repo..."
-	printf 'deb [arch=%s signed-by=/usr/share/keyrings/nginx-keyring.gpg] https://nginx.org/packages/mainline/%s/ %s nginx\n' \
-	    "$(ARCH)" "$(OS_ID)" "$(CODENAME)" > /etc/apt/sources.list.d/nginx.list
-	curl -fsSL https://nginx.org/keys/nginx_signing.key \
-	    -o /tmp/nginx_signing.key \
-	    || { echo "ERROR: failed to download nginx signing key"; exit 1; }
-	gpg --dearmor < /tmp/nginx_signing.key \
-	    > /usr/share/keyrings/nginx-keyring.gpg \
-	    || { echo "ERROR: failed to dearmor nginx signing key"; exit 1; }
-	[ -s /usr/share/keyrings/nginx-keyring.gpg ] \
-	    || { echo "ERROR: nginx keyring file is empty"; exit 1; }
-	rm -f /tmp/nginx_signing.key
 	echo "[ * ] Adding Sury PHP repo..."
 	printf 'deb [arch=%s signed-by=/usr/share/keyrings/sury-keyring.gpg] https://packages.sury.org/php/ %s main\n' \
 	    "$(ARCH)" "$(CODENAME)" > /etc/apt/sources.list.d/php.list
