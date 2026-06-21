@@ -1,7 +1,6 @@
 {
     "require": {
         "phpmailer/phpmailer": "7.0.2",
-        "robthree/twofactorauth": "3.0.3",
-        "chillerlan/php-qrcode": "5.0.5"
+        "robthree/twofactorauth": "3.0.3"
     }
 }
