@@ -59,9 +59,7 @@ _install-mail:
 	systemctl enable rspamd
 	systemctl start rspamd
 	echo "[ * ] Installing Roundcube..."
-	$(HESTIA)/bin/h-add-sys-roundcube quiet 2>/dev/null \
-	    || DEBIAN_FRONTEND=noninteractive apt-get -y install \
-	        roundcube roundcube-mysql roundcube-plugins >> $(LOG)
+	$(HESTIA)/bin/h-add-sys-roundcube >> $(LOG)
 	touch $(CONF_DIR)/.done.mail
 	echo ""
 	echo "[ OK ] install-mail complete"
