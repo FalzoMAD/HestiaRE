@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "description": "Central manifest of all third-party code vendored directly into this repository — whether as a single inlined file or a full vendor tree. Update this file whenever a vendored component is added, upgraded, or removed. License files must remain in their respective directories; this manifest points to them but does not replace them.",
+    "last_updated": "2026-06-21"
+  },
+
+  "vendored": [
+    {
+      "name": "phpquoteshellarg",
+      "type": "single-file",
+      "path": "web/inc/lib/quoteshellarg.php",
+      "upstream_repo": "https://github.com/hestiacp/phpquoteshellarg",
+      "upstream_version": "1.1.0",
+      "license": "Unlicense",
+      "reason": "Security-hardened shell argument quoting. PHP's native escapeshellarg() corrupts UTF-8 input (e.g. æøå) in processes running a non-UTF-8 locale. This implementation avoids the locale-dependent code path on Unix by wrapping in single quotes unconditionally.",
+      "transitive_deps": [],
+      "last_verified": "2026-06-21"
+    },
+    {
+      "name": "phpmailer/phpmailer",
+      "type": "vendor-tree",
+      "path": "web/inc/vendor/phpmailer",
+      "upstream_repo": "https://github.com/PHPMailer/PHPMailer",
+      "upstream_version": "7.0.2",
+      "license": "LGPL-2.1-only",
+      "license_note": "LGPL-2.1-only is compatible with GPL-3.0 per FSF guidance. License file at web/inc/vendor/phpmailer/phpmailer/LICENSE.",
+      "reason": "Panel email delivery (password reset, 2FA notifications, admin alerts). Build-time vendored to remove Composer as a runtime install dependency.",
+      "transitive_deps": [],
+      "last_verified": "2026-06-21"
+    },
+    {
+      "name": "robthree/twofactorauth",
+      "type": "vendor-tree",
+      "path": "web/inc/vendor/robthree",
+      "upstream_repo": "https://github.com/RobThree/TwoFactorAuth",
+      "upstream_version": "3.0.3",
+      "license": "MIT",
+      "reason": "TOTP secret generation and code verification for 2FA. QR code rendering is handled by the HestiaRE Eigenbau (web/inc/lib/qrcode.php), not by this library.",
+      "transitive_deps": [],
+      "last_verified": "2026-06-21"
+    }
+  ]
+}

@@ -141,17 +141,18 @@
       ],
       "panel_vendor": {
         "strategy": "Build-Time-Vendoring — vendor/ committed to git, no Composer at install time",
+        "manifest": "VENDORED.json",
         "packages": {
-          "phpmailer/phpmailer": "7.0.2 — panel email sending (password reset, alerts)",
-          "robthree/twofactorauth": "3.0.3 — TOTP 2FA; QR generation bypassed via getQRText()",
-          "chillerlan/php-qrcode": "5.0.5 — SVG QR code generation in secret.php (no external API, pure PHP, needs ext-mbstring which panel.mk installs)",
-          "chillerlan/php-settings-container": "3.3.0 — transitive dep of php-qrcode (ext-json, always in PHP 8.x)"
+          "phpmailer/phpmailer": "7.0.2 — panel email sending (password reset, alerts) — LGPL-2.1-only",
+          "robthree/twofactorauth": "3.0.3 — TOTP 2FA secret generation and code verification — MIT"
         },
         "inline_libs": {
-          "web/inc/lib/quoteshellarg.php": "Inlined from hestiacp/phpquoteshellarg v1.1.0 (Unlicense). Keeps namespace Hestiacp\\quoteshellarg intact. See security note in file header.",
-          "web/inc/cloudflare-ip.php": "Eigenbau replacement for divinity76/cloudflare-ip-validator. Static CIDR list, update from cloudflare.com/ips-v4 and /ips-v6 when Cloudflare updates their ranges."
+          "web/inc/lib/quoteshellarg.php": "Third-party: inlined from hestiacp/phpquoteshellarg v1.1.0 (Unlicense). Keeps namespace Hestiacp\\quoteshellarg intact. See VENDORED.json and security note in file header.",
+          "web/inc/lib/qrcode.php": "Eigenbau: single-file SVG QR code generator (byte mode, ECC-M, v1-10). No upstream, no deps.",
+          "web/inc/cloudflare-ip.php": "Eigenbau: static Cloudflare CIDR list. Update from cloudflare.com/ips-v4 and /ips-v6 when ranges change."
         },
         "removed": [
+          "chillerlan/php-qrcode + php-settings-container — removed in Issue #56, replaced by web/inc/lib/qrcode.php (Eigenbau)",
           "web/src/ (Quick-Install feature) — removed in Issue #56",
           "web/add/webapp/ — removed in Issue #56",
           "web/templates/pages/list_webapps.php — removed in Issue #56",
