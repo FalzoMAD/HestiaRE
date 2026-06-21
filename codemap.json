@@ -35,14 +35,14 @@
         "bin/h-update-sys-queue"
       ],
       "language": "bash",
-      "total_commands": 466,
+      "total_commands": 464,
       "command_prefixes": {
-        "h-*": 466,
+        "h-*": 464,
         "v-*": "symlinks only — see Issue #23"
       },
       "domains": {
         "user": { "count": 99, "pattern": "bin/h-*-user*" },
-        "sys": { "count": 105, "pattern": "bin/h-*-sys*" },
+        "sys": { "count": 102, "pattern": "bin/h-*-sys*" },
         "web": { "count": 80, "pattern": "bin/h-*-web*" },
         "mail": { "count": 66, "pattern": "bin/h-*-mail*" },
         "dns": { "count": 1, "pattern": "bin/h-*-dns*", "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58" },
@@ -290,7 +290,7 @@
         "make/panel.mk": "_install-panel — Caddy + hestia-php.service",
         "make/web.mk": "_install-web — nginx, PHP multi (5.6–8.4), web pool config",
         "make/db.mk": "_install-db — MariaDB + phpMyAdmin",
-        "make/mail.mk": "_install-mail — exim4, dovecot, rspamd, roundcube (standard profile only)",
+        "make/mail.mk": "_install-mail — exim4, dovecot, rspamd; calls h-add-sys-roundcube (standard profile only)",
         "make/security.mk": "_install-security — fail2ban, iptables, ipset",
         "make/tools.mk": "add-tools — composer, wp-cli; TOOLS_SET=hestia|sysadmin|full",
         "make/configure.mk": "_check-root, _collect-params, _configure-hestia, _finalize"
