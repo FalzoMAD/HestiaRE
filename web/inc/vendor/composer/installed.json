@@ -1,14 +1,9 @@
 {
-    "_readme": [
-        "This file locks the dependencies of your project to a known state",
-        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
-        "This file is @generated automatically"
-    ],
-    "content-hash": "f7e17f2588b5ff52d964d7c8247d4f79",
     "packages": [
         {
             "name": "chillerlan/php-qrcode",
             "version": "5.0.5",
+            "version_normalized": "5.0.5.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/chillerlan/php-qrcode.git",
@@ -41,7 +36,9 @@
                 "setasign/fpdf": "Required to use the QR FPDF output.",
                 "simple-icons/simple-icons": "SVG icons that you can use to embed as logos in the QR Code"
             },
+            "time": "2025-11-23T23:51:44+00:00",
             "type": "library",
+            "installation-source": "dist",
             "autoload": {
                 "psr-4": {
                     "chillerlan\\QRCode\\": "src"
@@ -97,11 +94,12 @@
                     "type": "Ko-Fi"
                 }
             ],
-            "time": "2025-11-23T23:51:44+00:00"
+            "install-path": "../chillerlan/php-qrcode"
         },
         {
             "name": "chillerlan/php-settings-container",
             "version": "3.3.0",
+            "version_normalized": "3.3.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/chillerlan/php-settings-container.git",
@@ -126,7 +124,9 @@
                 "slevomat/coding-standard": "^8.22",
                 "squizlabs/php_codesniffer": "^4.0"
             },
+            "time": "2026-03-20T21:10:52+00:00",
             "type": "library",
+            "installation-source": "dist",
             "autoload": {
                 "psr-4": {
                     "chillerlan\\Settings\\": "src"
@@ -166,11 +166,12 @@
                     "type": "ko_fi"
                 }
             ],
-            "time": "2026-03-20T21:10:52+00:00"
+            "install-path": "../chillerlan/php-settings-container"
         },
         {
             "name": "phpmailer/phpmailer",
             "version": "v7.0.2",
+            "version_normalized": "7.0.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/PHPMailer/PHPMailer.git",
@@ -210,7 +211,9 @@
                 "symfony/polyfill-mbstring": "To support UTF-8 if the Mbstring PHP extension is not enabled (^1.2)",
                 "thenetworg/oauth2-azure": "Needed for Microsoft XOAUTH2 authentication"
             },
+            "time": "2026-01-09T18:02:33+00:00",
             "type": "library",
+            "installation-source": "dist",
             "autoload": {
                 "psr-4": {
                     "PHPMailer\\PHPMailer\\": "src/"
@@ -248,11 +251,12 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-01-09T18:02:33+00:00"
+            "install-path": "../phpmailer/phpmailer"
         },
         {
             "name": "robthree/twofactorauth",
             "version": "v3.0.3",
+            "version_normalized": "3.0.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/RobThree/TwoFactorAuth.git",
@@ -276,7 +280,9 @@
                 "bacon/bacon-qr-code": "Needed for BaconQrCodeProvider provider",
                 "endroid/qr-code": "Needed for EndroidQrCodeProvider"
             },
+            "time": "2026-01-05T13:17:41+00:00",
             "type": "library",
+            "installation-source": "dist",
             "autoload": {
                 "psr-4": {
                     "RobThree\\Auth\\": "lib"
@@ -329,16 +335,9 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-01-05T13:17:41+00:00"
+            "install-path": "../robthree/twofactorauth"
         }
     ],
-    "packages-dev": [],
-    "aliases": [],
-    "minimum-stability": "stable",
-    "stability-flags": {},
-    "prefer-stable": false,
-    "prefer-lowest": false,
-    "platform": {},
-    "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "dev": false,
+    "dev-package-names": []
 }

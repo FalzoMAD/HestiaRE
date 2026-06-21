@@ -143,7 +143,9 @@
         "strategy": "Build-Time-Vendoring — vendor/ committed to git, no Composer at install time",
         "packages": {
           "phpmailer/phpmailer": "7.0.2 — panel email sending (password reset, alerts)",
-          "robthree/twofactorauth": "3.0.3 — TOTP 2FA with SvgQRCodeProvider (no external API)"
+          "robthree/twofactorauth": "3.0.3 — TOTP 2FA; QR generation bypassed via getQRText()",
+          "chillerlan/php-qrcode": "5.0.5 — SVG QR code generation in secret.php (no external API, pure PHP, needs ext-mbstring which panel.mk installs)",
+          "chillerlan/php-settings-container": "3.3.0 — transitive dep of php-qrcode (ext-json, always in PHP 8.x)"
         },
         "inline_libs": {
           "web/inc/lib/quoteshellarg.php": "Inlined from hestiacp/phpquoteshellarg v1.1.0 (Unlicense). Keeps namespace Hestiacp\\quoteshellarg intact. See security note in file header.",
