@@ -47,7 +47,10 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Prevent dbconfig-common from auto-configuring database
+# Prevent dbconfig-common from auto-configuring database.
+# debconf-set-selections writes to the debconf database before apt-get runs —
+# the selection persists for the entire transaction including any deferred
+# dpkg --configure calls, so no interactive DB prompt will appear.
 echo "phpmyadmin phpmyadmin/dbconfig-install boolean false" \
 	| debconf-set-selections
 
@@ -73,6 +76,14 @@ chmod 770 /var/lib/phpmyadmin/tmp
 dbpass=$(generate_password)
 db_client="mysql"
 [ -x /usr/bin/mariadb ] && db_client="mariadb"
+
+# Guard against name collision: bail if a 'phpmyadmin' database already exists
+# from a source not managed by this HestiaRE instance.
+if $db_client -e "SHOW DATABASES LIKE 'phpmyadmin'" 2>/dev/null | grep -q 'phpmyadmin'; then
+	echo "ERROR: Database 'phpmyadmin' already exists but is not managed by this HestiaRE instance."
+	echo "       Remove it manually first, or run h-delete-sys-phpmyadmin if it was a previous install."
+	exit 1
+fi
 
 $db_client -e "CREATE DATABASE IF NOT EXISTS \`phpmyadmin\` DEFAULT CHARACTER SET utf8 COLLATE utf8_bin" \
 	|| { echo "ERROR: Failed to create phpmyadmin database"; exit 1; }

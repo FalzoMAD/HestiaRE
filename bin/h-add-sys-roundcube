@@ -51,8 +51,10 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Prevent dbconfig-common from auto-configuring the database —
-# we create DB and user ourselves below.
+# Prevent dbconfig-common from auto-configuring the database.
+# debconf-set-selections writes to the debconf database before apt-get runs —
+# the selection persists for the entire transaction including any deferred
+# dpkg --configure calls, so no interactive DB prompt will appear.
 echo "roundcube-core roundcube/dbconfig-install boolean false" \
 	| debconf-set-selections
 
@@ -63,6 +65,17 @@ DEBIAN_FRONTEND=noninteractive apt-get -y install \
 dbpass=$(generate_password)
 db_client="mysql"
 [ -x /usr/bin/mariadb ] && db_client="mariadb"
+
+# Guard against name collision: bail if a 'roundcube' database already exists
+# from a source not managed by this HestiaRE instance. Without this check,
+# CREATE DATABASE IF NOT EXISTS would silently succeed against a foreign DB,
+# then write debian-db.php with a new password that doesn't match the
+# existing user — leaving a broken but non-obvious configuration.
+if $db_client -e "SHOW DATABASES LIKE 'roundcube'" 2>/dev/null | grep -q 'roundcube'; then
+	echo "ERROR: Database 'roundcube' already exists but is not managed by this HestiaRE instance."
+	echo "       Remove it manually first, or run h-delete-sys-roundcube if it was a previous install."
+	exit 1
+fi
 
 $db_client -e "CREATE DATABASE IF NOT EXISTS \`roundcube\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" \
 	|| { echo "ERROR: Failed to create roundcube database"; exit 1; }

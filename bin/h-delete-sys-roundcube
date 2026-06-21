@@ -46,7 +46,11 @@ DEBIAN_FRONTEND=noninteractive apt-get -y purge \
 	roundcube roundcube-core roundcube-mysql roundcube-plugins
 DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
 
-# Drop database and user
+# Drop database and user.
+# INTENTIONAL DATA LOSS: the roundcube DB is dropped completely. This is by
+# design — Roundcube stores only UI preferences and contacts, not emails (those
+# live in Dovecot). A subsequent h-add-sys-roundcube creates a clean DB from
+# scratch. There is no migration path across a delete/re-add cycle.
 db_client="mysql"
 [ -x /usr/bin/mariadb ] && db_client="mariadb"
 

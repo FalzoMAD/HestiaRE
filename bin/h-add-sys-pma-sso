@@ -79,9 +79,15 @@ sed -i "s/%API_HOST_NAME%/$(hostname -f)/g" $PMA_INSTALL/hestia-sso.php
 sed -i "s/%API_HESTIA_PORT%/$BACKEND_PORT/g" $PMA_INSTALL/hestia-sso.php
 
 # Write SSO config into conf.d — loaded by OS package config.inc.php glob.
-# Uses $cfg['Servers'][1] directly: the OS config.inc.php increments $i twice
-# before the conf.d glob runs (once for init, once after config-db.php),
-# so $i would be 2 at that point — not the active server.
+# Uses $cfg['Servers'][1] directly (not $i): the OS config.inc.php increments
+# $i twice before the conf.d glob runs (once on init, once after config-db.php),
+# so $i would equal 2 at that point — not the active server slot.
+# BRITTLE RISK: if a phpMyAdmin package update restructures config.inc.php and
+# changes the number of $i increments before the glob, this hardcoded [1] will
+# silently misconfigure SSO (auth_type switches but targets the wrong server).
+# To verify after a PMA upgrade: count $i increments in
+# /etc/phpmyadmin/config.inc.php above the "foreach glob(...conf.d...)" line —
+# if the count changes from 2, update [1] here accordingly.
 mkdir -p "$PMA_CONFIG/conf.d"
 cat > "$PMA_CONFIG/conf.d/hestia-sso.inc.php" <<'PHP'
 <?php
