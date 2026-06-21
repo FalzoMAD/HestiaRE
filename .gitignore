@@ -20,8 +20,6 @@
 
 # Composer
 composer.phar
-web/inc/vendor/
-web/src/vendor/
 
 # Distribution CSS
 web/css/themes/

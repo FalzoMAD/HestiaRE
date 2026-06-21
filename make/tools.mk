@@ -58,6 +58,5 @@ add-tools:
 	    echo "  wp-cli already present — upgrading"; \
 	    wp --allow-root cli update --quiet 2>/dev/null || true; \
 	fi
-	$(HESTIA)/bin/h-add-sys-dependencies 2>/dev/null || true
 	echo ""
 	echo "[ OK ] add-tools complete (TOOLS_SET=$(TOOLS_SET))"

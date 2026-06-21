@@ -35,14 +35,14 @@
         "bin/h-update-sys-queue"
       ],
       "language": "bash",
-      "total_commands": 466,
+      "total_commands": 465,
       "command_prefixes": {
-        "h-*": 466,
+        "h-*": 465,
         "v-*": "symlinks only — see Issue #23"
       },
       "domains": {
         "user": { "count": 99, "pattern": "bin/h-*-user*" },
-        "sys": { "count": 104, "pattern": "bin/h-*-sys*" },
+        "sys": { "count": 103, "pattern": "bin/h-*-sys*" },
         "web": { "count": 80, "pattern": "bin/h-*-web*" },
         "mail": { "count": 66, "pattern": "bin/h-*-mail*" },
         "dns": { "count": 1, "pattern": "bin/h-*-dns*", "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58" },
@@ -124,6 +124,9 @@
         "web/inc/policies.php",
         "web/inc/mail-wrapper.php",
         "web/inc/2fa/",
+        "web/inc/lib/quoteshellarg.php",
+        "web/inc/cloudflare-ip.php",
+        "web/inc/vendor/",
         "web/locale/languages.json"
       ],
       "language": "php",
@@ -136,6 +139,23 @@
         "Bulk operations",
         "File manager integration (optional)"
       ],
+      "panel_vendor": {
+        "strategy": "Build-Time-Vendoring — vendor/ committed to git, no Composer at install time",
+        "packages": {
+          "phpmailer/phpmailer": "7.0.2 — panel email sending (password reset, alerts)",
+          "robthree/twofactorauth": "3.0.3 — TOTP 2FA with SvgQRCodeProvider (no external API)"
+        },
+        "inline_libs": {
+          "web/inc/lib/quoteshellarg.php": "Inlined from hestiacp/phpquoteshellarg v1.1.0 (Unlicense). Keeps namespace Hestiacp\\quoteshellarg intact. See security note in file header.",
+          "web/inc/cloudflare-ip.php": "Eigenbau replacement for divinity76/cloudflare-ip-validator. Static CIDR list, update from cloudflare.com/ips-v4 and /ips-v6 when Cloudflare updates their ranges."
+        },
+        "removed": [
+          "web/src/ (Quick-Install feature) — removed in Issue #56",
+          "web/add/webapp/ — removed in Issue #56",
+          "web/templates/pages/list_webapps.php — removed in Issue #56",
+          "web/templates/pages/setup_webapp.php — removed in Issue #56"
+        ]
+      },
       "locales": 42,
       "action_dirs": ["add", "edit", "delete", "list", "bulk", "copy", "move", "suspend", "unsuspend", "restart", "stop", "start", "schedule", "update", "generate", "download", "search", "reset", "reset2fa"],
       "dependencies": ["cli_commands", "func_libraries"],

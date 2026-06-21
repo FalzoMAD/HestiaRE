@@ -6,12 +6,12 @@ use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
+require_once __DIR__ . '/lib/quoteshellarg.php';
+
 try {
-	require_once "vendor/autoload.php";
+	require_once __DIR__ . "/vendor/autoload.php";
 } catch (Throwable $ex) {
-	$errstr =
-		"Unable to load required libraries. Please run h-add-sys-dependencies in command line. Error: " .
-		$ex->getMessage();
+	$errstr = "Unable to load required libraries (vendor/ missing). Re-run the HestiaRE installer. Error: " . $ex->getMessage();
 	trigger_error($errstr);
 	echo $errstr;
 	exit(1);

@@ -449,26 +449,6 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Enable/Disable Quick App Installer
-	if (empty($_SESSION["error_msg"])) {
-		if ($_POST["v_plugin_app_installer"] != $_SESSION["PLUGIN_APP_INSTALLER"]) {
-			if ($_POST["v_plugin_app_installer"] == "true") {
-				$_POST["v_plugin_app_installer"] = "true";
-			} else {
-				$_POST["v_plugin_app_installer"] = "false";
-			}
-			exec(
-				HESTIA_CMD .
-					"h-change-sys-config-value PLUGIN_APP_INSTALLER " .
-					quoteshellarg($_POST["v_plugin_app_installer"]),
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-		}
-	}
-
 	// Update experimental features status
 	if (
 		empty($_SESSION["error_msg"]) &&
