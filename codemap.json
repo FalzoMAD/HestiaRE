@@ -293,7 +293,7 @@
       "make_structure": {
         "Makefile": "Orchestrator — global vars, -include make/$(OS).mk, include make/*.mk, public targets only",
         "make/$(OS).mk": "OS-specific vars: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA",
-        "make/base.mk": "_install-base — APT repos (nginx, sury, mariadb), base packages, system users, SSH hardening",
+        "make/base.mk": "_install-base — APT repos (sury, mariadb; nginx from OS repo), base packages, system users, SSH hardening",
         "make/panel.mk": "_install-panel — Caddy + hestia-php.service",
         "make/web.mk": "_install-web — nginx, PHP multi (5.6–8.4), web pool config",
         "make/db.mk": "_install-db — MariaDB + phpMyAdmin",
