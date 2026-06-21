@@ -7,7 +7,6 @@ import handleCopyCreds from './copyCreds';
 import handleCronGenerator from './cronGenerator';
 import handleDatabaseHints from './databaseHints';
 import handleDiscardAllMail from './discardAllMail';
-import handleDnsRecordHint from './dnsRecordHint';
 import handleDocRootHint from './docRootHint';
 import handleEditWebListeners from './editWebListeners';
 import handleErrorMessage from './errorHandler';
@@ -27,7 +26,6 @@ import handleSyncEmailValues from './syncEmailValues';
 import handleTabPanels from './tabPanels';
 import handleToggleAdvanced from './toggleAdvanced';
 import handleUnlimitedInput from './unlimitedInput';
-import initWebTerminal from './webTerminal';
 
 initListeners();
 focusFirstInput();
@@ -40,7 +38,6 @@ function initListeners() {
 	handleClipboardCopy();
 	handleCronGenerator();
 	handleDiscardAllMail();
-	handleDnsRecordHint();
 	handleDocRootHint();
 	handleEditWebListeners();
 	handleFormSubmit();
@@ -54,7 +51,7 @@ function initListeners() {
 	handleTabPanels();
 	handleToggleAdvanced();
 	initRrdCharts();
-	initWebTerminal();
+
 }
 
 document.addEventListener('alpine:init', () => {

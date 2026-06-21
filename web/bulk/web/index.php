@@ -70,7 +70,6 @@ foreach ($domain as $value) {
 if (isset($restart)) {
 	exec(HESTIA_CMD . "h-restart-web", $output, $return_var);
 	exec(HESTIA_CMD . "h-restart-proxy", $output, $return_var);
-	exec(HESTIA_CMD . "h-restart-dns", $output, $return_var);
 	exec(HESTIA_CMD . "h-restart-web-backend", $output, $return_var);
 }
 

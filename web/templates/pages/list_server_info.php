@@ -71,14 +71,7 @@
 											</a>
 										</li>
 									<?php } ?>
-									<?php if ((isset($_SESSION['DNS_SYSTEM'])) && (!empty($_SESSION['DNS_SYSTEM']))) { ?>
-										<li class="top-bar-menu-item">
-											<a class="top-bar-menu-link <?php if (isset($_GET['dns'])) echo 'active' ?>" href="/list/server/?dns">
-												<i class="fas fa-book-atlas"></i>
-												<span class="top-bar-menu-link-label"><?= tohtml( _("DNS")) ?></span>
-											</a>
-										</li>
-									<?php } ?>
+
 									<?php if ((isset($_SESSION['MAIL_SYSTEM'])) && (!empty($_SESSION['MAIL_SYSTEM']))) { ?>
 										<li class="top-bar-menu-item">
 											<a class="top-bar-menu-link <?php if (isset($_GET['mail'])) echo 'active' ?>" href="/list/server/?mail">

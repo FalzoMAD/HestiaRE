@@ -111,7 +111,6 @@ function prevent_get_csrf() {
 					"/list/user/index.php",
 					"/login/index.php",
 					"/list/web/index.php",
-					"/list/dns/index.php",
 					"/list/mail/index.php",
 					"/list/db/index.php",
 					"/list/cron/index.php",

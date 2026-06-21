@@ -58,25 +58,6 @@ function syshealth_update_web_config_format() {
 	unset known_keys
 }
 
-# Update list of known keys for dns.conf files
-function syshealth_update_dns_config_format() {
-
-	# DNS DOMAINS
-	# Create array of known keys in configuration file
-	system="dns"
-	known_keys="DOMAIN IP TPL TTL EXP SOA SERIAL SRC RECORDS DNSSEC KEY SLAVE MASTER SUSPENDED TIME DATE"
-	write_kv_config_file
-	unset system
-	unset known_keys
-
-	# DNS RECORDS
-	system="dns_records"
-	known_keys="ID RECORD TYPE PRIORITY VALUE SUSPENDED TIME DATE TTL"
-	write_kv_config_file
-	unset system
-	unset known_keys
-}
-
 # Update list of known keys for mail.conf files
 function syshealth_update_mail_config_format() {
 
@@ -104,7 +85,7 @@ function syshealth_update_user_config_format() {
 	# USER CONFIGURATION
 	# Create array of known keys in configuration file
 	system="user"
-	known_keys="NAME PACKAGE CONTACT CRON_REPORTS MD5 RKEY TWOFA QRCODE PHPCLI ROLE SUSPENDED SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_DNS SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON IP_AVAIL IP_OWNED U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_DNS_DOMAINS U_DNS_RECORDS U_MAIL_DKIM U_MAIL_DKIM U_MAIL_ACCOUNTS U_MAIL_DOMAINS U_MAIL_SSL U_DATABASES U_CRON_JOBS U_BACKUPS LANGUAGE THEME NOTIFICATIONS PREF_UI_SORT TIME DATE"
+	known_keys="NAME PACKAGE CONTACT CRON_REPORTS MD5 RKEY TWOFA QRCODE PHPCLI ROLE SUSPENDED SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON IP_AVAIL IP_OWNED U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DKIM U_MAIL_DKIM U_MAIL_ACCOUNTS U_MAIL_DOMAINS U_MAIL_SSL U_DATABASES U_CRON_JOBS U_BACKUPS LANGUAGE THEME NOTIFICATIONS PREF_UI_SORT TIME DATE"
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -169,19 +150,6 @@ function syshealth_repair_mail_config() {
 	done
 }
 
-function syshealth_repair_dns_config() {
-	system="dns"
-	sanitize_config_file "$system"
-	get_domain_values 'dns'
-	prev="DOMAIN"
-	for key in $known_keys; do
-		if [ -z "${!key}" ]; then
-			add_object_key 'dns' 'DOMAIN' "$domain" "$key" "$prev"
-		fi
-		prev=$key
-	done
-}
-
 function syshealth_repair_mail_account_config() {
 	system="mail_accounts"
 	sanitize_config_file "$system"
@@ -198,7 +166,7 @@ function syshealth_update_system_config_format() {
 	# SYSTEM CONFIGURATION
 	# Create array of known keys in configuration file
 	system="system"
-	known_keys="ANTISPAM_SYSTEM ANTIVIRUS_SYSTEM API_ALLOWED_IP API BACKEND_PORT BACKUP_GZIP BACKUP_MODE BACKUP_SYSTEM CRON_SYSTEM DB_PMA_ALIAS DB_SYSTEM DISK_QUOTA DNS_SYSTEM ENFORCE_SUBDOMAIN_OWNERSHIP FILE_MANAGER FIREWALL_EXTENSION FIREWALL_SYSTEM FTP_SYSTEM IMAP_SYSTEM INACTIVE_SESSION_TIMEOUT LANGUAGE LOGIN_STYLE MAIL_SYSTEM PROXY_PORT PROXY_SSL_PORT PROXY_SYSTEM RELEASE_BRANCH STATS_SYSTEM THEME UPDATE_HOSTNAME_SSL UPGRADE_SEND_EMAIL UPGRADE_SEND_EMAIL_LOG WEB_BACKEND WEBMAIL_ALIAS WEBMAIL_SYSTEM WEB_PORT WEB_RGROUPS WEB_SSL WEB_SSL_PORT WEB_SYSTEM WEB_TERMINAL WEB_TERMINAL_PORT VERSION DISABLE_IP_CHECK"
+	known_keys="ANTISPAM_SYSTEM ANTIVIRUS_SYSTEM API_ALLOWED_IP API BACKEND_PORT BACKUP_GZIP BACKUP_MODE BACKUP_SYSTEM CRON_SYSTEM DB_PMA_ALIAS DB_SYSTEM DISK_QUOTA ENFORCE_SUBDOMAIN_OWNERSHIP FILE_MANAGER FIREWALL_EXTENSION FIREWALL_SYSTEM FTP_SYSTEM IMAP_SYSTEM INACTIVE_SESSION_TIMEOUT LANGUAGE LOGIN_STYLE MAIL_SYSTEM PROXY_PORT PROXY_SSL_PORT PROXY_SYSTEM RELEASE_BRANCH STATS_SYSTEM THEME UPDATE_HOSTNAME_SSL UPGRADE_SEND_EMAIL UPGRADE_SEND_EMAIL_LOG WEB_BACKEND WEBMAIL_ALIAS WEBMAIL_SYSTEM WEB_PORT WEB_RGROUPS WEB_SSL WEB_SSL_PORT WEB_SYSTEM VERSION DISABLE_IP_CHECK"
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -375,15 +343,6 @@ function syshealth_repair_system_config() {
 		echo "[ ! ] Adding missing variable to hestia.conf: PLUGIN_APP_INSTALLER ('true')"
 		$BIN/h-change-sys-config-value "PLUGIN_APP_INSTALLER" "true"
 	fi
-	# Web Terminal
-	if [[ -z $(check_key_exists 'WEB_TERMINAL') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: WEB_TERMINAL ('false')"
-		$BIN/h-change-sys-config-value "WEB_TERMINAL" "false"
-	fi
-	if [[ -z $(check_key_exists 'WEB_TERMINAL_PORT') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: WEB_TERMINAL_PORT ('8085')"
-		$BIN/h-change-sys-config-value "WEB_TERMINAL_PORT" "8085"
-	fi
 	# Enable preview mode
 	if [[ -z $(check_key_exists 'POLICY_SYSTEM_ENABLE_BACON') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_ENABLE_BACON ('false')"
@@ -419,11 +378,6 @@ function syshealth_repair_system_config() {
 	if [[ -z $(check_key_exists 'POLICY_USER_EDIT_DETAILS') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_EDIT_DETAILS ('yes')"
 		$BIN/h-change-sys-config-value "POLICY_USER_EDIT_DETAILS" "yes"
-	fi
-	# Allow users to edit DNS templates
-	if [[ -z $(check_key_exists 'POLICY_USER_EDIT_DNS_TEMPLATES') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_EDIT_DNS_TEMPLATES ('yes')"
-		$BIN/h-change-sys-config-value "POLICY_USER_EDIT_DNS_TEMPLATES" "yes"
 	fi
 	# Allow users to edit web templates
 	if [[ -z $(check_key_exists 'POLICY_USER_EDIT_WEB_TEMPLATES') ]]; then
@@ -484,10 +438,7 @@ function syshealth_repair_system_config() {
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_CSRF_STRICTNESS ('')"
 		$BIN/h-change-sys-config-value "POLICY_CSRF_STRICTNESS" "1"
 	fi
-	if [[ -z $(check_key_exists 'DNS_CLUSTER_SYSTEM') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: DNS_CLUSTER_SYSTEM ('hestia')"
-		$BIN/h-change-sys-config-value "DNS_CLUSTER_SYSTEM" "hestia"
-	fi
+
 	if [[ -z $(check_key_exists 'DISABLE_IP_CHECK') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: DISABLE_IP_CHECK ('no')"
 		$BIN/h-change-sys-config-value "DISABLE_IP_CHECK" "no"

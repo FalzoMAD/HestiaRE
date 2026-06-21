@@ -55,16 +55,7 @@
 						?>
 					</select>
 				</div>
-				<?php if (isset($_SESSION["DNS_SYSTEM"]) && !empty($_SESSION["DNS_SYSTEM"])) { ?>
-					<?php if ($panel[$user_plain]["DNS_DOMAINS"] != "0") { ?>
-						<div class="form-check u-mb10">
-							<input class="form-check-input" type="checkbox" name="v_dns" id="v_dns" <?php if (empty($v_dns) && $panel[$user_plain]["DNS_DOMAINS"] != "0"); ?>>
-							<label for="v_dns">
-								<?= tohtml( _("DNS Support")) ?>
-							</label>
-						</div>
-					<?php } ?>
-				<?php } ?>
+
 				<?php if (isset($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["IMAP_SYSTEM"])) { ?>
 					<?php if ($panel[$user_plain]["MAIL_DOMAINS"] != "0") { ?>
 						<div class="form-check">

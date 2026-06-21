@@ -154,7 +154,6 @@
 					<select class="form-select" name="v_role" id="v_role" required>
 						<option value="user"><?= tohtml( _("User")) ?></option>
 						<option value="admin" <?= tohtml($v_role == "admin" ? "selected" : "") ?>><?= tohtml( _("Administrator")) ?></option>
-						<option value="dns-cluster" <?= tohtml($v_role == "dns-cluster" ? "selected" : "") ?>><?= tohtml( _("DNS Sync User")) ?></option>
 					</select>
 				</div>
 			<?php endif; ?>
@@ -240,19 +239,7 @@
 							?>
 						</select>
 					</div>
-					<?php if ((isset($_SESSION['DNS_SYSTEM'])) && (!empty($_SESSION['DNS_SYSTEM']))) { ?>
-						<p class="form-label u-mb10"><?= tohtml( _("Default Name Servers")) ?></p>
-						<div class="u-mb5">
-							<input type="text" class="form-control" name="v_ns1" value="<?= tohtml(trim($v_ns1, "'")) ?>">
-						</div>
-						<div class="u-mb5">
-							<input type="text" class="form-control" name="v_ns2" value="<?= tohtml(trim($v_ns2, "'")) ?>">
-						</div>
-						<?php require $_SERVER["HESTIA"] . "/web/templates/includes/extra-ns-fields.php"; ?>
-						<button type="button" class="form-link u-mt20 js-add-ns" <?php if ($v_ns8) echo 'style="display:none;"'; ?>>
-							<?= tohtml( _("Add Name Server")) ?>
-						</button>
-					<?php } ?>
+
 				</div>
 			<?php } ?>
 		</div>

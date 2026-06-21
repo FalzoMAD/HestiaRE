@@ -1,2 +1,0 @@
-ROLE='admin'
-COMMANDS='h-list-users,h-list-sys-config,h-list-user,h-add-cron-restart-job,h-delete-dns-domains-src,h-insert-dns-domain,h-insert-dns-record,h-insert-dns-records,h-rebuild-dns-domains,h-rebuild-dns-domain,h-delete-dns-record,h-make-tmp-file,h-insert-dns-domain,h-delete-dns-domain'

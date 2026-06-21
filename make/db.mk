@@ -33,26 +33,8 @@ _install-db:
 	mariadb -e "FLUSH PRIVILEGES;"
 	grep -q 'HESTIA_MPASS' "$(INSTALL_CONF)" \
 	    || echo "HESTIA_MPASS=\"$$MPASS\"" >> "$(INSTALL_CONF)"
-	echo "[ * ] Installing phpMyAdmin v$(PMA_VER)..."
-	cd /tmp
-	wget -q --retry-connrefused \
-	    https://files.phpmyadmin.net/phpMyAdmin/$(PMA_VER)/phpMyAdmin-$(PMA_VER)-all-languages.tar.gz
-	tar xzf phpMyAdmin-$(PMA_VER)-all-languages.tar.gz
-	mkdir -p /usr/share/phpmyadmin /etc/phpmyadmin /etc/phpmyadmin/conf.d \
-	    /usr/share/phpmyadmin/tmp /var/lib/phpmyadmin/tmp
-	cp -rf phpMyAdmin-$(PMA_VER)-all-languages/* /usr/share/phpmyadmin/
-	cp -f $(HESTIA_INSTALL_DIR)/phpmyadmin/config.inc.php /etc/phpmyadmin/
-	sed -i "s|'configFile' => ROOT_PATH . 'config.inc.php',|'configFile' => '/etc/phpmyadmin/config.inc.php',|g" \
-	    /usr/share/phpmyadmin/libraries/vendor_config.php 2>/dev/null || true
-	BLOWFISH=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 || true)
-	sed -i "s|%blowfish_secret%|$$BLOWFISH|" /etc/phpmyadmin/config.inc.php
-	chown -R hestiamail:www-data /usr/share/phpmyadmin/tmp/
-	chmod 770 /var/lib/phpmyadmin/tmp
-	chown -R root:hestiamail /etc/phpmyadmin/
-	chmod 640 /etc/phpmyadmin/config.inc.php
-	chmod 750 /etc/phpmyadmin/conf.d/
-	source $(HESTIA_INSTALL_DIR)/phpmyadmin/pma.sh > /dev/null 2>&1 || true
-	rm -rf phpMyAdmin-$(PMA_VER)-all-languages phpMyAdmin-$(PMA_VER)-all-languages.tar.gz
+	echo "[ * ] Installing phpMyAdmin..."
+	$(HESTIA)/bin/h-add-sys-phpmyadmin >> $(LOG)
 	touch $(CONF_DIR)/.done.db
 	echo ""
 	echo "[ OK ] install-db complete"

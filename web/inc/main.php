@@ -6,16 +6,8 @@ use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
-try {
-	require_once "vendor/autoload.php";
-} catch (Throwable $ex) {
-	$errstr =
-		"Unable to load required libraries. Please run h-add-sys-dependencies in command line. Error: " .
-		$ex->getMessage();
-	trigger_error($errstr);
-	echo $errstr;
-	exit(1);
-}
+require_once __DIR__ . '/lib/quoteshellarg.php';
+require_once '/usr/share/php/libphp-phpmailer/autoload.php';
 
 define("HESTIA_DIR_BIN", "/usr/local/hestia/bin/");
 define("HESTIA_CMD", "/usr/bin/sudo /usr/local/hestia/bin/");
@@ -292,8 +284,6 @@ function top_panel($user, $TAB) {
 		// Set home location URL based on available package features from account
 		if ($panel[$user]["WEB_DOMAINS"] != "0") {
 			$home_url = "/list/web/";
-		} elseif ($panel[$user]["DNS_DOMAINS"] != "0") {
-			$home_url = "/list/dns/";
 		} elseif ($panel[$user]["MAIL_DOMAINS"] != "0") {
 			$home_url = "/list/mail/";
 		} elseif ($panel[$user]["DATABASES"] != "0") {
@@ -439,7 +429,7 @@ function send_email($to, $subject, $mailtext, $from, $from_name, $to_name = "") 
 			}
 		}
 
-		$mail->IsSMTP();
+		$mail->isSMTP();
 		$mail->Mailer = "smtp";
 		$mail->SMTPDebug = 0;
 		$mail->SMTPAuth = true;
@@ -450,21 +440,21 @@ function send_email($to, $subject, $mailtext, $from, $from_name, $to_name = "") 
 		$mail->Password = $_SESSION["SERVER_SMTP_PASSWD"];
 	}
 
-	$mail->IsHTML(true);
-	$mail->ClearReplyTos();
+	$mail->isHTML(true);
+	$mail->clearReplyTos();
 	if (empty($to_name)) {
-		$mail->AddAddress($to);
+		$mail->addAddress($to);
 	} else {
-		$mail->AddAddress($to, $to_name);
+		$mail->addAddress($to, $to_name);
 	}
-	$mail->SetFrom($from, $from_name);
+	$mail->setFrom($from, $from_name);
 
 	$mail->CharSet = "utf-8";
 	$mail->Subject = $subject;
 	$content = $mailtext;
 	$content = nl2br($content);
-	$mail->MsgHTML($content);
-	$mail->Send();
+	$mail->msgHTML($content);
+	$mail->send();
 }
 
 function list_timezones() {

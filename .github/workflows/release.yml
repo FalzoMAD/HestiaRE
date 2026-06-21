@@ -24,10 +24,8 @@ jobs:
           
           mkdir -p dist/hestiare-${VERSION}
           rsync -a \
-            --exclude='.git' \
+            --exclude='.git*' \
             --exclude='dist' \
-            --exclude='.github' \
-            --exclude='.gitea' \
             . dist/hestiare-${VERSION}/
           tar -czf dist/hestiare-${VERSION}.tar.gz -C dist hestiare-${VERSION}
 

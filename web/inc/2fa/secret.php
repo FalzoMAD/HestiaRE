@@ -1,12 +1,10 @@
 <?php
 
-use RobThree\Auth\TwoFactorAuth;
-use RobThree\Auth\Providers\Qr\QRServerProvider;
+require_once __DIR__ . '/../lib/totp.php';
+require_once __DIR__ . '/../lib/qrcode.php';
 
-require_once __DIR__ . "/../vendor/autoload.php";
-$tfa = new TwoFactorAuth(new QRServerProvider(), "Hestia Control Panel");
+$secret = hestia_totp_secret(160);
+$otpUri = hestia_totp_uri(gethostname(), $secret, 'Hestia Control Panel');
+$qrcode = hestia_qrcode_data_uri($otpUri);
 
-$secret = $tfa->createSecret(160); // Though the default is an 80 bits secret (for backwards compatibility reasons) we recommend creating 160+ bits secrets (see RFC 4226 - Algorithm Requirements)
-$qrcode = $tfa->getQRCodeImageAsDataUri(gethostname(), $secret);
-
-echo $secret . "-" . $qrcode;
+echo $secret . '-' . $qrcode;

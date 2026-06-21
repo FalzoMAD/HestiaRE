@@ -96,7 +96,6 @@
 				<select class="form-select" name="v_role" id="v_role" required>
 					<option value="user"><?= tohtml( _("User")) ?></option>
 					<option value="admin" <?= tohtml($v_role == "admin" ? "selected" : "") ?>><?= tohtml( _("Administrator")) ?></option>
-					<option value="dns-cluster" <?= tohtml($v_role == "dns-cluster" ? "selected" : "") ?>><?= tohtml( _("DNS Sync User")) ?></option>
 				</select>
 			</div>
 			<div class="u-mb10">

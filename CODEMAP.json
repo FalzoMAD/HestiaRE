@@ -1,0 +1,424 @@
+{
+  "_meta": {
+    "generated": "2026-06-09",
+    "project": "HestiaRE",
+    "version_ref": "1.9.6",
+    "description": "Machine-readable component map. Read before exploring the codebase. Update as part of every feature branch that adds or moves components.",
+    "upstream_debt_legend": "Files/dirs still using HestiaCP-specific paths (/usr/local/hestia, /etc/hestiacp, hestia-nginx, hestia-php) that need migration to HestiaRE conventions."
+  },
+
+  "install_paths": {
+    "install_root": "/usr/local/hestia",
+    "instance_config": "/etc/hestia",
+    "user_data": "/home/$user",
+    "shell_profile": "/etc/profile.d/hestia.sh",
+    "sudo_rules": "/etc/sudoers.d/hestiaweb",
+    "log_dir": "/var/log/hestia",
+    "note": "install_root is intentionally identical to HestiaCP — only instance_config changed (/etc/hestiacp → /etc/hestia). See PATHS.md for full reference."
+  },
+
+  "components": {
+
+    "cli_commands": {
+      "description": "All CLI commands. h-* prefix is HestiaRE-native (renamed from v-* in Issue #22). v-* symlinks for HestiaCP compatibility added in Issue #23. No hl-* commands.",
+      "symlink_policy": {
+        "baseline": "Each h-* command that predated Issue #23 has one v-* symlink. New h-* commands created after Issue #23 get NO v-* symlink — the v-* name never existed.",
+        "escalation_rule": "When a command is substantially rewritten and diverges significantly from its HestiaCP upstream equivalent, its v-* symlink is removed. Rationale: prevent accidental upstream cherry-picks onto an internally incompatible implementation. Applied in Issue #54 (v-add-sys-roundcube removed after total rewrite for OS-package migration).",
+        "deletion": "When removing an h-* command: remove its v-* symlink too — no orphans."
+      },
+      "entry_points": ["bin/h-*"],
+      "directories": ["bin/"],
+      "key_files": [
+        "bin/h-add-user",
+        "bin/h-delete-user",
+        "bin/h-add-web-domain",
+        "bin/h-delete-web-domain",
+        "bin/h-add-mail-domain",
+        "bin/h-add-database",
+        "bin/h-backup-user",
+        "bin/h-add-firewall-rule",
+        "bin/h-update-sys-queue"
+      ],
+      "language": "bash",
+      "total_commands": 465,
+      "command_prefixes": {
+        "h-*": 465,
+        "v-*": "symlinks only — see Issue #23"
+      },
+      "domains": {
+        "user": { "count": 99, "pattern": "bin/h-*-user*" },
+        "sys": { "count": 103, "pattern": "bin/h-*-sys*" },
+        "web": { "count": 80, "pattern": "bin/h-*-web*" },
+        "mail": { "count": 66, "pattern": "bin/h-*-mail*" },
+        "dns": { "count": 1, "pattern": "bin/h-*-dns*", "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58" },
+        "database": { "count": 30, "pattern": "bin/h-*-database*" },
+        "firewall": { "count": 21, "pattern": "bin/h-*-firewall*" },
+        "cron": { "count": 20, "pattern": "bin/h-*-cron*" },
+        "backup": { "count": 19, "pattern": "bin/h-*-backup*" },
+        "letsencrypt": { "count": 8, "pattern": "bin/h-*-letsencrypt*" },
+        "other": { "count": 17, "pattern": "bin/h-{acknowledge,add-domain,add-fastcgi-cache,...}" }
+      },
+      "dependencies": ["func_libraries", "instance_config"],
+      "upstream_debt": {
+        "file_count": 512,
+        "issues": [
+          "$HESTIA variable itself is unchanged (/usr/local/hestia) — no migration needed in bin/*",
+          "h-add-cron-hestia-autoupdate references HestiaCP update mechanism — remove or replace (see PATHS.md Q5)"
+        ]
+      }
+    },
+
+    "func_libraries": {
+      "description": "Shared bash function libraries sourced by all CLI commands and the installer. Core runtime dependency.",
+      "entry_points": ["func/main.sh"],
+      "directories": ["func/", "func/internal/"],
+      "key_files": [
+        "func/main.sh",
+        "func/domain.sh",
+        "func/rebuild.sh",
+        "func/syshealth.sh",
+        "func/db.sh",
+        "func/backup.sh",
+        "func/upgrade.sh",
+        "func/ip.sh",
+        "func/firewall.sh"
+      ],
+      "language": "bash",
+      "file_roles": {
+        "main.sh": "Core utilities: source_conf(), check_result(), output formatting, logging, JSON/shell serialization",
+        "domain.sh": "Domain validation and template checking for web and mail",
+        "rebuild.sh": "User and domain rebuild logic — regenerates service configs from HestiaRE data",
+        "syshealth.sh": "System health monitoring, RRD graph generation, service status checks",
+        "db.sh": "MySQL/MariaDB and PostgreSQL connection helpers, host configuration",
+        "backup.sh": "Local, FTP, and Restic backup/restore handlers with retention logic",
+        "upgrade.sh": "Version-specific migration procedures called by upgrade scripts",
+        "ip.sh": "IP address validation, RDNS checking, IPv4/IPv6 utilities",
+        "firewall.sh": "iptables symlink healing helper"
+      },
+      "dependencies": ["instance_config"],
+      "upstream_debt": {
+        "file_count": 3,
+        "issues": [
+          "$HESTIA variable unchanged (/usr/local/hestia) — no path migration needed in func/*",
+          "upgrade.sh contains HestiaCP version-history migrations not relevant to HestiaRE"
+        ]
+      }
+    },
+
+    "web_panel": {
+      "description": "Plain-PHP control panel UI. No framework. Action-based routing via directory structure. Served by Caddy + PHP 8.3 FPM (hestia-php.service) on port 8083.",
+      "entry_points": ["web/index.php"],
+      "directories": [
+        "web/",
+        "web/inc/",
+        "web/add/",
+        "web/edit/",
+        "web/delete/",
+        "web/list/",
+        "web/bulk/",
+        "web/locale/",
+        "web/templates/"
+      ],
+      "key_files": [
+        "web/index.php",
+        "web/inc/main.php",
+        "web/inc/helpers.php",
+        "web/inc/prevent_csrf.php",
+        "web/inc/secure_login.php",
+        "web/inc/i18n.php",
+        "web/inc/policies.php",
+        "web/inc/mail-wrapper.php",
+        "web/inc/2fa/",
+        "web/inc/lib/quoteshellarg.php",
+        "web/inc/cloudflare-ip.php",
+        "web/inc/vendor/",
+        "web/locale/languages.json"
+      ],
+      "language": "php",
+      "routing": "directory-based: /list/user/, /add/web/, /edit/mail/ etc.",
+      "features": [
+        "2FA (TOTP)",
+        "CSRF protection",
+        "42-language i18n",
+        "RRD system graphs",
+        "Bulk operations",
+        "File manager integration (optional)"
+      ],
+      "panel_vendor": {
+        "strategy": "No Composer at install time. No vendor/ in repo. OS packages and Eigenbau only.",
+        "manifest": "VENDORED.json",
+        "os_packages": {
+          "libphp-phpmailer": "deb12=6.6.3 / ub24=6.8.1 / deb13=6.9.3 — panel email sending — LGPL-2.1-only — installed by make/panel.mk"
+        },
+        "packages": {},
+        "inline_libs": {
+          "web/inc/lib/quoteshellarg.php": "Third-party: inlined from hestiacp/phpquoteshellarg v1.1.0 (Unlicense). Keeps namespace Hestiacp\\quoteshellarg intact. See VENDORED.json and security note in file header.",
+          "web/inc/lib/totp.php": "Eigenbau: RFC 6238 TOTP (secret gen, URI builder, verify). No upstream, no deps.",
+          "web/inc/lib/qrcode.php": "Eigenbau: single-file SVG QR code generator (byte mode, ECC-M, v1-10). No upstream, no deps.",
+          "web/inc/cloudflare-ip.php": "Eigenbau: static Cloudflare CIDR list. Update from cloudflare.com/ips-v4 and /ips-v6 when ranges change."
+        },
+        "removed": [
+          "robthree/twofactorauth — removed in Issue #56, replaced by web/inc/lib/totp.php (Eigenbau)",
+          "phpmailer/phpmailer — removed in Issue #56, replaced by OS package libphp-phpmailer (make/panel.mk)",
+          "chillerlan/php-qrcode + php-settings-container — removed in Issue #56, replaced by web/inc/lib/qrcode.php (Eigenbau)",
+          "web/src/ (Quick-Install feature) — removed in Issue #56",
+          "web/add/webapp/ — removed in Issue #56",
+          "web/templates/pages/list_webapps.php — removed in Issue #56",
+          "web/templates/pages/setup_webapp.php — removed in Issue #56"
+        ]
+      },
+      "locales": 42,
+      "action_dirs": ["add", "edit", "delete", "list", "bulk", "copy", "move", "suspend", "unsuspend", "restart", "stop", "start", "schedule", "update", "generate", "download", "search", "reset", "reset2fa"],
+      "dependencies": ["cli_commands", "func_libraries"],
+      "upstream_debt": {
+        "file_count": 9,
+        "issues": [
+          "PHP files reference /usr/local/hestia paths in includes — install root is unchanged so paths are correct, but hardcoded (not using a constant)",
+          "web/inc/mail-wrapper.php shebang: updated to #!/usr/bin/php8.3 in Issue #25",
+          "Panel branding still references HestiaCP in some locale strings"
+        ]
+      }
+    },
+
+    "installer": {
+      "description": "Service config templates and data distributed during install. Consumed by Makefile install-* targets. hst-install-debian.sh and hst-install-ubuntu.sh removed in Issue #26b — replaced by Makefile targets.",
+      "entry_points": [
+        "install.sh"
+      ],
+      "directories": [
+        "install/",
+        "install/deb/",
+        "install/common/",
+        "conf/panel-caddy/",
+        "conf/panel-php/",
+        "install/upgrade/"
+      ],
+      "key_files": [
+        "install/deb/nginx/",
+        "install/deb/apache2/",
+        "install/deb/php-fpm/",
+        "install/deb/exim/",
+        "install/deb/dovecot/",
+        "install/deb/mysql/",
+        "install/deb/fail2ban/",
+        "install/deb/templates/web/",
+        "install/common/packages/default.pkg",
+        "install/common/packages/system.pkg",
+        "install/common/templates/email/",
+        "install/common/roundcube/",
+        "install/common/dovecot-24/",
+        "install/common/sudo/hestiaweb",
+        "install/upgrade/upgrade.conf",
+        "conf/panel-caddy/Caddyfile",
+        "conf/panel-caddy/hestia.conf",
+        "conf/panel-php/hestia-php.service",
+        "conf/panel-php/php-fpm.conf"
+      ],
+      "language": "bash / config templates",
+      "supported_distros": ["Debian 12 (bookworm)", "Ubuntu 24.04 LTS (noble)", "Debian 13 (trixie, priority 2, planned June 2026+)"],
+      "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. All install logic now lives in make/*.mk files (see make_release component).",
+      "web_templates": {
+        "nginx": "install/deb/templates/web/nginx/",
+        "apache2": "install/deb/templates/web/apache2/",
+        "php_fpm": "install/deb/templates/web/php-fpm/"
+      },
+      "dependencies": ["func_libraries", "make_release"],
+      "upstream_debt": {
+        "file_count": 0,
+        "issues": []
+      }
+    },
+
+    "panel_caddy_service": {
+      "description": "Caddy config for the HestiaRE admin panel on port 8083. Replaces the compiled hestia-nginx package. Handles PHP via FastCGI and X-Accel-Redirect for file downloads.",
+      "entry_points": ["conf/panel-caddy/Caddyfile"],
+      "directories": ["conf/panel-caddy/"],
+      "key_files": [
+        "conf/panel-caddy/Caddyfile",
+        "conf/panel-caddy/hestia.conf"
+      ],
+      "language": "caddyfile",
+      "runtime_paths": {
+        "caddyfile": "/etc/caddy/Caddyfile",
+        "site_config": "/etc/caddy/hestia.conf",
+        "access_log": "/var/log/hestia/caddy-access.log",
+        "error_log": "/var/log/hestia/caddy-error.log"
+      },
+      "notes": [
+        "Caddyfile: global options + import /etc/caddy/*.conf",
+        "hestia.conf: site block only (https://:8083)",
+        "X-Accel-Redirect handled via handle_response in reverse_proxy block",
+        "web/list/rrd/image.php updated to send absolute path for X-Accel-Redirect",
+        "File manager /fm/* served via handle block with uri strip_prefix",
+        "Web terminal removed in Issue #59 — /_shell/ location absent by design"
+      ],
+      "required_packages": ["caddy"],
+      "note": "Installer integration completed in Issue #26a.",
+      "dependencies": ["panel_php_service"],
+      "upstream_debt": {
+        "file_count": 0,
+        "issues": []
+      }
+    },
+
+    "panel_php_service": {
+      "description": "Dedicated PHP-FPM service for the HestiaRE panel. Runs as hestia-php.service using Sury php8.3-fpm binary with an isolated pool. Replaces compiled hestia-php package.",
+      "entry_points": ["conf/panel-php/hestia-php.service"],
+      "directories": ["conf/panel-php/"],
+      "key_files": [
+        "conf/panel-php/hestia-php.service",
+        "conf/panel-php/php-fpm.conf",
+        "conf/panel-php/pool.d/panel.conf"
+      ],
+      "language": "ini",
+      "runtime_paths": {
+        "config_dir": "/etc/php/hestia/fpm/",
+        "socket": "/run/hestia-php.sock",
+        "pid": "/run/hestia-php.pid",
+        "log": "/var/log/hestia/php-fpm.log"
+      },
+      "required_packages": [
+        "php8.3-fpm",
+        "php8.3-mysql",
+        "php8.3-curl",
+        "php8.3-zip",
+        "php8.3-gmp",
+        "php8.3-mbstring",
+        "php8.3-opcache"
+      ],
+      "note": "gettext included in php8.3-common (auto dep of php8.3-fpm). Installer integration completed in Issue #26a.",
+      "dependencies": [],
+      "upstream_debt": {
+        "file_count": 0,
+        "issues": []
+      }
+    },
+
+    "make_release": {
+      "description": "Slim orchestrator Makefile (~120 lines) + make/*.mk component files + install.sh bootstrap. All install logic is in make/*.mk. Makefile includes them and exposes only public targets. Restructured in Issue #26d.",
+      "entry_points": ["Makefile", "install.sh"],
+      "directories": ["make/"],
+      "key_files": [
+        "Makefile",
+        "install.sh",
+        "VERSION",
+        "make/debian-bookworm.mk",
+        "make/ubuntu-noble.mk",
+        "make/base.mk",
+        "make/panel.mk",
+        "make/web.mk",
+        "make/db.mk",
+        "make/mail.mk",
+        "make/security.mk",
+        "make/tools.mk",
+        "make/configure.mk"
+      ],
+      "language": "make + bash",
+      "make_structure": {
+        "Makefile": "Orchestrator — global vars, -include make/$(OS).mk, include make/*.mk, public targets only",
+        "make/$(OS).mk": "OS-specific vars: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA",
+        "make/base.mk": "_install-base — APT repos (sury, mariadb; nginx from OS repo), base packages, system users, SSH hardening",
+        "make/panel.mk": "_install-panel — Caddy + hestia-php.service",
+        "make/web.mk": "_install-web — nginx, PHP multi (5.6–8.4), web pool config",
+        "make/db.mk": "_install-db — MariaDB + phpMyAdmin",
+        "make/mail.mk": "_install-mail — exim4, dovecot, rspamd; calls h-add-sys-roundcube (standard profile only)",
+        "make/security.mk": "_install-security — fail2ban, iptables, ipset",
+        "make/tools.mk": "add-tools — composer, wp-cli; TOOLS_SET=hestia|sysadmin|full",
+        "make/configure.mk": "_check-root, _collect-params, _configure-hestia, _finalize"
+      },
+      "make_targets": {
+        "install": "Full install (interactive; override via H_HOSTNAME H_ADMIN H_EMAIL H_PASS)",
+        "add-tools": "Standalone tool installer, always re-runnable. TOOLS_SET=hestia|sysadmin|full",
+        "update": "Fetch latest release tarball and apply",
+        "check-updates": "Query latest version from GitHub or Gitea",
+        "status": "Show version, config, and completed install phases",
+        "backup": "Backup stub",
+        "uninstall": "Interactive uninstall stub"
+      },
+      "internal_targets": {
+        "_install-*": "Component install targets — each guarded by /etc/hestia/.done.COMPONENT sentinel",
+        "_check-root": "Verify root, OS known, not already installed",
+        "_collect-params": "Prompt or accept H_* vars, write /etc/hestia/install.conf",
+        "_configure-hestia": "hestia.conf, sudoers, SSL cert, admin user, crontab, IP; writes .done.configure",
+        "_finalize": "Start hestia.service, final apt upgrade, print credentials"
+      },
+      "sentinel_files": "/etc/hestia/.done.{base,panel,web,db,mail,security,configure} — presence skips that phase",
+      "profiles": {
+        "standard": "All components including mail (exim4, dovecot, rspamd, roundcube)",
+        "minimal": "All components except mail stack"
+      },
+      "tools_sets": {
+        "hestia": "composer + wp-cli (default)",
+        "sysadmin": "hestia + htop, ncdu, tmux, mtr-tiny, nmap, iotop, traceroute",
+        "full": "sysadmin + rclone, restic"
+      },
+      "bootstrap_flow": "curl | bash install.sh → OS detect → apt install curl make → download tarball → extract to /usr/local/hestia/ → make install OS=... PROFILE=...",
+      "release_sources": {
+        "github": "https://github.com/FalzoMAD/HestiaRE (default)",
+        "gitea": "Configurable via /etc/hestia/source.conf"
+      },
+      "install_conf": "/etc/hestia/install.conf — written by _collect-params, sourced by _configure-hestia and _finalize",
+      "dependencies": ["installer"],
+      "upstream_debt": {
+        "file_count": 0,
+        "issues": []
+      }
+    },
+
+    "pr_api": {
+      "description": "Gitea API integration for PR creation. Used in the CLAUDE.md workflow. Token from $GITEA_TOKEN env var.",
+      "entry_points": [],
+      "directories": [],
+      "key_files": ["CLAUDE.md"],
+      "language": "curl/bash",
+      "api_base": "https://git.hestiare.com/api/v1/repos/Admin/hestiare",
+      "pr_target_branch": "dev",
+      "dependencies": [],
+      "upstream_debt": {
+        "file_count": 0,
+        "issues": []
+      }
+    }
+  },
+
+  "service_matrix": {
+    "always_installed": ["nginx", "php-multi-sury", "mariadb", "phpmyadmin", "caddy", "iptables", "fail2ban", "ipset", "composer", "wp-cli"],
+    "standard_profile": ["exim4", "dovecot", "rspamd", "roundcube"],
+    "optional_hl_service": ["apache2", "proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
+    "never_install": ["bind9", "vsftpd", "web-terminal", "spamassassin", "software-installer"],
+    "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "caddyfile": "/etc/caddy/Caddyfile", "site_config": "/etc/caddy/hestia.conf", "install_source": "conf/panel-caddy/" },
+    "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "conf/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock" }
+  },
+
+  "upstream_debt_summary": {
+    "total_affected_files": 571,
+    "resolved_in_issue_30": 563,
+    "note": "571 total flagged files; 563 had /etc/hestiacp references migrated to /etc/hestia in Issue #30; src/ directory and install/hst-install.sh deleted in Issue #26d — build_tools component removed. 9 web/ files remain — /usr/local/hestia refs are structurally correct (install root unchanged) except mail-wrapper shebang (deferred Issue #25)",
+    "by_component": {
+      "cli_commands": 512,
+      "installer": 45,
+      "web_panel": 9,
+      "func_libraries": 1
+    },
+    "primary_issues": [
+      {
+        "issue": "Config path mismatch",
+        "detail": "bin/* and func/* sourced /etc/hestiacp/hestia.conf — migrated to /etc/hestia/hestia.conf in Issue #30",
+        "affected": "cli_commands, func_libraries",
+        "priority": "resolved"
+      },
+      {
+        "issue": "$HESTIA variable — no change needed",
+        "detail": "Install root stays /usr/local/hestia — $HESTIA is already correct in all bin/* files",
+        "affected": "none",
+        "priority": "resolved"
+      },
+      {
+        "issue": "Installer cleanup",
+        "detail": "hestia-nginx/php/web-terminal removed; Caddy+hestia-php.service added; bind/vsftpd/spamd removed; upgrade/versions/ deleted — completed Issue #26a",
+        "affected": "installer",
+        "priority": "resolved"
+      }
+    ]
+  }
+}
