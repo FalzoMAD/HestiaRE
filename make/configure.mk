@@ -120,6 +120,8 @@ _configure-hestia:
 	    wcv "IMAP_SYSTEM"          "dovecot"; \
 	    wcv "ANTISPAM_SYSTEM"      "rspamd"; \
 	    wcv "SIEVE_SYSTEM"         "yes"; \
+	    wcv "WEBMAIL_SYSTEM"       "roundcube"; \
+	    wcv "WEBMAIL_ALIAS"        "webmail"; \
 	fi
 	wcv "CRON_SYSTEM"              "cron"
 	wcv "FIREWALL_SYSTEM"          "iptables"
@@ -249,9 +251,6 @@ _configure-hestia:
 	$(HESTIA)/bin/h-add-cron-hestia-autoupdate apt > /dev/null 2>&1 || true
 	$(HESTIA)/bin/h-change-sys-port 8083 > /dev/null 2>&1 || true
 	$(HESTIA)/bin/h-update-sys-defaults > /dev/null 2>&1 || true
-	BIN="$(HESTIA)/bin"
-	source $(HESTIA)/func/syshealth.sh 2>/dev/null \
-	    && syshealth_repair_system_config 2>/dev/null || true
 	[ -f /root/.bashrc ] && grep -q 'hestia.sh' /root/.bashrc || \
 	    printf 'if [ "$${PATH#*/usr/local/hestia/bin*}" = "$$PATH" ]; then\n    . /etc/profile.d/hestia.sh\nfi\n' >> /root/.bashrc
 	touch "$(_DONE_CONFIGURE)"
