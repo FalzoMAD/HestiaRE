@@ -28,8 +28,8 @@ charset=${7-UTF8MB4}
 charset=$(echo "$charset" | tr '[:lower:]' '[:upper:]')
 
 # Includes
-# shellcheck source=/etc/hestia/hestia.conf
-source /etc/hestia/hestia.conf
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
 # shellcheck source=/usr/local/hestia/func/db.sh

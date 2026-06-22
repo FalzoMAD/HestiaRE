@@ -22,8 +22,8 @@ protocol=$(echo "$protocol" | tr '[:lower:]' '[:upper:]')
 iptables="/sbin/iptables"
 
 # Includes
-# shellcheck source=/etc/hestia/hestia.conf
-source /etc/hestia/hestia.conf
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source "$HESTIA/func/main.sh"
 # shellcheck source=/usr/local/hestia/func/firewall.sh

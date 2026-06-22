@@ -3,7 +3,7 @@
 #                hestia.conf generation, admin user, finalize
 # -------------------------------------------------------- #
 
-.PHONY: _check-root _collect-params _configure-hestia _finalize
+.PHONY: _check-root _collect-params _bootstrap-hestia-env _configure-hestia _finalize
 
 # Sentinel: written by _configure-hestia when fully complete
 _DONE_CONFIGURE := $(CONF_DIR)/.done.configure
@@ -61,6 +61,24 @@ _collect-params:
 	echo "[ * ] Install parameters saved."
 
 # -------------------------------------------------------- #
+# _bootstrap-hestia-env — write /etc/hestia/hestia.env and
+#                         /etc/profile.d/hestia.sh; runs early
+#                         so every h-* call during install can
+#                         source the env file
+# -------------------------------------------------------- #
+
+_bootstrap-hestia-env:
+	@mkdir -p /etc/hestia
+	if [ ! -e /etc/hestia/hestia.env ]; then \
+	    printf '# Do not edit — use /etc/hestia/local.conf instead\n\nexport HESTIA='"'"'/usr/local/hestia'"'"'\n\n[[ -f /etc/hestia/local.conf ]] && source /etc/hestia/local.conf\n' \
+	        > /etc/hestia/hestia.env; \
+	fi
+	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$$PATH:%s/bin\nexport PATH\n' \
+	    "$(HESTIA)" "$(HESTIA)" > /etc/profile.d/hestia.sh
+	chmod 755 /etc/profile.d/hestia.sh
+	source /etc/profile.d/hestia.sh
+
+# -------------------------------------------------------- #
 # _configure-hestia — hestia.conf, sudoers, SSL cert,
 #                     admin user, data dirs, IP, crontab
 # -------------------------------------------------------- #
@@ -71,14 +89,6 @@ _configure-hestia:
 	mkdir -p /etc/sudoers.d
 	cp -f $(HESTIA_COMMON_DIR)/sudo/hestiaweb /etc/sudoers.d/
 	chmod 440 /etc/sudoers.d/hestiaweb
-	if [ ! -e /etc/hestia/hestia.conf ]; then \
-	    printf '# Do not edit — use /etc/hestia/local.conf instead\n\nexport HESTIA='"'"'/usr/local/hestia'"'"'\n\n[[ -f /etc/hestia/local.conf ]] && source /etc/hestia/local.conf\n' \
-	        > /etc/hestia/hestia.conf; \
-	fi
-	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$$PATH:%s/bin\nexport PATH\n' \
-	    "$(HESTIA)" "$(HESTIA)" > /etc/profile.d/hestia.sh
-	chmod 755 /etc/profile.d/hestia.sh
-	source /etc/profile.d/hestia.sh
 	cp -f $(HESTIA_INSTALL_DIR)/logrotate/hestia /etc/logrotate.d/hestia 2>/dev/null || true
 	[ -L /var/log/hestia ] && rm -f /var/log/hestia || true
 	mkdir -p /var/log/hestia
