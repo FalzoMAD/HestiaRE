@@ -9,6 +9,7 @@ BASE_PKGS_EXTRA ?=
 
 _install-base:
 	@[ ! -f $(CONF_DIR)/.done.base ] || { echo "[ skip ] base already configured"; exit 0; }
+	source $(HESTIA)/make/helpers.sh
 	echo "[ * ] Configuring APT..."
 	[ -f /etc/apt/apt.conf.d/80-retries ] \
 	    || echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
@@ -40,9 +41,7 @@ _install-base:
 	rm -f /tmp/mariadb_signing.asc
 	echo "[ * ] Installing base packages..."
 	apt-get -qq update
-	DEBIAN_FRONTEND=noninteractive apt-get -y \
-	    -o Dpkg::Progress-Fancy=1 \
-	    install \
+	hestia_apt -y install \
 	    acl at bc bsdmainutils bsdutils ca-certificates \
 	    cron curl dnsutils e2fslibs e2fsprogs expect flex ftp \
 	    git gnupg idn2 imagemagick ipset iptables jq \
@@ -50,7 +49,7 @@ _install-base:
 	    rrdtool rsyslog sysstat unzip util-linux vim-common \
 	    wget whois xxd zip zstd bubblewrap restic sudo \
 	    apt-transport-https awstats \
-	    $(BASE_PKGS_EXTRA) >> $(LOG) 2>&1
+	    $(BASE_PKGS_EXTRA)
 	echo "[ * ] Creating system users..."
 	id hestiaweb &>/dev/null \
 	    || useradd hestiaweb -c "HestiaRE Web" --no-create-home -s /sbin/nologin

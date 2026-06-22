@@ -273,6 +273,7 @@ _configure-hestia:
 
 _finalize:
 	@source "$(INSTALL_CONF)"
+	source $(HESTIA)/make/helpers.sh
 	echo "[ * ] Starting Hestia service..."
 	update-rc.d hestia defaults
 	systemctl start hestia
@@ -285,9 +286,7 @@ _finalize:
 	$(HESTIA)/bin/h-update-sys-rrd > /dev/null 2>&1 || true
 	echo "[ * ] Final package upgrade..."
 	apt-get -qq update
-	DEBIAN_FRONTEND=noninteractive apt-get -y \
-	    -o Dpkg::Progress-Fancy=1 \
-	    upgrade >> $(LOG) 2>&1
+	hestia_apt -y upgrade
 	HOST_IP=$$(ip -4 route get 8.8.8.8 2>/dev/null | awk '{print $$7; exit}' \
 	    || hostname -I | awk '{print $$1}')
 	echo ""
