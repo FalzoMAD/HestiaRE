@@ -6,11 +6,10 @@
 
 _install-db:
 	@[ ! -f $(CONF_DIR)/.done.db ] || { echo "[ skip ] db already configured"; exit 0; }
+	source $(HESTIA)/make/helpers.sh
 	echo "[ * ] Installing database packages (MariaDB $(MARIADB_VER))..."
-	DEBIAN_FRONTEND=noninteractive apt-get -y \
-	    -o Dpkg::Progress-Fancy=1 \
-	    install \
-	    mariadb-client mariadb-common mariadb-server >> $(LOG) 2>&1
+	hestia_apt -y install \
+	    mariadb-client mariadb-common mariadb-server
 	echo "[ * ] Configuring MariaDB..."
 	MEM=$$(awk '/MemTotal/{print $$2}' /proc/meminfo); \
 	if   [ "$$MEM" -gt 3900000 ]; then MYCNF="my-large.cnf"; \
@@ -35,6 +34,9 @@ _install-db:
 	mariadb -e "FLUSH PRIVILEGES;"
 	grep -q 'HESTIA_MPASS' "$(INSTALL_CONF)" \
 	    || echo "HESTIA_MPASS=\"$$MPASS\"" >> "$(INSTALL_CONF)"
+	wcv() { echo "$$1='$$2'" >> $(HESTIA)/conf/hestia.conf; }
+	wcv "DB_SYSTEM"                "mysql"
+	wcv "DB_PMA_ALIAS"             "phpmyadmin"
 	echo "[ * ] Installing phpMyAdmin..."
 	$(HESTIA)/bin/h-add-sys-phpmyadmin >> $(LOG)
 	touch $(CONF_DIR)/.done.db

@@ -20,7 +20,7 @@ HESTIA             := /usr/local/hestia
 CONF_DIR           := /etc/hestia
 INSTALL_CONF       := $(CONF_DIR)/install.conf
 SOURCE_CONF        := $(CONF_DIR)/source.conf
-LOG                := /var/log/hestia/install.log
+export LOG         := /var/log/hestia/install.log
 VERSION            := $(shell cat $(HESTIA)/VERSION 2>/dev/null || cat VERSION 2>/dev/null || echo "dev")
 ARCH               := $(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
 

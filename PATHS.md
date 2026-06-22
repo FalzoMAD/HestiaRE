@@ -53,7 +53,7 @@ Current state and migration steps are documented in Section 5.
 
 ```
 /etc/hestia/
-├── hestia.conf        Bootstrap file — sets $HESTIA, sources local.conf
+├── hestia.env         Bootstrap file — sets $HESTIA, sources local.conf
 │                      Do not edit directly, overwritten on upgrade
 ├── local.conf         User overrides — survives upgrades, outside git
 ├── source.conf        Update channel config (github/gitea, token, channel)
