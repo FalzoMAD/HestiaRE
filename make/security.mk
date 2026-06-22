@@ -10,6 +10,9 @@ _install-security:
 	echo "[ * ] Installing security packages (fail2ban, iptables, ipset)..."
 	hestia_apt -y install \
 	    fail2ban iptables ipset
+	wcv() { echo "$$1='$$2'" >> $(HESTIA)/conf/hestia.conf; }
+	wcv "FIREWALL_SYSTEM"          "iptables"
+	wcv "FIREWALL_EXTENSION"       "fail2ban"
 	echo "[ * ] Configuring fail2ban..."
 	mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
 	cp -rf $(HESTIA_INSTALL_DIR)/fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/

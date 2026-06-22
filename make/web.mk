@@ -15,6 +15,14 @@ _install-web:
 	    php$(PHP_VER)-imagick php$(PHP_VER)-imap php$(PHP_VER)-intl \
 	    php$(PHP_VER)-ldap php$(PHP_VER)-pgsql php$(PHP_VER)-pspell \
 	    php$(PHP_VER)-readline php$(PHP_VER)-xml
+	wcv() { echo "$$1='$$2'" >> $(HESTIA)/conf/hestia.conf; }
+	wcv "WEB_SYSTEM"               "nginx"
+	wcv "WEB_PORT"                 "80"
+	wcv "WEB_SSL_PORT"             "443"
+	wcv "WEB_SSL"                  "openssl"
+	wcv "PROXY_SYSTEM"             ""
+	wcv "STATS_SYSTEM"             "awstats"
+	wcv "WEB_BACKEND"              "php-fpm"
 	echo "[ * ] Configuring nginx..."
 	rm -f /etc/nginx/conf.d/*.conf
 	cp -f $(HESTIA_INSTALL_DIR)/nginx/nginx.conf /etc/nginx/

@@ -61,14 +61,17 @@ _collect-params:
 	echo "[ * ] Install parameters saved."
 
 # -------------------------------------------------------- #
-# _bootstrap-hestia-env — write /etc/hestia/hestia.env and
-#                         /etc/profile.d/hestia.sh; runs early
-#                         so every h-* call during install can
-#                         source the env file
+# _bootstrap-hestia-env — creates /etc/hestia/hestia.env,
+#                         /etc/profile.d/hestia.sh, and
+#                         $HESTIA/conf/hestia.conf with
+#                         install-type-independent settings;
+#                         runs before _install-base so every
+#                         h-* call can source both env files
 # -------------------------------------------------------- #
 
 _bootstrap-hestia-env:
-	@mkdir -p /etc/hestia
+	@source "$(INSTALL_CONF)"
+	mkdir -p /etc/hestia
 	if [ ! -e /etc/hestia/hestia.env ]; then \
 	    printf '# Do not edit — use /etc/hestia/local.conf instead\n\nexport HESTIA='"'"'/usr/local/hestia'"'"'\n\n[[ -f /etc/hestia/local.conf ]] && source /etc/hestia/local.conf\n' \
 	        > /etc/hestia/hestia.env; \
@@ -77,10 +80,35 @@ _bootstrap-hestia-env:
 	    "$(HESTIA)" "$(HESTIA)" > /etc/profile.d/hestia.sh
 	chmod 755 /etc/profile.d/hestia.sh
 	source /etc/profile.d/hestia.sh
+	echo "[ * ] Initializing instance config..."
+	mkdir -p $(HESTIA)/conf
+	rm -f $(HESTIA)/conf/hestia.conf
+	touch $(HESTIA)/conf/hestia.conf
+	chmod 660 $(HESTIA)/conf/hestia.conf
+	wcv() { echo "$$1='$$2'" >> $(HESTIA)/conf/hestia.conf; }
+	wcv "BACKEND_PORT"             "8083"
+	wcv "CRON_SYSTEM"              "cron"
+	wcv "DISK_QUOTA"               "no"
+	wcv "RESOURCES_LIMIT"          "no"
+	wcv "BACKUP_SYSTEM"            "local"
+	wcv "BACKUP_GZIP"              "4"
+	wcv "BACKUP_MODE"              "zstd"
+	wcv "LANGUAGE"                 "en"
+	wcv "LOGIN_STYLE"              "default"
+	wcv "THEME"                    "dark"
+	wcv "INACTIVE_SESSION_TIMEOUT" "60"
+	wcv "VERSION"                  "$(VERSION)"
+	wcv "RELEASE_BRANCH"           "release"
+	wcv "UPGRADE_SEND_EMAIL"       "true"
+	wcv "UPGRADE_SEND_EMAIL_LOG"   "false"
+	wcv "API"                      "no"
+	wcv "API_SYSTEM"               "0"
+	wcv "API_ALLOWED_IP"           ""
+	wcv "ROOT_USER"                "$$HESTIA_ADMIN"
 
 # -------------------------------------------------------- #
-# _configure-hestia — hestia.conf, sudoers, SSL cert,
-#                     admin user, data dirs, IP, crontab
+# _configure-hestia — sudoers, SSL cert, admin user,
+#                     data dirs, IP config, crontab
 # -------------------------------------------------------- #
 
 _configure-hestia:
@@ -110,49 +138,6 @@ _configure-hestia:
 	    vcmd="$(HESTIA)/bin/v-$${hcmd##*/h-}"; \
 	    [ -L "$$vcmd" ] || ln -s "$$(basename "$$hcmd")" "$$vcmd"; \
 	done
-	echo "[ * ] Writing hestia.conf..."
-	rm -f $(HESTIA)/conf/hestia.conf
-	touch $(HESTIA)/conf/hestia.conf
-	chmod 660 $(HESTIA)/conf/hestia.conf
-	wcv() { echo "$$1='$$2'" >> $(HESTIA)/conf/hestia.conf; }
-	wcv "BACKEND_PORT"             "8083"
-	wcv "WEB_SYSTEM"               "nginx"
-	wcv "WEB_PORT"                 "80"
-	wcv "WEB_SSL_PORT"             "443"
-	wcv "WEB_SSL"                  "openssl"
-	wcv "PROXY_SYSTEM"             ""
-	wcv "STATS_SYSTEM"             "awstats"
-	wcv "WEB_BACKEND"              "php-fpm"
-	wcv "DB_SYSTEM"                "mysql"
-	wcv "DB_PMA_ALIAS"             "phpmyadmin"
-	if [ "$(PROFILE)" = "standard" ]; then \
-	    wcv "MAIL_SYSTEM"          "exim4"; \
-	    wcv "IMAP_SYSTEM"          "dovecot"; \
-	    wcv "ANTISPAM_SYSTEM"      "rspamd"; \
-	    wcv "SIEVE_SYSTEM"         "yes"; \
-	    wcv "WEBMAIL_SYSTEM"       "roundcube"; \
-	    wcv "WEBMAIL_ALIAS"        "webmail"; \
-	fi
-	wcv "CRON_SYSTEM"              "cron"
-	wcv "FIREWALL_SYSTEM"          "iptables"
-	wcv "FIREWALL_EXTENSION"       "fail2ban"
-	wcv "DISK_QUOTA"               "no"
-	wcv "RESOURCES_LIMIT"          "no"
-	wcv "BACKUP_SYSTEM"            "local"
-	wcv "BACKUP_GZIP"              "4"
-	wcv "BACKUP_MODE"              "zstd"
-	wcv "LANGUAGE"                 "en"
-	wcv "LOGIN_STYLE"              "default"
-	wcv "THEME"                    "dark"
-	wcv "INACTIVE_SESSION_TIMEOUT" "60"
-	wcv "VERSION"                  "$(VERSION)"
-	wcv "RELEASE_BRANCH"           "release"
-	wcv "UPGRADE_SEND_EMAIL"       "true"
-	wcv "UPGRADE_SEND_EMAIL_LOG"   "false"
-	wcv "API"                      "no"
-	wcv "API_SYSTEM"               "0"
-	wcv "API_ALLOWED_IP"           ""
-	wcv "ROOT_USER"                "$$HESTIA_ADMIN"
 	echo "[ * ] Installing packages, templates, firewall data..."
 	cp -rf $(HESTIA_COMMON_DIR)/packages $(HESTIA)/data/
 	IFS='.' read -r -a dom <<< "$$HESTIA_HOSTNAME"; \
