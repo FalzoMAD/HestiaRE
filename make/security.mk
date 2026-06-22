@@ -7,8 +7,10 @@
 _install-security:
 	@[ ! -f $(CONF_DIR)/.done.security ] || { echo "[ skip ] security already configured"; exit 0; }
 	echo "[ * ] Installing security packages (fail2ban, iptables, ipset)..."
-	DEBIAN_FRONTEND=noninteractive apt-get -y install \
-	    fail2ban iptables ipset 2>&1 | tee -a $(LOG)
+	DEBIAN_FRONTEND=noninteractive apt-get -y \
+	    -o Dpkg::Progress-Fancy=1 \
+	    install \
+	    fail2ban iptables ipset >> $(LOG) 2>&1
 	echo "[ * ] Configuring fail2ban..."
 	mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
 	cp -rf $(HESTIA_INSTALL_DIR)/fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/

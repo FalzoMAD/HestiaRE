@@ -7,13 +7,15 @@
 _install-web:
 	@[ ! -f $(CONF_DIR)/.done.web ] || { echo "[ skip ] web already configured"; exit 0; }
 	echo "[ * ] Installing web packages (nginx, PHP $(PHP_VER) extensions)..."
-	DEBIAN_FRONTEND=noninteractive apt-get -y install \
+	DEBIAN_FRONTEND=noninteractive apt-get -y \
+	    -o Dpkg::Progress-Fancy=1 \
+	    install \
 	    nginx \
 	    php$(PHP_VER) php$(PHP_VER)-apcu php$(PHP_VER)-bz2 php$(PHP_VER)-cgi \
 	    php$(PHP_VER)-cli php$(PHP_VER)-common php$(PHP_VER)-gd \
 	    php$(PHP_VER)-imagick php$(PHP_VER)-imap php$(PHP_VER)-intl \
 	    php$(PHP_VER)-ldap php$(PHP_VER)-pgsql php$(PHP_VER)-pspell \
-	    php$(PHP_VER)-readline php$(PHP_VER)-xml 2>&1 | tee -a $(LOG)
+	    php$(PHP_VER)-readline php$(PHP_VER)-xml >> $(LOG) 2>&1
 	echo "[ * ] Configuring nginx..."
 	rm -f /etc/nginx/conf.d/*.conf
 	cp -f $(HESTIA_INSTALL_DIR)/nginx/nginx.conf /etc/nginx/
