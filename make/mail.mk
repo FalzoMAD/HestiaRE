@@ -8,10 +8,12 @@
 _install-mail:
 	@[ ! -f $(CONF_DIR)/.done.mail ] || { echo "[ skip ] mail already configured"; exit 0; }
 	echo "[ * ] Installing mail packages (exim4, dovecot, rspamd)..."
-	DEBIAN_FRONTEND=noninteractive apt-get -y install \
+	DEBIAN_FRONTEND=noninteractive apt-get -y \
+	    -o Dpkg::Progress-Fancy=1 \
+	    install \
 	    exim4 exim4-daemon-heavy \
 	    dovecot-imapd dovecot-pop3d dovecot-managesieved dovecot-sieve \
-	    rspamd >> $(LOG)
+	    rspamd >> $(LOG) 2>&1
 	echo "[ * ] Configuring Exim4..."
 	gpasswd -a $(EXIM_USR) mail > /dev/null 2>&1 || true
 	cp -f $(HESTIA_INSTALL_DIR)/exim/exim4.conf.template /etc/exim4/ 2>/dev/null \

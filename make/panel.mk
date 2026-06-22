@@ -7,12 +7,14 @@
 _install-panel:
 	@[ ! -f $(CONF_DIR)/.done.panel ] || { echo "[ skip ] panel already configured"; exit 0; }
 	echo "[ * ] Installing panel packages (Caddy, PHP $(PHP_VER) FPM)..."
-	DEBIAN_FRONTEND=noninteractive apt-get -y install \
+	DEBIAN_FRONTEND=noninteractive apt-get -y \
+	    -o Dpkg::Progress-Fancy=1 \
+	    install \
 	    caddy \
 	    libphp-phpmailer \
 	    php$(PHP_VER)-fpm php$(PHP_VER)-mysql php$(PHP_VER)-curl \
 	    php$(PHP_VER)-zip php$(PHP_VER)-gmp php$(PHP_VER)-mbstring \
-	    php$(PHP_VER)-opcache >> $(LOG)
+	    php$(PHP_VER)-opcache >> $(LOG) 2>&1
 	echo "[ * ] Configuring panel PHP-FPM..."
 	mkdir -p /etc/php/hestia/fpm/pool.d
 	cp -f $(HESTIA)/conf/panel-php/php-fpm.conf /etc/php/hestia/fpm/

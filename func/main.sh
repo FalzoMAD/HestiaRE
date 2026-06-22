@@ -22,8 +22,8 @@ source_conf() {
 if [ -z "$user" ]; then
 	if [ -z "$ROOT_USER" ]; then
 		if [ -z "$HESTIA" ]; then
-			# shellcheck source=/etc/hestia/hestia.conf
-			source /etc/hestia/hestia.conf
+			# shellcheck source=/etc/hestia/hestia.env
+			source /etc/hestia/hestia.env
 		fi
 		source_conf "$HESTIA/conf/hestia.conf" # load config file
 	fi

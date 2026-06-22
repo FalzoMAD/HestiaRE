@@ -203,7 +203,7 @@ Variables set in `func/main.sh`:
 | Item | HestiaCP | HestiaRE | Status |
 |------|----------|----------|--------|
 | Instance config dir | `/etc/hestiacp/` | `/etc/hestia/` | **Decided** |
-| Bootstrap config file | `/etc/hestiacp/hestia.conf` | `/etc/hestia/hestia.conf` | **Decided** |
+| Bootstrap config file | `/etc/hestiacp/hestia.conf` | `/etc/hestia/hestia.env` | **Decided** |
 | Local overrides | `/etc/hestiacp/local.conf` | `/etc/hestia/local.conf` | **Decided** |
 | Install root | `/usr/local/hestia` | `/usr/local/hestia` | Unchanged — intentional |
 | `$HESTIA` variable | `/usr/local/hestia` | `/usr/local/hestia` | Unchanged — no migration needed |
@@ -213,7 +213,7 @@ Variables set in `func/main.sh`:
 | Log dir name | `/var/log/hestia` | `/var/log/hestia` | Unchanged — OS path, no rebrand needed |
 | Apt repo | `apt.hestiacp.com` | removed — no external hestia packages | **Decided** |
 
-**Key insight:** Because the install root stays `/usr/local/hestia`, the `$HESTIA` variable and all 514 `bin/*` commands that reference it require only one change: the `source /etc/hestiacp/hestia.conf` line must become `source /etc/hestia/hestia.conf`. The variable value itself is unchanged.
+**Key insight:** Because the install root stays `/usr/local/hestia`, the `$HESTIA` variable and all 514 `bin/*` commands that reference it require only one change: the `source /etc/hestiacp/hestia.conf` line must become `source /etc/hestia/hestia.env`. The variable value itself is unchanged.
 
 ---
 
@@ -243,30 +243,24 @@ Filenames are preserved — no renames.
 
 ### 5c. Known conflicts / open issues
 
-**Two files named `hestia.conf` — not yet resolved**
+**Two files named `hestia.conf` — resolved in Issue #81**
 
-There are currently two distinct files with similar names and different roles:
+The naming conflict between the two `hestia.conf` files has been resolved:
 
-1. **`/etc/hestiacp/hestia.conf`** — Bootstrap file. Sourced as the very first
-   action by every `v-*` and `hl-*` command. Sets `$HESTIA` and `$PATH`.
-   - Current content: `export HESTIA='/usr/local/hestia'` + sources `local.conf`
-   - Target: `/etc/hestia/hestia.conf` — but migration is its own issue because
-     renaming/restructuring this file involves the hestiaweb/admin user topic
-     and a decision on env-file vs. conf-file structure.
+1. **`/etc/hestia/hestia.env`** — Bootstrap file (renamed from `/etc/hestia/hestia.conf`).
+   Sourced as the very first action by every `h-*`/`v-*` command. Sets `$HESTIA` and `$PATH`.
+   Content: `export HESTIA='/usr/local/hestia'` + sources `local.conf`.
 
 2. **`/usr/local/hestia/conf/hestia.conf`** — Panel instance config. Contains all
    active panel settings as `KEY='value'` pairs (WEB_SYSTEM, MAIL_SYSTEM, etc.).
-   - Target: `/etc/hestia/conf/hestia.conf` (migration in 5a above)
+   Unchanged — only file #1 was renamed.
 
-These two files must not be confused. The migration in 5a moves file #2 only.
-File #1 stays at `/etc/hestiacp/hestia.conf` until its dedicated issue resolves
-the env vs. conf question and the user/account consolidation.
+hestiaweb/admin user consolidation remains a separate, future topic.
 
 ### 5d. Deferred to later issues
 
 | Topic | Scope |
 |-------|-------|
-| Bootstrap file restructure | `/etc/hestiacp/hestia.conf` → `/etc/hestia/hestia.conf`, env vs. conf format, hestiaweb/admin user consolidation |
 | `data/packages/` + `data/templates/` | Decision: move to `/etc/hestia/` or keep under install root |
 | `data/users/` | Backup format compatibility analysis required before any move |
 

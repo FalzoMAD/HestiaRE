@@ -403,7 +403,7 @@
     "primary_issues": [
       {
         "issue": "Config path mismatch",
-        "detail": "bin/* and func/* sourced /etc/hestiacp/hestia.conf — migrated to /etc/hestia/hestia.conf in Issue #30",
+        "detail": "bin/* and func/* sourced /etc/hestiacp/hestia.conf — migrated to /etc/hestia/hestia.conf in Issue #30, renamed to /etc/hestia/hestia.env in Issue #81",
         "affected": "cli_commands, func_libraries",
         "priority": "resolved"
       },
