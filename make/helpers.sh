@@ -17,8 +17,8 @@ _hestia_spin_start() {
 
 _hestia_spin_stop() {
     [ -n "$_hestia_spin_pid" ] || return 0
-    kill "$_hestia_spin_pid" 2>/dev/null
-    wait "$_hestia_spin_pid" 2>/dev/null
+    kill "$_hestia_spin_pid" 2>/dev/null || true
+    wait "$_hestia_spin_pid" 2>/dev/null || true
     printf '\r\033[K' >&2
     _hestia_spin_pid=""
 }
