@@ -14,8 +14,8 @@
 package=$1
 
 # Includes
-# shellcheck source=/etc/hestia/hestia.conf
-source /etc/hestia/hestia.conf
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
 # load config file
