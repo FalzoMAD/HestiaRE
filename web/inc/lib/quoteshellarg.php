@@ -1,4 +1,5 @@
 <?php
+// Upstream version: v1.1.0
 // Inlined from hestiacp/phpquoteshellarg v1.1.0 (The Unlicense / public domain)
 // Source: https://github.com/hestiacp/phpquoteshellarg
 // Reason: PHP's native escapeshellarg() corrupts UTF-8 characters (e.g. æøå)
