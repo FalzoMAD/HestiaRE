@@ -12,7 +12,7 @@ _install-panel:
 	    libphp-phpmailer \
 	    php$(PHP_VER)-fpm php$(PHP_VER)-mysql php$(PHP_VER)-curl \
 	    php$(PHP_VER)-zip php$(PHP_VER)-gmp php$(PHP_VER)-mbstring \
-	    php$(PHP_VER)-opcache >> $(LOG)
+	    php$(PHP_VER)-opcache 2>&1 | tee -a $(LOG)
 	echo "[ * ] Configuring panel PHP-FPM..."
 	mkdir -p /etc/php/hestia/fpm/pool.d
 	cp -f $(HESTIA)/conf/panel-php/php-fpm.conf /etc/php/hestia/fpm/

@@ -8,7 +8,7 @@ _install-db:
 	@[ ! -f $(CONF_DIR)/.done.db ] || { echo "[ skip ] db already configured"; exit 0; }
 	echo "[ * ] Installing database packages (MariaDB $(MARIADB_VER))..."
 	DEBIAN_FRONTEND=noninteractive apt-get -y install \
-	    mariadb-client mariadb-common mariadb-server >> $(LOG)
+	    mariadb-client mariadb-common mariadb-server 2>&1 | tee -a $(LOG)
 	echo "[ * ] Configuring MariaDB..."
 	MEM=$$(awk '/MemTotal/{print $$2}' /proc/meminfo); \
 	if   [ "$$MEM" -gt 3900000 ]; then MYCNF="my-large.cnf"; \

@@ -13,7 +13,7 @@ _install-web:
 	    php$(PHP_VER)-cli php$(PHP_VER)-common php$(PHP_VER)-gd \
 	    php$(PHP_VER)-imagick php$(PHP_VER)-imap php$(PHP_VER)-intl \
 	    php$(PHP_VER)-ldap php$(PHP_VER)-pgsql php$(PHP_VER)-pspell \
-	    php$(PHP_VER)-readline php$(PHP_VER)-xml >> $(LOG)
+	    php$(PHP_VER)-readline php$(PHP_VER)-xml 2>&1 | tee -a $(LOG)
 	echo "[ * ] Configuring nginx..."
 	rm -f /etc/nginx/conf.d/*.conf
 	cp -f $(HESTIA_INSTALL_DIR)/nginx/nginx.conf /etc/nginx/

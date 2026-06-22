@@ -275,7 +275,7 @@ _finalize:
 	$(HESTIA)/bin/h-update-sys-rrd > /dev/null 2>&1 || true
 	echo "[ * ] Final package upgrade..."
 	apt-get -qq update
-	DEBIAN_FRONTEND=noninteractive apt-get -y upgrade >> $(LOG) 2>&1
+	DEBIAN_FRONTEND=noninteractive apt-get -y upgrade 2>&1 | tee -a $(LOG)
 	HOST_IP=$$(ip -4 route get 8.8.8.8 2>/dev/null | awk '{print $$7; exit}' \
 	    || hostname -I | awk '{print $$1}')
 	echo ""

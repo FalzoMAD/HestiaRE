@@ -48,7 +48,7 @@ _install-base:
 	    rrdtool rsyslog sysstat unzip util-linux vim-common \
 	    wget whois xxd zip zstd bubblewrap restic sudo \
 	    apt-transport-https awstats \
-	    $(BASE_PKGS_EXTRA) >> $(LOG)
+	    $(BASE_PKGS_EXTRA) 2>&1 | tee -a $(LOG)
 	echo "[ * ] Creating system users..."
 	id hestiaweb &>/dev/null \
 	    || useradd hestiaweb -c "HestiaRE Web" --no-create-home -s /sbin/nologin

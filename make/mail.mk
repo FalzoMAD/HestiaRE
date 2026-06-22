@@ -11,7 +11,7 @@ _install-mail:
 	DEBIAN_FRONTEND=noninteractive apt-get -y install \
 	    exim4 exim4-daemon-heavy \
 	    dovecot-imapd dovecot-pop3d dovecot-managesieved dovecot-sieve \
-	    rspamd >> $(LOG)
+	    rspamd 2>&1 | tee -a $(LOG)
 	echo "[ * ] Configuring Exim4..."
 	gpasswd -a $(EXIM_USR) mail > /dev/null 2>&1 || true
 	cp -f $(HESTIA_INSTALL_DIR)/exim/exim4.conf.template /etc/exim4/ 2>/dev/null \
