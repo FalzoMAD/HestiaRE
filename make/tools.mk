@@ -12,6 +12,7 @@ TOOLS_SYSADM  := htop ncdu tmux mtr-tiny nmap iotop traceroute
 TOOLS_FULL    := rclone restic
 
 add-tools:
+	source $(HESTIA)/make/helpers.sh
 	echo "[ * ] Installing tools (TOOLS_SET=$(TOOLS_SET))..."
 	case "$(TOOLS_SET)" in \
 	    hestia) \
@@ -19,12 +20,12 @@ add-tools:
 	        ;; \
 	    sysadmin) \
 	        echo "  Set: composer, wp-cli + sysadmin utilities"; \
-	        DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Progress-Fancy=1 install $(TOOLS_SYSADM) >> $(LOG) 2>&1; \
+	        hestia_apt -y install $(TOOLS_SYSADM); \
 	        ;; \
 	    full) \
 	        echo "  Set: composer, wp-cli + sysadmin + rclone/restic"; \
-	        DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Progress-Fancy=1 install $(TOOLS_SYSADM) >> $(LOG) 2>&1; \
-	        DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Progress-Fancy=1 install $(TOOLS_FULL) >> $(LOG) 2>&1; \
+	        hestia_apt -y install $(TOOLS_SYSADM); \
+	        hestia_apt -y install $(TOOLS_FULL); \
 	        ;; \
 	    *) \
 	        echo "ERROR: Unknown TOOLS_SET '$(TOOLS_SET)'. Valid: hestia|sysadmin|full" >&2; \
