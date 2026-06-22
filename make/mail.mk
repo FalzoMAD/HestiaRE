@@ -59,6 +59,15 @@ _install-mail:
 	fi
 	systemctl enable rspamd
 	systemctl start rspamd
+	wcv() { echo "$$1='$$2'" >> $(HESTIA)/conf/hestia.conf; }
+	if [ "$(PROFILE)" = "standard" ]; then \
+	    wcv "MAIL_SYSTEM"          "exim4"; \
+	    wcv "IMAP_SYSTEM"          "dovecot"; \
+	    wcv "ANTISPAM_SYSTEM"      "rspamd"; \
+	    wcv "SIEVE_SYSTEM"         "yes"; \
+	    wcv "WEBMAIL_SYSTEM"       "roundcube"; \
+	    wcv "WEBMAIL_ALIAS"        "webmail"; \
+	fi
 	echo "[ * ] Installing Roundcube..."
 	$(HESTIA)/bin/h-add-sys-roundcube >> $(LOG)
 	touch $(CONF_DIR)/.done.mail

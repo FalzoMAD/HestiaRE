@@ -336,10 +336,11 @@
         "uninstall": "Interactive uninstall stub"
       },
       "internal_targets": {
-        "_install-*": "Component install targets — each guarded by /etc/hestia/.done.COMPONENT sentinel",
+        "_install-*": "Component install targets — each guarded by /etc/hestia/.done.COMPONENT sentinel; each writes its own wcv values to $HESTIA/conf/hestia.conf before any h-* call",
         "_check-root": "Verify root, OS known, not already installed",
         "_collect-params": "Prompt or accept H_* vars, write /etc/hestia/install.conf",
-        "_configure-hestia": "hestia.conf, sudoers, SSL cert, admin user, crontab, IP; writes .done.configure",
+        "_bootstrap-hestia-env": "Creates /etc/hestia/hestia.env + /etc/profile.d/hestia.sh; inits $HESTIA/conf/hestia.conf with install-type-independent key=value settings; runs before _install-base",
+        "_configure-hestia": "sudoers, SSL cert, admin user, data dirs, crontab, IP config; writes .done.configure (hestia.conf init moved to _bootstrap-hestia-env; per-component keys written by each _install-* target)",
         "_finalize": "Start hestia.service, final apt upgrade, print credentials"
       },
       "sentinel_files": "/etc/hestia/.done.{base,panel,web,db,mail,security,configure} — presence skips that phase",
@@ -357,7 +358,7 @@
         "github": "https://github.com/FalzoMAD/HestiaRE (default)",
         "gitea": "Configurable via /etc/hestia/source.conf"
       },
-      "install_conf": "/etc/hestia/install.conf — written by _collect-params, sourced by _configure-hestia and _finalize",
+      "install_conf": "/etc/hestia/install.conf — written by _collect-params, sourced by _bootstrap-hestia-env, _configure-hestia, and _finalize",
       "dependencies": ["installer"],
       "upstream_debt": {
         "file_count": 0,

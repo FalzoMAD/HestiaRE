@@ -34,6 +34,9 @@ _install-db:
 	mariadb -e "FLUSH PRIVILEGES;"
 	grep -q 'HESTIA_MPASS' "$(INSTALL_CONF)" \
 	    || echo "HESTIA_MPASS=\"$$MPASS\"" >> "$(INSTALL_CONF)"
+	wcv() { echo "$$1='$$2'" >> $(HESTIA)/conf/hestia.conf; }
+	wcv "DB_SYSTEM"                "mysql"
+	wcv "DB_PMA_ALIAS"             "phpmyadmin"
 	echo "[ * ] Installing phpMyAdmin..."
 	$(HESTIA)/bin/h-add-sys-phpmyadmin >> $(LOG)
 	touch $(CONF_DIR)/.done.db
