@@ -40,7 +40,9 @@ _install-base:
 	rm -f /tmp/mariadb_signing.asc
 	echo "[ * ] Installing base packages..."
 	apt-get -qq update
-	DEBIAN_FRONTEND=noninteractive apt-get -y install \
+	DEBIAN_FRONTEND=noninteractive apt-get -y \
+	    -o Dpkg::Progress-Fancy=1 \
+	    install \
 	    acl at bc bsdmainutils bsdutils ca-certificates \
 	    cron curl dnsutils e2fslibs e2fsprogs expect flex ftp \
 	    git gnupg idn2 imagemagick ipset iptables jq \
@@ -48,7 +50,7 @@ _install-base:
 	    rrdtool rsyslog sysstat unzip util-linux vim-common \
 	    wget whois xxd zip zstd bubblewrap restic sudo \
 	    apt-transport-https awstats \
-	    $(BASE_PKGS_EXTRA) >> $(LOG)
+	    $(BASE_PKGS_EXTRA) >> $(LOG) 2>&1
 	echo "[ * ] Creating system users..."
 	id hestiaweb &>/dev/null \
 	    || useradd hestiaweb -c "HestiaRE Web" --no-create-home -s /sbin/nologin

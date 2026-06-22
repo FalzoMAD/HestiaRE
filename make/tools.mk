@@ -19,12 +19,12 @@ add-tools:
 	        ;; \
 	    sysadmin) \
 	        echo "  Set: composer, wp-cli + sysadmin utilities"; \
-	        DEBIAN_FRONTEND=noninteractive apt-get -y install $(TOOLS_SYSADM) >> $(LOG); \
+	        DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Progress-Fancy=1 install $(TOOLS_SYSADM) >> $(LOG) 2>&1; \
 	        ;; \
 	    full) \
 	        echo "  Set: composer, wp-cli + sysadmin + rclone/restic"; \
-	        DEBIAN_FRONTEND=noninteractive apt-get -y install $(TOOLS_SYSADM) >> $(LOG); \
-	        DEBIAN_FRONTEND=noninteractive apt-get -y install $(TOOLS_FULL) >> $(LOG); \
+	        DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Progress-Fancy=1 install $(TOOLS_SYSADM) >> $(LOG) 2>&1; \
+	        DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Progress-Fancy=1 install $(TOOLS_FULL) >> $(LOG) 2>&1; \
 	        ;; \
 	    *) \
 	        echo "ERROR: Unknown TOOLS_SET '$(TOOLS_SET)'. Valid: hestia|sysadmin|full" >&2; \
