@@ -36,15 +36,15 @@ _install-mail:
 	echo "[ * ] Configuring Dovecot..."
 	gpasswd -a dovecot mail > /dev/null 2>&1 || true
 	mkdir -p /etc/dovecot/conf.d
-	DOVECOT_VER=$$(dovecot --version 2>/dev/null | cut -f-2 -d. || echo "2.3")
-	if [ "$$DOVECOT_VER" = "2.4" ]; then \
-	    cp -f $(HESTIA_COMMON_DIR)/dovecot-24/dovecot.conf /etc/dovecot/; \
-	    cp -f $(HESTIA_COMMON_DIR)/dovecot-24/conf.d/* /etc/dovecot/conf.d/; \
+	DOVECOT_VER=$$(dovecot --version 2>/dev/null | cut -d. -f1,2 || echo "2.3")
+	if [ "$$(printf '%s\n2.4' "$$DOVECOT_VER" | sort -V | head -1)" = "2.4" ]; then \
+	    DCDIR="$(HESTIA)/conf/dovecot/2.4"; \
 	else \
-	    cp -f $(HESTIA_COMMON_DIR)/dovecot/dovecot.conf /etc/dovecot/; \
-	    cp -f $(HESTIA_COMMON_DIR)/dovecot/conf.d/* /etc/dovecot/conf.d/; \
-	    rm -f /etc/dovecot/conf.d/15-mailboxes.conf; \
+	    DCDIR="$(HESTIA)/conf/dovecot/2.3"; \
 	fi
+	cp -f "$$DCDIR/dovecot.conf" /etc/dovecot/
+	cp -f "$$DCDIR/conf.d/"* /etc/dovecot/conf.d/
+	cp -f "$$DCDIR/sieve/"* /etc/dovecot/conf.d/
 	cp -f $(HESTIA_INSTALL_DIR)/logrotate/dovecot /etc/logrotate.d/
 	chown -R root:root /etc/dovecot*
 	touch /var/log/dovecot.log

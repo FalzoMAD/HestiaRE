@@ -191,6 +191,7 @@
         "install/common/",
         "conf/panel-caddy/",
         "conf/panel-php/",
+        "conf/dovecot/",
         "install/upgrade/"
       ],
       "key_files": [
@@ -206,7 +207,8 @@
         "install/common/packages/system.pkg",
         "install/common/templates/email/",
         "install/common/roundcube/",
-        "install/common/dovecot-24/",
+        "conf/dovecot/2.3/",
+        "conf/dovecot/2.4/",
         "install/common/sudo/hestiaweb",
         "install/upgrade/upgrade.conf",
         "conf/panel-caddy/Caddyfile",
