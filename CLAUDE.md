@@ -94,8 +94,8 @@ upstream/hestiacp HestiaCP snapshot, READ ONLY, never modify
 
 ### Key files
 ```
-install.sh        main installer
-Makefile          make targets: install, update, check-updates, status
+install.sh        main installer (downloads release, calls just)
+Justfile          just targets: install, update, check-updates, status
 VERSION           empty placeholder, filled at build time — never edit
 codemap.json      component map — read before exploring the codebase
 CLAUDE.md         this file

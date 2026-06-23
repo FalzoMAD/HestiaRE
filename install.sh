@@ -105,7 +105,7 @@ LOG="/var/log/hestia/install.log"
 mkdir -p /var/log/hestia
 echo "[ * ] Installing prerequisites..."
 DEBIAN_FRONTEND=noninteractive apt-get -qq update
-DEBIAN_FRONTEND=noninteractive apt-get -y install curl make gnupg ca-certificates >> "$LOG" 2>&1
+DEBIAN_FRONTEND=noninteractive apt-get -y install curl just gnupg ca-certificates >> "$LOG" 2>&1
 
 # -- Fetch latest release --------------------------------
 
@@ -157,4 +157,4 @@ cp -r /tmp/hestiare-${LATEST}/. "${INSTALL_DIR}/"
 rm -rf /tmp/hestiare-${LATEST}
 
 cd "${INSTALL_DIR}"
-make install OS="${OS}" PROFILE="${PROFILE}"
+just install os="${OS}" profile="${PROFILE}"
