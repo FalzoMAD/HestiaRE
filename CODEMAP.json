@@ -324,7 +324,7 @@
         "make/mail.mk": "_install-mail — exim4, dovecot, rspamd; calls h-add-sys-roundcube (standard profile only)",
         "make/security.mk": "_install-security — fail2ban, iptables, ipset",
         "make/tools.mk": "add-tools — composer, wp-cli; TOOLS_SET=hestia|sysadmin|full",
-        "make/configure.mk": "_check-root, _collect-params, _configure-hestia, _finalize"
+        "make/configure.mk": "_check-root, _collect-params, _bootstrap-hestia-env, _init-hestia-structure, _configure-hestia, _finalize"
       },
       "make_targets": {
         "install": "Full install (interactive; override via H_HOSTNAME H_ADMIN H_EMAIL H_PASS)",
@@ -340,7 +340,8 @@
         "_check-root": "Verify root, OS known, not already installed",
         "_collect-params": "Prompt or accept H_* vars, write /etc/hestia/install.conf",
         "_bootstrap-hestia-env": "Creates /etc/hestia/hestia.env + /etc/profile.d/hestia.sh; inits $HESTIA/conf/hestia.conf with install-type-independent key=value settings; runs before _install-base",
-        "_configure-hestia": "sudoers, SSL cert, admin user, data dirs, crontab, IP config; writes .done.configure (hestia.conf init moved to _bootstrap-hestia-env; per-component keys written by each _install-* target)",
+        "_init-hestia-structure": "Creates $HESTIA/log symlink, data/{users,queue,ips,firewall,sessions,templates,packages}, queue pipes, log files, permissions; runs after _bootstrap-hestia-env so any h-* call in _install-* targets finds a valid structure (func/main.sh requires these paths)",
+        "_configure-hestia": "sudoers, SSL cert, admin user, crontab, IP config; writes .done.configure (dir/log structure moved to _init-hestia-structure; hestia.conf init in _bootstrap-hestia-env; per-component keys in each _install-* target)",
         "_finalize": "Start hestia.service, final apt upgrade, print credentials"
       },
       "sentinel_files": "/etc/hestia/.done.{base,panel,web,db,mail,security,configure} — presence skips that phase",

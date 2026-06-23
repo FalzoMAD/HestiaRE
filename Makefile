@@ -80,6 +80,7 @@ install:
 	$(MAKE) _collect-params H_HOSTNAME="$(H_HOSTNAME)" H_ADMIN="$(H_ADMIN)" \
 	    H_EMAIL="$(H_EMAIL)" H_PASS="$(H_PASS)"
 	$(MAKE) _bootstrap-hestia-env
+	$(MAKE) _init-hestia-structure
 	$(MAKE) _install-base
 	$(MAKE) _install-panel
 	$(MAKE) _install-web

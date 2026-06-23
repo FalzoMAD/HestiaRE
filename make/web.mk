@@ -59,7 +59,7 @@ _install-web:
 	echo "[ * ] Installing PHP multi-version ($(MULTIPHP_VER))..."
 	for v in $(MULTIPHP_VER); do \
 	    echo "  php$$v..."; \
-	    $(HESTIA)/bin/h-add-web-php "$$v" > /dev/null 2>&1 || true; \
+	    $(HESTIA)/bin/h-add-web-php "$$v" >> $(LOG) 2>&1 || true; \
 	done
 	echo "[ * ] Configuring PHP $(PHP_VER) web pool..."
 	cp -f $(HESTIA_INSTALL_DIR)/php-fpm/www.conf /etc/php/$(PHP_VER)/fpm/pool.d/www.conf
