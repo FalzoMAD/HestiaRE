@@ -148,7 +148,7 @@
         "strategy": "No Composer at install time. No vendor/ in repo. OS packages and Eigenbau only.",
         "manifest": "VENDORED.json",
         "os_packages": {
-          "libphp-phpmailer": "deb12=6.6.3 / ub24=6.8.1 / deb13=6.9.3 — panel email sending — LGPL-2.1-only — installed by make/panel.mk"
+          "libphp-phpmailer": "deb12=6.6.3 / ub24=6.8.1 / deb13=6.9.3 — panel email sending — LGPL-2.1-only — installed by make/panel.just"
         },
         "packages": {},
         "inline_libs": {
@@ -218,7 +218,7 @@
       ],
       "language": "bash / config templates",
       "supported_distros": ["Debian 12 (bookworm)", "Ubuntu 24.04 LTS (noble)", "Debian 13 (trixie, priority 2, planned June 2026+)"],
-      "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. All install logic now lives in make/*.mk files (see make_release component).",
+      "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. All install logic now lives in make/*.just files (see make_release component). Migrated from Makefile to Justfile in Issue #102.",
       "web_templates": {
         "nginx": "install/deb/templates/web/nginx/",
         "apache2": "install/deb/templates/web/apache2/",
@@ -297,71 +297,73 @@
     },
 
     "make_release": {
-      "description": "Slim orchestrator Makefile (~120 lines) + make/*.mk component files + install.sh bootstrap. All install logic is in make/*.mk. Makefile includes them and exposes only public targets. Restructured in Issue #26d.",
-      "entry_points": ["Makefile", "install.sh"],
+      "description": "Justfile orchestrator + make/*.just component modules + install.sh bootstrap. Migrated from make/Makefile to just/Justfile in Issue #102. All install logic in make/*.just, imported into Justfile.",
+      "entry_points": ["Justfile", "install.sh"],
       "directories": ["make/"],
       "key_files": [
-        "Makefile",
+        "Justfile",
         "install.sh",
         "VERSION",
-        "make/debian-bookworm.mk",
-        "make/ubuntu-noble.mk",
-        "make/base.mk",
-        "make/panel.mk",
-        "make/web.mk",
-        "make/db.mk",
-        "make/mail.mk",
-        "make/security.mk",
-        "make/tools.mk",
-        "make/configure.mk"
+        "make/debian-bookworm.sh",
+        "make/ubuntu-noble.sh",
+        "make/base.just",
+        "make/panel.just",
+        "make/web.just",
+        "make/db.just",
+        "make/mail.just",
+        "make/security.just",
+        "make/tools.just",
+        "make/configure.just",
+        "make/helpers.sh"
       ],
-      "language": "make + bash",
-      "make_structure": {
-        "Makefile": "Orchestrator — global vars, -include make/$(OS).mk, include make/*.mk, public targets only",
-        "make/$(OS).mk": "OS-specific vars: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA",
-        "make/base.mk": "_install-base — APT repos (sury, mariadb; nginx from OS repo), base packages, system users, SSH hardening",
-        "make/panel.mk": "_install-panel — Caddy + hestia-php.service",
-        "make/web.mk": "_install-web — nginx, PHP multi (5.6–8.4), web pool config",
-        "make/db.mk": "_install-db — MariaDB + phpMyAdmin",
-        "make/mail.mk": "_install-mail — exim4, dovecot, rspamd; calls h-add-sys-roundcube (standard profile only)",
-        "make/security.mk": "_install-security — fail2ban, iptables, ipset",
-        "make/tools.mk": "add-tools — composer, wp-cli; TOOLS_SET=hestia|sysadmin|full",
-        "make/configure.mk": "_check-root, _collect-params, _bootstrap-hestia-env, _init-hestia-structure, _configure-hestia, _finalize"
+      "language": "just + bash",
+      "just_structure": {
+        "Justfile": "Orchestrator — exported vars, import make/*.just, public targets. set shell := bash -euo pipefail, set quiet.",
+        "make/$(os).sh": "OS-specific bash vars sourced in recipes that need them: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA",
+        "make/helpers.sh": "Spinner + hestia_apt() wrapper — sourced in recipes before apt operations",
+        "make/base.just": "_install-base — APT repos (sury, mariadb), base packages, system users, SSH hardening",
+        "make/panel.just": "_install-panel — Caddy + hestia-php.service",
+        "make/web.just": "_install-web — nginx, PHP multi (5.6–8.4), web pool config. TODO #104: add apache2 for standard profile",
+        "make/db.just": "_install-db — MariaDB + phpMyAdmin",
+        "make/mail.just": "_install-mail — exim4, dovecot (version-aware), rspamd; calls h-add-sys-roundcube (standard profile only)",
+        "make/security.just": "_install-security — fail2ban, iptables, ipset",
+        "make/tools.just": "add-tools — composer, wp-cli; tools_set=hestia|sysadmin|full",
+        "make/configure.just": "_check-root, _collect-params (writes install.conf incl. COMPONENT_* stubs), _bootstrap-hestia-env, _init-hestia-structure, _configure-hestia, _finalize"
       },
-      "make_targets": {
-        "install": "Full install (interactive; override via H_HOSTNAME H_ADMIN H_EMAIL H_PASS)",
-        "add-tools": "Standalone tool installer, always re-runnable. TOOLS_SET=hestia|sysadmin|full",
+      "just_targets": {
+        "install": "Full install. Params: os=debian-bookworm profile=standard h_hostname h_admin h_email h_pass tools_set",
+        "add-tools": "Standalone tool installer, always re-runnable. tools_set=hestia|sysadmin|full",
         "update": "Fetch latest release tarball and apply",
         "check-updates": "Query latest version from GitHub or Gitea",
-        "status": "Show version, config, and completed install phases",
+        "status": "Show version, config, completed phases, and COMPONENT_* state from install.conf",
         "backup": "Backup stub",
         "uninstall": "Interactive uninstall stub"
       },
       "internal_targets": {
         "_install-*": "Component install targets — each guarded by /etc/hestia/.done.COMPONENT sentinel; each writes its own wcv values to $HESTIA/conf/hestia.conf before any h-* call",
         "_check-root": "Verify root, OS known, not already installed",
-        "_collect-params": "Prompt or accept H_* vars, write /etc/hestia/install.conf",
-        "_bootstrap-hestia-env": "Creates /etc/hestia/hestia.env + /etc/profile.d/hestia.sh; inits $HESTIA/conf/hestia.conf with install-type-independent key=value settings incl. DB_SYSTEM=mysql (MariaDB always installed); runs before _install-base",
-        "_init-hestia-structure": "Creates $HESTIA/log symlink, data/{users,queue,ips,firewall,sessions,templates,packages}, queue pipes, log files, permissions; runs after _bootstrap-hestia-env so any h-* call in _install-* targets finds a valid structure (func/main.sh requires these paths)",
-        "_configure-hestia": "sudoers, SSL cert, admin user, crontab, IP config; writes .done.configure (dir/log structure moved to _init-hestia-structure; hestia.conf init in _bootstrap-hestia-env; per-component keys in each _install-* target)",
+        "_collect-params": "Prompt or accept H_* env vars, write /etc/hestia/install.conf including COMPONENT_* stubs (issue #103 makes these interactive)",
+        "_bootstrap-hestia-env": "Creates /etc/hestia/hestia.env + /etc/profile.d/hestia.sh; inits $HESTIA/conf/hestia.conf with install-type-independent key=value settings incl. DB_SYSTEM=mysql; runs before _install-base",
+        "_init-hestia-structure": "Creates $HESTIA/log symlink, data/{users,queue,ips,firewall,sessions,templates,packages}, queue pipes, log files, permissions; runs after _bootstrap-hestia-env so any h-* call in _install-* targets finds a valid structure",
+        "_configure-hestia": "sudoers, SSL cert, admin user, crontab, IP config; writes .done.configure",
         "_finalize": "Start hestia.service, final apt upgrade, print credentials"
       },
       "sentinel_files": "/etc/hestia/.done.{base,panel,web,db,mail,security,configure} — presence skips that phase",
       "profiles": {
-        "standard": "All components including mail (exim4, dovecot, rspamd, roundcube)",
-        "minimal": "All components except mail stack"
+        "standard": "All components including apache2 (OS only) and mail (exim4, dovecot, rspamd, roundcube)",
+        "minimal": "No apache2, no mail stack"
       },
       "tools_sets": {
         "hestia": "composer + wp-cli (default)",
         "sysadmin": "hestia + htop, ncdu, tmux, mtr-tiny, nmap, iotop, traceroute",
         "full": "sysadmin + rclone, restic"
       },
-      "bootstrap_flow": "curl | bash install.sh → OS detect → apt install curl make → download tarball → extract to /usr/local/hestia/ → make install OS=... PROFILE=...",
+      "bootstrap_flow": "curl | bash install.sh → OS detect → apt install curl just → download tarball → extract to /usr/local/hestia/ → just install os=... profile=...",
       "release_sources": {
         "github": "https://github.com/FalzoMAD/HestiaRE (default)",
         "gitea": "Configurable via /etc/hestia/source.conf"
       },
-      "install_conf": "/etc/hestia/install.conf — written by _collect-params, sourced by _bootstrap-hestia-env, _configure-hestia, and _finalize",
+      "install_conf": "/etc/hestia/install.conf — written by _collect-params; tracks HESTIA_* params + COMPONENT_* state; sourced by _bootstrap-hestia-env, _configure-hestia, _finalize; COMPONENT_* updated by h-add-*/h-remove-* (issue #103)",
       "dependencies": ["installer"],
       "upstream_debt": {
         "file_count": 0,
@@ -387,8 +389,9 @@
 
   "service_matrix": {
     "always_installed": ["nginx", "php-multi-sury", "mariadb", "phpmyadmin", "caddy", "iptables", "fail2ban", "ipset", "composer", "wp-cli"],
-    "standard_profile": ["exim4", "dovecot", "rspamd", "roundcube"],
-    "optional_hl_service": ["apache2", "proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
+    "standard_profile": ["apache2-os-only", "exim4", "dovecot", "rspamd", "roundcube"],
+    "minimal_profile": ["standard minus apache2 and mail stack"],
+    "optional_h_add_remove": ["proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
     "never_install": ["bind9", "vsftpd", "web-terminal", "spamassassin", "software-installer"],
     "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "caddyfile": "/etc/caddy/Caddyfile", "site_config": "/etc/caddy/hestia.conf", "install_source": "conf/panel-caddy/" },
     "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "conf/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock" }
