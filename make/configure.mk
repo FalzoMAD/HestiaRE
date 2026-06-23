@@ -3,7 +3,7 @@
 #                hestia.conf generation, admin user, finalize
 # -------------------------------------------------------- #
 
-.PHONY: _check-root _collect-params _bootstrap-hestia-env _configure-hestia _finalize
+.PHONY: _check-root _collect-params _bootstrap-hestia-env _init-hestia-structure _configure-hestia _finalize
 
 # Sentinel: written by _configure-hestia when fully complete
 _DONE_CONFIGURE := $(CONF_DIR)/.done.configure
@@ -105,10 +105,43 @@ _bootstrap-hestia-env:
 	wcv "API_SYSTEM"               "0"
 	wcv "API_ALLOWED_IP"           ""
 	wcv "ROOT_USER"                "$$HESTIA_ADMIN"
+	wcv "DB_SYSTEM"                "mysql"
+
+# -------------------------------------------------------- #
+# _init-hestia-structure — log symlink, data dirs, queue
+#                          pipes, log files; must run before
+#                          any _install-* target that calls
+#                          h-* commands (func/main.sh writes
+#                          to $HESTIA/log/* and $HESTIA/data/
+#                          on every invocation)
+# -------------------------------------------------------- #
+
+_init-hestia-structure:
+	@[ -L /var/log/hestia ] && rm -f /var/log/hestia || true
+	mkdir -p /var/log/hestia
+	ln -sf /var/log/hestia $(HESTIA)/log
+	mkdir -p $(HESTIA)/conf $(HESTIA)/ssl \
+	    $(HESTIA)/data/ips $(HESTIA)/data/queue \
+	    $(HESTIA)/data/users $(HESTIA)/data/firewall \
+	    $(HESTIA)/data/sessions \
+	    $(HESTIA)/data/templates/web/php-fpm \
+	    $(HESTIA)/data/templates/mail \
+	    $(HESTIA)/data/templates/dns \
+	    $(HESTIA)/data/packages
+	touch $(HESTIA)/data/queue/backup.pipe $(HESTIA)/data/queue/disk.pipe \
+	    $(HESTIA)/data/queue/webstats.pipe $(HESTIA)/data/queue/restart.pipe \
+	    $(HESTIA)/data/queue/traffic.pipe $(HESTIA)/data/queue/daily.pipe \
+	    $(HESTIA)/log/system.log $(HESTIA)/log/auth.log \
+	    $(HESTIA)/log/backup.log $(HESTIA)/log/activity.log
+	chmod 750 $(HESTIA)/conf $(HESTIA)/data/users $(HESTIA)/data/ips $(HESTIA)/log
+	chmod -R 750 $(HESTIA)/data/queue
+	chmod 660 /var/log/hestia/*
+	chmod 770 $(HESTIA)/data/sessions
+	echo "[ OK ] _init-hestia-structure complete"
 
 # -------------------------------------------------------- #
 # _configure-hestia — sudoers, SSL cert, admin user,
-#                     data dirs, IP config, crontab
+#                     IP config, crontab
 # -------------------------------------------------------- #
 
 _configure-hestia:
@@ -118,21 +151,6 @@ _configure-hestia:
 	cp -f $(HESTIA_COMMON_DIR)/sudo/hestiaweb /etc/sudoers.d/
 	chmod 440 /etc/sudoers.d/hestiaweb
 	cp -f $(HESTIA_INSTALL_DIR)/logrotate/hestia /etc/logrotate.d/hestia 2>/dev/null || true
-	[ -L /var/log/hestia ] && rm -f /var/log/hestia || true
-	mkdir -p /var/log/hestia
-	ln -sf /var/log/hestia $(HESTIA)/log
-	mkdir -p $(HESTIA)/conf $(HESTIA)/ssl \
-	    $(HESTIA)/data/ips $(HESTIA)/data/queue \
-	    $(HESTIA)/data/users $(HESTIA)/data/firewall \
-	    $(HESTIA)/data/sessions
-	touch $(HESTIA)/data/queue/backup.pipe $(HESTIA)/data/queue/disk.pipe \
-	    $(HESTIA)/data/queue/webstats.pipe $(HESTIA)/data/queue/restart.pipe \
-	    $(HESTIA)/data/queue/traffic.pipe $(HESTIA)/data/queue/daily.pipe \
-	    $(HESTIA)/log/system.log $(HESTIA)/log/auth.log $(HESTIA)/log/backup.log
-	chmod 750 $(HESTIA)/conf $(HESTIA)/data/users $(HESTIA)/data/ips $(HESTIA)/log
-	chmod -R 750 $(HESTIA)/data/queue
-	chmod 660 /var/log/hestia/*
-	chmod 770 $(HESTIA)/data/sessions
 	echo "[ * ] Creating v-* symlinks..."
 	for hcmd in $(HESTIA)/bin/h-*; do \
 	    vcmd="$(HESTIA)/bin/v-$${hcmd##*/h-}"; \
