@@ -279,7 +279,7 @@ _configure-hestia os="unknown" profile="standard":
 
 _finalize:
     source "$INSTALL_CONF"
-    source "$HESTIA/make/helpers.sh"
+    source "$HESTIA/just/helpers.sh"
     echo "[ * ] Starting Hestia service..."
     update-rc.d hestia defaults
     systemctl start hestia

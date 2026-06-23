@@ -148,7 +148,7 @@
         "strategy": "No Composer at install time. No vendor/ in repo. OS packages and Eigenbau only.",
         "manifest": "VENDORED.json",
         "os_packages": {
-          "libphp-phpmailer": "deb12=6.6.3 / ub24=6.8.1 / deb13=6.9.3 — panel email sending — LGPL-2.1-only — installed by make/panel.just"
+          "libphp-phpmailer": "deb12=6.6.3 / ub24=6.8.1 / deb13=6.9.3 — panel email sending — LGPL-2.1-only — installed by just/panel"
         },
         "packages": {},
         "inline_libs": {
@@ -159,7 +159,7 @@
         },
         "removed": [
           "robthree/twofactorauth — removed in Issue #56, replaced by web/inc/lib/totp.php (Eigenbau)",
-          "phpmailer/phpmailer — removed in Issue #56, replaced by OS package libphp-phpmailer (make/panel.mk)",
+          "phpmailer/phpmailer — removed in Issue #56, replaced by OS package libphp-phpmailer (just/panel)",
           "chillerlan/php-qrcode + php-settings-container — removed in Issue #56, replaced by web/inc/lib/qrcode.php (Eigenbau)",
           "web/src/ (Quick-Install feature) — removed in Issue #56",
           "web/add/webapp/ — removed in Issue #56",
@@ -218,7 +218,7 @@
       ],
       "language": "bash / config templates",
       "supported_distros": ["Debian 12 (bookworm)", "Ubuntu 24.04 LTS (noble)", "Debian 13 (trixie, priority 2, planned June 2026+)"],
-      "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. All install logic now lives in make/*.just files (see make_release component). Migrated from Makefile to Justfile in Issue #102.",
+      "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. All install logic now lives in just/* files (see make_release component). Migrated from Makefile to Justfile in Issue #102.",
       "web_templates": {
         "nginx": "install/deb/templates/web/nginx/",
         "apache2": "install/deb/templates/web/apache2/",
@@ -297,38 +297,38 @@
     },
 
     "make_release": {
-      "description": "Justfile orchestrator + make/*.just component modules + install.sh bootstrap. Migrated from make/Makefile to just/Justfile in Issue #102. All install logic in make/*.just, imported into Justfile.",
+      "description": "Justfile orchestrator + just/* component modules + install.sh bootstrap. Migrated from just/Justfile to just/Justfile in Issue #102. All install logic in just/*, imported into Justfile.",
       "entry_points": ["Justfile", "install.sh"],
-      "directories": ["make/"],
+      "directories": ["just/"],
       "key_files": [
         "Justfile",
         "install.sh",
         "VERSION",
-        "make/debian-bookworm.sh",
-        "make/ubuntu-noble.sh",
-        "make/base.just",
-        "make/panel.just",
-        "make/web.just",
-        "make/db.just",
-        "make/mail.just",
-        "make/security.just",
-        "make/tools.just",
-        "make/configure.just",
-        "make/helpers.sh"
+        "just/debian-bookworm.sh",
+        "just/ubuntu-noble.sh",
+        "just/base",
+        "just/panel",
+        "just/web",
+        "just/db",
+        "just/mail",
+        "just/security",
+        "just/tools",
+        "just/configure",
+        "just/helpers.sh"
       ],
       "language": "just + bash",
       "just_structure": {
-        "Justfile": "Orchestrator — exported vars, import make/*.just, public targets. set shell := bash -euo pipefail, set quiet.",
-        "make/$(os).sh": "OS-specific bash vars sourced in recipes that need them: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA",
-        "make/helpers.sh": "Spinner + hestia_apt() wrapper — sourced in recipes before apt operations",
-        "make/base.just": "_install-base — APT repos (sury, mariadb), base packages, system users, SSH hardening",
-        "make/panel.just": "_install-panel — Caddy + hestia-php.service",
-        "make/web.just": "_install-web — nginx, PHP multi (5.6–8.4), web pool config. TODO #104: add apache2 for standard profile",
-        "make/db.just": "_install-db — MariaDB + phpMyAdmin",
-        "make/mail.just": "_install-mail — exim4, dovecot (version-aware), rspamd; calls h-add-sys-roundcube (standard profile only)",
-        "make/security.just": "_install-security — fail2ban, iptables, ipset",
-        "make/tools.just": "add-tools — composer, wp-cli; tools_set=hestia|sysadmin|full",
-        "make/configure.just": "_check-root, _collect-params (writes install.conf incl. COMPONENT_* stubs), _bootstrap-hestia-env, _init-hestia-structure, _configure-hestia, _finalize"
+        "Justfile": "Orchestrator — exported vars, import just/*, public targets. set shell := bash -euo pipefail, set quiet.",
+        "just/$(os).sh": "OS-specific bash vars sourced in recipes that need them: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA",
+        "just/helpers.sh": "Spinner + hestia_apt() wrapper — sourced in recipes before apt operations",
+        "just/base": "_install-base — APT repos (sury, mariadb), base packages, system users, SSH hardening",
+        "just/panel": "_install-panel — Caddy + hestia-php.service",
+        "just/web": "_install-web — nginx, PHP multi (5.6–8.4), web pool config. TODO #104: add apache2 for standard profile",
+        "just/db": "_install-db — MariaDB + phpMyAdmin",
+        "just/mail": "_install-mail — exim4, dovecot (version-aware), rspamd; calls h-add-sys-roundcube (standard profile only)",
+        "just/security": "_install-security — fail2ban, iptables, ipset",
+        "just/tools": "add-tools — composer, wp-cli; tools_set=hestia|sysadmin|full",
+        "just/configure": "_check-root, _collect-params (writes install.conf incl. COMPONENT_* stubs), _bootstrap-hestia-env, _init-hestia-structure, _configure-hestia, _finalize"
       },
       "just_targets": {
         "install": "Full install. Params: os=debian-bookworm profile=standard h_hostname h_admin h_email h_pass tools_set",

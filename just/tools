@@ -4,7 +4,7 @@
 # -------------------------------------------------------- #
 
 add-tools tools_set="hestia":
-    source "$HESTIA/make/helpers.sh"
+    source "$HESTIA/just/helpers.sh"
     echo "[ * ] Installing tools (tools_set={{tools_set}})..."
     case "{{tools_set}}" in
         hestia)

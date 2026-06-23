@@ -4,7 +4,7 @@
 
 _install-db:
     [ ! -f "$CONF_DIR/.done.db" ] || { echo "[ skip ] db already configured"; exit 0; }
-    source "$HESTIA/make/helpers.sh"
+    source "$HESTIA/just/helpers.sh"
     echo "[ * ] Installing database packages (MariaDB $MARIADB_VER)..."
     hestia_apt -y install \
         mariadb-client mariadb-common mariadb-server

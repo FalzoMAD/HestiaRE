@@ -5,8 +5,8 @@
 
 _install-base os="unknown":
     [ ! -f "$CONF_DIR/.done.base" ] || { echo "[ skip ] base already configured"; exit 0; }
-    source "$HESTIA/make/helpers.sh"
-    source "$HESTIA/make/{{os}}.sh"
+    source "$HESTIA/just/helpers.sh"
+    source "$HESTIA/just/{{os}}.sh"
     echo "[ * ] Configuring APT..."
     [ -f /etc/apt/apt.conf.d/80-retries ] \
         || echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries

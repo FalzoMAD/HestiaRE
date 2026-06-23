@@ -4,7 +4,7 @@
 
 _install-security profile="standard":
     [ ! -f "$CONF_DIR/.done.security" ] || { echo "[ skip ] security already configured"; exit 0; }
-    source "$HESTIA/make/helpers.sh"
+    source "$HESTIA/just/helpers.sh"
     echo "[ * ] Installing security packages (fail2ban, iptables, ipset)..."
     hestia_apt -y install \
         fail2ban iptables ipset

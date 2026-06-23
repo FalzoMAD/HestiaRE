@@ -5,8 +5,8 @@
 
 _install-mail os="unknown":
     [ ! -f "$CONF_DIR/.done.mail" ] || { echo "[ skip ] mail already configured"; exit 0; }
-    source "$HESTIA/make/helpers.sh"
-    source "$HESTIA/make/{{os}}.sh"
+    source "$HESTIA/just/helpers.sh"
+    source "$HESTIA/just/{{os}}.sh"
     echo "[ * ] Installing mail packages (exim4, dovecot, rspamd)..."
     hestia_apt -y install \
         exim4 exim4-daemon-heavy \

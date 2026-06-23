@@ -5,7 +5,7 @@
 
 _install-web os="unknown":
     [ ! -f "$CONF_DIR/.done.web" ] || { echo "[ skip ] web already configured"; exit 0; }
-    source "$HESTIA/make/helpers.sh"
+    source "$HESTIA/just/helpers.sh"
     echo "[ * ] Installing web packages (nginx, PHP $PHP_VER extensions)..."
     hestia_apt -y install \
         nginx \

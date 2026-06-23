@@ -4,7 +4,7 @@
 
 _install-panel:
     [ ! -f "$CONF_DIR/.done.panel" ] || { echo "[ skip ] panel already configured"; exit 0; }
-    source "$HESTIA/make/helpers.sh"
+    source "$HESTIA/just/helpers.sh"
     echo "[ * ] Installing panel packages (Caddy, PHP $PHP_VER FPM)..."
     hestia_apt -y install \
         caddy \

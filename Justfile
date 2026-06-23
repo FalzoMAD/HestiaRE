@@ -1,6 +1,6 @@
 # ======================================================== #
 # HestiaRE Justfile — orchestrator
-# Install logic lives in make/*.just
+# Install logic lives in just/* modules
 #
 # Usage:
 #   just install os=debian-bookworm [profile=standard]
@@ -31,14 +31,14 @@ export VERSION            := `cat /usr/local/hestia/VERSION 2>/dev/null || cat V
 export ARCH               := `uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/'`
 
 # ── Modules ───────────────────────────────────────────────
-import 'make/configure.just'
-import 'make/base.just'
-import 'make/panel.just'
-import 'make/web.just'
-import 'make/db.just'
-import 'make/mail.just'
-import 'make/security.just'
-import 'make/tools.just'
+import 'just/configure'
+import 'just/base'
+import 'just/panel'
+import 'just/web'
+import 'just/db'
+import 'just/mail'
+import 'just/security'
+import 'just/tools'
 
 # ──────────────────────────────────────────────────────── #
 # install — main entry point
@@ -60,7 +60,7 @@ install os="unknown" profile="standard" h_hostname="" h_admin="" h_email="" h_pa
     just _install-panel
     just _install-web '{{os}}'
     just _install-db
-    just '_profile-{{profile}}'
+    just '_profile-{{profile}}' '{{os}}'
     just _install-security '{{profile}}'
     just _configure-hestia '{{os}}' '{{profile}}'
     just add-tools '{{tools_set}}'
@@ -69,7 +69,7 @@ install os="unknown" profile="standard" h_hostname="" h_admin="" h_email="" h_pa
 _profile-standard os="unknown":
     just _install-mail '{{os}}'
 
-_profile-minimal:
+_profile-minimal os="unknown":
     echo "[ * ] Minimal profile — skipping mail stack"
 
 # ──────────────────────────────────────────────────────── #
