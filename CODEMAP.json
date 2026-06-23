@@ -339,7 +339,7 @@
         "_install-*": "Component install targets — each guarded by /etc/hestia/.done.COMPONENT sentinel; each writes its own wcv values to $HESTIA/conf/hestia.conf before any h-* call",
         "_check-root": "Verify root, OS known, not already installed",
         "_collect-params": "Prompt or accept H_* vars, write /etc/hestia/install.conf",
-        "_bootstrap-hestia-env": "Creates /etc/hestia/hestia.env + /etc/profile.d/hestia.sh; inits $HESTIA/conf/hestia.conf with install-type-independent key=value settings; runs before _install-base",
+        "_bootstrap-hestia-env": "Creates /etc/hestia/hestia.env + /etc/profile.d/hestia.sh; inits $HESTIA/conf/hestia.conf with install-type-independent key=value settings incl. DB_SYSTEM=mysql (MariaDB always installed); runs before _install-base",
         "_init-hestia-structure": "Creates $HESTIA/log symlink, data/{users,queue,ips,firewall,sessions,templates,packages}, queue pipes, log files, permissions; runs after _bootstrap-hestia-env so any h-* call in _install-* targets finds a valid structure (func/main.sh requires these paths)",
         "_configure-hestia": "sudoers, SSL cert, admin user, crontab, IP config; writes .done.configure (dir/log structure moved to _init-hestia-structure; hestia.conf init in _bootstrap-hestia-env; per-component keys in each _install-* target)",
         "_finalize": "Start hestia.service, final apt upgrade, print credentials"
