@@ -105,6 +105,7 @@ _bootstrap-hestia-env:
 	wcv "API_SYSTEM"               "0"
 	wcv "API_ALLOWED_IP"           ""
 	wcv "ROOT_USER"                "$$HESTIA_ADMIN"
+	wcv "DB_SYSTEM"                "mysql"
 
 # -------------------------------------------------------- #
 # _init-hestia-structure — log symlink, data dirs, queue
