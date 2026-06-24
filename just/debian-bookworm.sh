@@ -1,0 +1,5 @@
+OS_ID="debian"
+CODENAME="bookworm"
+RELEASE="12"
+EXIM_USR="Debian-exim"
+BASE_PKGS_EXTRA="libmail-dkim-perl unrar-free"

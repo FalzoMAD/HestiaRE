@@ -69,10 +69,16 @@ nginx (OS), php multi (Sury 5.6–8.4), mariadb (ext repo), phpmyadmin (OS),
 caddy (OS), iptables, fail2ban (OS), ipset, composer (system-wide), wp-cli (system-wide)
 
 ### Standard profile adds
+apache2 (OS only — no Sury apache2 repo),
 exim4 (OS), dovecot (OS), rspamd (OS), roundcube + password plugin (OS)
 
-### Optional (hl-service-install/remove)
-apache2, proftpd, clamav, postgresql, redis, opensearch, docker-proxy, filemanager
+nginx acts as reverse proxy in front of apache2 for customer vhosts.
+
+### Minimal profile
+Standard install minus apache2 and mail stack.
+
+### Optional (h-add-*/h-remove-* commands)
+proftpd, clamav, postgresql, redis, opensearch, docker-proxy, filemanager
 
 ---
 
@@ -88,8 +94,8 @@ upstream/hestiacp HestiaCP snapshot, READ ONLY, never modify
 
 ### Key files
 ```
-install.sh        main installer
-Makefile          make targets: install, update, check-updates, status
+install.sh        main installer (downloads release, calls just)
+Justfile          just targets: install, update, check-updates, status
 VERSION           empty placeholder, filled at build time — never edit
 codemap.json      component map — read before exploring the codebase
 CLAUDE.md         this file
