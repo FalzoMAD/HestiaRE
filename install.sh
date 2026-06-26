@@ -37,6 +37,15 @@ GITHUB_REPO="FalzoMAD/HestiaRE"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}"
 GITHUB_RAW="https://github.com/${GITHUB_REPO}/releases/download"
 
+# Pinned 'just' fallback for Debian 12 (bookworm) — 'just' is not packaged there
+# (neither bookworm nor bookworm-backports; it ships only on Debian 13+/Ubuntu).
+# Single static musl binary, sha256-verified, no apt repo added. Keep JUST_VER in
+# sync with the version Debian 13 (trixie) ships; bump deliberately + update sums
+# from the release's SHA256SUMS file.
+JUST_VER="1.40.0"
+JUST_SHA256_amd64="181b91d0ceebe8a57723fb648ed2ce1a44d849438ce2e658339df4f8db5f1263"
+JUST_SHA256_arm64="d065d0df1a1f99529869fba8a5b3e0a25c1795b9007099b00dfabe29c7c1f7b6"
+
 # ── State ──────────────────────────────────────────────────
 HAS_WHIPTAIL=false
 OS=""
@@ -47,6 +56,22 @@ PHP_VERSIONS_AVAILABLE=""
 OS_MARIADB_VERSION=""
 TOOLS_SELECTION=""
 declare -A COMP_VALUES
+
+# ── Error surfacing ────────────────────────────────────────
+# With set -e the script aborts on the first failed command. Because prerequisite
+# output is redirected to the log, that abort would otherwise be completely
+# silent (the symptom seen on Debian 12). This trap surfaces the failure and the
+# tail of the log so a broken install is never invisible again.
+_on_error() {
+    local rc=$1 line=$2
+    echo "" >&2
+    echo "ERROR: install.sh aborted (exit ${rc}, line ${line})." >&2
+    if [ -f "${LOG_DIR}/install.log" ]; then
+        echo "       Last lines of ${LOG_DIR}/install.log:" >&2
+        tail -n 15 "${LOG_DIR}/install.log" 2>/dev/null | sed 's/^/       | /' >&2 || true
+    fi
+}
+trap '_on_error "$?" "$LINENO"' ERR
 
 # ── Argument parsing ───────────────────────────────────────
 for _arg in "$@"; do
@@ -99,9 +124,13 @@ fn_prerequisites() {
     esac
 
     mkdir -p "$LOG_DIR"
-    echo "[ * ] Installing prerequisites (curl, just, jq, whiptail)..."
+    echo "[ * ] Installing prerequisites (curl, jq, whiptail)..."
     DEBIAN_FRONTEND=noninteractive apt-get -qq update
-    DEBIAN_FRONTEND=noninteractive apt-get -y -qq install curl just jq whiptail >> "$LOG_DIR/install.log" 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get -y -qq install curl jq whiptail ca-certificates >> "$LOG_DIR/install.log" 2>&1
+
+    # just is the install orchestrator and a bootstrap dependency. Installed
+    # separately because Debian 12 has no 'just' package (see _ensure_just).
+    _ensure_just
 
     # Use whiptail only when it's available AND running in a real interactive terminal.
     # Fallback to plain bash if terminal is dumb, stdin is a pipe, or TERM is unset —
@@ -181,6 +210,49 @@ _fetch_release() {
     cp -r /tmp/hestiare-${latest}/. "${INSTALL_DIR}/"
     rm -rf /tmp/hestiare-${latest}
     echo "[ * ] Extracted to ${INSTALL_DIR}"
+}
+
+# ── just bootstrap ─────────────────────────────────────────
+# just orchestrates the installation and is needed before anything else. It is
+# packaged on Debian 13+/Ubuntu but NOT on Debian 12 (bookworm) or its backports.
+# OS package is always preferred; only where apt cannot resolve it do we fall back
+# to a pinned, checksum-verified prebuilt binary (no apt repo is added).
+_ensure_just() {
+    if command -v just >/dev/null 2>&1; then
+        echo "[ * ] just already present ($(just --version 2>/dev/null || echo 'unknown version'))"
+        return 0
+    fi
+    # Locale-independent candidate check: simulate the install (no system change).
+    if DEBIAN_FRONTEND=noninteractive apt-get install -s just >/dev/null 2>&1; then
+        echo "[ * ] Installing just (OS package)..."
+        DEBIAN_FRONTEND=noninteractive apt-get -y -qq install just >> "$LOG_DIR/install.log" 2>&1
+    else
+        _install_just_binary
+    fi
+    command -v just >/dev/null 2>&1 || { echo "ERROR: 'just' could not be installed." >&2; exit 1; }
+}
+
+_install_just_binary() {
+    echo "[ * ] 'just' is not packaged on this OS — installing pinned binary v${JUST_VER}..."
+    local arch target sha
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64)  target="x86_64-unknown-linux-musl";  sha="$JUST_SHA256_amd64" ;;
+        aarch64|arm64) target="aarch64-unknown-linux-musl"; sha="$JUST_SHA256_arm64" ;;
+        *) echo "ERROR: no pinned 'just' binary for architecture '$arch'." >&2; exit 1 ;;
+    esac
+    local url="https://github.com/casey/just/releases/download/${JUST_VER}/just-${JUST_VER}-${target}.tar.gz"
+    curl -fsSL "$url" -o /tmp/just.tar.gz
+    echo "${sha}  /tmp/just.tar.gz" | sha256sum -c - >/dev/null 2>&1 || {
+        rm -f /tmp/just.tar.gz
+        echo "ERROR: downloaded 'just' archive failed checksum verification." >&2
+        echo "       expected sha256 ${sha} (just ${JUST_VER}, ${target})" >&2
+        exit 1
+    }
+    tar -xzf /tmp/just.tar.gz -C /usr/local/bin just
+    chmod +x /usr/local/bin/just
+    rm -f /tmp/just.tar.gz
+    echo "[ * ] just ${JUST_VER} installed to /usr/local/bin/just"
 }
 
 # ════════════════════════════════════════════════════════════
@@ -412,13 +484,15 @@ fn_discover_php_versions() {
     # `php` metapackage (a single candidate) and used a start-anchored regex
     # that failed on Sury's epoch-prefixed versions (e.g. "2:8.3"). The version
     # is now extracted unanchored from the package name itself.
+    # `|| true`: a no-match in the pipeline (grep exit 1 under pipefail) must not
+    # abort the script — it falls through to the built-in fallback list below.
     PHP_VERSIONS_AVAILABLE=$(apt-cache pkgnames php 2>/dev/null \
         | grep -E '^php[0-9]+\.[0-9]+-(common|fpm)$' \
         | grep -oE '[0-9]+\.[0-9]+' \
         | sort -Vr \
         | uniq \
         | tr '\n' ' ' \
-        | sed 's/ $//')
+        | sed 's/ $//' || true)
 
     [ -n "$PHP_VERSIONS_AVAILABLE" ] || {
         echo "[ ! ] Sury version discovery failed — using built-in fallback list" >&2
