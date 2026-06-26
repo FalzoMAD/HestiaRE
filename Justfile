@@ -41,29 +41,37 @@ import 'just/security'
 import 'just/tools'
 
 # ──────────────────────────────────────────────────────── #
-# install — main entry point
+# install — main entry point (non-interactive)
+# Requires /etc/hestia/install.conf — run install.sh first.
 # ──────────────────────────────────────────────────────── #
 
-install os="unknown" profile="standard" h_hostname="" h_admin="" h_email="" h_pass="" tools_set="hestia":
+install:
+    [ -f "$INSTALL_CONF" ] || { \
+        echo ""; \
+        echo "  ERROR: /etc/hestia/install.conf not found."; \
+        echo "         Run the interactive wizard first: bash install.sh"; \
+        echo ""; \
+        exit 1; \
+    }
+    source "$INSTALL_CONF"
     echo "========================================================================"
     echo " HestiaRE $VERSION"
-    echo " OS:      {{os}}"
-    echo " Profile: {{profile}}"
+    echo " OS:      ${INSTALL_OS}"
+    echo " Profile: ${INSTALL_PROFILE}"
     echo "========================================================================"
     echo ""
-    just _check-root '{{os}}'
-    H_HOSTNAME='{{h_hostname}}' H_ADMIN='{{h_admin}}' H_EMAIL='{{h_email}}' H_PASS='{{h_pass}}' \
-        just _collect-params '{{os}}' '{{profile}}'
+    just _check-root "${INSTALL_OS}"
+    just _collect-params "${INSTALL_OS}" "${INSTALL_PROFILE}"
     just _bootstrap-hestia-env
     just _init-hestia-structure
-    just _install-base '{{os}}'
+    just _install-base "${INSTALL_OS}"
     just _install-panel
-    just _install-web '{{os}}'
+    just _install-web "${INSTALL_OS}"
     just _install-db
-    just '_profile-{{profile}}' '{{os}}'
-    just _install-security '{{profile}}'
-    just _configure-hestia '{{os}}' '{{profile}}'
-    just add-tools '{{tools_set}}'
+    just "_profile-${INSTALL_PROFILE}" "${INSTALL_OS}"
+    just _install-security "${INSTALL_PROFILE}"
+    just _configure-hestia "${INSTALL_OS}" "${INSTALL_PROFILE}"
+    just add-tools
     just _finalize
 
 _profile-standard os="unknown":

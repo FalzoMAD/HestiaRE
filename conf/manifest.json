@@ -75,7 +75,9 @@
     "WEB_REPO_SOURCE": {
       "group": "web",
       "type": "implicit",
-      "description": "OS-Paket vs. externes Upstream-Repo (Sury-Apache, nginx.org) fuer Apache/nginx. Keine eigene Nutzerfrage, vollstaendig durch Preset bestimmt.",
+      "question": "Web-Server Paketquelle:",
+      "options": ["os_package", "upstream_repo"],
+      "description": "OS-Paket vs. externes Upstream-Repo (Sury-Apache, nginx.org) fuer Apache/nginx. Normalerweise keine eigene Nutzerfrage, vollstaendig durch Preset bestimmt. Ausnahme: beim Preset 'custom' (default null) wird sie als echte Frage gestellt (siehe options/question).",
       "default": {
         "standard":  "os_package",
         "compact":   "os_package",
@@ -90,7 +92,8 @@
     "PHP_MODE": {
       "group": "web",
       "type": "implicit",
-      "description": "Architektur-Vorfrage: Single-PHP (OS-Paket, kein Sury) vs. MultiPHP (Sury-Repo). Keine eigene Frage falls durch Preset fest vorgegeben (singlephp, mailonly); sonst aus dem Preset abgeleitet.",
+      "question": "PHP-Modus:",
+      "description": "Architektur-Vorfrage: Single-PHP (OS-Paket, kein Sury) vs. MultiPHP (Sury-Repo). Keine eigene Frage falls durch Preset fest vorgegeben (singlephp, mailonly); sonst aus dem Preset abgeleitet. Ausnahme: beim Preset 'custom' (default null) wird sie als echte Frage gestellt.",
       "options": ["os_single", "sury_multi"],
       "default": {
         "standard":  "sury_multi",
@@ -157,14 +160,32 @@
       "group": "db",
       "type": "checkbox",
       "dependent_on": "DB_MARIADB_VERSION != null",
-      "note": "Nur sinnvoll/sichtbar, falls MariaDB ueberhaupt aktiv ist."
+      "default": {
+        "standard":  true,
+        "compact":   true,
+        "latest":    true,
+        "singlephp": true,
+        "nomail":    true,
+        "mailonly":  false,
+        "custom":    null
+      },
+      "note": "Nur sinnvoll/sichtbar, falls MariaDB ueberhaupt aktiv ist. Bei allen Hosting-Presets vorbelegt, bei mailonly nicht (reiner Mail-Server)."
     },
 
     "DB_PGADMIN": {
       "group": "db",
       "type": "checkbox",
       "dependent_on": "DB_POSTGRESQL == true",
-      "note": "Nur sinnvoll/sichtbar, falls PostgreSQL aktiv ist."
+      "default": {
+        "standard":  false,
+        "compact":   false,
+        "latest":    false,
+        "singlephp": false,
+        "nomail":    false,
+        "mailonly":  false,
+        "custom":    null
+      },
+      "note": "Nur sinnvoll/sichtbar, falls PostgreSQL aktiv ist. PostgreSQL ist ueberall standardmaessig aus, daher nirgends vorbelegt."
     },
 
     "DB_REDIS": {
@@ -176,7 +197,9 @@
     "MAIL_BLOCK_PRESENT": {
       "group": "mail",
       "type": "implicit",
-      "description": "Bestimmt ob ueberhaupt ein Mail-Block existiert. Keine eigene Frage - ergibt sich direkt aus dem Preset.",
+      "question": "Mail-Block (Dovecot-Postfaecher) installieren?",
+      "options": ["true", "false"],
+      "description": "Bestimmt ob ueberhaupt ein Mail-Block existiert. Normalerweise keine eigene Frage - ergibt sich direkt aus dem Preset. Ausnahme: beim Preset 'custom' (default null) wird sie als echte Frage gestellt.",
       "default": {
         "standard":  true,
         "compact":   true,

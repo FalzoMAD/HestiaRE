@@ -3,43 +3,35 @@
 #              public target: always re-runnable, no sentinel
 # -------------------------------------------------------- #
 
-add-tools tools_set="hestia":
+add-tools:
+    source "$INSTALL_CONF" 2>/dev/null || true
     source "$HESTIA/just/helpers.sh"
-    echo "[ * ] Installing tools (tools_set={{tools_set}})..."
-    case "{{tools_set}}" in
-        hestia)
-            echo "  Set: composer, wp-cli"
-            ;;
-        sysadmin)
-            echo "  Set: composer, wp-cli + sysadmin utilities"
-            hestia_apt -y install htop ncdu tmux mtr-tiny nmap iotop traceroute
-            ;;
-        full)
-            echo "  Set: composer, wp-cli + sysadmin + rclone/restic"
-            hestia_apt -y install htop ncdu tmux mtr-tiny nmap iotop traceroute
-            hestia_apt -y install rclone restic
-            ;;
-        *)
-            echo "ERROR: Unknown tools_set '{{tools_set}}'. Valid: hestia|sysadmin|full" >&2
-            exit 1
-            ;;
-    esac
-    echo "[ * ] Installing composer (system-wide)..."
-    if ! command -v composer > /dev/null 2>&1; then
-        EXPECTED_CHECKSUM="$(php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");')"
-        php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-        ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
-        if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+    echo "[ * ] Installing always-installed utilities..."
+    hestia_apt -y install htop iftop sysstat iotop mc mtr-tiny screen
+    if [ "${COMPONENT_ADDON_UTILITIES:-}" = "true" ] && [ -n "${TOOLS_SELECTION:-}" ]; then
+        echo "[ * ] Installing selected utilities: ${TOOLS_SELECTION}"
+        # SC2086: word-splitting intentional — TOOLS_SELECTION is space-separated
+        # shellcheck disable=SC2086
+        hestia_apt -y install $TOOLS_SELECTION
+    fi
+    if [ "${COMPONENT_ADDON_COMPOSER:-true}" = "true" ]; then
+        echo "[ * ] Installing composer (system-wide)..."
+        if ! command -v composer > /dev/null 2>&1; then
+            EXPECTED_CHECKSUM="$(php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");')"
+            php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+            ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
+            if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+                rm -f composer-setup.php
+                echo "ERROR: Composer installer checksum mismatch" >&2
+                exit 1
+            fi
+            php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
             rm -f composer-setup.php
-            echo "ERROR: Composer installer checksum mismatch" >&2
-            exit 1
+            echo "  composer installed"
+        else
+            echo "  composer already present — upgrading"
+            composer self-update --quiet 2>/dev/null || true
         fi
-        php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
-        rm -f composer-setup.php
-        echo "  composer installed"
-    else
-        echo "  composer already present — upgrading"
-        composer self-update --quiet 2>/dev/null || true
     fi
     echo "[ * ] Installing wp-cli (system-wide)..."
     if ! command -v wp > /dev/null 2>&1; then
@@ -52,4 +44,4 @@ add-tools tools_set="hestia":
         wp --allow-root cli update --quiet 2>/dev/null || true
     fi
     echo ""
-    echo "[ OK ] add-tools complete (tools_set={{tools_set}})"
+    echo "[ OK ] add-tools complete"
