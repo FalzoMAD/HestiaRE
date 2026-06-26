@@ -31,6 +31,12 @@ INSTALL_DIR="/usr/local/hestia"
 MANIFEST="${INSTALL_DIR}/conf/manifest.json"
 LOG_DIR="/var/log/hestia"
 
+# GitHub defaults — can be overridden by /etc/hestia/source.conf
+# (set HESTIARE_SOURCE=gitea + HESTIARE_REPO_URL for private Gitea releases)
+GITHUB_REPO="FalzoMAD/HestiaRE"
+GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}"
+GITHUB_RAW="https://github.com/${GITHUB_REPO}/releases/download"
+
 # ── State ──────────────────────────────────────────────────
 HAS_WHIPTAIL=false
 OS=""
@@ -82,20 +88,28 @@ fn_prerequisites() {
     source /etc/os-release
     case "${ID}:${VERSION_ID}" in
         debian:12)    OS="debian-bookworm" ;;
+        debian:13)    OS="debian-trixie"   ;;
         ubuntu:24.04) OS="ubuntu-noble"    ;;
+        ubuntu:26.04) OS="ubuntu-26lts"    ;;  # TODO: replace with official codename once confirmed
         *)
             echo "ERROR: Unsupported OS: ${ID} ${VERSION_ID}" >&2
-            echo "Supported: Debian 12, Ubuntu 24.04 LTS" >&2
+            echo "Supported: Debian 12, Debian 13 (trixie), Ubuntu 24.04 LTS, Ubuntu 26.04 LTS" >&2
             exit 1
             ;;
     esac
 
     mkdir -p "$LOG_DIR"
-    echo "[ * ] Installing prerequisites (curl, just, jq)..."
+    echo "[ * ] Installing prerequisites (curl, just, jq, whiptail)..."
     DEBIAN_FRONTEND=noninteractive apt-get -qq update
-    DEBIAN_FRONTEND=noninteractive apt-get -y -qq install curl just jq >> "$LOG_DIR/install.log" 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get -y -qq install curl just jq whiptail >> "$LOG_DIR/install.log" 2>&1
 
-    if command -v whiptail >/dev/null 2>&1; then
+    # Use whiptail only when it's available AND running in a real interactive terminal.
+    # Fallback to plain bash if terminal is dumb, stdin is a pipe, or TERM is unset —
+    # e.g. curl | bash installs, serial consoles, or minimal container environments.
+    if command -v whiptail >/dev/null 2>&1 \
+        && [ -t 0 ] \
+        && [ "${TERM:-}" != "dumb" ] \
+        && [ -n "${TERM:-}" ]; then
         HAS_WHIPTAIL=true
     fi
 
@@ -134,9 +148,6 @@ _dev_setup() {
 }
 
 _fetch_release() {
-    local github_repo="FalzoMAD/HestiaRE"
-    local github_api="https://api.github.com/repos/${github_repo}"
-    local github_raw="https://github.com/${github_repo}/releases/download"
     HESTIARE_REPO_URL="${HESTIARE_REPO_URL:-}"
     HESTIARE_TOKEN="${HESTIARE_TOKEN:-}"
     HESTIARE_CHANNEL="${HESTIARE_CHANNEL:-stable}"
@@ -152,11 +163,11 @@ _fetch_release() {
         tarball_url="${HESTIARE_REPO_URL}/releases/download/${latest}/hestiare-${latest}.tar.gz"
     else
         if [ "${HESTIARE_CHANNEL}" = "prerelease" ]; then
-            latest=$(curl -fsSL "${github_api}/releases" | jq -r '.[0].tag_name')
+            latest=$(curl -fsSL "${GITHUB_API}/releases" | jq -r '.[0].tag_name')
         else
-            latest=$(curl -fsSL "${github_api}/releases/latest" | jq -r '.tag_name')
+            latest=$(curl -fsSL "${GITHUB_API}/releases/latest" | jq -r '.tag_name')
         fi
-        tarball_url="${github_raw}/${latest}/hestiare-${latest}.tar.gz"
+        tarball_url="${GITHUB_RAW}/${latest}/hestiare-${latest}.tar.gz"
         curl_auth=()
     fi
 
