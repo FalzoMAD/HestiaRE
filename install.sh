@@ -196,6 +196,24 @@ fn_manifest_load() {
     jq empty "$MANIFEST" 2>/dev/null || {
         echo "ERROR: $MANIFEST is not valid JSON" >&2; exit 1
     }
+    # Schema sanity check: required top-level fields must exist with the right
+    # type. Without this a missing key would silently yield empty values via jq.
+    local missing
+    missing=$(jq -r '
+        . as $root
+        | [ ({presets:"object",components:"object",tools:"object",pre_questions:"array",always_installed_packages:"array"}
+            | to_entries[])
+          | .key as $k | .value as $t
+          | if ($root | has($k) | not) then "\($k): fehlt"
+            elif (($root[$k]) | type) != $t then "\($k): falscher Typ (erwartet \($t))"
+            else empty end ]
+        | join("; ")
+    ' "$MANIFEST")
+    [ -z "$missing" ] || {
+        echo "ERROR: $MANIFEST ist unvollstaendig oder hat eine falsche Struktur:" >&2
+        echo "       $missing" >&2
+        exit 1
+    }
 }
 
 mq() { jq -r "$@" "$MANIFEST"; }
@@ -353,11 +371,15 @@ fn_ask_preset() {
             echo "Valid presets: $(mq '.presets | keys | join(", ")')" >&2
             exit 1
         }
-        [ "$INSTALL_PROFILE" != "custom" ] || {
-            echo "ERROR: Preset 'custom' cannot be fasttracked." >&2
-            echo "       Run install.sh without a preset argument for interactive mode." >&2
-            exit 1
-        }
+        if [ "$INSTALL_PROFILE" = "custom" ]; then
+            # 'custom' is interactive-only: the preset is fixed by the argument,
+            # but every component is asked with no preselection. Clearing the
+            # fasttrack flag routes us into the full interactive component loop
+            # while skipping the preset-selection menu (custom is already set).
+            FASTTRACK_PRESET=""
+            echo "[ * ] Preset 'custom' — full interactive configuration (no defaults)"
+            return
+        fi
         echo "[ * ] Fasttrack preset: $INSTALL_PROFILE"
         return
     fi
@@ -385,9 +407,14 @@ fn_discover_php_versions() {
         > /etc/apt/sources.list.d/sury-php.list
     DEBIAN_FRONTEND=noninteractive apt-get -qq update >> "$LOG_DIR/install.log" 2>&1
 
-    PHP_VERSIONS_AVAILABLE=$(apt-cache madison php 2>/dev/null \
-        | awk '{print $3}' \
-        | grep -oE '^[0-9]+\.[0-9]+' \
+    # Enumerate every PHP version Sury actually ships by listing package names
+    # matching phpX.Y-common / phpX.Y-fpm. The old approach queried only the
+    # `php` metapackage (a single candidate) and used a start-anchored regex
+    # that failed on Sury's epoch-prefixed versions (e.g. "2:8.3"). The version
+    # is now extracted unanchored from the package name itself.
+    PHP_VERSIONS_AVAILABLE=$(apt-cache pkgnames php 2>/dev/null \
+        | grep -E '^php[0-9]+\.[0-9]+-(common|fpm)$' \
+        | grep -oE '[0-9]+\.[0-9]+' \
         | sort -Vr \
         | uniq \
         | tr '\n' ' ' \
@@ -421,13 +448,12 @@ fn_discover_mariadb_version() {
 }
 
 fn_pre_discovery() {
-    # Determine implicit PHP_MODE from preset to know if Sury repo is needed
+    # Determine the effective PHP_MODE for the preset (fn_component_default
+    # already honours fixed_no_prompt) to know whether the Sury repo is needed.
+    # For 'custom' this is empty here; discovery then runs lazily once the user
+    # actually picks sury_multi (see _ask_checklist).
     local php_mode
-    php_mode=$(mq --arg p "$INSTALL_PROFILE" '.components.PHP_MODE.default[$p] // empty')
-    # Check fixed_no_prompt too
-    local php_fixed
-    php_fixed=$(mq --arg p "$INSTALL_PROFILE" '.components.PHP_MODE.fixed_no_prompt[$p] // empty')
-    [ -n "$php_fixed" ] && php_mode="$php_fixed"
+    php_mode=$(fn_component_default PHP_MODE "$INSTALL_PROFILE")
 
     if [ "$php_mode" = "sury_multi" ]; then
         fn_discover_php_versions
@@ -465,19 +491,23 @@ fn_apply_default_rule() {
 # ════════════════════════════════════════════════════════════
 
 fn_component_default() {
-    # Returns the effective default for component $1 under preset $2
+    # Returns the effective default for component $1 under preset $2.
+    # Distinguishes boolean false / null / missing key explicitly so an
+    # intentional "false" survives (jq's `// empty` treats false as empty too).
     local id="$1" preset="$2"
     jq -r --arg id "$id" --arg preset "$preset" '
-      .components[$id] |
-      if .fixed_no_prompt[$preset] != null then
-        .fixed_no_prompt[$preset] | tostring
-      elif (.default | type) == "object" then
-        (.default[$preset] // empty | if . == null then empty else tostring end)
-      elif .default != null then
-        .default | tostring
+      .components[$id] as $c |
+      if ($c.fixed_no_prompt // {} | has($preset)) then
+        $c.fixed_no_prompt[$preset] | tostring
+      elif ($c.default | type) == "object" then
+        (if ($c.default | has($preset)) and ($c.default[$preset] != null)
+         then $c.default[$preset] | tostring
+         else "" end)
+      elif ($c.default != null) then
+        $c.default | tostring
       else
-        empty
-      end // empty
+        ""
+      end
     ' "$MANIFEST"
 }
 
@@ -506,6 +536,48 @@ fn_eval_condition() {
             echo "true"
             ;;
     esac
+}
+
+# ════════════════════════════════════════════════════════════
+# Shared value helpers (used by both interactive and fasttrack)
+# ════════════════════════════════════════════════════════════
+
+fn_resolve_version_value() {
+    # Translates the __os__ placeholder to the discovered OS version, so
+    # install.conf always holds a real version number — never "__os__".
+    # Shared by the interactive version_select dialog and the fasttrack path.
+    local val="$1"
+    if [ "$val" = "__os__" ]; then
+        [ -n "$OS_MARIADB_VERSION" ] || fn_discover_mariadb_version
+        printf '%s' "$OS_MARIADB_VERSION"
+    else
+        printf '%s' "$val"
+    fi
+}
+
+fn_normalize_list() {
+    # Normalizes a checklist selection into one canonical format regardless of
+    # source: whiptail emits quoted, space-separated tags ("8.4" "8.3"); the
+    # bash fallback emits bare tokens. Output is space-separated, unquoted,
+    # de-duplicated, order preserved — trivially re-readable via a word-split.
+    local raw="${1//\"/}"
+    local -a parts=()
+    local p s dup
+    for p in $raw; do
+        [ -n "$p" ] || continue
+        dup=0
+        for s in "${parts[@]:-}"; do [ "$s" = "$p" ] && { dup=1; break; }; done
+        if [ "$dup" -eq 0 ]; then parts+=("$p"); fi
+    done
+    printf '%s' "${parts[*]:-}"
+}
+
+fn_tools_default_for_preset() {
+    # Sets TOOLS_SELECTION to the manifest tool defaults for the current preset
+    # without prompting (used by the fasttrack path).
+    local -a defs=()
+    readarray -t defs < <(mq --arg p "$INSTALL_PROFILE" '.tools.selection.default[$p][]? // empty')
+    TOOLS_SELECTION=$(fn_normalize_list "${defs[*]:-}")
 }
 
 # ════════════════════════════════════════════════════════════
@@ -590,7 +662,7 @@ _ask_checklist() {
 
     local selected
     selected=$(_wt_checklist "HestiaRE — $id" "$question" "${items[@]}")
-    COMP_VALUES["$id"]="$selected"
+    COMP_VALUES["$id"]=$(fn_normalize_list "$selected")
 }
 
 _ask_version_select() {
@@ -601,7 +673,7 @@ _ask_version_select() {
     while IFS=$'\t' read -r value source label_tmpl; do
         local display_val display_label state="OFF"
         if [ "$value" = "__os__" ]; then
-            display_val="$OS_MARIADB_VERSION"
+            display_val=$(fn_resolve_version_value "$value")
             display_label="${label_tmpl/\{version\}/$OS_MARIADB_VERSION}"
             [ "$default_val" = "__os__" ] && state="ON"
         else
@@ -638,7 +710,64 @@ _ask_tools_selection() {
         items+=("$opt" "$opt" "$state")
     done
 
-    TOOLS_SELECTION=$(_wt_checklist "HestiaRE — Tools" "$question" "${items[@]}")
+    local _sel
+    _sel=$(_wt_checklist "HestiaRE — Tools" "$question" "${items[@]}")
+    TOOLS_SELECTION=$(fn_normalize_list "$_sel")
+}
+
+# ════════════════════════════════════════════════════════════
+# Fasttrack value derivation (no prompts)
+# ════════════════════════════════════════════════════════════
+
+fn_fasttrack_value() {
+    # Derives a component's value for the fasttrack path the same way the
+    # interactive path would default it — honouring visibility, dynamic PHP
+    # version rules, the __os__ placeholder and the tools follow-up — but
+    # without ever prompting. Mirrors fn_ask_components so both paths agree.
+    local id="$1" type="$2"
+
+    # Respect visibility so hidden components stay empty, exactly like interactive.
+    local cond
+    cond=$(mq --arg id "$id" '.components[$id].visible_if // empty')
+    if [ -n "$cond" ] && [ "$(fn_eval_condition "$cond" COMP_VALUES)" = "false" ]; then
+        COMP_VALUES["$id"]=""; return
+    fi
+    cond=$(mq --arg id "$id" '.components[$id].dependent_on // empty')
+    if [ -n "$cond" ] && [ "$(fn_eval_condition "$cond" COMP_VALUES)" = "false" ]; then
+        COMP_VALUES["$id"]=""; return
+    fi
+
+    case "$type" in
+        checklist)
+            local dyn
+            dyn=$(mq --arg id "$id" '.components[$id].dynamic_source // empty')
+            if [ "$dyn" = "sury_repo_metadata" ]; then
+                [ -n "$PHP_VERSIONS_AVAILABLE" ] || fn_discover_php_versions
+                local rule sel=""
+                rule=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" \
+                    '.components[$id].default_rule[$p] // empty')
+                if [ -n "$rule" ] && [ "$rule" != "null" ]; then
+                    sel=$(fn_apply_default_rule "$rule" "$PHP_VERSIONS_AVAILABLE")
+                fi
+                COMP_VALUES["$id"]=$(fn_normalize_list "$sel")
+            else
+                COMP_VALUES["$id"]=$(fn_normalize_list "$(fn_component_default "$id" "$INSTALL_PROFILE")")
+            fi
+            ;;
+        version_select)
+            COMP_VALUES["$id"]=$(fn_resolve_version_value "$(fn_component_default "$id" "$INSTALL_PROFILE")")
+            ;;
+        *)
+            COMP_VALUES["$id"]=$(fn_component_default "$id" "$INSTALL_PROFILE")
+            ;;
+    esac
+
+    # opens_followup: pull in the preset's tool defaults without prompting.
+    local followup
+    followup=$(mq --arg id "$id" '.components[$id].opens_followup // empty')
+    if [ -n "$followup" ] && [ "${COMP_VALUES[$id]:-}" = "true" ]; then
+        fn_tools_default_for_preset
+    fi
 }
 
 # ════════════════════════════════════════════════════════════
@@ -659,15 +788,28 @@ fn_ask_components() {
             continue
         fi
 
-        # implicit: derived from preset, no question
+        # implicit: derived from preset, normally no question.
+        # Exception: under 'custom' the preset default is null, so an implicit
+        # component that defines options (PHP_MODE, MAIL_BLOCK_PRESENT,
+        # WEB_REPO_SOURCE) is asked as a real question with no preselection —
+        # otherwise its dependent questions could never become visible.
         if [ "$type" = "implicit" ]; then
-            COMP_VALUES["$id"]=$(fn_component_default "$id" "$INSTALL_PROFILE")
+            local idefault
+            idefault=$(fn_component_default "$id" "$INSTALL_PROFILE")
+            if [ "$INSTALL_PROFILE" = "custom" ] && [ -z "$idefault" ] \
+               && [ "$(mq --arg id "$id" '.components[$id] | has("options") | tostring')" = "true" ]; then
+                local iq
+                iq=$(mq --arg id "$id" '.components[$id].question // $id')
+                _ask_radio "$id" "$iq" ""
+            else
+                COMP_VALUES["$id"]="$idefault"
+            fi
             continue
         fi
 
-        # Fasttrack: use preset default, no interaction
+        # Fasttrack: derive the value from the preset, no interaction.
         if [ -n "$FASTTRACK_PRESET" ]; then
-            COMP_VALUES["$id"]=$(fn_component_default "$id" "$INSTALL_PROFILE")
+            fn_fasttrack_value "$id" "$type"
             continue
         fi
 
@@ -706,14 +848,11 @@ fn_ask_components() {
 
         local question default_val
         question=$(mq --arg id "$id" '.components[$id].question // $id')
+        # Default comes solely from the manifest. DB_PHPMYADMIN/DB_PGADMIN now
+        # carry explicit per-preset defaults and fn_component_default preserves
+        # boolean false, so the interactive and fasttrack paths share identical
+        # defaults (no interactive-only fallback that would diverge from fasttrack).
         default_val=$(fn_component_default "$id" "$INSTALL_PROFILE")
-        # Fallback defaults for components without manifest defaults
-        if [ -z "$default_val" ] && [ "$INSTALL_PROFILE" != "custom" ]; then
-            case "$id" in
-                DB_PHPMYADMIN) default_val="true" ;;
-                *)             default_val="false" ;;
-            esac
-        fi
 
         case "$type" in
             radio)          _ask_radio          "$id" "$question" "$default_val" ;;
