@@ -1,4 +1,0 @@
-Defaults:root !requiretty
-
-# sudo is limited to hestia scripts
-hestiaweb   ALL=NOPASSWD:/usr/local/hestia/bin/*
