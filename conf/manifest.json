@@ -44,7 +44,7 @@
       "id": "ADMIN_PASSWORD",
       "type": "generated",
       "stage": "post_install",
-      "note": "Kein interaktiver Prompt. Wird von just install nach Abschluss zufaellig generiert (z.B. openssl rand) und einmalig ausgegeben. Wird nicht in install.conf gespeichert, kein Klartext-Parameter-Durchreichen an just."
+      "note": "Kein interaktiver Prompt. Wird von h-install-hestia (configure-Stage) nach Abschluss zufaellig generiert (openssl rand) und einmalig ausgegeben. Wird nicht in install.conf gespeichert, kein Klartext-Parameter-Durchreichen."
     }
   ],
 

@@ -1,0 +1,32 @@
+#!/bin/bash
+# info: list HestiaRE installation status
+# options: (none)
+#
+# Read-only status report: version, release source, OS/profile, completed
+# install phases (/etc/hestia/.done.*) and the recorded COMPONENT_* selections.
+
+HESTIA="${HESTIA:-/usr/local/hestia}"
+[ -f /etc/hestia/hestia.env ] && . /etc/hestia/hestia.env 2>/dev/null || true
+CONF_DIR="/etc/hestia"
+INSTALL_CONF="$CONF_DIR/install.conf"
+SOURCE_CONF="$CONF_DIR/source.conf"
+VERSION="$(cat "$HESTIA/VERSION" 2>/dev/null || echo dev)"
+
+# shellcheck disable=SC1090
+[ -f "$INSTALL_CONF" ] && . "$INSTALL_CONF" 2>/dev/null || true
+# shellcheck disable=SC1090
+[ -f "$SOURCE_CONF" ] && . "$SOURCE_CONF" 2>/dev/null || true
+
+echo "HestiaRE $VERSION"
+echo "Source:   ${HESTIARE_SOURCE:-github}"
+echo "Channel:  ${HESTIARE_CHANNEL:-stable}"
+echo "OS:       ${INSTALL_OS:-unknown}"
+echo "Profile:  ${INSTALL_PROFILE:-unknown}"
+echo ""
+echo "Completed install phases:"
+for s in "$CONF_DIR"/.done.*; do
+	[ -f "$s" ] && echo "  + ${s##*/.done.}" || true
+done
+echo ""
+echo "Installed components:"
+grep '^COMPONENT_' "$INSTALL_CONF" 2>/dev/null | sed 's/^/  /' || echo "  (install.conf not found)"

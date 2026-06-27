@@ -1,0 +1,74 @@
+#!/bin/bash
+# info: update HestiaRE from the latest release tarball
+# options: [--check]
+#
+# Updates the whole HestiaRE distribution from a GitHub/Gitea release tarball.
+# (Distinct from h-update-sys-hestia-all, which refreshes installed apt packages
+# in place — this command calls that afterwards as its migration step.)
+# With --check it only reports installed vs available and exits.
+
+set -eo pipefail
+
+HESTIA="${HESTIA:-/usr/local/hestia}"
+CONF_DIR="/etc/hestia"
+SOURCE_CONF="$CONF_DIR/source.conf"
+VERSION="$(cat "$HESTIA/VERSION" 2>/dev/null || echo dev)"
+CHECK_ONLY=false
+[ "${1:-}" = "--check" ] && CHECK_ONLY=true
+
+# shellcheck disable=SC1090
+[ -f "$SOURCE_CONF" ] && . "$SOURCE_CONF" 2>/dev/null || true
+HESTIARE_SOURCE="${HESTIARE_SOURCE:-github}"
+HESTIARE_REPO_URL="${HESTIARE_REPO_URL:-}"
+HESTIARE_TOKEN="${HESTIARE_TOKEN:-}"
+HESTIARE_CHANNEL="${HESTIARE_CHANNEL:-stable}"
+GITHUB_REPO="FalzoMAD/HestiaRE"
+GITHUB_API="https://api.github.com/repos/$GITHUB_REPO"
+GITHUB_RAW="https://github.com/$GITHUB_REPO/releases/download"
+
+AUTH=()
+[ -n "$HESTIARE_TOKEN" ] && AUTH=(-H "Authorization: token $HESTIARE_TOKEN")
+
+resolve_latest() {
+	if [ "$HESTIARE_SOURCE" = "gitea" ]; then
+		curl -fsSL "${AUTH[@]}" "$HESTIARE_REPO_URL/releases/latest" | jq -r '.tag_name'
+	elif [ "$HESTIARE_CHANNEL" = "prerelease" ]; then
+		curl -fsSL "$GITHUB_API/releases" | jq -r '.[0].tag_name'
+	else
+		curl -fsSL "$GITHUB_API/releases/latest" | jq -r '.tag_name'
+	fi
+}
+
+echo "Checking for updates..."
+LATEST="$(resolve_latest)"
+[ -n "$LATEST" ] && [ "$LATEST" != "null" ] || { echo "ERROR: could not determine latest release." >&2; exit 1; }
+echo "Installed: $VERSION"
+echo "Available: $LATEST"
+
+if [ "$LATEST" = "v$VERSION" ] || [ "$LATEST" = "$VERSION" ]; then
+	echo "Already up to date."
+	exit 0
+fi
+if [ "$CHECK_ONLY" = true ]; then
+	echo "Update available: $LATEST"
+	exit 0
+fi
+
+if [ "$HESTIARE_SOURCE" = "gitea" ]; then
+	URL="$HESTIARE_REPO_URL/releases/download/$LATEST/hestiare-$LATEST.tar.gz"
+else
+	URL="$GITHUB_RAW/$LATEST/hestiare-$LATEST.tar.gz"
+fi
+
+echo "Updating to $LATEST..."
+curl -fsSL "${AUTH[@]}" "$URL" -o /tmp/hestiare-update.tar.gz
+tar -xzf /tmp/hestiare-update.tar.gz -C /tmp
+rm -f /tmp/hestiare-update.tar.gz
+# Stop the panel around the copy so in-use files are not clobbered.
+systemctl stop hestia 2>/dev/null || true
+cp -r "/tmp/hestiare-$LATEST/." "$HESTIA/"
+rm -rf "/tmp/hestiare-$LATEST"
+# Migrations: refresh installed panel packages in place.
+"$HESTIA/bin/h-update-sys-hestia-all" 2>/dev/null || true
+systemctl start hestia 2>/dev/null || true
+echo "Update complete."

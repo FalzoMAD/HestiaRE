@@ -1,0 +1,143 @@
+#!/bin/bash
+
+#===========================================================================#
+#                                                                           #
+# HestiaRE - Installer Helper Library                                        #
+#                                                                           #
+# General home for cross-cutting install-time helpers, sourced by           #
+# bin/h-install-hestia and the other lifecycle commands:                    #
+#   - hestia_apt    : apt wrapper (spinner + stdout->log, stderr->term+log) #
+#   - load_os_profile : per-OS data for all supported targets               #
+#   - seed_hestia_etc  : create /etc/hestia env + seed hestia.conf          #
+#                                                                           #
+# Requires $LOG to point at the install log for hestia_apt.                 #
+#===========================================================================#
+
+# ── apt wrapper with spinner ───────────────────────────────────────────────
+# stdout (verbose package text) -> log only
+# stderr (apt errors/warnings)  -> terminal + log
+_hestia_spin_pid=""
+
+_hestia_spin_start() {
+	(
+		s='/-\|'
+		i=0
+		while true; do
+			printf '\r  %s ' "${s:$((i % 4)):1}" >&2
+			sleep 0.15
+			i=$((i + 1))
+		done
+	) &
+	_hestia_spin_pid=$!
+}
+
+_hestia_spin_stop() {
+	[ -n "$_hestia_spin_pid" ] || return 0
+	kill "$_hestia_spin_pid" 2>/dev/null || true
+	wait "$_hestia_spin_pid" 2>/dev/null || true
+	printf '\r\033[K' >&2
+	_hestia_spin_pid=""
+}
+
+# Usage: hestia_apt [apt-get args...]
+hestia_apt() {
+	_hestia_spin_start
+	local _rc=0
+	DEBIAN_FRONTEND=noninteractive apt-get "$@" \
+		1>> "${LOG}" \
+		2> >(tee -a "${LOG}" >&2) || _rc=$?
+	_hestia_spin_stop
+	return $_rc
+}
+
+# ── per-OS data ─────────────────────────────────────────────────────────────
+# Given the INSTALL_OS token (debian-bookworm, debian-trixie, ubuntu-noble,
+# ubuntu-26lts) sets: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA.
+# Replaces the per-file just/<os>.sh data modules. All four targets are
+# first-class — deb13/ub26 are not stubbed.
+load_os_profile() {
+	case "$1" in
+		debian-bookworm)
+			OS_ID="debian"; CODENAME="bookworm"; RELEASE="12"
+			EXIM_USR="Debian-exim"
+			BASE_PKGS_EXTRA="libmail-dkim-perl unrar-free"
+			;;
+		debian-trixie)
+			OS_ID="debian"; CODENAME="trixie"; RELEASE="13"
+			EXIM_USR="Debian-exim"
+			BASE_PKGS_EXTRA="libmail-dkim-perl unrar-free"
+			;;
+		ubuntu-noble)
+			OS_ID="ubuntu"; CODENAME="noble"; RELEASE="24"
+			EXIM_USR="Debian-exim"
+			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip4 apparmor-utils"
+			;;
+		ubuntu-26lts)
+			# TODO: pin the official 26.04 LTS codename once confirmed. Until then
+			# read it from /etc/os-release at runtime so APT repo lines are correct.
+			OS_ID="ubuntu"; RELEASE="26"
+			CODENAME="$(. /etc/os-release 2>/dev/null; echo "${VERSION_CODENAME:-}")"
+			EXIM_USR="Debian-exim"
+			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip4 apparmor-utils"
+			;;
+		*)
+			echo "ERROR: unsupported OS token '$1'" >&2
+			return 1
+			;;
+	esac
+	[ -n "$CODENAME" ] || { echo "ERROR: could not determine codename for '$1'" >&2; return 1; }
+}
+
+# ── seed /etc/hestia ────────────────────────────────────────────────────────
+# Creates /etc/hestia/hestia.env, /etc/profile.d/hestia.sh and a seed
+# $HESTIA/conf/hestia.conf with install-independent defaults — BEFORE any h-*
+# command runs, so func/main.sh can source hestia.env + hestia.conf safely.
+# Reads HESTIA_ADMIN / HESTIA_PANEL_PORT from install.conf (if present).
+seed_hestia_etc() {
+	local hestia_root="${HESTIA:-/usr/local/hestia}"
+	local install_conf="/etc/hestia/install.conf"
+	local admin="admin" port="8083" version
+	if [ -f "$install_conf" ]; then
+		# shellcheck disable=SC1090
+		. "$install_conf"
+		admin="${HESTIA_ADMIN:-admin}"
+		port="${HESTIA_PANEL_PORT:-8083}"
+	fi
+	version=$(cat "$hestia_root/VERSION" 2>/dev/null || echo "dev")
+
+	mkdir -p /etc/hestia
+	if [ ! -e /etc/hestia/hestia.env ]; then
+		printf '# Do not edit — use /etc/hestia/local.conf instead\n\nexport HESTIA='"'"'%s'"'"'\n\n[[ -f /etc/hestia/local.conf ]] && source /etc/hestia/local.conf\n' \
+			"$hestia_root" > /etc/hestia/hestia.env
+	fi
+	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$PATH:%s/bin\nexport PATH\n' \
+		"$hestia_root" "$hestia_root" > /etc/profile.d/hestia.sh
+	chmod 755 /etc/profile.d/hestia.sh
+
+	mkdir -p "$hestia_root/conf"
+	rm -f "$hestia_root/conf/hestia.conf"
+	touch "$hestia_root/conf/hestia.conf"
+	chmod 660 "$hestia_root/conf/hestia.conf"
+	_wcv() { echo "$1='$2'" >> "$hestia_root/conf/hestia.conf"; }
+	_wcv "BACKEND_PORT"             "$port"
+	_wcv "CRON_SYSTEM"              "cron"
+	_wcv "DISK_QUOTA"               "no"
+	_wcv "RESOURCES_LIMIT"          "no"
+	_wcv "BACKUP_SYSTEM"            "local"
+	_wcv "BACKUP_GZIP"              "4"
+	_wcv "BACKUP_MODE"              "zstd"
+	_wcv "LANGUAGE"                 "en"
+	_wcv "LOGIN_STYLE"              "default"
+	_wcv "THEME"                    "dark"
+	_wcv "INACTIVE_SESSION_TIMEOUT" "60"
+	_wcv "VERSION"                  "$version"
+	_wcv "RELEASE_BRANCH"           "release"
+	_wcv "UPGRADE_SEND_EMAIL"       "true"
+	_wcv "UPGRADE_SEND_EMAIL_LOG"   "false"
+	_wcv "API"                      "no"
+	_wcv "API_SYSTEM"               "0"
+	_wcv "API_ALLOWED_IP"           ""
+	_wcv "ROOT_USER"                "$admin"
+	_wcv "DB_SYSTEM"                "mysql"
+	unset -f _wcv
+}

@@ -1,0 +1,36 @@
+#!/bin/bash
+# info: HestiaRE umbrella command
+# options: install | configure | update | uninstall | status
+#
+# Thin, friendly dispatcher to the underlying h-* lifecycle commands.
+# (Deliberate exception to the h-* convention — the brand command; no v-* alias.)
+
+HESTIA="${HESTIA:-/usr/local/hestia}"
+BIN="$HESTIA/bin"
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift || true
+
+case "$cmd" in
+	install)   exec "$BIN/h-install-hestia" "$@" ;;
+	configure) exec bash "$HESTIA/func/wizard.sh" "$@" ;;
+	update)    exec "$BIN/h-update-hestia" "$@" ;;
+	uninstall) exec "$BIN/h-uninstall-hestia" "$@" ;;
+	status)    exec "$BIN/h-list-sys-install" "$@" ;;
+	"" | help | -h | --help)
+		cat << 'EOF'
+hestia — HestiaRE control
+
+Usage: hestia <command> [args]
+
+  install      run the installer (reads /etc/hestia/install.conf)
+  configure    (re)generate /etc/hestia/install.conf via the wizard
+  update       update HestiaRE from the latest release tarball  [--check]
+  uninstall    remove HestiaRE panel config (keeps /home + DBs) [--purge]
+  status       show installed version, OS, profile and components
+EOF
+		;;
+	*)
+		echo "hestia: unknown command '$cmd' (try: hestia help)" >&2
+		exit 1
+		;;
+esac
