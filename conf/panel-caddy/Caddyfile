@@ -1,9 +1,0 @@
-{
-    admin off
-    log {
-        output file /var/log/hestia/caddy-error.log
-        level ERROR
-    }
-}
-
-import /etc/caddy/*.conf
