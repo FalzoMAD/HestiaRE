@@ -94,8 +94,11 @@ upstream/hestiacp HestiaCP snapshot, READ ONLY, never modify
 
 ### Key files
 ```
-install.sh        main installer (downloads release, calls just)
-Justfile          just targets: install, update, check-updates, status
+install.sh        bootstrap: prereqs, fetch release, run wizard, hand off to h-install-hestia
+func/wizard.sh    interactive wizard (manifest-driven) → writes /etc/hestia/install.conf
+func/helper.sh    installer helpers: hestia_apt, load_os_profile, seed_hestia_etc
+bin/h-install-hestia  non-interactive installer (reads install.conf, COMPONENT_*-gated)
+bin/hestia        umbrella: hestia install|configure|update|uninstall|status
 VERSION           empty placeholder, filled at build time — never edit
 codemap.json      component map — read before exploring the codebase
 CLAUDE.md         this file

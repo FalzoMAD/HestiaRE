@@ -1,5 +1,0 @@
-OS_ID="ubuntu"
-CODENAME="noble"
-RELEASE="24"
-EXIM_USR="Debian-exim"
-BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip4 apparmor-utils"
