@@ -1,0 +1,58 @@
+#!/bin/bash
+# info: uninstall HestiaRE (keeps /home and databases)
+# options: [--purge]
+#
+# Conservative uninstaller. By default it stops the panel services and removes
+# the panel's system config (cron, sudoers, profile.d, .done.* sentinels) but
+# leaves packages, /usr/local/hestia, /etc/hestia, /home user data and the
+# databases intact. With --purge it additionally apt-removes the panel packages
+# and deletes /usr/local/hestia + /etc/hestia. /home and databases are ALWAYS
+# kept (HestiaCP-compatibility rule).
+
+HESTIA="${HESTIA:-/usr/local/hestia}"
+CONF_DIR="/etc/hestia"
+PURGE=false
+[ "${1:-}" = "--purge" ] && PURGE=true
+
+[ "$(id -u)" = "0" ] || { echo "ERROR: must run as root." >&2; exit 1; }
+
+echo "========================================================================"
+echo " HestiaRE Uninstall"
+echo "========================================================================"
+echo ""
+echo "This stops HestiaRE services and removes the panel system config."
+if [ "$PURGE" = true ]; then
+	echo "PURGE: also apt-removes panel packages and deletes $HESTIA + $CONF_DIR."
+fi
+echo "/home user data and databases are ALWAYS kept."
+echo ""
+read -rp "Proceed? [y/N] " confirm < /dev/tty
+case "$confirm" in
+	[yY] | [yY][eE][sS]) ;;
+	*) echo "Aborted."; exit 1 ;;
+esac
+
+echo "[ * ] Stopping services..."
+for s in hestia hestia-php caddy; do
+	systemctl stop "$s" 2>/dev/null || true
+	systemctl disable "$s" 2>/dev/null || true
+done
+
+echo "[ * ] Removing cron, profile and sudoers entries..."
+rm -f /var/spool/cron/crontabs/hestiaweb 2>/dev/null || true
+rm -f /etc/cron.d/hestia-* 2>/dev/null || true
+rm -f /etc/profile.d/hestia.sh 2>/dev/null || true
+rm -f /etc/sudoers.d/hestiaweb 2>/dev/null || true
+rm -f "$CONF_DIR"/.done.* 2>/dev/null || true
+
+if [ "$PURGE" = true ]; then
+	echo "[ * ] Purging panel packages and directories..."
+	DEBIAN_FRONTEND=noninteractive apt-get -y purge caddy 2>/dev/null || true
+	rm -rf "$HESTIA" "$CONF_DIR"
+	echo "[ * ] Purged. /home user data and databases left intact."
+else
+	echo "[ * ] Panel config removed. Packages, $HESTIA and $CONF_DIR left in place."
+	echo "      Re-run install.sh to reinstall, or pass --purge to remove everything."
+fi
+echo ""
+echo "Done."
