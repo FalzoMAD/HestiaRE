@@ -544,5 +544,4 @@ function syshealth_repair_system_cronjobs() {
 	echo "20 00 * * * sudo /usr/local/hestia/bin/h-update-user-stats" >> /var/spool/cron/crontabs/hestiaweb
 	echo "*/5 * * * * sudo /usr/local/hestia/bin/h-update-sys-rrd" >> /var/spool/cron/crontabs/hestiaweb
 	echo "$min $hour * * * sudo /usr/local/hestia/bin/h-update-letsencrypt-ssl" >> /var/spool/cron/crontabs/hestiaweb
-	echo "41 4 * * * sudo /usr/local/hestia/bin/h-update-sys-hestia-all" >> /var/spool/cron/crontabs/hestiaweb
 }

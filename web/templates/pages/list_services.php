@@ -8,9 +8,6 @@
 			<a href="/list/rrd/" class="button button-secondary">
 				<i class="fas fa-chart-area icon-blue"></i><?= tohtml( _("Task Monitor")) ?>
 			</a>
-			<a href="/list/updates/" class="button button-secondary">
-				<i class="fas fa-arrows-rotate icon-green"></i><?= tohtml( _("Updates")) ?>
-			</a>
 			<?php if (!empty($_SESSION["FIREWALL_SYSTEM"]) && $_SESSION["FIREWALL_SYSTEM"] == "iptables") { ?>
 				<a href="/list/firewall/" class="button button-secondary">
 					<i class="fas fa-shield-halved icon-red"></i><?= tohtml( _("Firewall")) ?>
