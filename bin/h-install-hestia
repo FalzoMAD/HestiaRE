@@ -747,6 +747,19 @@ finalize_install() {
 	else
 		HESTIA_PASS="(not found — use h-change-user-password $HESTIA_ADMIN <newpass>)"
 	fi
+
+	# Stamp install.conf as the live system-state file (HestiaRE #103). The
+	# COMPONENT_* keys written by the wizard already describe what was installed;
+	# add install metadata so install.conf is a complete system description that
+	# h-add-sys-*/h-remove-sys-* keep current via set_install_component.
+	local _ver; _ver=$(cat "$HESTIA/VERSION" 2>/dev/null || echo "dev")
+	grep -q '^INSTALL_DATE=' "$INSTALL_CONF" 2>/dev/null || echo "INSTALL_DATE=\"$(date +%F)\"" >> "$INSTALL_CONF"
+	if grep -q '^INSTALL_VERSION=' "$INSTALL_CONF" 2>/dev/null; then
+		sed -i "s|^INSTALL_VERSION=.*|INSTALL_VERSION=\"${_ver}\"|" "$INSTALL_CONF"
+	else
+		echo "INSTALL_VERSION=\"${_ver}\"" >> "$INSTALL_CONF"
+	fi
+
 	echo "[ * ] Starting Hestia service..."
 	update-rc.d hestia defaults > /dev/null 2>&1 || true
 	systemctl start hestia || true

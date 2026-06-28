@@ -173,6 +173,8 @@ fi
 #                       Hestia                             #
 #----------------------------------------------------------#
 
+set_install_component MAIL_WEBMAILER SNAPPYMAIL
+
 if [ "$UPDATE" = "yes" ]; then
 	$BIN/h-log-action "system" "Info" "Plugins" "SnappyMail updated (Version: $version)."
 else
