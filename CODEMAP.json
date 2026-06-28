@@ -318,7 +318,7 @@
         "func/helper.sh": "hestia_apt (spinner + apt log split), load_os_profile (OS_ID/CODENAME/RELEASE/EXIM_USR/BASE_PKGS_EXTRA for deb12/deb13/ub24/ub26), seed_hestia_etc (hestia.env + profile.d + seed hestia.conf).",
         "bin/h-install-hestia": "Non-interactive orchestrator: validates /etc/hestia, sources hestia.env+main.sh+helper.sh+install.conf, runs stages gated by COMPONENT_*. Idempotent via .done.* sentinels (exit→return).",
         "bin/hestia": "Umbrella dispatcher: hestia install|configure|update|uninstall|status (no v-* alias).",
-        "bin/h-update-hestia": "Update whole distribution from release tarball (+ --check); stops/starts hestia around copy; calls h-update-sys-hestia-all for package migrations.",
+        "bin/h-update-hestia": "Update whole distribution from release tarball (+ --check); stops/starts hestia around copy. Does NOT use the legacy h-update-sys-hestia* apt/git updaters (removal tracked in #128).",
         "bin/h-uninstall-hestia": "Conservative uninstall (keeps /home + DBs always; --purge removes packages + /usr/local/hestia + /etc/hestia).",
         "bin/h-list-sys-install": "Status report: version, source, OS, profile, .done.* phases, COMPONENT_*."
       },
