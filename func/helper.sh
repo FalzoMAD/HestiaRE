@@ -118,11 +118,23 @@ seed_hestia_etc() {
 		"$hestia_root" "$hestia_root" > /etc/profile.d/hestia.sh
 	chmod 755 /etc/profile.d/hestia.sh
 
-	mkdir -p "$hestia_root/conf"
-	rm -f "$hestia_root/conf/hestia.conf"
-	touch "$hestia_root/conf/hestia.conf"
-	chmod 660 "$hestia_root/conf/hestia.conf"
-	_wcv() { echo "$1='$2'" >> "$hestia_root/conf/hestia.conf"; }
+	# Instance config lives in /etc/hestia/conf (PATHS.md §5a). Bridge the historic
+	# $HESTIA/conf path with a directory symlink so the ~466 commands referencing
+	# $HESTIA/conf/hestia.conf keep working AND sed -i (33 writers) stays safe
+	# (only file symlinks break under sed -i; directory symlinks do not).
+	local conf_dir="/etc/hestia/conf"
+	mkdir -p "$conf_dir"
+	if [ ! -L "$hestia_root/conf" ]; then
+		if [ -d "$hestia_root/conf" ]; then
+			cp -an "$hestia_root/conf/." "$conf_dir/" 2>/dev/null || true
+			rm -rf "$hestia_root/conf"
+		fi
+		ln -sfn "$conf_dir" "$hestia_root/conf"
+	fi
+	rm -f "$conf_dir/hestia.conf"
+	touch "$conf_dir/hestia.conf"
+	chmod 660 "$conf_dir/hestia.conf"
+	_wcv() { echo "$1='$2'" >> "$conf_dir/hestia.conf"; }
 	_wcv "BACKEND_PORT"             "$port"
 	_wcv "CRON_SYSTEM"              "cron"
 	_wcv "DISK_QUOTA"               "no"

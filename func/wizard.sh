@@ -22,7 +22,7 @@ set -euo pipefail
 # ── Constants ──────────────────────────────────────────────
 INSTALL_CONF="/etc/hestia/install.conf"
 INSTALL_DIR="${HESTIA:-/usr/local/hestia}"
-MANIFEST="${INSTALL_DIR}/conf/manifest.json"
+MANIFEST="${INSTALL_DIR}/share/manifest.json"
 LOG_DIR="/var/log/hestia"
 
 # ── State ──────────────────────────────────────────────────
