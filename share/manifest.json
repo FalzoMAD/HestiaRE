@@ -4,13 +4,13 @@
   "manifest_version": 1,
 
   "presets": {
-    "standard":  { "label": "Standard (volles Hosting + volles Mail + DB + MultiPHP + Addons)" },
-    "compact":   { "label": "Compact (nginx only, schlankere Addon-Auswahl)" },
-    "latest":    { "label": "Latest (neueste Versionen, externe Repos fuer Web/PHP/DB)" },
-    "singlephp": { "label": "SinglePHP (OS-PHP statt Sury, schlankes Setup)" },
-    "nomail":    { "label": "No-Mail (Hosting only, kein Mail-Block, Exim nur Versand)" },
-    "mailonly":  { "label": "Mail-Only (nur Mail-Stack, kein Kunden-Webserver)" },
-    "custom":    { "label": "Custom (alles frei waehlbar, keine Vorbelegung)" }
+    "standard":  { "label": "Standard (full hosting + full mail + DB + MultiPHP + addons)" },
+    "compact":   { "label": "Compact (nginx only, leaner addon selection)" },
+    "latest":    { "label": "Latest (newest versions, external repos for web/PHP/DB)" },
+    "singlephp": { "label": "SinglePHP (OS PHP instead of Sury, lean setup)" },
+    "nomail":    { "label": "No-Mail (hosting only, no mail block, Exim send-only)" },
+    "mailonly":  { "label": "Mail-Only (mail stack only, no customer web server)" },
+    "custom":    { "label": "Custom (everything freely selectable, no presets)" }
   },
 
   "pre_questions": [
@@ -23,7 +23,7 @@
     {
       "id": "PANEL_PORT",
       "type": "number",
-      "question": "Panel-Port:",
+      "question": "Panel port:",
       "default": 8083,
       "stage": "pre_preset",
       "note": "Bei allen Presets abgefragt, inkl. standard"
@@ -31,13 +31,13 @@
     {
       "id": "ADMIN_USERNAME",
       "type": "text",
-      "question": "Admin-Benutzername:",
+      "question": "Admin username:",
       "stage": "pre_preset"
     },
     {
       "id": "ADMIN_EMAIL",
       "type": "text",
-      "question": "Admin-E-Mail:",
+      "question": "Admin email:",
       "stage": "pre_preset"
     },
     {
@@ -51,8 +51,8 @@
   "groups": ["web", "db", "mail", "panel", "addons", "tools"],
   "grouped_prompts": ["db", "addons"],
   "group_questions": {
-    "db": "Welche Datenbank- und Cache-Dienste installieren? (Mehrfachauswahl)",
-    "addons": "Welche Addons installieren? (Mehrfachauswahl)"
+    "db": "Which database & cache services to install? (multiple choice)",
+    "addons": "Which addons to install? (multiple choice)"
   },
 
   "components": {
@@ -60,8 +60,12 @@
     "WEB_SERVER": {
       "group": "web",
       "type": "radio",
-      "question": "Webserver:",
-      "options": ["APACHE", "NGINX", "BOTH"],
+      "question": "Web server:",
+      "options": [
+        { "value": "APACHE", "label": "apache2 only", "description": "Apache httpd (OS package)" },
+        { "value": "NGINX",  "label": "nginx only",   "description": "Single web server" },
+        { "value": "BOTH",   "label": "nginx + apache2", "description": "nginx reverse-proxies apache2" }
+      ],
       "default": {
         "standard":  "BOTH",
         "compact":   "NGINX",
@@ -80,9 +84,12 @@
     "WEB_REPO_SOURCE": {
       "group": "web",
       "type": "implicit",
-      "question": "Web-Server Paketquelle:",
-      "options": ["os_package", "upstream_repo"],
-      "description": "OS-Paket vs. externes Upstream-Repo (Sury-Apache, nginx.org) fuer Apache/nginx. Normalerweise keine eigene Nutzerfrage, vollstaendig durch Preset bestimmt. Ausnahme: beim Preset 'custom' (default null) wird sie als echte Frage gestellt (siehe options/question).",
+      "question": "Web server package source:",
+      "options": [
+        { "value": "os_package",   "label": "OS package",   "description": "Distribution repo (recommended)" },
+        { "value": "upstream_repo", "label": "Upstream repo", "description": "Sury-Apache / nginx.org (newer)" }
+      ],
+      "description": "OS package vs. external upstream repo (Sury-Apache, nginx.org) for Apache/nginx. Normally not a user question, fully determined by the preset. Exception: under the 'custom' preset (default null) it is asked as a real question.",
       "default": {
         "standard":  "os_package",
         "compact":   "os_package",
@@ -97,9 +104,12 @@
     "PHP_MODE": {
       "group": "web",
       "type": "implicit",
-      "question": "PHP-Modus:",
-      "description": "Architektur-Vorfrage: Single-PHP (OS-Paket, kein Sury) vs. MultiPHP (Sury-Repo). Keine eigene Frage falls durch Preset fest vorgegeben (singlephp, mailonly); sonst aus dem Preset abgeleitet. Ausnahme: beim Preset 'custom' (default null) wird sie als echte Frage gestellt.",
-      "options": ["os_single", "sury_multi"],
+      "question": "PHP mode:",
+      "description": "Architecture pre-question: Single-PHP (OS package, no Sury) vs. MultiPHP (Sury repo). Not asked when fixed by the preset (singlephp, mailonly); otherwise derived from the preset. Exception: under the 'custom' preset (default null) it is asked as a real question.",
+      "options": [
+        { "value": "os_single",  "label": "Single PHP", "description": "OS PHP, no Sury repo" },
+        { "value": "sury_multi", "label": "MultiPHP",   "description": "Sury repo, multiple versions" }
+      ],
       "default": {
         "standard":  "sury_multi",
         "compact":   "sury_multi",
@@ -118,7 +128,7 @@
     "PHP_MULTIPHP_VERSIONS": {
       "group": "web",
       "type": "checklist",
-      "question": "Welche PHP-Versionen installieren?",
+      "question": "Which PHP versions to install?",
       "visible_if": "PHP_MODE == sury_multi",
       "options": "__dynamic__",
       "dynamic_source": "sury_repo_metadata",
@@ -136,8 +146,8 @@
       "group": "db",
       "type": "checkbox",
       "label": "MariaDB",
-      "description": "MySQL-kompatibler DB-Server (inkl. phpMyAdmin)",
-      "question": "MariaDB installieren?",
+      "description": "MySQL-compatible DB server (incl. phpMyAdmin)",
+      "question": "Install MariaDB?",
       "default": {
         "standard":  true,
         "compact":   true,
@@ -154,8 +164,8 @@
       "group": "db",
       "type": "checkbox",
       "label": "PostgreSQL",
-      "description": "Objektrelationaler DB-Server (inkl. pgAdmin)",
-      "question": "PostgreSQL installieren?",
+      "description": "Object-relational DB server (incl. pgAdmin)",
+      "question": "Install PostgreSQL?",
       "default": false
     },
 
@@ -163,21 +173,21 @@
       "group": "db",
       "type": "checkbox",
       "label": "Redis",
-      "description": "In-Memory-Cache / Key-Value-Store (kein DB-Server)",
-      "question": "Redis installieren?",
+      "description": "In-memory cache / key-value store (not a DB server)",
+      "question": "Install Redis?",
       "default": false
     },
 
     "DB_MARIADB_VERSION": {
       "group": "db",
       "type": "version_select",
-      "question": "Welche MariaDB-Version installieren?",
+      "question": "Which MariaDB version to install?",
       "visible_if": "DB_MARIADB == true",
       "options": [
-        { "value": "12.3",   "source": "mariadb_repo" },
-        { "value": "11.8",   "source": "mariadb_repo" },
-        { "value": "11.4",   "source": "mariadb_repo" },
-        { "value": "__os__", "source": "os_default", "label_template": "{version} (OS-Version)" }
+        { "value": "12.3",   "source": "mariadb_repo", "description": "MariaDB.org repo" },
+        { "value": "11.8",   "source": "mariadb_repo", "description": "MariaDB.org repo" },
+        { "value": "11.4",   "source": "mariadb_repo", "description": "MariaDB.org repo (Magento 2.4.9)" },
+        { "value": "__os__", "source": "os_default", "label_template": "{version} (OS default)", "description": "Distribution default" }
       ],
       "default": {
         "standard":  "11.4",
@@ -208,9 +218,12 @@
     "MAIL_BLOCK_PRESENT": {
       "group": "mail",
       "type": "implicit",
-      "question": "Mail-Block (Dovecot-Postfaecher) installieren?",
-      "options": ["true", "false"],
-      "description": "Bestimmt ob ueberhaupt ein Mail-Block existiert. Normalerweise keine eigene Frage - ergibt sich direkt aus dem Preset. Ausnahme: beim Preset 'custom' (default null) wird sie als echte Frage gestellt.",
+      "question": "Install mail block (Dovecot mailboxes)?",
+      "options": [
+        { "value": "true",  "label": "Yes", "description": "Dovecot mailboxes + full mail stack" },
+        { "value": "false", "label": "No",  "description": "Exim send-only, no mailboxes" }
+      ],
+      "description": "Determines whether a mail block exists at all. Normally not a user question - follows directly from the preset. Exception: under the 'custom' preset (default null) it is asked as a real question.",
       "default": {
         "standard":  true,
         "compact":   true,
@@ -226,9 +239,13 @@
     "MAIL_WEBMAILER": {
       "group": "mail",
       "type": "radio",
-      "question": "Webmailer:",
+      "question": "Webmail client:",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
-      "options": ["ROUNDCUBE", "SNAPPYMAIL", "NONE"],
+      "options": [
+        { "value": "ROUNDCUBE",  "label": "Roundcube",  "description": "Full-featured webmail" },
+        { "value": "SNAPPYMAIL", "label": "SnappyMail", "description": "Lightweight webmail" },
+        { "value": "NONE",       "label": "None",       "description": "No webmail client" }
+      ],
       "default": {
         "standard":  "ROUNDCUBE",
         "compact":   "ROUNDCUBE",
@@ -270,7 +287,7 @@
       "group": "addons",
       "type": "checkbox",
       "label": "Composer",
-      "description": "PHP-Abhaengigkeitsmanager (systemweit)",
+      "description": "PHP dependency manager (system-wide)",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false, "custom": null },
       "source_default": {
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
@@ -283,7 +300,7 @@
       "group": "addons",
       "type": "checkbox",
       "label": "CrowdSec",
-      "description": "Kollaborative Intrusion-Prevention",
+      "description": "Collaborative intrusion prevention",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null },
       "note": "Unabhaengig von Fail2Ban waehlbar, kein Exklusiv-OR. Beide koennen parallel laufen."
     },
@@ -292,7 +309,7 @@
       "group": "addons",
       "type": "checkbox",
       "label": "Fail2Ban",
-      "description": "Brute-Force-Schutz (Log-basiert)",
+      "description": "Brute-force protection (log-based)",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null }
     },
 
@@ -300,7 +317,7 @@
       "group": "addons",
       "type": "checkbox",
       "label": "ProFTPD",
-      "description": "FTP-Server",
+      "description": "FTP server",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null }
     },
 
@@ -308,7 +325,7 @@
       "group": "addons",
       "type": "checkbox",
       "label": "rspamd",
-      "description": "Spamfilter (nur mit Mail-Block)",
+      "description": "Spam filter (mail block only)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "mailonly": true, "custom": null },
       "note": "Ausgeblendet bei nomail (kein Mail-Block). Reine Spamfilter-Komponente, NICHT fuer DKIM zustaendig (siehe PANEL_EXIM note)."
@@ -318,7 +335,7 @@
       "group": "addons",
       "type": "checkbox",
       "label": "Sieve",
-      "description": "Serverseitige Mail-Filter (nur mit Mail-Block)",
+      "description": "Server-side mail filters (mail block only)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false, "custom": null },
       "note": "Ausgeblendet bei nomail (kein Mail-Block)."
@@ -328,7 +345,7 @@
       "group": "addons",
       "type": "checkbox",
       "label": "Docker",
-      "description": "Container-Laufzeit (Proxy)",
+      "description": "Container runtime (proxy)",
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
       "note": "Bei allen Presets sichtbar, nirgends vorbelegt. Echter Ressourcen-Fussabdruck (RAM/Disk), bewusst keine automatische Aktivierung."
     },
@@ -337,7 +354,7 @@
       "group": "addons",
       "type": "checkbox",
       "label": "FileManager",
-      "description": "Web-Dateimanager",
+      "description": "Web file manager",
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
       "note": "Bei allen Presets inkl. mailonly sichtbar, nirgends vorbelegt. TODO: Abhaengigkeiten von PHP-Version/-Modus noch zu pruefen vor Produktivnutzung."
     },
@@ -346,7 +363,7 @@
       "group": "addons",
       "type": "checkbox",
       "label": "Utilities",
-      "description": "System-Werkzeuge (oeffnet Tool-Auswahl)",
+      "description": "System utilities (opens tool selection)",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null },
       "opens_followup": "TOOLS_SELECTION",
       "note": "Bei Aktivierung oeffnet sich die Tools-Folgeseite (siehe tools-Sektion unten)."
@@ -360,7 +377,7 @@
     "selection": {
       "id": "TOOLS_SELECTION",
       "type": "checklist",
-      "question": "Welche Utilities installieren?",
+      "question": "Which utilities to install?",
       "options": {
         "vorbelegt":  ["rsync", "net-tools", "vnstat", "parted", "telnet"],
         "unbelegt":   ["borg-backup", "fio", "iperf3", "rclone", "rdiff-backup", "restic"]

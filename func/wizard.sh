@@ -104,13 +104,13 @@ fn_manifest_load() {
         | [ ({presets:"object",components:"object",tools:"object",pre_questions:"array",always_installed_packages:"array"}
             | to_entries[])
           | .key as $k | .value as $t
-          | if ($root | has($k) | not) then "\($k): fehlt"
-            elif (($root[$k]) | type) != $t then "\($k): falscher Typ (erwartet \($t))"
+          | if ($root | has($k) | not) then "\($k): missing"
+            elif (($root[$k]) | type) != $t then "\($k): wrong type (expected \($t))"
             else empty end ]
         | join("; ")
     ' "$MANIFEST")
     [ -z "$missing" ] || {
-        echo "ERROR: $MANIFEST ist unvollstaendig oder hat eine falsche Struktur:" >&2
+        echo "ERROR: $MANIFEST is incomplete or has an invalid structure:" >&2
         echo "       $missing" >&2
         exit 1
     }
@@ -375,12 +375,23 @@ fn_tools_default_for_preset() {
 
 _ask_radio() {
     local id="$1" question="$2" default_val="$3"
-    local -a opts=(); readarray -t opts < <(mq --arg id "$id" '.components[$id].options[]')
+    # Options may be plain strings (value == display) or objects
+    # { value, label, description }. The stored value is always .value; the
+    # whiptail item column shows "label — description" (mirrors the grouped
+    # checklist UX so the raw enum is never shown bare).
     local -a items=()
-    for opt in "${opts[@]}"; do
-        local state="OFF"; [ "$opt" = "$default_val" ] && state="ON"
-        items+=("$opt" "$opt" "$state")
-    done
+    local value text
+    while IFS=$'\t' read -r value text; do
+        local state="OFF"; [ "$value" = "$default_val" ] && state="ON"
+        items+=("$value" "$text" "$state")
+    done < <(mq --arg id "$id" '
+        .components[$id].options[]
+        | if type=="object" then
+            [ .value,
+              ((.label // .value)
+               + (if (.description // "") != "" then "  —  " + .description else "" end)) ]
+          else [ ., . ] end
+        | @tsv')
     COMP_VALUES["$id"]=$(_wt_radiolist "HestiaRE — $id" "$question" "${items[@]}")
 }
 
@@ -436,18 +447,21 @@ _ask_version_select() {
     local id="$1" question="$2" default_val="$3"
     [ -n "$OS_MARIADB_VERSION" ] || fn_discover_mariadb_version
     local -a items=()
-    while IFS=$'\t' read -r value source label_tmpl; do
+    # Use a non-whitespace field separator (US, \x1f): with IFS=$'\t' bash would
+    # collapse an empty middle field (empty label_template), shifting later fields.
+    while IFS=$'\x1f' read -r value source label_tmpl descr; do
         local display_val display_label state="OFF"
         if [ "$value" = "__os__" ]; then
             display_val=$(fn_resolve_version_value "$value")
             display_label="${label_tmpl/\{version\}/$OS_MARIADB_VERSION}"
+            [ -n "$descr" ] && display_label="$display_label  —  $descr"
             [ "$default_val" = "__os__" ] && state="ON"
         else
-            display_val="$value"; display_label="$value ($source)"
+            display_val="$value"; display_label="${descr:-$source}"
             [ "$default_val" = "$value" ] && state="ON"
         fi
         items+=("$display_val" "$display_label" "$state")
-    done < <(mq --arg id "$id" '.components[$id].options[] | [.value, .source, (.label_template // "")] | @tsv')
+    done < <(mq --arg id "$id" '.components[$id].options[] | [.value, .source, (.label_template // ""), (.description // "")] | join("\u001f")')
     COMP_VALUES["$id"]=$(_wt_radiolist "HestiaRE — $id" "$question" "${items[@]}")
 }
 
@@ -524,7 +538,7 @@ fn_ask_group_checklist() {
         items+=("$label" "$desc" "$state"); shown+=("$id"); lbl2id["$label"]="$id"
     done
     [ ${#shown[@]} -gt 0 ] || return 0
-    local question; question=$(mq --arg g "$group" '.group_questions[$g] // ("Auswahl: " + $g)')
+    local question; question=$(mq --arg g "$group" '.group_questions[$g] // ("Select: " + $g)')
     local selected; selected=" $(fn_normalize_list "$(_wt_checklist "HestiaRE — $group" "$question" "${items[@]}")") "
     for id in "${shown[@]}"; do COMP_VALUES["$id"]="false"; done
     local lbl
