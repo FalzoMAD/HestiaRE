@@ -20,9 +20,9 @@
 ```
 /usr/local/hestia/
 ├── bin/               CLI commands (v-*, hl-*)
-├── conf/              Runtime config
-│   ├── hestia.conf    Active config (key=value pairs, generated)
-│   └── defaults/      Known-good baseline (copy of conf at install time)
+├── conf -> /etc/hestia/conf   Symlink — instance config lives in /etc/hestia (§5a)
+├── share/             Shipped install-time assets: manifest.json, panel-caddy/,
+│                      panel-php/, dovecot/ (consumed by the installer)
 ├── data/
 │   ├── ips/           IP address entries
 │   ├── queue/         Named pipes for async task processing
@@ -226,8 +226,8 @@ Filenames are preserved — no renames.
 
 | Source (current) | Target | Notes |
 |------------------|--------|-------|
-| `/usr/local/hestia/conf/` | `/etc/hestia/conf/` | Panel instance config |
-| `/usr/local/hestia/conf/defaults/` | `/etc/hestia/defaults/` | Flattened one level |
+| `/usr/local/hestia/conf/` | `/etc/hestia/conf/` | Panel instance config — **DONE (#129)**: `/usr/local/hestia/conf` is now a directory symlink → `/etc/hestia/conf`; the ~466 `$HESTIA/conf/hestia.conf` refs keep working and `sed -i` stays safe. Shipped assets (manifest/panel-*/dovecot) moved to `$HESTIA/share/`. |
+| `/usr/local/hestia/conf/defaults/` | `/etc/hestia/conf/defaults/` | Stays under `conf/` (not flattened — matches §1 target); follows the conf symlink. **DONE (#129)** |
 | `/usr/local/hestia/data/firewall/` | `/etc/hestia/firewall/` | Rules + ipset data |
 | `/usr/local/hestia/data/ips/` | `/etc/hestia/ips/` | IP address entries |
 | `/etc/hestiacp/hooks/` | `/etc/hestia/hooks/` | Lifecycle scripts (usually empty) |
