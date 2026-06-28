@@ -1,0 +1,122 @@
+# Plan: Wizard- & Cleanup-Cluster (#132, #133, #128)
+
+## Context
+
+Der Installer ist erstmals vollständig durchgelaufen (`install.sh` → `func/wizard.sh`
+→ `bin/h-install-hestia`) — ein Meilenstein. Das resultierende System ist aber noch
+**nicht nutzbar**: zwei Blocker (`#137` Bundled-PHP-CLI, `#138` `hestia.service`) verhindern
+ein funktionierendes Panel. Ein Audit der Install-Strecke bestätigt: **kein Eisberg** —
+die Breakages clustern sauber in `#137`, `#138`, `#128` plus etwas kosmetischer Dead-Code.
+
+Entscheidung des Autors (abgestimmt): als nächstes der **Wizard/Cleanup-Cluster**
+(`#132`, `#133`, `#128`), nicht der „grüne Install". Das ist bewusst gewählt; dieser Plan
+setzt das um. **Hinweis bleibt:** `#137` + `#138` sind die eigentlichen Blocker zu einem
+benutzbaren Panel und sollten der Meilenstein *unmittelbar nach* diesem Cluster sein.
+
+Drei weitgehend unabhängige Issues → **drei getrennte Branches/PRs** auf `dev`
+(Autor reviewt/merged je einzeln). Empfohlene Reihenfolge: **#132 → #133 → #128**
+(aufsteigendes Risiko; #132 sofort im nächsten Test sichtbar, #128 berührt Panel-UI).
+
+---
+
+## Teil A — #132: Wizard vollständig auf Englisch + Label/Description-Politur
+
+**Branch:** `feature/132-wizard-english`
+
+### A1 — Übersetzung (Kernarbeit, `share/manifest.json`)
+Alle **nutzersichtbaren** Strings ins Englische. `note`/`$comment`/`$parser` sind interne
+Doku und bleiben unangetastet. Konkrete Felder (per `jq` verifiziert):
+- `presets[].label` (7 Stück, z. B. „Standard (volles Hosting …)" → „Standard (full hosting …)")
+- `pre_questions[].question` (Hostname/Panel-Port/Admin-Benutzername/Admin-E-Mail) — Hinweis: `func/wizard.sh` stellt die Pre-Fragen aktuell mit *eigenen* englischen Strings (`fn_ask_pre_questions`, Z. ~207). Einheitlich auf eine Quelle ziehen, damit Manifest und Wizard nicht divergieren.
+- `group_questions.db` / `.addons`
+- `components[].question` (WEB_SERVER, WEB_REPO_SOURCE, PHP_MODE, PHP_MULTIPHP_VERSIONS, DB_*, MAIL_BLOCK_PRESENT, MAIL_WEBMAILER)
+- `components[].description` (die in #134/#135 ergänzten DB/Addon-Beschreibungen sind noch deutsch; + implicit-Beschreibungen WEB_REPO_SOURCE/PHP_MODE/MAIL_BLOCK_PRESENT)
+- `tools.selection.question`
+- `DB_MARIADB_VERSION.options[].label_template` („{version} (OS-Version)" → „{version} (OS default)")
+
+### A2 — `func/wizard.sh` Reststrings
+- `fn_manifest_load`: deutsche ERROR-Texte („ist unvollstaendig oder hat eine falsche Struktur", „fehlt", „falscher Typ") → Englisch.
+- Fallback `"Auswahl: " + $g` (Z. ~527) → `"Select: "`.
+- Restliche `echo`/ERROR sind bereits englisch — kurz gegenchecken.
+
+### A3 — Label/Description für radio & version_select (Politur, wie zuvor zugesagt)
+Heute zeigt `_ask_radio` den rohen Enum-Wert doppelt (Tag = Item, z. B. `NGINX  NGINX`) —
+dasselbe Muster, das wir für die Gruppen-Checkboxen in #134 schon gelöst haben.
+- **Manifest-Schema:** `options` darf neben dem String-Array auch die Objektform
+  `{ "value", "label", "description" }` annehmen (version_select nutzt schon Objekt-Optionen).
+- **Wizard:** `_ask_radio` (und konsistent `_ask_version_select`) so erweitern, dass bei
+  Objekt-Optionen `label` als Tag und `description` als zweite Spalte gerendert wird, der
+  ausgewählte Tag aber weiterhin auf `value` zurückgemappt wird; reine String-Optionen
+  bleiben unverändert (hält den dynamischen `PHP_MULTIPHP_VERSIONS`-Pfad simpel).
+- **Betroffen:** WEB_SERVER (apache/nginx/both), MAIL_WEBMAILER (roundcube/snappymail/none),
+  und die `custom`-only impliziten (WEB_REPO_SOURCE, PHP_MODE, MAIL_BLOCK_PRESENT).
+
+**Kritische Dateien:** `share/manifest.json`, `func/wizard.sh` (`_ask_radio`, `_ask_version_select`, `fn_manifest_load`, `fn_ask_pre_questions`).
+
+---
+
+## Teil B — #133: Pfade nach /etc/hestia (PATHS.md §5a)
+
+**Branch:** `feature/133-paths-etc-hestia`
+**Mechanik:** identisch zum bewährten **Dir-Symlink-Bridge**-Muster aus #129
+(`seed_hestia_etc` in `func/helper.sh`): Ziel unter `/etc/hestia/<x>` anlegen, Inhalt
+einmalig migrieren, `$HESTIA/data/<x>` → Symlink. Dir-Symlinks überleben `sed -i`
+(nur File-Symlinks brechen) — und es gibt reichlich `sed -i`-Writer (s. u.).
+
+| Quelle | Ziel | Refs (Dateien) | sed -i Writer | Vorgehen |
+|---|---|---|---|---|
+| `data/firewall` | `/etc/hestia/firewall` | **21** | ja (h-change-firewall-rule, h-change-sys-port, h-move-firewall-rule, h-delete-firewall-rule, h-install-hestia) | Dir-Symlink-Bridge |
+| `data/ips` | `/etc/hestia/ips` | **14** | wahrsch. ja | Dir-Symlink-Bridge |
+| `hooks` | `/etc/hestia/hooks` | — | — | **schon dort**: `h-add-letsencrypt-domain` liest bereits `/etc/hestia/hooks/le_*.sh`. Nur sicherstellen, dass `seed_hestia_etc` das Verzeichnis anlegt; ggf. nur Doku. |
+
+- Bridge zentral in `seed_hestia_etc` ergänzen (analog conf-Block), damit beim Install
+  sofort korrekt; keine ~35 Einzel-Edits nötig.
+- **§5b verschoben** (wie im Issue vermerkt): `data/users` (Backup-Format!),
+  `data/queue` (Named Pipes — bleibt), `data/packages`, `data/templates` — höheres Risiko,
+  separater Durchgang.
+- `PATHS.md` §5a-Zeilen auf DONE setzen, `CODEMAP.json` nachziehen.
+
+**Kritische Dateien:** `func/helper.sh` (`seed_hestia_etc`), `PATHS.md`, `CODEMAP.json`. Keine der ~35 lesenden/schreibenden Commands wird angefasst (Symlink-Bridge).
+
+---
+
+## Teil C — #128: Legacy-Paket-Update-Subsystem entfernen
+
+**Branch:** `feature/128-remove-legacy-update`
+Vollständig inventarisiert. **De-Wiring zuerst, dann löschen** (keine toten Links/Crons).
+
+### C1 — De-Wiring (zuerst)
+- `web/templates/pages/list_services.php` (Z. 11): „Updates"-Button (Link `/list/updates/`) entfernen — sonst toter Menüpunkt.
+- `func/syshealth.sh`: Default-Autoupdate-Cron (Z. 547) entfernen; Config-Keys `RELEASE_BRANCH`/`UPGRADE_SEND_EMAIL`/`UPGRADE_SEND_EMAIL_LOG` aus `known_keys` (Z. 169) + Health-Repair (Z. 196–271).
+- `func/helper.sh` `seed_hestia_etc`: `_wcv`-Zeilen für dieselben drei Keys entfernen.
+- `bin/h-update-sys-hestia-git` / `func/upgrade.sh` (Z. ~322): `h-add-cron-hestia-autoupdate git`-Hook entfernen.
+- `web/locale/hst_scan_i18n.sh` (Z. 18–22): `h-list-sys-hestia-updates`-Scan entfernen.
+- **Verify-Gate:** vor dem Entfernen der `UPGRADE_*`-Keys prüfen, ob unser *echter* Update-Pfad (`bin/h-update-hestia`) sie liest. Falls ja → behalten/umwidmen statt löschen.
+
+### C2 — Löschen (nach De-Wiring)
+- 7 Commands: `h-update-sys-hestia`, `-all`, `-git`, `h-list-sys-hestia-updates`, `h-list-sys-hestia-autoupdate`, `h-add-cron-hestia-autoupdate`, `h-delete-cron-hestia-autoupdate`.
+- 7 zugehörige `v-*`-Symlinks (Policy: keine Orphans).
+- Panel: `web/list/updates/`, `web/templates/pages/list_updates.php`, `web/add/cron/autoupdate/`, `web/delete/cron/autoupdate/`, `web/update/hestia/`.
+
+### C3 — Panel-„Updates"-Seite: bewusst NICHT neu bauen (keine Priorität)
+Der Autor hat den Neubau auf `h-update-hestia` als „keine Priorität" markiert. → In #128
+nur entfernen/de-wiren; **separates Folge-Issue** anlegen: „Panel: Updates-Seite auf
+`h-update-hestia --check` neu bauen" (low prio).
+
+**Kritische Dateien:** `web/templates/pages/list_services.php`, `func/syshealth.sh`, `func/helper.sh`, `func/upgrade.sh`, `web/locale/hst_scan_i18n.sh`, die 7 `bin/h-*` + `bin/v-*`, die 5 `web/`-Verzeichnisse/Templates.
+
+---
+
+## Issue-Housekeeping (begleitend, nicht blockierend)
+- `#137`/`#138` mit den im Audit neu gefundenen Fundstellen erweitern: #137 += Shebangs in `bin/h-generate-password-hash`, `bin/h-quick-install-app` und Direktaufrufe in `bin/h-add-sys-filemanager:66,86`; #138 += `bin/h-change-sys-hestia-ssl:69` (`/run/hestia-nginx.pid` → Caddy-Reload).
+- Epics prüfen/schließen: `#112` (just→bash, gemerged) und `#103` (Wizard, gebaut) sind erledigt — Status aktualisieren/schließen.
+- `#57`/`#61` referenzieren noch `make/configure.mk` bzw. `make install` (vor-Bash-Migration) — Bodies auf den Bash-Installer aktualisieren.
+- Kosmetik (eigenes kleines Issue oder Beifang): `bind9`/`named`-Branch in `bin/h-restart-service`, `vsftpd`-Pfade in `func/upgrade.sh`.
+
+---
+
+## Verifikation
+- **#132:** `jq empty share/manifest.json`; `bash -n func/wizard.sh`; keine deutschen nutzersichtbaren Strings mehr (`jq`-Scan wie in der Recherche). Round-trip-Simulation von `_ask_radio` mit Objekt-Optionen (Label→value-Mapping) wie bei der Gruppen-Checkliste in #134; auf Debian-12-VM Wizard interaktiv durchklicken.
+- **#133:** `bash -n func/helper.sh`; Frischinstall auf VM → `/etc/hestia/{firewall,ips,hooks}` existieren, `$HESTIA/data/{firewall,ips}` sind Symlinks dorthin; `h-update-firewall` + eine `sed -i`-schreibende Rule-Operation (z. B. `h-change-sys-port`) laufen fehlerfrei und der Symlink bleibt erhalten.
+- **#128:** `grep -r` zeigt keine Referenzen mehr auf die 7 Commands/Endpunkte; Panel-„Server"-Seite lädt ohne toten Updates-Link; Frischinstall legt keinen Autoupdate-Cron mehr an; `hestia update`/`h-update-hestia` weiterhin funktionsfähig.
+- Je Issue eigener PR auf `dev` (CLAUDE.md-Workflow), Autor reviewt/merged.
