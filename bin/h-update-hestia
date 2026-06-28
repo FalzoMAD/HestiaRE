@@ -68,7 +68,7 @@ rm -f /tmp/hestiare-update.tar.gz
 systemctl stop hestia 2>/dev/null || true
 cp -r "/tmp/hestiare-$LATEST/." "$HESTIA/"
 rm -rf "/tmp/hestiare-$LATEST"
-# Migrations: refresh installed panel packages in place.
-"$HESTIA/bin/h-update-sys-hestia-all" 2>/dev/null || true
+# No apt-package migration step: HestiaRE ships no hestia-* apt packages, so the
+# legacy h-update-sys-hestia* commands (HestiaCP apt/git updaters) do not apply.
 systemctl start hestia 2>/dev/null || true
 echo "Update complete."

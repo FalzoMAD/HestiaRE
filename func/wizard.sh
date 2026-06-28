@@ -490,32 +490,89 @@ fn_fasttrack_value() {
 
 # ── Main component loop ─────────────────────────────────────
 
+# Render all checkbox components of a group as ONE multi-select screen, set each.
+fn_ask_group_checklist() {
+    local group="$1"
+    local -a cb_ids=()
+    readarray -t cb_ids < <(mq --arg g "$group" '.components | to_entries[] | select(.value.group==$g and .value.type=="checkbox") | .key')
+    local -a items=() shown=()
+    local id
+    for id in "${cb_ids[@]}"; do
+        local fnp; fnp=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].fixed_no_prompt[$p] // empty')
+        if [ -n "$fnp" ]; then COMP_VALUES["$id"]="$fnp"; continue; fi
+        local vis; vis=$(mq --arg id "$id" '.components[$id].visible_if // empty')
+        if [ -n "$vis" ] && [ "$(fn_eval_condition "$vis" COMP_VALUES)" = "false" ]; then COMP_VALUES["$id"]=""; continue; fi
+        local dv label state="OFF"
+        dv=$(fn_component_default "$id" "$INSTALL_PROFILE")
+        [ "$dv" = "true" ] && state="ON"
+        label=$(mq --arg id "$id" '.components[$id].label // .components[$id].question // ($id | sub("^(ADDON_|DB_)";""))')
+        items+=("$id" "$label" "$state"); shown+=("$id")
+    done
+    [ ${#shown[@]} -gt 0 ] || return 0
+    local question; question=$(mq --arg g "$group" '.group_questions[$g] // ("Auswahl: " + $g)')
+    local selected; selected=" $(fn_normalize_list "$(_wt_checklist "HestiaRE — $group" "$question" "${items[@]}")") "
+    for id in "${shown[@]}"; do
+        case "$selected" in *" $id "*) COMP_VALUES["$id"]="true" ;; *) COMP_VALUES["$id"]="false" ;; esac
+    done
+}
+
 fn_ask_components() {
     local -a ids=(); readarray -t ids < <(mq '.components | keys_unsorted[]')
+    local grouped; grouped=" $(mq '.grouped_prompts // [] | join(" ")') "
+    local -A group_done=()
     for id in "${ids[@]}"; do
-        local type; type=$(mq --arg id "$id" '.components[$id].type')
+        local type grp
+        type=$(mq --arg id "$id" '.components[$id].type')
+        grp=$(mq --arg id "$id" '.components[$id].group // ""')
+
+        # fixed: always installed, no question
         if [ "$type" = "fixed" ]; then COMP_VALUES["$id"]="true"; continue; fi
+
+        # derived: value mirrors another component (no prompt). Source precedes it.
+        if [ "$type" = "derived" ]; then
+            local src; src=$(mq --arg id "$id" '.components[$id].derived_from')
+            COMP_VALUES["$id"]="${COMP_VALUES[$src]:-false}"
+            continue
+        fi
+
+        # implicit: preset default; under custom asked as a real question
         if [ "$type" = "implicit" ]; then
             local idefault; idefault=$(fn_component_default "$id" "$INSTALL_PROFILE")
             if [ "$INSTALL_PROFILE" = "custom" ] && [ -z "$idefault" ] \
                && [ "$(mq --arg id "$id" '.components[$id] | has("options") | tostring')" = "true" ]; then
-                local iq; iq=$(mq --arg id "$id" '.components[$id].question // $id')
-                _ask_radio "$id" "$iq" ""
+                _ask_radio "$id" "$(mq --arg id "$id" '.components[$id].question // $id')" ""
             else
                 COMP_VALUES["$id"]="$idefault"
             fi
             continue
         fi
+
+        # Fasttrack: derive value, no prompts (grouped screens are interactive-only)
         if [ -n "$FASTTRACK_PRESET" ]; then fn_fasttrack_value "$id" "$type"; continue; fi
+
+        # Grouped checkbox: render the whole group as one multi-select screen, once.
+        if [ "$type" = "checkbox" ] && [ -n "$grp" ] && [[ "$grouped" == *" $grp "* ]]; then
+            if [ -z "${group_done[$grp]:-}" ]; then
+                fn_ask_group_checklist "$grp"
+                group_done["$grp"]=1
+            fi
+            local fu; fu=$(mq --arg id "$id" '.components[$id].opens_followup // empty')
+            if [ -n "$fu" ] && [ "${COMP_VALUES[$id]:-}" = "true" ]; then _ask_tools_selection; fi
+            continue
+        fi
+
+        # fixed_no_prompt for this preset
         local fixed
         fixed=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].fixed_no_prompt[$p] // empty')
         if [ -n "$fixed" ]; then COMP_VALUES["$id"]="$fixed"; continue; fi
-        local visible_if
-        visible_if=$(mq --arg id "$id" '.components[$id].visible_if // empty')
-        if [ -n "$visible_if" ] && [ "$(fn_eval_condition "$visible_if" COMP_VALUES)" = "false" ]; then COMP_VALUES["$id"]=""; continue; fi
-        local dep_on
-        dep_on=$(mq --arg id "$id" '.components[$id].dependent_on // empty')
-        if [ -n "$dep_on" ] && [ "$(fn_eval_condition "$dep_on" COMP_VALUES)" = "false" ]; then COMP_VALUES["$id"]=""; continue; fi
+
+        # visible_if / dependent_on
+        local cond
+        cond=$(mq --arg id "$id" '.components[$id].visible_if // empty')
+        if [ -n "$cond" ] && [ "$(fn_eval_condition "$cond" COMP_VALUES)" = "false" ]; then COMP_VALUES["$id"]=""; continue; fi
+        cond=$(mq --arg id "$id" '.components[$id].dependent_on // empty')
+        if [ -n "$cond" ] && [ "$(fn_eval_condition "$cond" COMP_VALUES)" = "false" ]; then COMP_VALUES["$id"]=""; continue; fi
+
         local question default_val
         question=$(mq --arg id "$id" '.components[$id].question // $id')
         default_val=$(fn_component_default "$id" "$INSTALL_PROFILE")

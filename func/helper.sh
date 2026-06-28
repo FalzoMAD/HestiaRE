@@ -106,10 +106,14 @@ seed_hestia_etc() {
 	version=$(cat "$hestia_root/VERSION" 2>/dev/null || echo "dev")
 
 	mkdir -p /etc/hestia
-	if [ ! -e /etc/hestia/hestia.env ]; then
-		printf '# Do not edit — use /etc/hestia/local.conf instead\n\nexport HESTIA='"'"'%s'"'"'\n\n[[ -f /etc/hestia/local.conf ]] && source /etc/hestia/local.conf\n' \
-			"$hestia_root" > /etc/hestia/hestia.env
-	fi
+	# Always (re)generate hestia.env. Use an `if`-form for the local.conf include
+	# so the file's LAST statement returns 0 — a trailing `[[ -f x ]] && source x`
+	# returns 1 when x is absent, which aborts any caller running under `set -e`.
+	printf '%s\n' \
+		"# Do not edit — use /etc/hestia/local.conf instead" \
+		"export HESTIA='$hestia_root'" \
+		"if [ -f /etc/hestia/local.conf ]; then . /etc/hestia/local.conf; fi" \
+		> /etc/hestia/hestia.env
 	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$PATH:%s/bin\nexport PATH\n' \
 		"$hestia_root" "$hestia_root" > /etc/profile.d/hestia.sh
 	chmod 755 /etc/profile.d/hestia.sh

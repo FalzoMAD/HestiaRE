@@ -49,6 +49,11 @@
   ],
 
   "groups": ["web", "db", "mail", "panel", "addons", "tools"],
+  "grouped_prompts": ["db", "addons"],
+  "group_questions": {
+    "db": "Welche Datenbank-Server installieren? (Mehrfachauswahl)",
+    "addons": "Welche Addons installieren? (Mehrfachauswahl)"
+  },
 
   "components": {
 
@@ -127,10 +132,44 @@
       "note": "install.sh muss das Sury-Repo vor dieser Frage als APT-Quelle eintragen (inkl. apt-get update), um die Optionsliste per apt-cache madison o.ae. zu ermitteln. Keine Verfuegbarkeitsgarantie laut Sury-Maintainer - bei jedem Release-Refresh pruefen."
     },
 
+    "DB_MARIADB": {
+      "group": "db",
+      "type": "checkbox",
+      "label": "MariaDB",
+      "question": "MariaDB installieren?",
+      "default": {
+        "standard":  true,
+        "compact":   true,
+        "latest":    true,
+        "singlephp": true,
+        "nomail":    true,
+        "mailonly":  true,
+        "custom":    null
+      },
+      "note": "DB-Server-Engine. Wird mit DB_POSTGRESQL + DB_REDIS als gemeinsamer Mehrfachauswahl-Screen angezeigt (Gruppe 'db' in grouped_prompts). phpMyAdmin folgt implizit (DB_PHPMYADMIN, type derived)."
+    },
+
+    "DB_POSTGRESQL": {
+      "group": "db",
+      "type": "checkbox",
+      "label": "PostgreSQL",
+      "question": "PostgreSQL installieren?",
+      "default": false
+    },
+
+    "DB_REDIS": {
+      "group": "db",
+      "type": "checkbox",
+      "label": "Redis",
+      "question": "Redis installieren?",
+      "default": false
+    },
+
     "DB_MARIADB_VERSION": {
       "group": "db",
       "type": "version_select",
       "question": "Welche MariaDB-Version installieren?",
+      "visible_if": "DB_MARIADB == true",
       "options": [
         { "value": "12.3",   "source": "mariadb_repo" },
         { "value": "11.8",   "source": "mariadb_repo" },
@@ -146,52 +185,21 @@
         "mailonly":  "__os__",
         "custom":    null
       },
-      "note": "11.4 gewaehlt wegen Magento 2.4.9 Kompatibilitaet (Adobe-freigegeben). 10.6 und aelter bewusst ausgeschlossen: EOL 2026-07-06 und von aktueller Magento-Generation nicht mehr unterstuetzt. __os__ wird zur Laufzeit in install.sh ermittelt (z.B. via apt-cache policy/madison mariadb-server), bevor die Frage angezeigt wird."
-    },
-
-    "DB_POSTGRESQL": {
-      "group": "db",
-      "type": "checkbox",
-      "question": "PostgreSQL installieren?",
-      "default": false
+      "note": "Nur sichtbar/abgefragt, wenn MariaDB gewaehlt wurde (visible_if DB_MARIADB == true). 11.4 wegen Magento 2.4.9 (Adobe-freigegeben); 10.6 und aelter ausgeschlossen (EOL 2026-07-06). __os__ wird zur Laufzeit ermittelt."
     },
 
     "DB_PHPMYADMIN": {
       "group": "db",
-      "type": "checkbox",
-      "dependent_on": "DB_MARIADB_VERSION != null",
-      "default": {
-        "standard":  true,
-        "compact":   true,
-        "latest":    true,
-        "singlephp": true,
-        "nomail":    true,
-        "mailonly":  false,
-        "custom":    null
-      },
-      "note": "Nur sinnvoll/sichtbar, falls MariaDB ueberhaupt aktiv ist. Bei allen Hosting-Presets vorbelegt, bei mailonly nicht (reiner Mail-Server)."
+      "type": "derived",
+      "derived_from": "DB_MARIADB",
+      "note": "Implizit: wird ohne eigene Frage mitinstalliert, sobald MariaDB gewaehlt ist (Wert = DB_MARIADB)."
     },
 
     "DB_PGADMIN": {
       "group": "db",
-      "type": "checkbox",
-      "dependent_on": "DB_POSTGRESQL == true",
-      "default": {
-        "standard":  false,
-        "compact":   false,
-        "latest":    false,
-        "singlephp": false,
-        "nomail":    false,
-        "mailonly":  false,
-        "custom":    null
-      },
-      "note": "Nur sinnvoll/sichtbar, falls PostgreSQL aktiv ist. PostgreSQL ist ueberall standardmaessig aus, daher nirgends vorbelegt."
-    },
-
-    "DB_REDIS": {
-      "group": "db",
-      "type": "checkbox",
-      "default": false
+      "type": "derived",
+      "derived_from": "DB_POSTGRESQL",
+      "note": "Implizit: wird ohne eigene Frage mitinstalliert, sobald PostgreSQL gewaehlt ist (Wert = DB_POSTGRESQL)."
     },
 
     "MAIL_BLOCK_PRESENT": {
