@@ -680,9 +680,8 @@ configure_hestia() {
 	} > /var/spool/cron/crontabs/hestiaweb
 	chmod 600 /var/spool/cron/crontabs/hestiaweb
 	chown hestiaweb:hestiaweb /var/spool/cron/crontabs/hestiaweb
-	# NOTE: no h-add-cron-hestia-autoupdate — that wires the HestiaCP package
-	# auto-updater (h-update-sys-hestia*), which does not apply to HestiaRE's
-	# tarball release model. Legacy package-update subsystem removal -> #128.
+	# No package auto-update cron: HestiaRE updates via the release tarball
+	# (h-update-hestia), not an apt/git package auto-updater (#128).
 	"$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" > /dev/null 2>&1 || true
 	"$BIN/h-update-sys-defaults" > /dev/null 2>&1 || true
 	[ -f /root/.bashrc ] && grep -q 'hestia.sh' /root/.bashrc \
