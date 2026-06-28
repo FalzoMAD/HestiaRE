@@ -181,5 +181,7 @@ fi
 #                       Hestia                             #
 #----------------------------------------------------------#
 
+set_install_component MAIL_WEBMAILER ROUNDCUBE
+
 $BIN/h-log-action "system" "Info" "Plugins" "Roundcube installed (OS package)."
 log_event "$OK" "$ARGUMENTS"

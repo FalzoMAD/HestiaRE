@@ -124,5 +124,7 @@ fi
 #                       Hestia                             #
 #----------------------------------------------------------#
 
+set_install_component DB_PHPMYADMIN true
+
 $BIN/h-log-action "system" "Info" "Plugins" "phpMyAdmin installed (OS package)."
 log_event "$OK" "$ARGUMENTS"

@@ -135,5 +135,7 @@ fi
 #                       Logging                            #
 #----------------------------------------------------------#
 
+set_install_component ADDON_FILEMANAGER true
+
 $BIN/h-log-action "system" "Info" "Plugins" "File Manager enabled (Version: $fm_v)."
 log_event "$OK" "$ARGUMENTS"
