@@ -3,8 +3,8 @@
 # options: [--check]
 #
 # Updates the whole HestiaRE distribution from a GitHub/Gitea release tarball.
-# (Distinct from h-update-sys-hestia-all, which refreshes installed apt packages
-# in place — this command calls that afterwards as its migration step.)
+# This is HestiaRE's only updater — there is no apt/git package-update path
+# (HestiaRE ships no hestia-* apt packages).
 # With --check it only reports installed vs available and exits.
 
 set -eo pipefail
@@ -68,7 +68,6 @@ rm -f /tmp/hestiare-update.tar.gz
 systemctl stop hestia 2>/dev/null || true
 cp -r "/tmp/hestiare-$LATEST/." "$HESTIA/"
 rm -rf "/tmp/hestiare-$LATEST"
-# No apt-package migration step: HestiaRE ships no hestia-* apt packages, so the
-# legacy h-update-sys-hestia* commands (HestiaCP apt/git updaters) do not apply.
+# No apt-package migration step: HestiaRE ships no hestia-* apt packages.
 systemctl start hestia 2>/dev/null || true
 echo "Update complete."

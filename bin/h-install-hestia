@@ -23,6 +23,12 @@ _on_error() {
 	echo "" >&2
 	echo "ERROR: h-install-hestia aborted (exit ${rc}, line ${line})." >&2
 	[ -f "$LOG" ] && { echo "       Last lines of ${LOG}:" >&2; tail -n 15 "$LOG" 2>/dev/null | sed 's/^/       | /' >&2 || true; }
+	echo "" >&2
+	echo "       Recovery: fix the cause shown above, then re-run the installer." >&2
+	echo "       Completed stages are skipped (see /etc/hestia/.done.*); only the" >&2
+	echo "       failed and later stages run again:" >&2
+	echo "         h-install-hestia" >&2
+	echo "       Details + how to force a stage to re-run: TROUBLESHOOTING.md" >&2
 }
 trap '_on_error "$?" "$LINENO"' ERR
 
@@ -680,9 +686,8 @@ configure_hestia() {
 	} > /var/spool/cron/crontabs/hestiaweb
 	chmod 600 /var/spool/cron/crontabs/hestiaweb
 	chown hestiaweb:hestiaweb /var/spool/cron/crontabs/hestiaweb
-	# NOTE: no h-add-cron-hestia-autoupdate — that wires the HestiaCP package
-	# auto-updater (h-update-sys-hestia*), which does not apply to HestiaRE's
-	# tarball release model. Legacy package-update subsystem removal -> #128.
+	# No package auto-update cron: HestiaRE updates via the release tarball
+	# (h-update-hestia), not an apt/git package auto-updater (#128).
 	"$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" > /dev/null 2>&1 || true
 	"$BIN/h-update-sys-defaults" > /dev/null 2>&1 || true
 	[ -f /root/.bashrc ] && grep -q 'hestia.sh' /root/.bashrc \
@@ -747,6 +752,19 @@ finalize_install() {
 	else
 		HESTIA_PASS="(not found — use h-change-user-password $HESTIA_ADMIN <newpass>)"
 	fi
+
+	# Stamp install.conf as the live system-state file (HestiaRE #103). The
+	# COMPONENT_* keys written by the wizard already describe what was installed;
+	# add install metadata so install.conf is a complete system description that
+	# h-add-sys-*/h-remove-sys-* keep current via set_install_component.
+	local _ver; _ver=$(cat "$HESTIA/VERSION" 2>/dev/null || echo "dev")
+	grep -q '^INSTALL_DATE=' "$INSTALL_CONF" 2>/dev/null || echo "INSTALL_DATE=\"$(date +%F)\"" >> "$INSTALL_CONF"
+	if grep -q '^INSTALL_VERSION=' "$INSTALL_CONF" 2>/dev/null; then
+		sed -i "s|^INSTALL_VERSION=.*|INSTALL_VERSION=\"${_ver}\"|" "$INSTALL_CONF"
+	else
+		echo "INSTALL_VERSION=\"${_ver}\"" >> "$INSTALL_CONF"
+	fi
+
 	echo "[ * ] Starting Hestia service..."
 	update-rc.d hestia defaults > /dev/null 2>&1 || true
 	systemctl start hestia || true

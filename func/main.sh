@@ -54,6 +54,27 @@ HESTIA_THEMES_CUSTOM="$HESTIA/web/css/themes/custom"
 SCRIPT="$(basename $0)"
 CHECK_RESULT_CALLBACK=""
 
+# install.conf live component state (HestiaRE).
+# /etc/hestia/install.conf is written by the wizard as the install recipe and is
+# the source of truth for which components are currently installed. h-add-sys-*/
+# h-remove-sys-* call this after a successful (un)install so the file reflects the
+# live system without parsing service state. Idempotent: updates the key in place
+# or appends it. <id> is the manifest component id (e.g. DB_PHPMYADMIN), stored as
+# COMPONENT_<id>="<value>". No-op (and success) when install.conf is absent.
+set_install_component() {
+	local id="$1" value="$2"
+	local conf="/etc/hestia/install.conf"
+	[ -n "$id" ] || return 0
+	[ -f "$conf" ] || return 0
+	local key="COMPONENT_${id}"
+	if grep -q "^${key}=" "$conf" 2> /dev/null; then
+		sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$conf"
+	else
+		echo "${key}=\"${value}\"" >> "$conf"
+	fi
+	return 0
+}
+
 # Return codes
 OK=0
 E_ARGS=1
