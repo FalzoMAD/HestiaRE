@@ -38,6 +38,10 @@ for _f in "$INSTALL_CONF" /etc/hestia/hestia.env /usr/local/hestia/conf/hestia.c
 done
 
 # ── Sources: env -> core lib -> helper lib -> recipe ────────────────────────
+# Sourced with errexit OFF: these libs are written to be sourced by ordinary h-*
+# commands (which do not run under set -e), so a benign non-zero last statement
+# (e.g. hestia.env's local.conf include) must not abort the installer.
+set +e
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env                 # sets HESTIA
 # shellcheck source=/usr/local/hestia/func/main.sh
@@ -46,6 +50,7 @@ source "$HESTIA/func/main.sh"                  # source_conf hestia.conf, BIN, d
 source "$HESTIA/func/helper.sh"                # hestia_apt, load_os_profile, seed_hestia_etc
 # shellcheck source=/etc/hestia/install.conf
 source "$INSTALL_CONF"                          # HESTIA_*, INSTALL_OS/PROFILE, COMPONENT_*, TOOLS_SELECTION, HESTIA_MPASS
+set -e
 
 [ -n "${HESTIA_HOSTNAME:-}" ] && [ -n "${HESTIA_ADMIN:-}" ] && [ -n "${HESTIA_EMAIL:-}" ] || {
 	echo "ERROR: install.conf is missing HESTIA_HOSTNAME / HESTIA_ADMIN / HESTIA_EMAIL." >&2
@@ -296,46 +301,57 @@ install_web() {
 # ════════════════════════════════════════════════════════════════════════════
 install_db() {
 	[ -f "$CONF_DIR/.done.db" ] && { echo "[ skip ] db already configured"; return 0; }
-	echo "[ * ] Installing database packages (MariaDB ${COMPONENT_DB_MARIADB_VERSION:-os})..."
-	hestia_apt -y install mariadb-client mariadb-common mariadb-server
-	echo "[ * ] Configuring MariaDB..."
-	local MEM MYCNF
-	MEM=$(awk '/MemTotal/{print $2}' /proc/meminfo)
-	if   [ "$MEM" -gt 3900000 ]; then MYCNF="my-large.cnf"
-	elif [ "$MEM" -gt 1200000 ]; then MYCNF="my-medium.cnf"
-	else                              MYCNF="my-small.cnf"
-	fi
-	rm -f /etc/mysql/my.cnf
-	cp -f "$HESTIA_INSTALL_DIR/mysql/$MYCNF" /etc/mysql/my.cnf
-	sed -i 's|/usr/share/mysql|/usr/share/mariadb|g' /etc/mysql/my.cnf
-	mariadb-install-db >> "$LOG" 2>&1
-	update-rc.d mariadb defaults > /dev/null 2>&1
-	systemctl -q enable mariadb
-	systemctl start mariadb
-	echo "[ * ] Securing MariaDB..."
-	local MPASS
-	MPASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16 || true)
-	printf '[client]\npassword='"'"'%s'"'"'\n' "$MPASS" > /root/.my.cnf
-	chmod 600 /root/.my.cnf
-	mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$MPASS'; FLUSH PRIVILEGES;"
-	mariadb -e "UPDATE mysql.global_priv SET priv=json_set(priv, '\$.password_last_changed', UNIX_TIMESTAMP(), '\$.plugin', 'mysql_native_password', '\$.authentication_string', 'invalid', '\$.auth_or', json_array(json_object(), json_object('plugin', 'unix_socket'))) WHERE User='root';"
-	mariadb -e "DELETE FROM mysql.global_priv WHERE User='';"
-	mariadb -e "DROP DATABASE IF EXISTS test;"
-	mariadb -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%';"
-	mariadb -e "FLUSH PRIVILEGES;"
-	grep -q 'HESTIA_MPASS' "$INSTALL_CONF" || echo "HESTIA_MPASS=\"$MPASS\"" >> "$INSTALL_CONF"
-	HESTIA_MPASS="$MPASS"
 
-	if is_on "${COMPONENT_DB_PHPMYADMIN:-}"; then
-		wcv "DB_PMA_ALIAS" "phpmyadmin"
-		echo "[ * ] Installing phpMyAdmin..."
-		"$BIN/h-add-sys-phpmyadmin" >> "$LOG"
+	if is_on "${COMPONENT_DB_MARIADB:-}"; then
+		echo "[ * ] Installing database packages (MariaDB ${COMPONENT_DB_MARIADB_VERSION:-os})..."
+		hestia_apt -y install mariadb-client mariadb-common mariadb-server
+		echo "[ * ] Configuring MariaDB..."
+		local MEM MYCNF
+		MEM=$(awk '/MemTotal/{print $2}' /proc/meminfo)
+		if   [ "$MEM" -gt 3900000 ]; then MYCNF="my-large.cnf"
+		elif [ "$MEM" -gt 1200000 ]; then MYCNF="my-medium.cnf"
+		else                              MYCNF="my-small.cnf"
+		fi
+		rm -f /etc/mysql/my.cnf
+		cp -f "$HESTIA_INSTALL_DIR/mysql/$MYCNF" /etc/mysql/my.cnf
+		sed -i 's|/usr/share/mysql|/usr/share/mariadb|g' /etc/mysql/my.cnf
+		mariadb-install-db >> "$LOG" 2>&1
+		update-rc.d mariadb defaults > /dev/null 2>&1
+		systemctl -q enable mariadb
+		systemctl start mariadb
+		echo "[ * ] Securing MariaDB..."
+		local MPASS
+		MPASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16 || true)
+		printf '[client]\npassword='"'"'%s'"'"'\n' "$MPASS" > /root/.my.cnf
+		chmod 600 /root/.my.cnf
+		mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$MPASS'; FLUSH PRIVILEGES;"
+		mariadb -e "UPDATE mysql.global_priv SET priv=json_set(priv, '\$.password_last_changed', UNIX_TIMESTAMP(), '\$.plugin', 'mysql_native_password', '\$.authentication_string', 'invalid', '\$.auth_or', json_array(json_object(), json_object('plugin', 'unix_socket'))) WHERE User='root';"
+		mariadb -e "DELETE FROM mysql.global_priv WHERE User='';"
+		mariadb -e "DROP DATABASE IF EXISTS test;"
+		mariadb -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%';"
+		mariadb -e "FLUSH PRIVILEGES;"
+		grep -q 'HESTIA_MPASS' "$INSTALL_CONF" || echo "HESTIA_MPASS=\"$MPASS\"" >> "$INSTALL_CONF"
+		HESTIA_MPASS="$MPASS"
+
+		# phpMyAdmin is installed implicitly with MariaDB (DB_PHPMYADMIN derived).
+		if is_on "${COMPONENT_DB_PHPMYADMIN:-}"; then
+			wcv "DB_PMA_ALIAS" "phpmyadmin"
+			echo "[ * ] Installing phpMyAdmin..."
+			"$BIN/h-add-sys-phpmyadmin" >> "$LOG"
+		fi
+	else
+		echo "[ * ] MariaDB not selected — skipping"
 	fi
 
 	# Optional engines — minimal install; full integration tracked in #121.
 	if is_on "${COMPONENT_DB_POSTGRESQL:-}"; then
 		echo "[ * ] Installing PostgreSQL (minimal — see #121)..."
 		hestia_apt -y install postgresql postgresql-contrib || true
+		# pgAdmin implicit with PostgreSQL (DB_PGADMIN derived).
+		if is_on "${COMPONENT_DB_PGADMIN:-}"; then
+			echo "[ * ] Installing pgAdmin (minimal — see #121)..."
+			hestia_apt -y install pgadmin4-web || true
+		fi
 	fi
 	if is_on "${COMPONENT_DB_REDIS:-}"; then
 		echo "[ * ] Installing Redis (minimal — see #121)..."
@@ -666,7 +682,6 @@ configure_hestia() {
 		echo "20 00 * * * sudo $HESTIA/bin/h-update-user-stats"
 		echo "*/5 * * * * sudo $HESTIA/bin/h-update-sys-rrd"
 		echo "$MIN $HOUR * * * sudo $HESTIA/bin/h-update-letsencrypt-ssl"
-		echo "41 4 * * * sudo $HESTIA/bin/h-update-sys-hestia-all"
 	} > /var/spool/cron/crontabs/hestiaweb
 	chmod 600 /var/spool/cron/crontabs/hestiaweb
 	chown hestiaweb:hestiaweb /var/spool/cron/crontabs/hestiaweb
