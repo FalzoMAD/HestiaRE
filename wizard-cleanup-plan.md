@@ -13,9 +13,14 @@ Entscheidung des Autors (abgestimmt): als nächstes der **Wizard/Cleanup-Cluster
 setzt das um. **Hinweis bleibt:** `#137` + `#138` sind die eigentlichen Blocker zu einem
 benutzbaren Panel und sollten der Meilenstein *unmittelbar nach* diesem Cluster sein.
 
-Drei weitgehend unabhängige Issues → **drei getrennte Branches/PRs** auf `dev`
-(Autor reviewt/merged je einzeln). Empfohlene Reihenfolge: **#132 → #133 → #128**
-(aufsteigendes Risiko; #132 sofort im nächsten Test sichtbar, #128 berührt Panel-UI).
+Erweitert (Neubewertung): #133 wird ein **echter Move** (Ziel: `data/` mittelfristig
+ganz entfernen), und es kommt **Teil D** hinzu — die foundational Issues `#103` und `#61`
+schon im Cleanup auflösen, *bevor* die Per-Komponente-Modularisierung (#120–#123) startet.
+
+Getrennte Branches/PRs auf `dev` (Autor reviewt/merged je einzeln). Empfohlene
+Reihenfolge: **#132 → #103/#61 (Foundation, Teil D) → #133 → #128** — die Foundation
+(install.conf-Live-State + Recovery-Entscheidung) vor dem größeren #133-Refactor und der
+späteren Modularisierung; #128 zuletzt (berührt Panel-UI). #132 zuerst (sofort im Test sichtbar).
 
 ---
 
@@ -55,28 +60,45 @@ dasselbe Muster, das wir für die Gruppen-Checkboxen in #134 schon gelöst haben
 
 ---
 
-## Teil B — #133: Pfade nach /etc/hestia (PATHS.md §5a)
+## Teil B — #133: data/firewall + data/ips nach /etc/hestia (ECHTER Move, KEIN Symlink)
 
 **Branch:** `feature/133-paths-etc-hestia`
-**Mechanik:** identisch zum bewährten **Dir-Symlink-Bridge**-Muster aus #129
-(`seed_hestia_etc` in `func/helper.sh`): Ziel unter `/etc/hestia/<x>` anlegen, Inhalt
-einmalig migrieren, `$HESTIA/data/<x>` → Symlink. Dir-Symlinks überleben `sed -i`
-(nur File-Symlinks brechen) — und es gibt reichlich `sed -i`-Writer (s. u.).
+**Neubewertung (Autor):** Mittelfristiges Ziel ist, das `data/`-Verzeichnis **ganz zu
+entfernen**. Auch wenn es faktisch bleibt, bis die übrigen Inhalte entschieden/verschoben
+sind, ist hier ein **echter Fix** gewünscht (Referenzen umstellen + Inhalt verschieben) —
+bewusst statt der Symlink-Bridge, auch wenn es ~35 Dateien betrifft. Dies ist **Schritt 1
+zur Auflösung von `data/`**.
 
-| Quelle | Ziel | Refs (Dateien) | sed -i Writer | Vorgehen |
-|---|---|---|---|---|
-| `data/firewall` | `/etc/hestia/firewall` | **21** | ja (h-change-firewall-rule, h-change-sys-port, h-move-firewall-rule, h-delete-firewall-rule, h-install-hestia) | Dir-Symlink-Bridge |
-| `data/ips` | `/etc/hestia/ips` | **14** | wahrsch. ja | Dir-Symlink-Bridge |
-| `hooks` | `/etc/hestia/hooks` | — | — | **schon dort**: `h-add-letsencrypt-domain` liest bereits `/etc/hestia/hooks/le_*.sh`. Nur sicherstellen, dass `seed_hestia_etc` das Verzeichnis anlegt; ggf. nur Doku. |
+**Umfang (gemessen, nicht „nur 35 sed"):**
+- `data/firewall`: **88 Vorkommen** — 77× `$HESTIA/data/firewall` (einfacher Absolut-Rewrite),
+  **14× relativ `../../../data/firewall/ipset`** (`*_hstobject`-Objektreferenz) in 10 Firewall-
+  Commands (h-add/-delete/-change/-move/-list/-suspend/-unsuspend-firewall-rule,
+  h-add/-delete/-update-firewall-ipset), + 1× in `web/add/web/index.php`.
+- `data/ips`: **64 Vorkommen**, alle `$HESTIA/data/ips`.
 
-- Bridge zentral in `seed_hestia_etc` ergänzen (analog conf-Block), damit beim Install
-  sofort korrekt; keine ~35 Einzel-Edits nötig.
-- **§5b verschoben** (wie im Issue vermerkt): `data/users` (Backup-Format!),
-  `data/queue` (Named Pipes — bleibt), `data/packages`, `data/templates` — höheres Risiko,
-  separater Durchgang.
-- `PATHS.md` §5a-Zeilen auf DONE setzen, `CODEMAP.json` nachziehen.
+**Vorgehen:**
+- Zielpfade als Literale `/etc/hestia/firewall` und `/etc/hestia/ips` (konsistent mit dem
+  bereits literalen `/etc/hestia/hooks`). Optional Komfort-Var `HESTIA_CONF="/etc/hestia"`
+  in `func/main.sh`; web/PHP + relative Refs brauchen aber ohnehin Literale.
+- Die 77 + 64 `$HESTIA/data/...`-Vorkommen mechanisch umstellen (sed je Datei + Review).
+- **Sorgfalts-Teil (eigentlicher Refactor, kein sed):** die 14 relativen
+  `*_hstobject='../../../data/firewall/ipset'` — zuerst verstehen, wie `*_hstobject`
+  aufgelöst/konsumiert wird (HestiaCP-Objekt-Mechanik, relativ zu welchem cwd/Basis), dann
+  korrekt auf absolut umstellen. Hier liegt das Risiko.
+- `web/add/web/index.php`: die 1 Referenz mitziehen.
+- `seed_hestia_etc` (`func/helper.sh`): Zielverzeichnisse unter `/etc/hestia` anlegen; bei
+  Upgrade vorhandenen Inhalt **einmalig `mv`**, **kein** Symlink zurücklassen.
+- `data/firewall` + `data/ips` aus dem Laufzeit-/Asset-Baum entfernen; `PATHS.md` §5a auf
+  DONE, `CODEMAP.json` nachziehen.
+- **hooks**: liegt faktisch schon unter `/etc/hestia/hooks` (`h-add-letsencrypt-domain`) — nur
+  sicherstellen, dass `seed_hestia_etc` das Verzeichnis anlegt.
+- **§5b** bleibt eigener Durchgang (`data/users` [Backup-Format!], `data/queue` [Named Pipes],
+  `data/packages`, `data/templates`) — aber das `data/`-Eliminierungsziel ist jetzt das
+  explizite Leitmotiv.
 
-**Kritische Dateien:** `func/helper.sh` (`seed_hestia_etc`), `PATHS.md`, `CODEMAP.json`. Keine der ~35 lesenden/schreibenden Commands wird angefasst (Symlink-Bridge).
+**Kritische Dateien:** ~10 `bin/h-*firewall*` (relative `*_hstobject`-Refs — Risiko),
+weitere ~25 `bin/`+`func/` mit `$HESTIA/data/{firewall,ips}`, `web/add/web/index.php`,
+`func/helper.sh` (`seed_hestia_etc`-Migration), `PATHS.md`, `CODEMAP.json`.
 
 ---
 
@@ -107,16 +129,49 @@ nur entfernen/de-wiren; **separates Folge-Issue** anlegen: „Panel: Updates-Sei
 
 ---
 
+## Teil D — Foundational Issues im Cleanup auflösen (#103, #61)
+
+Beide lassen sich **jetzt** abschließen — bevor die Per-Komponente-Modularisierung
+(#120–#123) beginnt — statt sie als Altlast mitzuschleppen.
+
+### #103 — Interactive Wizard + install.conf als System-State
+- **Wizard: erledigt.** `func/wizard.sh` (manifest-getrieben) übertrifft die Issue-Skizze
+  deutlich. Veralteter Bezug „Issue #102 (make→just) zuerst" entfällt (wir sind bei Bash, #112).
+- **install.conf als Live-State** (von `h-add-*`/`h-remove-*` gepflegt): noch offen und
+  konzeptionell Teil der Modularisierung. **Im Cleanup machbar = die Foundation:** ein
+  gemeinsamer Mechanismus, der einen `COMPONENT_*`-Key in `/etc/hestia/install.conf` setzt
+  (kleiner Helper, analog zum vorhandenen `h-change-sys-config-value`), und `h-install-hestia`
+  schreibt den finalen Komponentenstand. Danach rufen #120–#123 nur noch diesen Helper.
+- **Empfehlung:** Foundation jetzt bauen → **#103 schließen**; die per-Komponente-Verdrahtung
+  bleibt Akzeptanzkriterium in #120–#123 (dort bereits als „install.conf-COMPONENT_*
+  aktualisieren" referenziert). Leichtere Alternative: nur den Wizard-Teil als erledigt
+  schließen und den Live-State komplett an #120–#123 delegieren.
+
+### #61 — Fehlerbehandlung / Recovery-Strategie
+- Der Bash-Installer liefert den **technischen Teil bereits**: `set -eo pipefail`, ERR-Trap mit
+  Log-Auszug (`_on_error`, `h-install-hestia:21–27`) und `.done.*`-Sentinels pro Stage →
+  ein erneuter Lauf **resumed** automatisch (fertige Stages werden übersprungen).
+- **Entscheidung (genau das fordert das Issue): Option 3** — sauberer Stop + verständliche
+  Fehlermeldung + dokumentierte manuelle Recovery; **kein** automatischer Paket-/Service-/DB-
+  Rollback (für ein internes Tool mit ~30 Kunden der richtige Zuschnitt). Resume ist über die
+  bestehenden Sentinels schon gegeben.
+- **Deliverable:** kurze `TROUBLESHOOTING.md` („Stage X fehlgeschlagen → `/var/log/hestia/install.log`
+  prüfen, Ursache beheben, `h-install-hestia` erneut ausführen — überspringt fertige Stages");
+  optional dünnes `hestia install --resume`/Status als Komfort. Danach **#61 schließen**.
+  Veraltete `make install`-Bezüge im Body entfallen.
+
+---
+
 ## Issue-Housekeeping (begleitend, nicht blockierend)
 - `#137`/`#138` mit den im Audit neu gefundenen Fundstellen erweitern: #137 += Shebangs in `bin/h-generate-password-hash`, `bin/h-quick-install-app` und Direktaufrufe in `bin/h-add-sys-filemanager:66,86`; #138 += `bin/h-change-sys-hestia-ssl:69` (`/run/hestia-nginx.pid` → Caddy-Reload).
-- Epics prüfen/schließen: `#112` (just→bash, gemerged) und `#103` (Wizard, gebaut) sind erledigt — Status aktualisieren/schließen.
-- `#57`/`#61` referenzieren noch `make/configure.mk` bzw. `make install` (vor-Bash-Migration) — Bodies auf den Bash-Installer aktualisieren.
+- Epic `#112` (just→bash, gemerged) erledigt — Status aktualisieren/schließen.
+- `#57` referenziert noch `make/configure.mk` (vor-Bash-Migration) — Body auf den Bash-Installer aktualisieren (analog dem #61-Cleanup in Teil D).
 - Kosmetik (eigenes kleines Issue oder Beifang): `bind9`/`named`-Branch in `bin/h-restart-service`, `vsftpd`-Pfade in `func/upgrade.sh`.
 
 ---
 
 ## Verifikation
 - **#132:** `jq empty share/manifest.json`; `bash -n func/wizard.sh`; keine deutschen nutzersichtbaren Strings mehr (`jq`-Scan wie in der Recherche). Round-trip-Simulation von `_ask_radio` mit Objekt-Optionen (Label→value-Mapping) wie bei der Gruppen-Checkliste in #134; auf Debian-12-VM Wizard interaktiv durchklicken.
-- **#133:** `bash -n func/helper.sh`; Frischinstall auf VM → `/etc/hestia/{firewall,ips,hooks}` existieren, `$HESTIA/data/{firewall,ips}` sind Symlinks dorthin; `h-update-firewall` + eine `sed -i`-schreibende Rule-Operation (z. B. `h-change-sys-port`) laufen fehlerfrei und der Symlink bleibt erhalten.
+- **#133:** `grep -r` zeigt **keine** `data/firewall`/`data/ips`-Referenzen mehr (auch keine relativen `../../../data/firewall`); `bash -n` aller geänderten Skripte. Frischinstall auf VM → `/etc/hestia/{firewall,ips,hooks}` existieren und werden direkt beschrieben (kein `$HESTIA/data/{firewall,ips}` mehr); `h-update-firewall`, `h-add-firewall-ipset` und eine schreibende Rule-Operation (`h-change-sys-port`, `h-add/-delete-firewall-rule`) laufen fehlerfrei; ipset-`*_hstobject`-Pfad löst korrekt auf. Upgrade-Pfad: bestehende `data/{firewall,ips}`-Inhalte wurden nach `/etc/hestia` verschoben.
 - **#128:** `grep -r` zeigt keine Referenzen mehr auf die 7 Commands/Endpunkte; Panel-„Server"-Seite lädt ohne toten Updates-Link; Frischinstall legt keinen Autoupdate-Cron mehr an; `hestia update`/`h-update-hestia` weiterhin funktionsfähig.
 - Je Issue eigener PR auf `dev` (CLAUDE.md-Workflow), Autor reviewt/merged.
