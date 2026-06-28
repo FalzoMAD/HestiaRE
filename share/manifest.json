@@ -51,7 +51,7 @@
   "groups": ["web", "db", "mail", "panel", "addons", "tools"],
   "grouped_prompts": ["db", "addons"],
   "group_questions": {
-    "db": "Welche Datenbank-Server installieren? (Mehrfachauswahl)",
+    "db": "Welche Datenbank- und Cache-Dienste installieren? (Mehrfachauswahl)",
     "addons": "Welche Addons installieren? (Mehrfachauswahl)"
   },
 
@@ -136,6 +136,7 @@
       "group": "db",
       "type": "checkbox",
       "label": "MariaDB",
+      "description": "MySQL-kompatibler DB-Server (inkl. phpMyAdmin)",
       "question": "MariaDB installieren?",
       "default": {
         "standard":  true,
@@ -153,6 +154,7 @@
       "group": "db",
       "type": "checkbox",
       "label": "PostgreSQL",
+      "description": "Objektrelationaler DB-Server (inkl. pgAdmin)",
       "question": "PostgreSQL installieren?",
       "default": false
     },
@@ -161,6 +163,7 @@
       "group": "db",
       "type": "checkbox",
       "label": "Redis",
+      "description": "In-Memory-Cache / Key-Value-Store (kein DB-Server)",
       "question": "Redis installieren?",
       "default": false
     },
@@ -263,51 +266,11 @@
       "note": "Immer installiert. Betriebsmodus (voller MTA mit Dovecot-Anbindung vs. reiner Versand) ergibt sich implizit aus MAIL_BLOCK_PRESENT, keine eigene Abfrage. DKIM-Signierung erfolgt granular pro Domain via OpenSSL (bestehender HestiaCP-Mechanismus), unabhaengig von rspamd."
     },
 
-    "ADDON_PROFTPD": {
-      "group": "addons",
-      "type": "checkbox",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null }
-    },
-
-    "ADDON_FAIL2BAN": {
-      "group": "addons",
-      "type": "checkbox",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null }
-    },
-
-    "ADDON_CROWDSEC": {
-      "group": "addons",
-      "type": "checkbox",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null },
-      "note": "Unabhaengig von Fail2Ban waehlbar, kein Exklusiv-OR. Beide koennen parallel laufen."
-    },
-
-    "ADDON_RSPAMD": {
-      "group": "addons",
-      "type": "checkbox",
-      "visible_if": "MAIL_BLOCK_PRESENT == true",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "mailonly": true, "custom": null },
-      "note": "Ausgeblendet bei nomail (kein Mail-Block). Reine Spamfilter-Komponente, NICHT fuer DKIM zustaendig (siehe PANEL_EXIM note)."
-    },
-
-    "ADDON_SIEVE": {
-      "group": "addons",
-      "type": "checkbox",
-      "visible_if": "MAIL_BLOCK_PRESENT == true",
-      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false, "custom": null },
-      "note": "Ausgeblendet bei nomail (kein Mail-Block)."
-    },
-
-    "ADDON_DOCKER": {
-      "group": "addons",
-      "type": "checkbox",
-      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Bei allen Presets sichtbar, nirgends vorbelegt. Echter Ressourcen-Fussabdruck (RAM/Disk), bewusst keine automatische Aktivierung."
-    },
-
     "ADDON_COMPOSER": {
       "group": "addons",
       "type": "checkbox",
+      "label": "Composer",
+      "description": "PHP-Abhaengigkeitsmanager (systemweit)",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false, "custom": null },
       "source_default": {
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
@@ -316,9 +279,65 @@
       "note": "latest nutzt Upstream-Installer-Skript (getcomposer.org) statt OS-Paket fuer aktuellere Version. Backlog: h-update-sys-composer Command fuer nachtraegliche Quellumstellung."
     },
 
+    "ADDON_CROWDSEC": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "CrowdSec",
+      "description": "Kollaborative Intrusion-Prevention",
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null },
+      "note": "Unabhaengig von Fail2Ban waehlbar, kein Exklusiv-OR. Beide koennen parallel laufen."
+    },
+
+    "ADDON_FAIL2BAN": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "Fail2Ban",
+      "description": "Brute-Force-Schutz (Log-basiert)",
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null }
+    },
+
+    "ADDON_PROFTPD": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "ProFTPD",
+      "description": "FTP-Server",
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null }
+    },
+
+    "ADDON_RSPAMD": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "rspamd",
+      "description": "Spamfilter (nur mit Mail-Block)",
+      "visible_if": "MAIL_BLOCK_PRESENT == true",
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "mailonly": true, "custom": null },
+      "note": "Ausgeblendet bei nomail (kein Mail-Block). Reine Spamfilter-Komponente, NICHT fuer DKIM zustaendig (siehe PANEL_EXIM note)."
+    },
+
+    "ADDON_SIEVE": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "Sieve",
+      "description": "Serverseitige Mail-Filter (nur mit Mail-Block)",
+      "visible_if": "MAIL_BLOCK_PRESENT == true",
+      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false, "custom": null },
+      "note": "Ausgeblendet bei nomail (kein Mail-Block)."
+    },
+
+    "ADDON_DOCKER": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "Docker",
+      "description": "Container-Laufzeit (Proxy)",
+      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
+      "note": "Bei allen Presets sichtbar, nirgends vorbelegt. Echter Ressourcen-Fussabdruck (RAM/Disk), bewusst keine automatische Aktivierung."
+    },
+
     "ADDON_FILEMANAGER": {
       "group": "addons",
       "type": "checkbox",
+      "label": "FileManager",
+      "description": "Web-Dateimanager",
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
       "note": "Bei allen Presets inkl. mailonly sichtbar, nirgends vorbelegt. TODO: Abhaengigkeiten von PHP-Version/-Modus noch zu pruefen vor Produktivnutzung."
     },
@@ -326,6 +345,8 @@
     "ADDON_UTILITIES": {
       "group": "addons",
       "type": "checkbox",
+      "label": "Utilities",
+      "description": "System-Werkzeuge (oeffnet Tool-Auswahl)",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null },
       "opens_followup": "TOOLS_SELECTION",
       "note": "Bei Aktivierung oeffnet sich die Tools-Folgeseite (siehe tools-Sektion unten)."

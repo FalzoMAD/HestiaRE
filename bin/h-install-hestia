@@ -81,16 +81,11 @@ install_base() {
 	echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/90nolang
 	mkdir -p /root/.gnupg && chmod 700 /root/.gnupg
 
-	# Sury PHP repo (panel + multi-PHP are built on Sury)
+	# Sury PHP repo (panel + multi-PHP are built on Sury). Shared helper so the
+	# wizard's discovery pass and this stage produce ONE identical repo definition
+	# (avoids apt's "Conflicting values set for option Signed-By").
 	echo "[ * ] Adding Sury PHP repo..."
-	printf 'deb [arch=%s signed-by=/usr/share/keyrings/sury-keyring.gpg] https://packages.sury.org/php/ %s main\n' \
-		"$ARCH" "$CODENAME" > /etc/apt/sources.list.d/php.list
-	curl -fsSL https://packages.sury.org/php/apt.gpg -o /tmp/sury_apt.gpg \
-		|| { echo "ERROR: failed to download Sury PHP signing key"; exit 1; }
-	gpg --dearmor < /tmp/sury_apt.gpg > /usr/share/keyrings/sury-keyring.gpg \
-		|| { echo "ERROR: failed to dearmor Sury PHP signing key"; exit 1; }
-	[ -s /usr/share/keyrings/sury-keyring.gpg ] || { echo "ERROR: Sury keyring empty"; exit 1; }
-	rm -f /tmp/sury_apt.gpg
+	add_sury_repo "$CODENAME" || exit 1
 
 	# MariaDB repo only for an external-repo version; the OS version uses OS packages.
 	MARIADB_VER="${COMPONENT_DB_MARIADB_VERSION:-}"
