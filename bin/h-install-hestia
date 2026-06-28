@@ -23,6 +23,12 @@ _on_error() {
 	echo "" >&2
 	echo "ERROR: h-install-hestia aborted (exit ${rc}, line ${line})." >&2
 	[ -f "$LOG" ] && { echo "       Last lines of ${LOG}:" >&2; tail -n 15 "$LOG" 2>/dev/null | sed 's/^/       | /' >&2 || true; }
+	echo "" >&2
+	echo "       Recovery: fix the cause shown above, then re-run the installer." >&2
+	echo "       Completed stages are skipped (see /etc/hestia/.done.*); only the" >&2
+	echo "       failed and later stages run again:" >&2
+	echo "         h-install-hestia" >&2
+	echo "       Details + how to force a stage to re-run: TROUBLESHOOTING.md" >&2
 }
 trap '_on_error "$?" "$LINENO"' ERR
 
