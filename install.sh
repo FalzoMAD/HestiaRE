@@ -31,7 +31,7 @@ set -euo pipefail
 # ── Constants ──────────────────────────────────────────────
 SOURCE_CONF="/etc/hestia/source.conf"
 INSTALL_DIR="/usr/local/hestia"
-MANIFEST="${INSTALL_DIR}/conf/manifest.json"
+MANIFEST="${INSTALL_DIR}/share/manifest.json"
 LOG_DIR="/var/log/hestia"
 
 # GitHub defaults — can be overridden by /etc/hestia/source.conf

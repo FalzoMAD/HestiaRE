@@ -189,9 +189,9 @@
         "install/",
         "install/deb/",
         "install/common/",
-        "conf/panel-caddy/",
-        "conf/panel-php/",
-        "conf/dovecot/",
+        "share/panel-caddy/",
+        "share/panel-php/",
+        "share/dovecot/",
         "install/upgrade/"
       ],
       "key_files": [
@@ -207,14 +207,14 @@
         "install/common/packages/system.pkg",
         "install/common/templates/email/",
         "install/common/roundcube/",
-        "conf/dovecot/2.3/",
-        "conf/dovecot/2.4/",
+        "share/dovecot/2.3/",
+        "share/dovecot/2.4/",
         "install/common/sudo/hestiaweb",
         "install/upgrade/upgrade.conf",
-        "conf/panel-caddy/Caddyfile",
-        "conf/panel-caddy/hestia.conf",
-        "conf/panel-php/hestia-php.service",
-        "conf/panel-php/php-fpm.conf"
+        "share/panel-caddy/Caddyfile",
+        "share/panel-caddy/hestia.conf",
+        "share/panel-php/hestia-php.service",
+        "share/panel-php/php-fpm.conf"
       ],
       "language": "bash / config templates",
       "supported_distros": ["Debian 12 (bookworm)", "Ubuntu 24.04 LTS (noble)", "Debian 13 (trixie, priority 2, planned June 2026+)"],
@@ -233,11 +233,11 @@
 
     "panel_caddy_service": {
       "description": "Caddy config for the HestiaRE admin panel on port 8083. Replaces the compiled hestia-nginx package. Handles PHP via FastCGI and X-Accel-Redirect for file downloads.",
-      "entry_points": ["conf/panel-caddy/Caddyfile"],
-      "directories": ["conf/panel-caddy/"],
+      "entry_points": ["share/panel-caddy/Caddyfile"],
+      "directories": ["share/panel-caddy/"],
       "key_files": [
-        "conf/panel-caddy/Caddyfile",
-        "conf/panel-caddy/hestia.conf"
+        "share/panel-caddy/Caddyfile",
+        "share/panel-caddy/hestia.conf"
       ],
       "language": "caddyfile",
       "runtime_paths": {
@@ -265,12 +265,12 @@
 
     "panel_php_service": {
       "description": "Dedicated PHP-FPM service for the HestiaRE panel. Runs as hestia-php.service using Sury php8.3-fpm binary with an isolated pool. Replaces compiled hestia-php package.",
-      "entry_points": ["conf/panel-php/hestia-php.service"],
-      "directories": ["conf/panel-php/"],
+      "entry_points": ["share/panel-php/hestia-php.service"],
+      "directories": ["share/panel-php/"],
       "key_files": [
-        "conf/panel-php/hestia-php.service",
-        "conf/panel-php/php-fpm.conf",
-        "conf/panel-php/pool.d/panel.conf"
+        "share/panel-php/hestia-php.service",
+        "share/panel-php/php-fpm.conf",
+        "share/panel-php/pool.d/panel.conf"
       ],
       "language": "ini",
       "runtime_paths": {
@@ -318,7 +318,7 @@
         "func/helper.sh": "hestia_apt (spinner + apt log split), load_os_profile (OS_ID/CODENAME/RELEASE/EXIM_USR/BASE_PKGS_EXTRA for deb12/deb13/ub24/ub26), seed_hestia_etc (hestia.env + profile.d + seed hestia.conf).",
         "bin/h-install-hestia": "Non-interactive orchestrator: validates /etc/hestia, sources hestia.env+main.sh+helper.sh+install.conf, runs stages gated by COMPONENT_*. Idempotent via .done.* sentinels (exit→return).",
         "bin/hestia": "Umbrella dispatcher: hestia install|configure|update|uninstall|status (no v-* alias).",
-        "bin/h-update-hestia": "Update whole distribution from release tarball (+ --check); stops/starts hestia around copy; calls h-update-sys-hestia-all for package migrations.",
+        "bin/h-update-hestia": "Update whole distribution from release tarball (+ --check); stops/starts hestia around copy. Does NOT use the legacy h-update-sys-hestia* apt/git updaters (removal tracked in #128).",
         "bin/h-uninstall-hestia": "Conservative uninstall (keeps /home + DBs always; --purge removes packages + /usr/local/hestia + /etc/hestia).",
         "bin/h-list-sys-install": "Status report: version, source, OS, profile, .done.* phases, COMPONENT_*."
       },
@@ -371,8 +371,8 @@
     "minimal_profile": ["standard minus apache2 and mail stack"],
     "optional_h_add_remove": ["proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
     "never_install": ["bind9", "vsftpd", "web-terminal", "spamassassin", "software-installer"],
-    "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "caddyfile": "/etc/caddy/Caddyfile", "site_config": "/etc/caddy/hestia.conf", "install_source": "conf/panel-caddy/" },
-    "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "conf/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock" }
+    "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "caddyfile": "/etc/caddy/Caddyfile", "site_config": "/etc/caddy/hestia.conf", "install_source": "share/panel-caddy/" },
+    "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "share/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock" }
   },
 
   "upstream_debt_summary": {

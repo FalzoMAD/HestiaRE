@@ -106,19 +106,35 @@ seed_hestia_etc() {
 	version=$(cat "$hestia_root/VERSION" 2>/dev/null || echo "dev")
 
 	mkdir -p /etc/hestia
-	if [ ! -e /etc/hestia/hestia.env ]; then
-		printf '# Do not edit — use /etc/hestia/local.conf instead\n\nexport HESTIA='"'"'%s'"'"'\n\n[[ -f /etc/hestia/local.conf ]] && source /etc/hestia/local.conf\n' \
-			"$hestia_root" > /etc/hestia/hestia.env
-	fi
+	# Always (re)generate hestia.env. Use an `if`-form for the local.conf include
+	# so the file's LAST statement returns 0 — a trailing `[[ -f x ]] && source x`
+	# returns 1 when x is absent, which aborts any caller running under `set -e`.
+	printf '%s\n' \
+		"# Do not edit — use /etc/hestia/local.conf instead" \
+		"export HESTIA='$hestia_root'" \
+		"if [ -f /etc/hestia/local.conf ]; then . /etc/hestia/local.conf; fi" \
+		> /etc/hestia/hestia.env
 	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$PATH:%s/bin\nexport PATH\n' \
 		"$hestia_root" "$hestia_root" > /etc/profile.d/hestia.sh
 	chmod 755 /etc/profile.d/hestia.sh
 
-	mkdir -p "$hestia_root/conf"
-	rm -f "$hestia_root/conf/hestia.conf"
-	touch "$hestia_root/conf/hestia.conf"
-	chmod 660 "$hestia_root/conf/hestia.conf"
-	_wcv() { echo "$1='$2'" >> "$hestia_root/conf/hestia.conf"; }
+	# Instance config lives in /etc/hestia/conf (PATHS.md §5a). Bridge the historic
+	# $HESTIA/conf path with a directory symlink so the ~466 commands referencing
+	# $HESTIA/conf/hestia.conf keep working AND sed -i (33 writers) stays safe
+	# (only file symlinks break under sed -i; directory symlinks do not).
+	local conf_dir="/etc/hestia/conf"
+	mkdir -p "$conf_dir"
+	if [ ! -L "$hestia_root/conf" ]; then
+		if [ -d "$hestia_root/conf" ]; then
+			cp -an "$hestia_root/conf/." "$conf_dir/" 2>/dev/null || true
+			rm -rf "$hestia_root/conf"
+		fi
+		ln -sfn "$conf_dir" "$hestia_root/conf"
+	fi
+	rm -f "$conf_dir/hestia.conf"
+	touch "$conf_dir/hestia.conf"
+	chmod 660 "$conf_dir/hestia.conf"
+	_wcv() { echo "$1='$2'" >> "$conf_dir/hestia.conf"; }
 	_wcv "BACKEND_PORT"             "$port"
 	_wcv "CRON_SYSTEM"              "cron"
 	_wcv "DISK_QUOTA"               "no"
