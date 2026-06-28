@@ -25,6 +25,11 @@ INSTALL_DIR="${HESTIA:-/usr/local/hestia}"
 MANIFEST="${INSTALL_DIR}/share/manifest.json"
 LOG_DIR="/var/log/hestia"
 
+# Shared install-time helpers (add_sury_repo, …). Sourcing only defines
+# functions — no side effects — so it is safe in the standalone wizard too.
+# shellcheck source=func/helper.sh
+[ -f "${INSTALL_DIR}/func/helper.sh" ] && . "${INSTALL_DIR}/func/helper.sh"
+
 # ── State ──────────────────────────────────────────────────
 HAS_WHIPTAIL=false
 OS=""
@@ -248,10 +253,14 @@ fn_discover_php_versions() {
     echo "[ * ] Adding Sury PHP repository for version discovery..."
     local codename
     codename=$(. /etc/os-release; echo "$VERSION_CODENAME")
-    curl -fsSL https://packages.sury.org/php/apt.gpg \
-        | gpg --dearmor -o /etc/apt/trusted.gpg.d/sury-php.gpg
-    printf 'deb https://packages.sury.org/php/ %s main\n' "$codename" \
-        > /etc/apt/sources.list.d/sury-php.list
+    # Same canonical repo definition the installer's base stage writes, so the
+    # later apt-get update in h-install-hestia does not see a conflicting entry.
+    if ! command -v add_sury_repo >/dev/null 2>&1 || ! add_sury_repo "$codename"; then
+        echo "[ ! ] Sury repo setup failed — using built-in PHP version list" >&2
+        PHP_VERSIONS_AVAILABLE="8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6"
+        echo "[ * ] Available PHP versions: $PHP_VERSIONS_AVAILABLE"
+        return 0
+    fi
     DEBIAN_FRONTEND=noninteractive apt-get -qq update >> "$LOG_DIR/install.log" 2>&1
     PHP_VERSIONS_AVAILABLE=$(apt-cache pkgnames php 2>/dev/null \
         | grep -E '^php[0-9]+\.[0-9]+-(common|fpm)$' \
@@ -496,23 +505,31 @@ fn_ask_group_checklist() {
     local -a cb_ids=()
     readarray -t cb_ids < <(mq --arg g "$group" '.components | to_entries[] | select(.value.group==$g and .value.type=="checkbox") | .key')
     local -a items=() shown=()
+    local -A lbl2id=()
     local id
     for id in "${cb_ids[@]}"; do
         local fnp; fnp=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].fixed_no_prompt[$p] // empty')
         if [ -n "$fnp" ]; then COMP_VALUES["$id"]="$fnp"; continue; fi
         local vis; vis=$(mq --arg id "$id" '.components[$id].visible_if // empty')
         if [ -n "$vis" ] && [ "$(fn_eval_condition "$vis" COMP_VALUES)" = "false" ]; then COMP_VALUES["$id"]=""; continue; fi
-        local dv label state="OFF"
+        local dv label desc state="OFF"
         dv=$(fn_component_default "$id" "$INSTALL_PROFILE")
         [ "$dv" = "true" ] && state="ON"
-        label=$(mq --arg id "$id" '.components[$id].label // .components[$id].question // ($id | sub("^(ADDON_|DB_)";""))')
-        items+=("$id" "$label" "$state"); shown+=("$id")
+        # whiptail checklist columns are <tag> <description> <on/off>. Use a clean
+        # single-token label as the tag (round-tripped back to the component id via
+        # lbl2id) and the human-readable description as the second column — so the
+        # raw COMPONENT id (ADDON_*/DB_*) is never shown to the user.
+        label=$(mq --arg id "$id" '.components[$id].label // ($id | sub("^(ADDON_|DB_)";""))')
+        desc=$(mq --arg id "$id" '.components[$id].description // ""')
+        items+=("$label" "$desc" "$state"); shown+=("$id"); lbl2id["$label"]="$id"
     done
     [ ${#shown[@]} -gt 0 ] || return 0
     local question; question=$(mq --arg g "$group" '.group_questions[$g] // ("Auswahl: " + $g)')
     local selected; selected=" $(fn_normalize_list "$(_wt_checklist "HestiaRE — $group" "$question" "${items[@]}")") "
-    for id in "${shown[@]}"; do
-        case "$selected" in *" $id "*) COMP_VALUES["$id"]="true" ;; *) COMP_VALUES["$id"]="false" ;; esac
+    for id in "${shown[@]}"; do COMP_VALUES["$id"]="false"; done
+    local lbl
+    for lbl in "${!lbl2id[@]}"; do
+        case "$selected" in *" $lbl "*) COMP_VALUES["${lbl2id[$lbl]}"]="true" ;; esac
     done
 }
 

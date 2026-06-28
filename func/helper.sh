@@ -50,6 +50,37 @@ hestia_apt() {
 	return $_rc
 }
 
+# ── Sury PHP repository (shared by wizard + installer) ──────────────────────
+# Canonical, idempotent Sury setup. BOTH func/wizard.sh (PHP version discovery)
+# and bin/h-install-hestia (base stage) call this, so the repo is defined exactly
+# ONCE — same keyring, same signed-by, same source file. Two diverging
+# definitions of packages.sury.org/php trip apt's
+#   "Conflicting values set for option Signed-By"
+# error and abort apt-get update. Canonical layout:
+#   keyring: /usr/share/keyrings/sury-keyring.gpg
+#   source : /etc/apt/sources.list.d/php.list   (deb [… signed-by=…] …)
+# Usage: add_sury_repo <codename>
+add_sury_repo() {
+	local codename="$1"
+	[ -n "$codename" ] || { echo "ERROR: add_sury_repo: codename missing" >&2; return 1; }
+	local arch keyring list
+	arch="$(dpkg --print-architecture 2>/dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+	keyring="/usr/share/keyrings/sury-keyring.gpg"
+	list="/etc/apt/sources.list.d/php.list"
+	# Drop any legacy/foreign Sury definition that would conflict on Signed-By.
+	rm -f /etc/apt/sources.list.d/sury-php.list /etc/apt/trusted.gpg.d/sury-php.gpg
+	if [ ! -s "$keyring" ]; then
+		curl -fsSL https://packages.sury.org/php/apt.gpg -o /tmp/sury_apt.gpg \
+			|| { echo "ERROR: failed to download Sury PHP signing key" >&2; return 1; }
+		gpg --dearmor < /tmp/sury_apt.gpg > "$keyring" \
+			|| { echo "ERROR: failed to dearmor Sury PHP signing key" >&2; rm -f /tmp/sury_apt.gpg; return 1; }
+		rm -f /tmp/sury_apt.gpg
+	fi
+	[ -s "$keyring" ] || { echo "ERROR: Sury keyring empty" >&2; return 1; }
+	printf 'deb [arch=%s signed-by=%s] https://packages.sury.org/php/ %s main\n' \
+		"$arch" "$keyring" "$codename" > "$list"
+}
+
 # ── per-OS data ─────────────────────────────────────────────────────────────
 # Given the INSTALL_OS token (debian-bookworm, debian-trixie, ubuntu-noble,
 # ubuntu-26lts) sets: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA.
