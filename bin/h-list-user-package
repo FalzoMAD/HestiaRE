@@ -117,7 +117,7 @@ is_package_valid
 #----------------------------------------------------------#
 
 # Parsing package
-source_conf "$HESTIA/data/packages/$PACKAGE.pkg"
+source_conf "$HESTIA/packages/$PACKAGE.pkg"
 
 # Listing data
 case $format in

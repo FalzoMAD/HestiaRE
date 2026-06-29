@@ -44,7 +44,7 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Import IP variables
-source "$HESTIA/data/ips/$ip"
+source "$CONF_DIR/ips/$ip"
 cidr="$(convert_netmask "$NETMASK")"
 
 # Get primary IP
@@ -85,7 +85,7 @@ elif [ -e "/etc/network/interfaces" ]; then
 fi
 
 # Deleting Hestia IP
-rm -f $HESTIA/data/ips/$ip
+rm -f $CONF_DIR/ips/$ip
 
 # Deleting web config
 if [ -n "$WEB_SYSTEM" ]; then

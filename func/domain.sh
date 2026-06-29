@@ -43,7 +43,7 @@ is_backend_template_valid() {
 
 # Web domain existence check
 is_web_domain_new() {
-	web=$(grep -F -H "DOMAIN='$1'" $HESTIA/data/users/*/web.conf)
+	web=$(grep -F -H "DOMAIN='$1'" $CONF_DIR/users/*/web.conf)
 	if [ -n "$web" ]; then
 		if [ "$type" == 'web' ]; then
 			check_result "$E_EXISTS" "Web domain $1 exists"
@@ -57,7 +57,7 @@ is_web_domain_new() {
 
 # Web alias existence check
 is_web_alias_new() {
-	grep -wH "$1" $HESTIA/data/users/*/web.conf | while read -r line; do
+	grep -wH "$1" $CONF_DIR/users/*/web.conf | while read -r line; do
 		user=$(echo $line | cut -f 7 -d /)
 		string=$(echo $line | cut -f 2- -d ':')
 		parse_object_kv_list $string
@@ -222,8 +222,8 @@ prepare_web_domain_values() {
 	fi
 
 	if [ "$SUSPENDED" = 'yes' ]; then
-		docroot="$HESTIA/data/templates/web/suspend"
-		sdocroot="$HESTIA/data/templates/web/suspend"
+		docroot="$HESTIA/templates/web/suspend"
+		sdocroot="$HESTIA/templates/web/suspend"
 		if [ "$PROXY_SYSTEM" == "nginx" ]; then
 			PROXY="suspended"
 		else
@@ -465,7 +465,7 @@ is_web_domain_cert_valid() {
 
 # Mail domain existence check
 is_mail_domain_new() {
-	mail=$(ls $HESTIA/data/users/*/mail/$1.conf 2> /dev/null)
+	mail=$(ls $CONF_DIR/users/*/mail/$1.conf 2> /dev/null)
 	if [ -n "$mail" ]; then
 		if [ "$2" == 'mail' ]; then
 			check_result $E_EXISTS "Mail domain $1 exists"
@@ -478,12 +478,12 @@ is_mail_domain_new() {
 	mail_sub=$(echo "$1" | cut -f 1 -d .)
 	mail_nosub=$(echo "$1" | cut -f 1 -d . --complement)
 	for mail_reserved in $(echo "mail $WEBMAIL_ALIAS"); do
-		if [ -n "$(ls $HESTIA/data/users/*/mail/$mail_reserved.$1.conf 2> /dev/null)" ]; then
+		if [ -n "$(ls $CONF_DIR/users/*/mail/$mail_reserved.$1.conf 2> /dev/null)" ]; then
 			if [ "$2" == 'mail' ]; then
 				check_result "$E_EXISTS" "Required subdomain \"$mail_reserved.$1\" already exists"
 			fi
 		fi
-		if [ -n "$(ls $HESTIA/data/users/*/mail/$mail_nosub.conf 2> /dev/null)" ] && [ "$mail_sub" = "$mail_reserved" ]; then
+		if [ -n "$(ls $CONF_DIR/users/*/mail/$mail_nosub.conf 2> /dev/null)" ] && [ "$mail_sub" = "$mail_reserved" ]; then
 			if [ "$2" == 'mail' ]; then
 				check_result "$E_INVALID" "The subdomain \"$mail_sub.\" is reserved by \"$mail_nosub\""
 			fi
@@ -791,59 +791,55 @@ get_domain_values() {
 is_valid_extension() {
 	local psl
 	psl="https://publicsuffix.org/list/public_suffix_list.dat"
-	if [ ! -e "$HESTIA/data/extensions/public_suffix_list.dat" ]; then
-		mkdir -p "$HESTIA/data/extensions/"
-		chmod 750 "$HESTIA/data/extensions/"
-		if /usr/bin/wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet -O "$HESTIA/data/extensions/public_suffix_list.dat.tmp" "$psl"; then
-			mv "$HESTIA/data/extensions/public_suffix_list.dat.tmp" "$HESTIA/data/extensions/public_suffix_list.dat"
+	if [ ! -e "$CONF_DIR/public_suffix_list.dat" ]; then
+		if /usr/bin/wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet -O "$CONF_DIR/public_suffix_list.dat.tmp" "$psl"; then
+			mv "$CONF_DIR/public_suffix_list.dat.tmp" "$CONF_DIR/public_suffix_list.dat"
 		else
-			rm -f "$HESTIA/data/extensions/public_suffix_list.dat.tmp"
+			rm -f "$CONF_DIR/public_suffix_list.dat.tmp"
 		fi
-	elif find "$HESTIA/data/extensions/public_suffix_list.dat" -mtime +7 2> /dev/null | grep -q .; then
-		mv "$HESTIA/data/extensions/public_suffix_list.dat" "$HESTIA/data/extensions/public_suffix_list.dat.save"
-		if /usr/bin/wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet -O "$HESTIA/data/extensions/public_suffix_list.dat.tmp" "$psl"; then
-			mv "$HESTIA/data/extensions/public_suffix_list.dat.tmp" "$HESTIA/data/extensions/public_suffix_list.dat"
-			rm -f "$HESTIA/data/extensions/public_suffix_list.dat.save"
+	elif find "$CONF_DIR/public_suffix_list.dat" -mtime +7 2> /dev/null | grep -q .; then
+		mv "$CONF_DIR/public_suffix_list.dat" "$CONF_DIR/public_suffix_list.dat.save"
+		if /usr/bin/wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet -O "$CONF_DIR/public_suffix_list.dat.tmp" "$psl"; then
+			mv "$CONF_DIR/public_suffix_list.dat.tmp" "$CONF_DIR/public_suffix_list.dat"
+			rm -f "$CONF_DIR/public_suffix_list.dat.save"
 		else
-			rm -f "$HESTIA/data/extensions/public_suffix_list.dat.tmp"
-			mv "$HESTIA/data/extensions/public_suffix_list.dat.save" "$HESTIA/data/extensions/public_suffix_list.dat"
+			rm -f "$CONF_DIR/public_suffix_list.dat.tmp"
+			mv "$CONF_DIR/public_suffix_list.dat.save" "$CONF_DIR/public_suffix_list.dat"
 		fi
 	fi
-	if [ ! -e "$HESTIA/data/extensions/public_suffix_list.dat" ]; then
+	if [ ! -e "$CONF_DIR/public_suffix_list.dat" ]; then
 		check_result "$E_NOTEXIST" "public_suffix_list.dat not found"
 	fi
 	test_domain=$(idn2 -d "$1")
 	extension="${test_domain##*.}"
-	exten=$(grep -Fx "$extension" "$HESTIA/data/extensions/public_suffix_list.dat")
+	exten=$(grep -Fx "$extension" "$CONF_DIR/public_suffix_list.dat")
 }
 
 is_valid_2_part_extension() {
 	local psl
 	psl="https://publicsuffix.org/list/public_suffix_list.dat"
-	if [ ! -e "$HESTIA/data/extensions/public_suffix_list.dat" ]; then
-		mkdir -p "$HESTIA/data/extensions/"
-		chmod 750 "$HESTIA/data/extensions/"
-		if /usr/bin/wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet -O "$HESTIA/data/extensions/public_suffix_list.dat.tmp" "$psl"; then
-			mv "$HESTIA/data/extensions/public_suffix_list.dat.tmp" "$HESTIA/data/extensions/public_suffix_list.dat"
+	if [ ! -e "$CONF_DIR/public_suffix_list.dat" ]; then
+		if /usr/bin/wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet -O "$CONF_DIR/public_suffix_list.dat.tmp" "$psl"; then
+			mv "$CONF_DIR/public_suffix_list.dat.tmp" "$CONF_DIR/public_suffix_list.dat"
 		else
-			rm -f "$HESTIA/data/extensions/public_suffix_list.dat.tmp"
+			rm -f "$CONF_DIR/public_suffix_list.dat.tmp"
 		fi
-	elif find "$HESTIA/data/extensions/public_suffix_list.dat" -mtime +7 2> /dev/null | grep -q .; then
-		mv "$HESTIA/data/extensions/public_suffix_list.dat" "$HESTIA/data/extensions/public_suffix_list.dat.save"
-		if /usr/bin/wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet -O "$HESTIA/data/extensions/public_suffix_list.dat.tmp" "$psl"; then
-			mv "$HESTIA/data/extensions/public_suffix_list.dat.tmp" "$HESTIA/data/extensions/public_suffix_list.dat"
-			rm -f "$HESTIA/data/extensions/public_suffix_list.dat.save"
+	elif find "$CONF_DIR/public_suffix_list.dat" -mtime +7 2> /dev/null | grep -q .; then
+		mv "$CONF_DIR/public_suffix_list.dat" "$CONF_DIR/public_suffix_list.dat.save"
+		if /usr/bin/wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet -O "$CONF_DIR/public_suffix_list.dat.tmp" "$psl"; then
+			mv "$CONF_DIR/public_suffix_list.dat.tmp" "$CONF_DIR/public_suffix_list.dat"
+			rm -f "$CONF_DIR/public_suffix_list.dat.save"
 		else
-			rm -f "$HESTIA/data/extensions/public_suffix_list.dat.tmp"
-			mv "$HESTIA/data/extensions/public_suffix_list.dat.save" "$HESTIA/data/extensions/public_suffix_list.dat"
+			rm -f "$CONF_DIR/public_suffix_list.dat.tmp"
+			mv "$CONF_DIR/public_suffix_list.dat.save" "$CONF_DIR/public_suffix_list.dat"
 		fi
 	fi
-	if [ ! -e "$HESTIA/data/extensions/public_suffix_list.dat" ]; then
+	if [ ! -e "$CONF_DIR/public_suffix_list.dat" ]; then
 		check_result "$E_NOTEXIST" "public_suffix_list.dat not found"
 	fi
 	test_domain=$(idn2 -d "$1")
 	extension=$(/bin/echo "${test_domain}" | awk -F. '{print $(NF-1)"."$NF}')
-	exten=$(grep -Fx "$extension" "$HESTIA/data/extensions/public_suffix_list.dat")
+	exten=$(grep -Fx "$extension" "$CONF_DIR/public_suffix_list.dat")
 }
 
 get_base_domain() {
@@ -867,7 +863,7 @@ is_base_domain_owner() {
 	for object in ${1//,/ }; do
 		if [ "$object" != "none" ]; then
 			get_base_domain $object
-			web=$(grep -F -H -h "DOMAIN='$basedomain'" $HESTIA/data/users/*/web.conf)
+			web=$(grep -F -H -h "DOMAIN='$basedomain'" $CONF_DIR/users/*/web.conf)
 			if [ "$ENFORCE_SUBDOMAIN_OWNERSHIP" = "yes" ]; then
 				if [ -n "$web" ]; then
 					parse_object_kv_list "$web"

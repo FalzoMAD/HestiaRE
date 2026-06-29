@@ -32,7 +32,7 @@ fi
 user="$($BIN/h-search-domain-owner "$domain" web)"
 [[ -z "$user" ]] && user="$ROOT_USER"
 
-USER_DATA=$HESTIA/data/users/$user
+USER_DATA=$CONF_DIR/users/$user
 
 #----------------------------------------------------------#
 #                    Verifications                         #

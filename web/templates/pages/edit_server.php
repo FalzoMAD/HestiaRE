@@ -36,8 +36,6 @@
 				"incrementalBackups" => $v_backup_incremental ?? "",
 				"backupType" => !empty($v_backup_type) ? trim($v_backup_type, "'") : "",
 				"webmailAlias" => $_SESSION["WEBMAIL_ALIAS"] ?? "",
-				"apiSystem" => $_SESSION["API_SYSTEM"],
-				"legacyApi" => $_SESSION["API"],
 			];
 		?>
 			<form
@@ -1043,51 +1041,6 @@
 							<?= tohtml( _("System")) ?>
 						</summary>
 						<div class="collapse-content">
-							<h3 class="u-mb10">
-								<?= tohtml( _("API")) ?>
-							</h3>
-							<div class="u-mb10">
-								<label for="v_api_system" class="form-label">
-									<?= tohtml( _("Enable API access")) ?>
-								</label>
-								<select x-model="apiSystem" class="form-select" name="v_api_system" id="v_api_system">
-									<option value="0">
-										<?= tohtml( _("Disabled")) ?>
-									</option>
-									<option value="1">
-										<?= tohtml( _("Enabled for admin")) ?>
-									</option>
-									<option value="2">
-										<?= tohtml( _("Enabled for all users")) ?>
-									</option>
-								</select>
-							</div>
-							<div class="u-mb10">
-								<label for="v_api" class="form-label">
-									<?= tohtml( _("Enable legacy API access")) ?>
-								</label>
-								<select x-model="legacyApi" class="form-select" name="v_api" id="v_api">
-									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
-									</option>
-									<option value="no">
-										<?= tohtml( _("No")) ?>
-									</option>
-								</select>
-							</div>
-							<div x-cloak x-show="legacyApi === 'yes' || apiSystem > 0">
-								<div class="u-mb10">
-									<label for="v_api_allowed_ip" class="form-label u-side-by-side">
-										<?= tohtml( _("Allowed IP addresses for API")) ?>
-										<span class="optional">1 IP address per line</span>
-									</label>
-									<textarea class="form-control" name="v_api_allowed_ip" id="v_api_allowed_ip"><?php
-											foreach (explode(",", $_SESSION["API_ALLOWED_IP"]) as $ip) {
-												echo trim($ip)."\n";
-											}
-										?></textarea>
-								</div>
-							</div>
 							<h3 class="u-mt20 u-mb10">
 								<?= tohtml( _("Login")) ?>
 							</h3>

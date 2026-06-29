@@ -44,14 +44,14 @@ fi
 
 # Defining pipe functions
 case $queue in
-	restart) bash $HESTIA/data/queue/$queue.pipe > /dev/null 2>&1 ;;
-	webstats) bash $HESTIA/data/queue/$queue.pipe > /dev/null 2>&1 ;;
-	backup) bash $HESTIA/data/queue/$queue.pipe > /dev/null 2>&1 ;;
-	disk) bash $HESTIA/data/queue/$queue.pipe > /dev/null 2>&1 ;;
-	daily) bash $HESTIA/data/queue/$queue.pipe > /dev/null 2>&1 ;;
-	traffic) bash $HESTIA/data/queue/$queue.pipe > /dev/null 2>&1 ;;
-	dns-cluster) bash $HESTIA/data/queue/$queue.pipe > /dev/null 2>&1 ;;
-	letsencrypt) bash $HESTIA/data/queue/$queue.pipe > /dev/null 2>&1 ;;
+	restart) bash $CONF_DIR/queue/$queue.pipe > /dev/null 2>&1 ;;
+	webstats) bash $CONF_DIR/queue/$queue.pipe > /dev/null 2>&1 ;;
+	backup) bash $CONF_DIR/queue/$queue.pipe > /dev/null 2>&1 ;;
+	disk) bash $CONF_DIR/queue/$queue.pipe > /dev/null 2>&1 ;;
+	daily) bash $CONF_DIR/queue/$queue.pipe > /dev/null 2>&1 ;;
+	traffic) bash $CONF_DIR/queue/$queue.pipe > /dev/null 2>&1 ;;
+	dns-cluster) bash $CONF_DIR/queue/$queue.pipe > /dev/null 2>&1 ;;
+	letsencrypt) bash $CONF_DIR/queue/$queue.pipe > /dev/null 2>&1 ;;
 	*) check_args '1' '0' 'QUEUE' ;;
 esac
 

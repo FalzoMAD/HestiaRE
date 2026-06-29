@@ -96,13 +96,13 @@ IFS=$'\n'
 for user in $("$BIN/h-list-users" list); do
 	# Search query
 	search=$(grep "$object" \
-		$HESTIA/data/users/$user/web.conf \
-		$HESTIA/data/users/$user/dns.conf \
-		$HESTIA/data/users/$user/dns/*.conf \
-		$HESTIA/data/users/$user/mail.conf \
-		$HESTIA/data/users/$user/mail/*.conf \
-		$HESTIA/data/users/$user/db.conf \
-		$HESTIA/data/users/$user/cron.conf 2> /dev/null)
+		$CONF_DIR/users/$user/web.conf \
+		$CONF_DIR/users/$user/dns.conf \
+		$CONF_DIR/users/$user/dns/*.conf \
+		$CONF_DIR/users/$user/mail.conf \
+		$CONF_DIR/users/$user/mail/*.conf \
+		$CONF_DIR/users/$user/db.conf \
+		$CONF_DIR/users/$user/cron.conf 2> /dev/null)
 
 	for row in $search; do
 		# Initialise variable

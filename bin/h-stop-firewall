@@ -49,7 +49,7 @@ echo "$iptables -X hestia" >> $tmp
 
 # Deleting custom chains
 IFS=$'\n'
-for chain in $(cat $HESTIA/data/firewall/chains.conf 2> /dev/null); do
+for chain in $(cat $CONF_DIR/firewall/chains.conf 2> /dev/null); do
 	parse_object_kv_list "$chain"
 	echo "$iptables -F fail2ban-$CHAIN" >> $tmp
 	echo "$iptables -X fail2ban-$CHAIN" >> $tmp

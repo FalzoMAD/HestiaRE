@@ -43,8 +43,8 @@ check_hestia_demo_mode
 heal_iptables_links
 
 # Deleting chain
-chains="$HESTIA/data/firewall/chains.conf"
-banlist="$HESTIA/data/firewall/banlist.conf"
+chains="$CONF_DIR/firewall/chains.conf"
+banlist="$CONF_DIR/firewall/banlist.conf"
 chain_param=""
 [ -f "$chains" ] && chain_param=$(grep "CHAIN='$chain'" "$chains")
 if [ -n "$chain_param" ]; then

@@ -39,8 +39,8 @@ if [[ "$LE_STAGING" = 'yes' ]]; then
 fi
 
 # LE Pre-Hook
-if [ -x "/etc/hestia/hooks/le_pre.sh" ]; then
-	/etc/hestia/hooks/le_pre.sh "$user" "$domain" "$aliases" "$mail"
+if [ -x "$CONF_DIR/hooks/le_pre.sh" ]; then
+	$CONF_DIR/hooks/le_pre.sh "$user" "$domain" "$aliases" "$mail"
 fi
 
 # encode base64
@@ -178,8 +178,8 @@ domain: ${domain}
 # Registering LetsEncrypt user account
 $BIN/h-add-letsencrypt-user $user
 if [ "$?" -ne 0 ]; then
-	touch $HESTIA/data/queue/letsencrypt.pipe
-	sed -i "/ $domain /d" $HESTIA/data/queue/letsencrypt.pipe
+	touch $CONF_DIR/queue/letsencrypt.pipe
+	sed -i "/ $domain /d" $CONF_DIR/queue/letsencrypt.pipe
 	send_notice "LETSENCRYPT" "Account registration failed ($user)"
 	check_result "$E_CONNECT" "LE account registration ($user)" > /dev/null
 fi
@@ -508,8 +508,8 @@ fi
 
 if [ "$?" -ne '0' ]; then
 	[ -d "$ssl_dir" ] && rm -rf "$ssl_dir"
-	touch $HESTIA/data/queue/letsencrypt.pipe
-	sed -i "/ $domain /d" $HESTIA/data/queue/letsencrypt.pipe
+	touch $CONF_DIR/queue/letsencrypt.pipe
+	sed -i "/ $domain /d" $CONF_DIR/queue/letsencrypt.pipe
 	send_notice 'LETSENCRYPT' "$domain certificate installation failed ($domain)"
 	check_result $? "SSL install" > /dev/null
 fi
@@ -549,8 +549,8 @@ else
 fi
 
 # LE Post-Hook
-if [ -x "/etc/hestia/hooks/le_post.sh" ]; then
-	/etc/hestia/hooks/le_post.sh "$user" "$domain" "$aliases" "$mail"
+if [ -x "$CONF_DIR/hooks/le_post.sh" ]; then
+	$CONF_DIR/hooks/le_post.sh "$user" "$domain" "$aliases" "$mail"
 fi
 
 # Remove challenge folder if exist
@@ -566,8 +566,8 @@ fi
 #----------------------------------------------------------#
 
 # Deleting task from queue
-touch $HESTIA/data/queue/letsencrypt.pipe
-sed -i "/ $domain /d" $HESTIA/data/queue/letsencrypt.pipe
+touch $CONF_DIR/queue/letsencrypt.pipe
+sed -i "/ $domain /d" $CONF_DIR/queue/letsencrypt.pipe
 
 # Notifying user
 send_notice 'LETSENCRYPT' "$domain SSL has been installed successfully"

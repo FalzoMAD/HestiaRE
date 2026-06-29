@@ -34,7 +34,7 @@ is_package_valid
 #----------------------------------------------------------#
 for user in $("$BIN/h-list-users" list); do
 	# Fix Bug User Data contain path to the root user
-	USER_DATA="$HESTIA/data/users/$user"
+	USER_DATA="$CONF_DIR/users/$user"
 	check_package=$(grep "PACKAGE='$package'" $USER_DATA/user.conf)
 	if [ -n "$check_package" ]; then
 		"$BIN/h-change-user-package" "$user" "$package" 'yes'

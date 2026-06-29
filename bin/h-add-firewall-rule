@@ -30,17 +30,17 @@ source_conf "$HESTIA/conf/hestia.conf"
 # Get next firewall rule id
 get_next_fw_rule() {
 	if [ -z "$rule" ]; then
-		curr_str=$(grep "RULE=" $HESTIA/data/firewall/rules.conf \
+		curr_str=$(grep "RULE=" $CONF_DIR/firewall/rules.conf \
 			| cut -f 2 -d \' | sort -n | tail -n1)
 		rule="$((curr_str + 1))"
 	fi
 }
 
 sort_fw_rules() {
-	cat $HESTIA/data/firewall/rules.conf \
-		| sort -n -k 2 -t \' > $HESTIA/data/firewall/rules.conf.tmp
-	mv -f $HESTIA/data/firewall/rules.conf.tmp \
-		$HESTIA/data/firewall/rules.conf
+	cat $CONF_DIR/firewall/rules.conf \
+		| sort -n -k 2 -t \' > $CONF_DIR/firewall/rules.conf.tmp
+	mv -f $CONF_DIR/firewall/rules.conf.tmp \
+		$CONF_DIR/firewall/rules.conf
 }
 
 #----------------------------------------------------------#
@@ -52,7 +52,7 @@ is_format_valid 'action' 'protocol' 'port_ext'
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 get_next_fw_rule
 is_format_valid 'rule'
-is_object_new '../../../data/firewall/rules' 'RULE' "$rule"
+is_object_new "$CONF_DIR/firewall/rules" 'RULE' "$rule"
 if [ -n "$comment" ]; then
 	is_format_valid 'comment'
 fi
@@ -82,10 +82,10 @@ str="$str IP='$ipv4_cidr' COMMENT='$comment' SUSPENDED='no'"
 str="$str TIME='$time' DATE='$date'"
 
 # Adding to config
-echo "$str" >> $HESTIA/data/firewall/rules.conf
+echo "$str" >> $CONF_DIR/firewall/rules.conf
 
 # Changing permissions
-chmod 660 $HESTIA/data/firewall/rules.conf
+chmod 660 $CONF_DIR/firewall/rules.conf
 
 # Sorting firewall rules by id number
 sort_fw_rules

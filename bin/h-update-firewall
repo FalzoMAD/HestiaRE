@@ -40,7 +40,7 @@ is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 heal_iptables_links
 
 # Checking local IPv4 rules
-rules="$HESTIA/data/firewall/rules.conf"
+rules="$CONF_DIR/firewall/rules.conf"
 
 if [ ! -e "$rules" ]; then
 	exit
@@ -60,8 +60,8 @@ if [ $? -ne 0 ]; then
 	conntrack_ftp='no'
 fi
 
-chains="$HESTIA/data/firewall/chains.conf"
-banlist="$HESTIA/data/firewall/banlist.conf"
+chains="$CONF_DIR/firewall/chains.conf"
+banlist="$CONF_DIR/firewall/banlist.conf"
 
 # Checking custom OpenSSH port (or ports)
 sshport="$($BIN/h-list-sys-sshd-port plain | sed ':a;N;$!ba;s/\n/,/g')"
@@ -91,7 +91,7 @@ if [ "$conntrack" != 'no' ] || grep --quiet container=lxc /proc/1/environ; then
 	echo "$str" >> "$tmp"
 fi
 
-ips="$(ls $HESTIA/data/ips)"
+ips="$(ls $CONF_DIR/ips)"
 # Handling local traffic
 for ip in $ips; do
 	echo "$iptables -A INPUT -s $ip -j ACCEPT" >> "$tmp"
@@ -155,8 +155,8 @@ bash "$tmp" 2> /dev/null
 rm -f "$tmp"
 
 # Checking custom trigger
-if [ -x "$HESTIA/data/firewall/custom.sh" ]; then
-	bash "$HESTIA/data/firewall/custom.sh"
+if [ -x "$CONF_DIR/firewall/custom.sh" ]; then
+	bash "$CONF_DIR/firewall/custom.sh"
 fi
 
 # Checking fail2ban support

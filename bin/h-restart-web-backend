@@ -23,7 +23,7 @@ source $HESTIA/func/main.sh
 source_conf "$HESTIA/conf/hestia.conf"
 
 send_email_report() {
-	email=$(grep CONTACT "$HESTIA/data/users/$ROOT_USER/user.conf")
+	email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf")
 	email=$(echo "$email" | cut -f 2 -d "'")
 	subj="$(hostname): $WEB_BACKEND restart failed"
 	cat $tmpfile | $SENDMAIL -s "$subj" $email
@@ -58,8 +58,8 @@ fi
 
 # Schedule restart
 if [ "$1" = 'scheduled' ] || [ -z "$1" ] && [ "$SCHEDULED_RESTART" = 'yes' ]; then
-	sed -i "/\/$SCRIPT now/d" $HESTIA/data/queue/restart.pipe
-	echo "$BIN/$SCRIPT now" >> $HESTIA/data/queue/restart.pipe
+	sed -i "/\/$SCRIPT now/d" $CONF_DIR/queue/restart.pipe
+	echo "$BIN/$SCRIPT now" >> $CONF_DIR/queue/restart.pipe
 	exit
 fi
 
@@ -90,8 +90,8 @@ else
 fi
 
 # Update restart queue
-if [ -e "$HESTIA/data/queue/restart.pipe" ]; then
-	sed -i "/\/$SCRIPT now/d" $HESTIA/data/queue/restart.pipe
+if [ -e "$CONF_DIR/queue/restart.pipe" ]; then
+	sed -i "/\/$SCRIPT now/d" $CONF_DIR/queue/restart.pipe
 fi
 
 #----------------------------------------------------------#

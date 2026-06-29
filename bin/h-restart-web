@@ -21,7 +21,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 date=$(date +"%Y-%m-%d %H:%M:%S")
 
 send_email_report() {
-	email=$(grep CONTACT "$HESTIA/data/users/$ROOT_USER/user.conf")
+	email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf")
 	email=$(echo "$email" | cut -f 2 -d "'")
 	tmpfile=$(mktemp)
 	subj="$(hostname): $WEB_SYSTEM restart failed"
@@ -63,14 +63,14 @@ fi
 restart=$1
 # Schedule restart
 if [ "$1" = 'scheduled' ] || [ -z "$1" ] && [ "$SCHEDULED_RESTART" = 'yes' ]; then
-	sed -i "/\/$SCRIPT now/d" $HESTIA/data/queue/restart.pipe
-	echo "$BIN/$SCRIPT now" >> $HESTIA/data/queue/restart.pipe
+	sed -i "/\/$SCRIPT now/d" $CONF_DIR/queue/restart.pipe
+	echo "$BIN/$SCRIPT now" >> $CONF_DIR/queue/restart.pipe
 	exit
 fi
 
 if [ "$1" = "updatessl" ]; then
-	sed -i "/\/$SCRIPT ssl/d" $HESTIA/data/queue/restart.pipe
-	echo "$BIN/$SCRIPT ssl" >> $HESTIA/data/queue/restart.pipe
+	sed -i "/\/$SCRIPT ssl/d" $CONF_DIR/queue/restart.pipe
+	echo "$BIN/$SCRIPT ssl" >> $CONF_DIR/queue/restart.pipe
 	exit
 fi
 
@@ -109,9 +109,9 @@ if [ $? -ne 0 ]; then
 fi
 
 # Update restart queue
-if [ -e "$HESTIA/data/queue/restart.pipe" ]; then
-	sed -i "/\/$SCRIPT now/d" $HESTIA/data/queue/restart.pipe
-	sed -i "/\/$SCRIPT ssl/d" $HESTIA/data/queue/restart.pipe
+if [ -e "$CONF_DIR/queue/restart.pipe" ]; then
+	sed -i "/\/$SCRIPT now/d" $CONF_DIR/queue/restart.pipe
+	sed -i "/\/$SCRIPT ssl/d" $CONF_DIR/queue/restart.pipe
 fi
 
 #----------------------------------------------------------#

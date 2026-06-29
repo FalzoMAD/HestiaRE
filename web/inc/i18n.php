@@ -54,15 +54,15 @@ function htmlify_trans($string, $closingTag) {
 function get_email_template($file, $language) {
 	if (
 		file_exists(
-			$_SERVER["HESTIA"] . "/data/templates/email/" . $language . "/" . $file . ".html",
+			$_SERVER["HESTIA"] . "/templates/email/" . $language . "/" . $file . ".html",
 		)
 	) {
 		return file_get_contents(
-			$_SERVER["HESTIA"] . "/data/templates/email/" . $language . "/" . $file . ".html",
+			$_SERVER["HESTIA"] . "/templates/email/" . $language . "/" . $file . ".html",
 		);
 	}
-	if (file_exists($_SERVER["HESTIA"] . "/data/templates/email/" . $file . ".html")) {
-		return file_get_contents($_SERVER["HESTIA"] . "/data/templates/email/" . $file . ".html");
+	if (file_exists($_SERVER["HESTIA"] . "/templates/email/" . $file . ".html")) {
+		return file_get_contents($_SERVER["HESTIA"] . "/templates/email/" . $file . ".html");
 	}
 	return false;
 }

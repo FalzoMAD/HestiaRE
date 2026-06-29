@@ -38,7 +38,7 @@ fi
 
 # Checking user certificates
 for user in $("$BIN/h-list-users" list); do
-	USER_DATA=$HESTIA/data/users/$user
+	USER_DATA=$CONF_DIR/users/$user
 
 	for domain in $(search_objects 'web' 'LETSENCRYPT' 'yes' 'DOMAIN'); do
 		# Clear any keys related to web domains

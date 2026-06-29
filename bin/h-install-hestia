@@ -1,14 +1,14 @@
 #!/bin/bash
-# info: install HestiaRE from a written /etc/hestia/install.conf
+# info: install HestiaRE from a written $CONF_DIR/install.conf
 # options: (none)
 #
-# Non-interactive installer orchestrator. Reads /etc/hestia/install.conf
+# Non-interactive installer orchestrator. Reads $CONF_DIR/install.conf
 # (produced by func/wizard.sh via install.sh) and installs HestiaRE in stages,
 # gated by the COMPONENT_* values. Replaces the former `just install` flow.
 #
 # Pure bash: stages are functions in this file; shared helpers live in
 # func/helper.sh; component install logic reuses the existing h-add-sys-*
-# commands where they exist. Idempotent via /etc/hestia/.done.* sentinels.
+# commands where they exist. Idempotent via $CONF_DIR/.done.* sentinels.
 
 set -eo pipefail
 
@@ -25,7 +25,7 @@ _on_error() {
 	[ -f "$LOG" ] && { echo "       Last lines of ${LOG}:" >&2; tail -n 15 "$LOG" 2>/dev/null | sed 's/^/       | /' >&2 || true; }
 	echo "" >&2
 	echo "       Recovery: fix the cause shown above, then re-run the installer." >&2
-	echo "       Completed stages are skipped (see /etc/hestia/.done.*); only the" >&2
+	echo "       Completed stages are skipped (see $CONF_DIR/.done.*); only the" >&2
 	echo "       failed and later stages run again:" >&2
 	echo "         h-install-hestia" >&2
 	echo "       Details + how to force a stage to re-run: TROUBLESHOOTING.md" >&2
@@ -34,7 +34,7 @@ trap '_on_error "$?" "$LINENO"' ERR
 
 # ── Thin validation (the env must already be seeded by install.sh) ──────────
 [ "$(id -u)" = "0" ] || { echo "ERROR: h-install-hestia must be run as root." >&2; exit 1; }
-for _f in "$INSTALL_CONF" /etc/hestia/hestia.env /etc/hestia/conf/hestia.conf; do
+for _f in "$INSTALL_CONF" $CONF_DIR/hestia.env $CONF_DIR/conf/hestia.conf; do
 	[ -f "$_f" ] || {
 		echo "ERROR: $_f not found." >&2
 		echo "       Run the installer first:  bash install.sh" >&2
@@ -283,12 +283,12 @@ install_web() {
 		sed -i "s%;date.timezone =%date.timezone = $ZONE%g" "$pconf"
 		sed -i 's%_open_tag = Off%_open_tag = On%g' "$pconf"
 	done
-	printf '#!/bin/sh\nfind -O3 /home/*/tmp/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\nfind -O3 %s/data/sessions/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\n' \
+	printf '#!/bin/sh\nfind -O3 /home/*/tmp/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\nfind -O3 %s/.sessions/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\n' \
 		"$HESTIA" > /etc/cron.daily/php-session-cleanup
 	chmod 755 /etc/cron.daily/php-session-cleanup
 	mkdir -p /var/www/html /var/www/document_errors
-	cp -rf "$HESTIA_COMMON_DIR/templates/web/unassigned/index.html" /var/www/html/
-	cp -rf "$HESTIA_COMMON_DIR/templates/web/skel/document_errors/"* /var/www/document_errors/
+	cp -rf "$HESTIA/templates/web/unassigned/index.html" /var/www/html/
+	cp -rf "$HESTIA/templates/web/skel/document_errors/"* /var/www/document_errors/
 	mkdir -p /etc/logrotate.d/httpd-prerotate
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/httpd-prerotate/"* /etc/logrotate.d/httpd-prerotate/ 2>/dev/null || true
 	rm -f /etc/cron.d/awstats
@@ -525,23 +525,20 @@ init_hestia_structure() {
 	[ -L /var/log/hestia ] && rm -f /var/log/hestia || true
 	mkdir -p /var/log/hestia
 	ln -sf /var/log/hestia "$HESTIA/log"
+	# templates/ and packages/ ship at the install root (tarball) — not created here.
 	mkdir -p "$HESTIA/conf" "$HESTIA/ssl" \
-		"$HESTIA/data/ips" "$HESTIA/data/queue" \
-		"$HESTIA/data/users" "$HESTIA/data/firewall" \
-		"$HESTIA/data/sessions" \
-		"$HESTIA/data/templates/web/php-fpm" \
-		"$HESTIA/data/templates/mail" \
-		"$HESTIA/data/templates/dns" \
-		"$HESTIA/data/packages"
-	touch "$HESTIA/data/queue/backup.pipe" "$HESTIA/data/queue/disk.pipe" \
-		"$HESTIA/data/queue/webstats.pipe" "$HESTIA/data/queue/restart.pipe" \
-		"$HESTIA/data/queue/traffic.pipe" "$HESTIA/data/queue/daily.pipe" \
+		"$CONF_DIR/ips" "$CONF_DIR/queue" \
+		"$CONF_DIR/users" "$CONF_DIR/firewall" \
+		"$HESTIA/.sessions"
+	touch "$CONF_DIR/queue/backup.pipe" "$CONF_DIR/queue/disk.pipe" \
+		"$CONF_DIR/queue/webstats.pipe" "$CONF_DIR/queue/restart.pipe" \
+		"$CONF_DIR/queue/traffic.pipe" "$CONF_DIR/queue/daily.pipe" \
 		"$HESTIA/log/system.log" "$HESTIA/log/auth.log" \
 		"$HESTIA/log/backup.log" "$HESTIA/log/activity.log"
-	chmod 750 "$HESTIA/conf" "$HESTIA/data/users" "$HESTIA/data/ips" "$HESTIA/log"
-	chmod -R 750 "$HESTIA/data/queue"
+	chmod 750 "$HESTIA/conf" "$CONF_DIR/users" "$CONF_DIR/ips" "$HESTIA/log"
+	chmod -R 750 "$CONF_DIR/queue"
 	chmod 660 /var/log/hestia/* 2>/dev/null || true
-	chmod 770 "$HESTIA/data/sessions"
+	chmod 770 "$HESTIA/.sessions"
 	echo "[ OK ] structure ready"
 }
 
@@ -572,25 +569,22 @@ configure_hestia() {
 		[ -L "$vcmd" ] || ln -s "$(basename "$hcmd")" "$vcmd"
 	done
 
-	echo "[ * ] Installing packages, templates, firewall data..."
-	cp -rf "$HESTIA_COMMON_DIR/packages" "$HESTIA/data/"
+	echo "[ * ] Installing firewall data; customizing shipped packages..."
+	# packages/ and templates/ ship at the install root via the tarball — no copy.
 	local -a dom; IFS='.' read -r -a dom <<< "$HESTIA_HOSTNAME"
 	if [ -n "${dom[-2]:-}" ] && [ -n "${dom[-1]:-}" ]; then
-		sed -i "s/domain.tld/${dom[-2]}.${dom[-1]}/g" "$HESTIA/data/packages/"*.pkg 2>/dev/null || true
+		sed -i "s/domain.tld/${dom[-2]}.${dom[-1]}/g" "$HESTIA/packages/"*.pkg 2>/dev/null || true
 	fi
-	cp -rf "$HESTIA_INSTALL_DIR/templates" "$HESTIA/data/"
-	cp -rf "$HESTIA_COMMON_DIR/templates/web/" "$HESTIA/data/templates"
-	cp -rf "$HESTIA_COMMON_DIR/firewall" "$HESTIA/data/"
-	rm -f "$HESTIA/data/firewall/ipset/blacklist.sh" "$HESTIA/data/firewall/ipset/blacklist.ipv6.sh"
+	mkdir -p "$CONF_DIR/firewall"
+	cp -f "$HESTIA/share/firewall/rules.conf" "$CONF_DIR/firewall/rules.conf"
 	# Strip mail firewall rules when there is no mail block (was: profile != standard)
 	if [ "$mail_present" != "yes" ]; then
-		sed -i "/COMMENT='SMTP'/d" "$HESTIA/data/firewall/rules.conf" 2>/dev/null || true
-		sed -i "/COMMENT='IMAP'/d" "$HESTIA/data/firewall/rules.conf" 2>/dev/null || true
-		sed -i "/COMMENT='POP3'/d" "$HESTIA/data/firewall/rules.conf" 2>/dev/null || true
+		sed -i "/COMMENT='SMTP'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
+		sed -i "/COMMENT='IMAP'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
+		sed -i "/COMMENT='POP3'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
 	fi
 	# Strip FTP rule unless proftpd was selected
-	is_on "${COMPONENT_ADDON_PROFTPD:-}" || sed -i "/COMMENT='FTP'/d" "$HESTIA/data/firewall/rules.conf" 2>/dev/null || true
-	cp -rf "$HESTIA_COMMON_DIR/api" "$HESTIA/data/"
+	is_on "${COMPONENT_ADDON_PROFTPD:-}" || sed -i "/COMMENT='FTP'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
 
 	echo "[ * ] Setting hostname..."
 	"$BIN/h-change-sys-hostname" "$HESTIA_HOSTNAME" > /dev/null 2>&1 || true
@@ -768,7 +762,7 @@ finalize_install() {
 	echo "[ * ] Starting Hestia service..."
 	update-rc.d hestia defaults > /dev/null 2>&1 || true
 	systemctl start hestia || true
-	chown hestiaweb:hestiaweb "$HESTIA/data/sessions"
+	chown hestiaweb:hestiaweb "$HESTIA/.sessions"
 	mkdir -p /backup && chmod 755 /backup
 	echo "[ * ] Scheduling Let's Encrypt host certificate..."
 	echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && $HESTIA/bin/h-add-letsencrypt-host" \

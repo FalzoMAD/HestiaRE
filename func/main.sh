@@ -38,14 +38,18 @@ BACKUP_DISK_LIMIT=95
 BACKUP_LA_LIMIT=$(grep -c '^processor' /proc/cpuinfo)
 RRD_STEP=300
 BIN=$HESTIA/bin
+# Instance config root (/etc/hestia). Exported by hestia.env on fresh installs;
+# this fallback is the reliable source — main.sh ships in the tarball, so it also
+# covers existing installs whose hestia.env predates the variable.
+CONF_DIR="${CONF_DIR:-/etc/hestia}"
 HESTIA_INSTALL_DIR="$HESTIA/install/deb"
 HESTIA_COMMON_DIR="$HESTIA/install/common"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 HESTIA_PHP="$HESTIA/php/bin/php"
-USER_DATA=$HESTIA/data/users/$user
-WEBTPL=$HESTIA/data/templates/web
-MAILTPL=$HESTIA/data/templates/mail
-DNSTPL=$HESTIA/data/templates/dns
+USER_DATA=$CONF_DIR/users/$user
+WEBTPL=$HESTIA/templates/web
+MAILTPL=$HESTIA/templates/mail
+DNSTPL=$HESTIA/templates/dns
 RRD=$HESTIA/web/rrd
 SENDMAIL="$HESTIA/web/inc/mail-wrapper.php"
 HESTIA_GIT_REPO="https://raw.githubusercontent.com/hestiacp/hestiacp"
@@ -55,7 +59,7 @@ SCRIPT="$(basename $0)"
 CHECK_RESULT_CALLBACK=""
 
 # install.conf live component state (HestiaRE).
-# /etc/hestia/install.conf is written by the wizard as the install recipe and is
+# $CONF_DIR/install.conf is written by the wizard as the install recipe and is
 # the source of truth for which components are currently installed. h-add-sys-*/
 # h-remove-sys-* call this after a successful (un)install so the file reflects the
 # live system without parsing service state. Idempotent: updates the key in place
@@ -63,7 +67,7 @@ CHECK_RESULT_CALLBACK=""
 # COMPONENT_<id>="<value>". No-op (and success) when install.conf is absent.
 set_install_component() {
 	local id="$1" value="$2"
-	local conf="/etc/hestia/install.conf"
+	local conf="$CONF_DIR/install.conf"
 	[ -n "$id" ] || return 0
 	[ -f "$conf" ] || return 0
 	local key="COMPONENT_${id}"
@@ -170,7 +174,7 @@ log_history() {
 		if ! $BIN/h-list-user "$log_user" > /dev/null; then
 			return $E_NOTEXIST
 		fi
-		log=$HESTIA/data/users/$log_user/history.log
+		log=$CONF_DIR/users/$log_user/history.log
 	fi
 	touch $log
 
@@ -276,11 +280,11 @@ generate_password() {
 # Package existence check
 is_package_valid() {
 	if [ -z $1 ]; then
-		if [ ! -e "$HESTIA/data/packages/$package.pkg" ]; then
+		if [ ! -e "$HESTIA/packages/$package.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $package doesn't exist"
 		fi
 	else
-		if [ ! -e "$HESTIA/data/packages/$1.pkg" ]; then
+		if [ ! -e "$HESTIA/packages/$1.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $1 doesn't exist"
 		fi
 	fi
@@ -288,7 +292,7 @@ is_package_valid() {
 }
 
 is_package_new() {
-	if [ -e "$HESTIA/data/packages/$1.pkg" ]; then
+	if [ -e "$HESTIA/packages/$1.pkg" ]; then
 		echo "Error: package $1 already exists."
 		log_event "$E_EXISTS" "$ARGUMENTS"
 		exit "$E_EXISTS"
@@ -319,12 +323,23 @@ is_incremental_backup_enabled() {
 
 # Check user backup settings
 is_backup_scheduled() {
-	if [ -e "$HESTIA/data/queue/backup.pipe" ]; then
-		check_q=$(grep " $user " $HESTIA/data/queue/backup.pipe | grep $1)
+	if [ -e "$CONF_DIR/queue/backup.pipe" ]; then
+		check_q=$(grep " $user " $CONF_DIR/queue/backup.pipe | grep $1)
 		if [ -n "$check_q" ]; then
 			check_result "$E_EXISTS" "$1 is already scheduled"
 		fi
 	fi
+}
+
+# Resolve an object's .conf path. Global objects (firewall rules/ipset, database
+# hosts) pass an absolute path and are used as-is; everything else resolves under
+# the per-user $USER_DATA — so the same helpers serve user and global objects
+# without the fragile ../../../ traversal that depended on $USER_DATA's depth (#154).
+_object_conf() {
+	case "$1" in
+		/*) printf '%s' "$1.conf" ;;
+		*) printf '%s' "$USER_DATA/$1.conf" ;;
+	esac
 }
 
 # Check if object is new
@@ -334,7 +349,7 @@ is_object_new() {
 			object="OK"
 		fi
 	else
-		object=$(grep "$2='$3'" $USER_DATA/$1.conf)
+		object=$(grep "$2='$3'" $(_object_conf "$1"))
 	fi
 	if [ -n "$object" ]; then
 		check_result "$E_EXISTS" "$2=$3 already exists"
@@ -344,18 +359,12 @@ is_object_new() {
 # Check if object is valid
 is_object_valid() {
 	if [ $2 = 'USER' ]; then
-		tstpath="$(readlink -f "$HESTIA/data/users/$3")"
-		if [ "$(dirname "$tstpath")" != "$(readlink -f "$HESTIA/data/users")" ] || [ ! -d "$HESTIA/data/users/$3" ]; then
-			check_result "$E_NOTEXIST" "$1 $3 doesn't exist"
-		fi
-	elif [ $2 = 'KEY' ]; then
-		local key="$(basename "$3")"
-
-		if [[ -z "$key" || ${#key} -lt 16 ]] || [[ ! -f "$HESTIA/data/access-keys/${key}" && ! -f "$HESTIA/data/access-keys/$key" ]]; then
+		tstpath="$(readlink -f "$CONF_DIR/users/$3")"
+		if [ "$(dirname "$tstpath")" != "$(readlink -f "$CONF_DIR/users")" ] || [ ! -d "$CONF_DIR/users/$3" ]; then
 			check_result "$E_NOTEXIST" "$1 $3 doesn't exist"
 		fi
 	else
-		object=$(grep "$2='$3'" $HESTIA/data/users/$user/$1.conf)
+		object=$(grep "$2='$3'" $(_object_conf "$1"))
 		if [ -z "$object" ]; then
 			arg1=$(basename $1)
 			arg2=$(echo $2 | tr '[:upper:]' '[:lower:]')
@@ -546,9 +555,9 @@ parse_object_kv_list() {
 # Check if object is supended
 is_object_suspended() {
 	if [ "$2" = 'USER' ]; then
-		spnd=$(grep "SUSPENDED='yes'" $USER_DATA/$1.conf)
+		spnd=$(grep "SUSPENDED='yes'" $(_object_conf "$1"))
 	else
-		spnd=$(grep "$2='$3'" $USER_DATA/$1.conf | grep "SUSPENDED='yes'")
+		spnd=$(grep "$2='$3'" $(_object_conf "$1") | grep "SUSPENDED='yes'")
 	fi
 	if [ -z "$spnd" ]; then
 		check_result "$E_UNSUSPENDED" "$(basename $1) $3 is not suspended"
@@ -558,9 +567,9 @@ is_object_suspended() {
 # Check if object is unsupended
 is_object_unsuspended() {
 	if [ $2 = 'USER' ]; then
-		spnd=$(grep "SUSPENDED='yes'" "$USER_DATA/$1.conf")
+		spnd=$(grep "SUSPENDED='yes'" "$(_object_conf "$1")")
 	else
-		spnd=$(grep "$2='$3'" $USER_DATA/$1.conf | grep "SUSPENDED='yes'")
+		spnd=$(grep "$2='$3'" $(_object_conf "$1") | grep "SUSPENDED='yes'")
 	fi
 	if [ -n "$spnd" ]; then
 		check_result "$E_SUSPENDED" "$(basename $1) $3 is suspended"
@@ -569,7 +578,7 @@ is_object_unsuspended() {
 
 # Check if object value is empty
 is_object_value_empty() {
-	str=$(grep "$2='$3'" $USER_DATA/$1.conf)
+	str=$(grep "$2='$3'" $(_object_conf "$1"))
 	parse_object_kv_list "$str"
 	local varname="${4#\$}"
 	value="${!varname}"
@@ -580,7 +589,7 @@ is_object_value_empty() {
 
 # Check if object value is empty
 is_object_value_exist() {
-	str=$(grep "$2='$3'" $USER_DATA/$1.conf)
+	str=$(grep "$2='$3'" $(_object_conf "$1"))
 	parse_object_kv_list "$str"
 	local varname="${4#\$}"
 	value="${!varname}"
@@ -620,7 +629,7 @@ is_dir_symlink() {
 
 # Get object value
 get_object_value() {
-	object=$(grep "$2='$3'" $USER_DATA/$1.conf)
+	object=$(grep "$2='$3'" $(_object_conf "$1"))
 	parse_object_kv_list "$object"
 	local varname="${4#\$}"
 	value="${!varname}"
@@ -628,12 +637,12 @@ get_object_value() {
 }
 
 get_object_values() {
-	parse_object_kv_list $(grep "$2='$3'" $USER_DATA/$1.conf)
+	parse_object_kv_list $(grep "$2='$3'" $(_object_conf "$1"))
 }
 
 # Update object value
 update_object_value() {
-	row=$(grep -nF "$2='$3'" $USER_DATA/$1.conf)
+	row=$(grep -nF "$2='$3'" $(_object_conf "$1"))
 	lnr=$(echo $row | cut -f 1 -d ':')
 	object=$(echo $row | sed "s/^$lnr://")
 	parse_object_kv_list "$object"
@@ -642,18 +651,18 @@ update_object_value() {
 	old=$(echo "$old" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/\//\\\//g')
 	new=$(echo "$5" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/\//\\\//g')
 	sed -i "$lnr s/${4//$/}='${old//\*/\\*}'/${4//$/}='${new//\*/\\*}'/g" \
-		$USER_DATA/$1.conf
+		$(_object_conf "$1")
 }
 
 # Add object key
 add_object_key() {
-	row=$(grep -n "$2='$3'" $USER_DATA/$1.conf)
+	row=$(grep -n "$2='$3'" $(_object_conf "$1"))
 	lnr=$(echo $row | cut -f 1 -d ':')
 	object=$(echo $row | sed "s/^$lnr://")
 	if [ -z "$(echo $object | grep $4=)" ]; then
 		local varname="${4#\$}"
 		old="${!varname}"
-		sed -i "$lnr s/$5='/$4='' $5='/" $USER_DATA/$1.conf
+		sed -i "$lnr s/$5='/$4='' $5='/" $(_object_conf "$1")
 	fi
 }
 
@@ -661,8 +670,8 @@ add_object_key() {
 search_objects() {
 	OLD_IFS="$IFS"
 	IFS=$'\n'
-	if [ -f $USER_DATA/$1.conf ]; then
-		for line in $(grep $2=\'$3\' $USER_DATA/$1.conf); do
+	if [ -f $(_object_conf "$1") ]; then
+		for line in $(grep $2=\'$3\' $(_object_conf "$1")); do
 			parse_object_kv_list "$line"
 			echo "${!4}"
 		done
@@ -678,10 +687,10 @@ get_user_value() {
 # Update user value in user.conf
 update_user_value() {
 	key="${2//$/}"
-	lnr=$(grep -m 1 -n "^$key='" $HESTIA/data/users/$1/user.conf | cut -f 1 -d ':')
+	lnr=$(grep -m 1 -n "^$key='" $CONF_DIR/users/$1/user.conf | cut -f 1 -d ':')
 	if [ -n "$lnr" ]; then
-		sed -i "$lnr d" $HESTIA/data/users/$1/user.conf
-		sed -i "$lnr i\\$key='${3}'" $HESTIA/data/users/$1/user.conf
+		sed -i "$lnr d" $CONF_DIR/users/$1/user.conf
+		sed -i "$lnr i\\$key='${3}'" $CONF_DIR/users/$1/user.conf
 	fi
 }
 
@@ -689,7 +698,7 @@ update_user_value() {
 increase_user_value() {
 	key="${2//$/}"
 	factor="${3-1}"
-	conf="$HESTIA/data/users/$1/user.conf"
+	conf="$CONF_DIR/users/$1/user.conf"
 	old=$(grep "$key=" $conf | cut -f 2 -d \')
 	if [ -z "$old" ]; then
 		old=0
@@ -702,7 +711,7 @@ increase_user_value() {
 decrease_user_value() {
 	key="${2//$/}"
 	factor="${3-1}"
-	conf="$HESTIA/data/users/$1/user.conf"
+	conf="$CONF_DIR/users/$1/user.conf"
 	old=$(grep "$key=" $conf | cut -f 2 -d \')
 	if [ -z "$old" ]; then
 		old=0
@@ -1420,7 +1429,6 @@ is_format_valid() {
 		arg="${!arg_name}"
 		if [ -n "$arg" ]; then
 			case $arg_name in
-				access_key_id) is_access_key_id_format_valid "$arg" "$arg_name" ;;
 				account) is_localpart_format_valid "$arg" "$arg_name" '64' ;;
 				action) is_fw_action_format_valid "$arg" ;;
 				active) is_boolean_format_valid "$arg" 'active' ;;
@@ -1497,7 +1505,6 @@ is_format_valid() {
 				rtype) is_dns_type_format_valid "$arg" ;;
 				rule) is_int_format_valid "$arg" "rule id" ;;
 				service) is_service_format_valid "$arg" "$arg_name" ;;
-				secret_access_key) is_secret_access_key_format_valid "$arg" "$arg_name" ;;
 				soa) is_domain_format_valid "$arg" 'SOA' ;;
 				#missing command: is_format_valid_shell
 				shell) is_format_valid_shell "$arg" ;;
@@ -1527,129 +1534,6 @@ is_command_valid_format() {
 	fi
 	if [[ -n $(echo "$1" | grep -e '\-\-') ]]; then
 		check_result "$E_INVALID" "Invalid command format"
-	fi
-}
-# Check access_key_id name
-# Don't work with legacy key format
-is_access_key_id_format_valid() {
-	local hash="$1"
-
-	# ACCESS_KEY_ID format validation
-	if ! [[ "$hash" =~ ^[[:alnum:]]{20}$ ]]; then
-		check_result "$E_INVALID" "invalid $2 format :: $hash"
-	fi
-}
-
-# SECRET_ACCESS_KEY format validation
-is_secret_access_key_format_valid() {
-	local hash="$1"
-
-	if ! [[ "$hash" =~ ^[[:alnum:]|_|\.|\+|/|\^|~|=|%|\-]{40}$ ]]; then
-		check_result "$E_INVALID" "invalid $2 format"
-	fi
-}
-
-# Checks if the secret belongs to the access key
-check_access_key_secret() {
-	local access_key_id="$(basename "$1")"
-	local secret_access_key=$2
-	local -n key_user=$3
-
-	if [[ -z "$access_key_id" || ! -f "$HESTIA/data/access-keys/${access_key_id}" ]]; then
-		check_result "$E_PASSWORD" "Access key $access_key_id doesn't exist"
-	fi
-
-	if [[ -z "$secret_access_key" ]]; then
-		check_result "$E_PASSWORD" "Secret key not provided for key $access_key_id"
-	elif ! [[ "$secret_access_key" =~ ^[[:alnum:]|_|\.|\+|/|\^|~|=|%|\-]{40}$ ]]; then
-		check_result "$E_PASSWORD" "Invalid secret key for key $access_key_id"
-	else
-		SECRET_ACCESS_KEY=""
-		source_conf "$HESTIA/data/access-keys/${access_key_id}"
-
-		if [[ -z "$SECRET_ACCESS_KEY" || "$SECRET_ACCESS_KEY" != "$secret_access_key" ]]; then
-			check_result "$E_PASSWORD" "Invalid secret key for key $access_key_id"
-		fi
-	fi
-
-	key_user="$USER"
-}
-
-# Checks if the key belongs to the user
-check_access_key_user() {
-	local access_key_id="$(basename "$1")"
-	local user=$2
-
-	if [[ -z "$access_key_id" || ! -f "$HESTIA/data/access-keys/${access_key_id}" ]]; then
-		check_result "$E_FORBIDEN" "Access key $access_key_id doesn't exist"
-	fi
-
-	if [[ -z "$user" ]]; then
-		check_result "$E_FORBIDEN" "User not provided"
-	else
-		USER=""
-		source_conf "$HESTIA/data/access-keys/${access_key_id}"
-
-		if [[ -z "$USER" || "$USER" != "$user" ]]; then
-			check_result "$E_FORBIDEN" "key $access_key_id does not belong to the user $user"
-		fi
-	fi
-}
-
-# Checks if the key is allowed to run the command
-check_access_key_cmd() {
-	local access_key_id="$(basename "$1")"
-	local cmd=$2
-	local -n user_arg_position=$3
-
-	if [[ "$DEBUG_MODE" = "true" ]]; then
-		new_timestamp
-		echo "[$date:$time] $1 $2" >> /var/log/hestia/api.log
-	fi
-	if [[ -z "$access_key_id" || ! -f "$HESTIA/data/access-keys/${access_key_id}" ]]; then
-		check_result "$E_FORBIDEN" "Access key $access_key_id doesn't exist"
-	fi
-
-	if [[ -z "$cmd" ]]; then
-		check_result "$E_FORBIDEN" "Command not provided"
-	elif [[ "$cmd" = 'h-make-tmp-file' ]]; then
-		USER="" PERMISSIONS=""
-		source_conf "${HESTIA}/data/access-keys/${access_key_id}"
-		local allowed_commands
-		if [[ -n "$PERMISSIONS" ]]; then
-			allowed_commands="$(get_apis_commands "$PERMISSIONS")"
-			if [[ -z "$(echo ",${allowed_commands}," | grep ",${hst_command},")" ]]; then
-				check_result "$E_FORBIDEN" "Key $access_key_id don't have permission to run the command $hst_command"
-			fi
-		elif [[ -z "$PERMISSIONS" && "$USER" != "$ROOT_USER" ]]; then
-			check_result "$E_FORBIDEN" "Key $access_key_id don't have permission to run the command $hst_command"
-		fi
-		user_arg_position="0"
-	elif [[ ! -e "$BIN/$cmd" ]]; then
-		check_result "$E_FORBIDEN" "Command $cmd not found"
-	else
-		USER="" PERMISSIONS=""
-		source_conf "${HESTIA}/data/access-keys/${access_key_id}"
-
-		local allowed_commands
-		if [[ -n "$PERMISSIONS" ]]; then
-			allowed_commands="$(get_apis_commands "$PERMISSIONS")"
-			if [[ -z "$(echo ",${allowed_commands}," | grep ",${hst_command},")" ]]; then
-				check_result "$E_FORBIDEN" "Key $access_key_id don't have permission to run the command $hst_command"
-			fi
-		elif [[ -z "$PERMISSIONS" && "$USER" != "$ROOT_USER" ]]; then
-			check_result "$E_FORBIDEN" "Key $access_key_id don't have permission to run the command $hst_command"
-		fi
-
-		if [[ "$USER" == "$ROOT_USER" ]]; then
-			# Admin can run commands for any user
-			user_arg_position="0"
-		else
-			user_arg_position="$(search_command_arg_position "$hst_command" "USER")"
-			if ! [[ "$user_arg_position" =~ ^[0-9]+$ ]]; then
-				check_result "$E_FORBIDEN" "Command $hst_command not found"
-			fi
-		fi
 	fi
 }
 
@@ -1865,114 +1749,6 @@ change_sys_value() {
 	fi
 }
 
-# Checks the format of APIs that will be allowed for the key
-is_key_permissions_format_valid() {
-	local permissions="$1"
-	local user="$2"
-
-	if [[ "$user" != "$ROOT_USER" && -z "$permissions" ]]; then
-		check_result "$E_INVALID" "Non-admin users need a permission list"
-	fi
-
-	while IFS=',' read -ra permissions_arr; do
-		for permission in "${permissions_arr[@]}"; do
-			permission="$(basename "$permission" | sed -E "s/^\s*|\s*$//g")"
-
-			#            if [[ -z "$(echo "$permission" | grep -E "^v-")" ]]; then
-			if [[ ! -e "$HESTIA/data/api/$permission" ]]; then
-				check_result "$E_NOTEXIST" "API $permission doesn't exist"
-			fi
-
-			source_conf "$HESTIA/data/api/$permission"
-			if [ "$ROLE" = "admin" ] && [ "$user" != "$ROOT_USER" ]; then
-				check_result "$E_INVALID" "Only the admin can run this API"
-			fi
-			#            elif [[ ! -e "$BIN/$permission" ]]; then
-			#                check_result "$E_NOTEXIST" "Command $permission doesn't exist"
-			#            fi
-		done
-	done <<< "$permissions"
-}
-
-# Remove whitespaces, and bin path from commands
-cleanup_key_permissions() {
-	local permissions="$1"
-
-	local final quote
-	while IFS=',' read -ra permissions_arr; do
-		for permission in "${permissions_arr[@]}"; do
-			permission="$(basename "$permission" | sed -E "s/^\s*|\s*$//g")"
-
-			# Avoid duplicate items
-			if [[ -z "$(echo ",${final}," | grep ",${permission},")" ]]; then
-				final+="${quote}${permission}"
-				quote=','
-			fi
-		done
-	done <<< "$permissions"
-
-	echo "$final"
-}
-
-# Extract all allowed commands from a permission list
-get_apis_commands() {
-	local permissions="$1"
-
-	local allowed_commands quote commands_to_add
-	while IFS=',' read -ra permissions_arr; do
-		for permission in "${permissions_arr[@]}"; do
-			permission="$(basename "$permission" | sed -E "s/^\s*|\s*$//g")"
-
-			commands_to_add=""
-			#            if [[ -n "$(echo "$permission" | grep -E "^v-")" ]]; then
-			#                commands_to_add="$permission"
-			#            el
-			if [[ -e "$HESTIA/data/api/$permission" ]]; then
-				source_conf "$HESTIA/data/api/$permission"
-				commands_to_add="$COMMANDS"
-			fi
-
-			if [[ -n "$commands_to_add" ]]; then
-				allowed_commands+="${quote}${commands_to_add}"
-				quote=','
-			fi
-		done
-	done <<< "$permissions"
-
-	cleanup_key_permissions "$allowed_commands"
-}
-
-# Get the position of an argument by name in a hestia command using the command's documentation comment.
-#
-# Return:
-# * 0:   It doesn't have the argument;
-# * 1-9: The position of the argument in the command.
-search_command_arg_position() {
-	local hst_command="$(basename "$1")"
-	local arg_name="$2"
-
-	local command_path="$BIN/$hst_command"
-	if [[ -z "$hst_command" || ! -e "$command_path" ]]; then
-		echo "-1"
-		return
-	fi
-
-	local position=0
-	local count=0
-	local command_options="$(sed -En 's/^# options: (.+)/\1/p' "$command_path")"
-	while IFS=' ' read -ra options_arr; do
-		for option in "${options_arr[@]}"; do
-			count=$((count + 1))
-
-			option_name="$(echo "  $option   " | sed -E 's/^(\s|\[)*|(\s|\])*$//g')"
-			if [[ "${option_name^^}" == "$arg_name" ]]; then
-				position=$count
-			fi
-		done
-	done <<< "$command_options"
-
-	echo "$position"
-}
 
 add_chroot_jail() {
 	local user=$1

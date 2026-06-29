@@ -21,7 +21,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 send_email_report() {
 	local mail_service="$1"
 	journalctl --no-pager --reverse --since=-1m --unit "$mail_service" >> "$tmpfile" 2>&1
-	email=$(grep CONTACT "$HESTIA/data/users/$ROOT_USER/user.conf")
+	email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf")
 	email=$(echo "$email" | cut -f 2 -d "'")
 	subj="$(hostname): $mail_service restart failed"
 	cat "$tmpfile" | $SENDMAIL -s "$subj" $email
@@ -49,8 +49,8 @@ fi
 
 # Schedule restart
 if [ "$1" = 'scheduled' ] || [ -z "$1" -a "$SCHEDULED_RESTART" = 'yes' ]; then
-	sed -i "/\/$SCRIPT now/d" $HESTIA/data/queue/restart.pipe
-	echo "$BIN/$SCRIPT now" >> $HESTIA/data/queue/restart.pipe
+	sed -i "/\/$SCRIPT now/d" $CONF_DIR/queue/restart.pipe
+	echo "$BIN/$SCRIPT now" >> $CONF_DIR/queue/restart.pipe
 	exit
 fi
 
@@ -72,8 +72,8 @@ if [ $? -ne 0 ]; then
 fi
 
 # Update restart queue
-if [ -e "$HESTIA/data/queue/restart.pipe" ]; then
-	sed -i "/\/$SCRIPT now/d" $HESTIA/data/queue/restart.pipe
+if [ -e "$CONF_DIR/queue/restart.pipe" ]; then
+	sed -i "/\/$SCRIPT now/d" $CONF_DIR/queue/restart.pipe
 fi
 
 #----------------------------------------------------------#

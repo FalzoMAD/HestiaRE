@@ -143,6 +143,7 @@ seed_hestia_etc() {
 	printf '%s\n' \
 		"# Do not edit — use /etc/hestia/local.conf instead" \
 		"export HESTIA='$hestia_root'" \
+		"export CONF_DIR='/etc/hestia'" \
 		"if [ -f /etc/hestia/local.conf ]; then . /etc/hestia/local.conf; fi" \
 		> /etc/hestia/hestia.env
 	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$PATH:%s/bin\nexport PATH\n' \
@@ -181,10 +182,76 @@ seed_hestia_etc() {
 	_wcv "RELEASE_BRANCH"           "release"
 	_wcv "UPGRADE_SEND_EMAIL"       "true"
 	_wcv "UPGRADE_SEND_EMAIL_LOG"   "false"
-	_wcv "API"                      "no"
-	_wcv "API_SYSTEM"               "0"
-	_wcv "API_ALLOWED_IP"           ""
 	_wcv "ROOT_USER"                "$admin"
 	_wcv "DB_SYSTEM"                "mysql"
 	unset -f _wcv
+}
+
+# ── migrate $HESTIA/data/* to their PATHS.md targets on upgrade ──────────────
+# Real move (no symlink bridge). Idempotent: each dir is only touched when the
+# old path still exists and the new target is absent, so re-runs are no-ops and
+# fresh installs (which create the new layout directly) skip everything.
+# Extended per data/-dissolution PR (#148 = extensions/ips/queue/sessions).
+migrate_data_layout() {
+	local hestia_root="${HESTIA:-/usr/local/hestia}"
+	local d
+
+	# ips + firewall + users -> $CONF_DIR (plain move). users is the per-user
+	# config tree; the backup format is location-agnostic (archives store relative
+	# paths, restore writes to $USER_DATA), so old archives still restore.
+	for d in ips firewall users; do
+		if [ -d "$hestia_root/data/$d" ] && [ ! -e "$CONF_DIR/$d" ]; then
+			mkdir -p $CONF_DIR
+			mv "$hestia_root/data/$d" "$CONF_DIR/$d"
+		fi
+	done
+
+	# data/ is fully dissolved — drop the empty husk if nothing else remains.
+	rmdir "$hestia_root/data" 2> /dev/null || true
+
+	# extensions/ is dissolved: the PSL cache becomes a single file and the
+	# optional operator mail-domain hooks join the other $CONF_DIR/hooks;
+	# then drop the (now empty) dir. rmdir keeps any unexpected leftovers safe.
+	if [ -d "$hestia_root/data/extensions" ]; then
+		mkdir -p $CONF_DIR/hooks
+		local h
+		for h in add-mail-domain delete-mail-domain; do
+			if [ -f "$hestia_root/data/extensions/$h.sh" ] && [ ! -e "$CONF_DIR/hooks/$h.sh" ]; then
+				mv "$hestia_root/data/extensions/$h.sh" "$CONF_DIR/hooks/$h.sh"
+			fi
+		done
+		if [ -f "$hestia_root/data/extensions/public_suffix_list.dat" ] && [ ! -e "$CONF_DIR/public_suffix_list.dat" ]; then
+			mv "$hestia_root/data/extensions/public_suffix_list.dat" "$CONF_DIR/public_suffix_list.dat"
+		fi
+		rmdir "$hestia_root/data/extensions" 2> /dev/null || true
+	fi
+
+	# PHP panel sessions -> $HESTIA/.sessions (plain move)
+	if [ -d "$hestia_root/data/sessions" ] && [ ! -e "$hestia_root/.sessions" ]; then
+		mv "$hestia_root/data/sessions" "$hestia_root/.sessions"
+		chmod 770 "$hestia_root/.sessions" 2> /dev/null || true
+	fi
+
+	# Queue holds runtime pipes — recreate fresh at the new location, never copy.
+	if [ -d "$hestia_root/data/queue" ] && [ ! -d "$CONF_DIR/queue" ]; then
+		mkdir -p $CONF_DIR/queue
+		chmod 750 $CONF_DIR/queue
+		local p
+		for p in backup disk webstats restart traffic daily; do
+			[ -e "$CONF_DIR/queue/$p.pipe" ] || touch "$CONF_DIR/queue/$p.pipe"
+		done
+		rm -rf "$hestia_root/data/queue"
+	fi
+
+	# Repo-root assets (packages, templates): shipped defaults arrive via the
+	# tarball at $hestia_root/{packages,templates}. Preserve operator-added files
+	# from the old data/ dir (cp -n won't clobber the refreshed defaults), then
+	# drop the old dir. (#150)
+	for d in packages templates; do
+		if [ -d "$hestia_root/data/$d" ]; then
+			mkdir -p "$hestia_root/$d"
+			cp -rn "$hestia_root/data/$d/." "$hestia_root/$d/" 2> /dev/null || true
+			rm -rf "$hestia_root/data/$d"
+		fi
+	done
 }

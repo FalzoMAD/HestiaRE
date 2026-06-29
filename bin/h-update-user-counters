@@ -44,7 +44,7 @@ fi
 
 # Updating user stats
 for user in $user_list; do
-	USER_DATA=$HESTIA/data/users/$user
+	USER_DATA=$CONF_DIR/users/$user
 	# Cleaning counters
 	SUSPENDED_USERS=0
 	SUSPENDED_WEB=0
@@ -83,15 +83,15 @@ for user in $user_list; do
 
 	# Checking users
 	if [ "$user" = "$ROOT_USER" ]; then
-		spnd=$(grep "SUSPENDED='yes'" $HESTIA/data/users/*/user.conf | wc -l)
+		spnd=$(grep "SUSPENDED='yes'" $CONF_DIR/users/*/user.conf | wc -l)
 		SUSPENDED_USERS=$spnd
 		U_USERS=$("$BIN/h-list-users" list | wc -l)
 	fi
 
-	ips=$(ls $HESTIA/data/ips)
+	ips=$(ls $CONF_DIR/ips)
 	# Checking ip
 	for ip in $ips; do
-		source $HESTIA/data/ips/$ip
+		source $CONF_DIR/ips/$ip
 		if [ "$OWNER" = "$user" ]; then
 			IP_OWNED=$((IP_OWNED + 1))
 			IP_AVAIL=$((IP_AVAIL + 1))
@@ -101,7 +101,7 @@ for user in $user_list; do
 		fi
 	done
 	if [ "$user" = "$ROOT_USER" ]; then
-		IP_AVAIL=$(ls $HESTIA/data/ips | wc -l)
+		IP_AVAIL=$(ls $CONF_DIR/ips | wc -l)
 	fi
 
 	# Checking web system

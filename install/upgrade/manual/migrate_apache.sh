@@ -48,7 +48,7 @@ echo "WEB_BACKEND='php-fpm'" >> $HESTIA/conf/defaults/hestia.conf
 
 for user in $($BIN/h-list-sys-users plain); do
 	# Define user data and get suspended status
-	USER_DATA=$HESTIA/data/users/$user
+	USER_DATA=$CONF_DIR/users/$user
 	SUSPENDED=$(get_user_value '$SUSPENDED')
 
 	# Check if user is suspended

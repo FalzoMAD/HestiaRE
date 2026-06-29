@@ -174,7 +174,7 @@ start_time=$(date '+%s')
 
 # Set notification email and subject
 subj="$user → backup failed"
-email=$(grep CONTACT "$HESTIA/data/users/$ROOT_USER/user.conf" | cut -f 2 -d \')
+email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" | cut -f 2 -d \')
 
 # Validate available disk space (take usage * 2, due to the backup handling)
 let u_disk=$(($(get_user_disk_usage) * 2))
@@ -185,7 +185,7 @@ if [ "$u_disk" -gt "$v_disk" ]; then
 	# Always notify on failure
 	echo "Not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb). https://hestiacp.com/docs/server-administration/backup-restore.html" | $SENDMAIL -s "$subj" "$email" "yes"
 	# Deleting task from queue
-	sed -i "/h-backup-user $user /d" $HESTIA/data/queue/backup.pipe
+	sed -i "/h-backup-user $user /d" $CONF_DIR/queue/backup.pipe
 	check_result "$E_LIMIT" "not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb)."
 fi
 
@@ -199,7 +199,7 @@ tmpdir=$(mktemp -p $BACKUP_TEMP -d)
 if [ "$?" -ne 0 ]; then
 	echo "Can't create tmp dir $tmpdir" | $SENDMAIL -s "$subj" "$email" "yes"
 	# Deleting task from queue
-	sed -i "/h-backup-user $user /d" $HESTIA/data/queue/backup.pipe
+	sed -i "/h-backup-user $user /d" $CONF_DIR/queue/backup.pipe
 	check_result "$E_NOTEXIST" "can't create tmp dir"
 fi
 
@@ -340,17 +340,17 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		mkdir template/php-fpm/
 
 		if [ $WEB_BACKEND == 'php-fpm' ]; then
-			cp $HESTIA/data/templates/web/$WEB_SYSTEM/php-fpm/$TPL.tpl template/$WEB_SYSTEM/
-			cp $HESTIA/data/templates/web/$WEB_SYSTEM/php-fpm/$TPL.stpl template/$WEB_SYSTEM/
-			cp $HESTIA/data/templates/web/php-fpm/$BACKEND.tpl template/php-fpm/
+			cp $HESTIA/templates/web/$WEB_SYSTEM/php-fpm/$TPL.tpl template/$WEB_SYSTEM/
+			cp $HESTIA/templates/web/$WEB_SYSTEM/php-fpm/$TPL.stpl template/$WEB_SYSTEM/
+			cp $HESTIA/templates/web/php-fpm/$BACKEND.tpl template/php-fpm/
 		else
-			cp $HESTIA/data/templates/web/$WEB_SYSTEM/$TPL.tpl template/$WEB_SYSTEM/
-			cp $HESTIA/data/templates/web/$WEB_SYSTEM/$TPL.stpl template/$WEB_SYSTEM/
+			cp $HESTIA/templates/web/$WEB_SYSTEM/$TPL.tpl template/$WEB_SYSTEM/
+			cp $HESTIA/templates/web/$WEB_SYSTEM/$TPL.stpl template/$WEB_SYSTEM/
 		fi
 		if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
 			mkdir template/$PROXY_SYSTEM
-			cp $HESTIA/data/templates/web/$PROXY_SYSTEM/$PROXY.tpl template/$PROXY_SYSTEM/
-			cp $HESTIA/data/templates/web/$PROXY_SYSTEM/$PROXY.stpl template/$PROXY_SYSTEM/
+			cp $HESTIA/templates/web/$PROXY_SYSTEM/$PROXY.tpl template/$PROXY_SYSTEM/
+			cp $HESTIA/templates/web/$PROXY_SYSTEM/$PROXY.stpl template/$PROXY_SYSTEM/
 		fi
 
 		# Backup ssl certificates
@@ -778,7 +778,7 @@ chmod 660 $USER_DATA/backup.conf
 chmod 660 $BACKUP/$user.log
 
 # Deleting task from queue
-sed -i "/h-backup-user $user /d" $HESTIA/data/queue/backup.pipe
+sed -i "/h-backup-user $user /d" $CONF_DIR/queue/backup.pipe
 
 U_BACKUPS=$(grep BACKUP $USER_DATA/backup.conf | wc -l)
 update_user_value "$user" '$U_BACKUPS' "$U_BACKUPS"

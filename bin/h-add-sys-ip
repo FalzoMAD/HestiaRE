@@ -139,8 +139,8 @@ INTERFACE='$iface'
 NETMASK='$netmask'
 NAT='$nat_ip'
 TIME='$time'
-DATE='$date'" > $HESTIA/data/ips/$ip
-chmod 660 $HESTIA/data/ips/$ip
+DATE='$date'" > $CONF_DIR/ips/$ip
+chmod 660 $CONF_DIR/ips/$ip
 
 # WEB support
 if [ -n "$WEB_SYSTEM" ]; then

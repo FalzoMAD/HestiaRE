@@ -72,11 +72,11 @@ TOTAL_USERS=0
 
 # Updating user stats
 for user in $user_list; do
-	USER_DATA=$HESTIA/data/users/$user
-	if [ ! -f "$HESTIA/data/users/$user/user.conf" ]; then
+	USER_DATA=$CONF_DIR/users/$user
+	if [ ! -f "$CONF_DIR/users/$user/user.conf" ]; then
 		continue
 	fi
-	USER_DATA=$HESTIA/data/users/$user
+	USER_DATA=$CONF_DIR/users/$user
 	source $USER_DATA/user.conf
 	next_month=$(date +'%m/01/%y' -d "$(date +%Y-%m-15) 1 month")
 	DATE=$(date -d "$next_month -1day" +%F)
@@ -133,7 +133,7 @@ done
 
 if [ "$update_overall_stats" = 'yes' ]; then
 	# Updating overall stats
-	stats="$HESTIA/data/users/$ROOT_USER/overall_stats.log"
+	stats="$CONF_DIR/users/$ROOT_USER/overall_stats.log"
 
 	s="DATE='$DATE' TIME='$TIME' PACKAGE='default' IP_OWNED='$TOTAL_IP_OWNED'"
 	s="$s DISK_QUOTA='0' U_DISK='$TOTAL_U_DISK' U_DISK_DIRS='$TOTAL_U_DISK_DIRS'"

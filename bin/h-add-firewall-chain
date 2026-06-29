@@ -111,7 +111,7 @@ if [ $? -eq 0 ]; then
 fi
 
 # Preserving chain
-chains="$HESTIA/data/firewall/chains.conf"
+chains="$CONF_DIR/firewall/chains.conf"
 check_chain=""
 [ -f "$chains" ] && check_chain=$(grep "CHAIN='$chain'" "$chains")
 if [ -z "$check_chain" ]; then
