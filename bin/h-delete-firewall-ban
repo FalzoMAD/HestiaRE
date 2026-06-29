@@ -46,7 +46,7 @@ check_hestia_demo_mode
 # Self heal iptables links
 heal_iptables_links
 
-conf="$HESTIA/data/firewall/banlist.conf"
+conf="$CONF_DIR/firewall/banlist.conf"
 if [ "$chain" == "ALL" ]; then
 	check_ip=$(grep "IP='$ipv4_cidr' CHAIN='*'" $conf)
 	if [ -z "$check_ip" ]; then

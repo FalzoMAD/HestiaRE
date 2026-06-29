@@ -528,7 +528,7 @@ init_hestia_structure() {
 	# templates/ and packages/ ship at the install root (tarball) — not created here.
 	mkdir -p "$HESTIA/conf" "$HESTIA/ssl" \
 		"$CONF_DIR/ips" "$CONF_DIR/queue" \
-		"$HESTIA/data/users" "$HESTIA/data/firewall" \
+		"$HESTIA/data/users" "$CONF_DIR/firewall" \
 		"$HESTIA/.sessions"
 	touch "$CONF_DIR/queue/backup.pipe" "$CONF_DIR/queue/disk.pipe" \
 		"$CONF_DIR/queue/webstats.pipe" "$CONF_DIR/queue/restart.pipe" \
@@ -575,16 +575,16 @@ configure_hestia() {
 	if [ -n "${dom[-2]:-}" ] && [ -n "${dom[-1]:-}" ]; then
 		sed -i "s/domain.tld/${dom[-2]}.${dom[-1]}/g" "$HESTIA/packages/"*.pkg 2>/dev/null || true
 	fi
-	cp -rf "$HESTIA_COMMON_DIR/firewall" "$HESTIA/data/"
-	rm -f "$HESTIA/data/firewall/ipset/blacklist.sh" "$HESTIA/data/firewall/ipset/blacklist.ipv6.sh"
+	mkdir -p "$CONF_DIR/firewall"
+	cp -f "$HESTIA/share/firewall/rules.conf" "$CONF_DIR/firewall/rules.conf"
 	# Strip mail firewall rules when there is no mail block (was: profile != standard)
 	if [ "$mail_present" != "yes" ]; then
-		sed -i "/COMMENT='SMTP'/d" "$HESTIA/data/firewall/rules.conf" 2>/dev/null || true
-		sed -i "/COMMENT='IMAP'/d" "$HESTIA/data/firewall/rules.conf" 2>/dev/null || true
-		sed -i "/COMMENT='POP3'/d" "$HESTIA/data/firewall/rules.conf" 2>/dev/null || true
+		sed -i "/COMMENT='SMTP'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
+		sed -i "/COMMENT='IMAP'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
+		sed -i "/COMMENT='POP3'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
 	fi
 	# Strip FTP rule unless proftpd was selected
-	is_on "${COMPONENT_ADDON_PROFTPD:-}" || sed -i "/COMMENT='FTP'/d" "$HESTIA/data/firewall/rules.conf" 2>/dev/null || true
+	is_on "${COMPONENT_ADDON_PROFTPD:-}" || sed -i "/COMMENT='FTP'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
 
 	echo "[ * ] Setting hostname..."
 	"$BIN/h-change-sys-hostname" "$HESTIA_HOSTNAME" > /dev/null 2>&1 || true

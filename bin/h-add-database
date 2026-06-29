@@ -55,8 +55,8 @@ is_object_unsuspended 'user' 'USER' "$user"
 is_object_new 'db' 'DB' "$database"
 is_object_new 'db' 'DBUSER' "$dbuser"
 get_next_dbhost
-is_object_valid "../../../conf/$type" 'HOST' "$host"
-is_object_unsuspended "../../../conf/$type" 'DBHOST' "$host"
+is_object_valid "$HESTIA/conf/$type" 'HOST' "$host"
+is_object_unsuspended "$HESTIA/conf/$type" 'DBHOST' "$host"
 #is_charset_valid
 is_package_full 'DATABASES'
 is_password_valid

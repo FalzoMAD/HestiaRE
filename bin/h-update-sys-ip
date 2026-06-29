@@ -148,7 +148,7 @@ if [ -n "$old_ip" ]; then
 
 	# Updating firewall
 	if [ -n "$FIREWALL_SYSTEM" ]; then
-		sed -i "s/$old_ip/$new_ip/g" $HESTIA/data/firewall/*.conf
+		sed -i "s/$old_ip/$new_ip/g" $CONF_DIR/firewall/*.conf
 		$BIN/h-update-firewall
 	fi
 fi
