@@ -58,8 +58,8 @@ leer bei Install, reine Laufzeit-Befüllung → `/etc/hestia/…`.
 | `data/sessions` | `/usr/local/hestia/.sessions` | Move + `panel.conf:35` | PR2 |
 | `data/ips` | `/etc/hestia/ips` | Move (direkte Pfade) | PR2 |
 | `data/queue` | `/etc/hestia/queue` | Move, Einträge **frisch neu anlegen** | PR2 |
-| `data/packages` | `/usr/local/hestia/packages` | Move (shippt befüllt) | PR2 |
-| `data/templates` | `/usr/local/hestia/templates` | Move (shippt befüllt) | PR2 |
+| `data/packages` | `/usr/local/hestia/packages` | **Repo-Root-Asset** (kein Install-Copy) | PR2 |
+| `data/templates` | `/usr/local/hestia/templates` | **Repo-Root-Asset** (kein Install-Copy) | PR2 |
 | `data/firewall` | `/etc/hestia/firewall` | Move **nach** Guard-Fix | PR3 |
 | `data/users` | `/etc/hestia/users` | Move **nach** Guard-Fix | PR4 |
 
@@ -72,6 +72,18 @@ verschieben; optionale spätere Konsolidierung mit `/etc/hestia/hooks` nur als N
 `data/queue`: `init_hestia_structure:530` legt die `.pipe`-Einträge aktuell per `touch`
 an (nicht `mkfifo`). Bei der Migration **nicht kopieren**, sondern am neuen Ort frisch
 anlegen (aktuelles Verhalten beibehalten).
+
+**packages/templates = Repo-Root-Assets (kein Install-Copy).** Da das Ziel
+`/usr/local/hestia/{packages,templates}` = `$HESTIA` = die **Tarball-Entpack-Wurzel** ist
+(`h-update-hestia:69` `cp -r tarball/. $HESTIA/`; Frischinstall ebenso), werden diese
+Inhalte im Repo **direkt als Top-Level `packages/` und `templates/`** abgelegt und shippen
+so bereits an der finalen Stelle. Der Install-Zeit-Copy in `configure_hestia`
+(`cp -rf …/templates`, `…/packages` — `:570,575,576`) **entfällt ersatzlos** — kein
+späterer Move, keine Doppelablage. Beim Verschieben kommen **nur die tatsächlich
+genutzten** Templates mit; Templates für entfernte Features (DNS ist ohnehin weg)
+entfallen. `install/common/` bzw. `install/deb/` werden im selben Zug entrümpelt. Die
+tiefere Umstrukturierung der Template-Unterordner bleibt ein **separater Pass** (nicht
+PR2).
 
 ---
 
@@ -94,8 +106,13 @@ Keine Object-Helper-Kopplung; entfernt 3 Subdirs sauber. **De-Wiring zuerst, dan
 
 ### PR2 — `feature/<n>-data-simple-moves` (einfache Moves, kein Object-Helper)
 extensions, sessions, ips, queue, packages, templates.
-- **Installzeit:** `init_hestia_structure` (`:522-538`) + `configure_hestia` (`:569-587`)
-  auf neue Zielpfade umstellen (Dirs anlegen + Kopier-Ziele `packages`/`templates`).
+- **packages/templates:** relevante Inhalte im Repo nach Top-Level `packages/` +
+  `templates/` ziehen, `install/`-Quellen entrümpeln, und die `cp -rf …/templates|packages`
+  in `configure_hestia` (`:570,575,576`) **ersatzlos streichen** (Tarball liefert sie schon
+  in `$HESTIA/{packages,templates}`).
+- **Installzeit (Rest):** `init_hestia_structure` (`:522-538`) + `configure_hestia`
+  (`:569-587`) auf neue Zielpfade für extensions/sessions/ips/queue umstellen
+  (Dirs anlegen); die `data/templates*`/`data/packages`-mkdir-Zeilen entfallen.
 - **Referenzen:** alle `$HESTIA/data/{extensions,sessions,ips,queue,packages,templates}`
   in `bin/` + `func/` auf die neuen absoluten Pfade umstellen (inkl.
   `is_backup_scheduled` `…/data/queue/backup.pipe` in `func/main.sh:301`).
@@ -151,6 +168,13 @@ Neue, idempotente `migrate_data_layout()` in `func/helper.sh`, aufgerufen von
 Migration im Update-Transaktionsfenster laufen: in `h-update-hestia` zwischen
 Tarball-Extraktion (neuer Code) und `systemctl start hestia` (`bin/h-update-hestia:68-72`),
 damit nie neuer Code auf alte Pfade trifft.
+
+**Sonderfall packages/templates (Repo-Root-Assets).** Diese kommen beim Update bereits
+über den Tarball nach `$HESTIA/{packages,templates}` (additives `cp -r`, löscht nichts).
+`migrate_data_layout()` darf hier **nicht** stumpf `mv`-en, sondern muss vorhandene
+**Custom-Dateien** aus dem alten `data/{templates,packages}` in das neue Verzeichnis
+übernehmen (nur was im neuen Set fehlt) und dann das alte `data/`-Verzeichnis entfernen —
+sonst gehen manuell hinzugefügte Operator-Templates verloren.
 
 ---
 
