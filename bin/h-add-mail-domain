@@ -196,8 +196,8 @@ if [ -n "$WEB_SYSTEM" ] || [ -n "$PROXY_SYSTEM" ]; then
 fi
 
 # Run extension trigger
-if [ -x "/etc/hestia/extensions/add-mail-domain.sh" ]; then
-	/etc/hestia/extensions/add-mail-domain.sh "$user" "$domain"
+if [ -x "/etc/hestia/hooks/add-mail-domain.sh" ]; then
+	/etc/hestia/hooks/add-mail-domain.sh "$user" "$domain"
 fi
 
 #----------------------------------------------------------#

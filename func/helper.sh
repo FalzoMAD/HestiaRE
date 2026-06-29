@@ -195,13 +195,28 @@ migrate_data_layout() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
 	local d
 
-	# Runtime dirs -> /etc/hestia (plain move)
-	for d in extensions ips; do
-		if [ -d "$hestia_root/data/$d" ] && [ ! -e "/etc/hestia/$d" ]; then
-			mkdir -p /etc/hestia
-			mv "$hestia_root/data/$d" "/etc/hestia/$d"
+	# ips -> /etc/hestia (plain move)
+	if [ -d "$hestia_root/data/ips" ] && [ ! -e "/etc/hestia/ips" ]; then
+		mkdir -p /etc/hestia
+		mv "$hestia_root/data/ips" "/etc/hestia/ips"
+	fi
+
+	# extensions/ is dissolved: the PSL cache becomes a single file and the
+	# optional operator mail-domain hooks join the other /etc/hestia/hooks;
+	# then drop the (now empty) dir. rmdir keeps any unexpected leftovers safe.
+	if [ -d "$hestia_root/data/extensions" ]; then
+		mkdir -p /etc/hestia/hooks
+		local h
+		for h in add-mail-domain delete-mail-domain; do
+			if [ -f "$hestia_root/data/extensions/$h.sh" ] && [ ! -e "/etc/hestia/hooks/$h.sh" ]; then
+				mv "$hestia_root/data/extensions/$h.sh" "/etc/hestia/hooks/$h.sh"
+			fi
+		done
+		if [ -f "$hestia_root/data/extensions/public_suffix_list.dat" ] && [ ! -e "/etc/hestia/public_suffix_list.dat" ]; then
+			mv "$hestia_root/data/extensions/public_suffix_list.dat" "/etc/hestia/public_suffix_list.dat"
 		fi
-	done
+		rmdir "$hestia_root/data/extensions" 2> /dev/null || true
+	fi
 
 	# PHP panel sessions -> $HESTIA/.sessions (plain move)
 	if [ -d "$hestia_root/data/sessions" ] && [ ! -e "$hestia_root/.sessions" ]; then

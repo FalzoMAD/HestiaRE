@@ -60,12 +60,13 @@ Current state and migration steps are documented in Section 5.
 ├── conf/              Panel instance config (moved from $HESTIA/conf/)
 │   ├── hestia.conf    Active panel config (key=value pairs, generated)
 │   └── defaults/      Known-good baseline
-├── extensions/        PSL cache + mail-domain hooks (moved from $HESTIA/data/extensions/)
+├── public_suffix_list.dat  TLD-validation cache (downloaded by domain.sh, refreshed weekly)
 ├── firewall/          Firewall rules and ipset data (moved from $HESTIA/data/firewall/)
 ├── ips/               IP address entries (moved from $HESTIA/data/ips/)
 ├── queue/             Runtime named pipes (moved from $HESTIA/data/queue/)
-└── hooks/             Optional lifecycle scripts (moved from /etc/hestiacp/hooks/)
-    └── le_pre.sh      Example: LetsEncrypt pre-hook (optional, usually absent)
+└── hooks/             Optional lifecycle hooks (LE + mail-domain; moved from /etc/hestiacp/hooks/)
+    ├── le_pre.sh           Example: LetsEncrypt pre-hook (optional, usually absent)
+    └── add-mail-domain.sh  Example: post-add-mail-domain hook (optional)
 ```
 
 ---
@@ -232,7 +233,7 @@ later PRs firewall/users). Real move, no symlink bridge. Filenames preserved —
 | `/usr/local/hestia/conf/defaults/` | `/etc/hestia/conf/defaults/` | Stays under `conf/` (not flattened — matches §1 target); follows the conf symlink. **DONE (#129)** |
 | `/usr/local/hestia/data/firewall/` | `/etc/hestia/firewall/` | Rules + ipset data — pending (object-helper guard PR) |
 | `/usr/local/hestia/data/ips/` | `/etc/hestia/ips/` | IP address entries — **DONE (#148)** |
-| `/usr/local/hestia/data/extensions/` | `/etc/hestia/extensions/` | PSL cache + mail-domain hooks — **DONE (#148)** |
+| `/usr/local/hestia/data/extensions/` | *dissolved* | PSL → `/etc/hestia/public_suffix_list.dat` (single file); mail-domain hooks → `/etc/hestia/hooks/` — **DONE (#148)** |
 | `/usr/local/hestia/data/queue/` | `/etc/hestia/queue/` | Runtime named pipes (recreated fresh, never copied) — **DONE (#148)** |
 | `/usr/local/hestia/data/sessions/` | `/usr/local/hestia/.sessions/` | PHP panel sessions (target under install root) — **DONE (#148)** |
 | `/etc/hestiacp/hooks/` | `/etc/hestia/hooks/` | Lifecycle scripts (usually empty) |
