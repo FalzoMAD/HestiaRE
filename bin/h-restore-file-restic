@@ -68,7 +68,7 @@ $BIN/h-update-user-counters $user
 $BIN/h-update-user-counters "$ROOT_USER"
 $BIN/h-update-sys-ip-counters
 
-sed -i "/h-restore-file-restic '$user' '$snapshot' '$file' /d" /etc/hestia/queue/backup.pipe
+sed -i "/h-restore-file-restic '$user' '$snapshot' '$file' /d" $CONF_DIR/queue/backup.pipe
 
 # Logging
 $BIN/h-log-action "system" "Info" "Backup" "DNS Domain successfully restored (User: $user, Snapshot: $snapshot, Databse: $database)."

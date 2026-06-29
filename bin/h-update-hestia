@@ -69,7 +69,7 @@ systemctl stop hestia 2>/dev/null || true
 cp -r "/tmp/hestiare-$LATEST/." "$HESTIA/"
 rm -rf "/tmp/hestiare-$LATEST"
 # No apt-package migration step: HestiaRE ships no hestia-* apt packages.
-# Migrate any legacy $HESTIA/data/* dirs to their /etc/hestia targets (#148)
+# Migrate any legacy $HESTIA/data/* dirs to their $CONF_DIR targets (#148)
 # while the panel is stopped, so the new code never reads the old paths.
 # shellcheck disable=SC1090
 [ -f "$HESTIA/func/helper.sh" ] && . "$HESTIA/func/helper.sh" && migrate_data_layout || true

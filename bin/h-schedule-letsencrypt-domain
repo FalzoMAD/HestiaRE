@@ -56,7 +56,7 @@ $BIN/h-add-cron-letsencrypt-job
 
 # Adding LE task
 echo "$BIN/h-add-letsencrypt-domain $user $domain '$aliases' no yes" \
-	>> /etc/hestia/queue/letsencrypt.pipe
+	>> $CONF_DIR/queue/letsencrypt.pipe
 
 #----------------------------------------------------------#
 #                       Hestia                             #

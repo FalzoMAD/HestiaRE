@@ -59,14 +59,14 @@ fi
 
 # Schedule restart
 if [ "$1" = 'scheduled' ] || [ -z "$1" ] && [ "$SCHEDULED_RESTART" = 'yes' ]; then
-	sed -i "/\/$SCRIPT now/d" /etc/hestia/queue/restart.pipe
-	echo "$BIN/$SCRIPT now" >> /etc/hestia/queue/restart.pipe
+	sed -i "/\/$SCRIPT now/d" $CONF_DIR/queue/restart.pipe
+	echo "$BIN/$SCRIPT now" >> $CONF_DIR/queue/restart.pipe
 	exit
 fi
 
 if [ "$1" = "updatessl" ]; then
-	sed -i "/\/$SCRIPT ssl/d" /etc/hestia/queue/restart.pipe
-	echo "$BIN/$SCRIPT ssl" >> /etc/hestia/queue/restart.pipe
+	sed -i "/\/$SCRIPT ssl/d" $CONF_DIR/queue/restart.pipe
+	echo "$BIN/$SCRIPT ssl" >> $CONF_DIR/queue/restart.pipe
 	exit
 fi
 
@@ -92,8 +92,8 @@ if [ -f "$HESTIA/web/inc/nginx_proxy" ]; then
 		$BIN/h-restart-service $PROXY_SYSTEM > /dev/null 2>&1
 
 		# Update restart queue
-		if [ -e "/etc/hestia/queue/restart.pipe" ]; then
-			sed -i "/$SCRIPT/d" /etc/hestia/queue/restart.pipe
+		if [ -e "$CONF_DIR/queue/restart.pipe" ]; then
+			sed -i "/$SCRIPT/d" $CONF_DIR/queue/restart.pipe
 		fi
 
 		exit
@@ -126,9 +126,9 @@ else
 	fi
 
 	# Update restart queue
-	if [ -e "/etc/hestia/queue/restart.pipe" ]; then
-		sed -i "/\/$SCRIPT now/d" /etc/hestia/queue/restart.pipe
-		sed -i "/\/$SCRIPT ssl/d" /etc/hestia/queue/restart.pipe
+	if [ -e "$CONF_DIR/queue/restart.pipe" ]; then
+		sed -i "/\/$SCRIPT now/d" $CONF_DIR/queue/restart.pipe
+		sed -i "/\/$SCRIPT ssl/d" $CONF_DIR/queue/restart.pipe
 	fi
 fi
 

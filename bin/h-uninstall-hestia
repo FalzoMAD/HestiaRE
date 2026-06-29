@@ -4,9 +4,9 @@
 #
 # Conservative uninstaller. By default it stops the panel services and removes
 # the panel's system config (cron, sudoers, profile.d, .done.* sentinels) but
-# leaves packages, /usr/local/hestia, /etc/hestia, /home user data and the
+# leaves packages, /usr/local/hestia, $CONF_DIR, /home user data and the
 # databases intact. With --purge it additionally apt-removes the panel packages
-# and deletes /usr/local/hestia + /etc/hestia. /home and databases are ALWAYS
+# and deletes /usr/local/hestia + $CONF_DIR. /home and databases are ALWAYS
 # kept (HestiaCP-compatibility rule).
 
 HESTIA="${HESTIA:-/usr/local/hestia}"

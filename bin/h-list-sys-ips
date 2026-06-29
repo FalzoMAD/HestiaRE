@@ -26,10 +26,10 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	echo '{'
-	ip_count="$(ls /etc/hestia/ips/ | wc -l)"
+	ip_count="$(ls $CONF_DIR/ips/ | wc -l)"
 	i=1
 	while read IP; do
-		source_conf "/etc/hestia/ips/$IP"
+		source_conf "$CONF_DIR/ips/$IP"
 		echo -n '    "'$IP'": {
         "OWNER": "'$OWNER'",
         "STATUS": "'$STATUS'",
@@ -48,7 +48,7 @@ json_list() {
 			echo
 		fi
 		((i++))
-	done < <(ls /etc/hestia/ips/)
+	done < <(ls $CONF_DIR/ips/)
 	echo '}'
 }
 
@@ -57,21 +57,21 @@ shell_list() {
 	echo "IP   MASK   NAT    STATUS   WEB  DATE"
 	echo "--   ----   ---    ------   ---  ----"
 	while read IP; do
-		source_conf "/etc/hestia/ips/$IP"
+		source_conf "$CONF_DIR/ips/$IP"
 		if [ -z "$NAT" ]; then
 			NAT='no'
 		fi
 		echo "$IP $NETMASK $NAT $STATUS $U_WEB_DOMAINS $DATE"
-	done < <(ls /etc/hestia/ips/)
+	done < <(ls $CONF_DIR/ips/)
 }
 
 # PLAIN list function
 plain_list() {
 	while read IP; do
-		source_conf "/etc/hestia/ips/$IP"
+		source_conf "$CONF_DIR/ips/$IP"
 		echo -ne "$IP\t$OWNER\t$STATUS\t$NAME\t$U_SYS_USERS\t$U_WEB_DOMAINS\t"
 		echo -e "$INTERFACE\t$NETMASK\t$NAT\t$TIME\t$DATE"
-	done < <(ls /etc/hestia/ips/)
+	done < <(ls $CONF_DIR/ips/)
 }
 
 # CSV list function
@@ -79,10 +79,10 @@ csv_list() {
 	echo -n "IP,OWNER,STATUS,NAME,U_SYS_USERS,U_WEB_DOMAINS,INTERFACE"
 	echo "NETMASK,NAT,TIME,DATE"
 	while read IP; do
-		source_conf "/etc/hestia/ips/$IP"
+		source_conf "$CONF_DIR/ips/$IP"
 		echo -n "$IP,$OWNER,$STATUS,$NAME,\"$U_SYS_USERS\",$U_WEB_DOMAINS,"
 		echo "$INTERFACE, $NETMASK,$NAT,$TIME,$DATE"
-	done < <(ls /etc/hestia/ips/)
+	done < <(ls $CONF_DIR/ips/)
 }
 
 #----------------------------------------------------------#

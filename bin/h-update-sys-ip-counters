@@ -42,7 +42,7 @@ check_hestia_demo_mode
 
 # Creating user_list
 if [ -z "$ip" ]; then
-	ip_list="$(ls /etc/hestia/ips/)"
+	ip_list="$(ls $CONF_DIR/ips/)"
 else
 	ip_list="$ip"
 fi

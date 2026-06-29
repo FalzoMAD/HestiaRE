@@ -192,18 +192,18 @@ chmod 660 $USER_DATA/backup.conf \
 	$USER_DATA/cron.conf
 
 # Updating queue pipes
-echo "$BIN/h-update-user-disk $user" >> /etc/hestia/queue/disk.pipe
+echo "$BIN/h-update-user-disk $user" >> $CONF_DIR/queue/disk.pipe
 if [ -n "$WEB_SYSTEM" ]; then
 	echo "$BIN/h-update-web-domains-traff $user" \
-		>> /etc/hestia/queue/traffic.pipe
-	echo "$BIN/h-update-web-domains-disk $user" >> /etc/hestia/queue/disk.pipe
+		>> $CONF_DIR/queue/traffic.pipe
+	echo "$BIN/h-update-web-domains-disk $user" >> $CONF_DIR/queue/disk.pipe
 fi
 if [ -n "$MAIL_SYSTEM" ]; then
-	echo "$BIN/h-update-mail-domains-disk $user" >> /etc/hestia/queue/disk.pipe
+	echo "$BIN/h-update-mail-domains-disk $user" >> $CONF_DIR/queue/disk.pipe
 fi
 
 if [ -n "$DB_SYSTEM" ]; then
-	echo "$BIN/h-update-databases-disk $user" >> /etc/hestia/queue/disk.pipe
+	echo "$BIN/h-update-databases-disk $user" >> $CONF_DIR/queue/disk.pipe
 fi
 
 # Generating timestamp

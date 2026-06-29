@@ -211,9 +211,9 @@ chmod 660 $HESTIA/data/firewall/ipset.conf
 chmod 660 "${IPSET_PATH}/${IPSET_FILE}.iplist"
 
 # Install ipset daily cron updater
-if ! grep --silent --no-messages "h-update-firewall-ipset" /etc/hestia/queue/daily.pipe; then
+if ! grep --silent --no-messages "h-update-firewall-ipset" $CONF_DIR/queue/daily.pipe; then
 	cmd="$BIN/h-update-firewall-ipset yes"
-	echo "$cmd" >> /etc/hestia/queue/daily.pipe
+	echo "$cmd" >> $CONF_DIR/queue/daily.pipe
 fi
 
 #----------------------------------------------------------#

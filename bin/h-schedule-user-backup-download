@@ -41,7 +41,7 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Adding backup task to  the queue
-echo "$BIN/h-download-backup $user $backup 2>&1" >> /etc/hestia/queue/backup.pipe
+echo "$BIN/h-download-backup $user $backup 2>&1" >> $CONF_DIR/queue/backup.pipe
 
 #----------------------------------------------------------#
 #                       Hestia                             #

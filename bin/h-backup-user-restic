@@ -107,7 +107,7 @@ if [ -e "$BACKUP/$user.log" ] && [ "$notify" = "yes" ]; then
 fi
 
 # Deleting task from queue
-sed -i "/h-backup-user-restic $user /d" /etc/hestia/queue/backup.pipe
+sed -i "/h-backup-user-restic $user /d" $CONF_DIR/queue/backup.pipe
 
 # Logging
 $BIN/h-log-action "$user" "Info" "Backup" "Backup created."

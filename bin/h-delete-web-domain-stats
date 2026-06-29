@@ -63,7 +63,7 @@ rm -f "$HOMEDIR/$user/conf/web/$domain/$STATS.conf"
 #----------------------------------------------------------#
 
 # Deleting pipe command
-sed -i "/ $domain$/d" /etc/hestia/queue/webstats.pipe
+sed -i "/ $domain$/d" $CONF_DIR/queue/webstats.pipe
 
 # Update config
 update_object_value 'web' 'DOMAIN' "$domain" '$STATS' ''
