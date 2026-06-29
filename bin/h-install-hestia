@@ -513,6 +513,15 @@ install_security() {
 	if is_on "${COMPONENT_ADDON_CROWDSEC:-}"; then
 		echo "[ * ] Installing CrowdSec (minimal — see #123)..."
 		hestia_apt -y install crowdsec || true
+		# CrowdSec's Local API defaults to 127.0.0.1:8080, which collides with the
+		# apache2 backend. Move it to 127.0.0.1:8054 (LAPI is local-only); update
+		# both the server listen_uri and the agent's credentials, then restart.
+		if [ -f /etc/crowdsec/config.yaml ]; then
+			sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/config.yaml
+			[ -f /etc/crowdsec/local_api_credentials.yaml ] \
+				&& sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/local_api_credentials.yaml
+			systemctl restart crowdsec 2> /dev/null || true
+		fi
 	fi
 
 	echo "[ * ] Configuring iptables/ipset..."
@@ -658,13 +667,25 @@ configure_hestia() {
 
 	echo "[ * ] Configuring system IP..."
 	"$BIN/h-update-sys-ip" > /dev/null 2>&1 || true
-	local DEFAULT_NIC IP PUB_IP
+	local DEFAULT_NIC IP PUB_IP _reg_ip
 	DEFAULT_NIC="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end' | head -n1)"
 	IP="$(ip -4 -d -j addr show "$DEFAULT_NIC" 2>/dev/null \
 		| jq -r '.[] | .addr_info[] | if .scope == "global" then .local else empty end' 2>/dev/null \
 		| head -n1 || hostname -I | awk '{print $1}')"
+	# Authoritative IP is the object h-update-sys-ip registered; prefer it if our
+	# NIC detection differs or the detected IP is not registered.
+	if [ -z "$IP" ] || [ ! -e "$CONF_DIR/ips/$IP" ]; then
+		_reg_ip="$(ls -t "$CONF_DIR/ips/" 2>/dev/null | head -n1)"
+		[ -n "$_reg_ip" ] && IP="$_reg_ip"
+	fi
 	PUB_IP="$(curl -fsLm5 --retry 2 --ipv4 https://ip.hestiacp.com/ 2>/dev/null || echo "")"
 	if [ -n "$PUB_IP" ] && [ "$PUB_IP" != "$IP" ]; then
+		# NAT: the interface holds a private IP ($IP) and reaches the internet via
+		# PUB_IP. Record PUB_IP as the NAT address of the (already-registered) local
+		# IP object. The default domain is created on the LOCAL IP — its NAT field
+		# carries the public IP for DNS/display. Do NOT set IP=PUB_IP: there is no
+		# /etc/hestia/ips/<public> object, so h-add-web-domain would fail
+		# ("admin user can't use IP <public>").
 		[ -e /etc/rc.local ] && sed -i '/exit 0/d' /etc/rc.local || touch /etc/rc.local
 		grep -q '^#!' /etc/rc.local || echo '#!/bin/sh' >> /etc/rc.local
 		echo "$HESTIA/bin/h-update-sys-ip" >> /etc/rc.local
@@ -672,7 +693,6 @@ configure_hestia() {
 		chmod +x /etc/rc.local
 		systemctl enable rc-local > /dev/null 2>&1 || true
 		"$BIN/h-change-sys-ip-nat" "$IP" "$PUB_IP" > /dev/null 2>&1 || true
-		IP="$PUB_IP"
 	fi
 	"$BIN/h-update-firewall" || true
 
