@@ -245,10 +245,9 @@ if [ -n "$FIREWALL_SYSTEM" ]; then
 	$BIN/h-update-firewall
 fi
 
-# Restarting hestia service if nginx backend config was changed
-if [ "$NGINX_BCONF_CHANGED" = "yes" -a -f "/etc/init.d/hestia" ]; then
-	systemctl restart hestia > /dev/null 2>&1
-	check_result $? "Hestia backend restart failed" > /dev/null
+# Reload the panel webserver (Caddy) if its backend config changed
+if [ "$NGINX_BCONF_CHANGED" = "yes" ]; then
+	systemctl reload caddy > /dev/null 2>&1 || true
 fi
 
 # Logging

@@ -65,7 +65,7 @@ curl -fsSL "${AUTH[@]}" "$URL" -o /tmp/hestiare-update.tar.gz
 tar -xzf /tmp/hestiare-update.tar.gz -C /tmp
 rm -f /tmp/hestiare-update.tar.gz
 # Stop the panel around the copy so in-use files are not clobbered.
-systemctl stop hestia 2>/dev/null || true
+systemctl stop caddy hestia-php 2>/dev/null || true
 cp -r "/tmp/hestiare-$LATEST/." "$HESTIA/"
 rm -rf "/tmp/hestiare-$LATEST"
 # No apt-package migration step: HestiaRE ships no hestia-* apt packages.
@@ -73,5 +73,5 @@ rm -rf "/tmp/hestiare-$LATEST"
 # while the panel is stopped, so the new code never reads the old paths.
 # shellcheck disable=SC1090
 [ -f "$HESTIA/func/helper.sh" ] && . "$HESTIA/func/helper.sh" && migrate_data_layout || true
-systemctl start hestia 2>/dev/null || true
+systemctl start caddy hestia-php 2>/dev/null || true
 echo "Update complete."

@@ -1,0 +1,17 @@
+#!/bin/sh
+# HestiaRE panel PHP CLI — the single indirection point for the panel's PHP
+# version. The version lives in /etc/php/hestia/php-version (written at install,
+# rewritten on a PHP-version switch, e.g. Sury -> OS repo). Static path, dynamic
+# target: $HESTIA_PHP points here and never hardcodes a version. Uses the panel's
+# own CLI php.ini.
+#
+# Named hestia-php (not php) so it stays callable: /usr/local/hestia/bin is
+# appended to PATH, so a bare `php` resolves to the system /usr/bin/php.
+v=$(cat /etc/php/hestia/php-version 2> /dev/null)
+[ -n "$v" ] || v=$(ls -1 /usr/bin/php[0-9].[0-9] 2> /dev/null | sort -V | tail -n1 | sed 's#.*/php##')
+ini="/etc/php/hestia/cli/php.ini"
+if [ -f "$ini" ]; then
+	exec "/usr/bin/php${v}" -c "$ini" "$@"
+else
+	exec "/usr/bin/php${v}" "$@"
+fi

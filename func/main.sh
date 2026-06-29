@@ -45,7 +45,10 @@ CONF_DIR="${CONF_DIR:-/etc/hestia}"
 HESTIA_INSTALL_DIR="$HESTIA/install/deb"
 HESTIA_COMMON_DIR="$HESTIA/install/common"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
-HESTIA_PHP="$HESTIA/php/bin/php"
+# HestiaRE bundles no PHP — CLI helpers go through the hestia-php wrapper, which
+# resolves the panel PHP version from /etc/php/hestia/php-version (single point,
+# survives a Sury->OS-repo switch).
+HESTIA_PHP="$HESTIA/bin/hestia-php"
 USER_DATA=$CONF_DIR/users/$user
 WEBTPL=$HESTIA/templates/web
 MAILTPL=$HESTIA/templates/mail
