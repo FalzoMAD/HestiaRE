@@ -494,7 +494,9 @@ install_security() {
 		mkdir -p /etc/ipset
 		cp -f "$HESTIA_INSTALL_DIR/ipset/"*.conf /etc/ipset/ 2>/dev/null || true
 	fi
-	"$BIN/h-update-sys-ip" 2>/dev/null || true
+	# NOTE: system IP / user-counter setup runs in the configure stage, after the
+	# admin user exists (h-update-sys-ip there). Calling it here would fail with
+	# "user admin doesn't exist" (#164).
 
 	touch "$CONF_DIR/.done.security"
 	echo "[ OK ] security complete"
@@ -762,9 +764,10 @@ finalize_install() {
 		echo "INSTALL_VERSION=\"${_ver}\"" >> "$INSTALL_CONF"
 	fi
 
-	echo "[ * ] Starting Hestia service..."
-	update-rc.d hestia defaults > /dev/null 2>&1 || true
-	systemctl start hestia || true
+	echo "[ * ] Restarting panel services (Caddy + hestia-php)..."
+	# No bundled hestia.service — the panel is Caddy + the hestia-php FPM pool.
+	# Restart both so the configure-stage changes (SSL cert, panel port) take effect.
+	systemctl restart caddy hestia-php 2>/dev/null || true
 	chown hestiaweb:hestiaweb "$HESTIA/.sessions"
 	mkdir -p /backup && chmod 755 /backup
 	echo "[ * ] Scheduling Let's Encrypt host certificate..."
