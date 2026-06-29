@@ -81,7 +81,9 @@ cp --recursive --force ${HESTIA_INSTALL_DIR}/filemanager/filegator/* "${FM_INSTA
 chown $user: -R "${FM_INSTALL_DIR}"
 
 if [ -z "$openssl_installed" ]; then
-	COMPOSER_HOME="$HOMEDIR/$user/.config/composer" user_exec $HESTIA/bin/hestia-php $COMPOSER_BIN --quiet --no-dev install
+	# Panel PHP has no openssl module — composer needs it, so fall back to the
+	# system php (/usr/bin/php) for this install only.
+	COMPOSER_HOME="$HOMEDIR/$user/.config/composer" user_exec /usr/bin/php $COMPOSER_BIN --quiet --no-dev install
 else
 	COMPOSER_HOME="$HOMEDIR/$user/.config/composer" user_exec $HESTIA/bin/hestia-php $COMPOSER_BIN --quiet --no-dev install
 fi
