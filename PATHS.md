@@ -19,25 +19,16 @@
 
 ```
 /usr/local/hestia/
-├── bin/               CLI commands (v-*, hl-*)
+├── bin/               CLI commands (h-*, v-* symlinks)
 ├── conf -> /etc/hestia/conf   Symlink — instance config lives in /etc/hestia (§5a)
 ├── share/             Shipped install-time assets: manifest.json, panel-caddy/,
 │                      panel-php/, dovecot/ (consumed by the installer)
+├── packages/          Hosting plan definitions (*.pkg) — ships in tarball (#150)
+├── templates/         Web/mail vhost + php-fpm templates — ships in tarball (#150)
+├── .sessions/         PHP panel session files (owner: hestiaweb)
 ├── data/
-│   ├── ips/           IP address entries
-│   ├── queue/         Named pipes for async task processing
-│   │   ├── backup.pipe
-│   │   ├── disk.pipe
-│   │   ├── webstats.pipe
-│   │   ├── restart.pipe
-│   │   ├── traffic.pipe
-│   │   └── daily.pipe
 │   ├── users/         Per-user data files (not home dirs)
-│   ├── firewall/      Firewall rules and ipset data
-│   ├── sessions/      PHP panel session files (owner: hestiaweb)
-│   ├── packages/      Hosting plan package definitions (*.pkg)
-│   ├── templates/     Web/DNS/mail vhost templates
-│   └── api/           API integration configs
+│   └── firewall/      Firewall rules and ipset data (→ /etc/hestia/firewall, pending)
 ├── func/              Shared bash function libraries
 ├── install/           Installer data (deployed with package)
 ├── log -> /var/log/hestia   Symlink
@@ -193,9 +184,9 @@ Variables set in `func/main.sh`:
 |----------|-------|
 | `HOMEDIR` | `/home` |
 | `USER_DATA` | `$HESTIA/data/users/$user` |
-| `WEBTPL` | `$HESTIA/data/templates/web` |
-| `MAILTPL` | `$HESTIA/data/templates/mail` |
-| `DNSTPL` | `$HESTIA/data/templates/dns` |
+| `WEBTPL` | `$HESTIA/templates/web` |
+| `MAILTPL` | `$HESTIA/templates/mail` |
+| `DNSTPL` | `$HESTIA/templates/dns` |
 | `RRD` | `$HESTIA/web/rrd` |
 | `SENDMAIL` | `$HESTIA/web/inc/mail-wrapper.php` |
 
@@ -243,8 +234,6 @@ later PRs firewall/users). Real move, no symlink bridge. Filenames preserved —
 | Path | Reason |
 |------|--------|
 | `$HESTIA/data/users/` | Part of the backup format — dedicated PR after the object-helper guard |
-| `$HESTIA/data/packages/` | Repo-root asset, runtime-mutable — dedicated PR with `data/templates/` (target `$HESTIA/packages/`) |
-| `$HESTIA/data/templates/` | Repo-root asset, needs `h-update-{web,mail}-templates` rework — dedicated PR with `data/packages/` (target `$HESTIA/templates/`) |
 
 ### 5c. Known conflicts / open issues
 
@@ -266,7 +255,6 @@ hestiaweb/admin user consolidation remains a separate, future topic.
 
 | Topic | Scope |
 |-------|-------|
-| `data/packages/` + `data/templates/` | Decision: move to `/etc/hestia/` or keep under install root |
 | `data/users/` | Backup format compatibility analysis required before any move |
 
 ---

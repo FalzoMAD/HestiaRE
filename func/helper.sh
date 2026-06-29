@@ -234,4 +234,16 @@ migrate_data_layout() {
 		done
 		rm -rf "$hestia_root/data/queue"
 	fi
+
+	# Repo-root assets (packages, templates): shipped defaults arrive via the
+	# tarball at $hestia_root/{packages,templates}. Preserve operator-added files
+	# from the old data/ dir (cp -n won't clobber the refreshed defaults), then
+	# drop the old dir. (#150)
+	for d in packages templates; do
+		if [ -d "$hestia_root/data/$d" ]; then
+			mkdir -p "$hestia_root/$d"
+			cp -rn "$hestia_root/data/$d/." "$hestia_root/$d/" 2> /dev/null || true
+			rm -rf "$hestia_root/data/$d"
+		fi
+	done
 }

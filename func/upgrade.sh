@@ -360,12 +360,12 @@ upgrade_start_backup() {
 	if [ "$DEBUG_MODE" = "true" ]; then
 		echo "      - Packages"
 	fi
-	cp -fr $HESTIA/data/packages/* $HESTIA_BACKUP/packages/
+	cp -fr $HESTIA/packages/* $HESTIA_BACKUP/packages/
 
 	if [ "$DEBUG_MODE" = "true" ]; then
 		echo "      - Templates"
 	fi
-	cp -fr $HESTIA/data/templates/* $HESTIA_BACKUP/templates/
+	cp -fr $HESTIA/templates/* $HESTIA_BACKUP/templates/
 
 	if [ "$DEBUG_MODE" = "true" ]; then
 		echo "      - Configuration files:"

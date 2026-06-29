@@ -43,9 +43,9 @@ HESTIA_COMMON_DIR="$HESTIA/install/common"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 HESTIA_PHP="$HESTIA/php/bin/php"
 USER_DATA=$HESTIA/data/users/$user
-WEBTPL=$HESTIA/data/templates/web
-MAILTPL=$HESTIA/data/templates/mail
-DNSTPL=$HESTIA/data/templates/dns
+WEBTPL=$HESTIA/templates/web
+MAILTPL=$HESTIA/templates/mail
+DNSTPL=$HESTIA/templates/dns
 RRD=$HESTIA/web/rrd
 SENDMAIL="$HESTIA/web/inc/mail-wrapper.php"
 HESTIA_GIT_REPO="https://raw.githubusercontent.com/hestiacp/hestiacp"
@@ -276,11 +276,11 @@ generate_password() {
 # Package existence check
 is_package_valid() {
 	if [ -z $1 ]; then
-		if [ ! -e "$HESTIA/data/packages/$package.pkg" ]; then
+		if [ ! -e "$HESTIA/packages/$package.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $package doesn't exist"
 		fi
 	else
-		if [ ! -e "$HESTIA/data/packages/$1.pkg" ]; then
+		if [ ! -e "$HESTIA/packages/$1.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $1 doesn't exist"
 		fi
 	fi
@@ -288,7 +288,7 @@ is_package_valid() {
 }
 
 is_package_new() {
-	if [ -e "$HESTIA/data/packages/$1.pkg" ]; then
+	if [ -e "$HESTIA/packages/$1.pkg" ]; then
 		echo "Error: package $1 already exists."
 		log_event "$E_EXISTS" "$ARGUMENTS"
 		exit "$E_EXISTS"

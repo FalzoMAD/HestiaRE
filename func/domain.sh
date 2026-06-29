@@ -222,8 +222,8 @@ prepare_web_domain_values() {
 	fi
 
 	if [ "$SUSPENDED" = 'yes' ]; then
-		docroot="$HESTIA/data/templates/web/suspend"
-		sdocroot="$HESTIA/data/templates/web/suspend"
+		docroot="$HESTIA/templates/web/suspend"
+		sdocroot="$HESTIA/templates/web/suspend"
 		if [ "$PROXY_SYSTEM" == "nginx" ]; then
 			PROXY="suspended"
 		else

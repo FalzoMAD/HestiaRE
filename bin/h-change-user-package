@@ -34,7 +34,7 @@ is_package_available() {
 	DISK_QUOTA='0'
 	BANDWIDTH='0'
 
-	source_conf "$HESTIA/data/packages/$package.pkg"
+	source_conf "$HESTIA/packages/$package.pkg"
 
 	# Checking usage agains package limits
 	if [ "$WEB_DOMAINS" != 'unlimited' ]; then
@@ -79,7 +79,7 @@ change_user_package() {
 	# Keep user creation date and time saved
 	creation_time="$TIME"
 	creation_date="$DATE"
-	source_conf "$HESTIA/data/packages/$package.pkg"
+	source_conf "$HESTIA/packages/$package.pkg"
 	echo "NAME='$NAME'
 PACKAGE='$package'
 WEB_TEMPLATE='$WEB_TEMPLATE'
@@ -174,12 +174,12 @@ check_hestia_demo_mode
 change_user_package
 
 # Update user shell
-shell_conf=$(cat "$HESTIA/data/packages/$package.pkg" | grep -m1 'SHELL' | cut -f 2 -d \')
+shell_conf=$(cat "$HESTIA/packages/$package.pkg" | grep -m1 'SHELL' | cut -f 2 -d \')
 $BIN/h-change-user-shell "$user" "$shell_conf"
 
 # Run template trigger
-if [ -x "$HESTIA/data/packages/$package.sh" ]; then
-	$HESTIA/data/packages/$package.sh "$user" "$CONTACT" "$NAME"
+if [ -x "$HESTIA/packages/$package.sh" ]; then
+	$HESTIA/packages/$package.sh "$user" "$CONTACT" "$NAME"
 fi
 
 # Update disk quota
