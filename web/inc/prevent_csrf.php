@@ -14,12 +14,6 @@ if (
 ) {
 	$check_csrf = false;
 } // Localhost only
-if (
-	$_SERVER["SCRIPT_FILENAME"] == "/usr/local/hestia/web/api/index.php" ||
-	$_SERVER["SCRIPT_FILENAME"] == "/usr/local/hestia/web//api/index.php"
-) {
-	$check_csrf = false;
-} // Own check
 if (substr($_SERVER["SCRIPT_FILENAME"], 0, 22) == "/usr/local/hestia/bin/") {
 	$check_csrf = false;
 }

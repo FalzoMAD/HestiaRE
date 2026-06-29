@@ -9,11 +9,9 @@
 				if (($_SESSION['userContext'] === 'admin') && ($_SESSION['look'] === '' ) && ($_SESSION['user'] !== $v_username)) {
 					$ssh_key_url = "/list/key/?user=".htmlentities($_GET['user'])."&token=".$_SESSION['token']."";
 					$log_url = "/list/log/?user=".htmlentities($_GET['user'])."&token=".$_SESSION['token']."";
-					$keys_url = "/list/access-key/?user=".htmlentities($_GET['user'])."&token=".$_SESSION['token']."";
 				}else{
 					$ssh_key_url = "/list/key/";
 					$log_url = "/list/log/";
-					$keys_url = "/list/access-key/";
 				}
 			?>
 			<a href="<?= tohtml($ssh_key_url) ?>" class="button button-secondary js-button-create" title="<?= tohtml( _("Manage SSH Keys")) ?>">
@@ -22,13 +20,6 @@
 			<?php if ($_SESSION["userContext"] == "admin" || ($_SESSION["userContext"] !== "admin" && $_SESSION["POLICY_USER_VIEW_LOGS"] !== "no")) { ?>
 				<a href="<?= tohtml($log_url) ?>" class="button button-secondary js-button-create" title="<?= tohtml( _("Logs")) ?>">
 					<i class="fas fa-clock-rotate-left icon-maroon"></i><?= tohtml( _("Logs")) ?>
-				</a>
-			<?php } ?>
-			<?php
-				$api_status = (!empty($_SESSION['API_SYSTEM']) && is_numeric($_SESSION['API_SYSTEM'])) ? $_SESSION['API_SYSTEM'] : 0;
-				if (($user_plain == $_SESSION['ROOT_USER'] && $api_status > 0) || ($user_plain != $_SESSION['ROOT_USER'] && $api_status > 1)) { ?>
-				<a href="<?= tohtml($keys_url) ?>" class="button button-secondary js-button-create" title="<?= tohtml( _("Access Keys")) ?>">
-					<i class="fas fa-key icon-purple"></i><?= tohtml( _("Access Keys")) ?>
 				</a>
 			<?php } ?>
 		</div>

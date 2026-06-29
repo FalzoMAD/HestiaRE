@@ -1,2 +1,0 @@
-ROLE='user'
-COMMANDS='h-list-mail-domains,h-list-mail-domain,h-list-mail-account,h-list-mail-accounts,h-list-mail-account-autoreply,h-delete-mail-account,h-delete-mail-account-alias,h-delete-mail-account-autoreply,h-delete-mail-account-forward,h-delete-mail-account-fwd-only,h-add-mail-account,h-add-mail-account-alias,h-add-mail-account-autoreply,h-add-mail-account-forward,h-add-mail-account-fwd-only,h-change-mail-account-password,h-change-mail-account-quota,h-suspend-mail-account,h-suspend-mail-accounts,h-unsuspend-mail-account,h-unsuspend-mail-accounts'

@@ -181,9 +181,6 @@ seed_hestia_etc() {
 	_wcv "RELEASE_BRANCH"           "release"
 	_wcv "UPGRADE_SEND_EMAIL"       "true"
 	_wcv "UPGRADE_SEND_EMAIL_LOG"   "false"
-	_wcv "API"                      "no"
-	_wcv "API_SYSTEM"               "0"
-	_wcv "API_ALLOWED_IP"           ""
 	_wcv "ROOT_USER"                "$admin"
 	_wcv "DB_SYSTEM"                "mysql"
 	unset -f _wcv

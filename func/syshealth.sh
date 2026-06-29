@@ -166,7 +166,7 @@ function syshealth_update_system_config_format() {
 	# SYSTEM CONFIGURATION
 	# Create array of known keys in configuration file
 	system="system"
-	known_keys="ANTISPAM_SYSTEM ANTIVIRUS_SYSTEM API_ALLOWED_IP API BACKEND_PORT BACKUP_GZIP BACKUP_MODE BACKUP_SYSTEM CRON_SYSTEM DB_PMA_ALIAS DB_SYSTEM DISK_QUOTA ENFORCE_SUBDOMAIN_OWNERSHIP FILE_MANAGER FIREWALL_EXTENSION FIREWALL_SYSTEM FTP_SYSTEM IMAP_SYSTEM INACTIVE_SESSION_TIMEOUT LANGUAGE LOGIN_STYLE MAIL_SYSTEM PROXY_PORT PROXY_SSL_PORT PROXY_SYSTEM RELEASE_BRANCH STATS_SYSTEM THEME UPDATE_HOSTNAME_SSL UPGRADE_SEND_EMAIL UPGRADE_SEND_EMAIL_LOG WEB_BACKEND WEBMAIL_ALIAS WEBMAIL_SYSTEM WEB_PORT WEB_RGROUPS WEB_SSL WEB_SSL_PORT WEB_SYSTEM VERSION DISABLE_IP_CHECK"
+	known_keys="ANTISPAM_SYSTEM ANTIVIRUS_SYSTEM BACKEND_PORT BACKUP_GZIP BACKUP_MODE BACKUP_SYSTEM CRON_SYSTEM DB_PMA_ALIAS DB_SYSTEM DISK_QUOTA ENFORCE_SUBDOMAIN_OWNERSHIP FILE_MANAGER FIREWALL_EXTENSION FIREWALL_SYSTEM FTP_SYSTEM IMAP_SYSTEM INACTIVE_SESSION_TIMEOUT LANGUAGE LOGIN_STYLE MAIL_SYSTEM PROXY_PORT PROXY_SSL_PORT PROXY_SYSTEM RELEASE_BRANCH STATS_SYSTEM THEME UPDATE_HOSTNAME_SSL UPGRADE_SEND_EMAIL UPGRADE_SEND_EMAIL_LOG WEB_BACKEND WEBMAIL_ALIAS WEBMAIL_SYSTEM WEB_PORT WEB_RGROUPS WEB_SSL WEB_SSL_PORT WEB_SYSTEM VERSION DISABLE_IP_CHECK"
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -309,28 +309,6 @@ function syshealth_repair_system_config() {
 	if [[ -z $(check_key_exists 'ENFORCE_SUBDOMAIN_OWNERSHIP') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: ENFORCE_SUBDOMAIN_OWNERSHIP ('yes')"
 		$BIN/h-change-sys-config-value "ENFORCE_SUBDOMAIN_OWNERSHIP" "yes"
-	fi
-
-	if [[ -z $(check_key_exists 'API') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: API ('no')"
-		$BIN/h-change-sys-config-value "API" "no"
-	fi
-
-	# Enable API V2
-	if [[ -z $(check_key_exists 'API_SYSTEM') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: API_SYSTEM ('0')"
-		$BIN/h-change-sys-config-value "API_SYSTEM" "0"
-	fi
-
-	# API access allowed IP's
-	if [ "$API" = "yes" ]; then
-		check_api_key=$(grep "API_ALLOWED_IP" $HESTIA/conf/hestia.conf)
-		if [ -z "$check_api_key" ]; then
-			if [[ -z $(check_key_exists 'API_ALLOWED_IP') ]]; then
-				echo "[ ! ] Adding missing variable to hestia.conf: API_ALLOWED_IP ('allow-all')"
-				$BIN/h-change-sys-config-value "API_ALLOWED_IP" "allow-all"
-			fi
-		fi
 	fi
 
 	# Debug mode

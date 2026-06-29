@@ -35,8 +35,6 @@ is_format_valid 'active'
 
 if [ "$active" = "yes" ]; then
 	#TO-DO: Instructions for disabling vhosts
-	# Disable API for Demo server
-	$BIN/h-change-sys-api 'disable'
 	$BIN/h-change-sys-config-value 'DEMO_MODE' 'yes'
 elif [ "$active" = "no" ]; then
 	# Note even h-change-sys-demo-mode can be called h-change-sys-config-value is protected to disable demo mode call
