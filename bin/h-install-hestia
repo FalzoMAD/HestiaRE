@@ -181,10 +181,37 @@ install_panel() {
 	systemctl daemon-reload
 	systemctl enable hestia-php
 	systemctl start hestia-php
+
+	# Panel TLS cert must exist before caddy starts (its config references it).
+	# Use $HESTIA_HOSTNAME (known from install.conf) — the system hostname is set
+	# later in the configure stage. A real cert replaces this via Let's Encrypt.
+	echo "[ * ] Generating panel SSL certificate..."
+	"$BIN/h-generate-ssl-cert" "$HESTIA_HOSTNAME" '' 'US' 'California' 'San Francisco' 'HestiaRE' 'IT' > /tmp/hst.pem
+	local CRT_END KEY_START KEY_END
+	CRT_END=$(grep -n "END CERTIFICATE-" /tmp/hst.pem | head -n1 | cut -f1 -d:)
+	KEY_START=$(grep -nE "BEGIN (RSA |EC |ENCRYPTED )?PRIVATE KEY" /tmp/hst.pem | head -n1 | cut -f1 -d:)
+	KEY_END=$(grep -nE "END (RSA |EC |ENCRYPTED )?PRIVATE KEY" /tmp/hst.pem | head -n1 | cut -f1 -d:)
+	if [ -z "$KEY_START" ]; then
+		KEY_START=$(grep -n "BEGIN RSA" /tmp/hst.pem | head -n1 | cut -f1 -d:)
+		KEY_END=$(grep -n "END RSA" /tmp/hst.pem | head -n1 | cut -f1 -d:)
+	fi
+	(
+		cd "$HESTIA/ssl"
+		sed -n "1,${CRT_END}p" /tmp/hst.pem > certificate.crt
+		sed -n "${KEY_START},${KEY_END}p" /tmp/hst.pem > certificate.key
+	)
+	chown root:mail "$HESTIA/ssl/"* 2> /dev/null || true
+	chmod 660 "$HESTIA/ssl/"*
+	rm -f /tmp/hst.pem
+
 	echo "[ * ] Configuring Caddy..."
 	mkdir -p /etc/caddy
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
+	# The panel cert is root:mail 660, shared with nginx/apache/proftpd/exim —
+	# those read it via their root master, but caddy runs entirely as the caddy
+	# user. Add caddy to the mail group so it can read certificate.key.
+	usermod -aG mail caddy 2> /dev/null || true
 	systemctl enable caddy
 	# restart, not start: apt already started caddy with its default Caddyfile
 	# during package install, so `start` would be a no-op and our panel config
@@ -608,24 +635,8 @@ configure_hestia() {
 			"$TLS13" >> /etc/ssl/openssl.cnf
 	fi
 
-	echo "[ * ] Generating SSL certificate..."
-	"$BIN/h-generate-ssl-cert" "$(hostname)" '' 'US' 'California' 'San Francisco' 'HestiaRE' 'IT' > /tmp/hst.pem
-	local CRT_END KEY_START KEY_END
-	CRT_END=$(grep -n "END CERTIFICATE-" /tmp/hst.pem | head -n1 | cut -f1 -d:)
-	KEY_START=$(grep -nE "BEGIN (RSA |EC |ENCRYPTED )?PRIVATE KEY" /tmp/hst.pem | head -n1 | cut -f1 -d:)
-	KEY_END=$(grep -nE "END (RSA |EC |ENCRYPTED )?PRIVATE KEY" /tmp/hst.pem | head -n1 | cut -f1 -d:)
-	if [ -z "$KEY_START" ]; then
-		KEY_START=$(grep -n "BEGIN RSA" /tmp/hst.pem | head -n1 | cut -f1 -d:)
-		KEY_END=$(grep -n "END RSA" /tmp/hst.pem | head -n1 | cut -f1 -d:)
-	fi
-	(
-		cd "$HESTIA/ssl"
-		sed -n "1,${CRT_END}p" /tmp/hst.pem > certificate.crt
-		sed -n "${KEY_START},${KEY_END}p" /tmp/hst.pem > certificate.key
-	)
-	chown root:mail "$HESTIA/ssl/"*
-	chmod 660 "$HESTIA/ssl/"*
-	rm -f /tmp/hst.pem
+	# Panel SSL certificate is generated earlier, in the panel stage (caddy needs
+	# it at start). Only the DH params are laid down here.
 	cp -f "$HESTIA_INSTALL_DIR/ssl/dhparam.pem" /etc/ssl/ 2>/dev/null || true
 
 	echo "[ * ] Enabling SFTP and SSH jails..."
