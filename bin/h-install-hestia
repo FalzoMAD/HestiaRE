@@ -182,7 +182,10 @@ install_panel() {
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
 	systemctl enable caddy
-	systemctl start caddy
+	# restart, not start: apt already started caddy with its default Caddyfile
+	# during package install, so `start` would be a no-op and our panel config
+	# (port 8083) would never load — caddy would keep serving :80 (#162).
+	systemctl restart caddy
 	touch "$CONF_DIR/.done.panel"
 	echo "[ OK ] panel complete"
 }
