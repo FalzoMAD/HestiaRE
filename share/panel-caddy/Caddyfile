@@ -1,7 +1,7 @@
 {
     admin off
     log {
-        output file /var/log/hestia/caddy-error.log
+        output file /var/log/caddy/error.log
         level ERROR
     }
 }

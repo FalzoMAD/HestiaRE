@@ -206,6 +206,9 @@ install_panel() {
 
 	echo "[ * ] Configuring Caddy..."
 	mkdir -p /etc/caddy
+	# Caddy logs to /var/log/caddy as the caddy user (it cannot write /var/log/hestia).
+	mkdir -p /var/log/caddy
+	chown caddy:caddy /var/log/caddy 2> /dev/null || true
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
 	# The panel cert is root:mail 660, shared with nginx/apache/proftpd/exim —
