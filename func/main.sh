@@ -38,6 +38,10 @@ BACKUP_DISK_LIMIT=95
 BACKUP_LA_LIMIT=$(grep -c '^processor' /proc/cpuinfo)
 RRD_STEP=300
 BIN=$HESTIA/bin
+# Instance config root (/etc/hestia). Exported by hestia.env on fresh installs;
+# this fallback is the reliable source — main.sh ships in the tarball, so it also
+# covers existing installs whose hestia.env predates the variable.
+CONF_DIR="${CONF_DIR:-/etc/hestia}"
 HESTIA_INSTALL_DIR="$HESTIA/install/deb"
 HESTIA_COMMON_DIR="$HESTIA/install/common"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
@@ -55,7 +59,7 @@ SCRIPT="$(basename $0)"
 CHECK_RESULT_CALLBACK=""
 
 # install.conf live component state (HestiaRE).
-# /etc/hestia/install.conf is written by the wizard as the install recipe and is
+# $CONF_DIR/install.conf is written by the wizard as the install recipe and is
 # the source of truth for which components are currently installed. h-add-sys-*/
 # h-remove-sys-* call this after a successful (un)install so the file reflects the
 # live system without parsing service state. Idempotent: updates the key in place
@@ -63,7 +67,7 @@ CHECK_RESULT_CALLBACK=""
 # COMPONENT_<id>="<value>". No-op (and success) when install.conf is absent.
 set_install_component() {
 	local id="$1" value="$2"
-	local conf="/etc/hestia/install.conf"
+	local conf="$CONF_DIR/install.conf"
 	[ -n "$id" ] || return 0
 	[ -f "$conf" ] || return 0
 	local key="COMPONENT_${id}"
@@ -319,8 +323,8 @@ is_incremental_backup_enabled() {
 
 # Check user backup settings
 is_backup_scheduled() {
-	if [ -e "/etc/hestia/queue/backup.pipe" ]; then
-		check_q=$(grep " $user " /etc/hestia/queue/backup.pipe | grep $1)
+	if [ -e "$CONF_DIR/queue/backup.pipe" ]; then
+		check_q=$(grep " $user " $CONF_DIR/queue/backup.pipe | grep $1)
 		if [ -n "$check_q" ]; then
 			check_result "$E_EXISTS" "$1 is already scheduled"
 		fi

@@ -5,7 +5,7 @@
 # HestiaRE Installer — Interactive Configuration Wizard
 #
 # Manifest-driven whiptail (with bash fallback) Q&A that writes the install
-# recipe to /etc/hestia/install.conf. Called by install.sh after the release
+# recipe to $CONF_DIR/install.conf. Called by install.sh after the release
 # tarball is extracted, and also runnable standalone to regenerate the recipe:
 #
 #   bash /usr/local/hestia/func/wizard.sh                # full interactive
@@ -20,7 +20,7 @@
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────
-INSTALL_CONF="/etc/hestia/install.conf"
+INSTALL_CONF="$CONF_DIR/install.conf"
 INSTALL_DIR="${HESTIA:-/usr/local/hestia}"
 MANIFEST="${INSTALL_DIR}/share/manifest.json"
 LOG_DIR="/var/log/hestia"
@@ -656,7 +656,7 @@ fn_write_install_conf() {
 # ════════════════════════════════════════════════════════════
 
 wizard_main() {
-    [ "$(id -u)" = "0" ] || { echo "ERROR: wizard must run as root (writes /etc/hestia + APT)." >&2; exit 1; }
+    [ "$(id -u)" = "0" ] || { echo "ERROR: wizard must run as root (writes $CONF_DIR + APT)." >&2; exit 1; }
     command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required." >&2; exit 1; }
     mkdir -p "$LOG_DIR"
     fn_detect_os

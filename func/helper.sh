@@ -143,6 +143,7 @@ seed_hestia_etc() {
 	printf '%s\n' \
 		"# Do not edit — use /etc/hestia/local.conf instead" \
 		"export HESTIA='$hestia_root'" \
+		"export CONF_DIR='/etc/hestia'" \
 		"if [ -f /etc/hestia/local.conf ]; then . /etc/hestia/local.conf; fi" \
 		> /etc/hestia/hestia.env
 	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$PATH:%s/bin\nexport PATH\n' \
@@ -195,25 +196,25 @@ migrate_data_layout() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
 	local d
 
-	# ips -> /etc/hestia (plain move)
-	if [ -d "$hestia_root/data/ips" ] && [ ! -e "/etc/hestia/ips" ]; then
-		mkdir -p /etc/hestia
-		mv "$hestia_root/data/ips" "/etc/hestia/ips"
+	# ips -> $CONF_DIR (plain move)
+	if [ -d "$hestia_root/data/ips" ] && [ ! -e "$CONF_DIR/ips" ]; then
+		mkdir -p $CONF_DIR
+		mv "$hestia_root/data/ips" "$CONF_DIR/ips"
 	fi
 
 	# extensions/ is dissolved: the PSL cache becomes a single file and the
-	# optional operator mail-domain hooks join the other /etc/hestia/hooks;
+	# optional operator mail-domain hooks join the other $CONF_DIR/hooks;
 	# then drop the (now empty) dir. rmdir keeps any unexpected leftovers safe.
 	if [ -d "$hestia_root/data/extensions" ]; then
-		mkdir -p /etc/hestia/hooks
+		mkdir -p $CONF_DIR/hooks
 		local h
 		for h in add-mail-domain delete-mail-domain; do
-			if [ -f "$hestia_root/data/extensions/$h.sh" ] && [ ! -e "/etc/hestia/hooks/$h.sh" ]; then
-				mv "$hestia_root/data/extensions/$h.sh" "/etc/hestia/hooks/$h.sh"
+			if [ -f "$hestia_root/data/extensions/$h.sh" ] && [ ! -e "$CONF_DIR/hooks/$h.sh" ]; then
+				mv "$hestia_root/data/extensions/$h.sh" "$CONF_DIR/hooks/$h.sh"
 			fi
 		done
-		if [ -f "$hestia_root/data/extensions/public_suffix_list.dat" ] && [ ! -e "/etc/hestia/public_suffix_list.dat" ]; then
-			mv "$hestia_root/data/extensions/public_suffix_list.dat" "/etc/hestia/public_suffix_list.dat"
+		if [ -f "$hestia_root/data/extensions/public_suffix_list.dat" ] && [ ! -e "$CONF_DIR/public_suffix_list.dat" ]; then
+			mv "$hestia_root/data/extensions/public_suffix_list.dat" "$CONF_DIR/public_suffix_list.dat"
 		fi
 		rmdir "$hestia_root/data/extensions" 2> /dev/null || true
 	fi
@@ -225,12 +226,12 @@ migrate_data_layout() {
 	fi
 
 	# Queue holds runtime pipes — recreate fresh at the new location, never copy.
-	if [ -d "$hestia_root/data/queue" ] && [ ! -d "/etc/hestia/queue" ]; then
-		mkdir -p /etc/hestia/queue
-		chmod 750 /etc/hestia/queue
+	if [ -d "$hestia_root/data/queue" ] && [ ! -d "$CONF_DIR/queue" ]; then
+		mkdir -p $CONF_DIR/queue
+		chmod 750 $CONF_DIR/queue
 		local p
 		for p in backup disk webstats restart traffic daily; do
-			[ -e "/etc/hestia/queue/$p.pipe" ] || touch "/etc/hestia/queue/$p.pipe"
+			[ -e "$CONF_DIR/queue/$p.pipe" ] || touch "$CONF_DIR/queue/$p.pipe"
 		done
 		rm -rf "$hestia_root/data/queue"
 	fi

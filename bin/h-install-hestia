@@ -1,14 +1,14 @@
 #!/bin/bash
-# info: install HestiaRE from a written /etc/hestia/install.conf
+# info: install HestiaRE from a written $CONF_DIR/install.conf
 # options: (none)
 #
-# Non-interactive installer orchestrator. Reads /etc/hestia/install.conf
+# Non-interactive installer orchestrator. Reads $CONF_DIR/install.conf
 # (produced by func/wizard.sh via install.sh) and installs HestiaRE in stages,
 # gated by the COMPONENT_* values. Replaces the former `just install` flow.
 #
 # Pure bash: stages are functions in this file; shared helpers live in
 # func/helper.sh; component install logic reuses the existing h-add-sys-*
-# commands where they exist. Idempotent via /etc/hestia/.done.* sentinels.
+# commands where they exist. Idempotent via $CONF_DIR/.done.* sentinels.
 
 set -eo pipefail
 
@@ -25,7 +25,7 @@ _on_error() {
 	[ -f "$LOG" ] && { echo "       Last lines of ${LOG}:" >&2; tail -n 15 "$LOG" 2>/dev/null | sed 's/^/       | /' >&2 || true; }
 	echo "" >&2
 	echo "       Recovery: fix the cause shown above, then re-run the installer." >&2
-	echo "       Completed stages are skipped (see /etc/hestia/.done.*); only the" >&2
+	echo "       Completed stages are skipped (see $CONF_DIR/.done.*); only the" >&2
 	echo "       failed and later stages run again:" >&2
 	echo "         h-install-hestia" >&2
 	echo "       Details + how to force a stage to re-run: TROUBLESHOOTING.md" >&2
@@ -34,7 +34,7 @@ trap '_on_error "$?" "$LINENO"' ERR
 
 # ── Thin validation (the env must already be seeded by install.sh) ──────────
 [ "$(id -u)" = "0" ] || { echo "ERROR: h-install-hestia must be run as root." >&2; exit 1; }
-for _f in "$INSTALL_CONF" /etc/hestia/hestia.env /etc/hestia/conf/hestia.conf; do
+for _f in "$INSTALL_CONF" $CONF_DIR/hestia.env $CONF_DIR/conf/hestia.conf; do
 	[ -f "$_f" ] || {
 		echo "ERROR: $_f not found." >&2
 		echo "       Run the installer first:  bash install.sh" >&2
@@ -527,16 +527,16 @@ init_hestia_structure() {
 	ln -sf /var/log/hestia "$HESTIA/log"
 	# templates/ and packages/ ship at the install root (tarball) — not created here.
 	mkdir -p "$HESTIA/conf" "$HESTIA/ssl" \
-		"/etc/hestia/ips" "/etc/hestia/queue" \
+		"$CONF_DIR/ips" "$CONF_DIR/queue" \
 		"$HESTIA/data/users" "$HESTIA/data/firewall" \
 		"$HESTIA/.sessions"
-	touch "/etc/hestia/queue/backup.pipe" "/etc/hestia/queue/disk.pipe" \
-		"/etc/hestia/queue/webstats.pipe" "/etc/hestia/queue/restart.pipe" \
-		"/etc/hestia/queue/traffic.pipe" "/etc/hestia/queue/daily.pipe" \
+	touch "$CONF_DIR/queue/backup.pipe" "$CONF_DIR/queue/disk.pipe" \
+		"$CONF_DIR/queue/webstats.pipe" "$CONF_DIR/queue/restart.pipe" \
+		"$CONF_DIR/queue/traffic.pipe" "$CONF_DIR/queue/daily.pipe" \
 		"$HESTIA/log/system.log" "$HESTIA/log/auth.log" \
 		"$HESTIA/log/backup.log" "$HESTIA/log/activity.log"
-	chmod 750 "$HESTIA/conf" "$HESTIA/data/users" "/etc/hestia/ips" "$HESTIA/log"
-	chmod -R 750 "/etc/hestia/queue"
+	chmod 750 "$HESTIA/conf" "$HESTIA/data/users" "$CONF_DIR/ips" "$HESTIA/log"
+	chmod -R 750 "$CONF_DIR/queue"
 	chmod 660 /var/log/hestia/* 2>/dev/null || true
 	chmod 770 "$HESTIA/.sessions"
 	echo "[ OK ] structure ready"

@@ -3,10 +3,10 @@
 # options: (none)
 #
 # Read-only status report: version, release source, OS/profile, completed
-# install phases (/etc/hestia/.done.*) and the recorded COMPONENT_* selections.
+# install phases ($CONF_DIR/.done.*) and the recorded COMPONENT_* selections.
 
 HESTIA="${HESTIA:-/usr/local/hestia}"
-[ -f /etc/hestia/hestia.env ] && . /etc/hestia/hestia.env 2>/dev/null || true
+[ -f $CONF_DIR/hestia.env ] && . $CONF_DIR/hestia.env 2>/dev/null || true
 CONF_DIR="/etc/hestia"
 INSTALL_CONF="$CONF_DIR/install.conf"
 SOURCE_CONF="$CONF_DIR/source.conf"

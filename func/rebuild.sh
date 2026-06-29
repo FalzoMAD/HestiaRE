@@ -127,8 +127,8 @@ rebuild_user_conf() {
 	$BIN/h-add-user-sftp-jail "$user"
 
 	# Update disk pipe
-	sed -i "/ $user$/d" /etc/hestia/queue/disk.pipe
-	echo "$BIN/h-update-user-disk $user" >> /etc/hestia/queue/disk.pipe
+	sed -i "/ $user$/d" $CONF_DIR/queue/disk.pipe
+	echo "$BIN/h-update-user-disk $user" >> $CONF_DIR/queue/disk.pipe
 
 	# WEB
 	if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != 'no' ]; then
@@ -136,12 +136,12 @@ rebuild_user_conf() {
 		chmod 770 $USER_DATA/ssl
 		touch $USER_DATA/web.conf
 		chmod 660 $USER_DATA/web.conf
-		if [ "$(grep -w $user /etc/hestia/queue/traffic.pipe)" ]; then
+		if [ "$(grep -w $user $CONF_DIR/queue/traffic.pipe)" ]; then
 			echo "$BIN/h-update-web-domains-traff $user" \
-				>> /etc/hestia/queue/traffic.pipe
+				>> $CONF_DIR/queue/traffic.pipe
 		fi
 		echo "$BIN/h-update-web-domains-disk $user" \
-			>> /etc/hestia/queue/disk.pipe
+			>> $CONF_DIR/queue/disk.pipe
 
 		if [[ -L "$HOMEDIR/$user/web" ]]; then
 			rm $HOMEDIR/$user/web
@@ -164,7 +164,7 @@ rebuild_user_conf() {
 		touch $USER_DATA/mail.conf
 		chmod 660 $USER_DATA/mail.conf
 		echo "$BIN/h-update-mail-domains-disk $user" \
-			>> /etc/hestia/queue/disk.pipe
+			>> $CONF_DIR/queue/disk.pipe
 
 		if [[ -L "$HOMEDIR/$user/mail" ]]; then
 			rm $HOMEDIR/$user/mail
@@ -181,7 +181,7 @@ rebuild_user_conf() {
 	if [ -n "$DB_SYSTEM" ] && [ "$DB_SYSTEM" != 'no' ]; then
 		touch $USER_DATA/db.conf
 		chmod 660 $USER_DATA/db.conf
-		echo "$BIN/h-update-databases-disk $user" >> /etc/hestia/queue/disk.pipe
+		echo "$BIN/h-update-databases-disk $user" >> $CONF_DIR/queue/disk.pipe
 
 		if [ "$create_user" = "yes" ]; then
 			$BIN/h-rebuild-databases $user
@@ -346,9 +346,9 @@ rebuild_web_domain_conf() {
 		fi
 
 		webstats="$BIN/h-update-web-domain-stat $user $domain"
-		check_webstats=$(grep "$webstats" /etc/hestia/queue/webstats.pipe)
+		check_webstats=$(grep "$webstats" $CONF_DIR/queue/webstats.pipe)
 		if [ -z "$check_webstats" ]; then
-			echo "$webstats" >> /etc/hestia/queue/webstats.pipe
+			echo "$webstats" >> $CONF_DIR/queue/webstats.pipe
 		fi
 
 		if [ -n "$STATS_USER" ]; then

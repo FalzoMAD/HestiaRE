@@ -185,7 +185,7 @@ if [ "$u_disk" -gt "$v_disk" ]; then
 	# Always notify on failure
 	echo "Not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb). https://hestiacp.com/docs/server-administration/backup-restore.html" | $SENDMAIL -s "$subj" "$email" "yes"
 	# Deleting task from queue
-	sed -i "/h-backup-user $user /d" /etc/hestia/queue/backup.pipe
+	sed -i "/h-backup-user $user /d" $CONF_DIR/queue/backup.pipe
 	check_result "$E_LIMIT" "not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb)."
 fi
 
@@ -199,7 +199,7 @@ tmpdir=$(mktemp -p $BACKUP_TEMP -d)
 if [ "$?" -ne 0 ]; then
 	echo "Can't create tmp dir $tmpdir" | $SENDMAIL -s "$subj" "$email" "yes"
 	# Deleting task from queue
-	sed -i "/h-backup-user $user /d" /etc/hestia/queue/backup.pipe
+	sed -i "/h-backup-user $user /d" $CONF_DIR/queue/backup.pipe
 	check_result "$E_NOTEXIST" "can't create tmp dir"
 fi
 
@@ -778,7 +778,7 @@ chmod 660 $USER_DATA/backup.conf
 chmod 660 $BACKUP/$user.log
 
 # Deleting task from queue
-sed -i "/h-backup-user $user /d" /etc/hestia/queue/backup.pipe
+sed -i "/h-backup-user $user /d" $CONF_DIR/queue/backup.pipe
 
 U_BACKUPS=$(grep BACKUP $USER_DATA/backup.conf | wc -l)
 update_user_value "$user" '$U_BACKUPS' "$U_BACKUPS"

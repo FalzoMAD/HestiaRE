@@ -55,7 +55,7 @@ check_hestia_demo_mode
 disk_usage=$(df $BACKUP | tail -n1 | tr ' ' '\n' | grep % | cut -f 1 -d %)
 if [ "$disk_usage" -ge "$BACKUP_DISK_LIMIT" ]; then
 	echo "Error: Not enough disk space" | $SENDMAIL -s "$subj" $email $notify
-	sed -i "/ $user /d" /etc/hestia/queue/backup.pipe
+	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
 	check_result $E_DISK "Not enough disk space"
 fi
 
@@ -84,7 +84,7 @@ if [ ! -e "$BACKUP/$backup" ]; then
 	if [ -z "$downloaded" ]; then
 		subj="Download of $backup failed for $user"
 		$BIN/h-add-user-notification $user "$subj" "<p class'u-text-bold'>Unable to retrieve backup file from remote server.</p><p><span class='u-text-bold'>Error:</span> $backup file doesn't exist in <code>'${BACKUP}'</code> directory.</p>"
-		sed -i "/h-download-backup $user /d" /etc/hestia/queue/backup.pipe
+		sed -i "/h-download-backup $user /d" $CONF_DIR/queue/backup.pipe
 		check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '${BACKUP}' folder"
 	else
 		if [ -e "$BACKUP/$backup" ]; then
@@ -109,7 +109,7 @@ if [ -e "$BACKUP/$backup" ]; then
 fi
 
 # Cleaning restore queue
-sed -i "/h-download-backup $user /d" /etc/hestia/queue/backup.pipe
+sed -i "/h-download-backup $user /d" $CONF_DIR/queue/backup.pipe
 
 # Logging
 $BIN/h-log-action "system" "Info" "Backup" "Backup download requested (User: $user, Archive: $backup)."

@@ -62,7 +62,7 @@ restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" forget "$sna
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-sed -i "/h-delete-user-backup-restic '$user' '$snapshot' /d" /etc/hestia/queue/backup.pipe
+sed -i "/h-delete-user-backup-restic '$user' '$snapshot' /d" $CONF_DIR/queue/backup.pipe
 
 # Logging
 $BIN/h-log-action "system" "Info" "Backup" "Restic snapshot successfully deleted (User: $user, Snapshot: $snapshot)."

@@ -80,8 +80,8 @@ if [ -n "$WEB_SYSTEM" ] || [ -n "$PROXY_SYSTEM" ]; then
 fi
 
 # Run extension trigger
-if [ -x "/etc/hestia/hooks/delete-mail-domain.sh" ]; then
-	/etc/hestia/hooks/delete-mail-domain.sh "$user" "$domain"
+if [ -x "$CONF_DIR/hooks/delete-mail-domain.sh" ]; then
+	$CONF_DIR/hooks/delete-mail-domain.sh "$user" "$domain"
 fi
 
 #----------------------------------------------------------#
