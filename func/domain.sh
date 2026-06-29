@@ -43,7 +43,7 @@ is_backend_template_valid() {
 
 # Web domain existence check
 is_web_domain_new() {
-	web=$(grep -F -H "DOMAIN='$1'" $HESTIA/data/users/*/web.conf)
+	web=$(grep -F -H "DOMAIN='$1'" $CONF_DIR/users/*/web.conf)
 	if [ -n "$web" ]; then
 		if [ "$type" == 'web' ]; then
 			check_result "$E_EXISTS" "Web domain $1 exists"
@@ -57,7 +57,7 @@ is_web_domain_new() {
 
 # Web alias existence check
 is_web_alias_new() {
-	grep -wH "$1" $HESTIA/data/users/*/web.conf | while read -r line; do
+	grep -wH "$1" $CONF_DIR/users/*/web.conf | while read -r line; do
 		user=$(echo $line | cut -f 7 -d /)
 		string=$(echo $line | cut -f 2- -d ':')
 		parse_object_kv_list $string
@@ -465,7 +465,7 @@ is_web_domain_cert_valid() {
 
 # Mail domain existence check
 is_mail_domain_new() {
-	mail=$(ls $HESTIA/data/users/*/mail/$1.conf 2> /dev/null)
+	mail=$(ls $CONF_DIR/users/*/mail/$1.conf 2> /dev/null)
 	if [ -n "$mail" ]; then
 		if [ "$2" == 'mail' ]; then
 			check_result $E_EXISTS "Mail domain $1 exists"
@@ -478,12 +478,12 @@ is_mail_domain_new() {
 	mail_sub=$(echo "$1" | cut -f 1 -d .)
 	mail_nosub=$(echo "$1" | cut -f 1 -d . --complement)
 	for mail_reserved in $(echo "mail $WEBMAIL_ALIAS"); do
-		if [ -n "$(ls $HESTIA/data/users/*/mail/$mail_reserved.$1.conf 2> /dev/null)" ]; then
+		if [ -n "$(ls $CONF_DIR/users/*/mail/$mail_reserved.$1.conf 2> /dev/null)" ]; then
 			if [ "$2" == 'mail' ]; then
 				check_result "$E_EXISTS" "Required subdomain \"$mail_reserved.$1\" already exists"
 			fi
 		fi
-		if [ -n "$(ls $HESTIA/data/users/*/mail/$mail_nosub.conf 2> /dev/null)" ] && [ "$mail_sub" = "$mail_reserved" ]; then
+		if [ -n "$(ls $CONF_DIR/users/*/mail/$mail_nosub.conf 2> /dev/null)" ] && [ "$mail_sub" = "$mail_reserved" ]; then
 			if [ "$2" == 'mail' ]; then
 				check_result "$E_INVALID" "The subdomain \"$mail_sub.\" is reserved by \"$mail_nosub\""
 			fi
@@ -863,7 +863,7 @@ is_base_domain_owner() {
 	for object in ${1//,/ }; do
 		if [ "$object" != "none" ]; then
 			get_base_domain $object
-			web=$(grep -F -H -h "DOMAIN='$basedomain'" $HESTIA/data/users/*/web.conf)
+			web=$(grep -F -H -h "DOMAIN='$basedomain'" $CONF_DIR/users/*/web.conf)
 			if [ "$ENFORCE_SUBDOMAIN_OWNERSHIP" = "yes" ]; then
 				if [ -n "$web" ]; then
 					parse_object_kv_list "$web"

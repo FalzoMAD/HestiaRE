@@ -21,7 +21,7 @@ source $HESTIA/conf/hestia.conf
 # nginx+apache+multiphp,
 # apache+multiphp:
 #   Change Hestia WEB_BACKEND from null to php-fpm
-#   Create backend templates ex: PHP-7_3, PHP-5_6 (in $HESTIA/data/templates/web/php-fpm/)
+#   Create backend templates ex: PHP-7_3, PHP-5_6 (in $HESTIA/templates/web/php-fpm/)
 #   h-update-web-templates
 #   Loop through all web domains
 #   If official multiphp tpl is used ex: PHP-72, then change backend tpl and set app web template to default
@@ -59,7 +59,7 @@ if [ "$num_php_versions" -gt 1 ] && [ -z "$WEB_BACKEND" ]; then
 	# Migrate domains
 	for user in $($BIN/h-list-sys-users plain); do
 		# Define user data and get suspended status
-		USER_DATA=$HESTIA/data/users/$user
+		USER_DATA=$CONF_DIR/users/$user
 		SUSPENDED=$(get_user_value '$SUSPENDED')
 
 		# Check if user is suspended

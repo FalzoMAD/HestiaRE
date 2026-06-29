@@ -88,7 +88,7 @@ main_domain1=$(grep main_domain userdata/main | cut -d " " -f2)
 new_user=$(grep "^user:" userdata/${main_domain1} | cut -d " " -f2)
 echo "Get User: $new_user"
 check_sysuser=$(cut -f 1 -d : /etc/passwd | grep "^$new_user$")
-if [ -n "$check_sysuser" ] || [ -e "$HESTIA/data/users/$new_user" ]; then
+if [ -n "$check_sysuser" ] || [ -e "$CONF_DIR/users/$new_user" ]; then
 	check_result "$E_EXISTS" "user $new_user exists"
 	echo "User allready exists"
 	exit 2
@@ -160,7 +160,7 @@ cat uni_u_db | while read db userdb; do
 		# you will need remove && [ "$userdb" != "$sk_cp_user" ] to restore main user, but
 		# this will cause database duplication in db.conf and will interfer with hestiacp backups
 		if [ "$userdb" == "$user" ] && [ "$userdb" != "$new_user" ]; then
-			echo "DB='$db' DBUSER='$userdb' MD5='$end_user_pass' HOST='localhost' TYPE='mysql' CHARSET='UTF8' U_DISK='0' SUSPENDED='no' TIME='$time' DATE='$data'" >> /usr/local/hestia/data/users/$new_user/db.conf
+			echo "DB='$db' DBUSER='$userdb' MD5='$end_user_pass' HOST='localhost' TYPE='mysql' CHARSET='UTF8' U_DISK='0' SUSPENDED='no' TIME='$time' DATE='$data'" >> $CONF_DIR/users/$new_user/db.conf
 		fi
 	done
 done
@@ -376,7 +376,7 @@ for folder in *; do
 						escaped=$(printf '%s\n' "$newline" | sed -e 's/[\/&]/\\&/g')
 						escaped2=$(printf '%s\n' "$newline2" | sed -e 's/[\/&]/\\&/g')
 						sed -i "s/^${mail_account}:.*/$escaped/g" /home/${new_user}/conf/mail/${folder}/passwd
-						sed -i "s/^ACCOUNT='${mail_account}.*/$escaped2/g" /usr/local/hestia/data/users/${new_user}/mail/${folder}.conf
+						sed -i "s/^ACCOUNT='${mail_account}.*/$escaped2/g" $CONF_DIR/users/${new_user}/mail/${folder}.conf
 					else
 						echo "Warning: Password for $mail_account@$folder not found in shadow file."
 					fi
@@ -394,7 +394,7 @@ if [ "$mx" = 'yes' ]; then
 	cd $main_dir/dnszones
 	for domain in $($BIN/h-list-mail-domains $new_user plain | awk '{ print  $1 }'); do
 		echo "Replace MX record for $domain"
-		mx_id=$(grep MX $HESTIA/data/users/${new_user}/dns/${domain}.conf | tr "'" " " | cut -d " " -f 2)
+		mx_id=$(grep MX $CONF_DIR/users/${new_user}/dns/${domain}.conf | tr "'" " " | cut -d " " -f 2)
 		$BIN/h-delete-dns-record $new_user $domain $mx_id
 		grep MX ${domain}.db | awk '{for(sk=NF;sk>=1;sk--) printf "%s ", $sk;print ""}' | while read value pri ns rest; do
 			if [ "$ns" = "MX" ]; then

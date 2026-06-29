@@ -103,7 +103,7 @@ if [ -n "$old_ip" ]; then
 		fi
 
 		for user in $("$BIN/h-list-users" list); do
-			sed -i "s/$old_ip/$new_ip/g" $HESTIA/data/users/$user/web.conf
+			sed -i "s/$old_ip/$new_ip/g" $CONF_DIR/users/$user/web.conf
 			$BIN/h-rebuild-web-domains "$user" no
 		done
 
@@ -130,8 +130,8 @@ if [ -n "$old_ip" ]; then
 	# Updating DNS
 	if [ -n "$DNS_SYSTEM" ]; then
 		for user in $("$BIN/h-list-users" list); do
-			sed -i "s/$old_ip/$new_ip/g" $HESTIA/data/users/$user/dns.conf
-			sed -i "s/$old_ip/$new_ip/g" $HESTIA/data/users/$user/dns/*.conf
+			sed -i "s/$old_ip/$new_ip/g" $CONF_DIR/users/$user/dns.conf
+			sed -i "s/$old_ip/$new_ip/g" $CONF_DIR/users/$user/dns/*.conf
 			$BIN/h-rebuild-dns-domains "$user" no
 		done
 		$BIN/h-restart-dns

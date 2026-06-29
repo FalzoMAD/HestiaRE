@@ -32,13 +32,13 @@ if [ -z "$BACKUP_SYSTEM" ]; then
 	exit
 fi
 for user in $("$BIN/h-list-users" list); do
-	check_suspend=$(grep "SUSPENDED='no'" $HESTIA/data/users/$user/user.conf)
+	check_suspend=$(grep "SUSPENDED='no'" $CONF_DIR/users/$user/user.conf)
 	log=$HESTIA/log/backup.log
-	if [ ! -f "$HESTIA/data/users/$user/user.conf" ]; then
+	if [ ! -f "$CONF_DIR/users/$user/user.conf" ]; then
 		continue
 	fi
 	check_backup_conditions
-	check_suspend=$(grep "SUSPENDED='no'" $HESTIA/data/users/$user/user.conf)
+	check_suspend=$(grep "SUSPENDED='no'" $CONF_DIR/users/$user/user.conf)
 	log=$HESTIA/log/backup.log
 	if [ -n "$check_suspend" ]; then
 		echo -e "================================" >> $log

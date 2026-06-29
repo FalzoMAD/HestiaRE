@@ -44,7 +44,7 @@ fi
 
 # Updating user stats
 for user in $user_list; do
-	USER_DATA=$HESTIA/data/users/$user
+	USER_DATA=$CONF_DIR/users/$user
 	# Cleaning counters
 	SUSPENDED_USERS=0
 	SUSPENDED_WEB=0
@@ -83,7 +83,7 @@ for user in $user_list; do
 
 	# Checking users
 	if [ "$user" = "$ROOT_USER" ]; then
-		spnd=$(grep "SUSPENDED='yes'" $HESTIA/data/users/*/user.conf | wc -l)
+		spnd=$(grep "SUSPENDED='yes'" $CONF_DIR/users/*/user.conf | wc -l)
 		SUSPENDED_USERS=$spnd
 		U_USERS=$("$BIN/h-list-users" list | wc -l)
 	fi

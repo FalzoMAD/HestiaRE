@@ -32,7 +32,7 @@ $BIN/h-add-sys-ssh-jail
 
 ## Migrate user jails to bubblewrap jails
 for user in $("$BIN/h-list-users" list); do
-	check_jail_enabled=$(grep "SHELL_JAIL_ENABLED='yes'" $HESTIA/data/users/$user/user.conf)
+	check_jail_enabled=$(grep "SHELL_JAIL_ENABLED='yes'" $CONF_DIR/users/$user/user.conf)
 
 	# If jail enabled remove the jailkit jail first then bubblewrap the jail
 	if [ -n "$check_jail_enabled" ]; then
@@ -56,19 +56,19 @@ for user in $("$BIN/h-list-users" list); do
 		$BIN/h-change-user-shell $user jailbash
 
 		# Remove config line from user.conf
-		sed -i "/SHELL_JAIL_ENABLED='yes'/d" $HESTIA/data/users/$user/user.conf
+		sed -i "/SHELL_JAIL_ENABLED='yes'/d" $CONF_DIR/users/$user/user.conf
 	fi
 
 	# Remove config line from user.conf
-	sed -i "/SHELL_JAIL_ENABLED='no'/d" $HESTIA/data/users/$user/user.conf
+	sed -i "/SHELL_JAIL_ENABLED='no'/d" $CONF_DIR/users/$user/user.conf
 done
 
-packages=$(ls --sort=time $HESTIA/data/packages | grep .pkg)
+packages=$(ls --sort=time $HESTIA/packages | grep .pkg)
 
 for package in $packages; do
 	# Remove config line from package.conf
-	sed -i "/SHELL_JAIL_ENABLED='yes'/d" $HESTIA/data/packages/$package
-	sed -i "/SHELL_JAIL_ENABLED='no'/d" $HESTIA/data/packages/$package
+	sed -i "/SHELL_JAIL_ENABLED='yes'/d" $HESTIA/packages/$package
+	sed -i "/SHELL_JAIL_ENABLED='no'/d" $HESTIA/packages/$package
 done
 
 # Checking sshd directives

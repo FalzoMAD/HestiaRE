@@ -45,7 +45,7 @@ if [ ! -f "$dump" ]; then
 fi
 
 # Check db existence
-db_data=$(grep "DB='$database'" $HESTIA/data/users/$user/db.conf)
+db_data=$(grep "DB='$database'" $CONF_DIR/users/$user/db.conf)
 
 parse_object_kv_list "$db_data"
 #Fix issue #1084 with "Upper case not allowed with PGSQL"

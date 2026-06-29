@@ -19,7 +19,7 @@ source $HESTIA/conf/hestia.conf
 #----------------------------------------------------------#
 
 #check if string already exists
-if grep "geoip2" $HESTIA/data/templates/web/awstats/awstats.tpl; then
+if grep "geoip2" $HESTIA/templates/web/awstats/awstats.tpl; then
 	echo "Plugin allready enabled"
 	exit 0
 fi
@@ -32,7 +32,7 @@ if [ -d /etc/awstats ]; then
 	apt-get install make libssl-dev zlib1g-dev libdata-validate-ip-perl
 	perl -MCPAN -f -e "GeoIP2::Database::Reader"
 	sed -i '/LoadPlugin=\"geoip2_country \/pathto\/GeoLite2-Country.mmdb\"/s/^#//g;s/pathto/usr\/share\/GeoIP/g' /etc/awstats/awstats.conf
-	echo "LoadPlugin=\"geoip2_country /usr/share/GeoIP/GeoLite2-Country.mmdb\"" >> $HESTIA/data/templates/web/awstats/awstats.tpl
+	echo "LoadPlugin=\"geoip2_country /usr/share/GeoIP/GeoLite2-Country.mmdb\"" >> $HESTIA/templates/web/awstats/awstats.tpl
 
 	for user in $($BIN/h-list-sys-users plain); do
 		$BIN/h-rebuild-web-domains $user no

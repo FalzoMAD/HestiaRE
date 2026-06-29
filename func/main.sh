@@ -46,7 +46,7 @@ HESTIA_INSTALL_DIR="$HESTIA/install/deb"
 HESTIA_COMMON_DIR="$HESTIA/install/common"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 HESTIA_PHP="$HESTIA/php/bin/php"
-USER_DATA=$HESTIA/data/users/$user
+USER_DATA=$CONF_DIR/users/$user
 WEBTPL=$HESTIA/templates/web
 MAILTPL=$HESTIA/templates/mail
 DNSTPL=$HESTIA/templates/dns
@@ -174,7 +174,7 @@ log_history() {
 		if ! $BIN/h-list-user "$log_user" > /dev/null; then
 			return $E_NOTEXIST
 		fi
-		log=$HESTIA/data/users/$log_user/history.log
+		log=$CONF_DIR/users/$log_user/history.log
 	fi
 	touch $log
 
@@ -359,8 +359,8 @@ is_object_new() {
 # Check if object is valid
 is_object_valid() {
 	if [ $2 = 'USER' ]; then
-		tstpath="$(readlink -f "$HESTIA/data/users/$3")"
-		if [ "$(dirname "$tstpath")" != "$(readlink -f "$HESTIA/data/users")" ] || [ ! -d "$HESTIA/data/users/$3" ]; then
+		tstpath="$(readlink -f "$CONF_DIR/users/$3")"
+		if [ "$(dirname "$tstpath")" != "$(readlink -f "$CONF_DIR/users")" ] || [ ! -d "$CONF_DIR/users/$3" ]; then
 			check_result "$E_NOTEXIST" "$1 $3 doesn't exist"
 		fi
 	else
@@ -687,10 +687,10 @@ get_user_value() {
 # Update user value in user.conf
 update_user_value() {
 	key="${2//$/}"
-	lnr=$(grep -m 1 -n "^$key='" $HESTIA/data/users/$1/user.conf | cut -f 1 -d ':')
+	lnr=$(grep -m 1 -n "^$key='" $CONF_DIR/users/$1/user.conf | cut -f 1 -d ':')
 	if [ -n "$lnr" ]; then
-		sed -i "$lnr d" $HESTIA/data/users/$1/user.conf
-		sed -i "$lnr i\\$key='${3}'" $HESTIA/data/users/$1/user.conf
+		sed -i "$lnr d" $CONF_DIR/users/$1/user.conf
+		sed -i "$lnr i\\$key='${3}'" $CONF_DIR/users/$1/user.conf
 	fi
 }
 
@@ -698,7 +698,7 @@ update_user_value() {
 increase_user_value() {
 	key="${2//$/}"
 	factor="${3-1}"
-	conf="$HESTIA/data/users/$1/user.conf"
+	conf="$CONF_DIR/users/$1/user.conf"
 	old=$(grep "$key=" $conf | cut -f 2 -d \')
 	if [ -z "$old" ]; then
 		old=0
@@ -711,7 +711,7 @@ increase_user_value() {
 decrease_user_value() {
 	key="${2//$/}"
 	factor="${3-1}"
-	conf="$HESTIA/data/users/$1/user.conf"
+	conf="$CONF_DIR/users/$1/user.conf"
 	old=$(grep "$key=" $conf | cut -f 2 -d \')
 	if [ -z "$old" ]; then
 		old=0
