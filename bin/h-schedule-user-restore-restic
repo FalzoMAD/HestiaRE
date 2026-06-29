@@ -44,18 +44,18 @@ check_hestia_demo_mode
 log=$HESTIA/log/restore.log
 
 if [ -z "$object" ]; then
-	echo "$BIN/h-restore-user-restic '$user' '$snapshot' '' '' '' '' '' '' 'yes' >> $log 2>&1" >> $HESTIA/data/queue/backup.pipe
+	echo "$BIN/h-restore-user-restic '$user' '$snapshot' '' '' '' '' '' '' 'yes' >> $log 2>&1" >> /etc/hestia/queue/backup.pipe
 else
 	if [ "$object" = "web" ]; then
-		echo "$BIN/h-restore-web-domain-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> $HESTIA/data/queue/backup.pipe
+		echo "$BIN/h-restore-web-domain-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> /etc/hestia/queue/backup.pipe
 	elif [ "$object" = "dns" ]; then
-		echo "$BIN/h-restore-dns-domain-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> $HESTIA/data/queue/backup.pipe
+		echo "$BIN/h-restore-dns-domain-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> /etc/hestia/queue/backup.pipe
 	elif [ "$object" = "mail" ]; then
-		echo "$BIN/h-restore-mail-domain-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> $HESTIA/data/queue/backup.pipe
+		echo "$BIN/h-restore-mail-domain-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> /etc/hestia/queue/backup.pipe
 	elif [ "$object" = "db" ]; then
-		echo "$BIN/h-restore-database-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> $HESTIA/data/queue/backup.pipe
+		echo "$BIN/h-restore-database-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> /etc/hestia/queue/backup.pipe
 	elif [ "$object" = "cron" ]; then
-		echo "$BIN/h-restore-cron-restic '$user' '$snapshot' 'yes' >> $log 2>&1" >> $HESTIA/data/queue/backup.pipe
+		echo "$BIN/h-restore-cron-restic '$user' '$snapshot' 'yes' >> $log 2>&1" >> /etc/hestia/queue/backup.pipe
 	else
 		check_result "$E_INVALID" "Not supported"
 	fi

@@ -80,7 +80,7 @@ for domain in $domains; do
 				rm -rf $tmpdir
 				error="$domain belongs to another user"
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				sed -i "/ $user /d" $HESTIA/data/queue/backup.pipe
+				sed -i "/ $user /d" /etc/hestia/queue/backup.pipe
 				check_result "$E_PARSING" "$error"
 			fi
 		fi
@@ -246,7 +246,7 @@ $BIN/h-update-user-counters $user
 $BIN/h-update-user-counters "$ROOT_USER"
 $BIN/h-update-sys-ip-counters
 
-sed -i "/h-restore-web-domain-restic '$user' '$snapshot' '$web' /d" $HESTIA/data/queue/backup.pipe
+sed -i "/h-restore-web-domain-restic '$user' '$snapshot' '$web' /d" /etc/hestia/queue/backup.pipe
 
 # Logging
 $BIN/h-log-action "system" "Info" "Backup" "Web domain successfully restored (User: $user, Snapshot: $snapshot, Databse: $database)."

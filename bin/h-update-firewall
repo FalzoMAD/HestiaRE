@@ -91,7 +91,7 @@ if [ "$conntrack" != 'no' ] || grep --quiet container=lxc /proc/1/environ; then
 	echo "$str" >> "$tmp"
 fi
 
-ips="$(ls $HESTIA/data/ips)"
+ips="$(ls /etc/hestia/ips)"
 # Handling local traffic
 for ip in $ips; do
 	echo "$iptables -A INPUT -s $ip -j ACCEPT" >> "$tmp"

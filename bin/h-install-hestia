@@ -283,7 +283,7 @@ install_web() {
 		sed -i "s%;date.timezone =%date.timezone = $ZONE%g" "$pconf"
 		sed -i 's%_open_tag = Off%_open_tag = On%g' "$pconf"
 	done
-	printf '#!/bin/sh\nfind -O3 /home/*/tmp/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\nfind -O3 %s/data/sessions/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\n' \
+	printf '#!/bin/sh\nfind -O3 /home/*/tmp/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\nfind -O3 %s/.sessions/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\n' \
 		"$HESTIA" > /etc/cron.daily/php-session-cleanup
 	chmod 755 /etc/cron.daily/php-session-cleanup
 	mkdir -p /var/www/html /var/www/document_errors
@@ -526,22 +526,22 @@ init_hestia_structure() {
 	mkdir -p /var/log/hestia
 	ln -sf /var/log/hestia "$HESTIA/log"
 	mkdir -p "$HESTIA/conf" "$HESTIA/ssl" \
-		"$HESTIA/data/ips" "$HESTIA/data/queue" \
+		"/etc/hestia/ips" "/etc/hestia/queue" \
 		"$HESTIA/data/users" "$HESTIA/data/firewall" \
-		"$HESTIA/data/sessions" \
+		"$HESTIA/.sessions" \
 		"$HESTIA/data/templates/web/php-fpm" \
 		"$HESTIA/data/templates/mail" \
 		"$HESTIA/data/templates/dns" \
 		"$HESTIA/data/packages"
-	touch "$HESTIA/data/queue/backup.pipe" "$HESTIA/data/queue/disk.pipe" \
-		"$HESTIA/data/queue/webstats.pipe" "$HESTIA/data/queue/restart.pipe" \
-		"$HESTIA/data/queue/traffic.pipe" "$HESTIA/data/queue/daily.pipe" \
+	touch "/etc/hestia/queue/backup.pipe" "/etc/hestia/queue/disk.pipe" \
+		"/etc/hestia/queue/webstats.pipe" "/etc/hestia/queue/restart.pipe" \
+		"/etc/hestia/queue/traffic.pipe" "/etc/hestia/queue/daily.pipe" \
 		"$HESTIA/log/system.log" "$HESTIA/log/auth.log" \
 		"$HESTIA/log/backup.log" "$HESTIA/log/activity.log"
-	chmod 750 "$HESTIA/conf" "$HESTIA/data/users" "$HESTIA/data/ips" "$HESTIA/log"
-	chmod -R 750 "$HESTIA/data/queue"
+	chmod 750 "$HESTIA/conf" "$HESTIA/data/users" "/etc/hestia/ips" "$HESTIA/log"
+	chmod -R 750 "/etc/hestia/queue"
 	chmod 660 /var/log/hestia/* 2>/dev/null || true
-	chmod 770 "$HESTIA/data/sessions"
+	chmod 770 "$HESTIA/.sessions"
 	echo "[ OK ] structure ready"
 }
 
@@ -767,7 +767,7 @@ finalize_install() {
 	echo "[ * ] Starting Hestia service..."
 	update-rc.d hestia defaults > /dev/null 2>&1 || true
 	systemctl start hestia || true
-	chown hestiaweb:hestiaweb "$HESTIA/data/sessions"
+	chown hestiaweb:hestiaweb "$HESTIA/.sessions"
 	mkdir -p /backup && chmod 755 /backup
 	echo "[ * ] Scheduling Let's Encrypt host certificate..."
 	echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && $HESTIA/bin/h-add-letsencrypt-host" \

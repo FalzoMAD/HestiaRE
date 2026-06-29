@@ -127,8 +127,8 @@ rebuild_user_conf() {
 	$BIN/h-add-user-sftp-jail "$user"
 
 	# Update disk pipe
-	sed -i "/ $user$/d" $HESTIA/data/queue/disk.pipe
-	echo "$BIN/h-update-user-disk $user" >> $HESTIA/data/queue/disk.pipe
+	sed -i "/ $user$/d" /etc/hestia/queue/disk.pipe
+	echo "$BIN/h-update-user-disk $user" >> /etc/hestia/queue/disk.pipe
 
 	# WEB
 	if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != 'no' ]; then
@@ -136,12 +136,12 @@ rebuild_user_conf() {
 		chmod 770 $USER_DATA/ssl
 		touch $USER_DATA/web.conf
 		chmod 660 $USER_DATA/web.conf
-		if [ "$(grep -w $user $HESTIA/data/queue/traffic.pipe)" ]; then
+		if [ "$(grep -w $user /etc/hestia/queue/traffic.pipe)" ]; then
 			echo "$BIN/h-update-web-domains-traff $user" \
-				>> $HESTIA/data/queue/traffic.pipe
+				>> /etc/hestia/queue/traffic.pipe
 		fi
 		echo "$BIN/h-update-web-domains-disk $user" \
-			>> $HESTIA/data/queue/disk.pipe
+			>> /etc/hestia/queue/disk.pipe
 
 		if [[ -L "$HOMEDIR/$user/web" ]]; then
 			rm $HOMEDIR/$user/web
@@ -158,16 +158,13 @@ rebuild_user_conf() {
 		fi
 	fi
 
-		fi
-	fi
-
 	if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'no' ]; then
 		mkdir -p $USER_DATA/mail
 		chmod 770 $USER_DATA/mail
 		touch $USER_DATA/mail.conf
 		chmod 660 $USER_DATA/mail.conf
 		echo "$BIN/h-update-mail-domains-disk $user" \
-			>> $HESTIA/data/queue/disk.pipe
+			>> /etc/hestia/queue/disk.pipe
 
 		if [[ -L "$HOMEDIR/$user/mail" ]]; then
 			rm $HOMEDIR/$user/mail
@@ -184,7 +181,7 @@ rebuild_user_conf() {
 	if [ -n "$DB_SYSTEM" ] && [ "$DB_SYSTEM" != 'no' ]; then
 		touch $USER_DATA/db.conf
 		chmod 660 $USER_DATA/db.conf
-		echo "$BIN/h-update-databases-disk $user" >> $HESTIA/data/queue/disk.pipe
+		echo "$BIN/h-update-databases-disk $user" >> /etc/hestia/queue/disk.pipe
 
 		if [ "$create_user" = "yes" ]; then
 			$BIN/h-rebuild-databases $user
@@ -349,9 +346,9 @@ rebuild_web_domain_conf() {
 		fi
 
 		webstats="$BIN/h-update-web-domain-stat $user $domain"
-		check_webstats=$(grep "$webstats" $HESTIA/data/queue/webstats.pipe)
+		check_webstats=$(grep "$webstats" /etc/hestia/queue/webstats.pipe)
 		if [ -z "$check_webstats" ]; then
-			echo "$webstats" >> $HESTIA/data/queue/webstats.pipe
+			echo "$webstats" >> /etc/hestia/queue/webstats.pipe
 		fi
 
 		if [ -n "$STATS_USER" ]; then

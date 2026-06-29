@@ -55,7 +55,7 @@ for nic in $nics; do
 	fi
 done
 
-v_ips="$(ls $HESTIA/data/ips/)"
+v_ips="$(ls /etc/hestia/ips/)"
 ip_num="$(echo "$ips" | wc -w)"
 v_ip_num="$(echo "$v_ips" | wc -w)"
 
@@ -69,7 +69,7 @@ fi
 
 # Updating configs
 if [ -n "$old_ip" ]; then
-	mv $HESTIA/data/ips/$old_ip $HESTIA/data/ips/$new_ip
+	mv /etc/hestia/ips/$old_ip /etc/hestia/ips/$new_ip
 
 	# Generating timestamp
 	new_timestamp
@@ -156,7 +156,7 @@ fi
 # Adding system IP
 for ip in $ips; do
 	check_ip="$(ip addr list | grep -w "$ip")"
-	if [ ! -e "$HESTIA/data/ips/$ip" ] && [ -n "$check_ip" ]; then
+	if [ ! -e "/etc/hestia/ips/$ip" ] && [ -n "$check_ip" ]; then
 		interface="$(ip -d -j addr show | jq --arg IP "$ip" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
 		prefixlen="$(ip -d -j addr show | jq --arg IP "$ip" -r '.[].addr_info[] | if .local == $IP then .prefixlen else empty end')"
 		netmask="$(convert_cidr "$prefixlen")"
@@ -168,9 +168,9 @@ done
 
 # Updating NAT
 pub_ipv4="$(curl -fsLm5 --retry 2 --ipv4 https://ip.hestiacp.com/)"
-if [ ! -e "$HESTIA/data/ips/$pub_ipv4" ]; then
-	if [ -z "$(grep -R "$pub_ipv4" $HESTIA/data/ips/)" ]; then
-		ip="$(ls -t $HESTIA/data/ips/ | head -n1)"
+if [ ! -e "/etc/hestia/ips/$pub_ipv4" ]; then
+	if [ -z "$(grep -R "$pub_ipv4" /etc/hestia/ips/)" ]; then
+		ip="$(ls -t /etc/hestia/ips/ | head -n1)"
 		$BIN/h-change-sys-ip-nat "$ip" "$pub_ipv4"
 	fi
 fi

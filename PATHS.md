@@ -60,8 +60,10 @@ Current state and migration steps are documented in Section 5.
 ├── conf/              Panel instance config (moved from $HESTIA/conf/)
 │   ├── hestia.conf    Active panel config (key=value pairs, generated)
 │   └── defaults/      Known-good baseline
+├── extensions/        PSL cache + mail-domain hooks (moved from $HESTIA/data/extensions/)
 ├── firewall/          Firewall rules and ipset data (moved from $HESTIA/data/firewall/)
 ├── ips/               IP address entries (moved from $HESTIA/data/ips/)
+├── queue/             Runtime named pipes (moved from $HESTIA/data/queue/)
 └── hooks/             Optional lifecycle scripts (moved from /etc/hestiacp/hooks/)
     └── le_pre.sh      Example: LetsEncrypt pre-hook (optional, usually absent)
 ```
@@ -219,27 +221,29 @@ Variables set in `func/main.sh`:
 
 ## 5. /etc/hestia/ Migration Plan
 
-### 5a. Paths moving to /etc/hestia/ (decided, later issue)
+### 5a. Paths moving to /etc/hestia/ (data/-dissolution)
 
-These directories will be migrated in a dedicated follow-up issue.
-Filenames are preserved — no renames.
+Migrated via the data/-dissolution PRs (#129 conf, #148 ips/queue/extensions/sessions,
+later PRs firewall/users). Real move, no symlink bridge. Filenames preserved — no renames.
 
 | Source (current) | Target | Notes |
 |------------------|--------|-------|
 | `/usr/local/hestia/conf/` | `/etc/hestia/conf/` | Panel instance config — **DONE (#129)**: `/usr/local/hestia/conf` is now a directory symlink → `/etc/hestia/conf`; the ~466 `$HESTIA/conf/hestia.conf` refs keep working and `sed -i` stays safe. Shipped assets (manifest/panel-*/dovecot) moved to `$HESTIA/share/`. |
 | `/usr/local/hestia/conf/defaults/` | `/etc/hestia/conf/defaults/` | Stays under `conf/` (not flattened — matches §1 target); follows the conf symlink. **DONE (#129)** |
-| `/usr/local/hestia/data/firewall/` | `/etc/hestia/firewall/` | Rules + ipset data |
-| `/usr/local/hestia/data/ips/` | `/etc/hestia/ips/` | IP address entries |
+| `/usr/local/hestia/data/firewall/` | `/etc/hestia/firewall/` | Rules + ipset data — pending (object-helper guard PR) |
+| `/usr/local/hestia/data/ips/` | `/etc/hestia/ips/` | IP address entries — **DONE (#148)** |
+| `/usr/local/hestia/data/extensions/` | `/etc/hestia/extensions/` | PSL cache + mail-domain hooks — **DONE (#148)** |
+| `/usr/local/hestia/data/queue/` | `/etc/hestia/queue/` | Runtime named pipes (recreated fresh, never copied) — **DONE (#148)** |
+| `/usr/local/hestia/data/sessions/` | `/usr/local/hestia/.sessions/` | PHP panel sessions (target under install root) — **DONE (#148)** |
 | `/etc/hestiacp/hooks/` | `/etc/hestia/hooks/` | Lifecycle scripts (usually empty) |
 
 ### 5b. Deliberately not moved (pending separate analysis)
 
 | Path | Reason |
 |------|--------|
-| `$HESTIA/data/users/` | Part of the backup format — requires separate analysis before any move |
-| `$HESTIA/data/queue/` | Runtime named pipes — leave untouched for now |
-| `$HESTIA/data/packages/` | Review together with `data/templates/` in a later issue |
-| `$HESTIA/data/templates/` | Review together with `data/packages/` — decision: stay or move to `/etc/hestia/` |
+| `$HESTIA/data/users/` | Part of the backup format — dedicated PR after the object-helper guard |
+| `$HESTIA/data/packages/` | Repo-root asset, runtime-mutable — dedicated PR with `data/templates/` (target `$HESTIA/packages/`) |
+| `$HESTIA/data/templates/` | Repo-root asset, needs `h-update-{web,mail}-templates` rework — dedicated PR with `data/packages/` (target `$HESTIA/templates/`) |
 
 ### 5c. Known conflicts / open issues
 

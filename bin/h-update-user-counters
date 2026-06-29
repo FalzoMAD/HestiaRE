@@ -88,10 +88,10 @@ for user in $user_list; do
 		U_USERS=$("$BIN/h-list-users" list | wc -l)
 	fi
 
-	ips=$(ls $HESTIA/data/ips)
+	ips=$(ls /etc/hestia/ips)
 	# Checking ip
 	for ip in $ips; do
-		source $HESTIA/data/ips/$ip
+		source /etc/hestia/ips/$ip
 		if [ "$OWNER" = "$user" ]; then
 			IP_OWNED=$((IP_OWNED + 1))
 			IP_AVAIL=$((IP_AVAIL + 1))
@@ -101,7 +101,7 @@ for user in $user_list; do
 		fi
 	done
 	if [ "$user" = "$ROOT_USER" ]; then
-		IP_AVAIL=$(ls $HESTIA/data/ips | wc -l)
+		IP_AVAIL=$(ls /etc/hestia/ips | wc -l)
 	fi
 
 	# Checking web system

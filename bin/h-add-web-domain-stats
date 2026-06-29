@@ -94,7 +94,7 @@ fi
 #----------------------------------------------------------#
 
 # Schedule statistic processing
-echo "$BIN/h-update-web-domain-stat $user $domain" >> $HESTIA/data/queue/webstats.pipe
+echo "$BIN/h-update-web-domain-stat $user $domain" >> /etc/hestia/queue/webstats.pipe
 
 # Update config
 update_object_value 'web' 'DOMAIN' "$domain" '$STATS' "$type"

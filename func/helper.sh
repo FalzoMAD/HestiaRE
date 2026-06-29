@@ -185,3 +185,38 @@ seed_hestia_etc() {
 	_wcv "DB_SYSTEM"                "mysql"
 	unset -f _wcv
 }
+
+# ── migrate $HESTIA/data/* to their PATHS.md targets on upgrade ──────────────
+# Real move (no symlink bridge). Idempotent: each dir is only touched when the
+# old path still exists and the new target is absent, so re-runs are no-ops and
+# fresh installs (which create the new layout directly) skip everything.
+# Extended per data/-dissolution PR (#148 = extensions/ips/queue/sessions).
+migrate_data_layout() {
+	local hestia_root="${HESTIA:-/usr/local/hestia}"
+	local d
+
+	# Runtime dirs -> /etc/hestia (plain move)
+	for d in extensions ips; do
+		if [ -d "$hestia_root/data/$d" ] && [ ! -e "/etc/hestia/$d" ]; then
+			mkdir -p /etc/hestia
+			mv "$hestia_root/data/$d" "/etc/hestia/$d"
+		fi
+	done
+
+	# PHP panel sessions -> $HESTIA/.sessions (plain move)
+	if [ -d "$hestia_root/data/sessions" ] && [ ! -e "$hestia_root/.sessions" ]; then
+		mv "$hestia_root/data/sessions" "$hestia_root/.sessions"
+		chmod 770 "$hestia_root/.sessions" 2> /dev/null || true
+	fi
+
+	# Queue holds runtime pipes — recreate fresh at the new location, never copy.
+	if [ -d "$hestia_root/data/queue" ] && [ ! -d "/etc/hestia/queue" ]; then
+		mkdir -p /etc/hestia/queue
+		chmod 750 /etc/hestia/queue
+		local p
+		for p in backup disk webstats restart traffic daily; do
+			[ -e "/etc/hestia/queue/$p.pipe" ] || touch "/etc/hestia/queue/$p.pipe"
+		done
+		rm -rf "$hestia_root/data/queue"
+	fi
+}
