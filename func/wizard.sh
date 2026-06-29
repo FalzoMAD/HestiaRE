@@ -20,6 +20,9 @@
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────
+# The wizard runs standalone at install time, before hestia.env/main.sh exist,
+# so define the instance-config root here (main.sh carries the same fallback).
+CONF_DIR="${CONF_DIR:-/etc/hestia}"
 INSTALL_CONF="$CONF_DIR/install.conf"
 INSTALL_DIR="${HESTIA:-/usr/local/hestia}"
 MANIFEST="${INSTALL_DIR}/share/manifest.json"
