@@ -170,9 +170,13 @@ install_panel() {
 		php${PHP_VER}-zip php${PHP_VER}-gmp php${PHP_VER}-mbstring \
 		php${PHP_VER}-opcache
 	echo "[ * ] Configuring panel PHP-FPM..."
-	mkdir -p /etc/php/hestia/fpm/pool.d
+	mkdir -p /etc/php/hestia/fpm/pool.d /etc/php/hestia/cli
 	cp -f "$HESTIA/share/panel-php/php-fpm.conf" /etc/php/hestia/fpm/
 	cp -f "$HESTIA/share/panel-php/pool.d/panel.conf" /etc/php/hestia/fpm/pool.d/
+	cp -f "$HESTIA/share/panel-php/cli/php.ini" /etc/php/hestia/cli/php.ini
+	# Single source of truth for the panel PHP version (read by the hestia-php /
+	# hestia-php-fpm wrappers). A future Sury->OS-repo switch only rewrites this.
+	echo "$PHP_VER" > /etc/php/hestia/php-version
 	cp -f "$HESTIA/share/panel-php/hestia-php.service" /etc/systemd/system/
 	systemctl daemon-reload
 	systemctl enable hestia-php

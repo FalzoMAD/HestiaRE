@@ -1,0 +1,11 @@
+#!/bin/sh
+# HestiaRE panel PHP-FPM — single indirection point for the panel's PHP version
+# (see /etc/php/hestia/php-version, same source as bin/hestia-php). Used as
+# ExecStart in hestia-php.service so the unit never hardcodes a version; a version
+# switch only rewrites php-version + restarts hestia-php.
+#
+# `exec` replaces this shell with php-fpm, preserving the PID for the unit's
+# Type=notify / PIDFile.
+v=$(cat /etc/php/hestia/php-version 2> /dev/null)
+[ -n "$v" ] || v=$(ls -1 /usr/sbin/php-fpm[0-9].[0-9] 2> /dev/null | sort -V | tail -n1 | sed 's#.*/php-fpm##')
+exec "/usr/sbin/php-fpm${v}" "$@"
