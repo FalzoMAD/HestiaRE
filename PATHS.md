@@ -22,13 +22,12 @@
 ├── bin/               CLI commands (h-*, v-* symlinks)
 ├── conf -> /etc/hestia/conf   Symlink — instance config lives in /etc/hestia (§5a)
 ├── share/             Shipped install-time assets: manifest.json, panel-caddy/,
-│                      panel-php/, dovecot/ (consumed by the installer)
+│                      panel-php/, dovecot/, firewall/ (consumed by the installer)
 ├── packages/          Hosting plan definitions (*.pkg) — ships in tarball (#150)
 ├── templates/         Web/mail vhost + php-fpm templates — ships in tarball (#150)
 ├── .sessions/         PHP panel session files (owner: hestiaweb)
 ├── data/
-│   ├── users/         Per-user data files (not home dirs)
-│   └── firewall/      Firewall rules and ipset data (→ /etc/hestia/firewall, pending)
+│   └── users/         Per-user data files (→ /etc/hestia/users, pending — last data/ resident)
 ├── func/              Shared bash function libraries
 ├── install/           Installer data (deployed with package)
 ├── log -> /var/log/hestia   Symlink
@@ -222,7 +221,7 @@ later PRs firewall/users). Real move, no symlink bridge. Filenames preserved —
 |------------------|--------|-------|
 | `/usr/local/hestia/conf/` | `/etc/hestia/conf/` | Panel instance config — **DONE (#129)**: `/usr/local/hestia/conf` is now a directory symlink → `/etc/hestia/conf`; the ~466 `$HESTIA/conf/hestia.conf` refs keep working and `sed -i` stays safe. Shipped assets (manifest/panel-*/dovecot) moved to `$HESTIA/share/`. |
 | `/usr/local/hestia/conf/defaults/` | `/etc/hestia/conf/defaults/` | Stays under `conf/` (not flattened — matches §1 target); follows the conf symlink. **DONE (#129)** |
-| `/usr/local/hestia/data/firewall/` | `/etc/hestia/firewall/` | Rules + ipset data — pending (object-helper guard PR) |
+| `/usr/local/hestia/data/firewall/` | `/etc/hestia/firewall/` | Rules + ipset data — **DONE (#154)**: default `rules.conf` ships in `share/firewall/`; the `../../../` object-path traversal resolved via the `_object_conf` guard |
 | `/usr/local/hestia/data/ips/` | `/etc/hestia/ips/` | IP address entries — **DONE (#148)** |
 | `/usr/local/hestia/data/extensions/` | *dissolved* | PSL → `/etc/hestia/public_suffix_list.dat` (single file); mail-domain hooks → `/etc/hestia/hooks/` — **DONE (#148)** |
 | `/usr/local/hestia/data/queue/` | `/etc/hestia/queue/` | Runtime named pipes (recreated fresh, never copied) — **DONE (#148)** |

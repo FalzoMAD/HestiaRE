@@ -105,7 +105,7 @@ fi
 
 # Updating firewall
 if [ -n "$old" ] && [ -n "$FIREWALL_SYSTEM" ]; then
-	sed -i "s/$old/$new/g" $HESTIA/data/firewall/*.conf
+	sed -i "s/$old/$new/g" $CONF_DIR/firewall/*.conf
 	$BIN/h-update-firewall
 fi
 

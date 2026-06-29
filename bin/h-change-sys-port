@@ -74,12 +74,12 @@ else
 		sed -i "/\"hestia_port\":/c\\\"hestia_host\": $PORT" /etc/snappymail/data/_data_/_default_/configs/plugin-change-password.json
 	fi
 
-	if [ -f "$HESTIA/data/firewall/rules.conf" ]; then
-		sed -i "/COMMENT='HESTIA'/c\RULE='2' ACTION='ACCEPT' PROTOCOL='TCP' PORT='$PORT' IP='0.0.0.0/0' COMMENT='HESTIA' SUSPENDED='no' TIME='07:40:16' DATE='2014-05-25'" "$HESTIA/data/firewall/rules.conf"
+	if [ -f "$CONF_DIR/firewall/rules.conf" ]; then
+		sed -i "/COMMENT='HESTIA'/c\RULE='2' ACTION='ACCEPT' PROTOCOL='TCP' PORT='$PORT' IP='0.0.0.0/0' COMMENT='HESTIA' SUSPENDED='no' TIME='07:40:16' DATE='2014-05-25'" "$CONF_DIR/firewall/rules.conf"
 	fi
 
-	if [ -f "$HESTIA/data/firewall/chains.conf" ]; then
-		sed -i "/CHAIN='HESTIA'/c\CHAIN='HESTIA' PORT='$PORT' PROTOCOL='TCP'" "$HESTIA/data/firewall/chains.conf"
+	if [ -f "$CONF_DIR/firewall/chains.conf" ]; then
+		sed -i "/CHAIN='HESTIA'/c\CHAIN='HESTIA' PORT='$PORT' PROTOCOL='TCP'" "$CONF_DIR/firewall/chains.conf"
 	fi
 
 	# Restart services
