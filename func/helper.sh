@@ -185,3 +185,53 @@ seed_hestia_etc() {
 	_wcv "DB_SYSTEM"                "mysql"
 	unset -f _wcv
 }
+
+# ── migrate $HESTIA/data/* to their PATHS.md targets on upgrade ──────────────
+# Real move (no symlink bridge). Idempotent: each dir is only touched when the
+# old path still exists and the new target is absent, so re-runs are no-ops and
+# fresh installs (which create the new layout directly) skip everything.
+# Extended per data/-dissolution PR (#148 = extensions/ips/queue/sessions).
+migrate_data_layout() {
+	local hestia_root="${HESTIA:-/usr/local/hestia}"
+	local d
+
+	# ips -> /etc/hestia (plain move)
+	if [ -d "$hestia_root/data/ips" ] && [ ! -e "/etc/hestia/ips" ]; then
+		mkdir -p /etc/hestia
+		mv "$hestia_root/data/ips" "/etc/hestia/ips"
+	fi
+
+	# extensions/ is dissolved: the PSL cache becomes a single file and the
+	# optional operator mail-domain hooks join the other /etc/hestia/hooks;
+	# then drop the (now empty) dir. rmdir keeps any unexpected leftovers safe.
+	if [ -d "$hestia_root/data/extensions" ]; then
+		mkdir -p /etc/hestia/hooks
+		local h
+		for h in add-mail-domain delete-mail-domain; do
+			if [ -f "$hestia_root/data/extensions/$h.sh" ] && [ ! -e "/etc/hestia/hooks/$h.sh" ]; then
+				mv "$hestia_root/data/extensions/$h.sh" "/etc/hestia/hooks/$h.sh"
+			fi
+		done
+		if [ -f "$hestia_root/data/extensions/public_suffix_list.dat" ] && [ ! -e "/etc/hestia/public_suffix_list.dat" ]; then
+			mv "$hestia_root/data/extensions/public_suffix_list.dat" "/etc/hestia/public_suffix_list.dat"
+		fi
+		rmdir "$hestia_root/data/extensions" 2> /dev/null || true
+	fi
+
+	# PHP panel sessions -> $HESTIA/.sessions (plain move)
+	if [ -d "$hestia_root/data/sessions" ] && [ ! -e "$hestia_root/.sessions" ]; then
+		mv "$hestia_root/data/sessions" "$hestia_root/.sessions"
+		chmod 770 "$hestia_root/.sessions" 2> /dev/null || true
+	fi
+
+	# Queue holds runtime pipes — recreate fresh at the new location, never copy.
+	if [ -d "$hestia_root/data/queue" ] && [ ! -d "/etc/hestia/queue" ]; then
+		mkdir -p /etc/hestia/queue
+		chmod 750 /etc/hestia/queue
+		local p
+		for p in backup disk webstats restart traffic daily; do
+			[ -e "/etc/hestia/queue/$p.pipe" ] || touch "/etc/hestia/queue/$p.pipe"
+		done
+		rm -rf "$hestia_root/data/queue"
+	fi
+}

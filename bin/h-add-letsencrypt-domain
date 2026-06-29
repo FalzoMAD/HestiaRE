@@ -178,8 +178,8 @@ domain: ${domain}
 # Registering LetsEncrypt user account
 $BIN/h-add-letsencrypt-user $user
 if [ "$?" -ne 0 ]; then
-	touch $HESTIA/data/queue/letsencrypt.pipe
-	sed -i "/ $domain /d" $HESTIA/data/queue/letsencrypt.pipe
+	touch /etc/hestia/queue/letsencrypt.pipe
+	sed -i "/ $domain /d" /etc/hestia/queue/letsencrypt.pipe
 	send_notice "LETSENCRYPT" "Account registration failed ($user)"
 	check_result "$E_CONNECT" "LE account registration ($user)" > /dev/null
 fi
@@ -508,8 +508,8 @@ fi
 
 if [ "$?" -ne '0' ]; then
 	[ -d "$ssl_dir" ] && rm -rf "$ssl_dir"
-	touch $HESTIA/data/queue/letsencrypt.pipe
-	sed -i "/ $domain /d" $HESTIA/data/queue/letsencrypt.pipe
+	touch /etc/hestia/queue/letsencrypt.pipe
+	sed -i "/ $domain /d" /etc/hestia/queue/letsencrypt.pipe
 	send_notice 'LETSENCRYPT' "$domain certificate installation failed ($domain)"
 	check_result $? "SSL install" > /dev/null
 fi
@@ -566,8 +566,8 @@ fi
 #----------------------------------------------------------#
 
 # Deleting task from queue
-touch $HESTIA/data/queue/letsencrypt.pipe
-sed -i "/ $domain /d" $HESTIA/data/queue/letsencrypt.pipe
+touch /etc/hestia/queue/letsencrypt.pipe
+sed -i "/ $domain /d" /etc/hestia/queue/letsencrypt.pipe
 
 # Notifying user
 send_notice 'LETSENCRYPT' "$domain SSL has been installed successfully"

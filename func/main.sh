@@ -319,8 +319,8 @@ is_incremental_backup_enabled() {
 
 # Check user backup settings
 is_backup_scheduled() {
-	if [ -e "$HESTIA/data/queue/backup.pipe" ]; then
-		check_q=$(grep " $user " $HESTIA/data/queue/backup.pipe | grep $1)
+	if [ -e "/etc/hestia/queue/backup.pipe" ]; then
+		check_q=$(grep " $user " /etc/hestia/queue/backup.pipe | grep $1)
 		if [ -n "$check_q" ]; then
 			check_result "$E_EXISTS" "$1 is already scheduled"
 		fi
