@@ -196,13 +196,18 @@ migrate_data_layout() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
 	local d
 
-	# ips + firewall -> $CONF_DIR (plain move; preserves user rules/ipsets/bans)
-	for d in ips firewall; do
+	# ips + firewall + users -> $CONF_DIR (plain move). users is the per-user
+	# config tree; the backup format is location-agnostic (archives store relative
+	# paths, restore writes to $USER_DATA), so old archives still restore.
+	for d in ips firewall users; do
 		if [ -d "$hestia_root/data/$d" ] && [ ! -e "$CONF_DIR/$d" ]; then
 			mkdir -p $CONF_DIR
 			mv "$hestia_root/data/$d" "$CONF_DIR/$d"
 		fi
 	done
+
+	# data/ is fully dissolved — drop the empty husk if nothing else remains.
+	rmdir "$hestia_root/data" 2> /dev/null || true
 
 	# extensions/ is dissolved: the PSL cache becomes a single file and the
 	# optional operator mail-domain hooks join the other $CONF_DIR/hooks;

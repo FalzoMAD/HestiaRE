@@ -151,7 +151,7 @@ if [ -z "$directadmin_usermail" ]; then
 fi
 
 check_sysuser=$(cut -f 1 -d : /etc/passwd | grep "^$directadmin_user$")
-if [ -n "$check_sysuser" ] || [ -e "$HESTIA/data/users/$directadmin_user" ]; then
+if [ -n "$check_sysuser" ] || [ -e "$CONF_DIR/users/$directadmin_user" ]; then
 	delete_tmp
 	check_result "$E_EXISTS" "user $directadmin_user exists"
 fi
@@ -223,7 +223,7 @@ function run_da_db() {
 						echo "udb: $db_user"
 						echo "Password: ${md5}"
 
-						echo "DB='$db' DBUSER='$db_user' MD5='$md5' HOST='localhost' TYPE='mysql' CHARSET='UTF8' U_DISK='0' SUSPENDED='no' TIME='$time' DATE='$date'" >> /usr/local/hestia/data/users/"$directadmin_user"/db.conf
+						echo "DB='$db' DBUSER='$db_user' MD5='$md5' HOST='localhost' TYPE='mysql' CHARSET='UTF8' U_DISK='0' SUSPENDED='no' TIME='$time' DATE='$date'" >> $CONF_DIR/users/"$directadmin_user"/db.conf
 					fi
 				done < "backup/${da_db}"
 
@@ -315,7 +315,7 @@ function da_restore_imap_pass() {
 	#DirectAdmin passw is SHA512-CRYPT
 	da_orig_pass=$(grep -w "$1" backup/"$2"/email/passwd | tr ':' ' ' | cut -d " " -f2)
 	echo "${da_orig_pass}"
-	USER_DATA=$HESTIA/data/users/${3}/
+	USER_DATA=$CONF_DIR/users/${3}/
 	update_object_value "mail/${2}" 'ACCOUNT' "${1}" '$MD5' "{SHA512-CRYPT}$da_orig_pass"
 	echo "Password for $1@$2 restored"
 }

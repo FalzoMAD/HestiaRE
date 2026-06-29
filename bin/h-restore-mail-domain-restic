@@ -105,8 +105,8 @@ for domain in $domains; do
 		# Restore SSL
 		check_config=$(grep "DOMAIN='$domain'" $USER_DATA/mail.conf | grep -o "SSL='yes'")
 		if [ -n "$check_config" ]; then
-			if [ ! -e "$HESTIA/data/users/$user/ssl/" ]; then
-				mkdir -p $HESTIA/data/users/$user/ssl/
+			if [ ! -e "$CONF_DIR/users/$user/ssl/" ]; then
+				mkdir -p $CONF_DIR/users/$user/ssl/
 			fi
 
 			if [ ! -e "$HOMEDIR/$user/conf/mail/$domain/ssl/" ]; then

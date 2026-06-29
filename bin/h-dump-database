@@ -46,7 +46,7 @@ check_hestia_demo_mode
 timestamp=$(date +'%G-%m-%d_%H-%M-%S')
 
 # Check db existence
-db_data=$(grep "DB='$database'" $HESTIA/data/users/$user/db.conf)
+db_data=$(grep "DB='$database'" $CONF_DIR/users/$user/db.conf)
 if [ -z "$db_data" ]; then
 	echo "Error: database $database doesn't exist"
 	log_event "$E_NOTEXIST" "$ARGUMENTS"

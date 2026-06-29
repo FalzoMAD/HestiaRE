@@ -528,14 +528,14 @@ init_hestia_structure() {
 	# templates/ and packages/ ship at the install root (tarball) — not created here.
 	mkdir -p "$HESTIA/conf" "$HESTIA/ssl" \
 		"$CONF_DIR/ips" "$CONF_DIR/queue" \
-		"$HESTIA/data/users" "$CONF_DIR/firewall" \
+		"$CONF_DIR/users" "$CONF_DIR/firewall" \
 		"$HESTIA/.sessions"
 	touch "$CONF_DIR/queue/backup.pipe" "$CONF_DIR/queue/disk.pipe" \
 		"$CONF_DIR/queue/webstats.pipe" "$CONF_DIR/queue/restart.pipe" \
 		"$CONF_DIR/queue/traffic.pipe" "$CONF_DIR/queue/daily.pipe" \
 		"$HESTIA/log/system.log" "$HESTIA/log/auth.log" \
 		"$HESTIA/log/backup.log" "$HESTIA/log/activity.log"
-	chmod 750 "$HESTIA/conf" "$HESTIA/data/users" "$CONF_DIR/ips" "$HESTIA/log"
+	chmod 750 "$HESTIA/conf" "$CONF_DIR/users" "$CONF_DIR/ips" "$HESTIA/log"
 	chmod -R 750 "$CONF_DIR/queue"
 	chmod 660 /var/log/hestia/* 2>/dev/null || true
 	chmod 770 "$HESTIA/.sessions"

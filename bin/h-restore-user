@@ -102,7 +102,7 @@ if [ -z "$check_user" ]; then
 	email=$(get_user_value '$CONTACT')
 else
 	create_user="yes"
-	email=$(grep CONTACT "$HESTIA/data/users/$ROOT_USER/user.conf" | cut -f2 -d \')
+	email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" | cut -f2 -d \')
 fi
 
 # Checking available disk space
@@ -578,8 +578,8 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		# Restore SSL
 		check_config=$(grep "DOMAIN='$domain'" $USER_DATA/mail.conf | grep -o "SSL='yes'")
 		if [ -n "$check_config" ]; then
-			if [ ! -e "$HESTIA/data/users/$user/ssl/" ]; then
-				mkdir -p $HESTIA/data/users/$user/ssl/
+			if [ ! -e "$CONF_DIR/users/$user/ssl/" ]; then
+				mkdir -p $CONF_DIR/users/$user/ssl/
 			fi
 
 			if [ ! -e "$HOMEDIR/$user/conf/mail/$domain/ssl/" ]; then

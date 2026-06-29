@@ -51,7 +51,7 @@ check_hestia_demo_mode
 echo "Moving $domain from $owner to $user, please wait..."
 
 # WEB domain
-web_data=$(grep "DOMAIN='$domain'" $HESTIA/data/users/$owner/web.conf)
+web_data=$(grep "DOMAIN='$domain'" $CONF_DIR/users/$owner/web.conf)
 if [ -n "$web_data" ]; then
 	echo "[*] Moving web domain..."
 	$BIN/h-suspend-web-domain "$owner" "$domain" >> /dev/null 2>&1
@@ -94,14 +94,14 @@ if [ -n "$web_data" ]; then
 
 	# Check SSL
 	if [ "$SSL" = 'yes' ]; then
-		ssl_crt=$HESTIA/data/users/$owner/ssl/$domain.crt
-		ssl_key=$HESTIA/data/users/$owner/ssl/$domain.key
-		ssl_ca=$HESTIA/data/users/$owner/ssl/$domain.ca
-		ssl_pem=$HESTIA/data/users/$owner/ssl/$domain.pem
-		cp $ssl_crt $HESTIA/data/users/$user/ssl/
-		cp $ssl_key $HESTIA/data/users/$user/ssl/
-		cp $ssl_ca $HESTIA/data/users/$user/ssl/ >> /dev/null 2>&1
-		cp $ssl_pem $HESTIA/data/users/$user/ssl/ >> /dev/null 2>&1
+		ssl_crt=$CONF_DIR/users/$owner/ssl/$domain.crt
+		ssl_key=$CONF_DIR/users/$owner/ssl/$domain.key
+		ssl_ca=$CONF_DIR/users/$owner/ssl/$domain.ca
+		ssl_pem=$CONF_DIR/users/$owner/ssl/$domain.pem
+		cp $ssl_crt $CONF_DIR/users/$user/ssl/
+		cp $ssl_key $CONF_DIR/users/$user/ssl/
+		cp $ssl_ca $CONF_DIR/users/$user/ssl/ >> /dev/null 2>&1
+		cp $ssl_pem $CONF_DIR/users/$user/ssl/ >> /dev/null 2>&1
 	fi
 
 	# Check ftp user account
@@ -113,8 +113,8 @@ if [ -n "$web_data" ]; then
 	fi
 
 	# Move config
-	sed -i "/DOMAIN='$domain'/d" $HESTIA/data/users/$owner/web.conf
-	echo "$web_data" >> $HESTIA/data/users/$user/web.conf
+	sed -i "/DOMAIN='$domain'/d" $CONF_DIR/users/$owner/web.conf
+	echo "$web_data" >> $CONF_DIR/users/$user/web.conf
 
 	# Move data
 	mv $HOMEDIR/$owner/web/$domain $HOMEDIR/$user/web/
@@ -142,7 +142,7 @@ if [ -n "$web_data" ]; then
 fi
 
 # DNS domain
-dns_data=$(grep "DOMAIN='$domain'" $HESTIA/data/users/$owner/dns.conf)
+dns_data=$(grep "DOMAIN='$domain'" $CONF_DIR/users/$owner/dns.conf)
 if [ -n "$dns_data" ]; then
 	echo "[*] Moving DNS zone and records..."
 	parse_object_kv_list "$dns_data"
@@ -150,16 +150,16 @@ if [ -n "$dns_data" ]; then
 	# Change IP
 	if [ -n "$ip" ]; then
 		dns_data=$(echo "$dns_data" | sed "s/IP='$IP'/IP='$ip'/")
-		sed -i "s/$IP/$ip/g" $HESTIA/data/users/$owner/dns/$domain.conf
+		sed -i "s/$IP/$ip/g" $CONF_DIR/users/$owner/dns/$domain.conf
 	fi
 
 	# Move config
-	sed -i "/DOMAIN='$domain'/d" $HESTIA/data/users/$owner/dns.conf
-	echo "$dns_data" >> $HESTIA/data/users/$user/dns.conf
+	sed -i "/DOMAIN='$domain'/d" $CONF_DIR/users/$owner/dns.conf
+	echo "$dns_data" >> $CONF_DIR/users/$user/dns.conf
 
 	# Move dns records
-	mv $HESTIA/data/users/$owner/dns/$domain.conf \
-		$HESTIA/data/users/$user/dns/
+	mv $CONF_DIR/users/$owner/dns/$domain.conf \
+		$CONF_DIR/users/$user/dns/
 
 	# Rebuild config
 	$BIN/h-unsuspend-dns-domain "$user" "$domain" no >> /dev/null 2>&1
@@ -176,7 +176,7 @@ if [ -n "$dns_data" ]; then
 fi
 
 # MAIL domain
-mail_data=$(grep "DOMAIN='$domain'" $HESTIA/data/users/$owner/mail.conf)
+mail_data=$(grep "DOMAIN='$domain'" $CONF_DIR/users/$owner/mail.conf)
 if [ -n "$mail_data" ]; then
 	$BIN/h-suspend-mail-domain "$owner" "$domain" >> /dev/null 2>&1
 	echo "[*] Moving mail domain and accounts..."
@@ -189,41 +189,41 @@ if [ -n "$mail_data" ]; then
 	fi
 
 	# Move config
-	sed -i "/DOMAIN='$domain'/d" $HESTIA/data/users/$owner/mail.conf
+	sed -i "/DOMAIN='$domain'/d" $CONF_DIR/users/$owner/mail.conf
 	mail_data=$(echo "$mail_data" | sed "s/SUSPENDED='no'/SUSPENDED='yes'/")
-	echo "$mail_data" >> $HESTIA/data/users/$user/mail.conf
-	mv -f $HESTIA/data/users/$owner/mail/$domain.conf \
-		$HESTIA/data/users/$user/mail/
+	echo "$mail_data" >> $CONF_DIR/users/$user/mail.conf
+	mv -f $CONF_DIR/users/$owner/mail/$domain.conf \
+		$CONF_DIR/users/$user/mail/
 
 	# Move DKIM
-	if [ -e "$HESTIA/data/users/$owner/mail/$domain.pem" ]; then
-		mv -f $HESTIA/data/users/$owner/mail/$domain.pem \
-			$HESTIA/data/users/$user/mail/
-		mv -f $HESTIA/data/users/$owner/mail/$domain.pub \
-			$HESTIA/data/users/$user/mail/
+	if [ -e "$CONF_DIR/users/$owner/mail/$domain.pem" ]; then
+		mv -f $CONF_DIR/users/$owner/mail/$domain.pem \
+			$CONF_DIR/users/$user/mail/
+		mv -f $CONF_DIR/users/$owner/mail/$domain.pub \
+			$CONF_DIR/users/$user/mail/
 	fi
 
 	# Move SSL certificates
 	if [ "$SSL" = 'yes' ]; then
 		# Ensure that SSL directory exists and move certificates
-		mkdir -p $HESTIA/data/users/$user/ssl/
+		mkdir -p $CONF_DIR/users/$user/ssl/
 		mkdir -p $HOMEDIR/$user/conf/mail/$domain/ssl/
 
-		ssl_crt=$HESTIA/data/users/$owner/ssl/mail.$domain.crt
-		ssl_key=$HESTIA/data/users/$owner/ssl/mail.$domain.key
-		ssl_ca=$HESTIA/data/users/$owner/ssl/mail.$domain.ca
-		ssl_pem=$HESTIA/data/users/$owner/ssl/mail.$domain.pem
-		mv $ssl_crt $HESTIA/data/users/$user/ssl/
-		mv $ssl_key $HESTIA/data/users/$user/ssl/
-		mv $ssl_ca $HESTIA/data/users/$user/ssl/ >> /dev/null 2>&1
-		mv $ssl_pem $HESTIA/data/users/$user/ssl/ >> /dev/null 2>&1
+		ssl_crt=$CONF_DIR/users/$owner/ssl/mail.$domain.crt
+		ssl_key=$CONF_DIR/users/$owner/ssl/mail.$domain.key
+		ssl_ca=$CONF_DIR/users/$owner/ssl/mail.$domain.ca
+		ssl_pem=$CONF_DIR/users/$owner/ssl/mail.$domain.pem
+		mv $ssl_crt $CONF_DIR/users/$user/ssl/
+		mv $ssl_key $CONF_DIR/users/$user/ssl/
+		mv $ssl_ca $CONF_DIR/users/$user/ssl/ >> /dev/null 2>&1
+		mv $ssl_pem $CONF_DIR/users/$user/ssl/ >> /dev/null 2>&1
 
 		# Add certificate to user home directory
-		cp -f $HESTIA/data/users/$user/ssl/mail.$domain.crt $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.crt
-		cp -f $HESTIA/data/users/$user/ssl/mail.$domain.key $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.key
-		cp -f $HESTIA/data/users/$user/ssl/mail.$domain.pem $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.pem
-		if [ -e "$HESTIA/data/users/$user/ssl/mail.$domain.ca" ]; then
-			cp -f $HESTIA/data/users/$user/ssl/mail.$domain.ca $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.ca
+		cp -f $CONF_DIR/users/$user/ssl/mail.$domain.crt $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.crt
+		cp -f $CONF_DIR/users/$user/ssl/mail.$domain.key $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.key
+		cp -f $CONF_DIR/users/$user/ssl/mail.$domain.pem $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.pem
+		if [ -e "$CONF_DIR/users/$user/ssl/mail.$domain.ca" ]; then
+			cp -f $CONF_DIR/users/$user/ssl/mail.$domain.ca $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.ca
 		fi
 
 		# Add domain SSL configuration to dovecot
@@ -290,8 +290,8 @@ if [ -n "$mail_data" ]; then
 	if [ -e "$HOMEDIR/$owner/conf/mail/$domain" ]; then
 		rm -rf "$HOMEDIR/$owner/conf/mail/$domain"
 	fi
-	if [ -e "$HESTIA/data/users/$owner/mail/$domain.conf" ]; then
-		rm -f "$HESTIA/data/users/$owner/mail/$domain.conf"
+	if [ -e "$CONF_DIR/users/$owner/mail/$domain.conf" ]; then
+		rm -f "$CONF_DIR/users/$owner/mail/$domain.conf"
 	fi
 
 	# Rebuild config

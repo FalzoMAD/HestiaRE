@@ -26,7 +26,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 # Functions
 is_package_in_use() {
-	check_package=$(grep "PACKAGE='$package" $HESTIA/data/users/*/user.conf | cut -d'/' -f7)
+	check_package=$(grep "PACKAGE='$package" $CONF_DIR/users/*/user.conf | cut -d'/' -f7)
 	if [ -n "$check_package" ]; then
 		for user in $check_package; do
 			$BIN/h-change-user-package "$user" 'default'

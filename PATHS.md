@@ -26,8 +26,7 @@
 ├── packages/          Hosting plan definitions (*.pkg) — ships in tarball (#150)
 ├── templates/         Web/mail vhost + php-fpm templates — ships in tarball (#150)
 ├── .sessions/         PHP panel session files (owner: hestiaweb)
-├── data/
-│   └── users/         Per-user data files (→ /etc/hestia/users, pending — last data/ resident)
+│                      (data/ fully dissolved — see /etc/hestia below)
 ├── func/              Shared bash function libraries
 ├── install/           Installer data (deployed with package)
 ├── log -> /var/log/hestia   Symlink
@@ -54,6 +53,7 @@ Current state and migration steps are documented in Section 5.
 ├── firewall/          Firewall rules and ipset data (moved from $HESTIA/data/firewall/)
 ├── ips/               IP address entries (moved from $HESTIA/data/ips/)
 ├── queue/             Runtime named pipes (moved from $HESTIA/data/queue/)
+├── users/             Per-user config tree (moved from $HESTIA/data/users/)
 └── hooks/             Optional lifecycle hooks (LE + mail-domain; moved from /etc/hestiacp/hooks/)
     ├── le_pre.sh           Example: LetsEncrypt pre-hook (optional, usually absent)
     └── add-mail-domain.sh  Example: post-add-mail-domain hook (optional)
@@ -182,7 +182,7 @@ Variables set in `func/main.sh`:
 | Variable | Value |
 |----------|-------|
 | `HOMEDIR` | `/home` |
-| `USER_DATA` | `$HESTIA/data/users/$user` |
+| `USER_DATA` | `$CONF_DIR/users/$user` |
 | `WEBTPL` | `$HESTIA/templates/web` |
 | `MAILTPL` | `$HESTIA/templates/mail` |
 | `DNSTPL` | `$HESTIA/templates/dns` |
@@ -215,7 +215,8 @@ Variables set in `func/main.sh`:
 ### 5a. Paths moving to /etc/hestia/ (data/-dissolution)
 
 Migrated via the data/-dissolution PRs (#129 conf, #148 ips/queue/extensions/sessions,
-later PRs firewall/users). Real move, no symlink bridge. Filenames preserved — no renames.
+#154 firewall, #156 users). Real move, no symlink bridge. Filenames preserved — no renames.
+`/usr/local/hestia/data/` is fully dissolved.
 
 | Source (current) | Target | Notes |
 |------------------|--------|-------|
@@ -226,13 +227,15 @@ later PRs firewall/users). Real move, no symlink bridge. Filenames preserved —
 | `/usr/local/hestia/data/extensions/` | *dissolved* | PSL → `/etc/hestia/public_suffix_list.dat` (single file); mail-domain hooks → `/etc/hestia/hooks/` — **DONE (#148)** |
 | `/usr/local/hestia/data/queue/` | `/etc/hestia/queue/` | Runtime named pipes (recreated fresh, never copied) — **DONE (#148)** |
 | `/usr/local/hestia/data/sessions/` | `/usr/local/hestia/.sessions/` | PHP panel sessions (target under install root) — **DONE (#148)** |
+| `/usr/local/hestia/data/users/` | `/etc/hestia/users/` | Per-user config tree — **DONE (#156)**: backup format is location-agnostic (relative archive paths), so old archives restore unchanged |
+| `/usr/local/hestia/data/packages/` | `/usr/local/hestia/packages/` | Hosting plans — **DONE (#150)**: repo-root tarball asset |
+| `/usr/local/hestia/data/templates/` | `/usr/local/hestia/templates/` | vhost/php-fpm templates — **DONE (#150)**: repo-root tarball asset |
 | `/etc/hestiacp/hooks/` | `/etc/hestia/hooks/` | Lifecycle scripts (usually empty) |
 
-### 5b. Deliberately not moved (pending separate analysis)
+### 5b. Deliberately not moved
 
-| Path | Reason |
-|------|--------|
-| `$HESTIA/data/users/` | Part of the backup format — dedicated PR after the object-helper guard |
+`/usr/local/hestia/data/` is fully dissolved — there is nothing left under it.
+All former residents were migrated (see §5a) or removed.
 
 ### 5c. Known conflicts / open issues
 
@@ -252,9 +255,7 @@ hestiaweb/admin user consolidation remains a separate, future topic.
 
 ### 5d. Deferred to later issues
 
-| Topic | Scope |
-|-------|-------|
-| `data/users/` | Backup format compatibility analysis required before any move |
+_None remaining for the `data/` dissolution — complete as of #156._
 
 ---
 

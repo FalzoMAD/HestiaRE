@@ -59,7 +59,7 @@ fi
 # Updating WEB configs
 if [ -n "$old" ] && [ -n "$WEB_SYSTEM" ]; then
 	for user in $("$BIN/h-list-users" list); do
-		sed -i "s/$old/$new/" $HESTIA/data/users/$user/web.conf
+		sed -i "s/$old/$new/" $CONF_DIR/users/$user/web.conf
 		$BIN/h-rebuild-web-domains "$user" no
 	done
 	$BIN/h-restart-dns "$restart"
@@ -68,9 +68,9 @@ fi
 # Updating DNS configs
 if [ -n "$old" ] && [ -n "$DNS_SYSTEM" ]; then
 	for user in $("$BIN/h-list-users" list); do
-		sed -i "s/$old/$new/" "$HESTIA/data/users/$user/dns.conf"
-		if ls $HESTIA/data/users/$user/dns/*.conf > /dev/null 2>&1; then
-			sed -i "s/$old/$new/" $HESTIA/data/users/$user/dns/*.conf
+		sed -i "s/$old/$new/" "$CONF_DIR/users/$user/dns.conf"
+		if ls $CONF_DIR/users/$user/dns/*.conf > /dev/null 2>&1; then
+			sed -i "s/$old/$new/" $CONF_DIR/users/$user/dns/*.conf
 		fi
 		$BIN/h-rebuild-dns-domains "$user" no
 	done

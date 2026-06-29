@@ -179,9 +179,9 @@ is_object_valid 'user' 'USER' "$user"
 # Defining config
 USER=$user
 HOME=$HOMEDIR/$user
-source_conf "$HESTIA/data/users/$user/user.conf"
-U_USERS=$(awk -F"'" '/^U_USERS=/ {print $2}' "$HESTIA/data/users/$ROOT_USER/user.conf")
-SUSPENDED_USERS=$(awk -F"'" '/^SUSPENDED_USERS=/ {print $2}' "$HESTIA/data/users/$ROOT_USER/user.conf")
+source_conf "$CONF_DIR/users/$user/user.conf"
+U_USERS=$(awk -F"'" '/^U_USERS=/ {print $2}' "$CONF_DIR/users/$ROOT_USER/user.conf")
+SUSPENDED_USERS=$(awk -F"'" '/^SUSPENDED_USERS=/ {print $2}' "$CONF_DIR/users/$ROOT_USER/user.conf")
 
 # Listing data
 case $format in

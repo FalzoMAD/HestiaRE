@@ -42,7 +42,7 @@ fi
 if [ "$user" = "system" ]; then
 	log_file="$HESTIA/log/activity.log"
 else
-	log_file="$HESTIA/data/users/$user/history.log"
+	log_file="$CONF_DIR/users/$user/history.log"
 fi
 
 # Verify log file exists before deleting to prevent errors

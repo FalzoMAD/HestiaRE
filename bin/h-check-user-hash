@@ -36,7 +36,7 @@ check_args '2' "$#" 'USER HASH'
 is_format_valid 'user' 'ip46'
 
 # Checking user
-if [ ! -d "$HESTIA/data/users/$user" ] && [ "$user" != 'root' ]; then
+if [ ! -d "$CONF_DIR/users/$user" ] && [ "$user" != 'root' ]; then
 	echo "Error: password missmatch"
 	echo "$date $time $user $ip failed to login" >> $HESTIA/log/auth.log
 	exit 9
