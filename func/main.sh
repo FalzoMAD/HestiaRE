@@ -348,12 +348,6 @@ is_object_valid() {
 		if [ "$(dirname "$tstpath")" != "$(readlink -f "$HESTIA/data/users")" ] || [ ! -d "$HESTIA/data/users/$3" ]; then
 			check_result "$E_NOTEXIST" "$1 $3 doesn't exist"
 		fi
-	elif [ $2 = 'KEY' ]; then
-		local key="$(basename "$3")"
-
-		if [[ -z "$key" || ${#key} -lt 16 ]] || [[ ! -f "$HESTIA/data/access-keys/${key}" && ! -f "$HESTIA/data/access-keys/$key" ]]; then
-			check_result "$E_NOTEXIST" "$1 $3 doesn't exist"
-		fi
 	else
 		object=$(grep "$2='$3'" $HESTIA/data/users/$user/$1.conf)
 		if [ -z "$object" ]; then
@@ -1420,7 +1414,6 @@ is_format_valid() {
 		arg="${!arg_name}"
 		if [ -n "$arg" ]; then
 			case $arg_name in
-				access_key_id) is_access_key_id_format_valid "$arg" "$arg_name" ;;
 				account) is_localpart_format_valid "$arg" "$arg_name" '64' ;;
 				action) is_fw_action_format_valid "$arg" ;;
 				active) is_boolean_format_valid "$arg" 'active' ;;
@@ -1497,7 +1490,6 @@ is_format_valid() {
 				rtype) is_dns_type_format_valid "$arg" ;;
 				rule) is_int_format_valid "$arg" "rule id" ;;
 				service) is_service_format_valid "$arg" "$arg_name" ;;
-				secret_access_key) is_secret_access_key_format_valid "$arg" "$arg_name" ;;
 				soa) is_domain_format_valid "$arg" 'SOA' ;;
 				#missing command: is_format_valid_shell
 				shell) is_format_valid_shell "$arg" ;;
@@ -1527,129 +1519,6 @@ is_command_valid_format() {
 	fi
 	if [[ -n $(echo "$1" | grep -e '\-\-') ]]; then
 		check_result "$E_INVALID" "Invalid command format"
-	fi
-}
-# Check access_key_id name
-# Don't work with legacy key format
-is_access_key_id_format_valid() {
-	local hash="$1"
-
-	# ACCESS_KEY_ID format validation
-	if ! [[ "$hash" =~ ^[[:alnum:]]{20}$ ]]; then
-		check_result "$E_INVALID" "invalid $2 format :: $hash"
-	fi
-}
-
-# SECRET_ACCESS_KEY format validation
-is_secret_access_key_format_valid() {
-	local hash="$1"
-
-	if ! [[ "$hash" =~ ^[[:alnum:]|_|\.|\+|/|\^|~|=|%|\-]{40}$ ]]; then
-		check_result "$E_INVALID" "invalid $2 format"
-	fi
-}
-
-# Checks if the secret belongs to the access key
-check_access_key_secret() {
-	local access_key_id="$(basename "$1")"
-	local secret_access_key=$2
-	local -n key_user=$3
-
-	if [[ -z "$access_key_id" || ! -f "$HESTIA/data/access-keys/${access_key_id}" ]]; then
-		check_result "$E_PASSWORD" "Access key $access_key_id doesn't exist"
-	fi
-
-	if [[ -z "$secret_access_key" ]]; then
-		check_result "$E_PASSWORD" "Secret key not provided for key $access_key_id"
-	elif ! [[ "$secret_access_key" =~ ^[[:alnum:]|_|\.|\+|/|\^|~|=|%|\-]{40}$ ]]; then
-		check_result "$E_PASSWORD" "Invalid secret key for key $access_key_id"
-	else
-		SECRET_ACCESS_KEY=""
-		source_conf "$HESTIA/data/access-keys/${access_key_id}"
-
-		if [[ -z "$SECRET_ACCESS_KEY" || "$SECRET_ACCESS_KEY" != "$secret_access_key" ]]; then
-			check_result "$E_PASSWORD" "Invalid secret key for key $access_key_id"
-		fi
-	fi
-
-	key_user="$USER"
-}
-
-# Checks if the key belongs to the user
-check_access_key_user() {
-	local access_key_id="$(basename "$1")"
-	local user=$2
-
-	if [[ -z "$access_key_id" || ! -f "$HESTIA/data/access-keys/${access_key_id}" ]]; then
-		check_result "$E_FORBIDEN" "Access key $access_key_id doesn't exist"
-	fi
-
-	if [[ -z "$user" ]]; then
-		check_result "$E_FORBIDEN" "User not provided"
-	else
-		USER=""
-		source_conf "$HESTIA/data/access-keys/${access_key_id}"
-
-		if [[ -z "$USER" || "$USER" != "$user" ]]; then
-			check_result "$E_FORBIDEN" "key $access_key_id does not belong to the user $user"
-		fi
-	fi
-}
-
-# Checks if the key is allowed to run the command
-check_access_key_cmd() {
-	local access_key_id="$(basename "$1")"
-	local cmd=$2
-	local -n user_arg_position=$3
-
-	if [[ "$DEBUG_MODE" = "true" ]]; then
-		new_timestamp
-		echo "[$date:$time] $1 $2" >> /var/log/hestia/api.log
-	fi
-	if [[ -z "$access_key_id" || ! -f "$HESTIA/data/access-keys/${access_key_id}" ]]; then
-		check_result "$E_FORBIDEN" "Access key $access_key_id doesn't exist"
-	fi
-
-	if [[ -z "$cmd" ]]; then
-		check_result "$E_FORBIDEN" "Command not provided"
-	elif [[ "$cmd" = 'h-make-tmp-file' ]]; then
-		USER="" PERMISSIONS=""
-		source_conf "${HESTIA}/data/access-keys/${access_key_id}"
-		local allowed_commands
-		if [[ -n "$PERMISSIONS" ]]; then
-			allowed_commands="$(get_apis_commands "$PERMISSIONS")"
-			if [[ -z "$(echo ",${allowed_commands}," | grep ",${hst_command},")" ]]; then
-				check_result "$E_FORBIDEN" "Key $access_key_id don't have permission to run the command $hst_command"
-			fi
-		elif [[ -z "$PERMISSIONS" && "$USER" != "$ROOT_USER" ]]; then
-			check_result "$E_FORBIDEN" "Key $access_key_id don't have permission to run the command $hst_command"
-		fi
-		user_arg_position="0"
-	elif [[ ! -e "$BIN/$cmd" ]]; then
-		check_result "$E_FORBIDEN" "Command $cmd not found"
-	else
-		USER="" PERMISSIONS=""
-		source_conf "${HESTIA}/data/access-keys/${access_key_id}"
-
-		local allowed_commands
-		if [[ -n "$PERMISSIONS" ]]; then
-			allowed_commands="$(get_apis_commands "$PERMISSIONS")"
-			if [[ -z "$(echo ",${allowed_commands}," | grep ",${hst_command},")" ]]; then
-				check_result "$E_FORBIDEN" "Key $access_key_id don't have permission to run the command $hst_command"
-			fi
-		elif [[ -z "$PERMISSIONS" && "$USER" != "$ROOT_USER" ]]; then
-			check_result "$E_FORBIDEN" "Key $access_key_id don't have permission to run the command $hst_command"
-		fi
-
-		if [[ "$USER" == "$ROOT_USER" ]]; then
-			# Admin can run commands for any user
-			user_arg_position="0"
-		else
-			user_arg_position="$(search_command_arg_position "$hst_command" "USER")"
-			if ! [[ "$user_arg_position" =~ ^[0-9]+$ ]]; then
-				check_result "$E_FORBIDEN" "Command $hst_command not found"
-			fi
-		fi
 	fi
 }
 
@@ -1865,114 +1734,6 @@ change_sys_value() {
 	fi
 }
 
-# Checks the format of APIs that will be allowed for the key
-is_key_permissions_format_valid() {
-	local permissions="$1"
-	local user="$2"
-
-	if [[ "$user" != "$ROOT_USER" && -z "$permissions" ]]; then
-		check_result "$E_INVALID" "Non-admin users need a permission list"
-	fi
-
-	while IFS=',' read -ra permissions_arr; do
-		for permission in "${permissions_arr[@]}"; do
-			permission="$(basename "$permission" | sed -E "s/^\s*|\s*$//g")"
-
-			#            if [[ -z "$(echo "$permission" | grep -E "^v-")" ]]; then
-			if [[ ! -e "$HESTIA/data/api/$permission" ]]; then
-				check_result "$E_NOTEXIST" "API $permission doesn't exist"
-			fi
-
-			source_conf "$HESTIA/data/api/$permission"
-			if [ "$ROLE" = "admin" ] && [ "$user" != "$ROOT_USER" ]; then
-				check_result "$E_INVALID" "Only the admin can run this API"
-			fi
-			#            elif [[ ! -e "$BIN/$permission" ]]; then
-			#                check_result "$E_NOTEXIST" "Command $permission doesn't exist"
-			#            fi
-		done
-	done <<< "$permissions"
-}
-
-# Remove whitespaces, and bin path from commands
-cleanup_key_permissions() {
-	local permissions="$1"
-
-	local final quote
-	while IFS=',' read -ra permissions_arr; do
-		for permission in "${permissions_arr[@]}"; do
-			permission="$(basename "$permission" | sed -E "s/^\s*|\s*$//g")"
-
-			# Avoid duplicate items
-			if [[ -z "$(echo ",${final}," | grep ",${permission},")" ]]; then
-				final+="${quote}${permission}"
-				quote=','
-			fi
-		done
-	done <<< "$permissions"
-
-	echo "$final"
-}
-
-# Extract all allowed commands from a permission list
-get_apis_commands() {
-	local permissions="$1"
-
-	local allowed_commands quote commands_to_add
-	while IFS=',' read -ra permissions_arr; do
-		for permission in "${permissions_arr[@]}"; do
-			permission="$(basename "$permission" | sed -E "s/^\s*|\s*$//g")"
-
-			commands_to_add=""
-			#            if [[ -n "$(echo "$permission" | grep -E "^v-")" ]]; then
-			#                commands_to_add="$permission"
-			#            el
-			if [[ -e "$HESTIA/data/api/$permission" ]]; then
-				source_conf "$HESTIA/data/api/$permission"
-				commands_to_add="$COMMANDS"
-			fi
-
-			if [[ -n "$commands_to_add" ]]; then
-				allowed_commands+="${quote}${commands_to_add}"
-				quote=','
-			fi
-		done
-	done <<< "$permissions"
-
-	cleanup_key_permissions "$allowed_commands"
-}
-
-# Get the position of an argument by name in a hestia command using the command's documentation comment.
-#
-# Return:
-# * 0:   It doesn't have the argument;
-# * 1-9: The position of the argument in the command.
-search_command_arg_position() {
-	local hst_command="$(basename "$1")"
-	local arg_name="$2"
-
-	local command_path="$BIN/$hst_command"
-	if [[ -z "$hst_command" || ! -e "$command_path" ]]; then
-		echo "-1"
-		return
-	fi
-
-	local position=0
-	local count=0
-	local command_options="$(sed -En 's/^# options: (.+)/\1/p' "$command_path")"
-	while IFS=' ' read -ra options_arr; do
-		for option in "${options_arr[@]}"; do
-			count=$((count + 1))
-
-			option_name="$(echo "  $option   " | sed -E 's/^(\s|\[)*|(\s|\])*$//g')"
-			if [[ "${option_name^^}" == "$arg_name" ]]; then
-				position=$count
-			fi
-		done
-	done <<< "$command_options"
-
-	echo "$position"
-}
 
 add_chroot_jail() {
 	local user=$1

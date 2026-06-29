@@ -590,7 +590,6 @@ configure_hestia() {
 	fi
 	# Strip FTP rule unless proftpd was selected
 	is_on "${COMPONENT_ADDON_PROFTPD:-}" || sed -i "/COMMENT='FTP'/d" "$HESTIA/data/firewall/rules.conf" 2>/dev/null || true
-	cp -rf "$HESTIA_COMMON_DIR/api" "$HESTIA/data/"
 
 	echo "[ * ] Setting hostname..."
 	"$BIN/h-change-sys-hostname" "$HESTIA_HOSTNAME" > /dev/null 2>&1 || true
