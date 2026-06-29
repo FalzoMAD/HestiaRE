@@ -1,5 +1,9 @@
 {
     admin off
+    # The panel serves HTTPS on :8083 with an explicit cert (no ACME). Disable
+    # the automatic HTTP->HTTPS redirect server, which otherwise binds :80 and
+    # squats the port nginx needs for customer vhosts.
+    auto_https disable_redirects
     log {
         output file /var/log/caddy/error.log
         level ERROR
