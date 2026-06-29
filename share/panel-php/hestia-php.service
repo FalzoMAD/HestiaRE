@@ -6,7 +6,7 @@ After=network.target
 [Service]
 Type=notify
 PIDFile=/run/hestia-php.pid
-ExecStart=/usr/sbin/php-fpm8.3 --nodaemonize --fpm-config /etc/php/hestia/fpm/php-fpm.conf
+ExecStart=/usr/local/hestia/bin/hestia-php-fpm --nodaemonize --fpm-config /etc/php/hestia/fpm/php-fpm.conf
 ExecReload=/bin/kill -USR2 $MAINPID
 KillMode=mixed
 PrivateTmp=true

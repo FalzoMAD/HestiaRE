@@ -64,9 +64,9 @@ cp -f $ssl_dir/certificate.key $HESTIA/ssl/certificate.key
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Restarting web server
+# Reload the panel webserver (Caddy) to pick up the new certificate
 if [ "$restart" != 'no' ]; then
-	kill -HUP $(cat /run/hestia-nginx.pid)
+	systemctl reload caddy 2> /dev/null || true
 	$BIN/h-restart-mail "$restart"
 fi
 

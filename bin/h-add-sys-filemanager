@@ -63,7 +63,7 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
-openssl_installed=$(/usr/local/hestia/php/bin/php -m | grep openssl)
+openssl_installed=$($HESTIA/bin/hestia-php -m | grep openssl)
 
 rm --recursive --force "$FM_INSTALL_DIR"
 mkdir -p "$FM_INSTALL_DIR"
@@ -81,9 +81,11 @@ cp --recursive --force ${HESTIA_INSTALL_DIR}/filemanager/filegator/* "${FM_INSTA
 chown $user: -R "${FM_INSTALL_DIR}"
 
 if [ -z "$openssl_installed" ]; then
+	# Panel PHP has no openssl module — composer needs it, so fall back to the
+	# system php (/usr/bin/php) for this install only.
 	COMPOSER_HOME="$HOMEDIR/$user/.config/composer" user_exec /usr/bin/php $COMPOSER_BIN --quiet --no-dev install
 else
-	COMPOSER_HOME="$HOMEDIR/$user/.config/composer" user_exec /usr/local/hestia/php/bin/php $COMPOSER_BIN --quiet --no-dev install
+	COMPOSER_HOME="$HOMEDIR/$user/.config/composer" user_exec $HESTIA/bin/hestia-php $COMPOSER_BIN --quiet --no-dev install
 fi
 
 # Check if installation was successful, if not abort script and throw error message notification and clean-up
