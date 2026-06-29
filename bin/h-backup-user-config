@@ -189,17 +189,17 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		mkdir -p template/php-fpm/
 
 		if [ $WEB_BACKEND == 'php-fpm' ]; then
-			cp $HESTIA/data/templates/web/$WEB_SYSTEM/php-fpm/$TPL.tpl template/$WEB_SYSTEM/
-			cp $HESTIA/data/templates/web/$WEB_SYSTEM/php-fpm/$TPL.stpl template/$WEB_SYSTEM/
-			cp $HESTIA/data/templates/web/php-fpm/$BACKEND.tpl template/php-fpm/
+			cp $HESTIA/templates/web/$WEB_SYSTEM/php-fpm/$TPL.tpl template/$WEB_SYSTEM/
+			cp $HESTIA/templates/web/$WEB_SYSTEM/php-fpm/$TPL.stpl template/$WEB_SYSTEM/
+			cp $HESTIA/templates/web/php-fpm/$BACKEND.tpl template/php-fpm/
 		else
-			cp $HESTIA/data/templates/web/$WEB_SYSTEM/$TPL.tpl template/$WEB_SYSTEM/
-			cp $HESTIA/data/templates/web/$WEB_SYSTEM/$TPL.stpl template/$WEB_SYSTEM/
+			cp $HESTIA/templates/web/$WEB_SYSTEM/$TPL.tpl template/$WEB_SYSTEM/
+			cp $HESTIA/templates/web/$WEB_SYSTEM/$TPL.stpl template/$WEB_SYSTEM/
 		fi
 		if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
 			mkdir -p template/$PROXY_SYSTEM
-			cp $HESTIA/data/templates/web/$PROXY_SYSTEM/$PROXY.tpl template/$PROXY_SYSTEM/
-			cp $HESTIA/data/templates/web/$PROXY_SYSTEM/$PROXY.stpl template/$PROXY_SYSTEM/
+			cp $HESTIA/templates/web/$PROXY_SYSTEM/$PROXY.tpl template/$PROXY_SYSTEM/
+			cp $HESTIA/templates/web/$PROXY_SYSTEM/$PROXY.stpl template/$PROXY_SYSTEM/
 		fi
 
 		# Backup ssl certificates
