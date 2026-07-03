@@ -11,7 +11,7 @@
 			<a href="/edit/server/whitelabel/" class="button button-secondary">
 				<i class="fas fa-paint-brush icon-blue"></i><?= tohtml( _("White Label")) ?>
 			</a>
-			<a href="/edit/server/hestiaweb/" class="button button-secondary">
+			<a href="/edit/server/hestia/" class="button button-secondary">
 				<i class="fas fa-clock icon-blue"></i><?= tohtml( _("Panel Cronjobs")) ?>
 			</a>
 		</div>

@@ -114,9 +114,9 @@ sed -i "s|\(\$dist_config\[\"frontend_config\"\]\[\"app_name\"\] = \"File Manage
 echo "$fm_v" > "${FM_INSTALL_DIR}/version"
 # Set permissions
 chown root: -R "${FM_INSTALL_DIR}"
-chown hestiaweb: "${FM_INSTALL_DIR}/private"
-chown hestiaweb: "${FM_INSTALL_DIR}/private/logs"
-chown hestiaweb: "${FM_INSTALL_DIR}/repository"
+chown hestia: "${FM_INSTALL_DIR}/private"
+chown hestia: "${FM_INSTALL_DIR}/private/logs"
+chown hestia: "${FM_INSTALL_DIR}/repository"
 
 $BIN/h-change-sys-config-value 'FILE_MANAGER' 'true'
 

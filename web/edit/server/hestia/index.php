@@ -26,7 +26,7 @@ if (!empty($_POST["save"])) {
 			HESTIA_CMD .
 				"h-change-sys-service-config " .
 				quoteshellarg($new_conf) .
-				" hestiaweb yes",
+				" hestia yes",
 			$output,
 			$return_var,
 		);
@@ -36,7 +36,7 @@ if (!empty($_POST["save"])) {
 	}
 }
 
-$v_config_path = "/var/spool/cron/crontabs/hestiaweb";
+$v_config_path = "/var/spool/cron/crontabs/hestia";
 $v_service_name = _("Panel Cronjobs");
 
 // Read config
