@@ -73,7 +73,7 @@ case $service in
 	clamd) dst=$($BIN/h-list-sys-clamd-config plain) ;;
 	fail2ban) dst='/etc/fail2ban/jail.local' ;;
 	ssh) dst='/etc/ssh/sshd_config' ;;
-	hestiaweb) dst='/var/spool/cron/crontabs/hestiaweb' ;;
+	hestia) dst='/var/spool/cron/crontabs/hestia' ;;
 	*) check_result $E_NOTEXIST "service $service doesn't exist" ;;
 esac
 
@@ -109,7 +109,7 @@ if [ "$update" = 'yes' ] && [ "$restart" != 'no' ]; then
 		fi
 	fi
 
-	if [[ "$service" != "hestiaweb" ]]; then
+	if [[ "$service" != "hestia" ]]; then
 		$BIN/h-restart-service "$service" > /dev/null 2>&1
 		if [ $? -ne 0 ]; then
 			for config in $dst; do

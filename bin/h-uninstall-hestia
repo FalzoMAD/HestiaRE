@@ -39,10 +39,10 @@ for s in hestia hestia-php caddy; do
 done
 
 echo "[ * ] Removing cron, profile and sudoers entries..."
-rm -f /var/spool/cron/crontabs/hestiaweb 2>/dev/null || true
+rm -f /var/spool/cron/crontabs/hestia 2>/dev/null || true
 rm -f /etc/cron.d/hestia-* 2>/dev/null || true
 rm -f /etc/profile.d/hestia.sh 2>/dev/null || true
-rm -f /etc/sudoers.d/hestiaweb 2>/dev/null || true
+rm -f /etc/sudoers.d/hestia 2>/dev/null || true
 rm -f "$CONF_DIR"/.done.* 2>/dev/null || true
 
 if [ "$PURGE" = true ]; then
