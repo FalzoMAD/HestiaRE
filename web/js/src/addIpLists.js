@@ -1,4 +1,4 @@
-import { parseAndSortIpLists } from './helpers';
+import { parseAndSortIpLists } from './helpers.js';
 
 // Populates the "IP address / IP list" select with created IP lists
 // on the Add Firewall Rule page

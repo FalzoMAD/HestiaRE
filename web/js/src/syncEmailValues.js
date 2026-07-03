@@ -1,4 +1,4 @@
-import { debounce } from './helpers';
+import { debounce } from './helpers.js';
 
 // Synchronizes the "Email" input value with "Email login credentials to" input value
 // based on the "Send welcome email" checkbox state on Add User page

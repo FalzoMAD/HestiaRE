@@ -1,5 +1,5 @@
-import handleFtpAccountHints from './ftpAccountHints';
-import { debounce, randomPassword } from './helpers';
+import handleFtpAccountHints from './ftpAccountHints.js';
+import { debounce, randomPassword } from './helpers.js';
 
 // Add/remove FTP accounts on Edit Web Domain page
 export default function handleFtpAccounts() {

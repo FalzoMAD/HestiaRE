@@ -1,4 +1,4 @@
-import { createConfirmationDialog } from './helpers';
+import { createConfirmationDialog } from './helpers.js';
 
 // Listen to .js-confirm-action links and intercept clicks with a confirmation dialog
 export default function handleConfirmAction() {

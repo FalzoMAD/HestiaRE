@@ -1,4 +1,4 @@
-import { debounce } from './helpers';
+import { debounce } from './helpers.js';
 
 // Handle "Custom document root -> Directory" hint on Edit Web Domain page
 export default function handleDocRootHint() {
