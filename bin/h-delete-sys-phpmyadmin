@@ -69,6 +69,16 @@ rm -f /etc/caddy/apps/phpmyadmin.conf
 systemctl reload hestia-php 2> /dev/null || true
 $BIN/h-restart-service caddy 2> /dev/null || true
 
+# Remove the customer-domain alias (nginx/apache proxy include)
+if [ -f /etc/nginx/conf.d/phpmyadmin.inc ]; then
+	rm -f /etc/nginx/conf.d/phpmyadmin.inc
+	$BIN/h-restart-service nginx 2> /dev/null || true
+fi
+if [ -f /etc/apache2/conf.d/phpmyadmin.inc ]; then
+	rm -f /etc/apache2/conf.d/phpmyadmin.inc
+	$BIN/h-restart-service apache2 2> /dev/null || true
+fi
+
 # Remove DB_PMA_ALIAS from hestia.conf
 $BIN/h-change-sys-config-value 'DB_PMA_ALIAS' ''
 
