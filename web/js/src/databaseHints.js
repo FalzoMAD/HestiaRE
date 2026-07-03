@@ -1,4 +1,4 @@
-import { debounce } from './helpers';
+import { debounce } from './helpers.js';
 
 // Attach listener to database "Name" and "Username" fields to update their hints
 export default function handleDatabaseHints() {

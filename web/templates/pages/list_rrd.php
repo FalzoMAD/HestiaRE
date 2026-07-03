@@ -24,14 +24,17 @@
 <div class="container">
 	<div class="form-container form-container-wide">
 		<!-- Begin graph list item loop -->
+		<?php // Graphs are PNGs rendered server-side by rrdtool graph in the same
+		// h-update-sys-rrd-* cron scripts that feed the RRD databases; image.php
+		// delivers them via X-Accel-Redirect through the panel Caddy. ?>
 		<?php foreach ($data as $key => $value) { ?>
 			<div class="u-mb40">
 				<h2 class="u-mb20"><?= tohtml($data[$key]["TITLE"]) ?></h2>
-				<canvas
-					class="u-max-height300 js-rrd-chart"
-					data-service="<?= tohtml($data[$key]["TYPE"] !== "net" ? $data[$key]["RRD"] : "net_" . $data[$key]["RRD"]) ?>"
-					data-period="<?= tohtml($period) ?>"
-				></canvas>
+				<img
+					class="u-max-height300"
+					src="/list/rrd/image.php?/rrd/<?= tohtml($data[$key]["TYPE"]) ?>/<?= tohtml($period . "-" . $data[$key]["RRD"]) ?>.png"
+					alt="<?= tohtml($data[$key]["TITLE"]) ?>"
+				>
 			</div>
 		<?php } ?>
 	</div>

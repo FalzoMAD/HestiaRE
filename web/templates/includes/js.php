@@ -1,6 +1,11 @@
-<script defer src="/js/dist/main.min.js?<?= JS_LATEST_UPDATE ?>"></script>
-<script defer src="/js/dist/alpinejs-collapse.min.js?<?= JS_LATEST_UPDATE ?>"></script>
-<script defer src="/js/dist/alpinejs.min.js?<?= JS_LATEST_UPDATE ?>"></script>
+<?php /* Panel JS is served build-free: own code as native ES modules straight
+from js/src (module scripts defer by default and execute in document order with
+the deferred vendor scripts below — our alpine:init listeners register before
+the Alpine core runs). Vendored libs come from upstream/* branches, see
+VENDORED.json. */ ?>
+<script type="module" src="/js/src/index.js?<?= JS_LATEST_UPDATE ?>"></script>
+<script defer src="/js/vendor/alpinejs-collapse.min.js?<?= JS_LATEST_UPDATE ?>"></script>
+<script defer src="/js/vendor/alpinejs.min.js?<?= JS_LATEST_UPDATE ?>"></script>
 <script>
 	document.documentElement.classList.replace('no-js', 'js');
 	document.addEventListener('alpine:init', () => {

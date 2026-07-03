@@ -20,6 +20,36 @@
       "reason": "Security-hardened shell argument quoting. PHP's native escapeshellarg() corrupts UTF-8 input (e.g. æøå) in processes running a non-UTF-8 locale. This implementation avoids the locale-dependent code path on Unix by wrapping in single quotes unconditionally.",
       "transitive_deps": [],
       "last_verified": "2026-06-21"
+    },
+    {
+      "name": "alpinejs",
+      "source_type": "inline",
+      "path": "web/js/vendor/alpinejs.min.js",
+      "upstream_repo": "https://github.com/alpinejs/alpine",
+      "upstream_version": "3.15.12",
+      "upstream_branch": "upstream/alpinejs",
+      "source_url": "https://registry.npmjs.org/alpinejs/-/alpinejs-3.15.12.tgz (dist/cdn.min.js)",
+      "sha256": "57b37d7cae9a27d965fdae4adcc844245dfdc407e655aee85dcfff3a08036a3f",
+      "license": "MIT",
+      "license_file": "web/js/vendor/LICENSE-alpinejs.md",
+      "reason": "Panel UI interactivity framework (x-data bindings, stores, notifications, bulk edit). Prebuilt CDN artifact — the GitHub repo commits no dist files and attaches no release assets; the npm registry tarball is the project's official publish artifact (#248).",
+      "transitive_deps": [],
+      "last_verified": "2026-07-03"
+    },
+    {
+      "name": "alpinejs-collapse",
+      "source_type": "inline",
+      "path": "web/js/vendor/alpinejs-collapse.min.js",
+      "upstream_repo": "https://github.com/alpinejs/alpine",
+      "upstream_version": "3.15.12",
+      "upstream_branch": "upstream/alpinejs",
+      "source_url": "https://registry.npmjs.org/@alpinejs/collapse/-/collapse-3.15.12.tgz (dist/cdn.min.js)",
+      "sha256": "c7661d4e2cf0465e3cd693190debb5f592ac72dcc4cfe650581273767558b27b",
+      "license": "MIT",
+      "license_file": "web/js/vendor/LICENSE-alpinejs.md",
+      "reason": "Alpine collapse plugin (x-collapse transitions). Same monorepo and release cadence as alpinejs — updated together (#248).",
+      "transitive_deps": [],
+      "last_verified": "2026-07-03"
     }
   ],
 
@@ -66,6 +96,26 @@
       "path": "web/inc/lib/qrcode.php",
       "algorithm_refs": ["ISO/IEC 18004:2015 (QR Code)"],
       "note": "Pure algorithm implementation. No upstream package. Byte mode, ECC Level M, versions 1-10. No PHP extensions required."
+    },
+    {
+      "name": "randomString",
+      "source_type": "eigenbau",
+      "path": "web/js/src/lib/randomString.js",
+      "inspiration_source": "ai/nanoid (customAlphabet)",
+      "inspiration_repo": "https://github.com/ai/nanoid",
+      "inspiration_license": "MIT",
+      "license_obligation": "none — independent reimplementation, no code copied.",
+      "note": "Unbiased random string from a custom alphabet: crypto.getRandomValues + rejection sampling. Replaces the bundled nanoid dependency; only consumer is helpers.js randomPassword() (#248)."
+    },
+    {
+      "name": "passwordStrength",
+      "source_type": "eigenbau",
+      "path": "web/js/src/lib/passwordStrength.js",
+      "inspiration_source": "deanilvincent/check-password-strength",
+      "inspiration_repo": "https://github.com/deanilvincent/check-password-strength",
+      "inspiration_license": "MIT",
+      "license_obligation": "none — independent reimplementation, no code copied.",
+      "note": "Password strength level 0-3 from length + character-class diversity, mirroring the rule model of check-password-strength's default options so the <meter> semantics stay identical. Only consumer is passwordInput.js (#248)."
     }
   ]
 }
