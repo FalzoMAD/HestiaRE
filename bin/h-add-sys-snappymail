@@ -127,8 +127,8 @@ if [ "$UPDATE" == "no" ]; then
 	chown -R www-data:www-data $SM_CONFIG_DIR/
 	php -f $HESTIA_COMMON_DIR/snappymail/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT"
 
-	# Set the permissions back to hestiamail
-	chown -R hestiamail:www-data $SM_CONFIG_DIR/
+	# Set the permissions back to caddy
+	chown -R caddy:caddy $SM_CONFIG_DIR/
 
 	# Remove the downloaded file
 	rm ${SM_INSTALL_DIR}/${SM_FILE}

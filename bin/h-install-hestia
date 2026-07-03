@@ -127,10 +127,10 @@ install_base() {
 
 	echo "[ * ] Creating system users..."
 	id hestia &> /dev/null || useradd hestia -c "HestiaRE Panel" --no-create-home -s /sbin/nologin
-	id hestiamail &> /dev/null || useradd hestiamail -c "HestiaRE Mail" --no-create-home -s /sbin/nologin
 	getent group hestia-users &> /dev/null || groupadd hestia-users
 	usermod -aG hestia-users hestia
-	usermod -aG hestia-users hestiamail
+	# caddy joins hestia-users in the panel stage (the caddy user does not exist yet
+	# here; it is created when the caddy package is installed).
 
 	echo "[ * ] Hardening SSH..."
 	if grep -qiE "^#?.*Subsystem.+(sftp )?sftp-server" /etc/ssh/sshd_config; then
@@ -212,10 +212,11 @@ install_panel() {
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
 	# caddy runs as the unprivileged caddy user. Add it to:
-	#  - mail: read the shared panel cert (root:mail 660, used by nginx/exim/…)
+	#  - mail:         read the shared panel cert (root:mail 660, used by nginx/exim/…)
+	#  - hestia-users: app FPM pools run as caddy (replaces the former hestiamail role)
 	# The panel FPM socket is reached via listen.group=caddy (see panel.conf),
 	# so caddy needs no extra group membership for it.
-	usermod -aG mail caddy 2> /dev/null || true
+	usermod -aG mail,hestia-users caddy 2> /dev/null || true
 	systemctl enable caddy
 	# restart, not start: apt already started caddy with its default Caddyfile
 	# during package install, so `start` would be a no-op and our panel config

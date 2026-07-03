@@ -90,7 +90,7 @@ if [ "$HAS_DOVECOT_SIEVE_INSTALLED" = "0" ]; then
 	chown -R dovecot:mail /var/log/dovecot.log
 	chmod 660 /var/log/dovecot.log
 
-	chown -R hestiamail:www-data "$RC_CONFIG_DIR"/
+	chown -R caddy:caddy "$RC_CONFIG_DIR"/
 	chmod 751 -R $RC_CONFIG_DIR
 
 	chmod 644 $RC_CONFIG_DIR/plugins/managesieve/config.inc.php
