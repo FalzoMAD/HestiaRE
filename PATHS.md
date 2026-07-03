@@ -12,7 +12,7 @@
 | Install root | `/usr/local/hestia` | Same as HestiaCP — intentional, no rename |
 | Instance config | `/etc/hestia` | Changed from `/etc/hestiacp` — only relevant path change |
 | Shell profile | `/etc/profile.d/hestia.sh` | Exports `$HESTIA`, adds `$HESTIA/bin` to `$PATH` |
-| Sudo rules | `/etc/sudoers.d/hestiaweb` | `hestiaweb ALL=NOPASSWD:/usr/local/hestia/bin/*` |
+| Sudo rules | `/etc/sudoers.d/hestia` | `hestia ALL=NOPASSWD:/usr/local/hestia/bin/*` |
 | Log dir | `/var/log/hestia` | Symlinked as `$HESTIA/log` |
 
 ### Install root subdirectory layout
@@ -25,7 +25,7 @@
 │                      panel-php/, dovecot/, firewall/ (consumed by the installer)
 ├── packages/          Hosting plan definitions (*.pkg) — ships in tarball (#150)
 ├── templates/         Web/mail vhost + php-fpm templates — ships in tarball (#150)
-├── .sessions/         PHP panel session files (owner: hestiaweb)
+├── .sessions/         PHP panel session files (owner: hestia)
 │                      (data/ fully dissolved — see /etc/hestia below)
 ├── func/              Shared bash function libraries
 ├── install/           Installer data (deployed with package)
@@ -146,11 +146,11 @@ Current state and migration steps are documented in Section 5.
 | Jail config | `/etc/fail2ban/jail.local` |
 | Auth log watched | `/var/log/hestia/auth.log` |
 
-### Cron (hestiaweb crontab)
+### Cron (hestia crontab)
 
 | Item | Path |
 |------|------|
-| Crontab | `/var/spool/cron/crontabs/hestiaweb` |
+| Crontab | `/var/spool/cron/crontabs/hestia` |
 | Session cleanup | `/etc/cron.daily/php-session-cleanup` |
 
 ---
@@ -251,7 +251,7 @@ The naming conflict between the two `hestia.conf` files has been resolved:
    active panel settings as `KEY='value'` pairs (WEB_SYSTEM, MAIL_SYSTEM, etc.).
    Unchanged — only file #1 was renamed.
 
-hestiaweb/admin user consolidation remains a separate, future topic.
+hestia/admin user consolidation remains a separate, future topic.
 
 ### 5d. Deferred to later issues
 
@@ -266,7 +266,7 @@ _None remaining for the `data/` dissolution — complete as of #156._
 | Q1 | Caddy config structure | **DONE** — Issue #24 |
 | Q2 | PHP FPM panel pool | **DECIDED** — Issue #25 |
 | Q3 | `/etc/profile.d/hestia.sh` comment | **DECIDED** + cleanup deferred |
-| Q4 | `hestiaweb` sudo wildcard scope | **OPEN** — too early, technical debt |
+| Q4 | `hestia` sudo wildcard scope | **OPEN** — too early, technical debt |
 | Q5 | `h-add-cron-hestia-autoupdate` | **DECIDED** |
 
 ---
@@ -285,7 +285,7 @@ _None remaining for the `data/` dissolution — complete as of #156._
 - Dedicated `hestia-php.service` unit using `/usr/sbin/php-fpm8.3` (Sury), independent of `php8.3-fpm.service`
 - Config dir: `/etc/php/hestia/fpm/` (version-independent — survives PHP version bumps)
 - Pool socket: `/run/hestia-php.sock` (unchanged from hestia-php — no Caddy config change needed)
-- Pool name: `panel`, user/group: `hestiaweb`
+- Pool name: `panel`, user/group: `hestia`
 - `pm=ondemand`, 4 children max (panel has low concurrent load)
 - opcache enabled (Sury ships it; old hestia-php had none)
 - Installer integration deferred to Issue #26a
@@ -300,13 +300,13 @@ _None remaining for the `data/` dissolution — complete as of #156._
 
 ---
 
-**Q4 — `hestiaweb` sudo wildcard scope: OPEN — technical debt**
+**Q4 — `hestia` sudo wildcard scope: OPEN — technical debt**
 
-`/etc/sudoers.d/hestiaweb` currently allows:
+`/etc/sudoers.d/hestia` currently allows:
 ```
-hestiaweb ALL=NOPASSWD:/usr/local/hestia/bin/*
+hestia ALL=NOPASSWD:/usr/local/hestia/bin/*
 ```
-The entire internal user setup (`hestiaweb`, `admin`, roles) is going on the audit list as its own issue. Wildcard stays for now, marked as technical debt.
+The entire internal user setup (`hestia`, `admin`, roles) is going on the audit list as its own issue. Wildcard stays for now, marked as technical debt.
 
 ---
 

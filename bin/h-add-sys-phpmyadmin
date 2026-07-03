@@ -65,11 +65,11 @@ $cfg['blowfish_secret'] = '_BLOWFISH_';
 PHP
 sed -i "s/_BLOWFISH_/$blowfish/" /var/lib/phpmyadmin/blowfish_secret.inc.php
 chmod 640 /var/lib/phpmyadmin/blowfish_secret.inc.php
-chown root:www-data /var/lib/phpmyadmin/blowfish_secret.inc.php
+chown root:caddy /var/lib/phpmyadmin/blowfish_secret.inc.php
 
-# Ensure tmp directory is writable
+# Ensure tmp directory is writable (phpMyAdmin FPM pool runs as caddy)
 mkdir -p /var/lib/phpmyadmin/tmp
-chown www-data:www-data /var/lib/phpmyadmin/tmp
+chown caddy:caddy /var/lib/phpmyadmin/tmp
 chmod 770 /var/lib/phpmyadmin/tmp
 
 # Create configuration storage database and user
@@ -108,17 +108,23 @@ $dbpass='_PMAPASS_';
 PHP
 sed -i "s/_PMAPASS_/$dbpass/" "$PMA_CONFIG/config-db.php"
 chmod 640 "$PMA_CONFIG/config-db.php"
-chown root:www-data "$PMA_CONFIG/config-db.php"
+chown root:caddy "$PMA_CONFIG/config-db.php"
 
 # Ensure conf.d directory exists for SSO and future extensions
 mkdir -p "$PMA_CONFIG/conf.d"
 chmod 750 "$PMA_CONFIG/conf.d"
-chown root:www-data "$PMA_CONFIG/conf.d"
+chown root:caddy "$PMA_CONFIG/conf.d"
 
 # Set panel alias
 if [ -z "$(grep DB_PMA_ALIAS "$HESTIA/conf/hestia.conf")" ]; then
 	$BIN/h-change-sys-config-value 'DB_PMA_ALIAS' 'phpmyadmin'
 fi
+
+# Deploy the dedicated caddy FPM pool and wire the Panel-Caddy route.
+# phpMyAdmin is served by Caddy on :8083 (not via nginx/apache aliases).
+cp -f "$HESTIA/share/panel-php/pool.d/phpmyadmin.conf" /etc/php/hestia/fpm/pool.d/phpmyadmin.conf
+systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+$BIN/h-change-sys-db-alias pma "${DB_PMA_ALIAS:-phpmyadmin}" > /dev/null 2>&1 || true
 
 #----------------------------------------------------------#
 #                       Hestia                             #

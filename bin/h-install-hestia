@@ -126,11 +126,11 @@ install_base() {
 		$BASE_PKGS_EXTRA
 
 	echo "[ * ] Creating system users..."
-	id hestiaweb &> /dev/null || useradd hestiaweb -c "HestiaRE Web" --no-create-home -s /sbin/nologin
-	id hestiamail &> /dev/null || useradd hestiamail -c "HestiaRE Mail" --no-create-home -s /sbin/nologin
+	id hestia &> /dev/null || useradd hestia -c "HestiaRE Panel" --no-create-home -s /sbin/nologin
 	getent group hestia-users &> /dev/null || groupadd hestia-users
-	usermod -aG hestia-users hestiaweb
-	usermod -aG hestia-users hestiamail
+	usermod -aG hestia-users hestia
+	# caddy joins hestia-users in the panel stage (the caddy user does not exist yet
+	# here; it is created when the caddy package is installed).
 
 	echo "[ * ] Hardening SSH..."
 	if grep -qiE "^#?.*Subsystem.+(sftp )?sftp-server" /etc/ssh/sshd_config; then
@@ -211,10 +211,19 @@ install_panel() {
 	chown caddy:caddy /var/log/caddy 2> /dev/null || true
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
+	# Panel-app route snippets (phpMyAdmin/phpPgAdmin) are written here by
+	# h-change-sys-db-alias. Ship a placeholder so `import /etc/caddy/apps/*.conf`
+	# inside hestia.conf is never an empty glob on the first caddy start.
+	mkdir -p /etc/caddy/apps
+	[ -e /etc/caddy/apps/00-placeholder.conf ] \
+		|| echo "# app route snippets are written here by h-change-sys-db-alias" \
+			> /etc/caddy/apps/00-placeholder.conf
 	# caddy runs as the unprivileged caddy user. Add it to:
-	#  - mail:      read the shared panel cert (root:mail 660, used by nginx/exim/…)
-	#  - hestiaweb: connect to the panel FPM socket (hestiaweb:hestiaweb 0660)
-	usermod -aG mail,hestiaweb caddy 2> /dev/null || true
+	#  - mail:         read the shared panel cert (root:mail 660, used by nginx/exim/…)
+	#  - hestia-users: app FPM pools run as caddy (replaces the former hestiamail role)
+	# The panel FPM socket is reached via listen.group=caddy (see panel.conf),
+	# so caddy needs no extra group membership for it.
+	usermod -aG mail,hestia-users caddy 2> /dev/null || true
 	systemctl enable caddy
 	# restart, not start: apt already started caddy with its default Caddyfile
 	# during package install, so `start` would be a no-op and our panel config
@@ -266,7 +275,8 @@ install_web() {
 	cp -f "$HESTIA_INSTALL_DIR/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
 	cp -f "$HESTIA_INSTALL_DIR/nginx/agents.conf" /etc/nginx/conf.d/
 	cp -f "$HESTIA_INSTALL_DIR/nginx/cloudflare.inc" /etc/nginx/conf.d/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/phpmyadmin.inc" /etc/nginx/conf.d/
+	# phpMyAdmin is no longer served via an nginx alias — it is delivered by the
+	# Panel-Caddy from a dedicated caddy FPM pool (see h-change-sys-db-alias).
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/nginx" /etc/logrotate.d/
 	mkdir -p /etc/nginx/conf.d/domains /etc/nginx/conf.d/main \
 		/etc/nginx/modules-enabled /var/log/nginx/domains
@@ -606,8 +616,8 @@ configure_hestia() {
 
 	echo "[ * ] Configuring Hestia Control Panel..."
 	mkdir -p /etc/sudoers.d
-	cp -f "$HESTIA_COMMON_DIR/sudo/hestiaweb" /etc/sudoers.d/
-	chmod 440 /etc/sudoers.d/hestiaweb
+	cp -f "$HESTIA_COMMON_DIR/sudo/hestia" /etc/sudoers.d/
+	chmod 440 /etc/sudoers.d/hestia
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/hestia" /etc/logrotate.d/hestia 2>/dev/null || true
 
 	echo "[ * ] Creating v-* symlinks..."
@@ -702,7 +712,7 @@ configure_hestia() {
 	echo "[ * ] Adding default domain..."
 	"$BIN/h-add-web-domain" "$HESTIA_ADMIN" "$HESTIA_HOSTNAME" "$IP" || true
 
-	echo "[ * ] Creating hestiaweb crontab..."
+	echo "[ * ] Creating hestia crontab..."
 	local MIN HOUR
 	MIN=$(tr -dc '012345' < /dev/urandom | head -c 2 || true)
 	HOUR=$(tr -dc '1234567' < /dev/urandom | head -c 1 || true)
@@ -720,9 +730,9 @@ configure_hestia() {
 		echo "20 00 * * * sudo $HESTIA/bin/h-update-user-stats"
 		echo "*/5 * * * * sudo $HESTIA/bin/h-update-sys-rrd"
 		echo "$MIN $HOUR * * * sudo $HESTIA/bin/h-update-letsencrypt-ssl"
-	} > /var/spool/cron/crontabs/hestiaweb
-	chmod 600 /var/spool/cron/crontabs/hestiaweb
-	chown hestiaweb:hestiaweb /var/spool/cron/crontabs/hestiaweb
+	} > /var/spool/cron/crontabs/hestia
+	chmod 600 /var/spool/cron/crontabs/hestia
+	chown hestia:hestia /var/spool/cron/crontabs/hestia
 	# No package auto-update cron: HestiaRE updates via the release tarball
 	# (h-update-hestia), not an apt/git package auto-updater (#128).
 	"$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" > /dev/null 2>&1 || true
@@ -806,7 +816,7 @@ finalize_install() {
 	# No bundled hestia.service — the panel is Caddy + the hestia-php FPM pool.
 	# Restart both so the configure-stage changes (SSL cert, panel port) take effect.
 	systemctl restart caddy hestia-php 2>/dev/null || true
-	chown hestiaweb:hestiaweb "$HESTIA/.sessions"
+	chown hestia:hestia "$HESTIA/.sessions"
 	mkdir -p /backup && chmod 755 /backup
 	echo "[ * ] Scheduling Let's Encrypt host certificate..."
 	echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && $HESTIA/bin/h-add-letsencrypt-host" \

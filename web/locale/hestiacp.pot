@@ -236,7 +236,7 @@ msgstr ""
 msgid "Inactive session timeout can not lower than 1 minute."
 msgstr ""
 
-#: ../../web/edit/server/hestiaweb/index.php:34
+#: ../../web/edit/server/hestia/index.php:34
 #: ../../web/templates/pages/edit_server.php:15
 msgid "Panel Cronjobs"
 msgstr ""

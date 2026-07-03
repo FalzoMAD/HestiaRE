@@ -102,7 +102,7 @@ $basepath='/var/lib/roundcube';
 PHP
 sed -i "s/_RCPASS_/$dbpass/" "$RC_CONFIG_DIR/debian-db.php"
 chmod 640 "$RC_CONFIG_DIR/debian-db.php"
-chown root:www-data "$RC_CONFIG_DIR/debian-db.php"
+chown root:caddy "$RC_CONFIG_DIR/debian-db.php"
 
 # Generate encryption key and write main config
 des_key="$(openssl rand -base64 30 | tr -d '/' | cut -c1-24)"
@@ -132,7 +132,7 @@ $config['smtp_conn_options'] = ['ssl' => [
 PHP
 sed -i "s/_DES_KEY_/$des_key/" "$RC_CONFIG_DIR/config.inc.php"
 chmod 644 "$RC_CONFIG_DIR/config.inc.php"
-chown root:www-data "$RC_CONFIG_DIR/config.inc.php"
+chown root:caddy "$RC_CONFIG_DIR/config.inc.php"
 
 # Deploy HestiaRE password driver.
 # Extra files in apt-managed directories survive package upgrades —
@@ -153,7 +153,7 @@ $config['password_hestia_host'] = 'localhost';
 $config['password_hestia_port'] = '8083';
 PHP
 chmod 644 "$RC_CONFIG_DIR/plugins/password/config.inc.php"
-chown root:www-data "$RC_CONFIG_DIR/plugins/password/config.inc.php"
+chown root:caddy "$RC_CONFIG_DIR/plugins/password/config.inc.php"
 
 # Deploy plugin configs for newmail_notifier and zipdownload
 cp -f "$HESTIA_COMMON_DIR/roundcube/plugins/config_newmail_notifier.inc.php" \
@@ -163,7 +163,7 @@ cp -f "$HESTIA_COMMON_DIR/roundcube/plugins/config_zipdownload.inc.php" \
 
 # Ensure log directory exists with correct ownership
 mkdir -p /var/log/roundcube
-chown www-data:adm /var/log/roundcube
+chown caddy:caddy /var/log/roundcube
 chmod 750 /var/log/roundcube
 
 # Update hestia.conf

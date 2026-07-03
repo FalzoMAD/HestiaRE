@@ -3,5 +3,5 @@
     monthly
     missingok
     notifempty
-    create 0640 hestiamail www-data
+    create 0640 caddy caddy
 }

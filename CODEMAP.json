@@ -12,7 +12,7 @@
     "instance_config": "/etc/hestia",
     "user_data": "/home/$user",
     "shell_profile": "/etc/profile.d/hestia.sh",
-    "sudo_rules": "/etc/sudoers.d/hestiaweb",
+    "sudo_rules": "/etc/sudoers.d/hestia",
     "log_dir": "/var/log/hestia",
     "note": "install_root is intentionally identical to HestiaCP — only instance_config changed (/etc/hestiacp → /etc/hestia). See PATHS.md for full reference."
   },
@@ -209,7 +209,7 @@
         "install/common/roundcube/",
         "share/dovecot/2.3/",
         "share/dovecot/2.4/",
-        "install/common/sudo/hestiaweb",
+        "install/common/sudo/hestia",
         "install/upgrade/upgrade.conf",
         "share/panel-caddy/Caddyfile",
         "share/panel-caddy/hestia.conf",
@@ -270,7 +270,9 @@
       "key_files": [
         "share/panel-php/hestia-php.service",
         "share/panel-php/php-fpm.conf",
-        "share/panel-php/pool.d/panel.conf"
+        "share/panel-php/pool.d/panel.conf",
+        "share/panel-php/pool.d/phpmyadmin.conf",
+        "share/panel-php/pool.d/phppgadmin.conf"
       ],
       "language": "ini",
       "runtime_paths": {

@@ -515,10 +515,10 @@ if [ "$?" -ne '0' ]; then
 fi
 
 # Adding LE autorenew cronjob
-if [ -z "$(grep $BIN/h-update-letsencrypt "/var/spool/cron/crontabs/hestiaweb")" ]; then
+if [ -z "$(grep $BIN/h-update-letsencrypt "/var/spool/cron/crontabs/hestia")" ]; then
 	min=$(generate_password '012345' '2')
 	hour=$(generate_password '1234567' '1')
-	sed -i -e "\$a*/5 * * * * sudo $BIN/h-update-letsencrypt" "/var/spool/cron/crontabs/hestiaweb"
+	sed -i -e "\$a*/5 * * * * sudo $BIN/h-update-letsencrypt" "/var/spool/cron/crontabs/hestia"
 fi
 
 # Updating letsencrypt key
