@@ -270,6 +270,8 @@
       "key_files": [
         "share/panel-php/hestia-php.service",
         "share/panel-php/php-fpm.conf",
+        "share/panel-php/fpm/php.ini",
+        "share/panel-php/cli/php.ini",
         "share/panel-php/pool.d/panel.conf",
         "share/panel-php/pool.d/phpmyadmin.conf",
         "share/panel-php/pool.d/phppgadmin.conf"
