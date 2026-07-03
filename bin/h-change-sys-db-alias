@@ -42,6 +42,11 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
+# The database editors are served by the Panel-Caddy (port 8083) from a
+# dedicated caddy FPM pool. Changing the alias (re)writes the Caddy route
+# snippet under /etc/caddy/apps/ (imported inside the :8083 site block).
+mkdir -p /etc/caddy/apps
+
 # Detect common allowed entries for phpMyAdmin
 if [ "$type" = "pma" ] || [ "$type" = "PMA" ] || [ "$type" = "phpmyadmin" ]; then
 	# Set database editor friendly name
@@ -49,24 +54,10 @@ if [ "$type" = "pma" ] || [ "$type" = "PMA" ] || [ "$type" = "phpmyadmin" ]; the
 	# Set new alias value
 	$BIN/h-change-sys-config-value 'DB_PMA_ALIAS' "$alias"
 
-	# Replace old configuration files and update alias
-	if [ -e "/etc/apache2/conf.d/phpmyadmin.inc" ]; then
-		rm -f /etc/apache2/conf.d/phpmyadmin.inc
-		cp -f $HESTIA_INSTALL_DIR/pma/apache.conf /etc/apache2/conf.d/phpmyadmin.inc
-		sed -i "s|%pma_alias%|$alias|g" /etc/apache2/conf.d/phpmyadmin.inc
-
-		# Restart services
-		$BIN/h-restart-service apache2
-	fi
-
-	if [ -e "/etc/nginx/conf.d/phpmyadmin.inc" ]; then
-		rm -f /etc/nginx/conf.d/phpmyadmin.inc
-		cp -f $HESTIA_INSTALL_DIR/nginx/phpmyadmin.inc /etc/nginx/conf.d/phpmyadmin.inc
-		sed -i "s|%pma_alias%|$alias|g" /etc/nginx/conf.d/phpmyadmin.inc
-
-		# Restart services
-		$BIN/h-restart-service nginx
-	fi
+	# (Re)generate the Panel-Caddy route with the requested alias
+	cp -f "$HESTIA_INSTALL_DIR/caddy/phpmyadmin.tpl" /etc/caddy/apps/phpmyadmin.conf
+	sed -i "s|%alias%|$alias|g" /etc/caddy/apps/phpmyadmin.conf
+	$BIN/h-restart-service caddy
 fi
 
 # Detect common allowed entries for phpPgAdmin
@@ -77,24 +68,10 @@ if [ "$type" = "pga" ] || [ "$type" = "PGA" ] || [ "$type" = "phppgadmin" ]; the
 	# Set new alias value
 	$BIN/h-change-sys-config-value 'DB_PGA_ALIAS' "$alias"
 
-	# Replace old configuration files and update alias
-	if [ -e "/etc/apache2/conf.d/phppgadmin.inc" ]; then
-		rm -f /etc/apache2/conf.d/phppgadmin.inc
-		cp -f $HESTIA_INSTALL_DIR/pga/phppgadmin.conf /etc/apache2/conf.d/phppgadmin.inc
-		sed -i "s|%pga_alias%|$alias|g" /etc/apache2/conf.d/phppgadmin.inc
-
-		# Restart services
-		$BIN/h-restart-service apache2
-	fi
-
-	if [ -e "/etc/nginx/conf.d/phppgadmin.inc" ]; then
-		rm -f /etc/nginx/conf.d/phppgadmin.inc
-		cp -f $HESTIA_INSTALL_DIR/nginx/phppgadmin.inc /etc/nginx/conf.d/phppgadmin.inc
-		sed -i "s|%pga_alias%|$alias|g" /etc/nginx/conf.d/phppgadmin.inc
-
-		# Restart services
-		$BIN/h-restart-service nginx
-	fi
+	# (Re)generate the Panel-Caddy route with the requested alias
+	cp -f "$HESTIA_INSTALL_DIR/caddy/phppgadmin.tpl" /etc/caddy/apps/phppgadmin.conf
+	sed -i "s|%alias%|$alias|g" /etc/caddy/apps/phppgadmin.conf
+	$BIN/h-restart-service caddy
 fi
 
 #----------------------------------------------------------#

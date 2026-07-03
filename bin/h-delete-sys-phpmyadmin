@@ -63,6 +63,12 @@ $db_client -e "FLUSH PRIVILEGES"
 rm -f "$PMA_CONFIG/config-db.php"
 rm -f /var/lib/phpmyadmin/blowfish_secret.inc.php
 
+# Remove the Panel-Caddy delivery (dedicated FPM pool + route snippet)
+rm -f /etc/php/hestia/fpm/pool.d/phpmyadmin.conf
+rm -f /etc/caddy/apps/phpmyadmin.conf
+systemctl reload hestia-php 2> /dev/null || true
+$BIN/h-restart-service caddy 2> /dev/null || true
+
 # Remove DB_PMA_ALIAS from hestia.conf
 $BIN/h-change-sys-config-value 'DB_PMA_ALIAS' ''
 

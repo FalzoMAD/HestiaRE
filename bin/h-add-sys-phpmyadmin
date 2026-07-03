@@ -120,6 +120,12 @@ if [ -z "$(grep DB_PMA_ALIAS "$HESTIA/conf/hestia.conf")" ]; then
 	$BIN/h-change-sys-config-value 'DB_PMA_ALIAS' 'phpmyadmin'
 fi
 
+# Deploy the dedicated caddy FPM pool and wire the Panel-Caddy route.
+# phpMyAdmin is served by Caddy on :8083 (not via nginx/apache aliases).
+cp -f "$HESTIA/share/panel-php/pool.d/phpmyadmin.conf" /etc/php/hestia/fpm/pool.d/phpmyadmin.conf
+systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+$BIN/h-change-sys-db-alias pma "${DB_PMA_ALIAS:-phpmyadmin}" > /dev/null 2>&1 || true
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#

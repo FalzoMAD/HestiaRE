@@ -211,6 +211,13 @@ install_panel() {
 	chown caddy:caddy /var/log/caddy 2> /dev/null || true
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
+	# Panel-app route snippets (phpMyAdmin/phpPgAdmin) are written here by
+	# h-change-sys-db-alias. Ship a placeholder so `import /etc/caddy/apps/*.conf`
+	# inside hestia.conf is never an empty glob on the first caddy start.
+	mkdir -p /etc/caddy/apps
+	[ -e /etc/caddy/apps/00-placeholder.conf ] \
+		|| echo "# app route snippets are written here by h-change-sys-db-alias" \
+			> /etc/caddy/apps/00-placeholder.conf
 	# caddy runs as the unprivileged caddy user. Add it to:
 	#  - mail:         read the shared panel cert (root:mail 660, used by nginx/exim/…)
 	#  - hestia-users: app FPM pools run as caddy (replaces the former hestiamail role)
@@ -268,7 +275,8 @@ install_web() {
 	cp -f "$HESTIA_INSTALL_DIR/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
 	cp -f "$HESTIA_INSTALL_DIR/nginx/agents.conf" /etc/nginx/conf.d/
 	cp -f "$HESTIA_INSTALL_DIR/nginx/cloudflare.inc" /etc/nginx/conf.d/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/phpmyadmin.inc" /etc/nginx/conf.d/
+	# phpMyAdmin is no longer served via an nginx alias — it is delivered by the
+	# Panel-Caddy from a dedicated caddy FPM pool (see h-change-sys-db-alias).
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/nginx" /etc/logrotate.d/
 	mkdir -p /etc/nginx/conf.d/domains /etc/nginx/conf.d/main \
 		/etc/nginx/modules-enabled /var/log/nginx/domains
