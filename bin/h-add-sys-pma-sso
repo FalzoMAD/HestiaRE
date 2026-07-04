@@ -4,7 +4,12 @@
 #
 # example: h-add-sys-pma-sso
 #
-# This function enables support for SSO to phpMyAdmin
+# This function enables support for SSO to phpMyAdmin. The SSO flow is local
+# (#145, no REST API): the panel creates a temp DB user plus a one-time
+# handoff token (h-add-database-sso-token, via the panel's sudo) and redirects
+# to hestia-sso.php in the phpMyAdmin webroot, which consumes the token from
+# /run/hestia-sso/ and opens the signon session. The phpMyAdmin FPM pool
+# (caddy) needs no sudo rule and holds no secrets.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -45,16 +50,6 @@ if [ -f "$PMA_INSTALL/hestia-sso.php" ]; then
 	exit 2
 fi
 
-if [ ! -f "/usr/local/hestia/web/api/index.php" ]; then
-	echo "Error: API script not installed"
-	exit 2
-fi
-
-if [ "$API_SYSTEM" = "0" ]; then
-	echo "Error: API is not enabled"
-	exit 2
-fi
-
 if [ ! -f "$PMA_CONFIG/config-db.php" ]; then
 	echo "Error: phpMyAdmin not configured. Run h-add-sys-phpmyadmin first"
 	exit 2
@@ -64,19 +59,11 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Generate the keys to secure everything
-phpmyadminkey=$(generate_password)
-apikey=$($BIN/h-add-access-key "$ROOT_USER" 'phpmyadmin-sso' 'phpMyAdmin' 'plain')
-
-# Deploy hestia-sso.php into the PMA webroot
+# Deploy hestia-sso.php into the PMA webroot (readable by the pool user caddy;
+# contains no secrets — it only consumes one-time tokens from /run/hestia-sso/)
 cp -f $HESTIA_INSTALL_DIR/phpmyadmin/hestia-sso.php $PMA_INSTALL/hestia-sso.php
 chmod 640 $PMA_INSTALL/hestia-sso.php
 chown root:caddy $PMA_INSTALL/hestia-sso.php
-
-sed -i "s/%PHPMYADMIN_KEY%/$phpmyadminkey/g" $PMA_INSTALL/hestia-sso.php
-sed -i "s/%API_KEY%/$apikey/g" $PMA_INSTALL/hestia-sso.php
-sed -i "s/%API_HOST_NAME%/$(hostname -f)/g" $PMA_INSTALL/hestia-sso.php
-sed -i "s/%API_HESTIA_PORT%/$BACKEND_PORT/g" $PMA_INSTALL/hestia-sso.php
 
 # Write SSO config into conf.d — loaded by OS package config.inc.php glob.
 # Uses $cfg['Servers'][1] directly (not $i): the OS config.inc.php increments
@@ -91,7 +78,7 @@ sed -i "s/%API_HESTIA_PORT%/$BACKEND_PORT/g" $PMA_INSTALL/hestia-sso.php
 mkdir -p "$PMA_CONFIG/conf.d"
 cat > "$PMA_CONFIG/conf.d/hestia-sso.inc.php" <<'PHP'
 <?php
-if (isset($_GET['hestia_token']) || isset($_COOKIE['SignonSession'])) {
+if (isset($_COOKIE['SignonSession'])) {
     $cfg['Servers'][1]['auth_type'] = 'signon';
     $cfg['Servers'][1]['SignonSession'] = 'SignonSession';
     $cfg['Servers'][1]['SignonURL'] = 'hestia-sso.php';
@@ -99,13 +86,13 @@ if (isset($_GET['hestia_token']) || isset($_COOKIE['SignonSession'])) {
 }
 PHP
 chmod 640 "$PMA_CONFIG/conf.d/hestia-sso.inc.php"
-chown root:www-data "$PMA_CONFIG/conf.d/hestia-sso.inc.php"
+chown root:caddy "$PMA_CONFIG/conf.d/hestia-sso.inc.php"
 
-$BIN/h-change-sys-config-value 'PHPMYADMIN_KEY' "$phpmyadminkey"
-
-if ! echo "$API_ALLOWED_IP" | grep -q "127.0.0.1"; then
-	$BIN/h-add-sys-api-ip "127.0.0.1"
-fi
+# PHPMYADMIN_KEY has no cryptographic role anymore — a non-empty value only
+# marks SSO as enabled (panel button in list_db.php, toggle in edit/server,
+# guard in h-delete-sys-phpmyadmin). Kept random to avoid meaning being
+# attached to the value.
+$BIN/h-change-sys-config-value 'PHPMYADMIN_KEY' "$(generate_password)"
 
 #----------------------------------------------------------#
 #                       Logging                            #

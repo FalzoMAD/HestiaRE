@@ -44,22 +44,14 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Revoke API key
-apikey=$(grep -Po "'API_KEY', '(.*)'" "$PMA_INSTALL/hestia-sso.php" | cut -d"'" -f4)
-if [ -n "$apikey" ]; then
-	if echo "$apikey" | grep -q ":"; then
-		apikey=$(echo "$apikey" | cut -d: -f1)
-		$BIN/h-delete-access-key "$apikey" 2>/dev/null || true
-	else
-		$BIN/h-revoke-api-key "$apikey" 2>/dev/null || true
-	fi
-fi
-
 # Remove SSO files
 rm -f "$PMA_INSTALL/hestia-sso.php"
 rm -f "$PMA_CONFIG/conf.d/hestia-sso.inc.php"
 
-# Disable key
+# Drop unconsumed handoff tokens (temp DB users expire via their own TTL)
+rm -rf /run/hestia-sso
+
+# Disable flag
 $BIN/h-change-sys-config-value 'PHPMYADMIN_KEY' ""
 
 #----------------------------------------------------------#
