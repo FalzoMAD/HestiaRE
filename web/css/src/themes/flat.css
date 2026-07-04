@@ -168,7 +168,8 @@
 
 .page-login,
 .page-reset {
-	background: var(--brand-anthracite);
+	/* light theme: plain light gray (flat variant of default's light radial) */
+	background: #ededed;
 }
 
 .login {

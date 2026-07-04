@@ -48,7 +48,7 @@ is_web_domain_new() {
 		if [ "$type" == 'web' ]; then
 			check_result "$E_EXISTS" "Web domain $1 exists"
 		fi
-		web_user=$(echo "$web" | cut -f 7 -d /)
+		web_user=$(echo "$web" | sed "s|^$CONF_DIR/users/||; s|/web.conf.*||")
 		if [ "$web_user" != "$user" ]; then
 			check_result "$E_EXISTS" "Web domain $1 exists"
 		fi
@@ -58,7 +58,7 @@ is_web_domain_new() {
 # Web alias existence check
 is_web_alias_new() {
 	grep -wH "$1" $CONF_DIR/users/*/web.conf | while read -r line; do
-		user=$(echo $line | cut -f 7 -d /)
+		user=$(echo $line | sed "s|^$CONF_DIR/users/||; s|/web.conf.*||")
 		string=$(echo $line | cut -f 2- -d ':')
 		parse_object_kv_list $string
 		if [ -n "$ALIAS" ]; then
@@ -470,7 +470,7 @@ is_mail_domain_new() {
 		if [ "$2" == 'mail' ]; then
 			check_result $E_EXISTS "Mail domain $1 exists"
 		fi
-		mail_user=$(echo "$mail" | cut -f 7 -d /)
+		mail_user=$(echo "$mail" | sed "s|^$CONF_DIR/users/||; s|/mail/.*||")
 		if [ "$mail_user" != "$user" ]; then
 			check_result "$E_EXISTS" "Mail domain $1 exists"
 		fi
