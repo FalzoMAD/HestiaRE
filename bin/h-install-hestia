@@ -237,6 +237,56 @@ install_panel() {
 # ════════════════════════════════════════════════════════════════════════════
 # Stage: web — nginx (+ optional apache2), PHP multi-version, web pool
 # ════════════════════════════════════════════════════════════════════════════
+
+# Install and configure apache2 as the customer web server (WEB_SYSTEM).
+# ports.conf is emptied on purpose: Listen directives come per IP from
+# h-add-sys-ip (conf.d/<ip>.conf). Until the first IP is registered the
+# hestia-status module keeps a 127.0.0.1:8081 listener, so apache2 can
+# start (with zero Listen directives it would refuse to).
+configure_apache2() {
+	echo "[ * ] Installing apache2..."
+	hestia_apt -y install apache2 apache2-suexec-custom libapache2-mod-fcgid
+
+	echo "[ * ] Configuring apache2..."
+	mkdir -p /etc/apache2/conf.d/domains
+	cp -f "$HESTIA_INSTALL_DIR/apache2/apache2.conf" /etc/apache2/
+	cp -f "$HESTIA_INSTALL_DIR/apache2/status.conf" /etc/apache2/mods-available/hestia-status.conf
+	cp -f /etc/apache2/mods-available/status.load /etc/apache2/mods-available/hestia-status.load
+	cp -f "$HESTIA_INSTALL_DIR/logrotate/apache2" /etc/logrotate.d/
+
+	local m
+	for m in rewrite suexec ssl actions headers; do
+		a2enmod -q "$m" > /dev/null 2>&1 || true
+	done
+	a2dismod -q status > /dev/null 2>&1 || true
+	a2enmod -q hestia-status > /dev/null 2>&1 || true
+
+	# WEB_BACKEND is php-fpm: event MPM + proxy_fcgi for the FastCGI
+	# SetHandler directives (default pool via hestia-event.conf and the
+	# per-domain vhost templates). h-add-web-php re-checks proxy_fcgi, but
+	# it must not depend on the multi-PHP loop running.
+	a2dismod -q mpm_prefork > /dev/null 2>&1 || true
+	a2enmod -q mpm_event > /dev/null 2>&1 || true
+	a2enmod -q proxy_fcgi setenvif > /dev/null 2>&1 || true
+	cp -f "$HESTIA_INSTALL_DIR/apache2/hestia-event.conf" /etc/apache2/conf.d/
+
+	# No distro default site, no global Listen ports
+	a2dissite -q 000-default > /dev/null 2>&1 || true
+	echo "# Powered by hestia" > /etc/apache2/ports.conf
+
+	echo -e "/home\npublic_html/cgi-bin" > /etc/apache2/suexec/www-data
+	touch /var/log/apache2/access.log /var/log/apache2/error.log
+	mkdir -p /var/log/apache2/domains
+	chmod a+x /var/log/apache2
+	chmod 640 /var/log/apache2/access.log /var/log/apache2/error.log
+	chmod 751 /var/log/apache2/domains
+
+	update-rc.d apache2 defaults > /dev/null 2>&1
+	# Restart, not start: the package install already started apache2 with
+	# the distro ports.conf (Listen 80) — our config must replace it now.
+	systemctl restart apache2
+}
+
 install_web() {
 	[ -f "$CONF_DIR/.done.web" ] && { echo "[ skip ] web already configured"; return 0; }
 	echo "[ * ] Installing web packages (nginx, PHP $PHP_VER extensions)..."
@@ -247,27 +297,6 @@ install_web() {
 		php${PHP_VER}-imagick php${PHP_VER}-imap php${PHP_VER}-intl \
 		php${PHP_VER}-ldap php${PHP_VER}-pgsql php${PHP_VER}-pspell \
 		php${PHP_VER}-readline php${PHP_VER}-xml
-
-	# Web server selection from the wizard (APACHE / NGINX / BOTH).
-	local web_server="${COMPONENT_WEB_SERVER:-NGINX}"
-	local proxy=""
-	case "$web_server" in
-		APACHE | BOTH)
-			# Minimal apache2 install so the choice is honoured; full vhost
-			# templating + reverse-proxy wiring is tracked in #120 / #63.
-			echo "[ * ] Installing apache2 (web server: $web_server)..."
-			hestia_apt -y install apache2 apache2-suexec-custom libapache2-mod-fcgid || true
-			[ "$web_server" = "BOTH" ] && proxy="nginx"
-			;;
-	esac
-
-	wcv "WEB_SYSTEM"               "nginx"
-	wcv "WEB_PORT"                 "80"
-	wcv "WEB_SSL_PORT"             "443"
-	wcv "WEB_SSL"                  "openssl"
-	wcv "PROXY_SYSTEM"             "$proxy"
-	wcv "STATS_SYSTEM"             "awstats"
-	wcv "WEB_BACKEND"              "php-fpm"
 
 	echo "[ * ] Configuring nginx..."
 	rm -f /etc/nginx/conf.d/*.conf
@@ -303,7 +332,53 @@ install_web() {
 		echo "  Cloudflare ranges updated"
 	fi
 	update-rc.d nginx defaults > /dev/null 2>&1
-	systemctl start nginx
+	# Restart, not start: the package install already started nginx with the
+	# distro default site on :80 — our nginx.conf (no sites-enabled include,
+	# status only) must replace it now, also to free :80 before apache2 is
+	# installed (its package start would otherwise fail on the bind).
+	systemctl restart nginx
+
+	# Web server selection from the wizard (APACHE / NGINX / BOTH) and the
+	# resulting port model (#247):
+	#   BOTH:   nginx (PROXY_SYSTEM) 80/443  ->  apache2 (WEB_SYSTEM) 8080/8443
+	#   APACHE: apache2 (WEB_SYSTEM) 80/443, no proxy
+	#   NGINX:  nginx (WEB_SYSTEM) 80/443, no proxy
+	# Listen directives are written per IP by h-add-sys-ip (conf.d/<ip>.conf),
+	# so the values must be in hestia.conf BEFORE the system IP is registered
+	# (configure stage) and before the multi-PHP loop below (h-add-web-php
+	# reads WEB_SYSTEM to wire apache2 FastCGI modules).
+	local web_server="${COMPONENT_WEB_SERVER:-NGINX}"
+	case "$web_server" in
+		APACHE)
+			configure_apache2
+			wcv "WEB_SYSTEM"       "apache2"
+			wcv "WEB_RGROUPS"      "www-data"
+			wcv "WEB_PORT"         "80"
+			wcv "WEB_SSL_PORT"     "443"
+			wcv "WEB_SSL"          "mod_ssl"
+			wcv "PROXY_SYSTEM"     ""
+			;;
+		BOTH)
+			configure_apache2
+			wcv "WEB_SYSTEM"       "apache2"
+			wcv "WEB_RGROUPS"      "www-data"
+			wcv "WEB_PORT"         "8080"
+			wcv "WEB_SSL_PORT"     "8443"
+			wcv "WEB_SSL"          "mod_ssl"
+			wcv "PROXY_SYSTEM"     "nginx"
+			wcv "PROXY_PORT"       "80"
+			wcv "PROXY_SSL_PORT"   "443"
+			;;
+		*)
+			wcv "WEB_SYSTEM"       "nginx"
+			wcv "WEB_PORT"         "80"
+			wcv "WEB_SSL_PORT"     "443"
+			wcv "WEB_SSL"          "openssl"
+			wcv "PROXY_SYSTEM"     ""
+			;;
+	esac
+	wcv "STATS_SYSTEM"             "awstats"
+	wcv "WEB_BACKEND"              "php-fpm"
 
 	# Multi-PHP: only in sury_multi mode, driven by the wizard's version list.
 	if [ "${COMPONENT_PHP_MODE:-sury_multi}" = "sury_multi" ] && [ -n "${COMPONENT_PHP_MULTIPHP_VERSIONS:-}" ]; then
@@ -709,6 +784,30 @@ configure_hestia() {
 		"$BIN/h-change-sys-ip-nat" "$IP" "$PUB_IP" > /dev/null 2>&1 || true
 	fi
 	"$BIN/h-update-firewall" || true
+
+	# BOTH (#247): apache2 sits behind the nginx proxy — logs and PHP must see
+	# the real client IP, not the proxy. nginx templates pass X-Real-IP;
+	# mod_remoteip translates it. h-add-sys-ip appends further proxy IPs to
+	# mods-enabled/remoteip.conf when additional IPs are registered.
+	if [ "${COMPONENT_WEB_SERVER:-NGINX}" = "BOTH" ]; then
+		echo "[ * ] Configuring apache2 remoteip (client IP behind nginx)..."
+		{
+			echo "<IfModule mod_remoteip.c>"
+			echo "  RemoteIPHeader X-Real-IP"
+			echo "  RemoteIPInternalProxy 127.0.0.1"
+			if [ -n "$IP" ]; then
+				echo "  RemoteIPInternalProxy $IP"
+			fi
+			if [ -n "$PUB_IP" ] && [ "$PUB_IP" != "$IP" ]; then
+				echo "  RemoteIPInternalProxy $PUB_IP"
+			fi
+			echo "</IfModule>"
+		} > /etc/apache2/mods-available/remoteip.conf
+		# Log the translated client address (%a) instead of the peer (%h)
+		sed -i 's/LogFormat "%h/LogFormat "%a/g' /etc/apache2/apache2.conf
+		a2enmod -q remoteip > /dev/null 2>&1 || true
+		systemctl restart apache2
+	fi
 
 	echo "[ * ] Adding default domain..."
 	"$BIN/h-add-web-domain" "$HESTIA_ADMIN" "$HESTIA_HOSTNAME" "$IP" || true

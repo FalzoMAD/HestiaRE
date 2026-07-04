@@ -906,14 +906,14 @@ process_http2_directive() {
 				sed -i "s/$old_param/$new_param/" "$1"
 			done < <(grep -E "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1")
 		else
-			listen_ssl="$(grep -E "listen.*\s\bssl\b(?:\s)*.*;" "$1")"
+			listen_ssl="$(grep -E "listen.*\s\bssl\b\s*.*;" "$1")"
 			listen_http2="$(grep -E "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1")"
 
 			if [ -n "$listen_ssl" ] && [ -z "$listen_http2" ]; then
 				while IFS= read -r old_param; do
 					new_param="$(echo "$old_param" | sed 's/\sssl/ ssl http2/')"
 					sed -i "s/$old_param/$new_param/" "$1"
-				done < <(grep -E "listen.*\s\bssl\b(?:\s)*.*;" "$1")
+				done < <(grep -E "listen.*\s\bssl\b\s*.*;" "$1")
 			fi
 		fi
 	fi

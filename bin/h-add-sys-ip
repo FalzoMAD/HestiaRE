@@ -42,8 +42,6 @@ source $HESTIA/func/main.sh
 source $HESTIA/func/ip.sh
 # shellcheck source=/usr/local/hestia/func/domain.sh
 source $HESTIA/func/domain.sh
-# shellcheck source=/usr/local/hestia/func/syshealth.sh
-source "$HESTIA/func/syshealth.sh"
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -207,10 +205,6 @@ if [ -n "$PROXY_SYSTEM" ]; then
 	fi
 fi
 
-# Adapt Port Listing in HESTIA NGINX Backend
-syshealth_adapt_hestia_nginx_listen_ports
-# Also update resolver
-syshealth_adapt_nginx_resolver
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
@@ -243,11 +237,6 @@ fi
 # Restarting firewall
 if [ -n "$FIREWALL_SYSTEM" ]; then
 	$BIN/h-update-firewall
-fi
-
-# Reload the panel webserver (Caddy) if its backend config changed
-if [ "$NGINX_BCONF_CHANGED" = "yes" ]; then
-	systemctl reload caddy > /dev/null 2>&1 || true
 fi
 
 # Logging
