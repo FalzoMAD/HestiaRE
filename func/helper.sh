@@ -254,4 +254,15 @@ migrate_data_layout() {
 			rm -rf "$hestia_root/data/$d"
 		fi
 	done
+
+	# vestia theme removed (#259) — migrate to default. css.php would silently
+	# skip the missing overlay anyway; migrating keeps the configs truthful.
+	local conf
+	for conf in "$hestia_root/conf/hestia.conf" "$CONF_DIR/conf/hestia.conf"; do
+		[ -f "$conf" ] && sed -i "s/^THEME='vestia'/THEME='default'/" "$conf"
+	done
+	for conf in "$CONF_DIR/users"/*/user.conf; do
+		[ -f "$conf" ] && sed -i "s/^THEME='vestia'/THEME='default'/" "$conf"
+	done
+	rm -f "$hestia_root/web/css/src/themes/vestia.css"
 }
