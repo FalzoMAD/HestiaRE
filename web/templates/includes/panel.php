@@ -76,7 +76,7 @@
 						>
 							<i
 								x-bind:class="{
-									'animate__animated animate__swing icon-orange': (!initialized && <?= $panel[$user]["NOTIFICATIONS"] == "yes" ? "true" : "false" ?>) || notifications.length != 0,
+									'u-swing icon-orange': (!initialized && <?= $panel[$user]["NOTIFICATIONS"] == "yes" ? "true" : "false" ?>) || notifications.length != 0,
 									'fas fa-bell': true
 								}"
 							></i>

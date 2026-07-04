@@ -180,6 +180,16 @@
       }
     },
 
+    "panel_assets": {
+      "description": "Panel frontend assets, served as-is by Panel-Caddy — no build step, no Node/npm (#248). JS: native ES modules from web/js/src/ (explicit .js import extensions). CSS: native nesting, plain min-width media queries, browser resolves @import chains. Browser baseline: adr-browser-baseline.md (Chrome/Edge 120, Firefox 117, Safari 17.2) with CSS-only warning banner in web/templates/header.php.",
+      "entry_points": ["web/templates/includes/js.php", "web/templates/includes/css.php", "web/js/src/index.js", "web/css/src/themes/default.css"],
+      "directories": ["web/js/src/", "web/js/vendor/", "web/css/src/", "web/css/vendor/", "web/webfonts/"],
+      "themes": "Shipped: web/css/src/themes/*.css (default + overlays dark/flat/vestia). Custom: web/css/src/themes/custom/*.css (instance data, gitignored). Listed by bin/h-list-sys-themes via HESTIA_THEMES/HESTIA_THEMES_CUSTOM (func/main.sh).",
+      "vendored": "web/js/vendor/ (Alpine.js + collapse), web/css/vendor/ (normalize.css, Font Awesome Free solid-only). Manifest: VENDORED.json; snapshot branches: upstream/alpinejs, upstream/normalize-css, upstream/fontawesome.",
+      "eigenbau": ["web/js/src/lib/randomString.js", "web/js/src/lib/passwordStrength.js", ".u-swing in web/css/src/utilities.css"],
+      "dependencies": ["web_panel", "panel_caddy_service"]
+    },
+
     "installer": {
       "description": "Service config templates and data distributed during install. Consumed by Makefile install-* targets. hst-install-debian.sh and hst-install-ubuntu.sh removed in Issue #26b — replaced by Makefile targets.",
       "entry_points": [

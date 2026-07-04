@@ -21,8 +21,5 @@
 # Composer
 composer.phar
 
-# Distribution CSS
-web/css/themes/
-
-# Distribution JS
-web/js/dist/
+# Instance data: custom panel themes (never shipped)
+web/css/src/themes/custom/

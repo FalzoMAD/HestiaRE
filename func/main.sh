@@ -56,8 +56,8 @@ DNSTPL=$HESTIA/templates/dns
 RRD=$HESTIA/web/rrd
 SENDMAIL="$HESTIA/web/inc/mail-wrapper.php"
 HESTIA_GIT_REPO="https://raw.githubusercontent.com/hestiacp/hestiacp"
-HESTIA_THEMES="$HESTIA/web/css/themes"
-HESTIA_THEMES_CUSTOM="$HESTIA/web/css/themes/custom"
+HESTIA_THEMES="$HESTIA/web/css/src/themes"
+HESTIA_THEMES_CUSTOM="$HESTIA/web/css/src/themes/custom"
 SCRIPT="$(basename $0)"
 CHECK_RESULT_CALLBACK=""
 

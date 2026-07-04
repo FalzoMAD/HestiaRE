@@ -4,8 +4,6 @@
     Website:     www.hestiacp.com
 */
 
-@import url("../media_queries");
-
 :root {
 	/* Alerts */
 	--alert-box-shadow: none;
@@ -24,7 +22,7 @@
 }
 
 .top-bar-notifications-panel {
-	@media (--viewport-small) {
+	@media (min-width: 480px) {
 		box-shadow: none;
 		border-color: #ccc;
 	}
@@ -62,7 +60,7 @@
 }
 
 .units-table-row {
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		&:hover {
 			box-shadow: none;
 		}
@@ -80,7 +78,7 @@
 }
 
 .units-table-badge {
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		box-shadow: none;
 	}
 }
@@ -89,7 +87,7 @@
    ========================================================================== */
 
 .stats-item {
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		&:hover {
 			box-shadow: none;
 		}
@@ -174,7 +172,7 @@
 }
 
 .login {
-	@media (--viewport-small) {
+	@media (min-width: 480px) {
 		background-color: rgb(255 255 255 / 80%);
 		box-shadow:
 			0 2px 10px rgb(0 0 0 / 30%),

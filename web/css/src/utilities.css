@@ -38,7 +38,7 @@
 }
 
 .u-text-center-desktop {
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		text-align: center !important;
 	}
 }
@@ -160,7 +160,7 @@
 }
 
 .u-side-by-side-tablet {
-	@media (--viewport-small) {
+	@media (min-width: 480px) {
 		display: flex !important;
 		justify-content: space-between !important;
 		align-items: center !important;
@@ -190,13 +190,42 @@
 }
 
 .u-hide-tablet {
-	@media (--viewport-medium) {
+	@media (min-width: 768px) {
 		display: none !important;
 	}
 }
 
 .u-hide-desktop {
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		display: none !important;
+	}
+}
+
+/* Eigenbau bell-wiggle for unread notifications (see VENDORED.json: swing-animation).
+   Duration is themeable via --animate-duration (vestia sets 0s to disable). */
+.u-swing {
+	transform-origin: top center;
+	animation: u-swing var(--animate-duration, 300ms) both;
+}
+
+@keyframes u-swing {
+	25% {
+		transform: rotate(12deg);
+	}
+
+	45% {
+		transform: rotate(-9deg);
+	}
+
+	65% {
+		transform: rotate(6deg);
+	}
+
+	85% {
+		transform: rotate(-3deg);
+	}
+
+	to {
+		transform: rotate(0deg);
 	}
 }

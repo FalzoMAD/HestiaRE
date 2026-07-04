@@ -4,8 +4,6 @@
     Website:     www.hestiacp.com
 */
 
-@import url("../media_queries");
-
 :root {
 	/* Colors */
 	--color-text: #cdcdcd;
@@ -52,7 +50,7 @@
 .top-bar-notifications-panel {
 	background-color: rgb(50 50 50 / 99%);
 
-	@media (--viewport-small) {
+	@media (min-width: 480px) {
 		border-color: #404040;
 	}
 }
@@ -171,7 +169,7 @@
 		}
 	}
 
-	@media (--viewport-medium) {
+	@media (min-width: 768px) {
 		border-bottom-color: #282828;
 
 		&:hover {
@@ -393,7 +391,7 @@
    ========================================================================== */
 
 .units-table-header {
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		background: #404040;
 		box-shadow: none;
 		text-shadow: 0 1px rgb(0 0 0 / 95%);
@@ -424,7 +422,7 @@
 		background-color: #353535;
 	}
 
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		&:hover {
 			background-color: #353535;
 			border-color: #282828;
@@ -467,13 +465,13 @@
 	border-color: #454545;
 	background-color: #282828;
 
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		background-color: transparent;
 	}
 }
 
 .units-table-badge {
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		color: #dadada;
 		border-color: #212121;
 		box-shadow:
@@ -490,7 +488,7 @@
 .stats-item {
 	border-bottom-color: #404040;
 
-	@media (--viewport-large) {
+	@media (min-width: 1024px) {
 		&:hover {
 			background-color: #353535;
 			border-left-color: #353535;
@@ -707,7 +705,7 @@
 		color: #f864fa;
 	}
 
-	@media (--viewport-small) {
+	@media (min-width: 480px) {
 		background-color: #282828;
 		box-shadow:
 			0 8px 25px rgb(0 0 0 / 30%),
