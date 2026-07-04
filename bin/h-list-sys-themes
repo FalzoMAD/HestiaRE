@@ -29,8 +29,8 @@ available_themes=()
 get_themes() {
 	# Retrieve list of system themes
 	if [ -d "$HESTIA_THEMES" ]; then
-		for file in "$HESTIA_THEMES"/*.min.css; do
-			filename=$(basename "$file" .min.css)
+		for file in "$HESTIA_THEMES"/*.css; do
+			filename=$(basename "$file" .css)
 			available_themes+=("${filename%.*}")
 		done
 	fi
