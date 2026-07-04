@@ -462,6 +462,8 @@ install_db() {
 			wcv "DB_PMA_ALIAS" "phpmyadmin"
 			echo "[ * ] Installing phpMyAdmin..."
 			"$BIN/h-add-sys-phpmyadmin" >> "$LOG"
+			# Local SSO (#145, no REST API) — opt-out via panel server settings
+			"$BIN/h-add-sys-pma-sso" quiet >> "$LOG"
 		fi
 	else
 		echo "[ * ] MariaDB not selected — skipping"

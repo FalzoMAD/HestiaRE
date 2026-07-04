@@ -181,23 +181,11 @@ if (!empty($_SESSION["DB_PGA_ALIAS"])) {
 									</a>
 								</li>
 							<?php } ?>
-								<?php if ($data[$key]['TYPE'] == 'mysql' && isset($_SESSION['PHPMYADMIN_KEY']) && $_SESSION['PHPMYADMIN_KEY'] != '' && !ipUsed()) { $time = time(); ?>
-									<?php
-										$hestia_sso_token = password_hash(
-											$key . $user_plain . $_SESSION['user_combined_ip'] . $time . $_SESSION['PHPMYADMIN_KEY'],
-											PASSWORD_DEFAULT,
-										);
-										$hestia_sso_url = $db_myadmin_link . "hestia-sso.php?" . http_build_query([
-											"database" => $key,
-											"user" => $user_plain,
-											"exp" => $time,
-											"hestia_token" => $hestia_sso_token,
-										]);
-									?>
+								<?php if ($data[$key]['TYPE'] == 'mysql' && isset($_SESSION['PHPMYADMIN_KEY']) && $_SESSION['PHPMYADMIN_KEY'] != '' && !ipUsed()) { ?>
 									<li class="units-table-row-action shortcut-enter" data-key-action="href">
 										<a
 											class="units-table-row-action-link"
-											href="<?= tohtml($hestia_sso_url) ?>"
+											href="/sso/phpmyadmin/?<?= tohtml(http_build_query(["database" => $key, "token" => $_SESSION["token"]])) ?>"
 											title="phpMyAdmin" target="_blank"
 										>
 										<i class="fas fa-right-to-bracket icon-orange"></i>

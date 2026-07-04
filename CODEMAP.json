@@ -51,7 +51,7 @@
         "web": { "count": 80, "pattern": "bin/h-*-web*" },
         "mail": { "count": 66, "pattern": "bin/h-*-mail*" },
         "dns": { "count": 1, "pattern": "bin/h-*-dns*", "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58" },
-        "database": { "count": 30, "pattern": "bin/h-*-database*" },
+        "database": { "count": 31, "pattern": "bin/h-*-database*" },
         "firewall": { "count": 21, "pattern": "bin/h-*-firewall*" },
         "cron": { "count": 20, "pattern": "bin/h-*-cron*" },
         "backup": { "count": 19, "pattern": "bin/h-*-backup*" },
@@ -168,7 +168,10 @@
         ]
       },
       "locales": 42,
-      "action_dirs": ["add", "edit", "delete", "list", "bulk", "copy", "move", "suspend", "unsuspend", "restart", "stop", "start", "schedule", "update", "generate", "download", "search", "reset", "reset2fa"],
+      "action_dirs": ["add", "edit", "delete", "list", "bulk", "copy", "move", "suspend", "unsuspend", "restart", "stop", "start", "schedule", "update", "generate", "download", "search", "reset", "reset2fa", "sso"],
+      "pma_sso": {
+        "description": "phpMyAdmin SSO without REST API (#145): web/sso/phpmyadmin/ runs h-add-database-sso-token via panel sudo (temp DB user + one-time handoff file /run/hestia-sso/<token>, root:caddy 0730/640); install/deb/phpmyadmin/hestia-sso.php (PMA pool, unprivileged) consumes the token and opens the signon session. Enable/disable: h-add-sys-pma-sso / h-delete-sys-pma-sso; PHPMYADMIN_KEY is only the enabled flag."
+      },
       "dependencies": ["cli_commands", "func_libraries"],
       "upstream_debt": {
         "file_count": 9,
