@@ -114,7 +114,7 @@ for row in $search; do
 	object_date=''
 
 	# Parsing result
-	type=$(echo $row | cut -f 1 -d : | cut -f 8 -d /)
+	type=$(echo $row | cut -f 1 -d : | sed "s|^$CONF_DIR/users/$user/||; s|/.*||")
 	data=$(echo $row | cut -f 2,3,4,5 -d :)
 	eval "$data"
 
@@ -190,7 +190,7 @@ for row in $search; do
 		type='mail'
 		if [ -n "$(echo $ACCOUNT | grep $object)" ]; then
 			key="ACCOUNT"
-			dom="$(echo $row | cut -f 1 -d : | cut -f 9 -d / | sed 's/.conf//')"
+			dom="$(echo $row | cut -f 1 -d : | sed "s|.*/||; s|\.conf$||")"
 			result="$ACCOUNT@$dom"
 			suspended=$SUSPENDED
 			object_link=$ACCOUNT

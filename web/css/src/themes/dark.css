@@ -705,15 +705,17 @@
 		color: #f28b82;
 	}
 
+	/* base (not media-scoped): below 480px the form sits directly on the dark
+	 * radial and default.css sets dark label text for its light background */
+	& .form-label {
+		color: #fff;
+	}
+
 	@media (min-width: 480px) {
 		background-color: #282828;
 		box-shadow:
 			0 8px 25px rgb(0 0 0 / 30%),
 			inset 0 0 2px rgb(0 0 0 / 25%);
-
-		& .form-label {
-			color: #fff;
-		}
 	}
 }
 

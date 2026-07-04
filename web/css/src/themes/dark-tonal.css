@@ -1,0 +1,22 @@
+/*
+    Theme Name:  Dark Tonal
+    Author:      HestiaRE (#260)
+
+    Dark variant with tonal icon coding: the former type colors (blue, teal,
+    lightblue, purple) become green/gray shades from light to dark instead of
+    the hard color cut, so object types in the list views stay roughly
+    distinguishable. Everything else is inherited from the dark theme.
+*/
+
+@import url("dark.css");
+
+:root {
+	/* tonal ladder (light → dark) on dark surfaces */
+	--icon-color-lightblue: #a7e3b3;
+	--icon-color-teal: #79d08c;
+	--icon-color-blue: #4dbb63;
+	--icon-color-purple: #8ba591;
+
+	/* semantic colors stay: green/red/orange/dim as in dark, maroon → red */
+	--icon-color-maroon: #ff5252;
+}
