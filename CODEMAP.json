@@ -185,7 +185,7 @@
       "entry_points": ["web/templates/includes/js.php", "web/templates/includes/css.php", "web/js/src/index.js", "web/css/src/themes/default.css"],
       "directories": ["web/js/src/", "web/js/vendor/", "web/css/src/", "web/css/vendor/", "web/webfonts/"],
       "themes": "Shipped: web/css/src/themes/*.css (default + overlays dark/flat/vestia). Custom: web/css/src/themes/custom/*.css (instance data, gitignored). Listed by bin/h-list-sys-themes via HESTIA_THEMES/HESTIA_THEMES_CUSTOM (func/main.sh).",
-      "vendored": "web/js/vendor/ (Alpine.js + collapse), web/css/vendor/ (normalize.css, Font Awesome Free solid-only). Manifest: VENDORED.json; snapshot branches: upstream/alpinejs, upstream/normalize-css, upstream/fontawesome. Updater: src/update-web-vendor.sh (--check read-only version report vs VENDORED.json; --fetch <asset>[@version] rebuilds one snapshot branch, publisher-hash-verified).",
+      "vendored": "web/js/vendor/ (Alpine.js + collapse), web/css/vendor/ (normalize.css, Font Awesome Free solid-only). Manifest: VENDORED.json; snapshot branches: upstream/alpinejs, upstream/normalize-css, upstream/fontawesome. Updater: share/upstream/update-web-vendor.sh (--check read-only version report vs VENDORED.json; --fetch <asset>[@version] rebuilds one snapshot branch, publisher-hash-verified); hooked into share/upstream/sync-upstream.sh (author's sync instance).",
       "eigenbau": ["web/js/src/lib/randomString.js", "web/js/src/lib/passwordStrength.js", ".u-swing in web/css/src/utilities.css"],
       "dependencies": ["web_panel", "panel_caddy_service"]
     },

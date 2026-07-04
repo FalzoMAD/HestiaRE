@@ -2,9 +2,9 @@
 # info: check/fetch vendored web assets and maintain the upstream/* snapshot branches
 # options: --check [ASSET] | --fetch ASSET[@VERSION] [--push] | --help
 #
-# example: ./src/update-web-vendor.sh --check
-#          ./src/update-web-vendor.sh --fetch alpinejs
-#          ./src/update-web-vendor.sh --fetch fontawesome@7.3.0 --push
+# example: share/upstream/update-web-vendor.sh --check
+#          share/upstream/update-web-vendor.sh --fetch alpinejs
+#          share/upstream/update-web-vendor.sh --fetch fontawesome@7.3.0 --push
 #
 # Maintains the READ-ONLY snapshot branches (one per vendor project, files in
 # HestiaRE target structure + VERSIONS.md), analog to upstream/phpquoteshellarg:
