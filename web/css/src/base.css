@@ -125,3 +125,22 @@ summary {
 		display: none;
 	}
 }
+
+/* Browser-baseline notice (see adr-browser-baseline.md). Only visible in
+   browsers without CSS nesting support — those ignore every nested rule in
+   this stylesheet, so the warning itself must stay nesting-free. */
+.browser-baseline-warning {
+	display: none;
+}
+
+@supports not (selector(&)) {
+	.browser-baseline-warning {
+		display: block;
+		padding: 12px 16px;
+		background-color: #c0392b;
+		color: #fff;
+		font-family: system-ui, sans-serif;
+		font-size: 1rem;
+		text-align: center;
+	}
+}
