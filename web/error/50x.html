@@ -32,13 +32,8 @@
 				margin-left: auto;
 			}
 
-			.animate__animated {
-				animation-duration: 1s;
-				animation-fill-mode: both;
-			}
-
-			.animate__fadeIn {
-				animation-name: fadeIn;
+			.fade-in {
+				animation: fade-in 1s both;
 			}
 
 			.info {
@@ -78,7 +73,7 @@
 				font-size: 0.7em;
 			}
 
-			@keyframes fadeIn {
+			@keyframes fade-in {
 				from {
 					opacity: 0;
 				}
@@ -92,7 +87,7 @@
 		<div class="container">
 			<div class="row">
 				<div class="col">
-					<div class="animate__animated animate__fadeIn">
+					<div class="fade-in">
 						<svg
 							class="warning icon-large fa-exclamation-triangle"
 							xmlns="http://www.w3.org/2000/svg"
@@ -103,8 +98,8 @@
 							></path>
 						</svg>
 					</div>
-					<h1 class="animate__animated animate__fadeIn">Internal Server Error</h1>
-					<div class="description-text animate__animated animate__fadeIn">
+					<h1 class="fade-in">Internal Server Error</h1>
+					<div class="description-text fade-in">
 						<p>Oops! Something went wrong.</p>
 						<p>
 							The server encountered an internal error or misconfiguration and was unable to
