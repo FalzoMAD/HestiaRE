@@ -132,3 +132,21 @@ echo "==> Pulling latest dev..."
 cd "$HESTIARE_DIR"
 git checkout dev
 git pull origin dev
+
+# ════════════════════════════════════════════════════════════════════════════
+# PART 4 — vendored web assets (alpinejs, fontawesome, normalize.css)
+# ════════════════════════════════════════════════════════════════════════════
+#
+# Version check via update-web-vendor.sh --check: compares the pins in
+# VENDORED.json against npm registry / GitHub API. Runs after the dev pull
+# on purpose, so the pins and the script itself are always current.
+# Strictly read-only — on a new release, rebuild the snapshot branch with:
+#   share/upstream/update-web-vendor.sh --fetch <asset>[@version] --push
+# Adoption into dev happens separately via merge/cherry-pick + PR.
+
+echo ""
+echo "==> Checking vendored web assets (VENDORED.json vs upstream)..."
+if ! "$HESTIARE_DIR/share/upstream/update-web-vendor.sh" --check; then
+  echo "    WARNING: web-vendor check failed (network/API?) — re-run manually:"
+  echo "    $HESTIARE_DIR/share/upstream/update-web-vendor.sh --check"
+fi
