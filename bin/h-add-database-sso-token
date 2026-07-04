@@ -1,0 +1,90 @@
+#!/bin/bash
+# info: create one-time phpMyAdmin SSO handoff token
+# options: USER DATABASE CLIENT_IP
+#
+# example: h-add-database-sso-token admin admin_wp 203.0.113.5
+#
+# Called by the panel (via sudo) when a user clicks the phpMyAdmin SSO button.
+# Creates a temporary database user (h-add-database-temp-user, 60 min TTL) and
+# stores its credentials in a one-time handoff file under /run/hestia-sso/,
+# readable only by the phpMyAdmin FPM pool user (caddy). Prints the token to
+# stdout; the panel redirects the browser to hestia-sso.php?token=<token>,
+# which consumes the file and opens the signon session. This replaces the
+# former REST-API path (#145) — the phpMyAdmin pool itself needs no sudo rule.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+database=$2
+client_ip=$3
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+SSO_DIR="/run/hestia-sso"
+# Seconds a handoff token stays valid (must match TOKEN_TTL in hestia-sso.php)
+TOKEN_TTL=60
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '3' "$#" 'USER DATABASE CLIENT_IP'
+is_format_valid 'user' 'database'
+is_ip46_format_valid "$client_ip"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Create the temporary database user; ownership/suspension of user and
+# database are validated there. The command schedules its own TTL cleanup.
+creds=$("$BIN/h-add-database-temp-user" "$user" "$database" mysql)
+if [ $? -ne 0 ]; then
+	echo "Error: Unable to create temp user"
+	exit 2
+fi
+dbuser=$(echo "$creds" | jq -r '.login.user')
+dbpass=$(echo "$creds" | jq -r '.login.password')
+if [ -z "$dbuser" ] || [ "$dbuser" = "null" ]; then
+	echo "Error: Unable to parse temp user credentials"
+	exit 2
+fi
+
+# Handoff directory: root:caddy 0730 — the phpMyAdmin pool (caddy) can open
+# files by exact name and unlink them (wx), but cannot list the directory (no
+# r), so a compromised pool cannot harvest tokens it was not handed.
+mkdir -p "$SSO_DIR"
+chown root:caddy "$SSO_DIR"
+chmod 730 "$SSO_DIR"
+
+# Purge stale handoff files from clicks that never reached hestia-sso.php
+find "$SSO_DIR" -type f -mmin +2 -delete 2> /dev/null
+
+token=$(openssl rand -hex 32)
+umask 037
+jq -n --arg u "$dbuser" --arg p "$dbpass" --arg ip "$client_ip" \
+	--argjson t "$(date +%s)" \
+	'{user: $u, password: $p, ip: $ip, time: $t}' > "$SSO_DIR/$token"
+chown root:caddy "$SSO_DIR/$token"
+
+echo "$token"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging is done by h-add-database-temp-user (grant of the temp user);
+# the token itself must not be logged.
+exit
