@@ -202,7 +202,7 @@
 }
 
 /* Eigenbau bell-wiggle for unread notifications (see VENDORED.json: swing-animation).
-   Duration is themeable via --animate-duration (vestia sets 0s to disable). */
+   Duration is themeable via --animate-duration (a theme can set 0s to disable). */
 .u-swing {
 	transform-origin: top center;
 	animation: u-swing var(--animate-duration, 300ms) both;
