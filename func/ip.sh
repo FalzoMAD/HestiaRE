@@ -176,7 +176,7 @@ get_real_ip() {
 	else
 		nat=$(grep -H "^NAT='$1'" $CONF_DIR/ips/* | head -n1)
 		if [ -n "$nat" ]; then
-			echo "$nat" | cut -f 1 -d : | cut -f 7 -d /
+			echo "$nat" | sed "s|:NAT=.*||; s|^$CONF_DIR/ips/||"
 		fi
 	fi
 }
@@ -257,7 +257,7 @@ is_ip_valid() {
 		if [ -z "$nat" ]; then
 			check_result "$E_NOTEXIST" "IP $1 doesn't exist"
 		else
-			nat=$(echo "$nat" | cut -f1 -d: | cut -f7 -d/)
+			nat=$(echo "$nat" | sed "s|:NAT=.*||; s|^$CONF_DIR/ips/||")
 			local_ip=$nat
 		fi
 	fi
