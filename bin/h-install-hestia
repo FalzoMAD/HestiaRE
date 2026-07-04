@@ -172,6 +172,7 @@ install_panel() {
 	echo "[ * ] Configuring panel PHP-FPM..."
 	mkdir -p /etc/php/hestia/fpm/pool.d /etc/php/hestia/cli
 	cp -f "$HESTIA/share/panel-php/php-fpm.conf" /etc/php/hestia/fpm/
+	cp -f "$HESTIA/share/panel-php/fpm/php.ini" /etc/php/hestia/fpm/php.ini
 	cp -f "$HESTIA/share/panel-php/pool.d/panel.conf" /etc/php/hestia/fpm/pool.d/
 	cp -f "$HESTIA/share/panel-php/cli/php.ini" /etc/php/hestia/cli/php.ini
 	# Single source of truth for the panel PHP version (read by the hestia-php /

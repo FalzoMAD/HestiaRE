@@ -1,6 +1,6 @@
-import { delay, isDesktopSafari, showSpinner } from './helpers';
-import { updateAdvancedTextarea } from './toggleAdvanced';
-import { enableUnlimitedInputs } from './unlimitedInput';
+import { delay, isDesktopSafari, showSpinner } from './helpers.js';
+import { updateAdvancedTextarea } from './toggleAdvanced.js';
+import { enableUnlimitedInputs } from './unlimitedInput.js';
 
 export default function handleFormSubmit() {
 	const mainForm = document.querySelector('#main-form');

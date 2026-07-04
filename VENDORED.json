@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Central manifest of all third-party code vendored into this repository, OS packages the panel depends on at runtime, and Eigenbau components with notable upstream inspiration. Update this file whenever a component is added, upgraded, or removed. License files for inline-vendored code must remain in their respective directories; this manifest points to them but does not replace them.",
-    "last_updated": "2026-06-21",
+    "last_updated": "2026-07-04",
     "source_type_values": {
       "inline":     "Third-party source copied into the repo. HestiaRE carries the full license-compliance obligation — license file must live alongside the code.",
       "os-package": "Installed via apt. The distro ships the code; HestiaRE only declares the dependency. Verify GPL compatibility, but no obligation to ship a separate license file.",
@@ -20,6 +20,71 @@
       "reason": "Security-hardened shell argument quoting. PHP's native escapeshellarg() corrupts UTF-8 input (e.g. æøå) in processes running a non-UTF-8 locale. This implementation avoids the locale-dependent code path on Unix by wrapping in single quotes unconditionally.",
       "transitive_deps": [],
       "last_verified": "2026-06-21"
+    },
+    {
+      "name": "alpinejs",
+      "source_type": "inline",
+      "path": "web/js/vendor/alpinejs.min.js",
+      "upstream_repo": "https://github.com/alpinejs/alpine",
+      "upstream_version": "3.15.12",
+      "upstream_branch": "upstream/alpinejs",
+      "source_url": "https://registry.npmjs.org/alpinejs/-/alpinejs-3.15.12.tgz (dist/cdn.min.js)",
+      "sha256": "57b37d7cae9a27d965fdae4adcc844245dfdc407e655aee85dcfff3a08036a3f",
+      "license": "MIT",
+      "license_file": "web/js/vendor/LICENSE-alpinejs.md",
+      "reason": "Panel UI interactivity framework (x-data bindings, stores, notifications, bulk edit). Prebuilt CDN artifact — the GitHub repo commits no dist files and attaches no release assets; the npm registry tarball is the project's official publish artifact (#248).",
+      "transitive_deps": [],
+      "last_verified": "2026-07-03"
+    },
+    {
+      "name": "alpinejs-collapse",
+      "source_type": "inline",
+      "path": "web/js/vendor/alpinejs-collapse.min.js",
+      "upstream_repo": "https://github.com/alpinejs/alpine",
+      "upstream_version": "3.15.12",
+      "upstream_branch": "upstream/alpinejs",
+      "source_url": "https://registry.npmjs.org/@alpinejs/collapse/-/collapse-3.15.12.tgz (dist/cdn.min.js)",
+      "sha256": "c7661d4e2cf0465e3cd693190debb5f592ac72dcc4cfe650581273767558b27b",
+      "license": "MIT",
+      "license_file": "web/js/vendor/LICENSE-alpinejs.md",
+      "reason": "Alpine collapse plugin (x-collapse transitions). Same monorepo and release cadence as alpinejs — updated together (#248).",
+      "transitive_deps": [],
+      "last_verified": "2026-07-03"
+    },
+    {
+      "name": "normalize.css",
+      "source_type": "inline",
+      "path": "web/css/vendor/normalize.css",
+      "upstream_repo": "https://github.com/necolas/normalize.css",
+      "upstream_branch": "upstream/normalize-css",
+      "upstream_version": "8.0.1",
+      "source_url": "https://raw.githubusercontent.com/necolas/normalize.css/8.0.1/normalize.css",
+      "sha256": "580818700724d42d7fcc4979b0197971fca1c6d2e0286769237a0ac897df5512",
+      "license": "MIT",
+      "license_file": "web/css/vendor/LICENSE-normalize.md",
+      "reason": "Cross-browser CSS reset, imported by the default panel theme. Vendored verbatim (upstream file is plain CSS, no build step). Project is finished software — no release since 2018, low update cadence expected.",
+      "transitive_deps": [],
+      "last_verified": "2026-07-04"
+    },
+    {
+      "name": "fontawesome-free",
+      "source_type": "inline",
+      "path": "web/css/vendor/fontawesome/ + web/webfonts/fa-solid-900.woff2",
+      "upstream_repo": "https://github.com/FortAwesome/Font-Awesome",
+      "upstream_branch": "upstream/fontawesome",
+      "upstream_version": "7.3.0",
+      "source_url": "https://github.com/FortAwesome/Font-Awesome/releases/download/7.3.0/fontawesome-free-7.3.0-web.zip",
+      "source_sha256": "791f5f4dbbcf7ad16e3727e54969df2691b53a9b8da127f19fdace190471d446",
+      "sha256": {
+        "fontawesome.css": "74ea77cd04ec7de48c598073a59297566b77b9fdf8b90200774ca1730b6c8d9a",
+        "solid.css": "6800766a322bcc2032dea527aeb2be0967283076cffd5d3a741462d7b3fbc01c",
+        "fa-solid-900.woff2": "47b1a018f969189c59b87e9d23f9304db54dc9bdcecf00b216c23515f86826e4"
+      },
+      "license": "CC-BY-4.0 (icons) / OFL-1.1 (fonts) / MIT (CSS code)",
+      "license_file": "web/css/vendor/fontawesome/LICENSE.txt",
+      "modifications": "solid.css: ../webfonts/ rewritten to /webfonts/ (panel serves fonts from web root). fontawesome.css and fa-solid-900.woff2 are byte-identical to the release artifact. Only the Solid style is shipped — the panel uses .fas exclusively (grep-verified); regular/brands CSS and webfonts are intentionally omitted (YAGNI).",
+      "transitive_deps": [],
+      "last_verified": "2026-07-04"
     }
   ],
 
@@ -57,15 +122,50 @@
       "name": "totp",
       "source_type": "eigenbau",
       "path": "web/inc/lib/totp.php",
-      "algorithm_refs": ["RFC 6238 (TOTP)", "RFC 4226 (HOTP)"],
+      "algorithm_refs": [
+        "RFC 6238 (TOTP)",
+        "RFC 4226 (HOTP)"
+      ],
       "note": "Pure algorithm implementation. No upstream package. Uses only PHP built-ins: random_bytes, hash_hmac, hash_equals, pack."
     },
     {
       "name": "qrcode",
       "source_type": "eigenbau",
       "path": "web/inc/lib/qrcode.php",
-      "algorithm_refs": ["ISO/IEC 18004:2015 (QR Code)"],
+      "algorithm_refs": [
+        "ISO/IEC 18004:2015 (QR Code)"
+      ],
       "note": "Pure algorithm implementation. No upstream package. Byte mode, ECC Level M, versions 1-10. No PHP extensions required."
+    },
+    {
+      "name": "randomString",
+      "source_type": "eigenbau",
+      "path": "web/js/src/lib/randomString.js",
+      "inspiration_source": "ai/nanoid (customAlphabet)",
+      "inspiration_repo": "https://github.com/ai/nanoid",
+      "inspiration_license": "MIT",
+      "license_obligation": "none — independent reimplementation, no code copied.",
+      "note": "Unbiased random string from a custom alphabet: crypto.getRandomValues + rejection sampling. Replaces the bundled nanoid dependency; only consumer is helpers.js randomPassword() (#248)."
+    },
+    {
+      "name": "passwordStrength",
+      "source_type": "eigenbau",
+      "path": "web/js/src/lib/passwordStrength.js",
+      "inspiration_source": "deanilvincent/check-password-strength",
+      "inspiration_repo": "https://github.com/deanilvincent/check-password-strength",
+      "inspiration_license": "MIT",
+      "license_obligation": "none — independent reimplementation, no code copied.",
+      "note": "Password strength level 0-3 from length + character-class diversity, mirroring the rule model of check-password-strength's default options so the <meter> semantics stay identical. Only consumer is passwordInput.js (#248)."
+    },
+    {
+      "name": "swing-animation",
+      "source_type": "eigenbau",
+      "path": "web/css/src/utilities.css (.u-swing)",
+      "inspiration_source": "animate.css v4.1.1 (replaced)",
+      "inspiration_repo": "https://github.com/animate-css/animate.css",
+      "inspiration_license": "Hippocratic License 2.1",
+      "license_obligation": "none — independent reimplementation with own keyframe timing/values, no code copied.",
+      "note": "Replaces the trimmed animate.css excerpt (web/css/src/dependencies/animate.css, removed 2026-07-04). Animate.css v4 is licensed under the Hippocratic License 2.1 — not OSI-approved and GPL-incompatible. The panel used exactly one animation (notification-bell swing), so the excerpt was replaced by a single Eigenbau keyframe utility; the unused fadeIn/zoomIn keyframes were dropped."
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { customAlphabet } from 'nanoid';
+import { randomString } from './lib/randomString.js';
 
 // Generates a random password that always passes password requirements
 export function randomPassword(length = 16) {
@@ -7,11 +7,10 @@ export function randomPassword(length = 16) {
 	const numbers = '0123456789';
 	const symbols = '!@#$%^&*()_+-=[]{}|;:/?';
 	const allCharacters = uppercase + lowercase + numbers + symbols;
-	const generate = customAlphabet(allCharacters, length);
 
 	let password;
 	do {
-		password = generate();
+		password = randomString(allCharacters, length);
 		// Must contain at least one uppercase letter, one lowercase letter, and one number
 	} while (!(/[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password)));
 
@@ -25,11 +24,6 @@ export function debounce(func, wait = 100) {
 		clearTimeout(timeout);
 		timeout = setTimeout(() => func.apply(this, args), wait);
 	};
-}
-
-// Returns the value of a CSS variable
-export function getCssVariable(variableName) {
-	return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
 }
 
 // Shows the loading spinner overlay
@@ -54,25 +48,6 @@ export function isDesktopSafari() {
 // Waits for the given number of milliseconds
 export function delay(milliseconds) {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-// Posts data to the given URL and returns the response
-export async function post(url, data, headers = {}) {
-	const requestOptions = {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			...headers,
-		},
-		body: JSON.stringify(data),
-	};
-
-	const response = await fetch(url, requestOptions);
-	if (!response.ok) {
-		throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-	}
-
-	return response.json();
 }
 
 // Creates a confirmation <dialog> on the fly

@@ -1,4 +1,4 @@
-import { debounce } from './helpers';
+import { debounce } from './helpers.js';
 
 // Monitor "Account" and "Password" inputs on "Add/Edit Mail Account"
 // page and update the sidebar "Account" and "Password" inputs

@@ -1,4 +1,4 @@
-import { debounce } from './helpers';
+import { debounce } from './helpers.js';
 
 // Attach event listeners to FTP account "Username" and "Path" fields to update their hints
 export default function handleFtpAccountHints() {

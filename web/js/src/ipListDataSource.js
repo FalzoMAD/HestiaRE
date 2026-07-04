@@ -1,4 +1,4 @@
-import { parseAndSortIpLists } from './helpers';
+import { parseAndSortIpLists } from './helpers.js';
 
 // Populates the "Data Source" select with various IP lists on the New IP List page
 export default function handleIpListDataSource() {

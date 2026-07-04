@@ -1,31 +1,30 @@
-import handleAddIpLists from './addIpLists';
-import alpineInit from './alpineInit';
-import handleAutoTrimInputs from './autoTrimInputs';
-import handleClipboardCopy from './clipboardCopy';
-import handleConfirmAction from './confirmAction';
-import handleCopyCreds from './copyCreds';
-import handleCronGenerator from './cronGenerator';
-import handleDatabaseHints from './databaseHints';
-import handleDiscardAllMail from './discardAllMail';
-import handleDocRootHint from './docRootHint';
-import handleEditWebListeners from './editWebListeners';
-import handleErrorMessage from './errorHandler';
-import focusFirstInput from './focusFirstInput';
-import handleFormSubmit from './formSubmit';
-import handleFtpAccountHints from './ftpAccountHints';
-import handleFtpAccounts from './ftpAccounts';
-import handleIpListDataSource from './ipListDataSource';
-import handleListSorting from './listSorting';
-import handleListUnitSelect from './listUnitSelect';
-import handleNameServerInput from './nameServerInput';
-import handlePasswordInput from './passwordInput';
-import initRrdCharts from './rrdCharts';
-import handleShortcuts from './shortcuts';
-import handleStickyToolbar from './stickyToolbar';
-import handleSyncEmailValues from './syncEmailValues';
-import handleTabPanels from './tabPanels';
-import handleToggleAdvanced from './toggleAdvanced';
-import handleUnlimitedInput from './unlimitedInput';
+import handleAddIpLists from './addIpLists.js';
+import alpineInit from './alpineInit.js';
+import handleAutoTrimInputs from './autoTrimInputs.js';
+import handleClipboardCopy from './clipboardCopy.js';
+import handleConfirmAction from './confirmAction.js';
+import handleCopyCreds from './copyCreds.js';
+import handleCronGenerator from './cronGenerator.js';
+import handleDatabaseHints from './databaseHints.js';
+import handleDiscardAllMail from './discardAllMail.js';
+import handleDocRootHint from './docRootHint.js';
+import handleEditWebListeners from './editWebListeners.js';
+import handleErrorMessage from './errorHandler.js';
+import focusFirstInput from './focusFirstInput.js';
+import handleFormSubmit from './formSubmit.js';
+import handleFtpAccountHints from './ftpAccountHints.js';
+import handleFtpAccounts from './ftpAccounts.js';
+import handleIpListDataSource from './ipListDataSource.js';
+import handleListSorting from './listSorting.js';
+import handleListUnitSelect from './listUnitSelect.js';
+import handleNameServerInput from './nameServerInput.js';
+import handlePasswordInput from './passwordInput.js';
+import handleShortcuts from './shortcuts.js';
+import handleStickyToolbar from './stickyToolbar.js';
+import handleSyncEmailValues from './syncEmailValues.js';
+import handleTabPanels from './tabPanels.js';
+import handleToggleAdvanced from './toggleAdvanced.js';
+import handleUnlimitedInput from './unlimitedInput.js';
 
 initListeners();
 focusFirstInput();
@@ -50,7 +49,6 @@ function initListeners() {
 	handleSyncEmailValues();
 	handleTabPanels();
 	handleToggleAdvanced();
-	initRrdCharts();
 
 }
 

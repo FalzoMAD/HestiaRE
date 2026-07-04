@@ -1,5 +1,5 @@
-import { passwordStrength } from 'check-password-strength';
-import { debounce, randomPassword } from './helpers';
+import { passwordStrength } from './lib/passwordStrength.js';
+import { debounce, randomPassword } from './helpers.js';
 
 // Adds listeners to password inputs (to monitor strength) and generate password buttons
 export default function handlePasswordInput() {
