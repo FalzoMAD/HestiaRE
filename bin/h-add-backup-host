@@ -33,8 +33,9 @@ source $HESTIA/func/main.sh
 source $HESTIA/func/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-# Fetch current verison B2 CLI tool
-source_conf "$HESTIA/install/upgrade/upgrade.conf"
+
+# Backblaze B2 CLI version (release manifest)
+b2_v=$(manifest_get '.software_versions.backblaze_b2')
 
 # Paths
 b2cli="/usr/local/bin/b2"

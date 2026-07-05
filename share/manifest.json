@@ -3,6 +3,15 @@
   "$parser": "jq (nicht python3 - zu schwergewichtig nur fuer JSON-Parsing). install.sh muss jq als allererste Abhaengigkeit pruefen/installieren, noch vor dem whiptail-Check, da das Manifest vor jeder Frage gelesen werden muss. jq ist ~113 KB Installed-Size + libjq1/libonig5, deutlich schlanker als eine python3-Abhaengigkeit.",
   "manifest_version": 1,
 
+  "software_versions": {
+    "$comment": "Release-shipped third-party version pins (#288, replaces install/upgrade/upgrade.conf). Bump per release. Read at runtime via manifest_get() in func/main.sh.",
+    "filegator": "7.14.3",
+    "snappymail": "2.38.2",
+    "backblaze_b2": "3.6.0",
+    "phppgadmin": "7.14.6",
+    "php_supported": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
+  },
+
   "presets": {
     "standard":  { "label": "Standard (full hosting + full mail + DB + MultiPHP + addons)" },
     "compact":   { "label": "Compact (nginx only, leaner addon selection)" },
