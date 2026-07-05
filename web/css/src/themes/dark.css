@@ -706,7 +706,7 @@
 	}
 
 	/* base (not media-scoped): below 480px the form sits directly on the dark
-	 * radial and default.css sets dark label text for its light background */
+	 * radial and light.css sets dark label text for its light background */
 	& .form-label {
 		color: #fff;
 	}

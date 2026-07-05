@@ -1,3 +1,11 @@
+/*
+    Theme Name:  Light
+    Author:      HestiaCP, rebranded in #259, renamed from "default" in #269
+
+    Base stylesheet: css.php always loads this file; every other theme is an
+    overlay on top of it.
+*/
+
 @import url("../../vendor/normalize.css");
 @import url("../../vendor/fontawesome/fontawesome.css");
 @import url("../../vendor/fontawesome/solid.css");

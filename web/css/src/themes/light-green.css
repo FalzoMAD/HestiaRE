@@ -1,0 +1,30 @@
+/*
+    Theme Name:  Light Green
+    Author:      HestiaRE (#269)
+
+    Light theme with the dark brand green as primary accent and anthracite
+    as contrast. Surfaces stay white as in the other light themes; only the
+    brand tokens are redefined, every token consumer (links, focus, buttons,
+    tabs, icon coding) follows automatically. The login page gets a light
+    green radial instead of light's white/gray one.
+*/
+
+:root {
+	/* dark green as the primary accent */
+	--brand-green: #237032;
+	--brand-green-dark: #174d22;
+	--brand-green-light: #79c28d;
+
+	/* anthracite as contrast for headings (top bar is anthracite already) */
+	--color-text-heading: #2b2d31;
+}
+
+/* Login
+   ========================================================================== */
+
+.page-login,
+.page-reset {
+	background:
+		radial-gradient(circle, rgb(234 246 236 / 100%) 0%, rgb(198 231 206 / 100%) 100%),
+		rgb(223 242 228);
+}
