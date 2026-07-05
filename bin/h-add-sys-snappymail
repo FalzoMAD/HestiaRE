@@ -15,8 +15,8 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-# upgrade config file
-source "$HESTIA/install/upgrade/upgrade.conf"
+
+sm_v=$(manifest_get '.software_versions.snappymail')
 
 MODE=$1
 UPDATE="no"

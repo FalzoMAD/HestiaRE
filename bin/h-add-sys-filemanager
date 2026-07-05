@@ -16,12 +16,11 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-# load config file
-source_conf "$HESTIA/install/upgrade/upgrade.conf"
 
 MODE=$1
 user="$ROOT_USER"
 
+fm_v=$(manifest_get '.software_versions.filegator')
 FM_INSTALL_DIR="$HESTIA/web/fm"
 FM_FILE="filegator_v${fm_v}"
 FM_URL="https://github.com/filegator/static/raw/master/builds/${FM_FILE}.zip"

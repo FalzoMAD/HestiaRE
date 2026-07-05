@@ -201,8 +201,7 @@
         "install/common/",
         "share/panel-caddy/",
         "share/panel-php/",
-        "share/dovecot/",
-        "install/upgrade/"
+        "share/dovecot/"
       ],
       "key_files": [
         "install/deb/nginx/",
@@ -220,7 +219,6 @@
         "share/dovecot/2.3/",
         "share/dovecot/2.4/",
         "install/common/sudo/hestia",
-        "install/upgrade/upgrade.conf",
         "share/panel-caddy/Caddyfile",
         "share/panel-caddy/hestia.conf",
         "share/panel-php/hestia-php.service",
