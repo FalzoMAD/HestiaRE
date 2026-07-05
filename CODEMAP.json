@@ -395,7 +395,7 @@
     "optional_h_add_remove": ["proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
     "never_install": ["bind9", "vsftpd", "web-terminal", "spamassassin", "software-installer"],
     "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "caddyfile": "/etc/caddy/Caddyfile", "site_config": "/etc/caddy/hestia.conf", "install_source": "share/panel-caddy/" },
-    "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "share/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock" }
+    "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "share/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock", "reference_version_source": "share/manifest.json -> components.PANEL_PHP.reference_version (#272): single source for installer PHP_VER + wizard checklist lock; always routed through h-add-web-php for the full extension set" }
   },
 
   "upstream_debt_summary": {
