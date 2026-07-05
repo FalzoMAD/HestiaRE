@@ -10,10 +10,6 @@
 #                Variables & Functions                     #
 #----------------------------------------------------------#
 
-# Importing system environment  as we run this script
-#       mostly by cron wich not read it by itself
-source /etc/profile.d/hestia.sh
-
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env

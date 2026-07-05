@@ -16,7 +16,6 @@ modprobe="/sbin/modprobe"
 sysctl="/sbin/sysctl"
 
 # Includes
-source /etc/profile.d/hestia.sh
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh

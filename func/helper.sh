@@ -146,9 +146,13 @@ seed_hestia_etc() {
 		"export CONF_DIR='/etc/hestia'" \
 		"if [ -f /etc/hestia/local.conf ]; then . /etc/hestia/local.conf; fi" \
 		> /etc/hestia/hestia.env
+	# Root-only (0600): only root/operators need $HESTIA + bin on the interactive
+	# PATH. /etc/profile skips it for non-root (its `[ -r ]` test fails on a 0600
+	# root file), so customer/login users are not exposed to it. Runtime commands
+	# get $HESTIA from hestia.env, not from here (#210).
 	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$PATH:%s/bin\nexport PATH\n' \
 		"$hestia_root" "$hestia_root" > /etc/profile.d/hestia.sh
-	chmod 755 /etc/profile.d/hestia.sh
+	chmod 600 /etc/profile.d/hestia.sh
 
 	# Instance config lives in /etc/hestia/conf (PATHS.md §5a). Bridge the historic
 	# $HESTIA/conf path with a directory symlink so the ~466 commands referencing
@@ -278,4 +282,8 @@ migrate_data_layout() {
 	if [ -x "$hestia_root/bin/hestia-php-confd" ] && [ -f /etc/php/hestia/php-version ]; then
 		"$hestia_root/bin/hestia-php-confd" > /dev/null 2>&1 || true
 	fi
+
+	# Restrict the shell-profile snippet to root on existing installs (#210): it was
+	# world-readable (0755) before and exposed $HESTIA + bin to every login user.
+	[ -f /etc/profile.d/hestia.sh ] && chmod 600 /etc/profile.d/hestia.sh
 }
