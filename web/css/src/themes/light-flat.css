@@ -1,6 +1,6 @@
 /*
-    Theme Name:  Flat
-    Author:      Robert Zollner (@Lupul)
+    Theme Name:  Light Flat
+    Author:      Robert Zollner (@Lupul), renamed from "flat" in #269
     Website:     www.hestiacp.com
 */
 
@@ -168,7 +168,7 @@
 
 .page-login,
 .page-reset {
-	/* light theme: plain light gray (flat variant of default's light radial) */
+	/* light theme: plain light gray (flat variant of light.css's radial) */
 	background: #ededed;
 }
 
