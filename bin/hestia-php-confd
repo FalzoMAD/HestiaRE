@@ -1,0 +1,57 @@
+#!/bin/bash
+# info: rebuild the panel FPM's isolated PHP conf.d
+# options: [VERSION]
+#
+# example: hestia-php-confd 8.3
+#
+# The panel FPM runs with PHP_INI_SCAN_DIR=/etc/php/hestia/fpm/conf.d (set by the
+# hestia-php-fpm wrapper) so it loads a fixed, curated extension set instead of
+# whatever customers have enabled/disabled on the same PHP version's conf.d. This
+# helper (re)builds that directory from the version's mods-available, keeping the
+# Debian priority prefixes. Run after the panel install and by h-change-sys-panel-php
+# (the mods-available path is version-specific, so it must follow the pinned version).
+#
+# Not a user-facing command — no v-* symlink.
+
+version="${1:-$(cat /etc/php/hestia/php-version 2> /dev/null)}"
+
+if [ -z "$version" ]; then
+	echo "ERROR: no panel PHP version (arg or /etc/php/hestia/php-version)."
+	exit 1
+fi
+
+mods="/etc/php/$version/mods-available"
+dst="/etc/php/hestia/fpm/conf.d"
+
+if [ ! -d "$mods" ]; then
+	echo "ERROR: $mods not found — is PHP $version installed?"
+	exit 1
+fi
+
+# Extensions the panel actually needs (verified against the panel code):
+#   opcache          performance (Zend)
+#   mysqlnd pdo      dependencies of the DB extensions
+#   mysqli pdo_mysql database access
+#   curl mbstring gmp zip   panel-stage set
+#   gettext          i18n — the panel's _() translation calls
+#   ftp              FTP account management (heavily used)
+#   dom              a few DOMDocument uses (from php-xml)
+# Deliberately excluded: imagick, imap, ldap, pgsql, gd, soap, intl, bcmath,
+# apcu, exif, pspell, … (customer-app extensions, not used by the panel).
+exts="opcache mysqlnd pdo mysqli pdo_mysql curl mbstring gmp zip gettext ftp dom"
+
+mkdir -p "$dst"
+find "$dst" -maxdepth 1 -name '*.ini' -delete 2> /dev/null
+
+for e in $exts; do
+	src="$mods/$e.ini"
+	if [ ! -f "$src" ]; then
+		echo "WARN: $src missing — skipped."
+		continue
+	fi
+	# Keep the Debian load-order prefix (e.g. 10-opcache, 20-curl); default 20.
+	prio=$(sed -n 's/^; *priority=\([0-9]\{1,\}\).*/\1/p' "$src" | head -n1)
+	ln -sf "$src" "$dst/${prio:-20}-$e.ini"
+done
+
+exit 0

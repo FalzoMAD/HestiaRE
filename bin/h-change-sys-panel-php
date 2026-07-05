@@ -64,15 +64,19 @@ if [ ! -x "/usr/sbin/php-fpm$version" ]; then
 	exit "$E_INVALID"
 fi
 
-# Flip the pin, then restart. On failure roll back to the previous version so the
-# panel never ends up pointing at a version that will not start.
+# Flip the pin and rebuild the panel's isolated conf.d for the new version
+# (mods-available is version-specific), then restart. On failure roll back to the
+# previous version so the panel never ends up pointing at a version that will not
+# start.
 echo "$version" > "$version_file"
+"$BIN/hestia-php-confd" "$version"
 systemctl restart hestia-php
 
 if ! systemctl is-active --quiet hestia-php; then
 	echo "ERROR: hestia-php failed to start on PHP $version — rolling back."
 	if [ -n "$current" ]; then
 		echo "$current" > "$version_file"
+		"$BIN/hestia-php-confd" "$current"
 	else
 		rm -f "$version_file"
 	fi
