@@ -11,7 +11,7 @@
     "install_root": "/usr/local/hestia",
     "instance_config": "/etc/hestia",
     "user_data": "/home/$user",
-    "shell_profile": "/etc/profile.d/hestia.sh",
+    "shell_profile": "/etc/profile.d/hestia.sh (0600, root-only — #210; non-root login shells skip it via /etc/profile's [ -r ] test)",
     "sudo_rules": "/etc/sudoers.d/hestia",
     "log_dir": "/var/log/hestia",
     "note": "install_root is intentionally identical to HestiaCP — only instance_config changed (/etc/hestiacp → /etc/hestia). See PATHS.md for full reference."
