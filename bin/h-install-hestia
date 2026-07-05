@@ -988,5 +988,9 @@ configure_hestia
 install_tools
 finalize_install
 
+# Post-install smoke test — report only, never aborts a completed install (#221).
+echo ""
+"$BIN/h-check-sys-smoke" || echo "[ ! ] Smoke test reported failures — review the output above."
+
 log_event "$OK" "$ARGUMENTS"
 exit 0
