@@ -66,7 +66,11 @@ set -e
 load_os_profile "$INSTALL_OS"
 
 # ── Install-time variables ──────────────────────────────────────────────────
-PHP_VER="8.3"                                   # panel + default web PHP (Sury)
+# Panel/reference PHP version — single source of truth in the manifest so the
+# wizard (checklist lock) and the installer agree. jq is not guaranteed this
+# early in the run, so parse with sed; fall back to 8.3.
+PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$HESTIA/share/manifest.json" 2> /dev/null | head -n1)
+PHP_VER="${PHP_VER:-8.3}"                        # panel + default web PHP (Sury)
 ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 HESTIA_INSTALL_DIR="${HESTIA_INSTALL_DIR:-$HESTIA/install/deb}"
 HESTIA_COMMON_DIR="${HESTIA_COMMON_DIR:-$HESTIA/install/common}"
@@ -381,10 +385,19 @@ install_web() {
 	wcv "WEB_BACKEND"              "php-fpm"
 
 	# Multi-PHP: only in sury_multi mode, driven by the wizard's version list.
-	if [ "${COMPONENT_PHP_MODE:-sury_multi}" = "sury_multi" ] && [ -n "${COMPONENT_PHP_MULTIPHP_VERSIONS:-}" ]; then
-		echo "[ * ] Installing PHP versions: $COMPONENT_PHP_MULTIPHP_VERSIONS"
+	# The panel/reference version ($PHP_VER) always goes through the same canonical
+	# installer (h-add-web-php) as customer versions, so it gets the full extension
+	# set even if the preset did not pre-select it (#196, #272). Deduped so a
+	# pre-selected reference version is not installed twice.
+	if [ "${COMPONENT_PHP_MODE:-sury_multi}" = "sury_multi" ]; then
+		local php_versions="${COMPONENT_PHP_MULTIPHP_VERSIONS:-}"
+		case " $php_versions " in
+			*" $PHP_VER "*) ;;
+			*) php_versions="$PHP_VER $php_versions" ;;
+		esac
+		echo "[ * ] Installing PHP versions: $php_versions"
 		local v
-		for v in $COMPONENT_PHP_MULTIPHP_VERSIONS; do
+		for v in $php_versions; do
 			echo "  php$v..."
 			"$BIN/h-add-web-php" "$v" >> "$LOG" 2>&1 || true
 		done

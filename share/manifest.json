@@ -267,7 +267,8 @@
       "group": "panel",
       "type": "fixed",
       "always_installed": true,
-      "note": "Nur ein Wrapper um eine PHP-Instanz fuer das Panel selbst. Nutzt bei mailonly os_single, sonst abhaengig von PHP_MODE."
+      "reference_version": "8.3",
+      "note": "Nur ein Wrapper um eine PHP-Instanz fuer das Panel selbst. Nutzt bei mailonly os_single, sonst abhaengig von PHP_MODE. reference_version = die vom Panel-FPM genutzte + immer voll installierte Referenz-Version (#272); Single Source of Truth fuer Installer (PHP_VER) und Wizard-Checklist-Lock."
     },
 
     "PANEL_IPTABLES": {
