@@ -9,9 +9,17 @@
 v=$(cat /etc/php/hestia/php-version 2> /dev/null)
 [ -n "$v" ] || v=$(ls -1 /usr/sbin/php-fpm[0-9].[0-9] 2> /dev/null | sort -V | tail -n1 | sed 's#.*/php-fpm##')
 # Use the panel's own php.ini so the panel FPM is isolated from the customer PHP
-# config (which disables exec/system/... — the panel needs exec). Extensions
-# still load from the version's conf.d scan dir. Same pattern as bin/hestia-php.
+# config (which disables exec/system/... — the panel needs exec). Same pattern as
+# bin/hestia-php.
 ini="/etc/php/hestia/fpm/php.ini"
+# Load only the panel's curated extension set from its own conf.d (built by
+# hestia-php-confd), isolated from the customer version's conf.d. Fall back to the
+# compiled default scan dir if it is not built yet (e.g. mid-upgrade) so the panel
+# never starts with no extensions.
+confd="/etc/php/hestia/fpm/conf.d"
+if [ -d "$confd" ] && [ -n "$(ls -A "$confd" 2> /dev/null)" ]; then
+	export PHP_INI_SCAN_DIR="$confd"
+fi
 if [ -f "$ini" ]; then
 	exec "/usr/sbin/php-fpm${v}" -c "$ini" "$@"
 else

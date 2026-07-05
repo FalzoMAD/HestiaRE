@@ -270,4 +270,12 @@ migrate_data_layout() {
 	rm -f "$hestia_root/web/css/src/themes/vestia.css" \
 		"$hestia_root/web/css/src/themes/default.css" \
 		"$hestia_root/web/css/src/themes/flat.css"
+
+	# Panel FPM conf.d isolation (#272): build the curated panel extension dir so
+	# the panel loads its own set instead of the customer version's conf.d. The
+	# hestia-php-fpm wrapper falls back to the shared dir until this exists, so
+	# this is what activates the isolation on existing installs. Best-effort.
+	if [ -x "$hestia_root/bin/hestia-php-confd" ] && [ -f /etc/php/hestia/php-version ]; then
+		"$hestia_root/bin/hestia-php-confd" > /dev/null 2>&1 || true
+	fi
 }
