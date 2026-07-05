@@ -19,6 +19,12 @@ source_conf() {
 	done < $1
 }
 
+# Read a value from the release manifest (share/manifest.json). jq is a prereq
+# (install.sh), so it is available at install- and run-time. Empty on miss.
+manifest_get() {
+	jq -r "$1" "$HESTIA/share/manifest.json" 2> /dev/null
+}
+
 if [ -z "$user" ]; then
 	if [ -z "$ROOT_USER" ]; then
 		if [ -z "$HESTIA" ]; then

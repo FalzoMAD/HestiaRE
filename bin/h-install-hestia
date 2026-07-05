@@ -172,7 +172,7 @@ install_panel() {
 		libphp-phpmailer \
 		php${PHP_VER}-cli php${PHP_VER}-fpm php${PHP_VER}-mysql php${PHP_VER}-curl \
 		php${PHP_VER}-zip php${PHP_VER}-gmp php${PHP_VER}-mbstring \
-		php${PHP_VER}-opcache
+		php${PHP_VER}-opcache php${PHP_VER}-xml
 	echo "[ * ] Configuring panel PHP-FPM..."
 	mkdir -p /etc/php/hestia/fpm/pool.d /etc/php/hestia/cli
 	cp -f "$HESTIA/share/panel-php/php-fpm.conf" /etc/php/hestia/fpm/
@@ -182,6 +182,9 @@ install_panel() {
 	# Single source of truth for the panel PHP version (read by the hestia-php /
 	# hestia-php-fpm wrappers). A future Sury->OS-repo switch only rewrites this.
 	echo "$PHP_VER" > /etc/php/hestia/php-version
+	# Build the panel's isolated conf.d before starting, so it comes up with only
+	# the curated panel extension set (independent of customer conf.d).
+	"$BIN/hestia-php-confd" "$PHP_VER"
 	cp -f "$HESTIA/share/panel-php/hestia-php.service" /etc/systemd/system/
 	systemctl daemon-reload
 	systemctl enable hestia-php
@@ -984,6 +987,10 @@ install_addons
 configure_hestia
 install_tools
 finalize_install
+
+# Post-install smoke test — report only, never aborts a completed install (#221).
+echo ""
+"$BIN/h-check-sys-smoke" || echo "[ ! ] Smoke test reported failures — review the output above."
 
 log_event "$OK" "$ARGUMENTS"
 exit 0

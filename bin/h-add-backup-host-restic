@@ -29,8 +29,6 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-# Fetch current verison B2 CLI tool
-source_conf "$HESTIA/install/upgrade/upgrade.conf"
 
 is_negative_one_or_int() {
 	if [[ "$1" != '-1' ]]; then

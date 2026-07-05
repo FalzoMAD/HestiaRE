@@ -20,7 +20,6 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-source_conf "$HESTIA/install/upgrade/upgrade.conf"
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -47,8 +46,9 @@ if [ -f "$php_fpm" ] && [ -f "$HESTIA/templates/web/php-fpm/PHP-${version/\./_}.
 	exit "$E_INVALID"
 fi
 
-# Check if php version is supported
-if [[ ! "$multiphp_v" =~ $version ]]; then
+# Check if php version is supported (release manifest, share/manifest.json)
+readarray -t php_supported < <(manifest_get '.software_versions.php_supported[]')
+if [[ " ${php_supported[*]} " != *" $version "* ]]; then
 	echo "ERROR: Specified PHP version is not supported or does not exist."
 	exit "$E_INVALID"
 fi

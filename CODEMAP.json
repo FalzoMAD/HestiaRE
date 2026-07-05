@@ -11,7 +11,7 @@
     "install_root": "/usr/local/hestia",
     "instance_config": "/etc/hestia",
     "user_data": "/home/$user",
-    "shell_profile": "/etc/profile.d/hestia.sh",
+    "shell_profile": "/etc/profile.d/hestia.sh (0600, root-only — #210; non-root login shells skip it via /etc/profile's [ -r ] test)",
     "sudo_rules": "/etc/sudoers.d/hestia",
     "log_dir": "/var/log/hestia",
     "note": "install_root is intentionally identical to HestiaCP — only instance_config changed (/etc/hestiacp → /etc/hestia). See PATHS.md for full reference."
@@ -79,7 +79,6 @@
         "func/syshealth.sh",
         "func/db.sh",
         "func/backup.sh",
-        "func/upgrade.sh",
         "func/ip.sh",
         "func/firewall.sh"
       ],
@@ -91,16 +90,14 @@
         "syshealth.sh": "System health monitoring, RRD graph generation, service status checks",
         "db.sh": "MySQL/MariaDB and PostgreSQL connection helpers, host configuration",
         "backup.sh": "Local, FTP, and Restic backup/restore handlers with retention logic",
-        "upgrade.sh": "Version-specific migration procedures called by upgrade scripts",
         "ip.sh": "IP address validation, RDNS checking, IPv4/IPv6 utilities",
         "firewall.sh": "iptables symlink healing helper"
       },
       "dependencies": ["instance_config"],
       "upstream_debt": {
-        "file_count": 3,
+        "file_count": 2,
         "issues": [
-          "$HESTIA variable unchanged (/usr/local/hestia) — no path migration needed in func/*",
-          "upgrade.sh contains HestiaCP version-history migrations not relevant to HestiaRE"
+          "$HESTIA variable unchanged (/usr/local/hestia) — no path migration needed in func/*"
         ]
       }
     },
@@ -204,8 +201,7 @@
         "install/common/",
         "share/panel-caddy/",
         "share/panel-php/",
-        "share/dovecot/",
-        "install/upgrade/"
+        "share/dovecot/"
       ],
       "key_files": [
         "install/deb/nginx/",
@@ -223,7 +219,6 @@
         "share/dovecot/2.3/",
         "share/dovecot/2.4/",
         "install/common/sudo/hestia",
-        "install/upgrade/upgrade.conf",
         "share/panel-caddy/Caddyfile",
         "share/panel-caddy/hestia.conf",
         "share/panel-php/hestia-php.service",
@@ -290,17 +285,20 @@
         "share/panel-php/pool.d/phppgadmin.conf",
         "bin/hestia-php-fpm",
         "bin/hestia-php",
+        "bin/hestia-php-confd",
         "bin/h-change-sys-panel-php",
         "bin/h-delete-web-php"
       ],
       "language": "ini",
       "runtime_paths": {
         "config_dir": "/etc/php/hestia/fpm/",
+        "conf_d": "/etc/php/hestia/fpm/conf.d/",
         "version_file": "/etc/php/hestia/php-version",
         "socket": "/run/hestia-php.sock",
         "pid": "/run/hestia-php.pid",
         "log": "/var/log/hestia/php-fpm.log"
       },
+      "confd_isolation": "The panel FPM runs with PHP_INI_SCAN_DIR=/etc/php/hestia/fpm/conf.d (set in hestia-php-fpm) so it loads a curated extension set (opcache, DB, curl, mbstring, gmp, zip, gettext, ftp, dom) independent of the customer version's conf.d (#272). hestia-php-confd rebuilds it from the pinned version's mods-available; called by install_panel, h-change-sys-panel-php, and migrate_data_layout. Wrapper falls back to the default scan dir if unbuilt.",
       "version_indirection": "The panel PHP version is the single source of truth in /etc/php/hestia/php-version (written by h-install-hestia, read by the hestia-php / hestia-php-fpm wrappers). h-change-sys-panel-php (#272) rewrites it + restarts hestia-php; h-delete-web-php refuses to remove the pinned version. Distinct from h-change-sys-php (default web PHP).",
       "required_packages": [
         "php8.3-fpm",
