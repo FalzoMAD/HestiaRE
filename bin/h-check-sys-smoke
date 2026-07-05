@@ -1,0 +1,148 @@
+#!/bin/bash
+# info: post-install smoke test (services, ports, logs)
+# options: NONE
+#
+# example: h-check-sys-smoke
+#
+# Verifies that a fresh install came up: the services implied by the active
+# configuration are running, the expected ports listen, the panel answers, and no
+# critical markers are in the key logs. Preset-independent — it derives what to
+# expect from hestia.conf's *_SYSTEM vars and install.conf's COMPONENT_* flags.
+# Prints PASS/FAIL per check; exits 0 if all pass, 1 otherwise. No v-* symlink.
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state (COMPONENT_* flags), if present
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+pass=0
+fail=0
+
+ok() {
+	echo "[ PASS ] $1"
+	pass=$((pass + 1))
+}
+no() {
+	echo "[ FAIL ] $1${2:+ — $2}"
+	fail=$((fail + 1))
+}
+skip() { echo "[ skip ] $1"; }
+
+# check_service <systemd-unit> <label>
+check_service() {
+	if systemctl is-active --quiet "$1"; then
+		ok "service $2 ($1) active"
+	else
+		no "service $2 ($1) not active" "$(systemctl is-active "$1" 2> /dev/null)"
+	fi
+}
+
+# check_port <port> <label>
+check_port() {
+	if ss -H -tln 2> /dev/null | awk '{print $4}' | grep -qE "[:.]$1\$"; then
+		ok "port $1 ($2) listening"
+	else
+		no "port $1 ($2) not listening"
+	fi
+}
+
+# check_http <url> <label>
+check_http() {
+	local code
+	code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$1" 2> /dev/null)
+	if [ "$code" = "200" ]; then
+		ok "$2 (HTTP $code)"
+	else
+		no "$2 (HTTP ${code:-000})"
+	fi
+}
+
+# check_log_clean <file> <extended-regex> <label>
+check_log_clean() {
+	if [ ! -f "$1" ]; then
+		skip "log $2 absent ($1)"
+		return
+	fi
+	local hits
+	hits=$(grep -aEc "$2" "$1" 2> /dev/null || true)
+	if [ "${hits:-0}" -eq 0 ]; then
+		ok "log $3 clean"
+	else
+		no "log $3 has $hits critical entr$([ "$hits" -eq 1 ] && echo y || echo ies)" "$1"
+	fi
+}
+
+# check_file_empty <file> <label>  (fail if file exists and is non-empty)
+check_file_empty() {
+	if [ -s "$1" ]; then
+		no "$2 non-empty" "$1"
+	else
+		ok "$2 empty/absent"
+	fi
+}
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+echo "=== HestiaRE smoke test ==="
+
+# --- Panel (always expected) ---
+echo "-- panel --"
+check_service caddy "panel webserver"
+check_service hestia-php "panel PHP-FPM"
+check_port "${BACKEND_PORT:-8083}" "panel"
+check_http "https://127.0.0.1:${BACKEND_PORT:-8083}/login/" "panel login page"
+
+# --- Configured subsystems (derived from *_SYSTEM) ---
+echo "-- services --"
+[ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != 'nginx' ] && check_service "$WEB_SYSTEM" "web"
+[ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" != 'remote' ] && check_service "$PROXY_SYSTEM" "reverse proxy"
+[ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_service "$MAIL_SYSTEM" "mail"
+[ -n "$IMAP_SYSTEM" ] && [ "$IMAP_SYSTEM" != 'remote' ] && check_service "$IMAP_SYSTEM" "imap"
+[ -n "$ANTISPAM_SYSTEM" ] && [ "$ANTISPAM_SYSTEM" != 'remote' ] && check_service "$ANTISPAM_SYSTEM" "antispam"
+[ -n "$FTP_SYSTEM" ] && [ "$FTP_SYSTEM" != 'remote' ] && check_service "$FTP_SYSTEM" "ftp"
+[ -n "$CRON_SYSTEM" ] && check_service "$CRON_SYSTEM" "cron"
+if echo "$DB_SYSTEM" | grep -qw 'mysql'; then check_service mariadb "database (mysql)"; fi
+if echo "$DB_SYSTEM" | grep -qw 'pgsql'; then check_service postgresql "database (pgsql)"; fi
+# Optional addons (only if the install recipe enabled them)
+is_on() { [ "${1:-}" = "true" ] || [ "${1:-}" = "yes" ]; }
+is_on "${COMPONENT_ADDON_FAIL2BAN:-}" && check_service fail2ban "fail2ban"
+is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
+is_on "${COMPONENT_ADDON_REDIS:-}" && check_service redis-server "redis"
+
+# --- Ports implied by the active config ---
+echo "-- ports --"
+if [ -n "$PROXY_SYSTEM" ] || [ -n "$WEB_SYSTEM" ]; then
+	check_port 80 "http"
+	check_port 443 "https"
+fi
+echo "$DB_SYSTEM" | grep -qw 'mysql' && check_port 3306 "mysql"
+[ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_port 25 "smtp"
+
+# --- Critical log markers ---
+echo "-- logs --"
+check_log_clean "/var/log/hestia-php-fpm.log" "PHP (Fatal|Parse) error|\[emergency\]|\[alert\]" "panel FPM"
+[ -n "$PROXY_SYSTEM" ] && check_log_clean "/var/log/nginx/error.log" "\[emerg\]|\[alert\]" "nginx"
+[ "$WEB_SYSTEM" = 'apache2' ] && check_log_clean "/var/log/apache2/error.log" "\[.*:emerg\]|\[.*:alert\]" "apache2"
+# exim writes serious problems to a dedicated paniclog — non-empty means trouble
+[ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_file_empty "/var/log/exim4/paniclog" "exim paniclog"
+
+#----------------------------------------------------------#
+#                       Result                             #
+#----------------------------------------------------------#
+
+echo "=== result: $pass passed, $fail failed ==="
+if [ "$fail" -gt 0 ]; then
+	exit 1
+fi
+exit 0
