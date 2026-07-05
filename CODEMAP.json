@@ -287,15 +287,21 @@
         "share/panel-php/cli/php.ini",
         "share/panel-php/pool.d/panel.conf",
         "share/panel-php/pool.d/phpmyadmin.conf",
-        "share/panel-php/pool.d/phppgadmin.conf"
+        "share/panel-php/pool.d/phppgadmin.conf",
+        "bin/hestia-php-fpm",
+        "bin/hestia-php",
+        "bin/h-change-sys-panel-php",
+        "bin/h-delete-web-php"
       ],
       "language": "ini",
       "runtime_paths": {
         "config_dir": "/etc/php/hestia/fpm/",
+        "version_file": "/etc/php/hestia/php-version",
         "socket": "/run/hestia-php.sock",
         "pid": "/run/hestia-php.pid",
         "log": "/var/log/hestia/php-fpm.log"
       },
+      "version_indirection": "The panel PHP version is the single source of truth in /etc/php/hestia/php-version (written by h-install-hestia, read by the hestia-php / hestia-php-fpm wrappers). h-change-sys-panel-php (#272) rewrites it + restarts hestia-php; h-delete-web-php refuses to remove the pinned version. Distinct from h-change-sys-php (default web PHP).",
       "required_packages": [
         "php8.3-fpm",
         "php8.3-mysql",

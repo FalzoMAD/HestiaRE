@@ -62,7 +62,7 @@ Symlink rules (non-negotiable):
 
 ### Panel webserver
 Caddy (OS repo, port 8083) — replaces hestia-nginx.
-PHP: Sury 8.2, isolated FPM pool — replaces hestia-php.
+PHP: Sury 8.3, isolated FPM pool — replaces hestia-php.
 
 ### Always installed components
 nginx (OS), php multi (Sury 5.6–8.4), mariadb (ext repo), phpmyadmin (OS),

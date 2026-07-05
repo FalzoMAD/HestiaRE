@@ -1,0 +1,93 @@
+#!/bin/bash
+# info: Change the PHP version the panel FPM runs on
+# options: VERSION
+#
+# example: h-change-sys-panel-php 8.4
+#
+# Moves the panel to another PHP version: installs it (full extension set) if
+# missing, rewrites the single source of truth /etc/php/hestia/php-version and
+# restarts hestia-php. The delete-guard in h-delete-web-php reads that same file,
+# so protection follows the panel automatically and the previous version becomes
+# removable. Distinct from h-change-sys-php, which changes the default *web* PHP.
+
+version=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'VERSION'
+
+# Verify php version format
+if [[ ! $version =~ ^[0-9]\.[0-9]+ ]]; then
+	echo "The specified PHP version format is invalid, it should look like [0-9].[0-9]."
+	echo "Example: 7.4, 8.3, 8.4"
+	exit "$E_INVALID"
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+version_file="/etc/php/hestia/php-version"
+current=$(cat "$version_file" 2> /dev/null)
+
+# Nothing to do if the panel already runs on this version
+if [ "$version" = "$current" ]; then
+	echo "PHP $version is already the panel FPM version."
+	exit
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Install the target version (full extension set) if it is not present yet.
+if [ -z "$($BIN/h-list-sys-php plain | grep -w "$version")" ]; then
+	echo "PHP $version is not installed yet — installing it for the panel..."
+	if ! $BIN/h-add-web-php "$version"; then
+		echo "ERROR: Failed to install PHP $version. Panel version unchanged."
+		exit "$E_INVALID"
+	fi
+fi
+
+# The wrapper launches /usr/sbin/php-fpm<version>; make sure it exists.
+if [ ! -x "/usr/sbin/php-fpm$version" ]; then
+	echo "ERROR: /usr/sbin/php-fpm$version not found after install. Panel version unchanged."
+	exit "$E_INVALID"
+fi
+
+# Flip the pin, then restart. On failure roll back to the previous version so the
+# panel never ends up pointing at a version that will not start.
+echo "$version" > "$version_file"
+systemctl restart hestia-php
+
+if ! systemctl is-active --quiet hestia-php; then
+	echo "ERROR: hestia-php failed to start on PHP $version — rolling back."
+	if [ -n "$current" ]; then
+		echo "$current" > "$version_file"
+	else
+		rm -f "$version_file"
+	fi
+	systemctl restart hestia-php
+	exit "$E_INVALID"
+fi
+
+echo "Panel FPM now runs on PHP $version."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "system" "Info" "System" "Changed panel PHP version to $version."
+log_event "$OK" "$ARGUMENTS"
+
+exit

@@ -41,6 +41,17 @@ if [[ ! $version =~ ^[0-9]\.[0-9]+ ]]; then
 	exit
 fi
 
+# Refuse deleting the version the panel FPM runs on. The pinned version is the
+# single source of truth in /etc/php/hestia/php-version (read by the hestia-php /
+# hestia-php-fpm wrappers); reading it dynamically means the guard follows the
+# panel automatically after h-change-sys-panel-php.
+panel_php=$(cat /etc/php/hestia/php-version 2> /dev/null)
+if [ -n "$panel_php" ] && [ "$version" = "$panel_php" ]; then
+	echo "ERROR: PHP $version is the panel FPM version and cannot be removed."
+	echo "       Move the panel to another version first: h-change-sys-panel-php <version>"
+	exit "$E_INVALID"
+fi
+
 # Remove backend template
 [ -f $HESTIA/templates/web/php-fpm/PHP-${version/\./_}.tpl ] && rm -f $HESTIA/templates/web/php-fpm/PHP-${version/\./_}.tpl
 
