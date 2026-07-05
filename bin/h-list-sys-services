@@ -191,15 +191,6 @@ if [ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" != 'remote' ]; then
 	data="$data CPU='$cpu' MEM='$mem' RTIME='$rtime'"
 fi
 
-# DNS
-service="$DNS_SYSTEM"
-if [ -n "$service" ] && [ "$service" != 'remote' ]; then
-	proc_name='named'
-	get_srv_state $service $proc_name
-	data="$data\nNAME='$service' SYSTEM='dns server' STATE='$state'"
-	data="$data CPU='$cpu' MEM='$mem' RTIME='$rtime'"
-fi
-
 # Checking MAIL system
 if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ]; then
 	get_srv_state "$MAIL_SYSTEM"
