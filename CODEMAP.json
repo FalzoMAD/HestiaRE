@@ -79,7 +79,6 @@
         "func/syshealth.sh",
         "func/db.sh",
         "func/backup.sh",
-        "func/upgrade.sh",
         "func/ip.sh",
         "func/firewall.sh"
       ],
@@ -91,16 +90,14 @@
         "syshealth.sh": "System health monitoring, RRD graph generation, service status checks",
         "db.sh": "MySQL/MariaDB and PostgreSQL connection helpers, host configuration",
         "backup.sh": "Local, FTP, and Restic backup/restore handlers with retention logic",
-        "upgrade.sh": "Version-specific migration procedures called by upgrade scripts",
         "ip.sh": "IP address validation, RDNS checking, IPv4/IPv6 utilities",
         "firewall.sh": "iptables symlink healing helper"
       },
       "dependencies": ["instance_config"],
       "upstream_debt": {
-        "file_count": 3,
+        "file_count": 2,
         "issues": [
-          "$HESTIA variable unchanged (/usr/local/hestia) — no path migration needed in func/*",
-          "upgrade.sh contains HestiaCP version-history migrations not relevant to HestiaRE"
+          "$HESTIA variable unchanged (/usr/local/hestia) — no path migration needed in func/*"
         ]
       }
     },
