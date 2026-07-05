@@ -437,22 +437,27 @@ _ask_checklist() {
             readarray -t default_opts < <(echo "$default_val" | jq -r '.[]?' 2>/dev/null || echo "$default_val" | tr ' ' '\n')
         fi
     fi
-    # The panel/reference PHP version is always installed and cannot be dropped;
-    # show it pre-selected + marked, and re-add it afterwards if unchecked (#272).
-    local ref=""
-    [ "$dynamic_source" = "sury_repo_metadata" ] && ref=$(mq '.components.PANEL_PHP.reference_version // empty')
+    # The panel/reference PHP version is always installed (the installer routes it
+    # through h-add-web-php regardless of this selection, #272). Keep it out of the
+    # customer checklist so there is no forced/asterisked row, and state it as a
+    # visible note instead.
+    local text="$question"
+    if [ "$dynamic_source" = "sury_repo_metadata" ]; then
+        local ref; ref=$(mq '.components.PANEL_PHP.reference_version // empty')
+        if [ -n "$ref" ]; then
+            local -a filtered=()
+            for opt in "${all_opts[@]}"; do [ "$opt" = "$ref" ] || filtered+=("$opt"); done
+            all_opts=("${filtered[@]}")
+            text="$question"$'\n'"PHP $ref is always installed and used by the panel."
+        fi
+    fi
     local -a items=()
     for opt in "${all_opts[@]}"; do
         local state="OFF"; for d in "${default_opts[@]}"; do [ "$d" = "$opt" ] && state="ON" && break; done
-        local label="$opt"
-        if [ -n "$ref" ] && [ "$opt" = "$ref" ]; then state="ON"; label="$opt  (Panel — erforderlich)"; fi
-        items+=("$opt" "$label" "$state")
+        items+=("$opt" "$opt" "$state")
     done
-    local selected; selected=$(_wt_checklist "HestiaRE — $id" "$question" "${items[@]}")
+    local selected; selected=$(_wt_checklist "HestiaRE — $id" "$text" "${items[@]}")
     COMP_VALUES["$id"]=$(fn_normalize_list "$selected")
-    if [ -n "$ref" ] && [[ " ${COMP_VALUES[$id]} " != *" $ref "* ]]; then
-        COMP_VALUES["$id"]=$(fn_normalize_list "$ref ${COMP_VALUES[$id]}")
-    fi
 }
 
 _ask_version_select() {
@@ -511,9 +516,15 @@ fn_fasttrack_value() {
                 local rule sel=""
                 rule=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].default_rule[$p] // empty')
                 if [ -n "$rule" ] && [ "$rule" != "null" ]; then sel=$(fn_apply_default_rule "$rule" "$PHP_VERSIONS_AVAILABLE"); fi
-                # Always include the panel/reference version (#272).
+                # The panel/reference version is installed by the installer itself
+                # (routed through h-add-web-php), not selected here — keep it out of
+                # the list so both wizard paths agree (#272).
                 local ref; ref=$(mq '.components.PANEL_PHP.reference_version // empty')
-                [ -n "$ref" ] && [[ " $sel " != *" $ref "* ]] && sel="$ref $sel"
+                if [ -n "$ref" ]; then
+                    local v out=""
+                    for v in $sel; do [ "$v" = "$ref" ] || out="$out $v"; done
+                    sel="$out"
+                fi
                 COMP_VALUES["$id"]=$(fn_normalize_list "$sel")
             else
                 COMP_VALUES["$id"]=$(fn_normalize_list "$(fn_component_default "$id" "$INSTALL_PROFILE")")
