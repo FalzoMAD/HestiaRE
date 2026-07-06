@@ -27,7 +27,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 check_args '1' "$#" 'VERSION'
 
 # Verify php version format
-if [[ ! $version =~ ^[0-9]\.[0-9]+ ]]; then
+if [[ ! $version =~ ^[0-9]+\.[0-9]+ ]]; then
 	echo "The specified PHP version format is invalid, it should look like [0-9].[0-9]."
 	echo "Example: 7.4, 8.3, 8.4"
 	exit "$E_INVALID"
@@ -78,7 +78,12 @@ if ! systemctl is-active --quiet hestia-php; then
 		echo "$current" > "$version_file"
 		"$BIN/hestia-php-confd" "$current"
 	else
+		# No previous pin to roll back to: drop the failed pin and rebuild the
+		# conf.d for the version the wrapper falls back to (newest installed, same
+		# logic as hestia-php-fpm) so conf.d is not left linked to the failed one.
 		rm -f "$version_file"
+		fallback=$(ls -1 /usr/sbin/php-fpm[0-9].[0-9] 2> /dev/null | sort -V | tail -n1 | sed 's#.*/php-fpm##')
+		[ -n "$fallback" ] && "$BIN/hestia-php-confd" "$fallback"
 	fi
 	systemctl restart hestia-php
 	exit "$E_INVALID"

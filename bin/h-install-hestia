@@ -402,7 +402,17 @@ install_web() {
 		local v
 		for v in $php_versions; do
 			echo "  php$v..."
-			"$BIN/h-add-web-php" "$v" >> "$LOG" 2>&1 || true
+			# Do not swallow the exit code: the reference version is essential
+			# (the panel pool below and the panel FPM depend on it), so a failure
+			# there aborts the install. A failed *extra* customer version only
+			# warns so one bad version does not kill an otherwise good install.
+			if ! "$BIN/h-add-web-php" "$v" >> "$LOG" 2>&1; then
+				if [ "$v" = "$PHP_VER" ]; then
+					echo "ERROR: reference PHP $v failed to install — see $LOG" >&2
+					exit 1
+				fi
+				echo "[ ! ] WARNING: PHP $v failed to install — skipping (see $LOG)" >&2
+			fi
 		done
 	else
 		echo "[ * ] Skipping multi-PHP (PHP_MODE=${COMPONENT_PHP_MODE:-?})"
