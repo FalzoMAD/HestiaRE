@@ -35,7 +35,7 @@ fi
 # Checking path
 if [ -n "$src_file" ]; then
 	rpath=$(readlink -f "$src_file")
-	services="nginx|apache|httpd|php|ftp|exim|dovecot|spamassassin"
+	services="nginx|apache|httpd|php|ftp|exim|dovecot"
 	services="$services|clam|mysql|postgresql|pgsql|cron|ssh|fail2ban|iptables"
 	services="$services|my.cnf|hestia"
 	spath=$(echo "$rpath" | egrep "$services")
