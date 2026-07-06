@@ -101,10 +101,13 @@ done
 # Do a blank echo to get the \n back
 echo
 
-# Check if installation was successful
+# Check if installation was successful — abort instead of reporting success, so
+# callers (h-change-sys-panel-php, the installer multi-PHP loop, direct users) can
+# detect a failed apt run rather than continuing on a half-installed version.
 if [ ! -f "$php_fpm" ]; then
 	echo "ERROR: Installation failed, please run the following command manually for debugging:"
 	echo "apt-get install $mph"
+	exit "$E_INVALID"
 fi
 
 # Check if required modules for apache2 are enabled
