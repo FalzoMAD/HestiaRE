@@ -1,0 +1,84 @@
+#!/bin/bash
+# info: remove Redis as a general service
+# options: NONE
+#
+# example: h-delete-sys-redis
+#
+# Removes the general-service role and records DB_REDIS=false. If rspamd is
+# installed, Redis is NOT uninstalled — rspamd depends on it as its Bayes
+# backend, so it is demoted back to the hard-capped companion instead (cap
+# re-appended from share/rspamd/redis-rspamd-limit.conf, Bayes data kept).
+# Only without rspamd is redis-server actually purged. This is the "demote"
+# side of the lifecycle contract from #299/#121.
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+limit_marker='HestiaRE rspamd-bayes limit'
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+# Checking root permissions
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+if [ "${COMPONENT_DB_REDIS:-}" != "true" ]; then
+	echo "ERROR: Redis is not installed as a general service."
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+if [ "$ANTISPAM_SYSTEM" = "rspamd" ]; then
+	# Demote, don't uninstall: rspamd needs Redis as its Bayes backend. Re-apply
+	# the hard cap so it shrinks back to the small companion; Bayes data and
+	# TTLs survive (volatile-ttl only evicts if the cap is ever hit).
+	if ! grep -q "$limit_marker" /etc/redis/redis.conf 2> /dev/null; then
+		cat "$HESTIA/share/rspamd/redis-rspamd-limit.conf" >> /etc/redis/redis.conf
+	fi
+	systemctl restart redis-server
+	if ! systemctl is-active --quiet redis-server; then
+		echo "ERROR: redis-server failed to restart with the rspamd cap."
+		exit "$E_RESTART"
+	fi
+	echo "rspamd is installed — Redis kept as its hard-capped Bayes companion (demoted, not uninstalled)."
+else
+	# No consumer left — actually remove it.
+	systemctl disable --now redis-server > /dev/null 2>&1
+	apt-get -y -qq purge redis-server > /dev/null 2>&1
+	apt-get -y -qq autoremove > /dev/null 2>&1
+	echo "Redis has been uninstalled."
+fi
+
+set_install_component DB_REDIS false
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "system" "Info" "System" "Removed Redis as a general service."
+log_event "$OK" "$ARGUMENTS"
+
+exit
