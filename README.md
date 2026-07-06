@@ -11,7 +11,7 @@ It is deliberately scoped for a small, professional fleet — on the order of a 
 
 ### Status: incomplete, not usable yet
 
-HestiaRE is in active, early-stage development. Releases exist (latest tag **v0.7.4**) for development and testing purposes only — **the project is not yet usable for any real hosting environment.** Core components are still being migrated, replaced, or audited, and no install on a production system should be attempted at this stage.
+HestiaRE is in active, early-stage development. Releases exist (latest tag **v0.7.5**) for development and testing purposes only — **the project is not yet usable for any real hosting environment.** Core components are still being migrated, replaced, or audited, and no install on a production system should be attempted at this stage.
 
 **Target systems:**
 - Primary: Debian 12 (Bookworm), Ubuntu 24.04 LTS (Noble)
