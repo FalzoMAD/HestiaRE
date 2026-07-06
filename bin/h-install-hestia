@@ -520,22 +520,21 @@ install_db() {
 install_mail() {
 	[ -f "$CONF_DIR/.done.mail" ] && { echo "[ skip ] mail already configured"; return 0; }
 	echo "[ * ] Installing mail packages (exim4, dovecot)..."
-	local rspamd_pkg=""
-	is_on "${COMPONENT_ADDON_RSPAMD:-}" && rspamd_pkg="rspamd"
-	# shellcheck disable=SC2086
 	hestia_apt -y install \
 		exim4 exim4-daemon-heavy \
-		dovecot-imapd dovecot-pop3d dovecot-managesieved dovecot-sieve \
-		$rspamd_pkg
+		dovecot-imapd dovecot-pop3d dovecot-managesieved dovecot-sieve
 
 	echo "[ * ] Configuring Exim4..."
 	gpasswd -a "$EXIM_USR" mail > /dev/null 2>&1 || true
-	cp -f "$HESTIA_INSTALL_DIR/exim/exim4.conf.template" /etc/exim4/ 2>/dev/null \
-		|| cp -f "$HESTIA_INSTALL_DIR/exim/exim4.conf.4.95.template" /etc/exim4/exim4.conf.template
-	cp -f "$HESTIA_INSTALL_DIR/exim/dnsbl.conf" /etc/exim4/
-	cp -f "$HESTIA_INSTALL_DIR/exim/spam-blocks.conf" /etc/exim4/
-	cp -f "$HESTIA_INSTALL_DIR/exim/limit.conf" /etc/exim4/
-	cp -f "$HESTIA_INSTALL_DIR/exim/system.filter" /etc/exim4/
+	# Single template, written for exim >= 4.95 (dsearch-untainted paths — all
+	# target OSes ship >= 4.95, upstream serves deb12/deb13/ubuntu with the same
+	# one; the pre-4.95 variant broke local delivery on exim 4.96+ with
+	# "Tainted filename" errors and was removed).
+	cp -f "$HESTIA/share/exim/exim4.conf.template" /etc/exim4/
+	cp -f "$HESTIA/share/exim/dnsbl.conf" /etc/exim4/
+	cp -f "$HESTIA/share/exim/spam-blocks.conf" /etc/exim4/
+	cp -f "$HESTIA/share/exim/limit.conf" /etc/exim4/
+	cp -f "$HESTIA/share/exim/system.filter" /etc/exim4/
 	touch /etc/exim4/white-blocks.conf
 	local SRS
 	SRS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 || true)
@@ -573,13 +572,38 @@ install_mail() {
 	wcv "MAIL_SYSTEM"  "exim4"
 	wcv "IMAP_SYSTEM"  "dovecot"
 	if is_on "${COMPONENT_ADDON_RSPAMD:-}"; then
-		echo "[ * ] Configuring rspamd..."
-		if [ -d "$HESTIA_INSTALL_DIR/rspamd" ]; then
-			mkdir -p /etc/rspamd/local.d
-			cp -rf "$HESTIA_INSTALL_DIR/rspamd/"* /etc/rspamd/local.d/ 2>/dev/null || true
+		echo "[ * ] Installing & configuring rspamd (with Bayes Redis)..."
+		# rspamd always gets Redis as its Bayes backend (rspamd 3.x has no other
+		# usable one). If the user selected Redis (DB_REDIS, install_db stage) it
+		# is already there as an unrestricted general service. Otherwise it comes
+		# along as a hard-capped companion (64 MB ceiling, ~16 MB idle — see
+		# share/rspamd/redis-rspamd-limit.conf). Lifecycle contract: a future
+		# h-add-sys-redis must remove the cap (promote), h-remove-sys-redis must
+		# re-add it instead of uninstalling while rspamd is present.
+		hestia_apt -y install rspamd redis-server
+		if ! is_on "${COMPONENT_DB_REDIS:-}" \
+			&& ! grep -q 'HestiaRE rspamd-bayes limit' /etc/redis/redis.conf; then
+			cat "$HESTIA/share/rspamd/redis-rspamd-limit.conf" >> /etc/redis/redis.conf
 		fi
+		systemctl enable redis-server > /dev/null 2>&1
+		systemctl restart redis-server 2> /dev/null || true
+		mkdir -p /etc/rspamd/local.d
+		cp -f "$HESTIA/share/rspamd/local.d/"* /etc/rspamd/local.d/
+		# Controller (stats/web UI on 11334, localhost) password — only the hash
+		# is stored; reset any time with `rspamadm pw`.
+		local rspamd_pw
+		rspamd_pw=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24 || true)
+		printf 'enable_password = "%s";\n' "$(rspamadm pw --password "$rspamd_pw")" \
+			>> /etc/rspamd/local.d/worker-controller.inc
 		systemctl enable rspamd
-		systemctl start rspamd
+		systemctl restart rspamd
+		# Wire exim to rspamd: enable the RSPAMD/SPAM_SCORE macros in the active
+		# template (the .ifdef RSPAMD blocks are inert until this) and reload.
+		sed -i -e 's/^#RSPAMD = yes/RSPAMD = yes/' \
+			-e 's/^#SPAM_SCORE = /SPAM_SCORE = /' \
+			-e 's/^#SPAM_REJECT_SCORE = /SPAM_REJECT_SCORE = /' \
+			/etc/exim4/exim4.conf.template
+		systemctl restart exim4
 		wcv "ANTISPAM_SYSTEM" "rspamd"
 	fi
 	is_on "${COMPONENT_ADDON_SIEVE:-}" && wcv "SIEVE_SYSTEM" "yes"
