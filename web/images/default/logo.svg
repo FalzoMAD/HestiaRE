@@ -1,55 +1,76 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 119.9 144">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -8 130 152">
   <defs>
-    <!-- Anthrazit vorne (heller): linker Strich, sichtbare Hauptflaeche -->
+    
     <linearGradient id="gAnthraciteFront" x1="0%" y1="0%" x2="70%" y2="100%">
-      <stop offset="0%" stop-color="#55585e"/>
-      <stop offset="100%" stop-color="#2b2d31"/>
+      <stop offset="0%" stop-color="#555c5e"></stop>
+      <stop offset="100%" stop-color="#2b3130"></stop>
     </linearGradient>
-    <!-- Anthrazit aussen (dunkler): Rand-/Schattenebene des linken Strichs -->
+    
     <linearGradient id="gAnthraciteOuter" x1="20%" y1="0%" x2="80%" y2="100%">
-      <stop offset="0%" stop-color="#2b2d31"/>
-      <stop offset="100%" stop-color="#131417"/>
+      <stop offset="0%" stop-color="#2b2d31"></stop>
+      <stop offset="100%" stop-color="#131417"></stop>
     </linearGradient>
-    <!-- Dunkelgruen (Lila-Analog): Querbalken + Haken rechts unten -->
+    
     <linearGradient id="gGreenDark" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2f8a44"/>
-      <stop offset="100%" stop-color="#173d1e"/>
+      <stop offset="0%" stop-color="#2f8a44"></stop>
+      <stop offset="100%" stop-color="#173d1e"></stop>
     </linearGradient>
-    <!-- Hellgruen (Pink-Analog): senkrechter rechter Abstrich -->
+    
     <linearGradient id="gGreenLight" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7ed957"/>
-      <stop offset="100%" stop-color="#3cae52"/>
+      <stop offset="0%" stop-color="#8ce55f"></stop>
+      <stop offset="100%" stop-color="#2f9e47"></stop>
     </linearGradient>
-    <!-- Seam: schmaler heller Verlaufskoerper auf der Grenze dunkel/hell-Anthrazit -->
+    
+    <linearGradient id="gGreenLightShade" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6cc94a"></stop>
+      <stop offset="100%" stop-color="#20732f"></stop>
+    </linearGradient>
     <linearGradient id="gSeam" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="#e4e6ea" stop-opacity="0.5"/>
+      <stop offset="0%" stop-color="#d9dadc" stop-opacity="0.9"></stop>
+      <stop offset="100%" stop-color="#c2c4c7" stop-opacity="0.5"></stop>
     </linearGradient>
+      <clipPath id="clipGreenLight">
+      <path d="M78.2 65.6c-8.2-5.8-18 3.9-18 3.9c8.7 -3.4 -1.7 18.5 4.1 48.5c0.8 5.3 13.2 23.3 23.2 24.2c5.0 0.4 9.0 1.4 11.8 1.4c-12.3 -9.8 -6.0 -67.1 -21.1 -78.0z"></path>
+    </clipPath>
   </defs>
 
-  <!-- [1] Querbalken (dunkelgruen); rechte Abwaertskante leicht hochgezogen, damit unter dem grauen Cusp kein Sliver hervorlugt -->
-  <path d="M23.8 125s8.4-3.6 26.2-39.3c4-8 6.7-13.2 10.8-16.8 0 0 6.9-.5 3.6 10.7-3.3 11.2-4.5 29.8-4.5 29.8s-10.3 19-11.7 20.5c-1.4 1.5-6.5 9.4-14.8 8.9S23.8 125 23.8 125z" fill="url(#gGreenDark)"/>
+  
+  <path d="M23.8 125s8.4-3.6 26.2-39.3c4-8 6.7-13.2 10.8-16.8 0 0 6.9-.5 3.6 10.7.2 7.4.3 16.4.2 23.4-5.2 8.8-10.4 17.7-16.4 26.9c-1.4 1.5-6.5 9.4-14.8 8.9S23.8 125 23.8 125z" fill="url(#gGreenDark)"></path>
 
-  <!-- [2] Linker Strich, vordere (hellere) Anthrazit-Ebene.
-       MARKER B: untere Spitze (grauer Cusp) jetzt bei (51.3, 126.0) - auf den gruenen Balken verschoben -->
-  <path d="M4.5 0C30-2 33 15 34.7 56.5c-3.5 61.7 4.7 85.4 16.6 69.5 0 0-12 26.4-35.9 12.2C1.3 129.9.6 115.6.7 98.4c0 0 4.5-56.2 3.8-98.4z" fill="url(#gAnthraciteFront)"/>
+  
+  <path d="M4.5 0C30-2 33 15 34.7 56.5c-3.5 61.7 4.7 85.4 15.4 69.9 0 0-10.8 26-34.7 11.8C1.3 129.9.6 115.6.7 98.4c0 0 4.5-56.2 3.8-98.4z" fill="url(#gAnthraciteFront)"></path>
 
-  <!-- [3] Dunkelgruener Haken rechts unten.
-       MARKER D: Spitze bei (117.3, 132.9), Nase bis (117.2, 134.4);
-       unterer Rand (Lippe) laeuft bis (104.5, 142.3) nach rechts und steigt erst dort an;
-       Unterseite schwingt via Kontrolle (90, 148.8) zurueck zum Start -->
-  <path d="M83.2 116.6c8.4 23.4 23.8 19.6 34.1 16.3c.2.5.1 1-.1 1.5c-3.7 3.4 -8.2 6.5 -12.7 7.9c-14.5 6.5 -19.8 -14.3 -21.3 -25.7z" fill="url(#gGreenDark)"/>
+  
+  <path d="M83.2 116.6c8.4 23.4 23.8 19.6 34.1 16.3c.2.5.1 1-.1 1.5c-3.7 3.4 -8.2 6.5 -12.7 7.9c-14.5 6.5 -19.8 -14.3 -21.3 -25.7z" fill="url(#gGreenDark)"></path>
 
-  <!-- [4] Hellgruener Abstrich.
-       MARKER C: Spitze exakt bei (104.5, 142.3) = Startpunkt des dunkelgruenen Anstiegs -->
-  <path d="M78.2 65.6c-8.2-5.8-18 3.9-18 3.9 8.7-3.4-3.4 19.5.7 47.1c3.6 19.7 15.1 25.3 23.6 25.2c7.5 0.5 15.0 0.8 20.0 0.5c-37.0 -5.5 -11.2 -65.8 -26.3 -76.7z" fill="url(#gGreenLight)"/>
+  
+  <path d="M78.2 65.6c-8.2-5.8-18 3.9-18 3.9c8.7 -3.4 -1.7 18.5 4.1 48.5c0.8 5.3 13.2 23.3 23.2 24.2c5.0 0.4 9.0 1.4 11.8 1.4c-12.3 -9.8 -6.0 -67.1 -21.1 -78.0z" fill="url(#gGreenLight)"></path>
 
-  <!-- [5] Linker Strich, aeussere (dunklere) Anthrazit-Ebene.
-       Cusp synchron mit [2] auf (51.2, 126.1) verschoben -->
-  <path d="M16.5 74.6C22 40 18 8 4.5 0 6.8 37.8 1.4 98.4 1.4 98.4c-.1 17.9.6 31.5 14.6 39.9C39.2 152.4 51.2 126.1 51.2 126.1c-15.6 29.4-41.1 16.2-34.7-51.5z" fill="url(#gAnthraciteOuter)"/>
+  
+  <path d="M60.2 69.5c8.7 -3.4 -1.7 18.5 4.1 48.5c0.8 5.3 13.2 23.35 23.2 24.15c5.0 0.4 9.0 1.4 11.8 1.4c-9.3 -3.55 -15.3 -10.55 -18.3 -17.55c-3.5 -8 -5.2 -21 -5.5 -31c0.5 -14 4.5 -26.5 -15.3 -25.5z" fill="url(#gGreenLightShade)" clip-path="url(#clipGreenLight)"></path>
 
-  <!-- [6] Seam: spitz auslaufender Verlaufskoerper.
-       MARKER A: untere Spitze bei (50.9, 126.5) - endet auf der gruenen Kante des Balkens.
-       (Als gesampelte Polyline generiert; Breitenprofil 0 -> 1.5 -> 0) -->
-  <path d="M4.5 0.0L6.4 1.5L8.1 3.2L9.7 5.3L11.2 7.7L12.5 10.3L13.7 13.2L14.7 16.4L15.7 19.9L16.4 23.5L17.1 27.4L17.5 31.5L17.9 35.7L18.1 40.2L18.2 44.7L18.1 49.5L17.9 54.3L17.6 59.2L17.1 64.2L16.5 69.3L15.8 74.5L15.0 84.3L14.8 93.3L14.9 101.5L15.4 108.9L16.3 115.5L17.5 121.3L19.1 126.4L20.9 130.7L22.9 134.3L25.1 137.2L27.6 139.3L30.2 140.7L32.8 141.4L35.6 141.3L38.3 140.5L41.0 139.0L43.6 136.8L46.2 134.0L48.6 130.6L50.9 126.5L50.9 126.5L48.4 130.5L45.9 133.8L43.3 136.5L40.7 138.5L38.0 139.8L35.5 140.5L32.9 140.5L30.5 139.8L28.2 138.5L26.0 136.4L23.9 133.7L22.0 130.2L20.3 126.0L18.9 121.0L17.7 115.2L16.9 108.7L16.4 101.4L16.2 93.3L16.5 84.4L17.2 74.7L18.0 69.5L18.6 64.4L19.1 59.3L19.4 54.4L19.6 49.5L19.6 44.7L19.4 40.1L19.2 35.7L18.8 31.4L18.2 27.2L17.5 23.3L16.6 19.6L15.6 16.2L14.5 13.0L13.2 10.0L11.7 7.4L10.1 5.0L8.4 3.0L6.5 1.3L4.5 0.0z" fill="url(#gSeam)"/>
+  
+  <path d="M16.5 74.6C22 40 18 8 4.5 0 6.8 37.8 1.4 98.4 1.4 98.4c-.1 17.9.6 31.5 14.6 39.9C39.2 152.4 50.1 126.4 50.1 126.4c-14.5 29.1-40 15.9-33.6-51.8z" fill="url(#gAnthraciteOuter)"></path>
+
+  
+  <path d="M4.5 0.0L6.4 1.5L8.1 3.2L9.7 5.3L11.2 7.7L12.5 10.3L13.7 13.2L14.7 16.4L15.7 19.9L16.4 23.5L17.1 27.4L17.5 31.5L17.9 35.7L18.1 40.2L18.2 44.7L18.1 49.5L17.9 54.3L17.6 59.2L17.1 64.2L16.5 69.3L15.8 74.5L15.0 84.3L14.8 93.3L14.9 101.5L15.4 108.9L16.3 115.5L17.5 121.3L19.0 126.4L20.8 130.8L22.8 134.4L25.0 137.2L27.4 139.4L29.9 140.8L32.6 141.5L35.2 141.4L37.9 140.7L40.5 139.2L43.0 137.1L45.5 134.3L47.8 130.9L49.9 126.9L49.9 126.9L47.6 130.8L45.2 134.1L42.7 136.7L40.1 138.7L37.6 140.0L35.1 140.6L32.7 140.6L30.3 139.9L28.0 138.5L25.9 136.5L23.8 133.7L22.0 130.2L20.3 126.0L18.9 121.0L17.7 115.2L16.9 108.7L16.4 101.4L16.2 93.3L16.5 84.4L17.2 74.7L18.0 69.5L18.6 64.4L19.1 59.3L19.4 54.4L19.6 49.5L19.6 44.7L19.4 40.1L19.2 35.7L18.8 31.4L18.2 27.2L17.5 23.3L16.6 19.6L15.6 16.2L14.5 13.0L13.2 10.0L11.7 7.4L10.1 5.0L8.4 3.0L6.5 1.3L4.5 0.0z" fill="url(#gSeam)"></path>
+
+  
+  <svg x="90" y="45" width="30" height="36" viewBox="0 0 119.9 144">
+    <defs>
+      <clipPath id="clipGreenLightR">
+        <path d="M78.2 65.6c-8.2-5.8-18 3.9-18 3.9c8.7 -3.4 -1.7 18.5 4.1 48.5c0.8 5.3 13.2 23.3 23.2 24.2c4.0 0.3 7.7 0.4 9.9 0.3c-10.9 -9.1 -4.1 -66.0 -19.2 -76.9z"></path>
+      </clipPath>
+    </defs>
+    <path d="M36 4.5C47 2.0 62 1.4 76 2.6C88 3.8 94 14 97 22C100 30 100 56 84 68C76 79 63 86 52 89C44.5 91 37 93 33.5 93.3L31.2 93.1L31.2 85.0C37.5 83.2 44 81.0 50 80.2C58 79.0 65 77 70 70C75 65 79 58 80 50C82 42 81 32 76 25C70 18 60 15.5 54 17.2C50 17.7 46.5 18.4 43.8 18.6C42.5 19.1 41.2 19.2 40.3 19.1C39 18.9 38.3 17.8 38 16C38.2 11 37 7.5 36 4.5z" fill="url(#gGreenDark)"></path>
+    <g transform="translate(0 -4) rotate(-22 99.3 143.55)">
+      <path d="M83.2 116.6c8.4 23.4 18.3 22.6 24.8 23c.2.4.1.8-.1 1.2c-2.4.8-4.4 1.1-6.4 1.2c-14.5 4.5-16.6-14.7-18.3-25.4z" fill="url(#gGreenDark)"></path>
+      <path d="M78.2 65.6c-8.2-5.8-18 3.9-18 3.9c8.7 -3.4 -1.7 18.5 4.1 48.5c0.8 5.3 13.2 23.3 23.2 24.2c4.0 0.3 7.7 0.4 9.9 0.3c-10.9 -9.1 -4.1 -66.0 -19.2 -76.9z" fill="url(#gGreenLight)"></path>
+      <path d="M60.2 69.5c8.7 -3.4 -1.7 18.5 4.1 48.5c0.8 5.3 13.2 23.3 23.2 24.2c4.0 0.3 7.7 0.4 9.9 0.3c-7.4 -2.5 -13.4 -9.5 -16.4 -16.5c-3.5 -8 -5.2 -21 -5.5 -31c0.5 -14 4.5 -26.5 -15.3 -25.5z" fill="url(#gGreenLightShade)" clip-path="url(#clipGreenLightR)"></path>
+    </g>
+    <g transform="matrix(1 0 0 -1 0 144)">
+      <path d="M4.5 0C30-2 33 15 34.7 56.5c-3.5 61.7 4.7 85.4 15.4 69.9 0 0-10.8 26-34.7 11.8C1.3 129.9.6 115.6.7 98.4c0 0 4.5-56.2 3.8-98.4z" fill="url(#gAnthraciteFront)"></path>
+      <path d="M16.5 74.6C22 40 18 8 4.5 0 6.8 37.8 1.4 98.4 1.4 98.4c-.1 17.9.6 31.5 14.6 39.9C39.2 152.4 50.1 126.4 50.1 126.4c-14.5 29.1-40 15.9-33.6-51.8z" fill="url(#gAnthraciteOuter)"></path>
+    </g>
+  </svg>
 </svg>
