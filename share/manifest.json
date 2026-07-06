@@ -335,10 +335,10 @@
       "group": "addons",
       "type": "checkbox",
       "label": "rspamd",
-      "description": "Spam filter (mail block only)",
+      "description": "Spam filter incl. Bayes learning (mail block only; brings a small capped Redis)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "mailonly": true, "custom": null },
-      "note": "Ausgeblendet bei nomail (kein Mail-Block). Reine Spamfilter-Komponente, NICHT fuer DKIM zustaendig (siehe PANEL_EXIM note)."
+      "note": "Ausgeblendet bei nomail (kein Mail-Block). Reine Spamfilter-Komponente, NICHT fuer DKIM zustaendig (siehe PANEL_EXIM note). Bringt IMMER einen Redis als Bayes-Backend mit: ohne DB_REDIS hart limitiert auf 64 MB (share/rspamd/redis-rspamd-limit.conf), mit DB_REDIS wird die General-Purpose-Instanz unlimitiert mitgenutzt. h-add-sys-redis muss das Limit entfernen (promote), h-remove-sys-redis es wiederherstellen statt zu deinstallieren (demote)."
     },
 
     "ADDON_SIEVE": {

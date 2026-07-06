@@ -118,7 +118,11 @@ if echo "$DB_SYSTEM" | grep -qw 'pgsql'; then check_service postgresql "database
 is_on() { [ "${1:-}" = "true" ] || [ "${1:-}" = "yes" ]; }
 is_on "${COMPONENT_ADDON_FAIL2BAN:-}" && check_service fail2ban "fail2ban"
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
-is_on "${COMPONENT_ADDON_REDIS:-}" && check_service redis-server "redis"
+# Redis: either the user's DB choice (DB_REDIS) or rspamd's always-present
+# Bayes companion (hard-capped, see share/rspamd/redis-rspamd-limit.conf).
+if is_on "${COMPONENT_DB_REDIS:-}" || [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
+	check_service redis-server "redis"
+fi
 
 # --- Ports implied by the active config ---
 echo "-- ports --"
@@ -128,6 +132,7 @@ if [ -n "$PROXY_SYSTEM" ] || [ -n "$WEB_SYSTEM" ]; then
 fi
 echo "$DB_SYSTEM" | grep -qw 'mysql' && check_port 3306 "mysql"
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_port 25 "smtp"
+[ "$ANTISPAM_SYSTEM" = 'rspamd' ] && check_port 11333 "rspamd scan worker"
 
 # --- Critical log markers ---
 echo "-- logs --"
