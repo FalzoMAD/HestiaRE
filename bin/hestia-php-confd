@@ -28,30 +28,48 @@ if [ ! -d "$mods" ]; then
 	exit 1
 fi
 
-# Extensions the panel actually needs (verified against the panel code):
-#   opcache          performance (Zend)
-#   mysqlnd pdo      dependencies of the DB extensions
-#   mysqli pdo_mysql database access
-#   curl mbstring gmp zip   panel-stage set
-#   gettext          i18n — the panel's _() translation calls
-#   ftp              FTP account management (heavily used)
-#   dom              a few DOMDocument uses (from php-xml)
+# Extensions the panel actually needs (verified against the panel code), split by
+# how badly the panel breaks without them:
+#   critical — the panel is non-functional without these; a missing one is a hard
+#     failure so a degraded panel is caught here at build time instead of
+#     surfacing as a runtime fatal on a random page later:
+#       mysqlnd pdo mysqli pdo_mysql  DB access chain
+#       mbstring                      string handling throughout the UI
+#       gettext                       i18n — the panel's _() translation calls
+#   optional — used but not fatal on every render; a missing one only warns:
+#       opcache          performance (Zend)
+#       curl gmp zip     panel-stage set
+#       ftp              FTP account management
+#       dom              DOMDocument (from php-xml)
 # Deliberately excluded: imagick, imap, ldap, pgsql, gd, soap, intl, bcmath,
 # apcu, exif, pspell, … (customer-app extensions, not used by the panel).
-exts="opcache mysqlnd pdo mysqli pdo_mysql curl mbstring gmp zip gettext ftp dom"
+critical="mysqlnd pdo mysqli pdo_mysql mbstring gettext"
+optional="opcache curl gmp zip ftp dom"
 
 mkdir -p "$dst"
 find "$dst" -maxdepth 1 -name '*.ini' -delete 2> /dev/null
 
-for e in $exts; do
+missing_critical=""
+for e in $critical $optional; do
 	src="$mods/$e.ini"
 	if [ ! -f "$src" ]; then
-		echo "WARN: $src missing — skipped."
+		case " $critical " in
+			*" $e "*)
+				echo "ERROR: critical extension '$e' missing ($src)."
+				missing_critical="$missing_critical $e"
+				;;
+			*) echo "WARN: $src missing — skipped." ;;
+		esac
 		continue
 	fi
 	# Keep the Debian load-order prefix (e.g. 10-opcache, 20-curl); default 20.
 	prio=$(sed -n 's/^; *priority=\([0-9]\{1,\}\).*/\1/p' "$src" | head -n1)
 	ln -sf "$src" "$dst/${prio:-20}-$e.ini"
 done
+
+if [ -n "$missing_critical" ]; then
+	echo "ERROR: panel PHP conf.d incomplete — missing critical extension(s):$missing_critical" >&2
+	exit 1
+fi
 
 exit 0
