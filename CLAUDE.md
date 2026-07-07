@@ -121,6 +121,7 @@ conf/             service configuration templates
 1. Read `CODEMAP.json` → identify relevant files only
 2. Create branch: `git checkout -b feature/N-short-desc`
 3. Make changes, commit with: `[#N] type: description`
+   — larger changes also add a `CHANGELOG.md` entry (Unreleased section) in the same PR
 4. Push: `git push origin feature/N-short-desc`
 5. Open PR to `dev` via Gitea API (see below)
 6. Stop. Do not merge. Author reviews and merges.
