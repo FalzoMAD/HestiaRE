@@ -273,6 +273,28 @@ dovecot_login:
 ######################################################################
 begin routers
 
+# Per-domain relay exclude: recipient domains listed in the sender domain's
+# smtp_relay_exclude file are delivered directly via DNS/MX instead of the
+# configured SMTP relay (use case: relays like AWS SES rewrite the envelope
+# sender to a VERP address, which envelope-level sender authorization at the
+# recipient — e.g. DATEV e-invoice — rejects). One recipient domain per line,
+# wildcards like *.example.com allowed (wildlsearch). Opt-in: if the file does
+# not exist, require_files declines and mail falls through to the relay
+# routers below. Must stay BEFORE the relay routers (they use no_more).
+# $sender_address_domain/$domain are tainted — the path is detainted via the
+# dsearch idiom (fallback no.such.dir = guaranteed decline, not defer). Do NOT
+# rewrite the condition as match_domain + nested readfile: broken on exim 4.97
+# (parser falls back to a non-empty literal -> condition always true -> ALL
+# mail bypasses the relay).
+bypass_smtp_relay:
+  driver = dnslookup
+  domains = !+local_domains
+  require_files = /etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains/}{$value}{no.such.dir}}/smtp_relay_exclude
+  condition = ${lookup{$domain}wildlsearch{/etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains/}{$value}{no.such.dir}}/smtp_relay_exclude}{yes}{no}}
+  transport = remote_smtp
+  no_more
+  no_verify
+
 send_via_unauthenticated_smtp_relay:
   driver = manualroute
   address_data = SMTP_RELAY_HOST:SMTP_RELAY_PORT
