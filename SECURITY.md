@@ -1,16 +1,14 @@
-# Hestia CP Security policy
+# Hestia RE Security policy
 
-Welcome and thanks for taking interest in Hestia CP!
+Welcome and thanks for taking interest in Hestia RE!
 
-We are mostly interested in reports by actual Hestia CP users but all high quality contributions are welcome.
+We are mostly interested in reports by actual Hestia RE users but all high quality contributions are welcome.
 
-If you believe that you have have discovered a vulnerability in Hestia Control Panel, please let our development team know by sending an email to <info@hestiacp.com>
+If you believe that you have have discovered a vulnerability in Hestia Control Panel, please let our development team know by sending an email to <info@hestiare.com>
 
 We ask you to include a detailed description of the vulnerability, a list of services involved (e.g. exim, dovecot) and the versions which you've tested, full steps to reproduce the vulnerability, and include your findings and expected results.
 
 Please do not open any public issue on Github or any other social media before the report has been published and a fix has been released.
-
-With that, good luck hacking us ;)
 
 ## Supported versions
 
