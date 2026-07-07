@@ -1,0 +1,88 @@
+#!/bin/bash
+# info: delete smtp relay exclude for mail domain
+# options: USER DOMAIN RECIPIENT_DOMAIN
+#
+# example: h-delete-mail-domain-relay-exclude user domain.tld datev.de
+#
+# Removes RECIPIENT_DOMAIN from the mail domain's smtp_relay_exclude list.
+# When the last entry is removed, the file is deleted so the bypass router
+# declines without any lookup cost (pure opt-in behavior). The file is read
+# per message — no exim reload needed.
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+rdomain=$(echo "$3" | tr '[:upper:]' '[:lower:]')
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Define mail user
+if [ "$MAIL_SYSTEM" = 'exim4' ]; then
+	MAIL_USER=Debian-exim
+else
+	MAIL_USER=exim
+fi
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '3' "$#" 'USER DOMAIN RECIPIENT_DOMAIN'
+is_format_valid 'user' 'domain'
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+is_object_unsuspended 'mail' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+exclude_file="$HOMEDIR/$user/conf/mail/$domain/smtp_relay_exclude"
+current=$(get_object_value 'mail' 'DOMAIN' "$domain" '$U_SMTP_RELAY_EXCLUDE')
+
+if [[ ",$current," != *",$rdomain,"* ]]; then
+	check_result "$E_NOTEXIST" "relay exclude $rdomain doesn't exist for $domain"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+new_list=",$current,"
+new_list="${new_list/",$rdomain,"/,}"
+new_list="${new_list#,}"
+new_list="${new_list%,}"
+
+if [ -z "$new_list" ]; then
+	rm -f "$exclude_file"
+else
+	echo "$new_list" | tr ',' '\n' > "$exclude_file"
+	chown $MAIL_USER:mail "$exclude_file"
+	chmod 660 "$exclude_file"
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Updating relay exclude value in config
+add_object_key 'mail' 'DOMAIN' "$domain" 'U_SMTP_RELAY_EXCLUDE' 'ACCOUNTS'
+update_object_value 'mail' 'DOMAIN' "$domain" '$U_SMTP_RELAY_EXCLUDE' "$new_list"
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Mail" "SMTP Relay exclude removed (Domain: $domain, Recipient: $rdomain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

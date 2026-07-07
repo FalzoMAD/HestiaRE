@@ -461,6 +461,9 @@ rebuild_web_domain_conf() {
 rebuild_mail_domain_conf() {
 	syshealth_repair_mail_config
 
+	# get_domain_values leaves keys absent on a domain's line untouched, so a
+	# value parsed for a previous domain in the rebuild loop would leak over
+	unset -v U_SMTP_RELAY_EXCLUDE
 	get_domain_values 'mail'
 	if [[ "$domain" = *[![:ascii:]]* ]]; then
 		domain_idn=$(idn2 --quiet $domain)
@@ -538,6 +541,13 @@ rebuild_mail_domain_conf() {
 		# Rebuild SMTP Relay configuration
 		if [ "$U_SMTP_RELAY" = 'true' ]; then
 			$BIN/h-add-mail-domain-smtp-relay $user $domain "$U_SMTP_RELAY_HOST" "$U_SMTP_RELAY_USERNAME" "$U_SMTP_RELAY_PASSWORD" "$U_SMTP_RELAY_PORT"
+		fi
+
+		# Rebuild SMTP relay exclude list (recipient domains delivered
+		# directly via DNS/MX — exim router bypass_smtp_relay)
+		if [ -n "$U_SMTP_RELAY_EXCLUDE" ]; then
+			echo "$U_SMTP_RELAY_EXCLUDE" | tr ',' '\n' \
+				> $HOMEDIR/$user/conf/mail/$domain/smtp_relay_exclude
 		fi
 
 		# Removing configuration files if domain is suspended
