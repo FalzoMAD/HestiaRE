@@ -132,7 +132,9 @@
 .top-bar-logo {
 	display: flex;
 	align-items: center;
-	margin-right: 30px;
+	/* 14px instead of 30px: the wordmark grew 54px -> 70px (trailing R),
+	   so the logo block keeps its original overall width */
+	margin-right: 14px;
 }
 
 .top-bar-usage {
