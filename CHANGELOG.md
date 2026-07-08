@@ -69,7 +69,8 @@ v0.8.0, entries are grouped per release.
   dissolved (#119); upgrade version pins folded into `share/manifest.json`
   (#288)
 - Panel rebranding: brand tokens, recolored default/flat/dark themes, new
-  dark-tonal and green themes, new logo (#259, #260, #269, #297)
+  dark-tonal and green themes, new logo, header wordmark with trailing R
+  (#259, #260, #261, #269, #297)
 
 ### Added
 
