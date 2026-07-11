@@ -127,16 +127,6 @@ if [ -n "$old_ip" ]; then
 		$BIN/h-restart-mail
 	fi
 
-	# Updating DNS
-	if [ -n "$DNS_SYSTEM" ]; then
-		for user in $("$BIN/h-list-users" list); do
-			sed -i "s/$old_ip/$new_ip/g" $CONF_DIR/users/$user/dns.conf
-			sed -i "s/$old_ip/$new_ip/g" $CONF_DIR/users/$user/dns/*.conf
-			$BIN/h-rebuild-dns-domains "$user" no
-		done
-		$BIN/h-restart-dns
-	fi
-
 	# Updating firewall
 	if [ -n "$FIREWALL_SYSTEM" ]; then
 		sed -i "s/$old_ip/$new_ip/g" $CONF_DIR/firewall/*.conf

@@ -40,7 +40,8 @@ entries are grouped per release.
 - `hestiamail` system user (#214)
 - Dead ballast sweeps: bind9/named/vsftpd remnants (#213),
   spamassassin/spamd remnants incl. their panel editor pages (#284),
-  unused installer data (#119)
+  unused installer data (#119), stale calls to removed DNS commands in
+  domain/user lifecycle scripts — errored on every run (#213)
 
 ### Changed / Rebuilt
 

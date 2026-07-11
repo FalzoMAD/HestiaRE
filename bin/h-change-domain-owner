@@ -141,40 +141,6 @@ if [ -n "$web_data" ]; then
 	rm -rf "$HOMEDIR/$owner/conf/web/$domain/"
 fi
 
-# DNS domain
-dns_data=$(grep "DOMAIN='$domain'" $CONF_DIR/users/$owner/dns.conf)
-if [ -n "$dns_data" ]; then
-	echo "[*] Moving DNS zone and records..."
-	parse_object_kv_list "$dns_data"
-
-	# Change IP
-	if [ -n "$ip" ]; then
-		dns_data=$(echo "$dns_data" | sed "s/IP='$IP'/IP='$ip'/")
-		sed -i "s/$IP/$ip/g" $CONF_DIR/users/$owner/dns/$domain.conf
-	fi
-
-	# Move config
-	sed -i "/DOMAIN='$domain'/d" $CONF_DIR/users/$owner/dns.conf
-	echo "$dns_data" >> $CONF_DIR/users/$user/dns.conf
-
-	# Move dns records
-	mv $CONF_DIR/users/$owner/dns/$domain.conf \
-		$CONF_DIR/users/$user/dns/
-
-	# Rebuild config
-	$BIN/h-unsuspend-dns-domain "$user" "$domain" no >> /dev/null 2>&1
-	$BIN/h-rebuild-dns-domains "$owner" no
-	$BIN/h-rebuild-dns-domains "$user"
-
-	# Cleanup old config
-	rm -f $HOMEDIR/$owner/conf/dns/$domain.db
-
-	# Resync dns cluster
-	if [ "$DNS_CLUSTER" = "yes" ]; then
-		$BIN/h-sync-dns-cluster
-	fi
-fi
-
 # MAIL domain
 mail_data=$(grep "DOMAIN='$domain'" $CONF_DIR/users/$owner/mail.conf)
 if [ -n "$mail_data" ]; then
@@ -317,7 +283,7 @@ if [ -n "$old_ip" ]; then
 	fi
 fi
 # Send notification to panel
-if [ -n "$web_data" ] || [ -n "$dns_data" ] || [ -n "$mail_data" ]; then
+if [ -n "$web_data" ] || [ -n "$mail_data" ]; then
 	$BIN/h-add-user-notification "$user" "$domain has been added to your account" ''
 fi
 
