@@ -1,0 +1,77 @@
+#!/bin/bash
+# info: list smtp relay excludes for mail domain
+# options: USER DOMAIN [FORMAT]
+#
+# example: h-list-mail-domain-relay-exclude user domain.tld json
+#
+# Lists the recipient domains excluded from the SMTP relay for this mail
+# domain (delivered directly via DNS/MX by the bypass_smtp_relay router).
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+format=${3-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# JSON list function
+json_list() {
+	echo '{'
+	echo -e "\t\"$domain\": {"
+	echo "        \"RELAY_EXCLUDE\": \"$entries\""
+	echo -e "\t}\n}"
+}
+
+# SHELL list function
+shell_list() {
+	echo "RELAY_EXCLUDE"
+	echo "-------------"
+	if [ -n "$entries" ]; then
+		echo "$entries" | tr ',' '\n'
+	fi
+}
+
+# PLAIN list function
+plain_list() {
+	if [ -n "$entries" ]; then
+		echo "$entries" | tr ',' '\n'
+	fi
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [FORMAT]'
+is_format_valid 'user' 'domain'
+is_object_valid 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+entries=$(get_object_value 'mail' 'DOMAIN' "$domain" '$U_SMTP_RELAY_EXCLUDE')
+
+# Listing data
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	shell) shell_list ;;
+	*) check_args '1' '0' 'USER DOMAIN [FORMAT]' ;;
+esac
+
+# Logging
+
+exit

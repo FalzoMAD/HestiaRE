@@ -64,8 +64,6 @@ case $service in
 	dovecot-6) dst='/etc/dovecot/conf.d/20-imap.conf' ;;
 	dovecot-7) dst='/etc/dovecot/conf.d/20-pop3.conf' ;;
 	dovecot-8) dst='/etc/dovecot/conf.d/auth-passwdfile.conf.ext' ;;
-	spamd) dst=$($BIN/h-list-sys-spamd-config plain) ;;
-	spamassassin) dst=$($BIN/h-list-sys-spamd-config plain) ;;
 	clamd) dst=$($BIN/h-list-sys-clamd-config plain) ;;
 	fail2ban) dst='/etc/fail2ban/jail.local' ;;
 	ssh) dst='/etc/ssh/sshd_config' ;;

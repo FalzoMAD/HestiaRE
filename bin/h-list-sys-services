@@ -225,7 +225,9 @@ fi
 
 # Checking MAIL ANTISPAM
 if [ -n "$ANTISPAM_SYSTEM" ] && [ "$ANTISPAM_SYSTEM" != 'remote' ]; then
-	get_srv_state "$ANTISPAM_SYSTEM" "spamd"
+	# Proc name = service name (rspamd). The old hardcoded "spamd" only worked
+	# because pgrep matches it as an unanchored regex inside "rspamd".
+	get_srv_state "$ANTISPAM_SYSTEM"
 	data="$data\nNAME='$ANTISPAM_SYSTEM' SYSTEM='email spam filter'"
 	data="$data STATE='$state' CPU='$cpu' MEM='$mem' RTIME='$rtime'"
 fi

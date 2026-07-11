@@ -4,7 +4,7 @@
 #                                                                    #
 ######################################################################
 
-#SPAMASSASSIN = yes
+#RSPAMD = yes
 #SPAM_SCORE = 50
 #SPAM_REJECT_SCORE = 100
 #CLAMD = yes
@@ -33,8 +33,8 @@ acl_smtp_rcpt = acl_check_rcpt
 acl_smtp_data = acl_check_data
 acl_smtp_mime = acl_check_mime
 
-.ifdef SPAMASSASSIN
-spamd_address = 127.0.0.1 783
+.ifdef RSPAMD
+spamd_address = 127.0.0.1 11333 variant=rspamd
 .endif
 
 .ifdef CLAMD
@@ -190,7 +190,7 @@ acl_check_rcpt:
           set acl_m0    = yes
 .endif
 
-.ifdef SPAMASSASSIN
+.ifdef RSPAMD
  warn    set acl_m1    = no
          set acl_m3    = no
  warn    condition     = ${if exists {/etc/exim4/domains/$domain/antispam}{yes}{no}}
@@ -209,12 +209,12 @@ acl_check_data:
          condition      = ${if eq{$acl_m0}{yes}{yes}{no}}
 .endif
 
-.ifdef SPAMASSASSIN
+.ifdef RSPAMD
  warn   !authenticated = *
         hosts          = !+relay_from_hosts
         condition      = ${if < {$message_size}{1024K}}
         condition      = ${if eq{$acl_m1}{yes}{yes}{no}}
-        spam           = debian-spamd:true/defer_ok
+        spam           = nobody:true/defer_ok
         add_header     = X-Spam-Score: $spam_score_int
         add_header     = X-Spam-Bar: $spam_bar
         add_header     = X-Spam-Report: $spam_report
@@ -223,12 +223,12 @@ acl_check_data:
  warn   condition      = ${if !eq{$acl_m2}{} {yes}{no}}
         condition      = ${if >{$acl_m2}{SPAM_SCORE} {yes}{no}}
         add_header     = X-Spam-Status: Yes
-        message        = SpamAssassin detected spam (from $sender_address to $recipients).
+        message        = rspamd detected spam (from $sender_address to $recipients).
 
   # Deny spam at high score if spam score > SPAM_REJECT_SCORE and delete_spam is enabled
   deny   message        = This message scored $spam_score spam points
          condition      = ${if eq{$acl_m3}{yes}{yes}{no}}
-         spam           = debian-spamd:true
+         spam           = nobody:true
          condition      = ${if >{$spam_score_int}{SPAM_REJECT_SCORE}{1}{0}}
 .endif
 
@@ -272,6 +272,28 @@ dovecot_login:
 #               Specifies how addresses are handled                  #
 ######################################################################
 begin routers
+
+# Per-domain relay exclude: recipient domains listed in the sender domain's
+# smtp_relay_exclude file are delivered directly via DNS/MX instead of the
+# configured SMTP relay (use case: relays like AWS SES rewrite the envelope
+# sender to a VERP address, which envelope-level sender authorization at the
+# recipient — e.g. DATEV e-invoice — rejects). One recipient domain per line,
+# wildcards like *.example.com allowed (wildlsearch). Opt-in: if the file does
+# not exist, require_files declines and mail falls through to the relay
+# routers below. Must stay BEFORE the relay routers (they use no_more).
+# $sender_address_domain/$domain are tainted — the path is detainted via the
+# dsearch idiom (fallback no.such.dir = guaranteed decline, not defer). Do NOT
+# rewrite the condition as match_domain + nested readfile: broken on exim 4.97
+# (parser falls back to a non-empty literal -> condition always true -> ALL
+# mail bypasses the relay).
+bypass_smtp_relay:
+  driver = dnslookup
+  domains = !+local_domains
+  require_files = /etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains/}{$value}{no.such.dir}}/smtp_relay_exclude
+  condition = ${lookup{$domain}wildlsearch{/etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains/}{$value}{no.such.dir}}/smtp_relay_exclude}{yes}{no}}
+  transport = remote_smtp
+  no_more
+  no_verify
 
 send_via_unauthenticated_smtp_relay:
   driver = manualroute
