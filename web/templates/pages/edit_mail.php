@@ -191,6 +191,13 @@
 					<label for="v_smtp_relay_pass" class="form-label"><?= tohtml( _("Password")) ?></label>
 					<input type="text" class="form-control" name="v_smtp_relay_pass" id="v_smtp_relay_pass">
 				</div>
+				<div class="u-mb10">
+					<label for="v_smtp_relay_exclude" class="form-label">
+						<?= tohtml( _("Excluded Recipient Domains")) ?> <span class="optional">(<?= tohtml( _("Optional")) ?>)</span>
+					</label>
+					<textarea class="form-control u-min-height100" name="v_smtp_relay_exclude" id="v_smtp_relay_exclude" placeholder="*.example.com"><?= tohtml($v_smtp_relay_exclude ?? "") ?></textarea>
+					<small class="hint"><?= tohtml( _("One recipient domain per line, wildcards like *.example.com allowed. Mail to these domains is delivered directly via DNS instead of the relay: the sender domain's SPF record must include this server's IP, DKIM should be enabled and outbound port 25 must be open with a matching PTR record.")) ?></small>
+				</div>
 			</div>
 		</div>
 

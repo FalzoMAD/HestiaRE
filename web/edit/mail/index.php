@@ -55,6 +55,24 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_smtp_relay_port = $data[$v_domain]["U_SMTP_RELAY_PORT"];
 	$v_smtp_relay_user = $data[$v_domain]["U_SMTP_RELAY_USERNAME"];
 
+	exec(
+		HESTIA_CMD .
+			"h-list-mail-domain-relay-exclude " .
+			$user .
+			" " .
+			quoteshellarg($v_domain) .
+			" json",
+		$output,
+		$return_var,
+	);
+	$exclude_data = json_decode(implode("", $output), true);
+	unset($output);
+	$v_smtp_relay_exclude = str_replace(
+		",",
+		"\n",
+		$exclude_data[$v_domain]["RELAY_EXCLUDE"] ?? "",
+	);
+
 	if ($v_suspended == "yes") {
 		$v_status = "suspended";
 	} else {
@@ -728,6 +746,55 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			);
 			check_return_code($return_var, $output);
 			unset($output);
+		}
+	}
+
+	// Update SMTP relay exclude list (recipient domains delivered directly
+	// via DNS/MX). Only processed while the relay toggle is on — with the
+	// relay off the list is kept untouched for a later re-enable.
+	if (empty($_SESSION["error_msg"]) && isset($_POST["v_smtp_relay"])) {
+		$current_excludes = array_filter(explode("\n", $v_smtp_relay_exclude));
+		$wexcludes = preg_replace("/\n/", " ", $_POST["v_smtp_relay_exclude"] ?? "");
+		$wexcludes = preg_replace("/,/", " ", $wexcludes);
+		$wexcludes = preg_replace("/\s+/", " ", $wexcludes);
+		$wexcludes = strtolower(trim($wexcludes));
+		$excludes = array_filter(explode(" ", $wexcludes));
+		foreach (array_diff($current_excludes, $excludes) as $exclude_domain) {
+			if (empty($_SESSION["error_msg"])) {
+				exec(
+					HESTIA_CMD .
+						"h-delete-mail-domain-relay-exclude " .
+						$v_username .
+						" " .
+						quoteshellarg($v_domain) .
+						" " .
+						quoteshellarg($exclude_domain),
+					$output,
+					$return_var,
+				);
+				check_return_code($return_var, $output);
+				unset($output);
+			}
+		}
+		foreach (array_diff($excludes, $current_excludes) as $exclude_domain) {
+			if (empty($_SESSION["error_msg"])) {
+				exec(
+					HESTIA_CMD .
+						"h-add-mail-domain-relay-exclude " .
+						$v_username .
+						" " .
+						quoteshellarg($v_domain) .
+						" " .
+						quoteshellarg($exclude_domain),
+					$output,
+					$return_var,
+				);
+				check_return_code($return_var, $output);
+				unset($output);
+			}
+		}
+		if (empty($_SESSION["error_msg"])) {
+			$v_smtp_relay_exclude = implode("\n", $excludes);
 		}
 	}
 
