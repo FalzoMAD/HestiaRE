@@ -589,10 +589,12 @@ install_mail() {
 		systemctl restart redis-server 2> /dev/null || true
 		mkdir -p /etc/rspamd/local.d
 		cp -f "$HESTIA/share/rspamd/local.d/"* /etc/rspamd/local.d/
-		# Controller (stats/web UI on 11334, localhost) password — only the hash
-		# is stored; reset any time with h-change-sys-rspamd-password. Set both
-		# password (read) and enable_password (write) to the same hash so the
-		# stock worker-controller.inc default read password "q1" is overridden.
+		# Controller (stats/web UI on 11334, localhost) password. The in-panel
+		# UI never uses it — forward_auth + secure_ip on the localhost proxy
+		# skip the rspamd login (see share/panel-caddy/apps/rspamd.tpl). It is
+		# set only so no known default password is active: both password (read)
+		# and enable_password (write) get the same random hash, which also
+		# overrides the stock worker-controller.inc default read password "q1".
 		local rspamd_pw rspamd_hash
 		rspamd_pw=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24 || true)
 		rspamd_hash=$(rspamadm pw --password "$rspamd_pw")

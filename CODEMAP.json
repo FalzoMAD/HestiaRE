@@ -261,7 +261,7 @@
         "web/list/rrd/image.php updated to send absolute path for X-Accel-Redirect",
         "File manager /fm/* served via handle block with uri strip_prefix",
         "Web terminal removed in Issue #59 — /_shell/ location absent by design",
-        "Panel apps under /etc/caddy/apps/*.conf: phpMyAdmin/phpPgAdmin (h-change-sys-db-alias) and rspamd controller UI (installer mail stage, Issue #301). rspamd: /rspamd/* is forward_auth-gated against the admin panel session (web/rspamd-auth.php) then proxied to 127.0.0.1:11334 with X-Forwarded-* stripped so secure_ip skips the rspamd login; shown in-panel via the iframe page web/list/rspamd/. h-change-sys-rspamd-password sets the direct-access controller password"
+        "Panel apps under /etc/caddy/apps/*.conf: phpMyAdmin/phpPgAdmin (h-change-sys-db-alias) and rspamd controller UI (installer mail stage, Issue #301). rspamd: /rspamd/* is forward_auth-gated against the admin panel session (web/rspamd-auth.php) then proxied to 127.0.0.1:11334 with X-Forwarded-* stripped so secure_ip skips the rspamd login; shown in-panel via the iframe page web/list/rspamd/. The installer sets the controller password (read + enable) overriding rspamd's stock q1 default; it only matters for direct :11334 access"
       ],
       "required_packages": ["caddy"],
       "note": "Installer integration completed in Issue #26a.",

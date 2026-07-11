@@ -20,8 +20,8 @@ section as part of its PR. On release, the section gets the version number.
 
 - rspamd controller web UI embedded in the panel at `/list/rspamd/` (iframe),
   gated behind the admin session via Caddy `forward_auth` — no separate rspamd
-  login; controller password (read + enable) set on install and via
-  `h-change-sys-rspamd-password`, overriding the stock `q1` default (#301)
+  login; the installer sets the controller password (read + enable),
+  overriding the stock `q1` default (#301)
 
 ## v0.8.0 (2026-07-11) — cumulative changes since the fork
 

@@ -10,8 +10,8 @@
 # (secure_ip), so we strip the X-Forwarded-* headers on the way in; otherwise
 # rspamd would see the real client IP, secure_ip would not match, and it would
 # demand its own password. With the headers stripped rspamd sees only Caddy
-# (localhost) and no rspamd login is needed. h-change-sys-rspamd-password
-# still sets the controller password for anyone reaching :11334 directly.
+# (localhost) and no rspamd login is needed. The controller password set at
+# install only matters for direct :11334 access, which is localhost-only.
 redir /rspamd /rspamd/ 308
 handle /rspamd/* {
     forward_auth unix//run/hestia-php.sock {
