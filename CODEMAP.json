@@ -260,7 +260,8 @@
         "X-Accel-Redirect handled via handle_response in reverse_proxy block",
         "web/list/rrd/image.php updated to send absolute path for X-Accel-Redirect",
         "File manager /fm/* served via handle block with uri strip_prefix",
-        "Web terminal removed in Issue #59 — /_shell/ location absent by design"
+        "Web terminal removed in Issue #59 — /_shell/ location absent by design",
+        "Panel apps under /etc/caddy/apps/*.conf: phpMyAdmin/phpPgAdmin (h-change-sys-db-alias) and rspamd controller UI /rspamd/ -> 127.0.0.1:11334 (installer mail stage, password via h-change-sys-rspamd-password, Issue #301)"
       ],
       "required_packages": ["caddy"],
       "note": "Installer integration completed in Issue #26a.",

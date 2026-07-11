@@ -159,6 +159,19 @@
 								<span class="u-hide-desktop"><?= tohtml( _("Edit")) ?></span>
 							</a>
 						</li>
+						<?php if ($key === "rspamd") { ?>
+							<li class="units-table-row-action" data-key-action="href">
+								<a
+									class="units-table-row-action-link"
+									href="/rspamd/"
+									target="_blank"
+									title="<?= tohtml( _("Open Web UI")) ?>"
+								>
+									<i class="fas fa-up-right-from-square icon-green"></i>
+									<span class="u-hide-desktop"><?= tohtml( _("Open Web UI")) ?></span>
+								</a>
+							</li>
+						<?php } ?>
 						<li class="units-table-row-action shortcut-s" data-key-action="js">
 							<a
 								class="units-table-row-action-link data-controls js-confirm-action"

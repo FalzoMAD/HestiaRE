@@ -597,6 +597,12 @@ install_mail() {
 			>> /etc/rspamd/local.d/worker-controller.inc
 		systemctl enable rspamd
 		systemctl restart rspamd
+		# Publish the controller UI at https://<host>:8083/rspamd/ via
+		# Panel-Caddy. try-restart: only bounce Caddy if it is already
+		# running — on a fresh install it starts later (finalize stage)
+		# and would fail here without the panel SSL cert.
+		cp -f "$HESTIA/share/panel-caddy/apps/rspamd.tpl" /etc/caddy/apps/rspamd.conf
+		systemctl try-restart caddy 2> /dev/null || true
 		# Wire exim to rspamd: enable the RSPAMD/SPAM_SCORE macros in the active
 		# template (the .ifdef RSPAMD blocks are inert until this) and reload.
 		sed -i -e 's/^#RSPAMD = yes/RSPAMD = yes/' \
