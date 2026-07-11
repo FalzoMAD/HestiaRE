@@ -52,7 +52,6 @@ check_hestia_demo_mode
 
 # Rebuild loop
 $BIN/h-rebuild-web-domains "$user" "$restart"
-$BIN/h-rebuild-dns-domains "$user" "$restart"
 $BIN/h-rebuild-mail-domains "$user" "$restart"
 $BIN/h-rebuild-databases "$user" "$restart"
 $BIN/h-rebuild-cron-jobs "$user" "$restart"
