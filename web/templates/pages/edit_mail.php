@@ -196,7 +196,7 @@
 						<?= tohtml( _("Excluded Recipient Domains")) ?> <span class="optional">(<?= tohtml( _("Optional")) ?>)</span>
 					</label>
 					<textarea class="form-control u-min-height100" name="v_smtp_relay_exclude" id="v_smtp_relay_exclude" placeholder="*.example.com"><?= tohtml($v_smtp_relay_exclude ?? "") ?></textarea>
-					<small class="hint"><?= tohtml( _("One recipient domain per line, wildcards like *.example.com allowed. Mail to these domains is delivered directly via DNS instead of the relay: the sender domain's SPF record must include this server's IP, DKIM should be enabled and outbound port 25 must be open with a matching PTR record.")) ?></small>
+					<small class="hint"><?= tohtml( _("One recipient domain per line, wildcards like *.example.com allowed. Delivered directly instead of via the relay — requires valid SPF and DKIM for this server.")) ?></small>
 				</div>
 			</div>
 		</div>
