@@ -86,7 +86,8 @@ entries are grouped per release.
   (#121)
 - Per-mail-domain SMTP relay excludes: `bypass_smtp_relay` router delivers
   listed recipient domains directly via DNS/MX past the relay, managed by
-  `h-add`/`h-delete`/`h-list-mail-domain-relay-exclude` (#304)
+  `h-add`/`h-delete`/`h-list-mail-domain-relay-exclude` (#304) and editable
+  in the panel's mail domain settings below the relay credentials (#306)
 - `hestia` umbrella command: `hestia install|configure|update|uninstall|status`
 - Repo tooling & docs: `CODEMAP.json`, `PATHS.md`, `TROUBLESHOOTING.md`,
   `VENDORED.json`, upstream sync/vendor-update scripts in `share/upstream/`
