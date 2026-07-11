@@ -590,10 +590,13 @@ install_mail() {
 		mkdir -p /etc/rspamd/local.d
 		cp -f "$HESTIA/share/rspamd/local.d/"* /etc/rspamd/local.d/
 		# Controller (stats/web UI on 11334, localhost) password — only the hash
-		# is stored; reset any time with `rspamadm pw`.
-		local rspamd_pw
+		# is stored; reset any time with h-change-sys-rspamd-password. Set both
+		# password (read) and enable_password (write) to the same hash so the
+		# stock worker-controller.inc default read password "q1" is overridden.
+		local rspamd_pw rspamd_hash
 		rspamd_pw=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24 || true)
-		printf 'enable_password = "%s";\n' "$(rspamadm pw --password "$rspamd_pw")" \
+		rspamd_hash=$(rspamadm pw --password "$rspamd_pw")
+		printf 'password = "%s";\nenable_password = "%s";\n' "$rspamd_hash" "$rspamd_hash" \
 			>> /etc/rspamd/local.d/worker-controller.inc
 		systemctl enable rspamd
 		systemctl restart rspamd

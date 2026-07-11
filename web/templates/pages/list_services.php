@@ -124,6 +124,9 @@
 				} else {
 					$edit_url=$key;
 				}
+				// rspamd has no service-config page — its "edit" target is the
+				// embedded web UI page, so the name and pencil links point there.
+				$edit_href = ($key === "rspamd") ? "/list/rspamd/" : "/edit/server/" . $edit_url . "/";
 
 				$cpu = $data[$key]['CPU'] / 10;
 				$cpu = number_format($cpu, 1);
@@ -143,7 +146,7 @@
 				<div class="units-table-cell units-table-heading-cell u-text-bold">
 					<span class="u-hide-desktop"><?= tohtml( _("Service")) ?>:</span>
 					<i class="fas <?= tohtml($state_icon) ?> u-mr5"></i>
-					<a href="/edit/server/<? echo $edit_url ?>/" title="<?= tohtml( _("Edit")) ?>: <?= tohtml($key) ?>">
+					<a href="<?= $edit_href ?>" title="<?= tohtml( _("Edit")) ?>: <?= tohtml($key) ?>">
 						<?= tohtml($key) ?>
 					</a>
 				</div>
@@ -152,25 +155,13 @@
 						<li class="units-table-row-action shortcut-enter" data-key-action="href">
 							<a
 								class="units-table-row-action-link"
-								href="/edit/server/<? echo $edit_url ?>/"
-								title="<?= tohtml( _("Edit")) ?>"
+								href="<?= $edit_href ?>"
+								title="<?php echo $key === "rspamd" ? tohtml( _("Open Web UI")) : tohtml( _("Edit")); ?>"
 							>
-								<i class="fas fa-pencil icon-orange"></i>
-								<span class="u-hide-desktop"><?= tohtml( _("Edit")) ?></span>
+								<i class="fas <?= $key === "rspamd" ? "fa-chart-area icon-green" : "fa-pencil icon-orange" ?>"></i>
+								<span class="u-hide-desktop"><?php echo $key === "rspamd" ? tohtml( _("Open Web UI")) : tohtml( _("Edit")); ?></span>
 							</a>
 						</li>
-						<?php if ($key === "rspamd") { ?>
-							<li class="units-table-row-action" data-key-action="href">
-								<a
-									class="units-table-row-action-link"
-									href="/list/rspamd/"
-									title="<?= tohtml( _("Open Web UI")) ?>"
-								>
-									<i class="fas fa-chart-area icon-green"></i>
-									<span class="u-hide-desktop"><?= tohtml( _("Open Web UI")) ?></span>
-								</a>
-							</li>
-						<?php } ?>
 						<li class="units-table-row-action shortcut-s" data-key-action="js">
 							<a
 								class="units-table-row-action-link data-controls js-confirm-action"

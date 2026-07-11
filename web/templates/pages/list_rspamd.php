@@ -16,11 +16,14 @@
 <!-- End toolbar -->
 
 <!-- rspamd controller UI, served same-origin at /rspamd/ behind the panel
-     session (forward_auth); no separate rspamd login thanks to secure_ip. -->
-<iframe
-	src="/rspamd/"
-	title="rspamd"
-	class="u-width-full"
-	style="height: calc(100vh - 96px); border: 0;"
-	referrerpolicy="same-origin"
-></iframe>
+     session (forward_auth); no separate rspamd login thanks to secure_ip.
+     Constrained to the standard content box; tall so the graphs/tables fit. -->
+<div class="container">
+	<iframe
+		src="/rspamd/"
+		title="rspamd"
+		class="u-width-full"
+		style="height: calc(100vh - 140px); min-height: 900px; border: 0;"
+		referrerpolicy="same-origin"
+	></iframe>
+</div>
