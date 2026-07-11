@@ -156,10 +156,10 @@
 							<a
 								class="units-table-row-action-link"
 								href="<?= $edit_href ?>"
-								title="<?php echo $key === "rspamd" ? tohtml( _("Open Web UI")) : tohtml( _("Edit")); ?>"
+								title="<?= tohtml( _("Edit")) ?>"
 							>
-								<i class="fas <?= $key === "rspamd" ? "fa-chart-area icon-green" : "fa-pencil icon-orange" ?>"></i>
-								<span class="u-hide-desktop"><?php echo $key === "rspamd" ? tohtml( _("Open Web UI")) : tohtml( _("Edit")); ?></span>
+								<i class="fas fa-pencil icon-orange"></i>
+								<span class="u-hide-desktop"><?= tohtml( _("Edit")) ?></span>
 							</a>
 						</li>
 						<li class="units-table-row-action shortcut-s" data-key-action="js">

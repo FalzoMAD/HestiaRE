@@ -16,6 +16,13 @@ section as part of its PR. On release, the section gets the version number.
   password, so generated passwords survive being typed by hand, e.g. over
   VNC (#316)
 
+### Added
+
+- rspamd controller web UI embedded in the panel at `/list/rspamd/` (iframe),
+  gated behind the admin session via Caddy `forward_auth` — no separate rspamd
+  login; controller password (read + enable) set on install and via
+  `h-change-sys-rspamd-password`, overriding the stock `q1` default (#301)
+
 ## v0.8.0 (2026-07-11) — cumulative changes since the fork
 
 Everything below shipped incrementally across v0.1.x–v0.8.0. From here on,
@@ -90,11 +97,7 @@ entries are grouped per release.
 - rspamd integration: exim wiring via `variant=rspamd` (exim keeps decision
   authority, per-domain toggles unchanged), curated `local.d` set, Bayes
   learning on an always-present hard-capped Redis companion (64 MB,
-  volatile-ttl), Spam→`.Spam` foldering via exim router (#299); controller
-  web UI embedded in the panel at `/list/rspamd/` (iframe), gated behind the
-  admin session via Caddy `forward_auth` — no separate rspamd login — with
-  `h-change-sys-rspamd-password` for the direct-access controller password
-  (#301)
+  volatile-ttl), Spam→`.Spam` foldering via exim router (#299)
 - Redis lifecycle commands `h-add-sys-redis`/`h-delete-sys-redis` honoring
   the rspamd companion contract (promote/demote instead of uninstall)
   (#121)
