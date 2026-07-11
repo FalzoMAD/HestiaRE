@@ -25,3 +25,18 @@ export function randomString(alphabet, size) {
 
 	return result;
 }
+
+// Unbiased random integer in [0, max) via rejection sampling on a single byte.
+export function randomInt(max) {
+	if (max < 1 || max > 256) {
+		throw new Error('max must be 1-256');
+	}
+	const limit = 256 - (256 % max);
+	// eslint-disable-next-line no-constant-condition
+	while (true) {
+		const byte = crypto.getRandomValues(new Uint8Array(1))[0];
+		if (byte < limit) {
+			return byte % max;
+		}
+	}
+}

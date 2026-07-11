@@ -7,6 +7,15 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
+## Unreleased
+
+### Changed / Rebuilt
+
+- Panel password generator: typeable-anywhere character set (no AltGr/dead
+  keys, no confusable I/l/1/O/0 or pipe/braces) with only 1–3 symbols per
+  password, so generated passwords survive being typed by hand, e.g. over
+  VNC (#316)
+
 ## v0.8.0 (2026-07-11) — cumulative changes since the fork
 
 Everything below shipped incrementally across v0.1.x–v0.8.0. From here on,
