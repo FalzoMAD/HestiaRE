@@ -589,14 +589,31 @@ install_mail() {
 		systemctl restart redis-server 2> /dev/null || true
 		mkdir -p /etc/rspamd/local.d
 		cp -f "$HESTIA/share/rspamd/local.d/"* /etc/rspamd/local.d/
-		# Controller (stats/web UI on 11334, localhost) password — only the hash
-		# is stored; reset any time with `rspamadm pw`.
-		local rspamd_pw
+		# Controller (stats/web UI on 11334, localhost) password. The in-panel
+		# UI never uses it — forward_auth + secure_ip on the localhost proxy
+		# skip the rspamd login (see share/panel-caddy/apps/rspamd.tpl). It is
+		# set only so no known default password is active: both password (read)
+		# and enable_password (write) get the same random hash, which also
+		# overrides the stock worker-controller.inc default read password "q1".
+		local rspamd_pw rspamd_hash
 		rspamd_pw=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24 || true)
-		printf 'enable_password = "%s";\n' "$(rspamadm pw --password "$rspamd_pw")" \
+		rspamd_hash=$(rspamadm pw --password "$rspamd_pw")
+		printf 'password = "%s";\nenable_password = "%s";\n' "$rspamd_hash" "$rspamd_hash" \
 			>> /etc/rspamd/local.d/worker-controller.inc
 		systemctl enable rspamd
 		systemctl restart rspamd
+		# The controller listens on a unix socket (mode 0660, group _rspamd) so
+		# arbitrary local users can't reach it. Add caddy to the _rspamd group
+		# so the panel proxy can. Must precede the caddy (re)start below/finalize
+		# so the running caddy process picks up the new group membership.
+		usermod -aG _rspamd caddy
+		# Publish the controller UI via Panel-Caddy — reached from the panel
+		# page /list/rspamd/ (iframe), gated behind the admin session.
+		# try-restart: only bounce Caddy if it is already running — on a fresh
+		# install it starts later (finalize stage) and would fail here without
+		# the panel SSL cert.
+		cp -f "$HESTIA/share/panel-caddy/apps/rspamd.tpl" /etc/caddy/apps/rspamd.conf
+		systemctl try-restart caddy 2> /dev/null || true
 		# Wire exim to rspamd: enable the RSPAMD/SPAM_SCORE macros in the active
 		# template (the .ifdef RSPAMD blocks are inert until this) and reload.
 		sed -i -e 's/^#RSPAMD = yes/RSPAMD = yes/' \

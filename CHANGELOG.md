@@ -16,6 +16,17 @@ section as part of its PR. On release, the section gets the version number.
   password, so generated passwords survive being typed by hand, e.g. over
   VNC (#316)
 
+### Added
+
+- rspamd controller web UI embedded in the panel at `/list/rspamd/` (iframe),
+  admin-only. Two independent access layers: Caddy `forward_auth` requires an
+  authenticated admin session, and the controller listens on a unix socket
+  (mode 0660, group `_rspamd` — the installer adds `caddy` to it) instead of
+  TCP localhost, so no local shell user (e.g. a customer with SSH) can read
+  the controller API. No separate rspamd login; installer still sets the
+  controller password overriding the stock `q1` default as defense in depth
+  (#301)
+
 ## v0.8.0 (2026-07-11) — cumulative changes since the fork
 
 Everything below shipped incrementally across v0.1.x–v0.8.0. From here on,
