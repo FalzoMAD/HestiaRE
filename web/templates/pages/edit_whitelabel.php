@@ -127,9 +127,9 @@
 					<div class="u-mb10">
 						<p class="u-mb10"><?= tohtml(sprintf(_("Upload the files to %s"), "/usr/local/hestia/web/images/custom/")) ?></p>
 						<ul>
-							<li><code>logo.svg</code> <small>(100px x 120px)</small></li>
-							<li><code>logo.png</code> <small>(100px x 120px)</small></li>
-							<li><code>logo-header.svg</code> <small>(70px x 29px)</small></li>
+							<li><code>logo.svg</code> <small>(108px x 120px)</small></li>
+							<li><code>logo.png</code> <small>(108px x 120px)</small></li>
+							<li><code>logo-header.svg</code> <small>(72px x 29px)</small></li>
 							<li><code>favicon.png</code> <small>(64px x 64px)</small></li>
 							<li><code>favicon.ico</code> <small>(16px x 16px)</small></li>
 						</ul>
