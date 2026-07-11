@@ -91,8 +91,10 @@ entries are grouped per release.
   authority, per-domain toggles unchanged), curated `local.d` set, Bayes
   learning on an always-present hard-capped Redis companion (64 MB,
   volatile-ttl), Spam→`.Spam` foldering via exim router (#299); controller
-  web UI served via Panel-Caddy at `/rspamd/` with a service-list link and
-  `h-change-sys-rspamd-password` for controller password resets (#301)
+  web UI embedded in the panel at `/list/rspamd/` (iframe), gated behind the
+  admin session via Caddy `forward_auth` — no separate rspamd login — with
+  `h-change-sys-rspamd-password` for the direct-access controller password
+  (#301)
 - Redis lifecycle commands `h-add-sys-redis`/`h-delete-sys-redis` honoring
   the rspamd companion contract (promote/demote instead of uninstall)
   (#121)

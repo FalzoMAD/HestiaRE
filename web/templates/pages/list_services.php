@@ -163,11 +163,10 @@
 							<li class="units-table-row-action" data-key-action="href">
 								<a
 									class="units-table-row-action-link"
-									href="/rspamd/"
-									target="_blank"
+									href="/list/rspamd/"
 									title="<?= tohtml( _("Open Web UI")) ?>"
 								>
-									<i class="fas fa-up-right-from-square icon-green"></i>
+									<i class="fas fa-chart-area icon-green"></i>
 									<span class="u-hide-desktop"><?= tohtml( _("Open Web UI")) ?></span>
 								</a>
 							</li>
