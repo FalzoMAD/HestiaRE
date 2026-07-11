@@ -7,10 +7,10 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
-## Unreleased — cumulative changes since the fork (up to v0.8.0)
+## v0.8.0 (2026-07-11) — cumulative changes since the fork
 
-Everything below shipped incrementally across v0.1.x–v0.7.x. Starting with
-v0.8.0, entries are grouped per release.
+Everything below shipped incrementally across v0.1.x–v0.8.0. From here on,
+entries are grouped per release.
 
 ### Removed (vs. HestiaCP)
 
