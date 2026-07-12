@@ -657,7 +657,10 @@ update_object_value() {
 	parse_object_kv_list "$object"
 	local varname="${4#\$}"
 	old="${!varname}"
-	old=$(echo "$old" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/\//\\\//g')
+	# the old value is used as a sed BRE pattern: every metacharacter must be
+	# escaped or values like '[SPAM]' silently never match (bracket expression)
+	old=$(echo "$old" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/\//\\\//g' \
+		-e 's/\[/\\[/g' -e 's/\]/\\]/g' -e 's/\./\\./g' -e 's/\^/\\^/g' -e 's/\$/\\$/g')
 	new=$(echo "$5" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/\//\\\//g')
 	sed -i "$lnr s/${4//$/}='${old//\*/\\*}'/${4//$/}='${new//\*/\\*}'/g" \
 		$(_object_conf "$1")

@@ -463,7 +463,7 @@ rebuild_mail_domain_conf() {
 
 	# get_domain_values leaves keys absent on a domain's line untouched, so a
 	# value parsed for a previous domain in the rebuild loop would leak over
-	unset -v U_SMTP_RELAY_EXCLUDE
+	unset -v U_SMTP_RELAY_EXCLUDE U_SPAM_SCORE U_SPAM_REJECT_SCORE U_SPAM_SUBJECT_TAG
 	get_domain_values 'mail'
 	if [[ "$domain" = *[![:ascii:]]* ]]; then
 		domain_idn=$(idn2 --quiet $domain)
@@ -548,6 +548,29 @@ rebuild_mail_domain_conf() {
 		if [ -n "$U_SMTP_RELAY_EXCLUDE" ]; then
 			echo "$U_SMTP_RELAY_EXCLUDE" | tr ',' '\n' \
 				> $HOMEDIR/$user/conf/mail/$domain/smtp_relay_exclude
+		fi
+
+		# Rebuild per-domain spam tuning files (#318). mail.conf holds the
+		# points value; the exim-facing score files carry integer tenths
+		# ($spam_score_int unit) without trailing newline. Empty/absent key
+		# removes a stale file so the global default applies again.
+		if [ -n "$U_SPAM_SCORE" ]; then
+			awk -v s="$U_SPAM_SCORE" 'BEGIN{printf "%d", s * 10 + 0.5}' \
+				> $HOMEDIR/$user/conf/mail/$domain/spam_score
+		else
+			rm -f $HOMEDIR/$user/conf/mail/$domain/spam_score
+		fi
+		if [ -n "$U_SPAM_REJECT_SCORE" ]; then
+			awk -v s="$U_SPAM_REJECT_SCORE" 'BEGIN{printf "%d", s * 10 + 0.5}' \
+				> $HOMEDIR/$user/conf/mail/$domain/spam_reject_score
+		else
+			rm -f $HOMEDIR/$user/conf/mail/$domain/spam_reject_score
+		fi
+		if [ -n "$U_SPAM_SUBJECT_TAG" ]; then
+			printf '%s' "$U_SPAM_SUBJECT_TAG" \
+				> $HOMEDIR/$user/conf/mail/$domain/spam_subject_tag
+		else
+			rm -f $HOMEDIR/$user/conf/mail/$domain/spam_subject_tag
 		fi
 
 		# Removing configuration files if domain is suspended

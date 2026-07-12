@@ -1,0 +1,86 @@
+#!/bin/bash
+# info: change per-domain spam subject tag
+# options: USER DOMAIN TAG
+#
+# example: h-change-mail-domain-spam-subject-tag user domain.tld '[SPAM]'
+#
+# Sets a subject prefix for mail classified as spam on this domain: exim
+# prepends "TAG " to the Subject at local delivery time (X-Spam-Status: Yes
+# only — clean mail is untouched). Purely cosmetic, complements the
+# X-Spam-* headers and the .Spam foldering. Stored in mail.conf as
+# U_SPAM_SUBJECT_TAG (source of truth) and mirrored to
+# /home/$user/conf/mail/$domain/spam_subject_tag (symlinked into
+# /etc/exim4/domains/), read by exim per message: no reload needed. Removing
+# the tag (h-delete-mail-domain-spam-subject-tag) disables the rewriting.
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+tag=$3
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Define mail user
+if [ "$MAIL_SYSTEM" = 'exim4' ]; then
+	MAIL_USER=Debian-exim
+else
+	MAIL_USER=exim
+fi
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '3' "$#" 'USER DOMAIN TAG'
+is_format_valid 'user' 'domain'
+# conservative charset: no quotes (mail.conf format), no newlines/backslashes
+# (header injection), must not start/end with whitespace
+tag_re='^[][()*+._:!#=[:alnum:]-]([][()*+._:!#= [:alnum:]-]{0,30}[][()*+._:!#=[:alnum:]-])?$'
+if ! [[ "$tag" =~ $tag_re ]]; then
+	check_result "$E_INVALID" "invalid tag :: max 32 chars, letters/digits/[]()*+._:!#=- and inner spaces only"
+fi
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+is_system_enabled "$ANTISPAM_SYSTEM" 'ANTISPAM_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+is_object_unsuspended 'mail' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+tag_file="$HOMEDIR/$user/conf/mail/$domain/spam_subject_tag"
+
+# no trailing newline — exim inserts the raw file content into the Subject
+printf '%s' "$tag" > "$tag_file"
+chown $MAIL_USER:mail "$tag_file"
+chmod 660 "$tag_file"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Adding subject tag value in config
+add_object_key 'mail' 'DOMAIN' "$domain" 'U_SPAM_SUBJECT_TAG' 'ACCOUNTS'
+update_object_value 'mail' 'DOMAIN' "$domain" '$U_SPAM_SUBJECT_TAG' "$tag"
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Mail" "Spam subject tag changed (Domain: $domain, Tag: $tag)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

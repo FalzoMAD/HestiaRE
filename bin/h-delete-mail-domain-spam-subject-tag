@@ -1,0 +1,61 @@
+#!/bin/bash
+# info: delete per-domain spam subject tag
+# options: USER DOMAIN
+#
+# example: h-delete-mail-domain-spam-subject-tag user domain.tld
+#
+# Removes the spam subject tag set by h-change-mail-domain-spam-subject-tag;
+# subjects of spam mail are no longer rewritten. Idempotent.
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN'
+is_format_valid 'user' 'domain'
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+is_object_unsuspended 'mail' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+rm -f "$HOMEDIR/$user/conf/mail/$domain/spam_subject_tag"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Clearing subject tag value in config (key may not exist on old domains)
+if [ -n "$(get_object_value 'mail' 'DOMAIN' "$domain" '$U_SPAM_SUBJECT_TAG')" ]; then
+	update_object_value 'mail' 'DOMAIN' "$domain" '$U_SPAM_SUBJECT_TAG' ''
+fi
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Mail" "Spam subject tag removed (Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit
