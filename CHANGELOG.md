@@ -9,6 +9,18 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Fixed
+
+- Debian 13 mail stack: local delivery deferred for every message — the
+  dovecot-2.4 branch of the mail-account commands (upstream heritage) wrote
+  the account maildir path into the passwd home field while exim's
+  appendfile transports expect the user home. The passwd format is now
+  identical on all platforms (home in field 5; only the quota extra field
+  stays version-specific) and dovecot 2.4 derives the maildir from home in
+  10-mail.conf, matching the proven 2.3 layout. Also fixes the
+  `sssl_server_cert_file` typo that produced broken dovecot-2.4 per-domain
+  SSL configs (#329)
+
 ### Changed / Rebuilt
 
 - Panel password generator: typeable-anywhere character set (no AltGr/dead
