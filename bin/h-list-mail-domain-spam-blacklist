@@ -1,0 +1,77 @@
+#!/bin/bash
+# info: list per-domain spam blacklist
+# options: USER DOMAIN [FORMAT]
+#
+# example: h-list-mail-domain-spam-blacklist user domain.tld json
+#
+# Lists the sender patterns on the domain's spam blacklist (see
+# h-add-mail-domain-spam-blacklist).
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+format=${3-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# JSON list function
+json_list() {
+	echo '{'
+	echo -e "\t\"$domain\": {"
+	echo "        \"SPAM_BLACKLIST\": \"$entries\""
+	echo -e "\t}\n}"
+}
+
+# SHELL list function
+shell_list() {
+	echo "SPAM_BLACKLIST"
+	echo "--------------"
+	if [ -n "$entries" ]; then
+		echo "$entries" | tr ',' '\n'
+	fi
+}
+
+# PLAIN list function
+plain_list() {
+	if [ -n "$entries" ]; then
+		echo "$entries" | tr ',' '\n'
+	fi
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [FORMAT]'
+is_format_valid 'user' 'domain'
+is_object_valid 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+entries=$(get_object_value 'mail' 'DOMAIN' "$domain" '$U_SPAM_BLACKLIST')
+
+# Listing data
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	shell) shell_list ;;
+	*) check_args '1' '0' 'USER DOMAIN [FORMAT]' ;;
+esac
+
+# Logging
+
+exit

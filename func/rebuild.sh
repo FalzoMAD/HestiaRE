@@ -463,7 +463,8 @@ rebuild_mail_domain_conf() {
 
 	# get_domain_values leaves keys absent on a domain's line untouched, so a
 	# value parsed for a previous domain in the rebuild loop would leak over
-	unset -v U_SMTP_RELAY_EXCLUDE U_SPAM_SCORE U_SPAM_REJECT_SCORE U_SPAM_SUBJECT_TAG
+	unset -v U_SMTP_RELAY_EXCLUDE U_SPAM_SCORE U_SPAM_REJECT_SCORE U_SPAM_SUBJECT_TAG \
+		U_SPAM_WHITELIST U_SPAM_BLACKLIST
 	get_domain_values 'mail'
 	if [[ "$domain" = *[![:ascii:]]* ]]; then
 		domain_idn=$(idn2 --quiet $domain)
@@ -571,6 +572,18 @@ rebuild_mail_domain_conf() {
 				> $HOMEDIR/$user/conf/mail/$domain/spam_subject_tag
 		else
 			rm -f $HOMEDIR/$user/conf/mail/$domain/spam_subject_tag
+		fi
+		if [ -n "$U_SPAM_WHITELIST" ]; then
+			echo "$U_SPAM_WHITELIST" | tr ',' '\n' \
+				> $HOMEDIR/$user/conf/mail/$domain/spam_whitelist
+		else
+			rm -f $HOMEDIR/$user/conf/mail/$domain/spam_whitelist
+		fi
+		if [ -n "$U_SPAM_BLACKLIST" ]; then
+			echo "$U_SPAM_BLACKLIST" | tr ',' '\n' \
+				> $HOMEDIR/$user/conf/mail/$domain/spam_blacklist
+		else
+			rm -f $HOMEDIR/$user/conf/mail/$domain/spam_blacklist
 		fi
 
 		# Removing configuration files if domain is suspended
