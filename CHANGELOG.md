@@ -9,6 +9,18 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Fixed
+
+- Debian 13 mail stack: local delivery deferred for every message — the
+  dovecot-2.4 branch of the mail-account commands (upstream heritage) wrote
+  the account maildir path into the passwd home field while exim's
+  appendfile transports expect the user home. The passwd format is now
+  identical on all platforms (home in field 5; only the quota extra field
+  stays version-specific) and dovecot 2.4 derives the maildir from home in
+  10-mail.conf, matching the proven 2.3 layout. Also fixes the
+  `sssl_server_cert_file` typo that produced broken dovecot-2.4 per-domain
+  SSL configs (#329)
+
 ### Changed / Rebuilt
 
 - Panel password generator: typeable-anywhere character set (no AltGr/dead
@@ -23,6 +35,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- rspamd and sieve are modular addons (#122 part 1): `h-add-sys-rspamd`/
+  `h-remove-sys-rspamd` and `h-add-sys-sieve`/`h-remove-sys-sieve` install,
+  wire, unwire and purge each service at runtime; the installer now just
+  invokes them per the recipe. The sieve addon is the first FUNCTIONAL
+  sieve support: ManageSieve on 4190 (localhost consumers), per-account
+  script storage inside the account maildir, and clean local delivery
+  switched to dovecot-lda (new `SIEVE` exim macro +
+  `dovecot_virtual_delivery` transport) so scripts actually run at
+  delivery — spam keeps exim's direct `.Spam` path. Removal reverts to the
+  appendfile transport; stored scripts survive re-adding. The
+  managesieved/sieve packages left the base install set (#122)
 - rspamd controller web UI embedded in the panel at `/list/rspamd/` (iframe),
   admin-only. Two independent access layers: Caddy `forward_auth` requires an
   authenticated admin session, and the controller listens on a unix socket

@@ -1,0 +1,104 @@
+#!/bin/bash
+# info: remove sieve mail filtering
+# options: NONE
+#
+# example: h-remove-sys-sieve
+#
+# Unwires and uninstalls sieve: exim's SIEVE macro back to inert (clean local
+# delivery returns to the appendfile transport), the sieve packages are
+# purged and the sieve-flavoured 15-lda.conf is restored to the base variant
+# (it belongs to dovecot-core, purging the sieve packages does not bring it
+# back). Stored per-account scripts stay in the maildirs — they become
+# active again on h-add-sys-sieve.
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+# Checking root permissions
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+if [ "$SIEVE_SYSTEM" != 'yes' ]; then
+	echo "ERROR: sieve is not installed."
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Unwire exim first: clean local delivery back to the appendfile transport
+sed -i 's/^SIEVE = yes/#SIEVE = yes/' /etc/exim4/exim4.conf.template
+systemctl restart exim4
+if ! systemctl is-active --quiet exim4; then
+	echo "ERROR: exim4 failed to restart without sieve delivery."
+	exit "$E_RESTART"
+fi
+
+# Take the sieve configs out BEFORE purging: the dovecot conf.d files are
+# maintainer-script managed (not dpkg conffiles), and the purge triggers a
+# dovecot restart that would fail while sieve settings are still referenced
+rm -f /etc/dovecot/conf.d/20-managesieve.conf \
+	/etc/dovecot/conf.d/90-sieve.conf \
+	/etc/dovecot/conf.d/90-sieve-extprograms.conf
+# 15-lda.conf belongs to dovecot-core — restore the base (non-sieve) variant
+DOVECOT_VER=$(dovecot --version 2> /dev/null | cut -d. -f1,2 || echo "2.3")
+if [ "$(printf '%s\n2.4' "$DOVECOT_VER" | sort -V | head -1)" = "2.4" ]; then
+	DCDIR="$HESTIA/share/dovecot/2.4"
+else
+	DCDIR="$HESTIA/share/dovecot/2.3"
+fi
+cp -f "$DCDIR/conf.d/15-lda.conf" /etc/dovecot/conf.d/
+
+systemctl restart dovecot
+if ! systemctl is-active --quiet dovecot; then
+	echo "ERROR: dovecot failed to restart without sieve."
+	exit "$E_RESTART"
+fi
+
+apt-get -y -qq purge dovecot-managesieved dovecot-sieve > /dev/null 2>&1
+# no autoremove: it would rip out auto-marked siblings of the shared stack
+# (seen on deb13: purging the sieve packages autoremoved dovecot-core)
+# the package maintainer scripts may stop dovecot during the purge (seen on
+# deb13) — make sure it is running again
+systemctl start dovecot 2> /dev/null || true
+if ! systemctl is-active --quiet dovecot; then
+	echo "ERROR: dovecot did not come back up after the sieve purge."
+	exit "$E_RESTART"
+fi
+
+$BIN/h-change-sys-config-value 'SIEVE_SYSTEM' ''
+set_install_component ADDON_SIEVE false
+
+echo "sieve has been removed (stored scripts remain in the maildirs)."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "system" "Info" "System" "Removed sieve mail filtering."
+log_event "$OK" "$ARGUMENTS"
+
+exit

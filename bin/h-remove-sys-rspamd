@@ -1,0 +1,90 @@
+#!/bin/bash
+# info: remove rspamd antispam
+# options: NONE
+#
+# example: h-remove-sys-rspamd
+#
+# Unwires and uninstalls rspamd: exim macros back to inert (mail flows
+# unscanned, per-domain antispam flags and spam-tuning files stay in place —
+# they become active again on h-add-sys-rspamd), panel UI route removed,
+# package purged. Redis is removed with it unless it is the user's general
+# service (DB_REDIS, lifecycle contract from #299/#121).
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+# Checking root permissions
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+if [ "$ANTISPAM_SYSTEM" != 'rspamd' ]; then
+	echo "ERROR: rspamd is not the active antispam system."
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Unwire exim first so mail keeps flowing (unscanned) while rspamd goes away
+sed -i -e 's/^RSPAMD = yes/#RSPAMD = yes/' \
+	-e 's/^SPAM_SCORE = /#SPAM_SCORE = /' \
+	-e 's/^SPAM_REJECT_SCORE = /#SPAM_REJECT_SCORE = /' \
+	/etc/exim4/exim4.conf.template
+systemctl restart exim4
+if ! systemctl is-active --quiet exim4; then
+	echo "ERROR: exim4 failed to restart without rspamd."
+	exit "$E_RESTART"
+fi
+
+# Panel UI route
+rm -f /etc/caddy/apps/rspamd.conf
+systemctl try-restart caddy 2> /dev/null || true
+
+systemctl disable --now rspamd > /dev/null 2>&1
+apt-get -y -qq purge rspamd > /dev/null 2>&1
+
+# Redis: only the rspamd Bayes companion goes away with it — as a general
+# service (DB_REDIS) it stays untouched
+if [ "${COMPONENT_DB_REDIS:-}" != "true" ]; then
+	systemctl disable --now redis-server > /dev/null 2>&1
+	apt-get -y -qq purge redis-server > /dev/null 2>&1
+fi
+# no autoremove: it would rip out auto-marked siblings of the shared stack
+# (seen on deb13: purging the sieve packages autoremoved dovecot-core)
+
+$BIN/h-change-sys-config-value 'ANTISPAM_SYSTEM' ''
+set_install_component ADDON_RSPAMD false
+
+echo "rspamd has been removed (mail is delivered unscanned)."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "system" "Info" "System" "Removed rspamd antispam."
+log_event "$OK" "$ARGUMENTS"
+
+exit

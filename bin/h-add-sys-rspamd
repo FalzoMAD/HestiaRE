@@ -1,0 +1,139 @@
+#!/bin/bash
+# info: add rspamd antispam (with Bayes Redis companion)
+# options: NONE
+#
+# example: h-add-sys-rspamd
+#
+# Installs and wires rspamd as the antispam system: curated local.d set
+# (controller and scan worker on group-restricted unix sockets), random
+# controller password (overrides the stock "q1"), panel web UI via
+# Panel-Caddy (/list/rspamd/, admin-session-gated), exim integration by
+# enabling the RSPAMD/SPAM_SCORE macros in the active template. Redis comes
+# along as the Bayes backend: unrestricted if selected as a general service
+# (DB_REDIS), otherwise as the hard-capped companion — lifecycle contract
+# from #299/#121 (h-add/h-delete-sys-redis promote/demote it).
+# Also called by the installer (COMPONENT_ADDON_RSPAMD).
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+# Checking root permissions
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+if [ "$ANTISPAM_SYSTEM" = 'rspamd' ] && dpkg -l rspamd 2> /dev/null | grep -q '^ii'; then
+	echo "ERROR: rspamd is already installed."
+	exit "$E_EXISTS"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+echo "Installing rspamd (with Bayes Redis)..."
+apt-get -y -qq install rspamd redis-server > /dev/null 2>&1
+if ! dpkg -l rspamd 2> /dev/null | grep -q '^ii'; then
+	echo "ERROR: rspamd installation failed."
+	exit "$E_INVALID"
+fi
+
+# Redis: hard-capped Bayes companion unless it is the user's general service
+if [ "${COMPONENT_DB_REDIS:-}" != "true" ] \
+	&& ! grep -q 'HestiaRE rspamd-bayes limit' /etc/redis/redis.conf; then
+	cat "$HESTIA/share/rspamd/redis-rspamd-limit.conf" >> /etc/redis/redis.conf
+fi
+systemctl enable redis-server > /dev/null 2>&1
+systemctl restart redis-server 2> /dev/null || true
+
+mkdir -p /etc/rspamd/local.d
+cp -f "$HESTIA/share/rspamd/local.d/"* /etc/rspamd/local.d/
+# Controller (stats/web UI) password. The in-panel UI never uses it —
+# forward_auth + the secure unix-socket connection skip the rspamd login (see
+# share/panel-caddy/apps/rspamd.tpl). It is set only so no known default
+# password is active: both password (read) and enable_password (write) get
+# the same random hash, overriding the stock worker-controller.inc "q1".
+rspamd_pw=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24 || true)
+rspamd_hash=$(rspamadm pw --password "$rspamd_pw")
+printf 'password = "%s";\nenable_password = "%s";\n' "$rspamd_hash" "$rspamd_hash" \
+	>> /etc/rspamd/local.d/worker-controller.inc
+systemctl enable rspamd > /dev/null 2>&1
+systemctl restart rspamd
+if ! systemctl is-active --quiet rspamd; then
+	echo "ERROR: rspamd failed to start."
+	exit "$E_RESTART"
+fi
+# the workers create their unix sockets shortly after the unit is active —
+# wait briefly so follow-up checks (smoke test) don't race the startup
+for _ in $(seq 1 15); do
+	[ -S /run/rspamd/normal.sock ] && [ -S /run/rspamd/controller.sock ] && break
+	sleep 1
+done
+if [ ! -S /run/rspamd/normal.sock ]; then
+	echo "ERROR: rspamd scan worker socket did not appear."
+	exit "$E_RESTART"
+fi
+
+# Controller and scan worker listen on unix sockets (mode 0660, group
+# _rspamd) so arbitrary local users can't reach them. Add caddy (panel
+# proxy -> controller) and Debian-exim (spam scan -> normal worker) to
+# the _rspamd group. Must precede the caddy/exim (re)starts below so
+# the running processes pick up the new group membership.
+usermod -aG _rspamd caddy
+usermod -aG _rspamd Debian-exim
+
+# Publish the controller UI via Panel-Caddy — reached from the panel page
+# /list/rspamd/ (iframe), gated behind the admin session. try-restart: only
+# bounce Caddy if it is already running — on a fresh install it starts later
+# (finalize stage) and would fail here without the panel SSL cert.
+cp -f "$HESTIA/share/panel-caddy/apps/rspamd.tpl" /etc/caddy/apps/rspamd.conf
+systemctl try-restart caddy 2> /dev/null || true
+
+# Wire exim to rspamd: enable the RSPAMD/SPAM_SCORE macros in the active
+# template (the .ifdef RSPAMD blocks are inert until this) and restart
+sed -i -e 's/^#RSPAMD = yes/RSPAMD = yes/' \
+	-e 's/^#SPAM_SCORE = /SPAM_SCORE = /' \
+	-e 's/^#SPAM_REJECT_SCORE = /SPAM_REJECT_SCORE = /' \
+	/etc/exim4/exim4.conf.template
+systemctl restart exim4
+if ! systemctl is-active --quiet exim4; then
+	echo "ERROR: exim4 failed to restart with rspamd enabled."
+	exit "$E_RESTART"
+fi
+
+$BIN/h-change-sys-config-value 'ANTISPAM_SYSTEM' 'rspamd'
+set_install_component ADDON_RSPAMD true
+
+echo "rspamd is now active (antispam system)."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "system" "Info" "System" "Installed rspamd antispam."
+log_event "$OK" "$ARGUMENTS"
+
+exit
