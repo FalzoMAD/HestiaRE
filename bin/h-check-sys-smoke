@@ -55,6 +55,15 @@ check_port() {
 	fi
 }
 
+# check_socket <path> <label> — listening unix socket
+check_socket() {
+	if ss -H -xln 2> /dev/null | grep -qF "$1"; then
+		ok "socket $2 ($1) listening"
+	else
+		no "socket $2 ($1) not listening"
+	fi
+}
+
 # check_http <url> <label>
 check_http() {
 	local code
@@ -132,7 +141,11 @@ if [ -n "$PROXY_SYSTEM" ] || [ -n "$WEB_SYSTEM" ]; then
 fi
 echo "$DB_SYSTEM" | grep -qw 'mysql' && check_port 3306 "mysql"
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_port 25 "smtp"
-[ "$ANTISPAM_SYSTEM" = 'rspamd' ] && check_port 11333 "rspamd scan worker"
+if [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
+	# group-restricted unix sockets since #301/#321 — rspamd has no TCP ports
+	check_socket /run/rspamd/normal.sock "rspamd scan worker"
+	check_socket /run/rspamd/controller.sock "rspamd controller"
+fi
 
 # --- Critical log markers ---
 echo "-- logs --"
