@@ -1,0 +1,208 @@
+/*
+ * Dark override for the embedded rspamd controller UI (#319).
+ *
+ * Injected into the same-origin /rspamd/ iframe by list_rspamd.php when the
+ * panel runs a dark theme. None of our target platforms ship rspamd >= 3.14
+ * (the first version with a native dark mode), so the override is home-grown.
+ * It only touches Bootstrap colour classes that are identical across the
+ * shipped rspamd versions (3.4 deb12, 3.8 ubuntu 24/26, 3.12 deb13):
+ * bg-light/bg-white, navbar-light, card*, table*, form controls, modals,
+ * dropdowns, nav-tabs — plus the D3 chart text/axes. Revisit (and prefer the
+ * native toggle) once a platform ships rspamd >= 3.14.
+ *
+ * Palette matches the panel dark themes (web/css/src/themes/dark.css).
+ */
+
+:root {
+	color-scheme: dark;
+}
+
+body {
+	background-color: #282828;
+	color: #cdcdcd;
+}
+
+/* Bootstrap paints these with !important, so overriding needs it too */
+.bg-light {
+	background-color: #333 !important;
+}
+.bg-white {
+	background-color: #282828 !important;
+}
+.text-secondary {
+	color: #9a9a9a !important;
+}
+
+a {
+	color: #6ea8fe;
+}
+
+/* Top navigation */
+.navbar-light .navbar-nav .nav-link,
+.navbar-light .navbar-text {
+	color: #cdcdcd;
+}
+.navbar-light .navbar-nav .nav-link.active,
+.navbar-light .navbar-nav .nav-link:hover,
+.navbar-light .navbar-nav .nav-link:focus {
+	color: #e8e8e8;
+}
+.navbar-toggler {
+	border-color: #4a4a4a;
+}
+.navbar-toggler-icon {
+	/* stock icon is a dark-on-light inline SVG */
+	filter: invert(0.8);
+}
+
+/* Cards */
+.card {
+	background-color: #333;
+	border-color: #4a4a4a;
+}
+.card-header,
+.card-footer {
+	background-color: #3a3a3a;
+	border-color: #4a4a4a;
+}
+
+/* Tables */
+.table {
+	color: #cdcdcd;
+}
+.table th,
+.table td,
+.table thead th,
+.table-bordered,
+.table-bordered th,
+.table-bordered td {
+	border-color: #4a4a4a;
+}
+.table-striped tbody tr:nth-of-type(odd) {
+	background-color: rgba(255, 255, 255, 0.04);
+}
+.table-hover tbody tr:hover {
+	background-color: rgba(255, 255, 255, 0.08);
+	color: #e8e8e8;
+}
+
+/* Forms */
+.form-control,
+.custom-select,
+.form-select {
+	background-color: #1f1f1f;
+	border-color: #555;
+	color: #cdcdcd;
+}
+.form-control:focus,
+.custom-select:focus,
+.form-select:focus {
+	background-color: #1f1f1f;
+	border-color: #7a7a7a;
+	color: #e8e8e8;
+	box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.1);
+}
+.form-control::placeholder {
+	color: #7a7a7a;
+}
+.form-control:disabled,
+.form-control[readonly] {
+	background-color: #2e2e2e;
+}
+.input-group-text {
+	background-color: #3a3a3a;
+	border-color: #555;
+	color: #cdcdcd;
+}
+
+/* Buttons that assume a light page */
+.btn-outline-secondary {
+	color: #b0b0b0;
+	border-color: #6a6a6a;
+}
+.btn-outline-secondary:hover {
+	background-color: #4a4a4a;
+	border-color: #6a6a6a;
+	color: #e8e8e8;
+}
+.btn-light {
+	background-color: #3a3a3a;
+	border-color: #4a4a4a;
+	color: #cdcdcd;
+}
+.close {
+	color: #cdcdcd;
+	text-shadow: none;
+}
+
+/* Tabs / pills (sidebar navigation) */
+.nav-tabs {
+	border-color: #4a4a4a;
+}
+.nav-tabs .nav-link:hover,
+.nav-tabs .nav-link:focus {
+	border-color: #4a4a4a;
+}
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item.show .nav-link {
+	background-color: #282828;
+	border-color: #4a4a4a;
+	color: #e8e8e8;
+}
+
+/* Dropdowns */
+.dropdown-menu {
+	background-color: #333;
+	border-color: #4a4a4a;
+	color: #cdcdcd;
+}
+.dropdown-item {
+	color: #cdcdcd;
+}
+.dropdown-item:hover,
+.dropdown-item:focus {
+	background-color: #3f3f3f;
+	color: #e8e8e8;
+}
+.dropdown-divider {
+	border-color: #4a4a4a;
+}
+
+/* Modals */
+.modal-content {
+	background-color: #333;
+	color: #cdcdcd;
+}
+.modal-header,
+.modal-footer {
+	border-color: #4a4a4a;
+}
+
+/* Pagination (history) */
+.page-link {
+	background-color: #333;
+	border-color: #4a4a4a;
+	color: #cdcdcd;
+}
+.page-link:hover {
+	background-color: #3f3f3f;
+	border-color: #4a4a4a;
+	color: #e8e8e8;
+}
+.page-item.disabled .page-link {
+	background-color: #2e2e2e;
+	border-color: #4a4a4a;
+	color: #7a7a7a;
+}
+
+/* D3 charts (throughput graph, pie): axis/legend text and grid lines.
+   No !important — inline fills (e.g. pie slice labels) keep precedence. */
+svg text {
+	fill: #cdcdcd;
+}
+svg .axis path,
+svg .axis line,
+svg .grid path,
+svg .grid line {
+	stroke: #5a5a5a;
+}
