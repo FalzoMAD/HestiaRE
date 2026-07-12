@@ -1,3 +1,22 @@
+<?php
+// Per-domain spam tuning (#318): preset values must match the controller's
+// map (web/edit/mail/index.php). The select's initial state is derived from
+// the stored mark threshold; unknown values render as "custom".
+$spam_presets = ["tolerant" => "7.0", "normal" => "5.0", "strict" => "3.5"];
+$v_spam_sensitivity = "custom";
+if (($v_spam_score ?? "") === "") {
+	$v_spam_sensitivity = "default";
+} else {
+	foreach ($spam_presets as $spam_preset_key => $spam_preset_value) {
+		if ((float) $spam_preset_value === (float) $v_spam_score) {
+			$v_spam_sensitivity = $spam_preset_key;
+		}
+	}
+}
+$spam_tuning_allowed =
+	$_SESSION["userContext"] === "admin" ||
+	($_SESSION["POLICY_SPAM_CUSTOMER_TUNING"] ?? "yes") !== "no";
+?>
 <!-- Begin toolbar -->
 <div class="toolbar">
 	<div class="toolbar-inner">
@@ -21,7 +40,9 @@
 		x-data="{
 			sslEnabled: <?= tohtml($v_ssl == "yes" ? "true" : "false") ?>,
 			letsEncryptEnabled: <?= tohtml($v_letsencrypt == "yes" ? "true" : "false") ?>,
-			hasSmtpRelay: <?= tohtml($v_smtp_relay == "true" ? "true" : "false") ?>
+			hasSmtpRelay: <?= tohtml($v_smtp_relay == "true" ? "true" : "false") ?>,
+			spamFilterEnabled: <?= tohtml($v_antispam == "yes" ? "true" : "false") ?>,
+			spamSensitivity: '<?= tohtml($v_spam_sensitivity ?? "default") ?>'
 		}"
 		id="main-form"
 		name="v_edit_mail"
@@ -67,7 +88,7 @@
 			</div>
 			<?php if (!empty($_SESSION["ANTISPAM_SYSTEM"])) { ?>
 				<div class="form-check u-mb10">
-					<input class="form-check-input" type="checkbox" name="v_antispam" id="v_antispam" <?php if ($v_antispam == 'yes') echo 'checked'; ?>>
+					<input x-model="spamFilterEnabled" class="form-check-input" type="checkbox" name="v_antispam" id="v_antispam" <?php if ($v_antispam == 'yes') echo 'checked'; ?>>
 					<label for="v_antispam">
 						<?= tohtml( _("Spam Filter")) ?>
 					</label>
@@ -78,6 +99,44 @@
 						<?= tohtml( _("Reject Spam")) ?>
 					</label>
 				</div>
+				<?php if ($spam_tuning_allowed) { ?>
+					<div x-cloak x-show="spamFilterEnabled" class="u-pl30">
+						<div class="u-mb10">
+							<label for="v_spam_sensitivity" class="form-label"><?= tohtml( _("Spam Filter Sensitivity")) ?></label>
+							<select x-model="spamSensitivity" class="form-select" name="v_spam_sensitivity" id="v_spam_sensitivity">
+								<option value="default" <?php if ($v_spam_sensitivity === 'default') echo 'selected'; ?>><?= tohtml( _("Server default")) ?></option>
+								<option value="tolerant" <?php if ($v_spam_sensitivity === 'tolerant') echo 'selected'; ?>><?= tohtml( _("Tolerant")) ?> (7.0)</option>
+								<option value="normal" <?php if ($v_spam_sensitivity === 'normal') echo 'selected'; ?>><?= tohtml( _("Normal")) ?> (5.0)</option>
+								<option value="strict" <?php if ($v_spam_sensitivity === 'strict') echo 'selected'; ?>><?= tohtml( _("Strict")) ?> (3.5)</option>
+								<option value="custom" <?php if ($v_spam_sensitivity === 'custom') echo 'selected'; ?>><?= tohtml( _("Custom threshold")) ?></option>
+							</select>
+							<small class="hint"><?= tohtml( _("Mail scoring above the threshold is marked as spam — lower means stricter.")) ?></small>
+						</div>
+						<div x-cloak x-show="spamSensitivity === 'custom'" class="u-mb10">
+							<label for="v_spam_score" class="form-label">
+								<?= tohtml( _("Mark Threshold")) ?>
+							</label>
+							<input type="text" class="form-control" name="v_spam_score" id="v_spam_score" value="<?= tohtml($v_spam_score ?? "") ?>">
+							<?php if ($_SESSION["userContext"] !== "admin") { ?>
+								<small class="hint"><?= tohtml(sprintf( _("Allowed range: %s to %s."), $_SESSION["POLICY_SPAM_SCORE_MIN"] ?? "3.0", $_SESSION["POLICY_SPAM_SCORE_MAX"] ?? "10.0")) ?></small>
+							<?php } ?>
+						</div>
+						<div class="u-mb10">
+							<label for="v_spam_reject_score" class="form-label">
+								<?= tohtml( _("Reject Threshold")) ?> <span class="optional">(<?= tohtml( _("Optional")) ?>)</span>
+							</label>
+							<input type="text" class="form-control" name="v_spam_reject_score" id="v_spam_reject_score" value="<?= tohtml($v_spam_reject_score ?? "") ?>">
+							<small class="hint"><?= tohtml( _("Only applies while Reject Spam is enabled. Empty = server default.")) ?><?php if ($_SESSION["userContext"] !== "admin") { echo " " . tohtml(sprintf( _("Allowed range: %s to %s."), $_SESSION["POLICY_SPAM_REJECT_SCORE_MIN"] ?? "8.0", $_SESSION["POLICY_SPAM_REJECT_SCORE_MAX"] ?? "20.0")); } ?></small>
+						</div>
+						<div class="u-mb10">
+							<label for="v_spam_subject_tag" class="form-label">
+								<?= tohtml( _("Spam Subject Tag")) ?> <span class="optional">(<?= tohtml( _("Optional")) ?>)</span>
+							</label>
+							<input type="text" class="form-control" name="v_spam_subject_tag" id="v_spam_subject_tag" value="<?= tohtml($v_spam_subject_tag ?? "") ?>" placeholder="[SPAM]">
+							<small class="hint"><?= tohtml( _("Prepended to the subject of mail classified as spam.")) ?></small>
+						</div>
+					</div>
+				<?php } ?>
 			<?php } ?>
 			<?php if (!empty($_SESSION["ANTIVIRUS_SYSTEM"])) { ?>
 				<div class="form-check u-mb10">

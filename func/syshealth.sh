@@ -342,6 +342,28 @@ function syshealth_repair_system_config() {
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_CHANGE_THEME ('yes')"
 		$BIN/h-change-sys-config-value "POLICY_USER_CHANGE_THEME" "yes"
 	fi
+	# Per-domain spam tuning for customers (#318): feature toggle and the
+	# allowed threshold ranges (points) for non-admin users
+	if [[ -z $(check_key_exists 'POLICY_SPAM_CUSTOMER_TUNING') ]]; then
+		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_CUSTOMER_TUNING ('yes')"
+		$BIN/h-change-sys-config-value "POLICY_SPAM_CUSTOMER_TUNING" "yes"
+	fi
+	if [[ -z $(check_key_exists 'POLICY_SPAM_SCORE_MIN') ]]; then
+		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_SCORE_MIN ('3.0')"
+		$BIN/h-change-sys-config-value "POLICY_SPAM_SCORE_MIN" "3.0"
+	fi
+	if [[ -z $(check_key_exists 'POLICY_SPAM_SCORE_MAX') ]]; then
+		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_SCORE_MAX ('10.0')"
+		$BIN/h-change-sys-config-value "POLICY_SPAM_SCORE_MAX" "10.0"
+	fi
+	if [[ -z $(check_key_exists 'POLICY_SPAM_REJECT_SCORE_MIN') ]]; then
+		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_REJECT_SCORE_MIN ('8.0')"
+		$BIN/h-change-sys-config-value "POLICY_SPAM_REJECT_SCORE_MIN" "8.0"
+	fi
+	if [[ -z $(check_key_exists 'POLICY_SPAM_REJECT_SCORE_MAX') ]]; then
+		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_REJECT_SCORE_MAX ('20.0')"
+		$BIN/h-change-sys-config-value "POLICY_SPAM_REJECT_SCORE_MAX" "20.0"
+	fi
 	# Protect admin user
 	if [[ -z $(check_key_exists 'POLICY_SYSTEM_PROTECTED_ADMIN') ]]; then
 		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_PROTECTED_ADMIN ('no')"

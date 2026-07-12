@@ -73,6 +73,11 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 		$exclude_data[$v_domain]["RELAY_EXCLUDE"] ?? "",
 	);
 
+	// Per-domain spam tuning (#318): empty = server default applies
+	$v_spam_score = $data[$v_domain]["U_SPAM_SCORE"] ?? "";
+	$v_spam_reject_score = $data[$v_domain]["U_SPAM_REJECT_SCORE"] ?? "";
+	$v_spam_subject_tag = $data[$v_domain]["U_SPAM_SUBJECT_TAG"] ?? "";
+
 	if ($v_suspended == "yes") {
 		$v_status = "suspended";
 	} else {
@@ -354,6 +359,168 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		check_return_code($return_var, $output);
 		$v_reject = "";
 		unset($output);
+	}
+
+	// Per-domain spam tuning (#318): mark/reject thresholds and subject tag.
+	// Only processed when the tuning UI was rendered (sensitivity field
+	// present). Non-admin users are bound to the POLICY_SPAM_* ranges and the
+	// POLICY_SPAM_CUSTOMER_TUNING toggle; the admin is unrestricted.
+	if (empty($_SESSION["error_msg"]) && isset($_POST["v_spam_sensitivity"])) {
+		$spam_presets = ["tolerant" => "7.0", "normal" => "5.0", "strict" => "3.5"];
+		$spam_is_admin = $_SESSION["userContext"] === "admin";
+		$spam_tuning_allowed =
+			$spam_is_admin || ($_SESSION["POLICY_SPAM_CUSTOMER_TUNING"] ?? "yes") !== "no";
+		if ($spam_tuning_allowed) {
+			// Mark threshold: preset or custom value; "default" clears the override
+			$spam_sensitivity = $_POST["v_spam_sensitivity"];
+			$new_spam_score = $spam_presets[$spam_sensitivity] ?? "";
+			if ($spam_sensitivity === "custom") {
+				$new_spam_score = trim($_POST["v_spam_score"] ?? "");
+				if (!preg_match('/^\d{1,2}(\.\d)?$/', $new_spam_score)) {
+					$_SESSION["error_msg"] = _("Invalid spam score threshold.");
+				}
+			}
+			if (empty($_SESSION["error_msg"]) && $new_spam_score !== "" && !$spam_is_admin) {
+				$score_min = (float) ($_SESSION["POLICY_SPAM_SCORE_MIN"] ?? "3.0");
+				$score_max = (float) ($_SESSION["POLICY_SPAM_SCORE_MAX"] ?? "10.0");
+				if ((float) $new_spam_score < $score_min || (float) $new_spam_score > $score_max) {
+					$_SESSION["error_msg"] = sprintf(
+						_("Spam score threshold must be between %s and %s."),
+						$score_min,
+						$score_max,
+					);
+				}
+			}
+			if (empty($_SESSION["error_msg"]) && $new_spam_score !== $v_spam_score) {
+				if ($new_spam_score === "") {
+					exec(
+						HESTIA_CMD .
+							"h-delete-mail-domain-spam-score " .
+							$v_username .
+							" " .
+							quoteshellarg($v_domain),
+						$output,
+						$return_var,
+					);
+				} else {
+					exec(
+						HESTIA_CMD .
+							"h-change-mail-domain-spam-score " .
+							$v_username .
+							" " .
+							quoteshellarg($v_domain) .
+							" " .
+							quoteshellarg($new_spam_score),
+						$output,
+						$return_var,
+					);
+				}
+				check_return_code($return_var, $output);
+				unset($output);
+				if (empty($_SESSION["error_msg"])) {
+					$v_spam_score = $new_spam_score;
+				}
+			}
+
+			// Reject threshold: plain numeric input, empty = server default.
+			// Stored independently of the reject toggle; exim only applies it
+			// while reject_spam is enabled.
+			$new_reject_score = trim($_POST["v_spam_reject_score"] ?? "");
+			if (
+				empty($_SESSION["error_msg"]) &&
+				$new_reject_score !== "" &&
+				!preg_match('/^\d{1,2}(\.\d)?$/', $new_reject_score)
+			) {
+				$_SESSION["error_msg"] = _("Invalid spam reject threshold.");
+			}
+			if (empty($_SESSION["error_msg"]) && $new_reject_score !== "" && !$spam_is_admin) {
+				$reject_min = (float) ($_SESSION["POLICY_SPAM_REJECT_SCORE_MIN"] ?? "8.0");
+				$reject_max = (float) ($_SESSION["POLICY_SPAM_REJECT_SCORE_MAX"] ?? "20.0");
+				if (
+					(float) $new_reject_score < $reject_min ||
+					(float) $new_reject_score > $reject_max
+				) {
+					$_SESSION["error_msg"] = sprintf(
+						_("Spam reject threshold must be between %s and %s."),
+						$reject_min,
+						$reject_max,
+					);
+				}
+			}
+			if (empty($_SESSION["error_msg"]) && $new_reject_score !== $v_spam_reject_score) {
+				if ($new_reject_score === "") {
+					exec(
+						HESTIA_CMD .
+							"h-delete-mail-domain-spam-reject-score " .
+							$v_username .
+							" " .
+							quoteshellarg($v_domain),
+						$output,
+						$return_var,
+					);
+				} else {
+					exec(
+						HESTIA_CMD .
+							"h-change-mail-domain-spam-reject-score " .
+							$v_username .
+							" " .
+							quoteshellarg($v_domain) .
+							" " .
+							quoteshellarg($new_reject_score),
+						$output,
+						$return_var,
+					);
+				}
+				check_return_code($return_var, $output);
+				unset($output);
+				if (empty($_SESSION["error_msg"])) {
+					$v_spam_reject_score = $new_reject_score;
+				}
+			}
+
+			// Subject tag: empty = no rewriting (charset mirrors the CLI check)
+			$new_subject_tag = trim($_POST["v_spam_subject_tag"] ?? "");
+			if (
+				empty($_SESSION["error_msg"]) &&
+				$new_subject_tag !== "" &&
+				!preg_match(
+					'/^[A-Za-z0-9\[\]()*+._:!#=-]([A-Za-z0-9\[\]()*+._:!#= -]{0,30}[A-Za-z0-9\[\]()*+._:!#=-])?$/',
+					$new_subject_tag,
+				)
+			) {
+				$_SESSION["error_msg"] = _("Invalid spam subject tag.");
+			}
+			if (empty($_SESSION["error_msg"]) && $new_subject_tag !== $v_spam_subject_tag) {
+				if ($new_subject_tag === "") {
+					exec(
+						HESTIA_CMD .
+							"h-delete-mail-domain-spam-subject-tag " .
+							$v_username .
+							" " .
+							quoteshellarg($v_domain),
+						$output,
+						$return_var,
+					);
+				} else {
+					exec(
+						HESTIA_CMD .
+							"h-change-mail-domain-spam-subject-tag " .
+							$v_username .
+							" " .
+							quoteshellarg($v_domain) .
+							" " .
+							quoteshellarg($new_subject_tag),
+						$output,
+						$return_var,
+					);
+				}
+				check_return_code($return_var, $output);
+				unset($output);
+				if (empty($_SESSION["error_msg"])) {
+					$v_spam_subject_tag = $new_subject_tag;
+				}
+			}
+		}
 	}
 
 	// Change catchall address
