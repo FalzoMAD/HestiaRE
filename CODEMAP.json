@@ -49,7 +49,7 @@
         "user": { "count": 99, "pattern": "bin/h-*-user*" },
         "sys": { "count": 103, "pattern": "bin/h-*-sys*" },
         "web": { "count": 80, "pattern": "bin/h-*-web*" },
-        "mail": { "count": 66, "pattern": "bin/h-*-mail*" },
+        "mail": { "count": 81, "pattern": "bin/h-*-mail*" },
         "dns": { "count": 1, "pattern": "bin/h-*-dns*", "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58" },
         "database": { "count": 31, "pattern": "bin/h-*-database*" },
         "firewall": { "count": 21, "pattern": "bin/h-*-firewall*" },

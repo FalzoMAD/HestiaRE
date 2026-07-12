@@ -1,0 +1,83 @@
+#!/bin/bash
+# info: delete sender from per-domain spam whitelist
+# options: USER DOMAIN SENDER
+#
+# example: h-delete-mail-domain-spam-whitelist user domain.tld partner@example.com
+#
+# Removes a sender pattern from the domain's spam whitelist (see
+# h-add-mail-domain-spam-whitelist). Idempotent; the mirrored per-domain file
+# is removed when the list becomes empty.
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+sender=$(echo "$3" | tr '[:upper:]' '[:lower:]')
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Define mail user
+if [ "$MAIL_SYSTEM" = 'exim4' ]; then
+	MAIL_USER=Debian-exim
+else
+	MAIL_USER=exim
+fi
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '3' "$#" 'USER DOMAIN SENDER'
+is_format_valid 'user' 'domain'
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+is_object_unsuspended 'mail' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+list_file="$HOMEDIR/$user/conf/mail/$domain/spam_whitelist"
+current=$(get_object_value 'mail' 'DOMAIN' "$domain" '$U_SPAM_WHITELIST')
+
+new_list=",$current,"
+new_list="${new_list/",$sender,"/,}"
+new_list="${new_list#,}"
+new_list="${new_list%,}"
+
+if [ -z "$new_list" ]; then
+	rm -f "$list_file"
+else
+	echo "$new_list" | tr ',' '\n' > "$list_file"
+	chown $MAIL_USER:mail "$list_file"
+	chmod 660 "$list_file"
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Updating whitelist value in config
+add_object_key 'mail' 'DOMAIN' "$domain" 'U_SPAM_WHITELIST' 'ACCOUNTS'
+update_object_value 'mail' 'DOMAIN' "$domain" '$U_SPAM_WHITELIST' "$new_list"
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Mail" "Spam whitelist entry removed (Domain: $domain, Sender: $sender)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

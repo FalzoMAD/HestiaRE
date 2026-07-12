@@ -1,0 +1,90 @@
+#!/bin/bash
+# info: change per-domain spam mark threshold
+# options: USER DOMAIN SCORE
+#
+# example: h-change-mail-domain-spam-score user domain.tld 6.5
+#
+# Sets the spam mark threshold for one mail domain (in spam points, at most
+# one decimal). Incoming mail scoring above it gets X-Spam-Status: Yes and
+# the .Spam foldering. Stored in mail.conf as U_SPAM_SCORE (source of truth,
+# survives rebuild/restore) and mirrored as integer tenths — the unit exim
+# compares in — to /home/$user/conf/mail/$domain/spam_score (symlinked into
+# /etc/exim4/domains/), read by exim per message: no reload needed. Removing
+# the override (h-delete-mail-domain-spam-score) falls back to the global
+# SPAM_SCORE default. Customer-facing range limits (POLICY_SPAM_SCORE_MIN/
+# MAX) are enforced by the panel; the CLI only validates the format.
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+score=$3
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Define mail user
+if [ "$MAIL_SYSTEM" = 'exim4' ]; then
+	MAIL_USER=Debian-exim
+else
+	MAIL_USER=exim
+fi
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '3' "$#" 'USER DOMAIN SCORE'
+is_format_valid 'user' 'domain'
+if ! [[ "$score" =~ ^[0-9]{1,2}(\.[0-9])?$ ]]; then
+	check_result "$E_INVALID" "invalid score format :: $score (points, one decimal, e.g. 6.5)"
+fi
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+is_system_enabled "$ANTISPAM_SYSTEM" 'ANTISPAM_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+is_object_unsuspended 'mail' 'DOMAIN' "$domain"
+
+# exim compares integer tenths ($spam_score_int)
+score_tenths=$(awk -v s="$score" 'BEGIN{printf "%d", s * 10 + 0.5}')
+if [ "$score_tenths" -lt 1 ]; then
+	check_result "$E_INVALID" "score must be greater than 0"
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+score_file="$HOMEDIR/$user/conf/mail/$domain/spam_score"
+
+# no trailing newline — exim compares the raw file content numerically
+printf '%s' "$score_tenths" > "$score_file"
+chown $MAIL_USER:mail "$score_file"
+chmod 660 "$score_file"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Adding spam score value in config
+add_object_key 'mail' 'DOMAIN' "$domain" 'U_SPAM_SCORE' 'ACCOUNTS'
+update_object_value 'mail' 'DOMAIN' "$domain" '$U_SPAM_SCORE' "$score"
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Mail" "Spam mark threshold changed (Domain: $domain, Score: $score)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

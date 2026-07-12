@@ -31,6 +31,29 @@ section as part of its PR. On release, the section gets the version number.
   the controller API. No separate rspamd login; installer still sets the
   controller password overriding the stock `q1` default as defense in depth
   (#301)
+- Embedded rspamd UI follows the panel theme: on dark panel themes a
+  home-grown override stylesheet (`web/css/src/rspamd-dark.css`) is injected
+  into the same-origin iframe — rspamd has no native dark mode below 3.14,
+  which no target platform ships; the override only touches Bootstrap colour
+  classes that are identical across rspamd 3.4/3.8/3.12 (#319)
+- Per-domain spam tuning for customers: mark threshold (preset
+  tolerant/normal/strict or custom value), reject threshold and an optional
+  spam subject tag per mail domain, editable in the panel below the Spam
+  Filter toggle and via `h-change`/`h-delete-mail-domain-spam-score`/
+  `-spam-reject-score`/`-spam-subject-tag`. Values live in `mail.conf`
+  (rebuild/restore-safe), mirrored to per-domain files read by exim per
+  message — no reload. Non-admin users are bounded by the new
+  `POLICY_SPAM_CUSTOMER_TUNING` and `POLICY_SPAM_(REJECT_)SCORE_MIN/MAX`
+  keys; exim keeps decision authority (#318)
+- Per-domain sender whitelist/blacklist (spam tuning phase 2): whitelisted
+  senders are never treated as spam (scan skipped), blacklisted senders are
+  always marked — with `.Spam` foldering and subject tag — and refused at
+  SMTP time while Reject Spam is on; whitelist wins on conflict. Patterns
+  `user@dom`, `*@dom`, `dom`, `*.dom` per line, managed via
+  `h-add|delete|list-mail-domain-spam-whitelist|-blacklist` and two
+  textareas in the mail domain editor; same exim-file data model as phase 1,
+  no reload. The per-domain greylist toggle from the plan was dropped —
+  greylisting is deliberately disabled in HestiaRE (#330)
 
 ## v0.8.0 (2026-07-11) — cumulative changes since the fork
 

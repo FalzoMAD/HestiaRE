@@ -83,6 +83,13 @@ DKIM_PRIVATE_KEY = ${if exists{DKIM_FILE}{DKIM_FILE}{0}}
 
 OUTGOING_IP = /etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains}}/ip
 
+# Per-domain spam subject tag (h-change-mail-domain-spam-subject-tag): if the
+# recipient domain has this file, its content replaces the global
+# "*** SPAM ***" subject prefix (system.filter) for mail classified as spam
+# (X-Spam-Status: Yes), applied at local delivery time per recipient domain.
+SPAM_SUBJECT_TAG_FILE = /etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/spam_subject_tag
+SPAM_SUBJECT_TAG_ACTIVE = ${if and{{match{$h_X-Spam-Status:}{\N^Yes\N}}{exists{SPAM_SUBJECT_TAG_FILE}}}{yes}{no}}
+
 SMTP_RELAY_FILE = ${if exists{/etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains}}/smtp_relay.conf}{/etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains}}/smtp_relay.conf}{/etc/exim4/smtp_relay.conf}}
 SMTP_RELAY_HOST = ${lookup{host}lsearch{SMTP_RELAY_FILE}}
 SMTP_RELAY_PORT = ${lookup{port}lsearch{SMTP_RELAY_FILE}}
@@ -193,10 +200,37 @@ acl_check_rcpt:
 .ifdef RSPAMD
  warn    set acl_m1    = no
          set acl_m3    = no
+         set acl_m4    = SPAM_SCORE
+         set acl_m5    = SPAM_REJECT_SCORE
+         set acl_m6    = no
+         set acl_m7    = no
  warn    condition     = ${if exists {/etc/exim4/domains/$domain/antispam}{yes}{no}}
          set acl_m1    = yes
  warn    condition     = ${if exists {/etc/exim4/domains/$domain/reject_spam}{yes}{no}}
          set acl_m3    = yes
+# Per-domain threshold overrides (h-change-mail-domain-spam-(reject-)score):
+# integer tenths like the global macros, read per message — no reload needed.
+# Guarded by a digits-only match so a malformed file falls back to the global
+# default instead of breaking the numeric conditions in acl_check_data.
+# Like acl_m1/m3, the last recipient's domain wins for multi-domain messages.
+ warn    condition     = ${if exists {/etc/exim4/domains/$domain/spam_score}{yes}{no}}
+         condition     = ${if match {${readfile{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/spam_score}}}{\N^\d+$\N}{yes}{no}}
+         set acl_m4    = ${readfile{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/spam_score}}
+ warn    condition     = ${if exists {/etc/exim4/domains/$domain/spam_reject_score}{yes}{no}}
+         condition     = ${if match {${readfile{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/spam_reject_score}}}{\N^\d+$\N}{yes}{no}}
+         set acl_m5    = ${readfile{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/spam_reject_score}}
+# Per-domain sender white/blacklist (h-add-mail-domain-spam-whitelist /
+# -blacklist): wildlsearch patterns (user@dom, *@dom, dom, *.dom) matched
+# against the lowercased envelope sender and its domain. acl_m6 = whitelisted
+# (scan skipped entirely in acl_check_data), acl_m7 = blacklisted (always
+# marked as spam; refused while reject_spam is active). The whitelist wins.
+ warn    condition     = ${if exists {/etc/exim4/domains/$domain/spam_whitelist}{yes}{no}}
+         condition     = ${lookup{${lc:$sender_address}}wildlsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/spam_whitelist}{yes}{${lookup{${lc:$sender_address_domain}}wildlsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/spam_whitelist}{yes}{no}}}}
+         set acl_m6    = yes
+ warn    condition     = ${if !eq{$acl_m6}{yes} {yes}{no}}
+         condition     = ${if exists {/etc/exim4/domains/$domain/spam_blacklist}{yes}{no}}
+         condition     = ${lookup{${lc:$sender_address}}wildlsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/spam_blacklist}{yes}{${lookup{${lc:$sender_address_domain}}wildlsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/spam_blacklist}{yes}{no}}}}
+         set acl_m7    = yes
 .endif
 
   accept
@@ -210,10 +244,14 @@ acl_check_data:
 .endif
 
 .ifdef RSPAMD
+  # Scan skipped for white/blacklisted senders (acl_m6/m7): the outcome is
+  # predetermined either way, no point burning rspamd time on it
  warn   !authenticated = *
         hosts          = !+relay_from_hosts
         condition      = ${if < {$message_size}{1024K}}
         condition      = ${if eq{$acl_m1}{yes}{yes}{no}}
+        condition      = ${if eq{$acl_m6}{no}{yes}{no}}
+        condition      = ${if eq{$acl_m7}{no}{yes}{no}}
         spam           = nobody:true/defer_ok
         add_header     = X-Spam-Score: $spam_score_int
         add_header     = X-Spam-Bar: $spam_bar
@@ -221,15 +259,30 @@ acl_check_data:
         set acl_m2     = $spam_score_int
 
  warn   condition      = ${if !eq{$acl_m2}{} {yes}{no}}
-        condition      = ${if >{$acl_m2}{SPAM_SCORE} {yes}{no}}
+        condition      = ${if >{$acl_m2}{$acl_m4} {yes}{no}}
         add_header     = X-Spam-Status: Yes
         message        = rspamd detected spam (from $sender_address to $recipients).
 
-  # Deny spam at high score if spam score > SPAM_REJECT_SCORE and delete_spam is enabled
+  # Blacklisted sender: always spam — marked without a scan (.Spam foldering
+  # and the subject tag key off the header), refused while reject_spam is on
+  deny   message        = Sender address is blacklisted for the recipient domain
+         condition      = ${if eq{$acl_m1}{yes}{yes}{no}}
+         condition      = ${if eq{$acl_m7}{yes}{yes}{no}}
+         condition      = ${if eq{$acl_m3}{yes}{yes}{no}}
+
+ warn   condition      = ${if eq{$acl_m1}{yes}{yes}{no}}
+        condition      = ${if eq{$acl_m7}{yes}{yes}{no}}
+        add_header     = X-Spam-Status: Yes
+        message        = sender blacklisted (from $sender_address to $recipients).
+
+  # Deny spam at high score if spam score > reject threshold (acl_m5, per-domain
+  # or global SPAM_REJECT_SCORE) and reject_spam is enabled; whitelisted
+  # senders (acl_m6) are exempt
   deny   message        = This message scored $spam_score spam points
          condition      = ${if eq{$acl_m3}{yes}{yes}{no}}
+         condition      = ${if eq{$acl_m6}{no}{yes}{no}}
          spam           = nobody:true
-         condition      = ${if >{$spam_score_int}{SPAM_REJECT_SCORE}{1}{0}}
+         condition      = ${if >{$spam_score_int}{$acl_m5}{1}{0}}
 .endif
 
   accept
@@ -467,6 +520,16 @@ local_delivery:
   delivery_date_add
   envelope_to_add
   return_path_add
+.ifdef RSPAMD
+  # headers_remove is a colon-separated list split BEFORE per-item expansion;
+  # the condition contains colons ($h_X-Spam-Status:), so switch the list
+  # separator to ";" (headers_add is newline-separated — no issue there)
+  headers_remove = <; ${if eq{SPAM_SUBJECT_TAG_ACTIVE}{yes}{Subject}{}}
+  # the per-domain tag REPLACES the global "*** SPAM ***" prefix the system
+  # filter has already prepended (same X-Spam-Status condition), so tags
+  # never stack; domains without a tag file keep the global prefix
+  headers_add = ${if eq{SPAM_SUBJECT_TAG_ACTIVE}{yes}{Subject: ${sg{${readfile{SPAM_SUBJECT_TAG_FILE}}}{\N[\r\n]\N}{}} ${sg{$h_subject:}{\N^\*\*\* SPAM \*\*\* \N}{}}}{}}
+.endif
   directory = "${extract{5}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}/mail/${lookup{$domain}dsearch{/etc/exim4/domains/}}/${lookup{$local_part}dsearch{${extract{5}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}/mail/${lookup{$domain}dsearch{/etc/exim4/domains/}}}}"
   quota = ${extract{6}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}M
   quota_warn_threshold = 75%
@@ -484,6 +547,16 @@ local_spam_delivery:
   delivery_date_add
   envelope_to_add
   return_path_add
+.ifdef RSPAMD
+  # headers_remove is a colon-separated list split BEFORE per-item expansion;
+  # the condition contains colons ($h_X-Spam-Status:), so switch the list
+  # separator to ";" (headers_add is newline-separated — no issue there)
+  headers_remove = <; ${if eq{SPAM_SUBJECT_TAG_ACTIVE}{yes}{Subject}{}}
+  # the per-domain tag REPLACES the global "*** SPAM ***" prefix the system
+  # filter has already prepended (same X-Spam-Status condition), so tags
+  # never stack; domains without a tag file keep the global prefix
+  headers_add = ${if eq{SPAM_SUBJECT_TAG_ACTIVE}{yes}{Subject: ${sg{${readfile{SPAM_SUBJECT_TAG_FILE}}}{\N[\r\n]\N}{}} ${sg{$h_subject:}{\N^\*\*\* SPAM \*\*\* \N}{}}}{}}
+.endif
   directory = "${extract{5}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}/mail/${lookup{$domain}dsearch{/etc/exim4/domains/}}/${lookup{$local_part}dsearch{${extract{5}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}/mail/${lookup{$domain}dsearch{/etc/exim4/domains/}}}}/.Spam"
   quota = ${extract{6}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}M
   quota_directory = "${extract{5}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}/mail/${lookup{$domain}dsearch{/etc/exim4/domains/}}/${lookup{$local_part}dsearch{${extract{5}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}/mail/${lookup{$domain}dsearch{/etc/exim4/domains/}}}}"

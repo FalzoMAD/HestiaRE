@@ -1,0 +1,62 @@
+#!/bin/bash
+# info: delete per-domain spam mark threshold
+# options: USER DOMAIN
+#
+# example: h-delete-mail-domain-spam-score user domain.tld
+#
+# Removes the per-domain spam mark threshold override set by
+# h-change-mail-domain-spam-score; the domain falls back to the global
+# SPAM_SCORE default. Idempotent.
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN'
+is_format_valid 'user' 'domain'
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'mail' 'DOMAIN' "$domain"
+is_object_unsuspended 'mail' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+rm -f "$HOMEDIR/$user/conf/mail/$domain/spam_score"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Clearing spam score value in config (key may not exist on old domains)
+if [ -n "$(get_object_value 'mail' 'DOMAIN' "$domain" '$U_SPAM_SCORE')" ]; then
+	update_object_value 'mail' 'DOMAIN' "$domain" '$U_SPAM_SCORE' ''
+fi
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Mail" "Spam mark threshold reset to server default (Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit
