@@ -8,6 +8,7 @@
 #SPAM_SCORE = 50
 #SPAM_REJECT_SCORE = 100
 #CLAMD = yes
+#SIEVE = yes
 
 smtp_banner = $smtp_active_hostname ESMTP
 smtp_active_hostname = ${lookup dnsdb{>: defer_never,ptr=$interface_address}{${listextract{1}{$value}}}{$primary_hostname}}
@@ -445,7 +446,14 @@ localuser_spam:
 
 localuser:
   driver = accept
+# With the sieve addon (h-add-sys-sieve) clean local mail is handed to
+# dovecot-lda so the account's sieve scripts run at delivery. Spam keeps the
+# direct .Spam appendfile path (localuser_spam above) — its verdict is final.
+.ifdef SIEVE
+  transport = dovecot_virtual_delivery
+.else
   transport = local_delivery
+.endif
   condition = ${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}{true}{false}}
 
 catchall:
@@ -561,6 +569,25 @@ local_spam_delivery:
   quota = ${extract{6}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}M
   quota_directory = "${extract{5}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}/mail/${lookup{$domain}dsearch{/etc/exim4/domains/}}/${lookup{$local_part}dsearch{${extract{5}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}/mail/${lookup{$domain}dsearch{/etc/exim4/domains/}}}}"
   quota_warn_threshold = 75%
+
+.ifdef SIEVE
+# Sieve addon delivery agent: dovecot-lda runs the account's sieve scripts and
+# writes into the same maildir layout as local_delivery (quota enforced by the
+# dovecot quota plugin from the userdb extras). The account name is detainted
+# via the accounts-file lookup; the userdb lookup (-d) goes through the
+# auth-master socket (10-master.conf), running as the mailbox system user.
+dovecot_virtual_delivery:
+  driver = pipe
+  command = /usr/lib/dovecot/dovecot-lda -e -d ${extract{1}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/accounts}}}}@${lookup{$domain}dsearch{/etc/exim4/domains/}}
+  delivery_date_add
+  envelope_to_add
+  return_path_add
+  log_output = true
+  log_defer_output = true
+  user = ${extract{2}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}
+  group = mail
+  return_output
+.endif
 
 address_pipe:
   driver = pipe

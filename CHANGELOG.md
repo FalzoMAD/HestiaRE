@@ -35,6 +35,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- rspamd and sieve are modular addons (#122 part 1): `h-add-sys-rspamd`/
+  `h-remove-sys-rspamd` and `h-add-sys-sieve`/`h-remove-sys-sieve` install,
+  wire, unwire and purge each service at runtime; the installer now just
+  invokes them per the recipe. The sieve addon is the first FUNCTIONAL
+  sieve support: ManageSieve on 4190 (localhost consumers), per-account
+  script storage inside the account maildir, and clean local delivery
+  switched to dovecot-lda (new `SIEVE` exim macro +
+  `dovecot_virtual_delivery` transport) so scripts actually run at
+  delivery — spam keeps exim's direct `.Spam` path. Removal reverts to the
+  appendfile transport; stored scripts survive re-adding. The
+  managesieved/sieve packages left the base install set (#122)
 - rspamd controller web UI embedded in the panel at `/list/rspamd/` (iframe),
   admin-only. Two independent access layers: Caddy `forward_auth` requires an
   authenticated admin session, and the controller listens on a unix socket
