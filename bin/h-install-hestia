@@ -602,11 +602,13 @@ install_mail() {
 			>> /etc/rspamd/local.d/worker-controller.inc
 		systemctl enable rspamd
 		systemctl restart rspamd
-		# The controller listens on a unix socket (mode 0660, group _rspamd) so
-		# arbitrary local users can't reach it. Add caddy to the _rspamd group
-		# so the panel proxy can. Must precede the caddy (re)start below/finalize
-		# so the running caddy process picks up the new group membership.
+		# Controller and scan worker listen on unix sockets (mode 0660, group
+		# _rspamd) so arbitrary local users can't reach them. Add caddy (panel
+		# proxy -> controller) and Debian-exim (spam scan -> normal worker) to
+		# the _rspamd group. Must precede the caddy/exim (re)starts below so
+		# the running processes pick up the new group membership.
 		usermod -aG _rspamd caddy
+		usermod -aG _rspamd Debian-exim
 		# Publish the controller UI via Panel-Caddy — reached from the panel
 		# page /list/rspamd/ (iframe), gated behind the admin session.
 		# try-restart: only bounce Caddy if it is already running — on a fresh

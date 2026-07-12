@@ -34,7 +34,7 @@ acl_smtp_data = acl_check_data
 acl_smtp_mime = acl_check_mime
 
 .ifdef RSPAMD
-spamd_address = 127.0.0.1 11333 variant=rspamd
+spamd_address = /run/rspamd/normal.sock variant=rspamd
 .endif
 
 .ifdef CLAMD
