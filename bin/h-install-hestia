@@ -561,6 +561,13 @@ install_mail() {
 	fi
 	cp -f "$DCDIR/dovecot.conf" /etc/dovecot/
 	cp -f "$DCDIR/conf.d/"* /etc/dovecot/conf.d/
+	if [ "$DCDIR" = "$HESTIA/share/dovecot/2.3" ]; then
+		# 2.3: our dovecot.conf defines the (anonymous) inbox namespace itself;
+		# the Debian stock 15-mailboxes.conf declares a second one with the same
+		# empty prefix -> "Duplicate namespace prefix" -> every IMAP/POP3 login
+		# fails after auth. 2.4 ships its own curated 15-mailboxes.conf instead.
+		rm -f /etc/dovecot/conf.d/15-mailboxes.conf
+	fi
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/dovecot" /etc/logrotate.d/
 	chown -R root:root /etc/dovecot*
 	touch /var/log/dovecot.log
