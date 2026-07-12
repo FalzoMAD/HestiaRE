@@ -146,6 +146,8 @@ if [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
 	check_socket /run/rspamd/normal.sock "rspamd scan worker"
 	check_socket /run/rspamd/controller.sock "rspamd controller"
 fi
+# localhost consumers only (webmail plugin) — not opened in the firewall
+[ "$SIEVE_SYSTEM" = 'yes' ] && check_port 4190 "managesieve"
 
 # --- Critical log markers ---
 echo "-- logs --"
