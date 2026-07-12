@@ -45,6 +45,15 @@ section as part of its PR. On release, the section gets the version number.
   message — no reload. Non-admin users are bounded by the new
   `POLICY_SPAM_CUSTOMER_TUNING` and `POLICY_SPAM_(REJECT_)SCORE_MIN/MAX`
   keys; exim keeps decision authority (#318)
+- Per-domain sender whitelist/blacklist (spam tuning phase 2): whitelisted
+  senders are never treated as spam (scan skipped), blacklisted senders are
+  always marked — with `.Spam` foldering and subject tag — and refused at
+  SMTP time while Reject Spam is on; whitelist wins on conflict. Patterns
+  `user@dom`, `*@dom`, `dom`, `*.dom` per line, managed via
+  `h-add|delete|list-mail-domain-spam-whitelist|-blacklist` and two
+  textareas in the mail domain editor; same exim-file data model as phase 1,
+  no reload. The per-domain greylist toggle from the plan was dropped —
+  greylisting is deliberately disabled in HestiaRE (#330)
 
 ## v0.8.0 (2026-07-11) — cumulative changes since the fork
 

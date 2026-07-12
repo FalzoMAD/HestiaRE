@@ -135,6 +135,20 @@ $spam_tuning_allowed =
 							<input type="text" class="form-control" name="v_spam_subject_tag" id="v_spam_subject_tag" value="<?= tohtml($v_spam_subject_tag ?? "") ?>" placeholder="[SPAM]">
 							<small class="hint"><?= tohtml( _("Prepended to the subject of mail classified as spam.")) ?></small>
 						</div>
+						<div class="u-mb10">
+							<label for="v_spam_whitelist" class="form-label">
+								<?= tohtml( _("Sender Whitelist")) ?> <span class="optional">(<?= tohtml( _("Optional")) ?>)</span>
+							</label>
+							<textarea class="form-control u-min-height100" name="v_spam_whitelist" id="v_spam_whitelist" placeholder="partner@example.com"><?= tohtml($v_spam_whitelist ?? "") ?></textarea>
+							<small class="hint"><?= tohtml( _("Never treated as spam. One sender per line: user@example.com, *@example.com, example.com or *.example.com.")) ?></small>
+						</div>
+						<div class="u-mb10">
+							<label for="v_spam_blacklist" class="form-label">
+								<?= tohtml( _("Sender Blacklist")) ?> <span class="optional">(<?= tohtml( _("Optional")) ?>)</span>
+							</label>
+							<textarea class="form-control u-min-height100" name="v_spam_blacklist" id="v_spam_blacklist" placeholder="spammer@example.com"><?= tohtml($v_spam_blacklist ?? "") ?></textarea>
+							<small class="hint"><?= tohtml( _("Always treated as spam; rejected while Reject Spam is enabled. Same format as the whitelist, which wins on conflict.")) ?></small>
+						</div>
 					</div>
 				<?php } ?>
 			<?php } ?>

@@ -78,6 +78,42 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_spam_reject_score = $data[$v_domain]["U_SPAM_REJECT_SCORE"] ?? "";
 	$v_spam_subject_tag = $data[$v_domain]["U_SPAM_SUBJECT_TAG"] ?? "";
 
+	// Per-domain sender white/blacklist (#330)
+	exec(
+		HESTIA_CMD .
+			"h-list-mail-domain-spam-whitelist " .
+			$user .
+			" " .
+			quoteshellarg($v_domain) .
+			" json",
+		$output,
+		$return_var,
+	);
+	$whitelist_data = json_decode(implode("", $output), true);
+	unset($output);
+	$v_spam_whitelist = str_replace(
+		",",
+		"\n",
+		$whitelist_data[$v_domain]["SPAM_WHITELIST"] ?? "",
+	);
+	exec(
+		HESTIA_CMD .
+			"h-list-mail-domain-spam-blacklist " .
+			$user .
+			" " .
+			quoteshellarg($v_domain) .
+			" json",
+		$output,
+		$return_var,
+	);
+	$blacklist_data = json_decode(implode("", $output), true);
+	unset($output);
+	$v_spam_blacklist = str_replace(
+		",",
+		"\n",
+		$blacklist_data[$v_domain]["SPAM_BLACKLIST"] ?? "",
+	);
+
 	if ($v_suspended == "yes") {
 		$v_status = "suspended";
 	} else {
@@ -518,6 +554,68 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 				unset($output);
 				if (empty($_SESSION["error_msg"])) {
 					$v_spam_subject_tag = $new_subject_tag;
+				}
+			}
+
+			// Sender white/blacklist (#330): diff textarea against current
+			// list and apply via the add/delete commands (pattern like the
+			// relay excludes in #306)
+			foreach (
+				[
+					"whitelist" => "v_spam_whitelist",
+					"blacklist" => "v_spam_blacklist",
+				]
+				as $spam_list_kind => $spam_list_var
+			) {
+				if (!empty($_SESSION["error_msg"])) {
+					break;
+				}
+				$current_entries = array_filter(explode("\n", $$spam_list_var));
+				$wentries = preg_replace("/\n/", " ", $_POST[$spam_list_var] ?? "");
+				$wentries = preg_replace("/,/", " ", $wentries);
+				$wentries = preg_replace("/\s+/", " ", $wentries);
+				$wentries = strtolower(trim($wentries));
+				$entries = array_filter(explode(" ", $wentries));
+				foreach (array_diff($current_entries, $entries) as $spam_sender) {
+					if (empty($_SESSION["error_msg"])) {
+						exec(
+							HESTIA_CMD .
+								"h-delete-mail-domain-spam-" .
+								$spam_list_kind .
+								" " .
+								$v_username .
+								" " .
+								quoteshellarg($v_domain) .
+								" " .
+								quoteshellarg($spam_sender),
+							$output,
+							$return_var,
+						);
+						check_return_code($return_var, $output);
+						unset($output);
+					}
+				}
+				foreach (array_diff($entries, $current_entries) as $spam_sender) {
+					if (empty($_SESSION["error_msg"])) {
+						exec(
+							HESTIA_CMD .
+								"h-add-mail-domain-spam-" .
+								$spam_list_kind .
+								" " .
+								$v_username .
+								" " .
+								quoteshellarg($v_domain) .
+								" " .
+								quoteshellarg($spam_sender),
+							$output,
+							$return_var,
+						);
+						check_return_code($return_var, $output);
+						unset($output);
+					}
+				}
+				if (empty($_SESSION["error_msg"])) {
+					$$spam_list_var = implode("\n", $entries);
 				}
 			}
 		}
