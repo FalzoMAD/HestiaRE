@@ -31,6 +31,11 @@ section as part of its PR. On release, the section gets the version number.
   the controller API. No separate rspamd login; installer still sets the
   controller password overriding the stock `q1` default as defense in depth
   (#301)
+- Embedded rspamd UI follows the panel theme: on dark panel themes a
+  home-grown override stylesheet (`web/css/src/rspamd-dark.css`) is injected
+  into the same-origin iframe — rspamd has no native dark mode below 3.14,
+  which no target platform ships; the override only touches Bootstrap colour
+  classes that are identical across rspamd 3.4/3.8/3.12 (#319)
 
 ## v0.8.0 (2026-07-11) — cumulative changes since the fork
 
