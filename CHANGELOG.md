@@ -15,6 +15,11 @@ section as part of its PR. On release, the section gets the version number.
   keys, no confusable I/l/1/O/0 or pipe/braces) with only 1–3 symbols per
   password, so generated passwords survive being typed by hand, e.g. over
   VNC (#316)
+- rspamd scan worker moved from TCP `127.0.0.1:11333` to a group-restricted
+  unix socket (`/run/rspamd/normal.sock`, mode 0660, group `_rspamd` — the
+  installer adds `Debian-exim`), so local shell users can no longer read the
+  rule/score configuration or submit scan jobs; same pattern as the
+  controller socket from #301 (#321)
 
 ### Added
 
