@@ -54,13 +54,6 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != 'no' ]; then
 	check_result "$?" "web domain deletion failed"
 fi
 
-# Deleting dns domains
-if [ -n "$DNS_SYSTEM" ] && [ "$DNS_SYSTEM" != 'no' ]; then
-	$BIN/h-unsuspend-dns-domains "$user" "$restart"
-	$BIN/h-delete-dns-domains "$user" "$restart"
-	check_result "$?" "dns domain deletion failed"
-fi
-
 # Deleting mail domains
 if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'no' ]; then
 	$BIN/h-unsuspend-mail-domains "$user"

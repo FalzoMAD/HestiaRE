@@ -23,3 +23,6 @@ composer.phar
 
 # Instance data: custom panel themes (never shipped)
 web/css/src/themes/custom/
+
+# Claude
+.claude/

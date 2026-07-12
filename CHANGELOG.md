@@ -7,10 +7,35 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
-## Unreleased — cumulative changes since the fork (up to v0.8.0)
+## Unreleased
 
-Everything below shipped incrementally across v0.1.x–v0.7.x. Starting with
-v0.8.0, entries are grouped per release.
+### Changed / Rebuilt
+
+- Panel password generator: typeable-anywhere character set (no AltGr/dead
+  keys, no confusable I/l/1/O/0 or pipe/braces) with only 1–3 symbols per
+  password, so generated passwords survive being typed by hand, e.g. over
+  VNC (#316)
+- rspamd scan worker moved from TCP `127.0.0.1:11333` to a group-restricted
+  unix socket (`/run/rspamd/normal.sock`, mode 0660, group `_rspamd` — the
+  installer adds `Debian-exim`), so local shell users can no longer read the
+  rule/score configuration or submit scan jobs; same pattern as the
+  controller socket from #301 (#321)
+
+### Added
+
+- rspamd controller web UI embedded in the panel at `/list/rspamd/` (iframe),
+  admin-only. Two independent access layers: Caddy `forward_auth` requires an
+  authenticated admin session, and the controller listens on a unix socket
+  (mode 0660, group `_rspamd` — the installer adds `caddy` to it) instead of
+  TCP localhost, so no local shell user (e.g. a customer with SSH) can read
+  the controller API. No separate rspamd login; installer still sets the
+  controller password overriding the stock `q1` default as defense in depth
+  (#301)
+
+## v0.8.0 (2026-07-11) — cumulative changes since the fork
+
+Everything below shipped incrementally across v0.1.x–v0.8.0. From here on,
+entries are grouped per release.
 
 ### Removed (vs. HestiaCP)
 
@@ -31,7 +56,8 @@ v0.8.0, entries are grouped per release.
 - `hestiamail` system user (#214)
 - Dead ballast sweeps: bind9/named/vsftpd remnants (#213),
   spamassassin/spamd remnants incl. their panel editor pages (#284),
-  unused installer data (#119)
+  unused installer data (#119), stale calls to removed DNS commands in
+  domain/user lifecycle scripts — errored on every run (#213)
 
 ### Changed / Rebuilt
 
@@ -86,7 +112,8 @@ v0.8.0, entries are grouped per release.
   (#121)
 - Per-mail-domain SMTP relay excludes: `bypass_smtp_relay` router delivers
   listed recipient domains directly via DNS/MX past the relay, managed by
-  `h-add`/`h-delete`/`h-list-mail-domain-relay-exclude` (#304)
+  `h-add`/`h-delete`/`h-list-mail-domain-relay-exclude` (#304) and editable
+  in the panel's mail domain settings below the relay credentials (#306)
 - `hestia` umbrella command: `hestia install|configure|update|uninstall|status`
 - Repo tooling & docs: `CODEMAP.json`, `PATHS.md`, `TROUBLESHOOTING.md`,
   `VENDORED.json`, upstream sync/vendor-update scripts in `share/upstream/`
