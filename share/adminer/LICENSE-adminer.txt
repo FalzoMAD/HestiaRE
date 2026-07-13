@@ -1,0 +1,23 @@
+Adminer — vendored into HestiaRE
+================================
+
+Upstream project : Adminer (https://www.adminer.org/)
+Source repository: https://github.com/vrana/adminer
+Vendored version : v5.4.4 (release asset adminer-5.4.4-en.php)
+Vendored file    : share/adminer/adminer.php
+
+License (verbatim from the upstream LICENSE file):
+
+    Apache License 2.0 or GPL 2
+
+Adminer is dual-licensed: you may use it under the terms of EITHER the
+Apache License, Version 2.0, OR the GNU General Public License, version 2.
+Both are GPL-compatible; HestiaRE redistributes the unmodified upstream
+single-file build under this dual license.
+
+  - Apache-2.0: https://www.apache.org/licenses/LICENSE-2.0
+  - GPL-2.0:    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+The vendored artifact is the official pre-built single-file release asset,
+byte-for-byte identical to upstream (sha256 pinned in VENDORED.json). No
+modifications were made.

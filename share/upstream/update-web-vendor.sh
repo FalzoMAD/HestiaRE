@@ -13,6 +13,7 @@
 #   alpinejs       upstream/alpinejs       web/js/vendor/alpinejs*.min.js + LICENSE
 #   fontawesome    upstream/fontawesome    web/css/vendor/fontawesome/* + web/webfonts/fa-solid-900.woff2
 #   normalize-css  upstream/normalize-css  web/css/vendor/normalize.css + LICENSE
+#   adminer        upstream/adminer        share/adminer/adminer.php + LICENSE
 #
 # --check is strictly read-only (network: npm registry / GitHub API only).
 # --fetch works per asset: downloads exactly one project at the given (or
@@ -54,7 +55,8 @@ latest_version() {
 		# no GitHub releases upstream, only tags — highest version wins
 		normalize-css) api "https://api.github.com/repos/necolas/normalize.css/tags?per_page=100" \
 			| jq -r '.[].name | ltrimstr("v")' | sort -V | tail -1 ;;
-		*) fail "unknown asset: $1 (known: alpinejs fontawesome normalize-css)" ;;
+		adminer) api "https://api.github.com/repos/vrana/adminer/releases/latest" | jq -r '.tag_name | ltrimstr("v")' ;;
+		*) fail "unknown asset: $1 (known: alpinejs fontawesome normalize-css adminer)" ;;
 	esac
 }
 
@@ -244,18 +246,62 @@ EOF
 	close_worktree
 }
 
+fetch_adminer() {
+	local version=$1 branch="upstream/adminer" dir release digest url asset sha
+	# EN build, all drivers — the official pre-built single-file release asset.
+	# (There is no prebuilt pgsql-only asset; the full build is vendored and
+	# positioned as the Postgres UI — see VENDORED.json / #350.)
+	asset="adminer-$version-en.php"
+	release=$(api "https://api.github.com/repos/vrana/adminer/releases/tags/v$version")
+	url=$(echo "$release" | jq -r --arg n "$asset" '.assets[] | select(.name == $n) | .browser_download_url')
+	digest=$(echo "$release" | jq -r --arg n "$asset" '.assets[] | select(.name == $n) | .digest | ltrimstr("sha256:")')
+	[ -n "$url" ] || fail "release v$version has no asset $asset"
+
+	open_worktree "$branch"
+	dir="$WT/share/adminer"
+	mkdir -p "$dir"
+	curl -fsSL -A "$UA" -o "$dir/adminer.php" "$url"
+	[ -n "$digest" ] && [ "$digest" != "null" ] && verify_sha256 "$dir/adminer.php" "$digest"
+	php -l "$dir/adminer.php" > /dev/null 2>&1 || fail "downloaded adminer.php fails php -l"
+	curl -fsSL -A "$UA" -o "$dir/LICENSE-adminer.txt" \
+		"https://raw.githubusercontent.com/vrana/adminer/v$version/LICENSE"
+	sha=$(file_sha256 "$dir/adminer.php")
+	cat > "$dir/VERSIONS.md" << EOF
+# Vendored artifact — Adminer (vrana/adminer)
+
+Branch \`$branch\`: READ ONLY snapshot of the official release asset,
+laid out in HestiaRE target structure for direct merge/cherry-pick into dev.
+Update via share/upstream/update-web-vendor.sh (--fetch adminer[@version]).
+
+Release asset: $asset
+Source: $url
+Artifact sha256: ${digest:-"(no digest published for this release)"}
+
+| File | Version | Modification | sha256 (as vendored) |
+|---|---|---|---|
+| adminer.php | $version | none (byte-identical to $asset) | $sha |
+
+License: Apache-2.0 OR GPL-2.0 (LICENSE-adminer.txt, from the same tag).
+Canonical source: vrana/adminer (5.x) — NOT AdminerEvo (repo closed/dead) or
+AdminNeo (sidebranch). EN build, all drivers; phpMyAdmin stays the MySQL default.
+EOF
+	commit_snapshot "adminer" "$version" "$branch"
+	close_worktree
+}
+
 # ── modes ──────────────────────────────────────────────────
 
 do_check() {
 	local assets=$1 a pinned latest mark
-	[ "$assets" = "all" ] && assets="alpinejs fontawesome normalize-css"
+	[ "$assets" = "all" ] && assets="alpinejs fontawesome normalize-css adminer"
 	printf '%-15s %-10s %-10s %s\n' "ASSET" "PINNED" "LATEST" "STATUS"
 	for a in $assets; do
 		case "$a" in
 			alpinejs) pinned=$(pinned_version alpinejs) ;;
 			fontawesome) pinned=$(pinned_version fontawesome-free) ;;
 			normalize-css) pinned=$(pinned_version normalize.css) ;;
-			*) fail "unknown asset: $a (known: alpinejs fontawesome normalize-css)" ;;
+			adminer) pinned=$(pinned_version adminer) ;;
+			*) fail "unknown asset: $a (known: alpinejs fontawesome normalize-css adminer)" ;;
 		esac
 		latest=$(latest_version "$a")
 		mark="up to date"
@@ -275,7 +321,8 @@ do_fetch() {
 		alpinejs) fetch_alpinejs "$version" ;;
 		fontawesome) fetch_fontawesome "$version" ;;
 		normalize-css) fetch_normalize "$version" ;;
-		*) fail "unknown asset: $asset (known: alpinejs fontawesome normalize-css)" ;;
+		adminer) fetch_adminer "$version" ;;
+		*) fail "unknown asset: $asset (known: alpinejs fontawesome normalize-css adminer)" ;;
 	esac
 }
 

@@ -9,6 +9,24 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Added
+
+- Adminer as the PostgreSQL web UI, offered as an optional addon (#350). It is
+  a single vendored PHP file (`share/adminer/adminer.php`, official upstream
+  5.4.4 EN build, sha256-pinned in `VENDORED.json`) served by the Panel-Caddy at
+  `/adminer/` via a dedicated caddy FPM pool — the same delivery model as
+  phpMyAdmin, but repo-vendored because every OS `adminer` package ships a
+  CVE-affected version (deb12/noble 4.8.1: CVE-2023-45195/45196 + CVE-2025-43960;
+  even 26.04's 5.4.1: CVE-2026-25892, fixed only in 5.4.2). New commands
+  `h-add-sys-adminer` / `h-remove-sys-adminer` (no v-* symlinks). The wizard
+  offers it in the addons group and pre-selects it when PostgreSQL is chosen
+  (`visible_if DB_POSTGRESQL == true`, default on), hidden otherwise — replacing
+  the old `DB_PGADMIN` derivation (pgadmin4-web is in no OS repo; phpPgAdmin is
+  dormant). The smoke test verifies the Adminer FPM socket when installed, and
+  `share/upstream/update-web-vendor.sh` gained an `adminer` target for version
+  checks and snapshot rebuilds. phpMyAdmin/MySQL is untouched — the full Adminer
+  build can also reach MySQL, but phpMyAdmin stays the default.
+
 ### Fixed
 
 - Installer robustness across all four targets, from the Ubuntu 24/26 + deb13
