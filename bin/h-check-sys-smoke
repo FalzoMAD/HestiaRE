@@ -75,6 +75,41 @@ check_http() {
 	fi
 }
 
+# check_rspamd_ctrl_isolation — the #341 invariant: the rspamd controller
+# socket is reachable by the Caddy PROXY process but NOT by the app FPM pools
+# that share the caddy user. Verified against process credentials + /etc/group,
+# not config, so a regression (e.g. re-adding `usermod -aG _rspamd caddy`)
+# fails here. Catches the whole "socket grant leaks into the wrong role" class.
+check_rspamd_ctrl_isolation() {
+	local gid pid pgroups
+	gid=$(getent group _rspamd-ctrl | cut -d: -f3)
+	if [ -z "$gid" ]; then
+		no "rspamd controller group _rspamd-ctrl missing"
+		return
+	fi
+	# 1. socket carries the dedicated group (not plain _rspamd)
+	if [ "$(stat -c '%G' /run/rspamd/controller.sock 2> /dev/null)" = '_rspamd-ctrl' ]; then
+		ok "controller socket group is _rspamd-ctrl"
+	else
+		no "controller socket not group _rspamd-ctrl" "$(stat -c '%G' /run/rspamd/controller.sock 2> /dev/null)"
+	fi
+	# 2. the caddy USER must NOT be in the controller group (nor _rspamd) in
+	#    /etc/group — otherwise app pools inherit it via initgroups()
+	if id -nG caddy 2> /dev/null | tr ' ' '\n' | grep -qxE '_rspamd(-ctrl)?'; then
+		no "caddy user is in an rspamd group (app pools would inherit socket access)" "$(id -nG caddy)"
+	else
+		ok "caddy user not in any rspamd group (app pools isolated)"
+	fi
+	# 3. the caddy PROXY process must actually hold the group (else UI breaks)
+	pid=$(systemctl show -p MainPID --value caddy.service 2> /dev/null)
+	pgroups=$(grep -E '^Groups:' /proc/"${pid:-0}"/status 2> /dev/null)
+	if echo "$pgroups" | tr ' \t' '\n' | grep -qx "$gid"; then
+		ok "caddy proxy process holds _rspamd-ctrl (controller reachable)"
+	else
+		no "caddy proxy process lacks _rspamd-ctrl (controller UI would break)" "$pgroups"
+	fi
+}
+
 # check_log_clean <file> <extended-regex> <label>
 check_log_clean() {
 	if [ ! -f "$1" ]; then
@@ -145,6 +180,7 @@ if [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
 	# group-restricted unix sockets since #301/#321 — rspamd has no TCP ports
 	check_socket /run/rspamd/normal.sock "rspamd scan worker"
 	check_socket /run/rspamd/controller.sock "rspamd controller"
+	check_rspamd_ctrl_isolation
 fi
 # localhost consumers only (webmail plugin) — not opened in the firewall
 [ "$SIEVE_SYSTEM" = 'yes' ] && check_port 4190 "managesieve"

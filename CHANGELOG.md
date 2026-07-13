@@ -19,6 +19,20 @@ section as part of its PR. On release, the section gets the version number.
   over-quota mailbox defers on both paths — installing the addon is
   behaviour-neutral. Documented the related property that sieve scripts run
   only on non-spam mail (spam bypasses lda straight to `.Spam`) (#343)
+- rspamd controller socket no longer reachable by the panel's app pools
+  (#341): the controller UI needs the Panel-Caddy proxy to reach
+  `/run/rspamd/controller.sock`, but the grant was `usermod -aG _rspamd caddy`
+  — and since the phpMyAdmin/phpPgAdmin/Roundcube FPM pools also run as
+  `caddy` (#214), they inherited it via `initgroups()` and could hit the
+  controller API (mail metadata across all domains, Bayes writes) past
+  `forward_auth`. Now a dedicated `_rspamd-ctrl` group owns only the
+  controller socket and is granted to the Caddy *process* via a systemd
+  drop-in (`SupplementaryGroups=`), which FPM workers do not inherit — so the
+  proxy reaches the socket and the app pools do not. `h-add-sys-rspamd` also
+  strips the stale `caddy`→`_rspamd` membership from pre-fix installs;
+  `h-remove-sys-rspamd` cleans up the drop-in and group. New smoke checks
+  assert the invariant against process credentials, not config, so a
+  regression fails the baseline (#341)
 
 ## v0.9.0 (2026-07-13)
 

@@ -70,6 +70,19 @@ systemctl restart redis-server 2> /dev/null || true
 
 mkdir -p /etc/rspamd/local.d
 cp -f "$HESTIA/share/rspamd/local.d/"* /etc/rspamd/local.d/
+
+# Dedicated group for the controller socket (see worker-controller.inc). Its
+# only purpose is reaching /run/rspamd/controller.sock. _rspamd joins it so the
+# worker can chgrp its own socket to it — must exist before rspamd starts so
+# the socket comes up with the right group. The Panel-Caddy PROXY is granted
+# this group process-scoped (systemd drop-in below), not the caddy user, so app
+# FPM pools running as caddy cannot inherit it (#341).
+groupadd -r _rspamd-ctrl 2> /dev/null || true
+usermod -aG _rspamd-ctrl _rspamd
+# Heal pre-#341 installs: earlier versions added the caddy USER to _rspamd in
+# /etc/group, which leaks controller access into the app FPM pools. Remove that
+# stale membership — the proxy now gets _rspamd-ctrl process-scoped instead.
+gpasswd -d caddy _rspamd > /dev/null 2>&1 || true
 # Controller (stats/web UI) password. The in-panel UI never uses it —
 # forward_auth + the secure unix-socket connection skip the rspamd login (see
 # share/panel-caddy/apps/rspamd.tpl). It is set only so no known default
@@ -96,18 +109,27 @@ if [ ! -S /run/rspamd/normal.sock ]; then
 	exit "$E_RESTART"
 fi
 
-# Controller and scan worker listen on unix sockets (mode 0660, group
-# _rspamd) so arbitrary local users can't reach them. Add caddy (panel
-# proxy -> controller) and Debian-exim (spam scan -> normal worker) to
-# the _rspamd group. Must precede the caddy/exim (re)starts below so
-# the running processes pick up the new group membership.
-usermod -aG _rspamd caddy
+# Scan worker socket: Debian-exim (spam scan -> normal.sock) joins the _rspamd
+# group so exim can reach it. This is a service account, not a shared web
+# identity, so the /etc/group grant is fine here. Must precede the exim restart
+# below so the running process picks up the membership.
 usermod -aG _rspamd Debian-exim
+
+# Controller socket: grant the Caddy PROXY process the _rspamd-ctrl group via a
+# systemd drop-in (process-scoped), NOT the caddy user in /etc/group — app FPM
+# pools also run as caddy and would otherwise inherit it through initgroups()
+# and reach the controller past forward_auth (#341). caddy.service uses
+# User=caddy, so systemd applies SupplementaryGroups to the process.
+mkdir -p /etc/systemd/system/caddy.service.d
+cp -f "$HESTIA/share/rspamd/caddy-service.d/rspamd-ctrl.conf" \
+	/etc/systemd/system/caddy.service.d/rspamd-ctrl.conf
+systemctl daemon-reload
 
 # Publish the controller UI via Panel-Caddy — reached from the panel page
 # /list/rspamd/ (iframe), gated behind the admin session. try-restart: only
 # bounce Caddy if it is already running — on a fresh install it starts later
-# (finalize stage) and would fail here without the panel SSL cert.
+# (finalize stage, after daemon-reload here) and would fail without the panel
+# SSL cert; either way it starts with the drop-in's group.
 cp -f "$HESTIA/share/panel-caddy/apps/rspamd.tpl" /etc/caddy/apps/rspamd.conf
 systemctl try-restart caddy 2> /dev/null || true
 
