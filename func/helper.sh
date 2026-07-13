@@ -101,7 +101,10 @@ load_os_profile() {
 		ubuntu-noble)
 			OS_ID="ubuntu"; CODENAME="noble"; RELEASE="24"
 			EXIM_USR="Debian-exim"
-			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip4 apparmor-utils"
+			# libzip: 24.04 renamed libzip4 -> libzip4t64 in the time_t (t64)
+			# transition. Plain `libzip4` still resolves via a Provides here, but is
+			# gone entirely on 26.04 (see below) — pin the real name per release.
+			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip4t64 apparmor-utils"
 			;;
 		ubuntu-26lts)
 			# TODO: pin the official 26.04 LTS codename once confirmed. Until then
@@ -109,7 +112,10 @@ load_os_profile() {
 			OS_ID="ubuntu"; RELEASE="26"
 			CODENAME="$(. /etc/os-release 2>/dev/null; echo "${VERSION_CODENAME:-}")"
 			EXIM_USR="Debian-exim"
-			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip4 apparmor-utils"
+			# 26.04 (resolute) ships libzip5; libzip4/libzip4t64 do not exist here,
+			# not even as a virtual package -> `apt-get install libzip4` aborts the
+			# whole base stage with "Unable to locate package".
+			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip5 apparmor-utils"
 			;;
 		*)
 			echo "ERROR: unsupported OS token '$1'" >&2

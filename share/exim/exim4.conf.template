@@ -586,7 +586,13 @@ dovecot_virtual_delivery:
   log_defer_output = true
   user = ${extract{2}{:}{${lookup{$local_part}lsearch{/etc/exim4/domains/${lookup{$domain}dsearch{/etc/exim4/domains/}}/passwd}}}}
   group = mail
-  return_output
+  # return_fail_output (not return_output): honour dovecot-lda's exit code so a
+  # temporary failure defers instead of bouncing. With quota_full_tempfail=yes
+  # in the sieve lda config, an over-quota mailbox exits EX_TEMPFAIL(75) and
+  # exim defers — same as the appendfile transports (local_delivery /
+  # local_spam_delivery) so the sieve addon does not change over-quota
+  # behaviour vs. the base install. Permanent lda errors still bounce.
+  return_fail_output
 .endif
 
 address_pipe:

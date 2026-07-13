@@ -7,6 +7,45 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
+## Unreleased
+
+### Fixed
+
+- Installer robustness across all four targets, from the Ubuntu 24/26 + deb13
+  baseline round (#347): (1) `/etc/ssl/dhparam.pem` is now laid down in the base
+  stage instead of the later configure stage — nginx and dovecot both reference
+  it and fatal at start if it is missing, so mail delivery could break (dovecot
+  `doveconf: Fatal … Can't open /etc/ssl/dhparam.pem`, most visibly during the
+  sieve-addon restart on Ubuntu 24.04); (2) the `libzip4` package name is fixed
+  per release — `libzip4t64` on 24.04 (t64 transition), `libzip5` on 26.04,
+  where plain `libzip4` does not exist and aborted the base stage outright;
+  (3) the non-existent `pgadmin4-web` is no longer installed (it is in no OS repo
+  and only ever errored) — PostgreSQL is CLI-only until phpPgAdmin is wired up
+  (#121); (4) the smoke test now checks PostgreSQL via `COMPONENT_DB_POSTGRESQL`
+  (it is not recorded in `DB_SYSTEM`, so it was never verified before)
+- Sieve addon no longer changes over-quota delivery behaviour: with sieve on,
+  clean mail goes through dovecot-lda, which by default *bounced* an over-quota
+  mailbox while exim's appendfile transports (spam, and all mail without the
+  addon) *defer*. dovecot-lda now runs with `quota_full_tempfail = yes` and the
+  `dovecot_virtual_delivery` transport uses `return_fail_output`, so an
+  over-quota mailbox defers on both paths — installing the addon is
+  behaviour-neutral. Documented the related property that sieve scripts run
+  only on non-spam mail (spam bypasses lda straight to `.Spam`) (#343)
+- rspamd controller socket no longer reachable by the panel's app pools
+  (#341): the controller UI needs the Panel-Caddy proxy to reach
+  `/run/rspamd/controller.sock`, but the grant was `usermod -aG _rspamd caddy`
+  — and since the phpMyAdmin/phpPgAdmin/Roundcube FPM pools also run as
+  `caddy` (#214), they inherited it via `initgroups()` and could hit the
+  controller API (mail metadata across all domains, Bayes writes) past
+  `forward_auth`. Now a dedicated `_rspamd-ctrl` group owns only the
+  controller socket and is granted to the Caddy *process* via a systemd
+  drop-in (`SupplementaryGroups=`), which FPM workers do not inherit — so the
+  proxy reaches the socket and the app pools do not. `h-add-sys-rspamd` also
+  strips the stale `caddy`→`_rspamd` membership from pre-fix installs;
+  `h-remove-sys-rspamd` cleans up the drop-in and group. New smoke checks
+  assert the invariant against process credentials, not config, so a
+  regression fails the baseline (#341)
+
 ## v0.9.0 (2026-07-13)
 
 Covers everything since v0.8.0, including the quick tags v0.8.1–v0.8.3.

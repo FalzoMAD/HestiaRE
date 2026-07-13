@@ -58,12 +58,23 @@ if ! systemctl is-active --quiet exim4; then
 	exit "$E_RESTART"
 fi
 
-# Panel UI route
+# Panel UI route + the controller-socket group grant for the Caddy process
+# (drop-in from h-add-sys-rspamd). Remove both so nothing is left half-wired.
 rm -f /etc/caddy/apps/rspamd.conf
+rm -f /etc/systemd/system/caddy.service.d/rspamd-ctrl.conf
+rmdir /etc/systemd/system/caddy.service.d 2> /dev/null || true
+# Also drop any stale caddy membership in _rspamd left by pre-#341 installs.
+gpasswd -d caddy _rspamd > /dev/null 2>&1 || true
+systemctl daemon-reload
 systemctl try-restart caddy 2> /dev/null || true
 
 systemctl disable --now rspamd > /dev/null 2>&1
 apt-get -y -qq purge rspamd > /dev/null 2>&1
+
+# The dedicated controller-socket group is rspamd-only — drop it with the
+# package so it does not linger as a stale entry (the _rspamd user is removed
+# by the purge above).
+groupdel _rspamd-ctrl 2> /dev/null || true
 
 # Redis: only the rspamd Bayes companion goes away with it — as a general
 # service (DB_REDIS) it stays untouched
