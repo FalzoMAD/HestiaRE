@@ -1,0 +1,97 @@
+#!/bin/bash
+# info: install Adminer database management tool
+# options: NONE
+#
+# example: h-add-sys-adminer
+#
+# Installs Adminer as a single vendored PHP file (share/adminer/adminer.php,
+# official upstream 5.x build, pinned in VENDORED.json) served by the Panel-Caddy
+# on :8083 at /adminer/ via a dedicated caddy FPM pool — the same delivery model
+# as phpMyAdmin, but repo-vendored instead of an OS package (the OS packages ship
+# CVE-affected versions, see #350). Positioned as the PostgreSQL web UI (the
+# installer auto-selects it when PostgreSQL is chosen); the full build can also
+# reach MySQL, but phpMyAdmin stays the default MySQL tool and is untouched.
+# Like phpMyAdmin it is served on the panel port without a forward_auth gate —
+# the gate is Adminer's own DB-credential login plus the firewall on :8083 (SSRF
+# hardening of the login form is the #350 follow-up).
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+WEBROOT="/usr/share/adminer"
+POOL="/etc/php/hestia/fpm/pool.d/adminer.conf"
+ROUTE="/etc/caddy/apps/adminer.conf"
+TMPDIR="/var/lib/adminer/tmp"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "$(id -u)" != '0' ]; then
+	echo "ERROR: h-add-sys-adminer must be run as root"
+	exit 10
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+if [ ! -s "$HESTIA/share/adminer/adminer.php" ]; then
+	echo "ERROR: vendored Adminer file missing ($HESTIA/share/adminer/adminer.php)"
+	exit "$E_NOTEXIST"
+fi
+
+# Already installed?
+if [ -f "$WEBROOT/index.php" ] && [ -f "$POOL" ] && [ -f "$ROUTE" ]; then
+	echo "INFO: Adminer is already installed."
+	exit 0
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+echo "[ * ] Installing Adminer (vendored single-file)..."
+
+# 1. Webroot — the single file becomes the directory index. root:caddy 644:
+#    the caddy FPM pool only needs to read it, not write it.
+mkdir -p "$WEBROOT"
+cp -f "$HESTIA/share/adminer/adminer.php" "$WEBROOT/index.php"
+chown root:caddy "$WEBROOT/index.php"
+chmod 644 "$WEBROOT/index.php"
+
+# 2. Writable temp dir for sessions / uploads (pool runs as caddy)
+mkdir -p "$TMPDIR"
+chown caddy:caddy "$TMPDIR"
+chmod 770 "$TMPDIR"
+
+# 3. Dedicated caddy FPM pool
+cp -f "$HESTIA/share/panel-php/pool.d/adminer.conf" "$POOL"
+systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+
+# 4. Panel-Caddy route (imported inside the :8083 site block)
+mkdir -p /etc/caddy/apps
+cp -f "$HESTIA/share/panel-caddy/apps/adminer.tpl" "$ROUTE"
+$BIN/h-restart-service caddy > /dev/null 2>&1 || true
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+set_install_component ADDON_ADMINER true
+
+echo "[ OK ] Adminer installed — reachable at the panel under /adminer/"
+
+$BIN/h-log-action "system" "Info" "Plugins" "Adminer installed (vendored single-file)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

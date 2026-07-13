@@ -40,14 +40,14 @@
         "bin/h-update-sys-queue"
       ],
       "language": "bash",
-      "total_commands": 468,
+      "total_commands": 470,
       "command_prefixes": {
         "h-*": 468,
         "v-*": "symlinks only — see Issue #23"
       },
       "domains": {
         "user": { "count": 98, "pattern": "bin/h-*-user*" },
-        "sys": { "count": 102, "pattern": "bin/h-*-sys*" },
+        "sys": { "count": 104, "pattern": "bin/h-*-sys*" },
         "web": { "count": 80, "pattern": "bin/h-*-web*" },
         "mail": { "count": 81, "pattern": "bin/h-*-mail*" },
         "dns": { "count": 1, "pattern": "bin/h-*-dns*", "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58" },
@@ -284,6 +284,7 @@
         "share/panel-php/pool.d/panel.conf",
         "share/panel-php/pool.d/phpmyadmin.conf",
         "share/panel-php/pool.d/phppgadmin.conf",
+        "share/panel-php/pool.d/adminer.conf",
         "bin/hestia-php-fpm",
         "bin/hestia-php",
         "bin/hestia-php-confd",
