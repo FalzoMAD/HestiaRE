@@ -156,10 +156,15 @@ echo "-- services --"
 [ -n "$ANTISPAM_SYSTEM" ] && [ "$ANTISPAM_SYSTEM" != 'remote' ] && check_service "$ANTISPAM_SYSTEM" "antispam"
 [ -n "$FTP_SYSTEM" ] && [ "$FTP_SYSTEM" != 'remote' ] && check_service "$FTP_SYSTEM" "ftp"
 [ -n "$CRON_SYSTEM" ] && check_service "$CRON_SYSTEM" "cron"
-if echo "$DB_SYSTEM" | grep -qw 'mysql'; then check_service mariadb "database (mysql)"; fi
-if echo "$DB_SYSTEM" | grep -qw 'pgsql'; then check_service postgresql "database (pgsql)"; fi
-# Optional addons (only if the install recipe enabled them)
 is_on() { [ "${1:-}" = "true" ] || [ "${1:-}" = "yes" ]; }
+if echo "$DB_SYSTEM" | grep -qw 'mysql'; then check_service mariadb "database (mysql)"; fi
+# PostgreSQL: selected as an optional engine (COMPONENT_DB_POSTGRESQL), which does
+# NOT write 'pgsql' into DB_SYSTEM — so keying off DB_SYSTEM alone missed it
+# entirely. Honour the component flag (and DB_SYSTEM for forward-compat).
+if echo "$DB_SYSTEM" | grep -qw 'pgsql' || is_on "${COMPONENT_DB_POSTGRESQL:-}"; then
+	check_service postgresql "database (pgsql)"
+fi
+# Optional addons (only if the install recipe enabled them)
 is_on "${COMPONENT_ADDON_FAIL2BAN:-}" && check_service fail2ban "fail2ban"
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
 # Redis: either the user's DB choice (DB_REDIS) or rspamd's always-present

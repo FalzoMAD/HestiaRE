@@ -157,6 +157,21 @@ install_base() {
 		&& echo "@reboot root sleep 5 && mount -o remount,defaults,hidepid=2 /proc" > /etc/cron.d/hestia-proc \
 		|| echo "Info: Cannot remount /proc (LXC — skip hidepid)"
 
+	# DH params: laid down in the base stage on purpose — BOTH nginx (install_web,
+	# ssl_dhparam in nginx.conf) and dovecot (install_mail, ssl_dh in 10-ssl.conf,
+	# incl. the sieve-addon restart) reference /etc/ssl/dhparam.pem and fatal at
+	# start if it is missing. Doing it here guarantees the file exists before any
+	# TLS-consuming service is (re)started. Fail loud: a missing DH file silently
+	# breaks mail delivery. Ship the curated file; regenerate only as a fallback.
+	if [ -s "$HESTIA_INSTALL_DIR/ssl/dhparam.pem" ]; then
+		cp -f "$HESTIA_INSTALL_DIR/ssl/dhparam.pem" /etc/ssl/dhparam.pem
+	else
+		echo "[ ! ] shipped dhparam.pem missing — generating (this is slow)..."
+		openssl dhparam -out /etc/ssl/dhparam.pem 2048
+	fi
+	chmod 644 /etc/ssl/dhparam.pem
+	[ -s /etc/ssl/dhparam.pem ] || { echo "ERROR: /etc/ssl/dhparam.pem missing after base stage" >&2; exit 1; }
+
 	touch "$CONF_DIR/.done.base"
 	echo "[ OK ] base complete"
 }
@@ -499,10 +514,13 @@ install_db() {
 	if is_on "${COMPONENT_DB_POSTGRESQL:-}"; then
 		echo "[ * ] Installing PostgreSQL (minimal — see #121)..."
 		hestia_apt -y install postgresql postgresql-contrib || true
-		# pgAdmin implicit with PostgreSQL (DB_PGADMIN derived).
+		# No web admin UI is installed automatically: pgadmin4-web is in no OS repo
+		# (only pgAdmin's own external APT repo, which HestiaRE does not add), so the
+		# former `apt-get install pgadmin4-web` only ever errored out. Upstream ships
+		# phpPgAdmin (repo-free GitHub tarball, install/deb/pga/) — wiring that up is
+		# tracked in #121. Until then PostgreSQL is CLI-only.
 		if is_on "${COMPONENT_DB_PGADMIN:-}"; then
-			echo "[ * ] Installing pgAdmin (minimal — see #121)..."
-			hestia_apt -y install pgadmin4-web || true
+			echo "[ * ] pgAdmin web UI not available yet — PostgreSQL is CLI-only (see #121)"
 		fi
 	fi
 	if is_on "${COMPONENT_DB_REDIS:-}"; then
@@ -771,8 +789,8 @@ configure_hestia() {
 	fi
 
 	# Panel SSL certificate is generated earlier, in the panel stage (caddy needs
-	# it at start). Only the DH params are laid down here.
-	cp -f "$HESTIA_INSTALL_DIR/ssl/dhparam.pem" /etc/ssl/ 2>/dev/null || true
+	# it at start). DH params (/etc/ssl/dhparam.pem) are laid down in install_base
+	# now — nginx/dovecot need them before this stage runs (see install_base).
 
 	echo "[ * ] Enabling SFTP and SSH jails..."
 	"$BIN/h-add-sys-sftp-jail" > /dev/null 2>&1 || true

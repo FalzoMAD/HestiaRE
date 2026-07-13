@@ -11,6 +11,18 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- Installer robustness across all four targets, from the Ubuntu 24/26 + deb13
+  baseline round (#347): (1) `/etc/ssl/dhparam.pem` is now laid down in the base
+  stage instead of the later configure stage — nginx and dovecot both reference
+  it and fatal at start if it is missing, so mail delivery could break (dovecot
+  `doveconf: Fatal … Can't open /etc/ssl/dhparam.pem`, most visibly during the
+  sieve-addon restart on Ubuntu 24.04); (2) the `libzip4` package name is fixed
+  per release — `libzip4t64` on 24.04 (t64 transition), `libzip5` on 26.04,
+  where plain `libzip4` does not exist and aborted the base stage outright;
+  (3) the non-existent `pgadmin4-web` is no longer installed (it is in no OS repo
+  and only ever errored) — PostgreSQL is CLI-only until phpPgAdmin is wired up
+  (#121); (4) the smoke test now checks PostgreSQL via `COMPONENT_DB_POSTGRESQL`
+  (it is not recorded in `DB_SYSTEM`, so it was never verified before)
 - Sieve addon no longer changes over-quota delivery behaviour: with sieve on,
   clean mail goes through dovecot-lda, which by default *bounced* an over-quota
   mailbox while exim's appendfile transports (spam, and all mail without the
