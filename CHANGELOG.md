@@ -23,6 +23,11 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed / Rebuilt
 
+- Panel PHP CLI (`hestia-php`) now loads its own curated extension set from
+  `/etc/php/hestia/cli/conf.d` (built by `hestia-php-confd` alongside the FPM
+  set from #280), isolated from the customer conf.d of the same PHP version.
+  The CLI consumers need only compiled-in PHP; the set exists for composer
+  runs (phar, mbstring/iconv/ctype, curl/zip) (#281)
 - Panel password generator: typeable-anywhere character set (no AltGr/dead
   keys, no confusable I/l/1/O/0 or pipe/braces) with only 1–3 symbols per
   password, so generated passwords survive being typed by hand, e.g. over
