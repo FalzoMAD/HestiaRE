@@ -40,12 +40,14 @@ check_hestia_demo_mode
 # Define conf
 case $type in
 	web) conf="$CONF_DIR/users/*/web.conf" ;;
-	dns) conf="$CONF_DIR/users/*/dns.conf" ;;
 	mail) conf="$CONF_DIR/users/*/mail.conf" ;;
 	*) conf="$CONF_DIR/users/*/*.conf" ;;
 esac
 
-owner=$(grep -H "DOMAIN='$domain'" $conf | head -n 1 | cut -f7 -d '/')
+# Extract the user from the matching path ($CONF_DIR/users/<user>/<type>.conf)
+# instead of a fixed cut field — the field position broke when the user data
+# moved from $HESTIA/data/users to /etc/hestia/users (#148).
+owner=$(grep -H "DOMAIN='$domain'" $conf | head -n 1 | sed -e "s|^$CONF_DIR/users/||" -e "s|/.*||")
 if [ -z "$owner" ]; then
 	exit "$E_NOTEXIST"
 fi

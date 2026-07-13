@@ -390,27 +390,6 @@ for folder in *; do
 	fi
 done
 
-if [ "$mx" = 'yes' ]; then
-	cd $main_dir/dnszones
-	for domain in $($BIN/h-list-mail-domains $new_user plain | awk '{ print  $1 }'); do
-		echo "Replace MX record for $domain"
-		mx_id=$(grep MX $CONF_DIR/users/${new_user}/dns/${domain}.conf | tr "'" " " | cut -d " " -f 2)
-		$BIN/h-delete-dns-record $new_user $domain $mx_id
-		grep MX ${domain}.db | awk '{for(sk=NF;sk>=1;sk--) printf "%s ", $sk;print ""}' | while read value pri ns rest; do
-			if [ "$ns" = "MX" ]; then
-				if [ "$value" == "$sk_mx" ] || [ "$value" == "$sk_mx." ]; then
-					value=mail.$value
-				fi
-				$BIN/h-add-dns-record $new_user $domain @ MX $value $pri
-				if [[ "$?" -ge "1" ]]; then
-					$BIN/h-add-dns-record $new_user $domain @ MX mail.${domain} 0
-				fi
-				echo "MX fixed in $sk_mx"
-			fi
-		done
-	done
-fi
-
 ##################
 # Cron Jobs
 tput setaf 2

@@ -7,7 +7,9 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
-## Unreleased
+## v0.9.0 (2026-07-13)
+
+Covers everything since v0.8.0, including the quick tags v0.8.1–v0.8.3.
 
 ### Fixed
 
@@ -21,8 +23,28 @@ section as part of its PR. On release, the section gets the version number.
   `sssl_server_cert_file` typo that produced broken dovecot-2.4 per-domain
   SSL configs (#329)
 
+### Removed
+
+- Dead DNS feature plumbing (#283): the last `DNS_SYSTEM`-guarded blocks and
+  every call to non-existent `h-*-dns` commands are gone from the mail/
+  letsencrypt/webmail lifecycle, backups, cpanel import and the search
+  commands; `h-list-sys-config` no longer emits the DNS_SYSTEM/DNS_CLUSTER/
+  DNSSEC keys (no panel consumer). The restic restore path called
+  `h-restore-dns-domain-restic` unconditionally — every full restore hit a
+  command-not-found; fixed by removal. `h-change-user-ns` (+ v-* symlink) and
+  the panel's orphaned nameserver-input remnants are deleted — nothing read
+  the NS values. Kept: the DKIM-DNS record display
+  (`h-list-mail-domain-dkim-dns`) and the HestiaCP-compatible user-data
+  schema (`dns.conf`, `dns/`, user.conf/package DNS fields, restore ignores
+  dns containers) so backups stay bidirectional
+
 ### Changed / Rebuilt
 
+- Panel PHP CLI (`hestia-php`) now loads its own curated extension set from
+  `/etc/php/hestia/cli/conf.d` (built by `hestia-php-confd` alongside the FPM
+  set from #280), isolated from the customer conf.d of the same PHP version.
+  The CLI consumers need only compiled-in PHP; the set exists for composer
+  runs (phar, mbstring/iconv/ctype, curl/zip) (#281)
 - Panel password generator: typeable-anywhere character set (no AltGr/dead
   keys, no confusable I/l/1/O/0 or pipe/braces) with only 1–3 symbols per
   password, so generated passwords survive being typed by hand, e.g. over

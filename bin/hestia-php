@@ -10,6 +10,14 @@
 v=$(cat /etc/php/hestia/php-version 2> /dev/null)
 [ -n "$v" ] || v=$(ls -1 /usr/bin/php[0-9].[0-9] 2> /dev/null | sort -V | tail -n1 | sed 's#.*/php##')
 ini="/etc/php/hestia/cli/php.ini"
+# Load only the curated CLI extension set from the panel's own conf.d (built by
+# hestia-php-confd), isolated from the customer version's conf.d. Fall back to
+# the compiled default scan dir if it is not built yet (e.g. mid-upgrade) so
+# CLI helpers never run with no extensions. Same pattern as bin/hestia-php-fpm.
+confd="/etc/php/hestia/cli/conf.d"
+if [ -d "$confd" ] && [ -n "$(ls -A "$confd" 2> /dev/null)" ]; then
+	export PHP_INI_SCAN_DIR="$confd"
+fi
 if [ -f "$ini" ]; then
 	exec "/usr/bin/php${v}" -c "$ini" "$@"
 else

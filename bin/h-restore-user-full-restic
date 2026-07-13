@@ -87,8 +87,6 @@ rebuild_user_conf
 # Restore web domains
 echo "[ * ] Restore Web domains"
 $BIN/h-restore-web-domain-restic "$user" "$snapshot" '*' 'no' 'yes'
-echo "[ * ] Restore DNS domains"
-$BIN/h-restore-dns-domain-restic "$user" "$snapshot" '*'
 echo "[ * ] Restore Mail domains"
 $BIN/h-restore-mail-domain-restic "$user" "$snapshot" '*'
 echo "[ * ] Restore Databases"

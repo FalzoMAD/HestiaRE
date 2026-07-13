@@ -404,59 +404,6 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 	fi
 fi
 
-# DNS domains
-if [ -n "$DNS_SYSTEM" ] && [ "$DNS" != '*' ]; then
-	echo -e "\n-- DNS --" | tee -a $BACKUP/$user.log
-	mkdir $tmpdir/dns/
-
-	# Parsing domain exclusions
-	for domain in $(search_objects 'dns' 'SUSPENDED' "*" 'DOMAIN'); do
-		exclusion=$(echo "$DNS" | tr ',' '\n' | grep "^$domain$")
-		if [ -z "$exclusion" ]; then
-			dns_list="$dns_list $domain"
-		else
-			echo "$(date "+%F %T") excluding $domain"
-			msg="$msg\n$(date "+%F %T") excluding $domain"
-		fi
-	done
-	dns_list=$(echo "$dns_list" | sed -e "s/  */\ /g" -e "s/^ //")
-
-	i=0
-	for domain in $dns_list; do
-		((i++))
-		echo -e "$(date "+%F %T") $domain" | tee -a $BACKUP/$user.log
-		domain_idn="$domain"
-		# Building directory tree
-		mkdir -p $tmpdir/dns/$domain/conf
-		mkdir -p $tmpdir/dns/$domain/conf/keys
-		mkdir -p $tmpdir/dns/$domain/hestia
-
-		# Backup dns.conf
-		cd $tmpdir/dns/$domain/
-		conf="$USER_DATA/dns.conf"
-		grep "DOMAIN='$domain'" $conf > hestia/dns.conf
-
-		# Backup dns recods
-		cp $USER_DATA/dns/$domain.conf hestia/$domain.conf
-		if [ "$DNS_SYSTEM" != 'remote' ]; then
-			cp $HOMEDIR/$user/conf/dns/$domain.db conf/$domain.db
-		fi
-		# Backup DNSSEC public and private key if enabled
-		dnssec=$(grep "DOMAIN='$domain'" $USER_DATA/dns.conf | grep "DNSSEC='yes'")
-		if [ -n "$dnssec" ]; then
-			format_domain_idn
-			cp $USER_DATA/keys/K$domain_idn*.* $tmpdir/dns/$domain/conf/keys
-		fi
-	done
-
-	# Print total
-	if [ "$i" -eq 1 ]; then
-		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user.log
-	else
-		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user.log
-	fi
-fi
-
 # Mail domains
 if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 	echo -e "\n-- MAIL --" | tee -a $BACKUP/$user.log

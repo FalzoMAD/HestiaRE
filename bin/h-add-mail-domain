@@ -177,17 +177,6 @@ if [[ "$MAIL_SYSTEM" =~ exim ]]; then
 	chown $user:mail $HOMEDIR/$user/mail/$domain_idn
 fi
 
-# Adding dkim dns records
-if [ -n "$DNS_SYSTEM" ] && [ "$dkim" = 'yes' ]; then
-	check_dns_domain=$(is_object_valid 'dns' 'DOMAIN' "$domain")
-	if [ "$?" -eq 0 ]; then
-		p=$(cat $USER_DATA/mail/$domain.pub | grep -v ' KEY---' | tr -d '\n')
-		record='mail._domainkey'
-		selector="\"v=DKIM1\; k=rsa\; p=$p\""
-		$BIN/h-add-dns-record "$user" "$domain" "$record" TXT "$selector" '' '' 'yes' '' 'yes'
-	fi
-fi
-
 # Add webmail configuration to mail domain
 if [ -n "$WEB_SYSTEM" ] || [ -n "$PROXY_SYSTEM" ]; then
 	if [ -n "$IMAP_SYSTEM" ]; then
