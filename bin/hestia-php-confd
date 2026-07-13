@@ -1,15 +1,17 @@
 #!/bin/bash
-# info: rebuild the panel FPM's isolated PHP conf.d
+# info: rebuild the panel PHP's isolated conf.d (FPM + CLI)
 # options: [VERSION]
 #
 # example: hestia-php-confd 8.3
 #
-# The panel FPM runs with PHP_INI_SCAN_DIR=/etc/php/hestia/fpm/conf.d (set by the
-# hestia-php-fpm wrapper) so it loads a fixed, curated extension set instead of
-# whatever customers have enabled/disabled on the same PHP version's conf.d. This
-# helper (re)builds that directory from the version's mods-available, keeping the
-# Debian priority prefixes. Run after the panel install and by h-change-sys-panel-php
-# (the mods-available path is version-specific, so it must follow the pinned version).
+# The panel PHP runs with PHP_INI_SCAN_DIR pointing at its own conf.d (set by
+# the hestia-php-fpm and hestia-php wrappers) so it loads a fixed, curated
+# extension set instead of whatever customers have enabled/disabled on the same
+# PHP version's conf.d. This helper (re)builds both directories —
+# /etc/php/hestia/fpm/conf.d and /etc/php/hestia/cli/conf.d — from the
+# version's mods-available, keeping the Debian priority prefixes. Run after the
+# panel install and by h-change-sys-panel-php (the mods-available path is
+# version-specific, so it must follow the pinned version).
 #
 # Not a user-facing command — no v-* symlink.
 
@@ -21,51 +23,73 @@ if [ -z "$version" ]; then
 fi
 
 mods="/etc/php/$version/mods-available"
-dst="/etc/php/hestia/fpm/conf.d"
 
 if [ ! -d "$mods" ]; then
 	echo "ERROR: $mods not found — is PHP $version installed?"
 	exit 1
 fi
 
-# Extensions the panel actually needs (verified against the panel code), split by
-# how badly the panel breaks without them:
-#   critical — the panel is non-functional without these; a missing one is a hard
-#     failure so a degraded panel is caught here at build time instead of
-#     surfacing as a runtime fatal on a random page later:
+# Extension sets per target, split by how badly the consumer breaks without
+# them: a missing critical extension is a hard failure so a degraded panel is
+# caught here at build time instead of surfacing as a runtime fatal later; a
+# missing optional one only warns.
+#
+# FPM (the panel web UI, verified against the panel code):
+#   critical — the panel is non-functional without these:
 #       mysqlnd pdo mysqli pdo_mysql  DB access chain
 #       mbstring                      string handling throughout the UI
 #       gettext                       i18n — the panel's _() translation calls
-#   optional — used but not fatal on every render; a missing one only warns:
+#   optional — used but not fatal on every render:
 #       opcache          performance (Zend)
 #       curl gmp zip     panel-stage set
 #       ftp              FTP account management
 #       dom              DOMDocument (from php-xml)
-# Deliberately excluded: imagick, imap, ldap, pgsql, gd, soap, intl, bcmath,
-# apcu, exif, pspell, … (customer-app extensions, not used by the panel).
-critical="mysqlnd pdo mysqli pdo_mysql mbstring gettext"
-optional="opcache curl gmp zip ftp dom"
-
-mkdir -p "$dst"
-find "$dst" -maxdepth 1 -name '*.ini' -delete 2> /dev/null
+#
+# CLI (bin/hestia-php, verified against its consumers): the in-tree callers —
+# func/main.sh validators (filter_var, kv-parser), the 2FA TOTP/QR helpers,
+# h-add-web-domain-redirect (parse_url) — need only compiled-in PHP. The
+# curated set exists for composer, which h-add-sys-filemanager runs through
+# hestia-php: phar (composer IS a phar; openssl for its downloads is
+# compiled-in on Debian/Sury), mbstring/iconv/ctype (real extensions instead
+# of composer's bundled polyfills), plus curl/zip to speed up downloads and
+# archive extraction. No DB chain, no gettext — no CLI consumer uses them.
+#
+# Deliberately excluded everywhere: imagick, imap, ldap, pgsql, gd, soap,
+# intl, bcmath, apcu, exif, pspell, … (customer-app extensions).
+fpm_critical="mysqlnd pdo mysqli pdo_mysql mbstring gettext"
+fpm_optional="opcache curl gmp zip ftp dom"
+cli_critical="mbstring ctype iconv phar"
+cli_optional="curl zip"
 
 missing_critical=""
-for e in $critical $optional; do
-	src="$mods/$e.ini"
-	if [ ! -f "$src" ]; then
-		case " $critical " in
-			*" $e "*)
-				echo "ERROR: critical extension '$e' missing ($src)."
-				missing_critical="$missing_critical $e"
-				;;
-			*) echo "WARN: $src missing — skipped." ;;
-		esac
-		continue
-	fi
-	# Keep the Debian load-order prefix (e.g. 10-opcache, 20-curl); default 20.
-	prio=$(sed -n 's/^; *priority=\([0-9]\{1,\}\).*/\1/p' "$src" | head -n1)
-	ln -sf "$src" "$dst/${prio:-20}-$e.ini"
-done
+
+build_confd() {
+	local dst="$1" critical="$2" optional="$3"
+	local e src prio
+
+	mkdir -p "$dst"
+	find "$dst" -maxdepth 1 -name '*.ini' -delete 2> /dev/null
+
+	for e in $critical $optional; do
+		src="$mods/$e.ini"
+		if [ ! -f "$src" ]; then
+			case " $critical " in
+				*" $e "*)
+					echo "ERROR: critical extension '$e' missing ($src)."
+					missing_critical="$missing_critical $e"
+					;;
+				*) echo "WARN: $src missing — skipped." ;;
+			esac
+			continue
+		fi
+		# Keep the Debian load-order prefix (e.g. 10-opcache, 20-curl); default 20.
+		prio=$(sed -n 's/^; *priority=\([0-9]\{1,\}\).*/\1/p' "$src" | head -n1)
+		ln -sf "$src" "$dst/${prio:-20}-$e.ini"
+	done
+}
+
+build_confd /etc/php/hestia/fpm/conf.d "$fpm_critical" "$fpm_optional"
+build_confd /etc/php/hestia/cli/conf.d "$cli_critical" "$cli_optional"
 
 if [ -n "$missing_critical" ]; then
 	echo "ERROR: panel PHP conf.d incomplete — missing critical extension(s):$missing_critical" >&2
