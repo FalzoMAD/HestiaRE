@@ -7,7 +7,9 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
-## Unreleased
+## v0.9.0 (2026-07-13)
+
+Covers everything since v0.8.0, including the quick tags v0.8.1–v0.8.3.
 
 ### Fixed
 
