@@ -173,7 +173,7 @@
       "group": "db",
       "type": "checkbox",
       "label": "PostgreSQL",
-      "description": "Object-relational DB server (incl. pgAdmin)",
+      "description": "Object-relational DB server (web UI via Adminer addon)",
       "question": "Install PostgreSQL?",
       "default": false
     },
@@ -215,13 +215,6 @@
       "type": "derived",
       "derived_from": "DB_MARIADB",
       "note": "Implizit: wird ohne eigene Frage mitinstalliert, sobald MariaDB gewaehlt ist (Wert = DB_MARIADB)."
-    },
-
-    "DB_PGADMIN": {
-      "group": "db",
-      "type": "derived",
-      "derived_from": "DB_POSTGRESQL",
-      "note": "Implizit: wird ohne eigene Frage mitinstalliert, sobald PostgreSQL gewaehlt ist (Wert = DB_POSTGRESQL)."
     },
 
     "MAIL_BLOCK_PRESENT": {
@@ -291,6 +284,16 @@
       "type": "fixed",
       "always_installed": true,
       "note": "Immer installiert. Betriebsmodus (voller MTA mit Dovecot-Anbindung vs. reiner Versand) ergibt sich implizit aus MAIL_BLOCK_PRESENT, keine eigene Abfrage. DKIM-Signierung erfolgt granular pro Domain via OpenSSL (bestehender HestiaCP-Mechanismus), unabhaengig von rspamd."
+    },
+
+    "ADDON_ADMINER": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "Adminer",
+      "description": "Web DB UI for PostgreSQL (vendored single-file). MySQL keeps phpMyAdmin.",
+      "visible_if": "DB_POSTGRESQL == true",
+      "default": true,
+      "note": "Nur sichtbar/vorausgewaehlt, wenn PostgreSQL gewaehlt wurde (visible_if DB_POSTGRESQL == true, default true) — ohne PostgreSQL ausgeblendet und damit nicht installiert. Ersetzt die fruehere DB_PGADMIN-Ableitung (pgadmin4-web existiert in keinem OS-Repo, phpPgAdmin dormant; #350). Vendored aus share/adminer/ statt OS-Paket (OS-Versionen CVE-behaftet). Full-Build kann auch MySQL, aber phpMyAdmin bleibt unangetastet der MySQL-Default."
     },
 
     "ADDON_COMPOSER": {

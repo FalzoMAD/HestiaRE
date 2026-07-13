@@ -167,6 +167,11 @@ fi
 # Optional addons (only if the install recipe enabled them)
 is_on "${COMPONENT_ADDON_FAIL2BAN:-}" && check_service fail2ban "fail2ban"
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
+# Adminer: served by the Panel-Caddy from a dedicated caddy FPM pool (no own
+# daemon) — verify its FPM socket is listening. Not HTTP-checked: the endpoint
+# serves Adminer's own login page (its own DB-credential gate), same delivery as
+# phpMyAdmin, which is also not HTTP-checked here.
+is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
 # Redis: either the user's DB choice (DB_REDIS) or rspamd's always-present
 # Bayes companion (hard-capped, see share/rspamd/redis-rspamd-limit.conf).
 if is_on "${COMPONENT_DB_REDIS:-}" || [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then

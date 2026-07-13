@@ -514,14 +514,15 @@ install_db() {
 	if is_on "${COMPONENT_DB_POSTGRESQL:-}"; then
 		echo "[ * ] Installing PostgreSQL (minimal — see #121)..."
 		hestia_apt -y install postgresql postgresql-contrib || true
-		# No web admin UI is installed automatically: pgadmin4-web is in no OS repo
-		# (only pgAdmin's own external APT repo, which HestiaRE does not add), so the
-		# former `apt-get install pgadmin4-web` only ever errored out. Upstream ships
-		# phpPgAdmin (repo-free GitHub tarball, install/deb/pga/) — wiring that up is
-		# tracked in #121. Until then PostgreSQL is CLI-only.
-		if is_on "${COMPONENT_DB_PGADMIN:-}"; then
-			echo "[ * ] pgAdmin web UI not available yet — PostgreSQL is CLI-only (see #121)"
-		fi
+	fi
+	# Adminer — vendored single-file web DB UI, offered as an addon that the
+	# wizard defaults ON when PostgreSQL is selected (#350). It is the PostgreSQL
+	# web UI here (the OS pgadmin4-web package does not exist; phpPgAdmin is
+	# dormant). The full build can also reach MySQL, but phpMyAdmin stays the
+	# untouched MySQL default. Engine-agnostic, so it is keyed on its own flag.
+	if is_on "${COMPONENT_ADDON_ADMINER:-}"; then
+		"$BIN/h-add-sys-adminer" >> "$LOG" 2>&1 \
+			|| echo "[ ! ] Adminer install reported an issue (see $LOG)"
 	fi
 	if is_on "${COMPONENT_DB_REDIS:-}"; then
 		echo "[ * ] Installing Redis (minimal — see #121)..."

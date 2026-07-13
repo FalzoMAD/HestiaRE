@@ -1,0 +1,69 @@
+#!/bin/bash
+# info: remove Adminer database management tool
+# options: NONE
+#
+# example: h-remove-sys-adminer
+#
+# Reverses h-add-sys-adminer: removes the Panel-Caddy route, the caddy FPM pool,
+# the webroot and the temp dir, then reloads the affected services. Vendored
+# single file — nothing is purged via apt. New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+WEBROOT="/usr/share/adminer"
+POOL="/etc/php/hestia/fpm/pool.d/adminer.conf"
+ROUTE="/etc/caddy/apps/adminer.conf"
+TMPDIR="/var/lib/adminer"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "$(id -u)" != '0' ]; then
+	echo "ERROR: h-remove-sys-adminer must be run as root"
+	exit 10
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+echo "[ * ] Removing Adminer..."
+
+# 1. Panel-Caddy route first, so the endpoint stops answering
+rm -f "$ROUTE"
+$BIN/h-restart-service caddy > /dev/null 2>&1 || true
+
+# 2. FPM pool
+rm -f "$POOL"
+systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+
+# 3. Webroot + temp dir
+rm -rf "$WEBROOT"
+rm -rf "$TMPDIR"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+set_install_component ADDON_ADMINER false
+
+echo "[ OK ] Adminer removed."
+
+$BIN/h-log-action "system" "Info" "Plugins" "Adminer removed."
+log_event "$OK" "$ARGUMENTS"
+
+exit
