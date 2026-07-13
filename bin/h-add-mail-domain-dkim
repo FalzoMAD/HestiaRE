@@ -71,14 +71,6 @@ if [[ "$MAIL_SYSTEM" =~ exim ]]; then
 	chmod 660 $HOMEDIR/$user/conf/mail/$domain/dkim.pem
 fi
 
-# Adding dns records
-if [ -n "$DNS_SYSTEM" ] && [ -e "$USER_DATA/dns/$domain.conf" ]; then
-	p=$(cat $USER_DATA/mail/$domain.pub | grep -v ' KEY---' | tr -d '\n')
-	record="mail._domainkey"
-	selector="\"v=DKIM1\; k=rsa\; p=$p\""
-	$BIN/h-add-dns-record "$user" "$domain" "$record" TXT "$selector" '' '' 'yes' '' 'yes'
-fi
-
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#

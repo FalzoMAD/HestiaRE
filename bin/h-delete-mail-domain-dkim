@@ -50,16 +50,6 @@ if [[ "$MAIL_SYSTEM" =~ exim ]]; then
 	rm -f $HOMEDIR/$user/conf/mail/$domain/dkim.pem
 fi
 
-# Deleting dns record
-if [ -n "$DNS_SYSTEM" ] && [ -e "$USER_DATA/dns/$domain.conf" ]; then
-	records=$($BIN/h-list-dns-records "$user" "$domain")
-	# Keep removing deprecated _domainkey policy entries until they are fully retired.
-	dkim_records=$(echo "$records" | grep -E "\s(mail\._domainkey|_domainkey)\s" | cut -f 1 -d ' ')
-	for id in $dkim_records; do
-		$BIN/h-delete-dns-record "$user" "$domain" "$id" 'yes'
-	done
-fi
-
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#

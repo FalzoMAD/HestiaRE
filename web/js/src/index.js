@@ -17,7 +17,6 @@ import handleFtpAccounts from './ftpAccounts.js';
 import handleIpListDataSource from './ipListDataSource.js';
 import handleListSorting from './listSorting.js';
 import handleListUnitSelect from './listUnitSelect.js';
-import handleNameServerInput from './nameServerInput.js';
 import handlePasswordInput from './passwordInput.js';
 import handleShortcuts from './shortcuts.js';
 import handleStickyToolbar from './stickyToolbar.js';
@@ -43,7 +42,6 @@ function initListeners() {
 	handleFtpAccounts();
 	handleListSorting();
 	handleListUnitSelect();
-	handleNameServerInput();
 	handlePasswordInput();
 	handleStickyToolbar();
 	handleSyncEmailValues();

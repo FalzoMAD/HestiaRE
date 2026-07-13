@@ -40,13 +40,13 @@
         "bin/h-update-sys-queue"
       ],
       "language": "bash",
-      "total_commands": 469,
+      "total_commands": 468,
       "command_prefixes": {
-        "h-*": 469,
+        "h-*": 468,
         "v-*": "symlinks only — see Issue #23"
       },
       "domains": {
-        "user": { "count": 99, "pattern": "bin/h-*-user*" },
+        "user": { "count": 98, "pattern": "bin/h-*-user*" },
         "sys": { "count": 102, "pattern": "bin/h-*-sys*" },
         "web": { "count": 80, "pattern": "bin/h-*-web*" },
         "mail": { "count": 81, "pattern": "bin/h-*-mail*" },
