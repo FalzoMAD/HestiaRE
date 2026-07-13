@@ -58,15 +58,6 @@ if [[ "$MAIL_SYSTEM" =~ exim ]]; then
 	rm -rf $HOMEDIR/$user/mail/$domain_idn
 fi
 
-# Deleting dkim dns record
-if [ "$DKIM" = 'yes' ] && [ -e "$USER_DATA/dns/$domain.conf" ]; then
-	# Legacy _domainkey policy records are deprecated but still cleaned up; remove once obsolete.
-	dkim_records=$($BIN/h-list-dns-records "$user" "$domain" | grep -E "\s(mail\._domainkey|_domainkey)\s" | cut -f 1 -d ' ')
-	for id in $dkim_records; do
-		$BIN/h-delete-dns-record "$user" "$domain" "$id" '' 'yes'
-	done
-fi
-
 # Delete SSL certificates and configuration
 if [ "$SSL" = 'yes' ] || [ -e "$HOMEDIR/$user/conf/mail/$domain/ssl/$domain.crt" ]; then
 	$BIN/h-delete-mail-domain-ssl "$user" "$domain"

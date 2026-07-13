@@ -96,52 +96,6 @@ fi
 if [ -z "$WEBMAIL_ALIAS" ]; then
 	$BIN/h-change-sys-config-value 'WEBMAIL_ALIAS' "webmail"
 else
-	# Ensure DNS record exists if Hestia is hosting DNS zones
-	if [ -n "$DNS_SYSTEM" ]; then
-		dns_domain=$($BIN/h-list-dns-domains $user | grep $domain | cut -d' ' -f1)
-		if [ "$dns_domain" = "$domain" ]; then
-			if [ "$WEBMAIL_ALIAS" != "mail" ]; then
-				# Handle non-mail webmail alias (e.g., "webmail")
-				webmail_record=$($BIN/h-list-dns-records $user $domain | awk '{if ($2 == "'"$WEBMAIL_ALIAS"'") print $1}')
-				if [ -z "$webmail_record" ]; then
-					if [ "$quiet" = "yes" ]; then
-						$BIN/h-add-dns-record "$user" "$domain" "$WEBMAIL_ALIAS" A "$ip" '' '' "$restart" '' 'yes'
-					else
-						$BIN/h-add-dns-record "$user" "$domain" "$WEBMAIL_ALIAS" A "$ip" '' '' "$restart" '' 'yes'
-					fi
-				else
-					if [ "$quiet" = "yes" ]; then
-						$BIN/h-delete-dns-record "$user" "$domain" "$webmail_record" "$restart" 'yes'
-						$BIN/h-add-dns-record "$user" "$domain" "$WEBMAIL_ALIAS" A "$ip" '' '' "$restart" '' 'yes'
-					else
-						$BIN/h-delete-dns-record "$user" "$domain" "$webmail_record" "$restart" 'yes'
-						$BIN/h-add-dns-record "$user" "$domain" "$WEBMAIL_ALIAS" A "$ip" '' '' "$restart" '' 'yes'
-					fi
-				fi
-			else
-				# WEBMAIL_ALIAS is "mail" - ensure webmail CNAME points to mail.domain.com
-				webmail_cname_record=$($BIN/h-list-dns-records $user $domain | awk '$2 == "webmail" && $3 == "CNAME" {print $1}')
-				mail_target="mail.$domain."
-				if [ -z "$webmail_cname_record" ]; then
-					# Add webmail CNAME record
-					if [ "$quiet" = "yes" ]; then
-						$BIN/h-add-dns-record "$user" "$domain" "webmail" CNAME "$mail_target" '' '' "$restart" '' 'yes'
-					else
-						$BIN/h-add-dns-record "$user" "$domain" "webmail" CNAME "$mail_target" '' '' "$restart" '' 'yes'
-					fi
-				else
-					# Update existing webmail CNAME record
-					if [ "$quiet" = "yes" ]; then
-						$BIN/h-delete-dns-record "$user" "$domain" "$webmail_cname_record" "$restart" 'yes'
-						$BIN/h-add-dns-record "$user" "$domain" "webmail" CNAME "$mail_target" '' '' "$restart" '' 'yes'
-					else
-						$BIN/h-delete-dns-record "$user" "$domain" "$webmail_cname_record" "$restart" 'yes'
-						$BIN/h-add-dns-record "$user" "$domain" "webmail" CNAME "$mail_target" '' '' "$restart" '' 'yes'
-					fi
-				fi
-			fi
-		fi
-	fi
 
 	if [ "$webmail" == "roundcube" ]; then
 		WEBMAIL_TEMPLATE="default"

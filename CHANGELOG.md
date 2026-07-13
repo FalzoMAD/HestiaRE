@@ -21,6 +21,21 @@ section as part of its PR. On release, the section gets the version number.
   `sssl_server_cert_file` typo that produced broken dovecot-2.4 per-domain
   SSL configs (#329)
 
+### Removed
+
+- Dead DNS feature plumbing (#283): the last `DNS_SYSTEM`-guarded blocks and
+  every call to non-existent `h-*-dns` commands are gone from the mail/
+  letsencrypt/webmail lifecycle, backups, cpanel import and the search
+  commands; `h-list-sys-config` no longer emits the DNS_SYSTEM/DNS_CLUSTER/
+  DNSSEC keys (no panel consumer). The restic restore path called
+  `h-restore-dns-domain-restic` unconditionally — every full restore hit a
+  command-not-found; fixed by removal. `h-change-user-ns` (+ v-* symlink) and
+  the panel's orphaned nameserver-input remnants are deleted — nothing read
+  the NS values. Kept: the DKIM-DNS record display
+  (`h-list-mail-domain-dkim-dns`) and the HestiaCP-compatible user-data
+  schema (`dns.conf`, `dns/`, user.conf/package DNS fields, restore ignores
+  dns containers) so backups stay bidirectional
+
 ### Changed / Rebuilt
 
 - Panel PHP CLI (`hestia-php`) now loads its own curated extension set from

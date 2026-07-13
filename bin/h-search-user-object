@@ -95,8 +95,6 @@ IFS=$'\n'
 # Search query
 search=$(grep "$object" \
 	$CONF_DIR/users/$user/web.conf \
-	$CONF_DIR/users/$user/dns.conf \
-	$CONF_DIR/users/$user/dns/*.conf \
 	$CONF_DIR/users/$user/mail.conf \
 	$CONF_DIR/users/$user/mail/*.conf \
 	$CONF_DIR/users/$user/db.conf \
@@ -144,32 +142,6 @@ for row in $search; do
 				object_date=$DATE
 				((i++))
 			fi
-		fi
-	fi
-
-	# DNS
-	if [ "$type" = 'dns.conf' ]; then
-		if [ -n "$(echo $DOMAIN | grep $object)" ]; then
-			key="DOMAIN"
-			result="$DOMAIN"
-			suspended=$SUSPENDED
-			object_time=$TIME
-			object_date=$DATE
-			((i++))
-		fi
-	fi
-
-	# DNS Records
-	if [ "$type" = 'dns' ]; then
-		if [ -n "$(echo $RECORD | grep $object)" ]; then
-			key="RECORD"
-			result="$RECORD.$DOMAIN"
-			suspended=$SUSPENDED
-			object_link=$ID
-			object_parent=$DOMAIN
-			object_time=$TIME
-			object_date=$DATE
-			((i++))
 		fi
 	fi
 
@@ -253,7 +225,7 @@ case $format in
 		;;
 	shell)
 		fields='$USER~$TYPE~$KEY~$RESULT~$ALIAS'
-		shell_list | column -t -s '~'
+		shell_list_search | column -t -s '~'
 		;;
 	*) check_args '2' '0' 'USER OBJECT [FORMAT]' ;;
 esac
