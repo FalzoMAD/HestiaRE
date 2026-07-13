@@ -7,6 +7,19 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
+## Unreleased
+
+### Fixed
+
+- Sieve addon no longer changes over-quota delivery behaviour: with sieve on,
+  clean mail goes through dovecot-lda, which by default *bounced* an over-quota
+  mailbox while exim's appendfile transports (spam, and all mail without the
+  addon) *defer*. dovecot-lda now runs with `quota_full_tempfail = yes` and the
+  `dovecot_virtual_delivery` transport uses `return_fail_output`, so an
+  over-quota mailbox defers on both paths — installing the addon is
+  behaviour-neutral. Documented the related property that sieve scripts run
+  only on non-spam mail (spam bypasses lda straight to `.Spam`) (#343)
+
 ## v0.9.0 (2026-07-13)
 
 Covers everything since v0.8.0, including the quick tags v0.8.1–v0.8.3.
