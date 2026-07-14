@@ -23,7 +23,8 @@
 #   VM_MAP        "vmid=ip vmid=ip ..."  VMID -> reachable IP for SSH
 #   PRESET        install preset (standard|compact|latest|singlephp|nomail|mailonly)
 #   DUMP_DIR      vzdump backup directory (default /var/lib/vz/dump)
-#   INSTALL_URL   bootstrap URL (default https://hestiare.com/install.sh)
+#   INSTALL_URL   bootstrap URL (default: raw install.sh from main; swap for
+#                 https://hestiare.com/install.sh once that host is set up)
 #   SSH_USER      user to SSH into the VMs as (default root)
 #   SSH_OPTS      extra ssh options
 #   SSH_WAIT      seconds to wait for SSH after start (default 240)
@@ -34,7 +35,10 @@ set -uo pipefail
 VM_MAP="${VM_MAP:-412=10.4.4.12 413=10.4.4.13 424=10.4.4.24 426=10.4.4.26}"
 PRESET="${PRESET:-standard}"
 DUMP_DIR="${DUMP_DIR:-/var/lib/vz/dump}"
-INSTALL_URL="${INSTALL_URL:-https://hestiare.com/install.sh}"
+# hestiare.com/install.sh is the eventual canonical bootstrap, but that host is
+# not set up yet — default to the raw install.sh from the public mirror's main
+# branch. Override via INSTALL_URL when hestiare.com goes live.
+INSTALL_URL="${INSTALL_URL:-https://raw.githubusercontent.com/FalzoMAD/HestiaRE/refs/heads/main/install.sh}"
 SSH_USER="${SSH_USER:-root}"
 SSH_WAIT="${SSH_WAIT:-240}"
 SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes}"
