@@ -9,6 +9,25 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Fixed
+
+- Install no longer aborts when rspamd's scan-worker socket is slow to appear
+  (#353): a cold first start (Lua compile, language detector, 120+ regexps,
+  remote map fetches) can take well over the previous 15s wait, while a warm
+  restart binds the socket in ~3s. On deb12/deb13/ubuntu-26 the timeout tripped
+  and `h-add-sys-rspamd` hard-exited, leaving the mail stage half-wired
+  (`ANTISPAM_SYSTEM` unset). The wait is now 60s and — since the unit is already
+  confirmed active — a still-missing socket only warns and continues instead of
+  aborting; the smoke test verifies the socket independently. (No redis conflict
+  was involved: the 64 MB Bayes cap is applied only to rspamd's own companion
+  redis, never when the user selected a full Redis via `DB_REDIS`.)
+- PostgreSQL install no longer prints `pg_lsclusters: not found` (#353): the
+  `postgresql` metapackage's debconf pre-config script calls `pg_lsclusters`
+  before `postgresql-common` (which provides it) is unpacked when both are in one
+  apt transaction. `postgresql-common` is now installed in a separate, earlier
+  transaction so the command is on PATH. Cosmetic only — the cluster was always
+  created correctly.
+
 ### Added
 
 - Adminer as the PostgreSQL web UI, offered as an optional addon (#350). It is
