@@ -12,6 +12,12 @@
 
 set -eo pipefail
 
+# Non-interactive for the whole install run: sub-commands (h-add-sys-*) and
+# maintainer scripts inherit this, so debconf uses its Noninteractive frontend
+# instead of trying Dialog and falling back to Readline in the non-TTY install
+# context ("unable to initialize frontend: Dialog … falling back: Readline").
+export DEBIAN_FRONTEND=noninteractive
+
 CONF_DIR="/etc/hestia"
 INSTALL_CONF="$CONF_DIR/install.conf"
 LOG="/var/log/hestia/install.log"

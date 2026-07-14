@@ -96,10 +96,12 @@ fn_prerequisites() {
     mkdir -p "$LOG_DIR"
     # gnupg: needed to dearmor APT signing keys (Sury during PHP discovery, and
     # Sury+MariaDB in the install stage). jq+whiptail: the wizard. curl/ca-certs:
-    # downloads. No 'just' — the installer is pure bash now.
-    echo "[ * ] Installing prerequisites (curl, jq, whiptail, gnupg)..."
+    # downloads. apt-utils: without it debconf logs "delaying package
+    # configuration, since apt-utils is not installed" on every later apt call
+    # (harmless but noisy). No 'just' — the installer is pure bash now.
+    echo "[ * ] Installing prerequisites (curl, jq, whiptail, gnupg, apt-utils)..."
     DEBIAN_FRONTEND=noninteractive apt-get -qq update
-    DEBIAN_FRONTEND=noninteractive apt-get -y -qq install curl jq whiptail ca-certificates gnupg >> "$LOG_DIR/install.log" 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get -y -qq install curl jq whiptail ca-certificates gnupg apt-utils >> "$LOG_DIR/install.log" 2>&1
 
     if [ "$DEV_MODE" = true ]; then
         _dev_setup
