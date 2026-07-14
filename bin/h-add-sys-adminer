@@ -69,6 +69,17 @@ cp -f "$HESTIA/share/adminer/adminer.php" "$WEBROOT/index.php"
 chown root:caddy "$WEBROOT/index.php"
 chmod 644 "$WEBROOT/index.php"
 
+# 1b. Restrict logins to the LOCAL server via the login-servers plugin: Adminer
+#     auto-detects adminer-plugins.php and loads the class from adminer-plugins/.
+#     This replaces the free-text "Server" field with a fixed localhost dropdown,
+#     so the panel's Adminer cannot be pointed at an arbitrary remote host
+#     (SSRF hardening, #350). No SSO — the regular DB login is enough.
+mkdir -p "$WEBROOT/adminer-plugins"
+cp -f "$HESTIA/share/adminer/plugins/login-servers.php" "$WEBROOT/adminer-plugins/login-servers.php"
+cp -f "$HESTIA/share/adminer/adminer-plugins.php" "$WEBROOT/adminer-plugins.php"
+chown -R root:caddy "$WEBROOT/adminer-plugins" "$WEBROOT/adminer-plugins.php"
+chmod 644 "$WEBROOT/adminer-plugins.php" "$WEBROOT/adminer-plugins/login-servers.php"
+
 # 2. Writable temp dir for sessions / uploads (pool runs as caddy)
 mkdir -p "$TMPDIR"
 chown caddy:caddy "$TMPDIR"

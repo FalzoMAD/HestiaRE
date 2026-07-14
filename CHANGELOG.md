@@ -9,7 +9,25 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Changed
+
+- Adminer logins are now restricted to the local server (#356): the vendored
+  login-servers plugin replaces the login form's free-text "Server" field with a
+  fixed localhost dropdown (PostgreSQL / MySQL-MariaDB), so the panel's Adminer
+  cannot be pointed at an arbitrary remote host — the SSRF follow-up from #350.
+  Username/password login is unchanged; no SSO (out of scope by decision). Fresh
+  installs get it automatically; `h-add-sys-adminer` now also deploys
+  `adminer-plugins/login-servers.php` (vendored) + `adminer-plugins.php` (the
+  localhost config).
+
 ### Fixed
+
+- Installer prerequisites curated to silence two harmless-but-noisy warnings
+  (#356): `apt-utils` is now a prerequisite (without it debconf logs "delaying
+  package configuration" on every apt call), and `h-install-hestia` exports
+  `DEBIAN_FRONTEND=noninteractive` for the whole run so sub-commands no longer
+  trip debconf's "unable to initialize frontend: Dialog … falling back:
+  Readline" in the non-TTY install context.
 
 - Install no longer aborts when rspamd's scan-worker socket is slow to appear
   (#353): a cold first start (Lua compile, language detector, 120+ regexps,
