@@ -98,15 +98,21 @@ if ! systemctl is-active --quiet rspamd; then
 	echo "ERROR: rspamd failed to start."
 	exit "$E_RESTART"
 fi
-# the workers create their unix sockets shortly after the unit is active —
-# wait briefly so follow-up checks (smoke test) don't race the startup
-for _ in $(seq 1 15); do
+# the workers create their unix sockets shortly after the unit is active — but a
+# COLD first start (Lua compile, language detector, 120+ regexps, remote map
+# fetches from maps.rspamd.com) legitimately takes far longer than a warm restart
+# (~3s). Wait up to 60s so a slow first start does not abort the whole install.
+for _ in $(seq 1 60); do
 	[ -S /run/rspamd/normal.sock ] && [ -S /run/rspamd/controller.sock ] && break
 	sleep 1
 done
 if [ ! -S /run/rspamd/normal.sock ]; then
-	echo "ERROR: rspamd scan worker socket did not appear."
-	exit "$E_RESTART"
+	# The unit is active (checked above) — the socket is merely slow to bind on
+	# this box. Do NOT abort the install for that: rspamd is running and the
+	# socket materialises once the cold start finishes; the exim restart below
+	# happens several steps later, and the smoke test verifies the socket
+	# independently. Aborting here left mail installs half-wired (#353).
+	echo "WARNING: rspamd scan worker socket not up after 60s — continuing (rspamd is active; smoke test will verify)."
 fi
 
 # Scan worker socket: Debian-exim (spam scan -> normal.sock) joins the _rspamd

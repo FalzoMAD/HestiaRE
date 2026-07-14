@@ -513,6 +513,13 @@ install_db() {
 	# Optional engines — minimal install; full integration tracked in #121.
 	if is_on "${COMPONENT_DB_POSTGRESQL:-}"; then
 		echo "[ * ] Installing PostgreSQL (minimal — see #121)..."
+		# Install postgresql-common first, in its own transaction: the `postgresql`
+		# metapackage's debconf .config script runs `pg_lsclusters` during apt's
+		# pre-configuration phase, which happens BEFORE postgresql-common is
+		# unpacked when both are in one transaction — printing a harmless but ugly
+		# "pg_lsclusters: not found" (#353). Landing postgresql-common first puts
+		# the command on PATH before that script runs.
+		hestia_apt -y install postgresql-common || true
 		hestia_apt -y install postgresql postgresql-contrib || true
 	fi
 	# Adminer — vendored single-file web DB UI, offered as an addon that the
