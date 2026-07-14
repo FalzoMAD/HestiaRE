@@ -9,6 +9,16 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Added
+
+- Fully unattended install via `-a`/`--auto` (#198): `bash install.sh <preset> -a`
+  now runs with no prompts at all — it takes the same defaults the pre-questions
+  would propose (hostname = FQDN, port 8083, admin `admin`, email
+  `admin@<hostname>`); the admin password is generated and printed as usual.
+  Requires a preset (fails early otherwise, since preset selection would
+  otherwise still prompt). Preset-only (`install.sh <preset>`) stays interactive
+  for the four identity questions. Enables scripted test-VM (re)provisioning.
+
 ### Changed
 
 - Adminer logins are now restricted to the local server (#356): the vendored
