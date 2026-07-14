@@ -3,50 +3,62 @@
 #
 # RUNS ON THE PROXMOX HOST (needs `qm`/`qmrestore` + the local vzdump backups).
 # For each VM it: stops it, restores the latest local backup (--force, DESTRUCTIVE),
-# starts it, waits for SSH, then fetches install.sh and runs the fasttrack
-# unattended install (`install.sh <preset> -a`, #198), and finally reports the
-# smoke-test result.
+# starts it, waits until it is reachable, then fetches install.sh and runs the
+# fasttrack unattended install (`install.sh <preset> -a`, #198), finishing with
+# h-check-sys-smoke.
 #
 # The backups are expected to be clean-base-OS vzdumps (pre-HestiaRE); the
-# restore wipes whatever HestiaRE install was there and the script installs
-# fresh. This is a DEV/TEST-INFRA tool — not part of the shipped product.
+# restore wipes whatever was there and the script installs fresh. This is a
+# DEV/TEST-INFRA tool — not part of the shipped product.
+#
+# TRANSPORT — how commands get INTO the VM (default: agent):
+#   agent  QEMU Guest Agent via `qm guest exec` — NO SSH keys needed. REQUIRES
+#          `qemu-guest-agent` installed+running in the base OS image; the script
+#          sets `agent: 1` on the VM config automatically before start.
+#   ssh    plain SSH (needs the host's key deposited on the VMs, StrictHostKey
+#          accept-new). Use `--via ssh` once keys are in place.
 #
 # Usage (on the Proxmox host, as root):
 #   tools/reset-test-vms.sh                 # all VMs, preset 'standard', asks first
 #   tools/reset-test-vms.sh -y              # no confirmation prompt
 #   tools/reset-test-vms.sh --only 412,413  # subset by VMID
 #   tools/reset-test-vms.sh --preset mailonly
+#   tools/reset-test-vms.sh --via ssh       # use SSH instead of the guest agent
 #   tools/reset-test-vms.sh --no-install    # restore + start only, install manually
 #   tools/reset-test-vms.sh --dry-run       # print what would happen, change nothing
 #
 # Config via env (or edit the defaults below):
-#   VM_MAP        "vmid=ip vmid=ip ..."  VMID -> reachable IP for SSH
-#   PRESET        install preset (standard|compact|latest|singlephp|nomail|mailonly)
-#   DUMP_DIR      vzdump backup directory (default /var/lib/vz/dump)
-#   INSTALL_URL   bootstrap URL (default: raw install.sh from main; swap for
-#                 https://hestiare.com/install.sh once that host is set up)
-#   SSH_USER      user to SSH into the VMs as (default root)
-#   SSH_OPTS      extra ssh options
-#   SSH_WAIT      seconds to wait for SSH after start (default 240)
+#   VM_MAP          "vmid=ip vmid=ip ..."  VMID -> IP (IP only used for --via ssh)
+#   PRESET          install preset (standard|compact|latest|singlephp|nomail|mailonly)
+#   TRANSPORT       agent | ssh   (default agent)
+#   DUMP_DIR        vzdump backup directory (default /var/lib/vz/dump)
+#   INSTALL_URL     bootstrap URL
+#   INSTALL_TIMEOUT seconds to allow the install to run (default 1800)
+#   READY_WAIT      seconds to wait for agent/SSH after start (default 240)
+#   SSH_USER        user for --via ssh (default root)
+#   SSH_OPTS        extra ssh options for --via ssh
 
 set -uo pipefail
 
 # ── Config / defaults ───────────────────────────────────────────────────────
 VM_MAP="${VM_MAP:-412=10.4.4.12 413=10.4.4.13 424=10.4.4.24 426=10.4.4.26}"
 PRESET="${PRESET:-standard}"
+TRANSPORT="${TRANSPORT:-agent}"
 DUMP_DIR="${DUMP_DIR:-/var/lib/vz/dump}"
 # hestiare.com/install.sh is the eventual canonical bootstrap, but that host is
 # not set up yet — default to the raw install.sh from the public mirror's main
 # branch. Override via INSTALL_URL when hestiare.com goes live.
 INSTALL_URL="${INSTALL_URL:-https://raw.githubusercontent.com/FalzoMAD/HestiaRE/refs/heads/main/install.sh}"
+INSTALL_TIMEOUT="${INSTALL_TIMEOUT:-1800}"
+READY_WAIT="${READY_WAIT:-240}"
 SSH_USER="${SSH_USER:-root}"
-SSH_WAIT="${SSH_WAIT:-240}"
 SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes}"
 
 ASSUME_YES=false
 DRY_RUN=false
 DO_INSTALL=true
 ONLY=""
+GUEST_RC=0
 
 # ── Args ────────────────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
@@ -54,17 +66,21 @@ while [ $# -gt 0 ]; do
 		-y | --yes)     ASSUME_YES=true ;;
 		--dry-run)      DRY_RUN=true ;;
 		--no-install)   DO_INSTALL=false ;;
+		--via)          TRANSPORT="$2"; shift ;;
+		--via=*)        TRANSPORT="${1#*=}" ;;
 		--preset)       PRESET="$2"; shift ;;
 		--preset=*)     PRESET="${1#*=}" ;;
 		--only)         ONLY="$2"; shift ;;
 		--only=*)       ONLY="${1#*=}" ;;
 		--dump-dir)     DUMP_DIR="$2"; shift ;;
 		--dump-dir=*)   DUMP_DIR="${1#*=}" ;;
-		-h | --help)    sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+		-h | --help)    sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 		*)              echo "ERROR: unknown argument: $1 (see --help)" >&2; exit 1 ;;
 	esac
 	shift
 done
+
+case "$TRANSPORT" in agent | ssh) ;; *) echo "ERROR: --via must be 'agent' or 'ssh'" >&2; exit 1 ;; esac
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 log()  { echo "[ * ] $*"; }
@@ -82,15 +98,18 @@ latest_backup() {
 		"$DUMP_DIR"/vzdump-qemu-"$vmid"-*.vma 2> /dev/null | head -n 1
 }
 
-# wait_ssh <ip> — poll until SSH answers or SSH_WAIT elapses
-wait_ssh() {
-	local ip="$1" waited=0
-	# The restored VM keeps its old host key; drop any stale entry just in case.
-	ssh-keygen -R "$ip" > /dev/null 2>&1 || true
-	while [ "$waited" -lt "$SSH_WAIT" ]; do
-		# shellcheck disable=SC2086
-		if ssh $SSH_OPTS "$SSH_USER@$ip" true 2> /dev/null; then
-			return 0
+# wait_ready <vmid> <ip> — poll until the VM answers (agent ping or SSH)
+wait_ready() {
+	local vmid="$1" ip="$2" waited=0
+	if [ "$TRANSPORT" = ssh ]; then
+		ssh-keygen -R "$ip" > /dev/null 2>&1 || true
+	fi
+	while [ "$waited" -lt "$READY_WAIT" ]; do
+		if [ "$TRANSPORT" = agent ]; then
+			qm agent "$vmid" ping > /dev/null 2>&1 && return 0
+		else
+			# shellcheck disable=SC2086
+			ssh $SSH_OPTS "$SSH_USER@$ip" true 2> /dev/null && return 0
 		fi
 		sleep 5
 		waited=$((waited + 5))
@@ -98,11 +117,40 @@ wait_ssh() {
 	return 1
 }
 
+# remote_run <vmid> <ip> <timeout> <shell-command> — run inside the guest.
+# Sets GUEST_RC to the command's exit code. Returns 0 if it completed (regardless
+# of GUEST_RC), 1 if the transport failed / timed out.
+remote_run() {
+	local vmid="$1" ip="$2" timeout="$3" cmd="$4"
+	GUEST_RC=0
+	if [ "$TRANSPORT" = ssh ]; then
+		# shellcheck disable=SC2086
+		timeout "$timeout" ssh $SSH_OPTS "$SSH_USER@$ip" "$cmd"
+		GUEST_RC=$?
+		return 0
+	fi
+	# agent: start async, then poll exec-status until it exits.
+	local pid js waited=0
+	pid=$(qm guest exec "$vmid" --synchronous 0 -- bash -lc "$cmd" 2> /dev/null \
+		| grep -oE '"pid"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | head -1)
+	[ -n "$pid" ] || { warn "VM $vmid: guest agent did not accept the command (agent not installed/running?)"; return 1; }
+	while [ "$waited" -lt "$timeout" ]; do
+		js=$(qm guest exec-status "$vmid" "$pid" 2> /dev/null)
+		if echo "$js" | grep -qE '"exited"[[:space:]]*:[[:space:]]*(1|true)'; then
+			GUEST_RC=$(echo "$js" | grep -oE '"exitcode"[[:space:]]*:[[:space:]]*-?[0-9]+' | grep -oE '\-?[0-9]+' | tail -1)
+			GUEST_RC=${GUEST_RC:-0}
+			return 0
+		fi
+		sleep 5
+		waited=$((waited + 5))
+	done
+	warn "VM $vmid: guest command did not finish within ${timeout}s"
+	return 1
+}
+
 # ── Preflight ───────────────────────────────────────────────────────────────
 if [ "$DRY_RUN" != true ]; then
 	[ "$(id -u)" = "0" ] || die "must run as root on the Proxmox host (qm/qmrestore need root)."
-fi
-if [ "$DRY_RUN" != true ]; then
 	command -v qm > /dev/null 2>&1 || die "'qm' not found — is this a Proxmox VE host?"
 	command -v qmrestore > /dev/null 2>&1 || die "'qmrestore' not found — is this a Proxmox VE host?"
 fi
@@ -125,7 +173,8 @@ for t in "${TARGETS[@]}"; do
 	bk="$(latest_backup "$vmid")"
 	printf '   VM %-5s  ip %-12s  backup: %s\n' "$vmid" "$ip" "${bk:-<NONE FOUND>}"
 done
-echo "Preset: $PRESET   Install: $DO_INSTALL   Dump dir: $DUMP_DIR"
+echo "Preset: $PRESET   Transport: $TRANSPORT   Install: $DO_INSTALL   Dump dir: $DUMP_DIR"
+[ "$TRANSPORT" = agent ] && echo "Note: transport 'agent' needs qemu-guest-agent in the base image."
 if [ "$ASSUME_YES" != true ] && [ "$DRY_RUN" != true ]; then
 	printf 'Type "yes" to proceed: '
 	read -r _confirm
@@ -135,17 +184,16 @@ fi
 # ── Per-VM reset ────────────────────────────────────────────────────────────
 declare -a RESULTS=()
 reset_one() {
-	local vmid="$1" ip="$2" bk rc
-	log "VM $vmid ($ip): starting reset"
+	local vmid="$1" ip="$2" bk
 
+	log "VM $vmid ($ip): starting reset"
 	bk="$(latest_backup "$vmid")"
 	[ -n "$bk" ] || { warn "VM $vmid: no backup found in $DUMP_DIR — skipping"; return 1; }
 	log "VM $vmid: latest backup = $bk"
 
-	# Stop (ignore error if already stopped)
+	# Stop (ignore error if already stopped), then wait for it to be stopped
 	log "VM $vmid: stopping"
 	run "qm stop $vmid --skiplock 2>/dev/null || true"
-	# Wait for it to actually be stopped
 	if [ "$DRY_RUN" != true ]; then
 		for _ in $(seq 1 24); do
 			[ "$(qm status "$vmid" 2>/dev/null | awk '{print $2}')" = "stopped" ] && break
@@ -157,6 +205,12 @@ reset_one() {
 	log "VM $vmid: restoring from backup (--force)"
 	run "qmrestore '$bk' $vmid --force" || { warn "VM $vmid: qmrestore failed"; return 1; }
 
+	# Ensure the guest-agent channel exists (idempotent) when using it
+	if [ "$TRANSPORT" = agent ]; then
+		log "VM $vmid: enabling guest-agent channel (agent=1)"
+		run "qm set $vmid --agent 1 >/dev/null"
+	fi
+
 	# Start
 	log "VM $vmid: starting"
 	run "qm start $vmid" || { warn "VM $vmid: qm start failed"; return 1; }
@@ -165,33 +219,37 @@ reset_one() {
 		ok "VM $vmid: restored and started (install skipped)"
 		return 0
 	fi
-
-	# Wait for SSH
-	log "VM $vmid: waiting for SSH on $ip (up to ${SSH_WAIT}s)"
 	if [ "$DRY_RUN" = true ]; then
-		echo "  (dry-run) would wait for ssh $SSH_USER@$ip, then run install.sh $PRESET -a"
+		echo "  (dry-run) would wait for $TRANSPORT, then run install.sh $PRESET -a + smoke"
 		return 0
 	fi
-	wait_ssh "$ip" || { warn "VM $vmid: SSH did not come up within ${SSH_WAIT}s"; return 1; }
 
-	# Fetch + run the unattended install
-	log "VM $vmid: fetching install.sh and running '$PRESET -a'"
-	# shellcheck disable=SC2086
-	ssh $SSH_OPTS "$SSH_USER@$ip" \
-		"curl -fsSL '$INSTALL_URL' -o /root/install.sh && bash /root/install.sh '$PRESET' -a"
-	rc=$?
-	[ "$rc" -eq 0 ] || { warn "VM $vmid: install.sh exited $rc"; return 1; }
+	# Wait until reachable
+	log "VM $vmid: waiting for $TRANSPORT (up to ${READY_WAIT}s)"
+	wait_ready "$vmid" "$ip" || { warn "VM $vmid: $TRANSPORT not reachable within ${READY_WAIT}s"; return 1; }
+
+	# Fetch + run the unattended install (output to a log inside the VM)
+	log "VM $vmid: installing ('$PRESET -a', up to ${INSTALL_TIMEOUT}s)"
+	remote_run "$vmid" "$ip" "$INSTALL_TIMEOUT" \
+		"curl -fsSL '$INSTALL_URL' -o /root/install.sh && bash /root/install.sh '$PRESET' -a >/root/install.log 2>&1" \
+		|| { warn "VM $vmid: install transport failed"; return 1; }
+	if [ "${GUEST_RC:-1}" -ne 0 ]; then
+		warn "VM $vmid: install.sh exited $GUEST_RC (inspect /root/install.log in the VM, e.g. qm guest exec $vmid -- tail -n 40 /root/install.log)"
+		return 1
+	fi
 
 	# Smoke test
 	log "VM $vmid: running smoke test"
-	# shellcheck disable=SC2086
-	if ssh $SSH_OPTS "$SSH_USER@$ip" "/usr/local/hestia/bin/h-check-sys-smoke"; then
+	remote_run "$vmid" "$ip" 180 \
+		"/usr/local/hestia/bin/h-check-sys-smoke >/root/smoke.log 2>&1" \
+		|| { warn "VM $vmid: smoke transport failed"; return 1; }
+	if [ "${GUEST_RC:-1}" -eq 0 ]; then
 		ok "VM $vmid: install + smoke PASSED"
+		return 0
 	else
-		warn "VM $vmid: smoke test reported failures (see output above)"
+		warn "VM $vmid: smoke reported failures (qm guest exec $vmid -- cat /root/smoke.log)"
 		return 1
 	fi
-	return 0
 }
 
 for t in "${TARGETS[@]}"; do
@@ -206,7 +264,7 @@ done
 
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo "──────────────────────────────────────────────────────────────"
-echo "=== reset summary ==="
+echo "=== reset summary (transport: $TRANSPORT, preset: $PRESET) ==="
 fail=0
 for r in "${RESULTS[@]}"; do
 	echo "  $r"
