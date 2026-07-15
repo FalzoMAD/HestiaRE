@@ -9,6 +9,29 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Removed
+
+- Dead phpPgAdmin plumbing, replaced by Adminer in #350 but never cleaned up
+  (#365). phpPgAdmin was never installed or served anymore, yet its wiring lived
+  on across the tree: `install/deb/pga/`, the `phppgadmin.*` templates under
+  `share/{panel-caddy,nginx,apache2}/apps/`, a whole unused FPM pool
+  (`share/panel-php/pool.d/phppgadmin.conf`), the `pga` branch of
+  `h-change-sys-db-alias`, the `DB_PGA_ALIAS` seeding in `func/syshealth.sh`, the
+  `DB_PGA_*` fields in `h-list-sys-config`, and the panel UI's (broken, 404-ing)
+  phpPgAdmin links/alias field. Also dropped the unused
+  `install/deb/postgresql/pg_hba.conf` (the installer never deployed it) and the
+  `phppgadmin` version pin in `manifest.json`. Recoverable from `upstream/hestiacp`.
+
+### Changed
+
+- The panel now wires **Adminer** into the DB UI as the PostgreSQL admin tool
+  (#365, #229): the DB list shows an "Adminer" button for PostgreSQL databases
+  (linking to the panel's fixed `/adminer/` route) instead of the dead phpPgAdmin
+  link, shown only when the Adminer addon is installed. `h-add-sys-adminer` /
+  `h-remove-sys-adminer` set/clear a `DB_ADMINER_ALIAS` marker in `hestia.conf`
+  that the panel reads to decide whether to offer the button (the phpMyAdmin
+  pattern). phpMyAdmin/MySQL is untouched.
+
 ### Added
 
 - Fully unattended install via `-a`/`--auto` (#198): `bash install.sh <preset> -a`

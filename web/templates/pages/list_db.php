@@ -1,14 +1,15 @@
 <?php
 [$http_host, $port] = explode(":", $_SERVER["HTTP_HOST"] . ":");
 $db_myadmin_link = "//" . $http_host . "/phpmyadmin/";
-$db_pgadmin_link = "//" . $http_host . "/phppgadmin/";
 
 if (!empty($_SESSION["DB_PMA_ALIAS"])) {
 	$db_myadmin_link = "//" . $http_host . "/" . $_SESSION["DB_PMA_ALIAS"] . "/";
 }
-if (!empty($_SESSION["DB_PGA_ALIAS"])) {
-	$db_pgadmin_link = "//" . $http_host . "/" . $_SESSION["DB_PGA_ALIAS"] . "/";
-}
+// Adminer (the PostgreSQL UI) is served by the Panel-Caddy on the panel origin at
+// a fixed /adminer/ route — not via the customer-domain proxy phpMyAdmin uses — so
+// it is linked panel-relative. Shown only when the addon is installed
+// (DB_ADMINER_ALIAS marker, set by h-add-sys-adminer).
+$db_adminer_link = "/" . (!empty($_SESSION["DB_ADMINER_ALIAS"]) ? $_SESSION["DB_ADMINER_ALIAS"] : "adminer") . "/";
 ?>
 
 <!-- Begin toolbar -->
@@ -24,9 +25,9 @@ if (!empty($_SESSION["DB_PGA_ALIAS"])) {
 						<i class="fas fa-database icon-orange"></i>phpMyAdmin
 					</a>
 				<?php } ?>
-				<?php if ($_SESSION["DB_SYSTEM"] === "pgsql" || $_SESSION["DB_SYSTEM"] === "mysql,pgsql" || $_SESSION["DB_SYSTEM"] === "pgsql,mysql") { ?>
-					<a class="button button-secondary <?= tohtml(ipUsed() ? "button-suspended" : "") ?>" href="<?= tohtml($db_pgadmin_link) ?>" target="_blank">
-						<i class="fas fa-database icon-orange"></i>phpPgAdmin
+				<?php if (!empty($_SESSION["DB_ADMINER_ALIAS"]) && ($_SESSION["DB_SYSTEM"] === "pgsql" || $_SESSION["DB_SYSTEM"] === "mysql,pgsql" || $_SESSION["DB_SYSTEM"] === "pgsql,mysql")) { ?>
+					<a class="button button-secondary" href="<?= tohtml($db_adminer_link) ?>" target="_blank">
+						<i class="fas fa-database icon-orange"></i>Adminer
 					</a>
 				<?php } ?>
 				<?php if (ipUsed()) { ?>
@@ -139,9 +140,8 @@ if (!empty($_SESSION["DB_PGA_ALIAS"])) {
 				if ($data[$key]['TYPE'] == 'mysql') $db_admin = "phpMyAdmin";
 				if ($data[$key]['TYPE'] == 'mysql') $db_admin_link = "https://".$http_host."/phpmyadmin/";
 				if (($data[$key]['TYPE'] == 'mysql') && (!empty($_SESSION['DB_PMA_ALIAS']))) $db_admin_link = $_SESSION['DB_PMA_ALIAS'];
-				if ($data[$key]['TYPE'] == 'pgsql') $db_admin = "phpPgAdmin";
-				if ($data[$key]['TYPE'] == 'pgsql') $db_admin_link = "https://".$http_host."/phppgadmin/";
-				if (($data[$key]['TYPE'] == 'pgsql') && (!empty($_SESSION['DB_PGA_ALIAS']))) $db_admin_link = $_SESSION['DB_PGA_ALIAS'];
+				if ($data[$key]['TYPE'] == 'pgsql') $db_admin = "Adminer";
+				if ($data[$key]['TYPE'] == 'pgsql') $db_admin_link = $db_adminer_link;
 			?>
 			<div class="units-table-row <?php if ($data[$key]['SUSPENDED'] == 'yes') echo 'disabled'; ?> js-unit"
 				data-sort-date="<?= tohtml(strtotime($data[$key]['DATE'].' '.$data[$key]['TIME'])) ?>"

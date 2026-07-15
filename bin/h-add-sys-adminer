@@ -113,6 +113,10 @@ $BIN/h-restart-service caddy > /dev/null 2>&1 || true
 #----------------------------------------------------------#
 
 set_install_component ADDON_ADMINER true
+# Marker read by the panel (h-list-sys-config json -> $_SESSION): presence means
+# the DB list shows an Adminer "manage" button for PostgreSQL DBs. The route is
+# fixed (/adminer/), so the value is the path segment, not a configurable alias.
+$BIN/h-change-sys-config-value 'DB_ADMINER_ALIAS' 'adminer'
 
 echo "[ OK ] Adminer installed — reachable at the panel under /adminer/"
 

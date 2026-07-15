@@ -698,22 +698,7 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Update phpPgAdmin url
-	if (empty($_SESSION["error_msg"])) {
-		if (empty($_POST["v_pgsql_url"])) {
-			$_POST["v_pgsql_url"] = "";
-		}
-		if ($_POST["v_pgsql_url"] != $_SESSION["DB_PGA_ALIAS"]) {
-			exec(
-				HESTIA_CMD . "h-change-sys-db-alias pga " . quoteshellarg($_POST["v_pgsql_url"]),
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			$v_db_adv = "yes";
-		}
-	}
+	// (PostgreSQL uses Adminer on a fixed /adminer/ route — no configurable alias.)
 
 	// Update send notification setting
 	if (empty($_SESSION["error_msg"])) {

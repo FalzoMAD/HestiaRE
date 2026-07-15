@@ -9,7 +9,7 @@
 # other _rspamd-group file access). h-add-sys-rspamd grants that group to the
 # Panel-Caddy *process* via a systemd drop-in (SupplementaryGroups=), NOT to
 # the caddy *user* in /etc/group — otherwise the app FPM pools that also run
-# as caddy (phpMyAdmin/phpPgAdmin/Roundcube) would inherit it through
+# as caddy (phpMyAdmin/Adminer/Roundcube) would inherit it through
 # initgroups() and reach the controller past forward_auth (#341). _rspamd is a
 # member of _rspamd-ctrl only so the worker can chgrp its own socket.
 #
