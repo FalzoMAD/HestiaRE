@@ -32,6 +32,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- All hestia sudo grants were dead on Ubuntu 26 (#363): `/etc/sudoers.d/hestia`
+  opened with `Defaults:root !requiretty`, but Ubuntu 26 ships **sudo-rs** (the
+  Rust reimplementation) as its default sudo, and sudo-rs does not implement the
+  obsolete `requiretty` setting — it rejects the *entire* file when it appears,
+  silently dropping the `hestia` grant the panel relies on for every privileged
+  action. (Classic sudo, incl. Debian 13's 1.9.16, still accepts it — so this is
+  a sudo-rs behaviour, not a version bump.) `requiretty` was a CentOS-era
+  workaround that was always a no-op on Debian/Ubuntu, so the line is removed
+  everywhere. The smoke test now runs `visudo -cf /etc/sudoers.d/hestia`, so a
+  file the local sudo cannot parse fails the baseline instead of silently
+  disabling the panel.
 - phpMyAdmin and Adminer were broken under the isolated panel PHP (#227, #229):
   both run under the shared hestia FPM master, but its curated conf.d
   (`hestia-php-confd`, #272) only carried the panel-UI extension set — so
