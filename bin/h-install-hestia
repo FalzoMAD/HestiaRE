@@ -768,7 +768,7 @@ configure_hestia() {
 
 	echo "[ * ] Configuring Hestia Control Panel..."
 	mkdir -p /etc/sudoers.d
-	cp -f "$HESTIA_COMMON_DIR/sudo/hestia" /etc/sudoers.d/
+	cp -f "$HESTIA/share/sudo/hestia" /etc/sudoers.d/
 	chmod 440 /etc/sudoers.d/hestia
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/hestia" /etc/logrotate.d/hestia 2>/dev/null || true
 
