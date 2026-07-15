@@ -61,7 +61,7 @@ fi
 
 # Deploy hestia-sso.php into the PMA webroot (readable by the pool user caddy;
 # contains no secrets — it only consumes one-time tokens from /run/hestia-sso/)
-cp -f $HESTIA_INSTALL_DIR/phpmyadmin/hestia-sso.php $PMA_INSTALL/hestia-sso.php
+cp -f $HESTIA/share/phpmyadmin/hestia-sso.php $PMA_INSTALL/hestia-sso.php
 chmod 640 $PMA_INSTALL/hestia-sso.php
 chown root:caddy $PMA_INSTALL/hestia-sso.php
 

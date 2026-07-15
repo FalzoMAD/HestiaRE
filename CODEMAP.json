@@ -167,7 +167,7 @@
       "locales": 42,
       "action_dirs": ["add", "edit", "delete", "list", "bulk", "copy", "move", "suspend", "unsuspend", "restart", "stop", "start", "schedule", "update", "generate", "download", "search", "reset", "reset2fa", "sso"],
       "pma_sso": {
-        "description": "phpMyAdmin SSO without REST API (#145): web/sso/phpmyadmin/ runs h-add-database-sso-token via panel sudo (temp DB user + one-time handoff file /run/hestia-sso/<token>, root:caddy 0730/640); install/deb/phpmyadmin/hestia-sso.php (PMA pool, unprivileged) consumes the token and opens the signon session. Enable/disable: h-add-sys-pma-sso / h-delete-sys-pma-sso; PHPMYADMIN_KEY is only the enabled flag."
+        "description": "phpMyAdmin SSO without REST API (#145): web/sso/phpmyadmin/ runs h-add-database-sso-token via panel sudo (temp DB user + one-time handoff file /run/hestia-sso/<token>, root:caddy 0730/640); share/phpmyadmin/hestia-sso.php (PMA pool, unprivileged) consumes the token and opens the signon session. Enable/disable: h-add-sys-pma-sso / h-delete-sys-pma-sso; PHPMYADMIN_KEY is only the enabled flag."
       },
       "dependencies": ["cli_commands", "func_libraries"],
       "upstream_debt": {
@@ -204,8 +204,8 @@
         "share/dovecot/"
       ],
       "key_files": [
-        "install/deb/nginx/",
-        "install/deb/apache2/",
+        "share/nginx/",
+        "share/apache2/",
         "install/deb/php-fpm/",
         "install/deb/exim/",
         "install/deb/dovecot/",

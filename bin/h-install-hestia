@@ -284,8 +284,8 @@ configure_apache2() {
 
 	echo "[ * ] Configuring apache2..."
 	mkdir -p /etc/apache2/conf.d/domains
-	cp -f "$HESTIA_INSTALL_DIR/apache2/apache2.conf" /etc/apache2/
-	cp -f "$HESTIA_INSTALL_DIR/apache2/status.conf" /etc/apache2/mods-available/hestia-status.conf
+	cp -f "$HESTIA/share/apache2/apache2.conf" /etc/apache2/
+	cp -f "$HESTIA/share/apache2/status.conf" /etc/apache2/mods-available/hestia-status.conf
 	cp -f /etc/apache2/mods-available/status.load /etc/apache2/mods-available/hestia-status.load
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/apache2" /etc/logrotate.d/
 
@@ -303,7 +303,7 @@ configure_apache2() {
 	a2dismod -q mpm_prefork > /dev/null 2>&1 || true
 	a2enmod -q mpm_event > /dev/null 2>&1 || true
 	a2enmod -q proxy_fcgi setenvif > /dev/null 2>&1 || true
-	cp -f "$HESTIA_INSTALL_DIR/apache2/hestia-event.conf" /etc/apache2/conf.d/
+	cp -f "$HESTIA/share/apache2/hestia-event.conf" /etc/apache2/conf.d/
 
 	# No distro default site, no global Listen ports
 	a2dissite -q 000-default > /dev/null 2>&1 || true
@@ -335,11 +335,11 @@ install_web() {
 
 	echo "[ * ] Configuring nginx..."
 	rm -f /etc/nginx/conf.d/*.conf
-	cp -f "$HESTIA_INSTALL_DIR/nginx/nginx.conf" /etc/nginx/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/status.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/agents.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/cloudflare.inc" /etc/nginx/conf.d/
+	cp -f "$HESTIA/share/nginx/nginx.conf" /etc/nginx/
+	cp -f "$HESTIA/share/nginx/status.conf" /etc/nginx/conf.d/
+	cp -f "$HESTIA/share/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
+	cp -f "$HESTIA/share/nginx/agents.conf" /etc/nginx/conf.d/
+	cp -f "$HESTIA/share/nginx/cloudflare.inc" /etc/nginx/conf.d/
 	# phpMyAdmin is no longer served via an nginx alias — it is delivered by the
 	# Panel-Caddy from a dedicated caddy FPM pool (see h-change-sys-db-alias).
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/nginx" /etc/logrotate.d/
