@@ -134,6 +134,22 @@ check_file_empty() {
 	fi
 }
 
+# check_sudoers <file> <label> — the file parses cleanly under the running sudo.
+# A single setting the local sudo rejects (e.g. requiretty, not implemented by
+# sudo-rs — Ubuntu 26's default sudo, #363) makes sudo discard the WHOLE file —
+# silently dropping every grant in it. visudo -cf catches that at baseline time.
+check_sudoers() {
+	if [ ! -f "$1" ]; then
+		no "sudoers $2 ($1) missing"
+		return
+	fi
+	if visudo -cf "$1" > /dev/null 2>&1; then
+		ok "sudoers $2 ($1) valid"
+	else
+		no "sudoers $2 ($1) invalid" "$(visudo -cf "$1" 2>&1 | tail -1)"
+	fi
+}
+
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -146,6 +162,9 @@ check_service caddy "panel webserver"
 check_service hestia-php "panel PHP-FPM"
 check_port "${BACKEND_PORT:-8083}" "panel"
 check_http "https://127.0.0.1:${BACKEND_PORT:-8083}/login/" "panel login page"
+# The panel drives every privileged action by calling h-* through sudo as the
+# hestia user — an invalid /etc/sudoers.d/hestia means no privileged action works.
+check_sudoers /etc/sudoers.d/hestia "hestia grant"
 
 # --- Configured subsystems (derived from *_SYSTEM) ---
 echo "-- services --"

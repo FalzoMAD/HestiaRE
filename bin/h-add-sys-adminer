@@ -50,8 +50,22 @@ if [ ! -s "$HESTIA/share/adminer/adminer.php" ]; then
 	exit "$E_NOTEXIST"
 fi
 
-# Already installed?
-if [ -f "$WEBROOT/index.php" ] && [ -f "$POOL" ] && [ -f "$ROUTE" ]; then
+# The login-servers plugin is what closes the SSRF hole (fixed localhost
+# dropdown instead of a free Server field, #350). Refuse to install without it
+# rather than deploying an Adminer that silently allows arbitrary DB hosts.
+if [ ! -s "$HESTIA/share/adminer/adminer-plugins.php" ] \
+	|| [ ! -s "$HESTIA/share/adminer/plugins/login-servers.php" ]; then
+	echo "ERROR: Adminer login-servers plugin missing ($HESTIA/share/adminer/) — refusing to install without SSRF hardening."
+	exit "$E_NOTEXIST"
+fi
+
+# Already installed? Include the login-servers plugin files in the check: an
+# install predating the plugin (#350) has index.php+pool+route but no plugin,
+# leaving the SSRF-closing localhost dropdown absent. Re-running must then fall
+# through and (re)deploy the plugin (the cp -f below is idempotent).
+if [ -f "$WEBROOT/index.php" ] && [ -f "$POOL" ] && [ -f "$ROUTE" ] \
+	&& [ -f "$WEBROOT/adminer-plugins.php" ] \
+	&& [ -f "$WEBROOT/adminer-plugins/login-servers.php" ]; then
 	echo "INFO: Adminer is already installed."
 	exit 0
 fi
@@ -68,6 +82,17 @@ mkdir -p "$WEBROOT"
 cp -f "$HESTIA/share/adminer/adminer.php" "$WEBROOT/index.php"
 chown root:caddy "$WEBROOT/index.php"
 chmod 644 "$WEBROOT/index.php"
+
+# 1b. Restrict logins to the LOCAL server via the login-servers plugin: Adminer
+#     auto-detects adminer-plugins.php and loads the class from adminer-plugins/.
+#     This replaces the free-text "Server" field with a fixed localhost dropdown,
+#     so the panel's Adminer cannot be pointed at an arbitrary remote host
+#     (SSRF hardening, #350). No SSO — the regular DB login is enough.
+mkdir -p "$WEBROOT/adminer-plugins"
+cp -f "$HESTIA/share/adminer/plugins/login-servers.php" "$WEBROOT/adminer-plugins/login-servers.php"
+cp -f "$HESTIA/share/adminer/adminer-plugins.php" "$WEBROOT/adminer-plugins.php"
+chown -R root:caddy "$WEBROOT/adminer-plugins" "$WEBROOT/adminer-plugins.php"
+chmod 644 "$WEBROOT/adminer-plugins.php" "$WEBROOT/adminer-plugins/login-servers.php"
 
 # 2. Writable temp dir for sessions / uploads (pool runs as caddy)
 mkdir -p "$TMPDIR"
@@ -88,6 +113,10 @@ $BIN/h-restart-service caddy > /dev/null 2>&1 || true
 #----------------------------------------------------------#
 
 set_install_component ADDON_ADMINER true
+# Marker read by the panel (h-list-sys-config json -> $_SESSION): presence means
+# the DB list shows an Adminer "manage" button for PostgreSQL DBs. The route is
+# fixed (/adminer/), so the value is the path segment, not a configurable alias.
+$BIN/h-change-sys-config-value 'DB_ADMINER_ALIAS' 'adminer'
 
 echo "[ OK ] Adminer installed — reachable at the panel under /adminer/"
 

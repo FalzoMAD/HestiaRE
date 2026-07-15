@@ -17,6 +17,8 @@
 # Usage:
 #   bash install.sh                  # full interactive wizard
 #   bash install.sh <preset>         # fasttrack: skip component questions
+#   bash install.sh <preset> -a      # fully unattended: also take the default
+#                                    #   hostname/port/admin/email, no prompts
 #   bash install.sh --dev            # configure private source first
 #   bash install.sh --profile=<p>    # same as positional preset arg
 #
@@ -44,6 +46,7 @@ GITHUB_RAW="https://github.com/${GITHUB_REPO}/releases/download"
 OS=""
 FASTTRACK_PRESET=""
 DEV_MODE=false
+AUTO_MODE=false
 
 # ── Error surfacing ────────────────────────────────────────
 # With set -e the script aborts on the first failed command. Because prerequisite
@@ -63,12 +66,21 @@ trap '_on_error "$?" "$LINENO"' ERR
 # ── Argument parsing ───────────────────────────────────────
 for _arg in "$@"; do
     case $_arg in
-        --dev)       DEV_MODE=true ;;
-        --profile=*) FASTTRACK_PRESET="${_arg#*=}" ;;
-        -*)          ;;
-        *)           [ -z "$FASTTRACK_PRESET" ] && FASTTRACK_PRESET="$_arg" ;;
+        --dev)          DEV_MODE=true ;;
+        --profile=*)    FASTTRACK_PRESET="${_arg#*=}" ;;
+        -a|--auto)      AUTO_MODE=true ;;
+        -*)             ;;
+        *)              [ -z "$FASTTRACK_PRESET" ] && FASTTRACK_PRESET="$_arg" ;;
     esac
 done
+
+# --auto only makes sense together with a preset: without one, the preset
+# selection would still prompt, defeating "unattended". Fail early and clearly.
+if [ "$AUTO_MODE" = true ] && [ -z "$FASTTRACK_PRESET" ]; then
+    echo "ERROR: -a/--auto requires a preset, e.g.:  bash install.sh standard -a" >&2
+    echo "       Valid presets: standard, compact, latest, singlephp, nomail, mailonly" >&2
+    exit 1
+fi
 
 # ════════════════════════════════════════════════════════════
 # Prerequisites
@@ -96,10 +108,12 @@ fn_prerequisites() {
     mkdir -p "$LOG_DIR"
     # gnupg: needed to dearmor APT signing keys (Sury during PHP discovery, and
     # Sury+MariaDB in the install stage). jq+whiptail: the wizard. curl/ca-certs:
-    # downloads. No 'just' — the installer is pure bash now.
-    echo "[ * ] Installing prerequisites (curl, jq, whiptail, gnupg)..."
+    # downloads. apt-utils: without it debconf logs "delaying package
+    # configuration, since apt-utils is not installed" on every later apt call
+    # (harmless but noisy). No 'just' — the installer is pure bash now.
+    echo "[ * ] Installing prerequisites (curl, jq, whiptail, gnupg, apt-utils)..."
     DEBIAN_FRONTEND=noninteractive apt-get -qq update
-    DEBIAN_FRONTEND=noninteractive apt-get -y -qq install curl jq whiptail ca-certificates gnupg >> "$LOG_DIR/install.log" 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get -y -qq install curl jq whiptail ca-certificates gnupg apt-utils >> "$LOG_DIR/install.log" 2>&1
 
     if [ "$DEV_MODE" = true ]; then
         _dev_setup
@@ -187,7 +201,9 @@ main() {
     echo ""
 
     # Wizard: manifest-driven Q&A -> /etc/hestia/install.conf (separate process)
-    bash "${INSTALL_DIR}/func/wizard.sh" --os="${OS}" ${FASTTRACK_PRESET:+--preset="${FASTTRACK_PRESET}"}
+    bash "${INSTALL_DIR}/func/wizard.sh" --os="${OS}" \
+        ${FASTTRACK_PRESET:+--preset="${FASTTRACK_PRESET}"} \
+        $([ "$AUTO_MODE" = true ] && echo --auto)
 
     # Seed /etc/hestia (env + hestia.conf) before any h-* command runs, so the
     # bootstrap-trap (func/main.sh sourcing hestia.env/hestia.conf at load) is a

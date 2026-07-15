@@ -9,7 +9,98 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Changed
+
+- Web server + phpMyAdmin-SSO config assets moved from the legacy `install/deb/`
+  tree to `share/` (#119): `install/deb/apache2/` → `share/apache2/`,
+  `install/deb/nginx/` → `share/nginx/` (joining the `apps/` snippets already
+  there), and `install/deb/phpmyadmin/hestia-sso.php` → `share/phpmyadmin/`.
+  Consumers (`h-install-hestia`, `h-add-sys-ip`, `h-add-sys-pma-sso`) now read
+  from `$HESTIA/share/...`; `HESTIA_INSTALL_DIR` is unchanged for the remaining
+  `install/deb/` assets. Opportunistic step in dissolving `install/` — no
+  behaviour change, the deployed files are identical.
+
+### Removed
+
+- Dead phpPgAdmin plumbing, replaced by Adminer in #350 but never cleaned up
+  (#365). phpPgAdmin was never installed or served anymore, yet its wiring lived
+  on across the tree: `install/deb/pga/`, the `phppgadmin.*` templates under
+  `share/{panel-caddy,nginx,apache2}/apps/`, a whole unused FPM pool
+  (`share/panel-php/pool.d/phppgadmin.conf`), the `pga` branch of
+  `h-change-sys-db-alias`, the `DB_PGA_ALIAS` seeding in `func/syshealth.sh`, the
+  `DB_PGA_*` fields in `h-list-sys-config`, and the panel UI's (broken, 404-ing)
+  phpPgAdmin links/alias field. Also dropped the unused
+  `install/deb/postgresql/pg_hba.conf` (the installer never deployed it) and the
+  `phppgadmin` version pin in `manifest.json`. Recoverable from `upstream/hestiacp`.
+
+### Changed
+
+- The panel now wires **Adminer** into the DB UI as the PostgreSQL admin tool
+  (#365, #229): the DB list shows an "Adminer" button for PostgreSQL databases
+  (linking to the panel's fixed `/adminer/` route) instead of the dead phpPgAdmin
+  link, shown only when the Adminer addon is installed. `h-add-sys-adminer` /
+  `h-remove-sys-adminer` set/clear a `DB_ADMINER_ALIAS` marker in `hestia.conf`
+  that the panel reads to decide whether to offer the button (the phpMyAdmin
+  pattern). phpMyAdmin/MySQL is untouched.
+
+### Added
+
+- Fully unattended install via `-a`/`--auto` (#198): `bash install.sh <preset> -a`
+  now runs with no prompts at all — it takes the same defaults the pre-questions
+  would propose (hostname = FQDN, port 8083, admin `admin`, email
+  `admin@<hostname>`); the admin password is generated and printed as usual.
+  Requires a preset (fails early otherwise, since preset selection would
+  otherwise still prompt). Preset-only (`install.sh <preset>`) stays interactive
+  for the four identity questions. Enables scripted test-VM (re)provisioning.
+
+### Changed
+
+- Adminer logins are now restricted to the local server (#356): the vendored
+  login-servers plugin replaces the login form's free-text "Server" field with a
+  fixed localhost dropdown (PostgreSQL / MySQL-MariaDB), so the panel's Adminer
+  cannot be pointed at an arbitrary remote host — the SSRF follow-up from #350.
+  Username/password login is unchanged; no SSO (out of scope by decision). Fresh
+  installs get it automatically; `h-add-sys-adminer` now also deploys
+  `adminer-plugins/login-servers.php` (vendored) + `adminer-plugins.php` (the
+  localhost config).
+
 ### Fixed
+
+- All hestia sudo grants were dead on Ubuntu 26 (#363): `/etc/sudoers.d/hestia`
+  opened with `Defaults:root !requiretty`, but Ubuntu 26 ships **sudo-rs** (the
+  Rust reimplementation) as its default sudo, and sudo-rs does not implement the
+  obsolete `requiretty` setting — it rejects the *entire* file when it appears,
+  silently dropping the `hestia` grant the panel relies on for every privileged
+  action. (Classic sudo, incl. Debian 13's 1.9.16, still accepts it — so this is
+  a sudo-rs behaviour, not a version bump.) `requiretty` was a CentOS-era
+  workaround that was always a no-op on Debian/Ubuntu, so the line is removed
+  everywhere. The smoke test now runs `visudo -cf /etc/sudoers.d/hestia`, so a
+  file the local sudo cannot parse fails the baseline instead of silently
+  disabling the panel. The sudoers source also moved from the legacy
+  `install/common/sudo/` to `share/sudo/` (opportunistic step in dissolving
+  `install/`, #119).
+- phpMyAdmin and Adminer were broken under the isolated panel PHP (#227, #229):
+  both run under the shared hestia FPM master, but its curated conf.d
+  (`hestia-php-confd`, #272) only carried the panel-UI extension set — so
+  phpMyAdmin died with a runtime fatal (`undefined function ctype_alpha()`,
+  HTTP 500 on all OSes) and Adminer could never reach PostgreSQL (no
+  `pgsql`/`pdo_pgsql` driver). The curated FPM set now also includes the
+  extensions the bundled DB web UIs need (ctype, iconv, fileinfo, the xml
+  family; gd/bz2 for phpMyAdmin, pgsql/pdo_pgsql for Adminer), and the panel
+  stage installs `php-gd`/`php-bz2`/`php-pgsql` for the panel version
+  unconditionally — the panel PHP stays self-contained, with no coupling of
+  PostgreSQL add/remove to the hestia-php config.
+- `h-add-sys-adminer` no longer silently ships an Adminer without SSRF hardening
+  (#229): the "already installed" guard now also checks the login-servers plugin
+  files, so re-running on an install that predates the plugin (#356) redeploys
+  it instead of short-circuiting; and a missing vendored plugin source is now a
+  hard error rather than a failed `cp` that still reports success.
+- Installer prerequisites curated to silence two harmless-but-noisy warnings
+  (#356): `apt-utils` is now a prerequisite (without it debconf logs "delaying
+  package configuration" on every apt call), and `h-install-hestia` exports
+  `DEBIAN_FRONTEND=noninteractive` for the whole run so sub-commands no longer
+  trip debconf's "unable to initialize frontend: Dialog … falling back:
+  Readline" in the non-TTY install context.
 
 - Install no longer aborts when rspamd's scan-worker socket is slow to appear
   (#353): a cold first start (Lua compile, language detector, 120+ regexps,

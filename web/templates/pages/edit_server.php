@@ -571,12 +571,8 @@
 									</a>
 								</p>
 							</div>
-							<div class="u-mb20">
-								<label for="v_pgsql_url" class="form-label">
-									<?= tohtml( _("phpPgAdmin Alias")) ?>
-								</label>
-								<input type="text" class="form-control" name="v_pgsql_url" id="v_pgsql_url" value="<?= tohtml($_SESSION["DB_PGA_ALIAS"]) ?>">
-							</div>
+							<?php /* PostgreSQL's web UI is Adminer (fixed /adminer/ route,
+							         no configurable alias — see h-add-sys-adminer). */ ?>
 						<?php } ?>
 						<?php if ($v_pgsql == "yes") {
 							$i = 0;

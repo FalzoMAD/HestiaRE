@@ -12,6 +12,12 @@
 
 set -eo pipefail
 
+# Non-interactive for the whole install run: sub-commands (h-add-sys-*) and
+# maintainer scripts inherit this, so debconf uses its Noninteractive frontend
+# instead of trying Dialog and falling back to Readline in the non-TTY install
+# context ("unable to initialize frontend: Dialog … falling back: Readline").
+export DEBIAN_FRONTEND=noninteractive
+
 CONF_DIR="/etc/hestia"
 INSTALL_CONF="$CONF_DIR/install.conf"
 LOG="/var/log/hestia/install.log"
@@ -182,12 +188,19 @@ install_base() {
 install_panel() {
 	[ -f "$CONF_DIR/.done.panel" ] && { echo "[ skip ] panel already configured"; return 0; }
 	echo "[ * ] Installing panel packages (Caddy, PHP $PHP_VER FPM)..."
+	# The last line covers the DB web UIs that run under the same panel FPM master
+	# (phpMyAdmin, Adminer): gd/bz2 for phpMyAdmin, pgsql (ships pdo_pgsql too) for
+	# Adminer->PostgreSQL. Installed unconditionally so the panel PHP is self-
+	# contained — no coupling of postgres add/remove to the hestia-php config.
+	# ctype/iconv/fileinfo come via php-common; the xml family via php-xml. All are
+	# wired into the isolated panel conf.d by hestia-php-confd below.
 	hestia_apt -y install \
 		caddy \
 		libphp-phpmailer \
 		php${PHP_VER}-cli php${PHP_VER}-fpm php${PHP_VER}-mysql php${PHP_VER}-curl \
 		php${PHP_VER}-zip php${PHP_VER}-gmp php${PHP_VER}-mbstring \
-		php${PHP_VER}-opcache php${PHP_VER}-xml
+		php${PHP_VER}-opcache php${PHP_VER}-xml \
+		php${PHP_VER}-gd php${PHP_VER}-bz2 php${PHP_VER}-pgsql
 	echo "[ * ] Configuring panel PHP-FPM..."
 	mkdir -p /etc/php/hestia/fpm/pool.d /etc/php/hestia/cli
 	cp -f "$HESTIA/share/panel-php/php-fpm.conf" /etc/php/hestia/fpm/
@@ -234,7 +247,7 @@ install_panel() {
 	chown caddy:caddy /var/log/caddy 2> /dev/null || true
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
-	# Panel-app route snippets (phpMyAdmin/phpPgAdmin) are written here by
+	# Panel-app route snippets (phpMyAdmin, Adminer) are written here by
 	# h-change-sys-db-alias. Ship a placeholder so `import /etc/caddy/apps/*.conf`
 	# inside hestia.conf is never an empty glob on the first caddy start.
 	mkdir -p /etc/caddy/apps
@@ -271,8 +284,8 @@ configure_apache2() {
 
 	echo "[ * ] Configuring apache2..."
 	mkdir -p /etc/apache2/conf.d/domains
-	cp -f "$HESTIA_INSTALL_DIR/apache2/apache2.conf" /etc/apache2/
-	cp -f "$HESTIA_INSTALL_DIR/apache2/status.conf" /etc/apache2/mods-available/hestia-status.conf
+	cp -f "$HESTIA/share/apache2/apache2.conf" /etc/apache2/
+	cp -f "$HESTIA/share/apache2/status.conf" /etc/apache2/mods-available/hestia-status.conf
 	cp -f /etc/apache2/mods-available/status.load /etc/apache2/mods-available/hestia-status.load
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/apache2" /etc/logrotate.d/
 
@@ -290,7 +303,7 @@ configure_apache2() {
 	a2dismod -q mpm_prefork > /dev/null 2>&1 || true
 	a2enmod -q mpm_event > /dev/null 2>&1 || true
 	a2enmod -q proxy_fcgi setenvif > /dev/null 2>&1 || true
-	cp -f "$HESTIA_INSTALL_DIR/apache2/hestia-event.conf" /etc/apache2/conf.d/
+	cp -f "$HESTIA/share/apache2/hestia-event.conf" /etc/apache2/conf.d/
 
 	# No distro default site, no global Listen ports
 	a2dissite -q 000-default > /dev/null 2>&1 || true
@@ -322,11 +335,11 @@ install_web() {
 
 	echo "[ * ] Configuring nginx..."
 	rm -f /etc/nginx/conf.d/*.conf
-	cp -f "$HESTIA_INSTALL_DIR/nginx/nginx.conf" /etc/nginx/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/status.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/agents.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA_INSTALL_DIR/nginx/cloudflare.inc" /etc/nginx/conf.d/
+	cp -f "$HESTIA/share/nginx/nginx.conf" /etc/nginx/
+	cp -f "$HESTIA/share/nginx/status.conf" /etc/nginx/conf.d/
+	cp -f "$HESTIA/share/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
+	cp -f "$HESTIA/share/nginx/agents.conf" /etc/nginx/conf.d/
+	cp -f "$HESTIA/share/nginx/cloudflare.inc" /etc/nginx/conf.d/
 	# phpMyAdmin is no longer served via an nginx alias — it is delivered by the
 	# Panel-Caddy from a dedicated caddy FPM pool (see h-change-sys-db-alias).
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/nginx" /etc/logrotate.d/
@@ -755,7 +768,7 @@ configure_hestia() {
 
 	echo "[ * ] Configuring Hestia Control Panel..."
 	mkdir -p /etc/sudoers.d
-	cp -f "$HESTIA_COMMON_DIR/sudo/hestia" /etc/sudoers.d/
+	cp -f "$HESTIA/share/sudo/hestia" /etc/sudoers.d/
 	chmod 440 /etc/sudoers.d/hestia
 	cp -f "$HESTIA_INSTALL_DIR/logrotate/hestia" /etc/logrotate.d/hestia 2>/dev/null || true
 

@@ -3494,10 +3494,6 @@ msgstr ""
 msgid "PostgreSQL Support"
 msgstr ""
 
-#: ../../web/templates/pages/edit_server.php:620
-msgid "phpPgAdmin Alias"
-msgstr ""
-
 #: ../../web/templates/pages/edit_server.php:661
 msgid "Local Backup"
 msgstr ""

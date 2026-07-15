@@ -12,11 +12,6 @@ server {
 			return 404;
 		}
 
-		location /phppgadmin/ {
-			alias  /var/www/document_errors/;
-			return 404;
-		}
-
 		location /webmail {
 			alias  /var/www/document_errors/;
 			return 404;
