@@ -9,6 +9,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Changed
+
+- Web server + phpMyAdmin-SSO config assets moved from the legacy `install/deb/`
+  tree to `share/` (#119): `install/deb/apache2/` → `share/apache2/`,
+  `install/deb/nginx/` → `share/nginx/` (joining the `apps/` snippets already
+  there), and `install/deb/phpmyadmin/hestia-sso.php` → `share/phpmyadmin/`.
+  Consumers (`h-install-hestia`, `h-add-sys-ip`, `h-add-sys-pma-sso`) now read
+  from `$HESTIA/share/...`; `HESTIA_INSTALL_DIR` is unchanged for the remaining
+  `install/deb/` assets. Opportunistic step in dissolving `install/` — no
+  behaviour change, the deployed files are identical.
+
 ### Removed
 
 - Dead phpPgAdmin plumbing, replaced by Adminer in #350 but never cleaned up

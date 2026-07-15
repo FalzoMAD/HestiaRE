@@ -150,12 +150,12 @@ if [ -n "$WEB_SYSTEM" ]; then
 			echo "NameVirtualHost $ip:$WEB_PORT" > "$web_conf"
 		fi
 		echo "Listen $ip:$WEB_PORT" >> "$web_conf"
-		cat $HESTIA_INSTALL_DIR/apache2/unassigned.conf >> "$web_conf"
+		cat $HESTIA/share/apache2/unassigned.conf >> "$web_conf"
 		sed -i 's/directIP/'$ip'/g' "$web_conf"
 		sed -i 's/directPORT/'$WEB_PORT'/g' "$web_conf"
 
 	elif [ "$WEB_SYSTEM" = 'nginx' ]; then
-		cp -f $HESTIA_INSTALL_DIR/nginx/unassigned.inc "$web_conf"
+		cp -f $HESTIA/share/nginx/unassigned.inc "$web_conf"
 		sed -i 's/directIP/'$ip'/g' "$web_conf"
 		process_http2_directive "$web_conf"
 	fi

@@ -71,7 +71,7 @@
     "func_libraries": {
       "description": "Shared bash function libraries sourced by all CLI commands and the installer. Core runtime dependency.",
       "entry_points": ["func/main.sh"],
-      "directories": ["func/", "func/internal/"],
+      "directories": ["func/"],
       "key_files": [
         "func/main.sh",
         "func/domain.sh",
@@ -128,7 +128,6 @@
         "web/inc/2fa/",
         "web/inc/lib/quoteshellarg.php",
         "web/inc/cloudflare-ip.php",
-        "web/inc/vendor/",
         "web/locale/languages.json"
       ],
       "language": "php",
@@ -167,7 +166,7 @@
       "locales": 42,
       "action_dirs": ["add", "edit", "delete", "list", "bulk", "copy", "move", "suspend", "unsuspend", "restart", "stop", "start", "schedule", "update", "generate", "download", "search", "reset", "reset2fa", "sso"],
       "pma_sso": {
-        "description": "phpMyAdmin SSO without REST API (#145): web/sso/phpmyadmin/ runs h-add-database-sso-token via panel sudo (temp DB user + one-time handoff file /run/hestia-sso/<token>, root:caddy 0730/640); install/deb/phpmyadmin/hestia-sso.php (PMA pool, unprivileged) consumes the token and opens the signon session. Enable/disable: h-add-sys-pma-sso / h-delete-sys-pma-sso; PHPMYADMIN_KEY is only the enabled flag."
+        "description": "phpMyAdmin SSO without REST API (#145): web/sso/phpmyadmin/ runs h-add-database-sso-token via panel sudo (temp DB user + one-time handoff file /run/hestia-sso/<token>, root:caddy 0730/640); share/phpmyadmin/hestia-sso.php (PMA pool, unprivileged) consumes the token and opens the signon session. Enable/disable: h-add-sys-pma-sso / h-delete-sys-pma-sso; PHPMYADMIN_KEY is only the enabled flag."
       },
       "dependencies": ["cli_commands", "func_libraries"],
       "upstream_debt": {
@@ -182,7 +181,7 @@
 
     "panel_assets": {
       "description": "Panel frontend assets, served as-is by Panel-Caddy — no build step, no Node/npm (#248). JS: native ES modules from web/js/src/ (explicit .js import extensions). CSS: native nesting, plain min-width media queries, browser resolves @import chains. Browser baseline: adr-browser-baseline.md (Chrome/Edge 120, Firefox 117, Safari 17.2) with CSS-only warning banner in web/templates/header.php.",
-      "entry_points": ["web/templates/includes/js.php", "web/templates/includes/css.php", "web/js/src/index.js", "web/css/src/themes/default.css"],
+      "entry_points": ["web/templates/includes/js.php", "web/templates/includes/css.php", "web/js/src/index.js", "web/css/src/themes/light.css"],
       "directories": ["web/js/src/", "web/js/vendor/", "web/css/src/", "web/css/vendor/", "web/webfonts/"],
       "themes": "Shipped: web/css/src/themes/*.css — light is the base stylesheet (css.php always loads it), overlays: dark, dark-tonal (@import dark.css + tonal green icon ladder, #260/#269), light-flat, light-green (dark green primary via brand-token redefinition, #269). Renames #269: default→light, flat→light-flat; vestia removed #259 — THEME migration + stale-file cleanup in func/helper.sh migrate_data_layout. Brand tokens --brand-* (green/anthracite, #259) in light.css :root, dark.css overrides greens brighter. Custom: web/css/src/themes/custom/*.css (instance data, gitignored). Listed by bin/h-list-sys-themes via HESTIA_THEMES/HESTIA_THEMES_CUSTOM (func/main.sh).",
       "vendored": "web/js/vendor/ (Alpine.js + collapse), web/css/vendor/ (normalize.css, Font Awesome Free solid-only). Manifest: VENDORED.json; snapshot branches: upstream/alpinejs, upstream/normalize-css, upstream/fontawesome. Updater: share/upstream/update-web-vendor.sh (--check read-only version report vs VENDORED.json; --fetch <asset>[@version] rebuilds one snapshot branch, publisher-hash-verified); hooked into share/upstream/sync-upstream.sh (author's sync instance).",
@@ -204,21 +203,20 @@
         "share/dovecot/"
       ],
       "key_files": [
-        "install/deb/nginx/",
-        "install/deb/apache2/",
+        "share/nginx/",
+        "share/apache2/",
+        "share/exim/",
         "install/deb/php-fpm/",
-        "install/deb/exim/",
-        "install/deb/dovecot/",
         "install/deb/mysql/",
         "install/deb/fail2ban/",
-        "install/deb/templates/web/",
-        "install/common/packages/default.pkg",
-        "install/common/packages/system.pkg",
-        "install/common/templates/email/",
+        "templates/web/",
+        "packages/default.pkg",
+        "packages/system.pkg",
+        "templates/email/",
         "install/common/roundcube/",
         "share/dovecot/2.3/",
         "share/dovecot/2.4/",
-        "install/common/sudo/hestia",
+        "share/sudo/hestia",
         "share/panel-caddy/Caddyfile",
         "share/panel-caddy/hestia.conf",
         "share/panel-php/hestia-php.service",
@@ -228,9 +226,9 @@
       "supported_distros": ["Debian 12 (bookworm)", "Ubuntu 24.04 LTS (noble)", "Debian 13 (trixie, priority 2, planned June 2026+)"],
       "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. Install logic: Makefile (removed) → Justfile #102 → pure-bash bin/h-install-hestia + func/wizard.sh + func/helper.sh in Issue #112 (just removed). See make_release component.",
       "web_templates": {
-        "nginx": "install/deb/templates/web/nginx/",
-        "apache2": "install/deb/templates/web/apache2/",
-        "php_fpm": "install/deb/templates/web/php-fpm/"
+        "nginx": "templates/web/nginx/",
+        "apache2": "templates/web/apache2/",
+        "php_fpm": "templates/web/php-fpm/"
       },
       "dependencies": ["func_libraries", "make_release"],
       "upstream_debt": {
@@ -283,7 +281,6 @@
         "share/panel-php/cli/php.ini",
         "share/panel-php/pool.d/panel.conf",
         "share/panel-php/pool.d/phpmyadmin.conf",
-        "share/panel-php/pool.d/phppgadmin.conf",
         "share/panel-php/pool.d/adminer.conf",
         "bin/hestia-php-fpm",
         "bin/hestia-php",
