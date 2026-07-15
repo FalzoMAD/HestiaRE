@@ -54,10 +54,23 @@ fi
 # of composer's bundled polyfills), plus curl/zip to speed up downloads and
 # archive extraction. No DB chain, no gettext — no CLI consumer uses them.
 #
-# Deliberately excluded everywhere: imagick, imap, ldap, pgsql, gd, soap,
-# intl, bcmath, apcu, exif, pspell, … (customer-app extensions).
+# Deliberately excluded from the panel set: imagick, imap, ldap, soap, intl,
+# bcmath, apcu, exif, pspell, … (customer-app extensions).
 fpm_critical="mysqlnd pdo mysqli pdo_mysql mbstring gettext"
 fpm_optional="opcache curl gmp zip ftp dom"
+# App tools served by the SAME hestia FPM master (phpMyAdmin, Adminer): their
+# pools live under this master and share this conf.d, so the tools' extensions
+# must be curated here too. Without them the bundled DB web UIs die with runtime
+# fatals (e.g. phpMyAdmin: "undefined function ctype_alpha()") instead of the
+# clean build-time error this script exists to give.
+#   critical — always present via php-common (ctype/iconv/fileinfo) and php-xml
+#              (simplexml/xmlwriter/xmlreader); phpMyAdmin hard-needs them.
+#   optional — installed for the panel version in the panel stage: gd/bz2 for
+#              phpMyAdmin, pgsql/pdo_pgsql for Adminer->PostgreSQL.
+# (sodium is compiled-in on Debian/Sury — no mods-available .ini — so it needs
+#  no symlink and is deliberately not listed.)
+fpm_apps_critical="ctype iconv fileinfo simplexml xmlwriter xmlreader"
+fpm_apps_optional="gd bz2 pgsql pdo_pgsql"
 cli_critical="mbstring ctype iconv phar"
 cli_optional="curl zip"
 
@@ -88,7 +101,7 @@ build_confd() {
 	done
 }
 
-build_confd /etc/php/hestia/fpm/conf.d "$fpm_critical" "$fpm_optional"
+build_confd /etc/php/hestia/fpm/conf.d "$fpm_critical $fpm_apps_critical" "$fpm_optional $fpm_apps_optional"
 build_confd /etc/php/hestia/cli/conf.d "$cli_critical" "$cli_optional"
 
 if [ -n "$missing_critical" ]; then
