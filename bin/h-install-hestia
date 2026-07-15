@@ -247,7 +247,7 @@ install_panel() {
 	chown caddy:caddy /var/log/caddy 2> /dev/null || true
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
-	# Panel-app route snippets (phpMyAdmin/phpPgAdmin) are written here by
+	# Panel-app route snippets (phpMyAdmin, Adminer) are written here by
 	# h-change-sys-db-alias. Ship a placeholder so `import /etc/caddy/apps/*.conf`
 	# inside hestia.conf is never an empty glob on the first caddy start.
 	mkdir -p /etc/caddy/apps

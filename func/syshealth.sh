@@ -205,18 +205,12 @@ function syshealth_repair_system_config() {
 		fi
 	fi
 
-	# phpMyAdmin/phpPgAdmin alias
+	# phpMyAdmin alias (PostgreSQL uses Adminer, wired up by h-add-sys-adminer)
 	if [ -n "$DB_SYSTEM" ]; then
-		if [ "$DB_SYSTEM" = "mysql" ]; then
+		if echo "$DB_SYSTEM" | grep -qw 'mysql'; then
 			if [[ -z $(check_key_exists 'DB_PMA_ALIAS') ]]; then
 				echo "[ ! ] Adding missing variable to hestia.conf: DB_PMA_ALIAS ('phpmyadmin)"
 				$BIN/h-change-sys-config-value 'DB_PMA_ALIAS' 'phpmyadmin'
-			fi
-		fi
-		if [ "$DB_SYSTEM" = "pgsql" ]; then
-			if [[ -z $(check_key_exists 'DB_PGA_ALIAS') ]]; then
-				echo "[ ! ] Adding missing variable to hestia.conf: DB_PGA_ALIAS ('phppgadmin')"
-				$BIN/h-change-sys-config-value 'DB_PGA_ALIAS' 'phppgadmin'
 			fi
 		fi
 	fi

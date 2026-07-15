@@ -117,13 +117,10 @@ if (!empty($_POST["ok"])) {
 			$db_admin_link = "https://" . $http_host . "/" . $_SESSION["DB_PMA_ALIAS"];
 		}
 		if ($_POST["v_type"] == "pgsql") {
-			$db_admin = "phpPgAdmin";
-		}
-		if ($_POST["v_type"] == "pgsql") {
-			$db_admin_link = "https://" . $http_host . "/phppgadmin/";
-		}
-		if ($_POST["v_type"] == "pgsql" && !empty($_SESSION["DB_PGA_ALIAS"])) {
-			$db_admin_link = "https://" . $http_host . "/" . $_SESSION["DB_PGA_ALIAS"];
+			$db_admin = "Adminer";
+			// Adminer is served panel-relative on the fixed /adminer/ route, not via
+			// the customer-domain proxy phpMyAdmin uses.
+			$db_admin_link = "/" . (!empty($_SESSION["DB_ADMINER_ALIAS"]) ? $_SESSION["DB_ADMINER_ALIAS"] : "adminer") . "/";
 		}
 	}
 

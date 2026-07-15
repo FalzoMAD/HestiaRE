@@ -60,6 +60,8 @@ rm -rf "$TMPDIR"
 #----------------------------------------------------------#
 
 set_install_component ADDON_ADMINER false
+# Clear the panel marker so the DB list stops offering the Adminer button.
+$BIN/h-change-sys-config-value 'DB_ADMINER_ALIAS' ''
 
 echo "[ OK ] Adminer removed."
 
