@@ -42,7 +42,9 @@ section as part of its PR. On release, the section gets the version number.
   workaround that was always a no-op on Debian/Ubuntu, so the line is removed
   everywhere. The smoke test now runs `visudo -cf /etc/sudoers.d/hestia`, so a
   file the local sudo cannot parse fails the baseline instead of silently
-  disabling the panel.
+  disabling the panel. The sudoers source also moved from the legacy
+  `install/common/sudo/` to `share/sudo/` (opportunistic step in dissolving
+  `install/`, #119).
 - phpMyAdmin and Adminer were broken under the isolated panel PHP (#227, #229):
   both run under the shared hestia FPM master, but its curated conf.d
   (`hestia-php-confd`, #272) only carried the panel-UI extension set — so
