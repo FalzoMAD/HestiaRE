@@ -32,6 +32,22 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- phpMyAdmin and Adminer were broken under the isolated panel PHP (#227, #229):
+  both run under the shared hestia FPM master, but its curated conf.d
+  (`hestia-php-confd`, #272) only carried the panel-UI extension set — so
+  phpMyAdmin died with a runtime fatal (`undefined function ctype_alpha()`,
+  HTTP 500 on all OSes) and Adminer could never reach PostgreSQL (no
+  `pgsql`/`pdo_pgsql` driver). The curated FPM set now also includes the
+  extensions the bundled DB web UIs need (ctype, iconv, fileinfo, the xml
+  family; gd/bz2 for phpMyAdmin, pgsql/pdo_pgsql for Adminer), and the panel
+  stage installs `php-gd`/`php-bz2`/`php-pgsql` for the panel version
+  unconditionally — the panel PHP stays self-contained, with no coupling of
+  PostgreSQL add/remove to the hestia-php config.
+- `h-add-sys-adminer` no longer silently ships an Adminer without SSRF hardening
+  (#229): the "already installed" guard now also checks the login-servers plugin
+  files, so re-running on an install that predates the plugin (#356) redeploys
+  it instead of short-circuiting; and a missing vendored plugin source is now a
+  hard error rather than a failed `cp` that still reports success.
 - Installer prerequisites curated to silence two harmless-but-noisy warnings
   (#356): `apt-utils` is now a prerequisite (without it debconf logs "delaying
   package configuration" on every apt call), and `h-install-hestia` exports

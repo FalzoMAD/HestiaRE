@@ -50,8 +50,22 @@ if [ ! -s "$HESTIA/share/adminer/adminer.php" ]; then
 	exit "$E_NOTEXIST"
 fi
 
-# Already installed?
-if [ -f "$WEBROOT/index.php" ] && [ -f "$POOL" ] && [ -f "$ROUTE" ]; then
+# The login-servers plugin is what closes the SSRF hole (fixed localhost
+# dropdown instead of a free Server field, #350). Refuse to install without it
+# rather than deploying an Adminer that silently allows arbitrary DB hosts.
+if [ ! -s "$HESTIA/share/adminer/adminer-plugins.php" ] \
+	|| [ ! -s "$HESTIA/share/adminer/plugins/login-servers.php" ]; then
+	echo "ERROR: Adminer login-servers plugin missing ($HESTIA/share/adminer/) — refusing to install without SSRF hardening."
+	exit "$E_NOTEXIST"
+fi
+
+# Already installed? Include the login-servers plugin files in the check: an
+# install predating the plugin (#350) has index.php+pool+route but no plugin,
+# leaving the SSRF-closing localhost dropdown absent. Re-running must then fall
+# through and (re)deploy the plugin (the cp -f below is idempotent).
+if [ -f "$WEBROOT/index.php" ] && [ -f "$POOL" ] && [ -f "$ROUTE" ] \
+	&& [ -f "$WEBROOT/adminer-plugins.php" ] \
+	&& [ -f "$WEBROOT/adminer-plugins/login-servers.php" ]; then
 	echo "INFO: Adminer is already installed."
 	exit 0
 fi
