@@ -361,16 +361,6 @@ fn_eval_condition() {
 
 # ── Shared value helpers ────────────────────────────────────
 
-fn_resolve_version_value() {
-    local val="$1"
-    if [ "$val" = "__os__" ]; then
-        [ -n "$OS_MARIADB_VERSION" ] || fn_discover_mariadb_version
-        printf '%s' "$OS_MARIADB_VERSION"
-    else
-        printf '%s' "$val"
-    fi
-}
-
 fn_normalize_list() {
     local raw="${1//\"/}"; local -a parts=(); local p s dup
     for p in $raw; do
@@ -482,7 +472,13 @@ _ask_version_select() {
     while IFS=$'\x1f' read -r value source label_tmpl descr; do
         local display_val display_label state="OFF"
         if [ "$value" = "__os__" ]; then
-            display_val=$(fn_resolve_version_value "$value")
+            # Keep the __os__ sentinel as the stored value — resolving it to a bare
+            # version number loses the source (os_default) and can collide with an
+            # external-repo option (e.g. OS 11.8 == the offered external 11.8),
+            # which would silently force the MariaDB.org repo. h-install-hestia
+            # routes __os__ to the OS package. The resolved version is shown in the
+            # label only.
+            display_val="__os__"
             display_label="${label_tmpl/\{version\}/$OS_MARIADB_VERSION}"
             [ -n "$descr" ] && display_label="$display_label  —  $descr"
             [ "$default_val" = "__os__" ] && state="ON"
@@ -543,7 +539,7 @@ fn_fasttrack_value() {
                 COMP_VALUES["$id"]=$(fn_normalize_list "$(fn_component_default "$id" "$INSTALL_PROFILE")")
             fi
             ;;
-        version_select) COMP_VALUES["$id"]=$(fn_resolve_version_value "$(fn_component_default "$id" "$INSTALL_PROFILE")") ;;
+        version_select) COMP_VALUES["$id"]=$(fn_component_default "$id" "$INSTALL_PROFILE") ;;
         *)              COMP_VALUES["$id"]=$(fn_component_default "$id" "$INSTALL_PROFILE") ;;
     esac
     local followup; followup=$(mq --arg id "$id" '.components[$id].opens_followup // empty')

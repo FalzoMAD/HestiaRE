@@ -19,6 +19,24 @@ section as part of its PR. On release, the section gets the version number.
   from `$HESTIA/share/...`; `HESTIA_INSTALL_DIR` is unchanged for the remaining
   `install/deb/` assets. Opportunistic step in dissolving `install/` — no
   behaviour change, the deployed files are identical.
+- MariaDB `my-{small,medium,large}.cnf` moved from `install/deb/mysql/` to
+  `share/mysql/` (#119, opportunistic while fixing #226); consumer
+  `h-install-hestia` now reads `$HESTIA/share/mysql/`. No behaviour change.
+
+### Fixed
+
+- Choosing the OS-repo MariaDB ("OS default") silently installed the *external*
+  MariaDB.org build on Debian 13 / Ubuntu 26 (#226): the wizard resolved the
+  `__os__` sentinel to a bare version number before storing it, and
+  `h-install-hestia` decides the repo source by matching that number — so when the
+  OS version equalled an offered external version (both 11.8 on deb13/ub26) the
+  external repo was added instead of using OS packages. It also produced a
+  duplicate "11.8" entry in the version picker and affected the `singlephp` /
+  `mailonly` presets (both `__os__`). Fix: the `__os__` sentinel is now preserved
+  as the stored value (the OS version is shown in the label only), so the source
+  survives; `h-install-hestia` already routes `__os__` to the OS package. On
+  deb12 / ub24 (OS 10.11) the path happened to work already since 10.11 collides
+  with no external option.
 
 ### Removed
 
