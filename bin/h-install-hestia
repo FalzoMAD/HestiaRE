@@ -118,7 +118,8 @@ install_base() {
 			rm -f /tmp/mariadb_signing.asc
 			;;
 		*)
-			echo "[ * ] MariaDB: using OS package (version '${MARIADB_VER:-os}')"
+			# __os__ sentinel or empty → distribution's own MariaDB, no external repo
+			echo "[ * ] MariaDB: using OS package (distribution default)"
 			;;
 	esac
 
@@ -481,7 +482,9 @@ install_db() {
 	[ -f "$CONF_DIR/.done.db" ] && { echo "[ skip ] db already configured"; return 0; }
 
 	if is_on "${COMPONENT_DB_MARIADB:-}"; then
-		echo "[ * ] Installing database packages (MariaDB ${COMPONENT_DB_MARIADB_VERSION:-os})..."
+		_mdb_ver="${COMPONENT_DB_MARIADB_VERSION:-}"
+		case "$_mdb_ver" in ""|__os__) _mdb_ver="OS default";; esac
+		echo "[ * ] Installing database packages (MariaDB $_mdb_ver)..."
 		hestia_apt -y install mariadb-client mariadb-common mariadb-server
 		echo "[ * ] Configuring MariaDB..."
 		local MEM MYCNF
@@ -491,7 +494,7 @@ install_db() {
 		else                              MYCNF="my-small.cnf"
 		fi
 		rm -f /etc/mysql/my.cnf
-		cp -f "$HESTIA_INSTALL_DIR/mysql/$MYCNF" /etc/mysql/my.cnf
+		cp -f "$HESTIA/share/mysql/$MYCNF" /etc/mysql/my.cnf
 		sed -i 's|/usr/share/mysql|/usr/share/mariadb|g' /etc/mysql/my.cnf
 		mariadb-install-db >> "$LOG" 2>&1
 		update-rc.d mariadb defaults > /dev/null 2>&1

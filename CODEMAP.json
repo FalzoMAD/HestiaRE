@@ -207,7 +207,7 @@
         "share/apache2/",
         "share/exim/",
         "install/deb/php-fpm/",
-        "install/deb/mysql/",
+        "share/mysql/",
         "install/deb/fail2ban/",
         "templates/web/",
         "packages/default.pkg",
