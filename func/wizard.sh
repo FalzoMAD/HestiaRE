@@ -467,28 +467,42 @@ _ask_version_select() {
     local id="$1" question="$2" default_val="$3"
     [ -n "$OS_MARIADB_VERSION" ] || fn_discover_mariadb_version
     local -a items=()
+    local -a ext_vals=()   # external version values, to tell the OS-default pick apart
+    local has_os=0
     # Use a non-whitespace field separator (US, \x1f): with IFS=$'\t' bash would
     # collapse an empty middle field (empty label_template), shifting later fields.
     while IFS=$'\x1f' read -r value source label_tmpl descr; do
         local display_val display_label state="OFF"
         if [ "$value" = "__os__" ]; then
-            # Keep the __os__ sentinel as the stored value — resolving it to a bare
-            # version number loses the source (os_default) and can collide with an
-            # external-repo option (e.g. OS 11.8 == the offered external 11.8),
-            # which would silently force the MariaDB.org repo. h-install-hestia
-            # routes __os__ to the OS package. The resolved version is shown in the
-            # label only.
-            display_val="__os__"
-            display_label="${label_tmpl/\{version\}/$OS_MARIADB_VERSION}"
-            [ -n "$descr" ] && display_label="$display_label  —  $descr"
+            # Show the resolved OS version as the tag (users pick a version, not a
+            # "__os__" placeholder). The "(OS default)" suffix from label_template
+            # keeps it distinct from any external option of the same number, so a
+            # collision (OS 11.8 == external 11.8) cannot make both rows identical.
+            # After selection the tag is mapped back to the __os__ sentinel so the
+            # source (os_default) survives to h-install-hestia (which routes __os__
+            # to the OS package); storing a bare number would lose that.
+            has_os=1
+            display_val="${label_tmpl/\{version\}/$OS_MARIADB_VERSION}"
+            display_label="${descr:-distribution package}"
             [ "$default_val" = "__os__" ] && state="ON"
         else
-            display_val="$value"; display_label="${descr:-$source}"
+            display_val="$value"; display_label="${descr:-$source}"; ext_vals+=("$value")
             [ "$default_val" = "$value" ] && state="ON"
         fi
         items+=("$display_val" "$display_label" "$state")
     done < <(mq --arg id "$id" '.components[$id].options[] | [.value, .source, (.label_template // ""), (.description // "")] | join("\u001f")')
-    COMP_VALUES["$id"]=$(_wt_radiolist "HestiaRE — $id" "$question" "${items[@]}")
+    local _sel; _sel=$(_wt_radiolist "HestiaRE — $id" "$question" "${items[@]}")
+    # Map the OS-default pick back to the __os__ sentinel: its display tag carries
+    # the resolved version, but storing a bare number would lose the os_default
+    # source and could force the external repo (#226). Any non-empty selection
+    # that is not one of the external version values is the OS-default row —
+    # robust regardless of how whiptail returns the (spaced) tag.
+    if [ "$has_os" -eq 1 ] && [ -n "$_sel" ]; then
+        local _is_ext=0 _e
+        for _e in "${ext_vals[@]}"; do [ "$_sel" = "$_e" ] && { _is_ext=1; break; }; done
+        [ "$_is_ext" -eq 0 ] && _sel="__os__"
+    fi
+    COMP_VALUES["$id"]="$_sel"
 }
 
 _ask_tools_selection() {

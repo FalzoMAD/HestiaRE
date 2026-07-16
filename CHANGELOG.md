@@ -32,11 +32,14 @@ section as part of its PR. On release, the section gets the version number.
   OS version equalled an offered external version (both 11.8 on deb13/ub26) the
   external repo was added instead of using OS packages. It also produced a
   duplicate "11.8" entry in the version picker and affected the `singlephp` /
-  `mailonly` presets (both `__os__`). Fix: the `__os__` sentinel is now preserved
-  as the stored value (the OS version is shown in the label only), so the source
-  survives; `h-install-hestia` already routes `__os__` to the OS package. On
-  deb12 / ub24 (OS 10.11) the path happened to work already since 10.11 collides
-  with no external option.
+  `mailonly` presets (both `__os__`). Fix: the version picker shows the resolved
+  OS version (e.g. "11.8 (OS default)") but maps the pick back to the `__os__`
+  sentinel for storage — any selection that is not one of the external version
+  values is treated as the OS-default row, so the choice is robust regardless of
+  how whiptail returns the tag and the `os_default` source survives to
+  `h-install-hestia` (which routes `__os__` to the OS package). Verified live:
+  deb12 (OS 10.11) and deb13 (OS 11.8, the collision case) reinstalled from the
+  OS repo, with hardening/paths identical to the external path.
 
 ### Removed
 
