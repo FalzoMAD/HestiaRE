@@ -11,6 +11,20 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- In-place MariaDB version switching: `h-upgrade-sys-mariadb TARGET` (#207),
+  building on the version dispatch from #121. Flow: forced full logical dump
+  (`mariadb-dump --all-databases`, hard precondition — abort if it fails; kept in
+  `/root`, 0600, never auto-deleted after a successful upgrade), repo switch
+  (same `__os__`/external dispatch as `h-add-sys-mariadb`), package upgrade,
+  restart, `mariadb-upgrade` system-table migration, post-check, and the new
+  version recorded in install.conf. **Downgrades are refused** (MariaDB cannot
+  open a newer-format datadir): apt's candidate after the repo switch is compared
+  to the running version; on refusal the previous repo definition is restored and
+  the unused dump removed. The rollback path (remove+`PURGE_DATA` → reinstall old
+  version → restore dump) is documented in the command header. `LC_ALL=C` on the
+  apt-cache parse — the output is localized and a German "Installationskandidat:"
+  silently broke the candidate match. No v-* symlink.
+
 - PostgreSQL is now a fully panel-integrated, removable component:
   `h-add-sys-postgresql` / `h-remove-sys-postgresql` (#121). Previously PostgreSQL
   was CLI-only — the lifecycle helpers (`func/db.sh`) and web UI were present, but
