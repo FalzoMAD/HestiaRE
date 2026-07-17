@@ -9,7 +9,42 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Added
+
+- MariaDB is now a standalone, removable component: `h-add-sys-mariadb [VERSION]`
+  / `h-remove-sys-mariadb` (#121). The add command owns the full lifecycle
+  (repo/keyring dispatch — `12.3|11.8|11.4` = MariaDB.org, else the OS package;
+  RAM-tiered my.cnf; root unix_socket hardening; local host registration; implicit
+  phpMyAdmin) and resolves the version from its argument, else
+  `COMPONENT_DB_MARIADB_VERSION`, else the OS default — no prompt (the interactive
+  choice stays in the wizard), recording the resolved version back. Remove refuses
+  while customer databases exist (maintained counter **and** a live cross-check),
+  keeps the datadir by default (`PURGE_DATA=yes` to wipe), and clears the version.
+  The installer's `install_db` stage is now a thin orchestrator that calls these
+  commands and checks their exit code (MariaDB hard-fails the install, Redis is
+  fail-soft) instead of inlining the logic — no more silent "installed" on failure
+  (the #272 class). No v-* symlinks (new commands).
+
 ### Changed
+
+- `h-delete-sys-redis` renamed to `h-remove-sys-redis` for naming consistency
+  (#121; the `h-remove-sys-*` convention, already referenced in the manifest and
+  the rspamd cap config). Hard rename, no deprecation shim (pre-1.0, no live
+  systems). Its promote/demote (rspamd Bayes cap) behaviour is unchanged, and the
+  installer now calls `h-add-sys-redis` instead of a raw `apt install`.
+- `h-add-database-host` validates the engine against the supported types
+  (`mysql|pgsql`) instead of DB_SYSTEM membership, and no longer requires
+  DB_SYSTEM to be pre-enabled (#121): adding the first host of a type is what
+  *enables* it, so the old guards were circular — they made the first MySQL host
+  rely on a pre-seeded `DB_SYSTEM='mysql'` and made a PostgreSQL host impossible
+  to register at all. `h-delete-database-host` now decomposes `DB_SYSTEM` (drops
+  the type token when its last host is gone) — the missing counterpart to the
+  compose. `DB_SYSTEM` is consequently seeded **empty** (composed from actually
+  registered hosts, so a no-MariaDB install no longer claims MySQL); the panel's
+  add-database page filters empty tokens so an empty `DB_SYSTEM` renders no ghost
+  type. Idempotency guards on the new engine commands are artefact-based (package
+  + host registration), since `COMPONENT_*` flags are the wizard *selection*, not
+  the install state.
 
 - Web server + phpMyAdmin-SSO config assets moved from the legacy `install/deb/`
   tree to `share/` (#119): `install/deb/apache2/` → `share/apache2/`,

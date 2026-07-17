@@ -39,9 +39,15 @@ fi
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-if [ "${COMPONENT_DB_REDIS:-}" = "true" ]; then
-	echo "ERROR: Redis is already installed as a general service."
-	exit "$E_EXISTS"
+# Idempotency guard is artefact-based, NOT flag-based: COMPONENT_DB_REDIS is the
+# wizard *selection*, not the install state (it is "true" before this ever runs),
+# so a flag guard would early-exit the installer's own first call (#121 F3).
+# Already the general service = redis-server installed AND not the rspamd-capped
+# companion. Installed-but-capped falls through to promote (cap removed below).
+if dpkg -l redis-server 2> /dev/null | grep -q '^ii' \
+	&& ! grep -q "$limit_marker" /etc/redis/redis.conf 2> /dev/null; then
+	echo "INFO: Redis is already installed as a general service."
+	exit 0
 fi
 
 #----------------------------------------------------------#

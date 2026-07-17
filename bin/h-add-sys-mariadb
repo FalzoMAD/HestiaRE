@@ -1,0 +1,170 @@
+#!/bin/bash
+# info: install MariaDB database server
+# options: [VERSION]
+#
+# example: h-add-sys-mariadb           # version from install.conf, else OS default
+# example: h-add-sys-mariadb 11.8      # explicit (post-install)
+#
+# Installs and hardens MariaDB and registers it as the local database host so the
+# panel can manage MySQL databases. The version resolves to the optional argument,
+# else COMPONENT_DB_MARIADB_VERSION, else __os__ (OS default). 12.3|11.8|11.4 pull
+# the MariaDB.org repo; __os__ uses the distribution package (#226). No prompt —
+# the interactive choice lives in the wizard; here it is arg-driven and scriptable.
+# The resolved version is recorded back into install.conf (h-remove-sys-mariadb
+# clears it).
+# Reproduces the former inline installer logic (repo/keyring, RAM-tiered my.cnf,
+# root unix_socket hardening, host registration) as a standalone, idempotent,
+# removable command (#121). phpMyAdmin follows implicitly when DB_PHPMYADMIN is set.
+#
+# Idempotency is artefact-based, NOT flag-based: COMPONENT_DB_MARIADB is the
+# wizard *selection*, not the install state (it is "true" before this ever runs).
+# "Fully installed" = package present AND local host registered; package present
+# without a host registration means an aborted first run -> resume.
+#
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state (COMPONENT_*, INSTALL_OS)
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+# OS-profile helper (load_os_profile). Sourcing only defines functions.
+# shellcheck source=/usr/local/hestia/func/helper.sh
+[ -f "$HESTIA/func/helper.sh" ] && . "$HESTIA/func/helper.sh"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+# Idempotency guard (artefact-based, see header). Fully installed only when the
+# package is present AND the local host is registered — then skip. A package with
+# no host registration is an aborted first run and must fall through (resume).
+if dpkg -l mariadb-server 2> /dev/null | grep -q '^ii' \
+	&& grep -qs "HOST='localhost'" "$HESTIA/conf/mysql.conf"; then
+	echo "INFO: MariaDB is already installed."
+	exit 0
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Version resolution: explicit arg > wizard selection > OS default. No prompt.
+MARIADB_VER="${1:-${COMPONENT_DB_MARIADB_VERSION:-}}"
+[ -z "$MARIADB_VER" ] && MARIADB_VER="__os__"
+case "$MARIADB_VER" in
+	12.3 | 11.8 | 11.4 | __os__) ;;
+	*) echo "ERROR: unsupported MariaDB version '$MARIADB_VER' (expected 12.3|11.8|11.4|__os__)"; exit "$E_INVALID" ;;
+esac
+ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+
+# OS_ID + CODENAME for the external repo line. Prefer the installer's profile
+# helper (handles the ubuntu-26 codename edge); fall back to /etc/os-release.
+if command -v load_os_profile > /dev/null 2>&1 && [ -n "${INSTALL_OS:-}" ]; then
+	load_os_profile "$INSTALL_OS" > /dev/null 2>&1 || true
+fi
+[ -n "${OS_ID:-}" ] || OS_ID="$(. /etc/os-release; echo "$ID")"
+[ -n "${CODENAME:-}" ] || CODENAME="$(. /etc/os-release; echo "${VERSION_CODENAME:-}")"
+
+# Repo/keyring only for an external-repo version; __os__/empty uses OS packages.
+case "$MARIADB_VER" in
+	12.3 | 11.8 | 11.4)
+		echo "[ * ] Adding MariaDB $MARIADB_VER repo..."
+		printf 'deb [arch=%s signed-by=/usr/share/keyrings/mariadb-keyring.gpg] https://dlm.mariadb.com/repo/mariadb-server/%s/repo/%s %s main\n' \
+			"$ARCH" "$MARIADB_VER" "$OS_ID" "$CODENAME" > /etc/apt/sources.list.d/mariadb.list
+		curl -fsSL https://mariadb.org/mariadb_release_signing_key.asc -o /tmp/mariadb_signing.asc \
+			|| { echo "ERROR: failed to download MariaDB signing key"; exit 1; }
+		gpg --dearmor < /tmp/mariadb_signing.asc > /usr/share/keyrings/mariadb-keyring.gpg \
+			|| { echo "ERROR: failed to dearmor MariaDB signing key"; exit 1; }
+		[ -s /usr/share/keyrings/mariadb-keyring.gpg ] || { echo "ERROR: MariaDB keyring empty"; exit 1; }
+		rm -f /tmp/mariadb_signing.asc
+		;;
+	*)
+		echo "[ * ] MariaDB: using OS package (distribution default)"
+		;;
+esac
+
+echo "[ * ] Installing MariaDB packages..."
+apt-get -qq update
+DEBIAN_FRONTEND=noninteractive apt-get -y -qq install \
+	mariadb-client mariadb-common mariadb-server > /dev/null 2>&1
+if ! dpkg -l mariadb-server 2> /dev/null | grep -q '^ii'; then
+	echo "ERROR: MariaDB package install failed"
+	exit "$E_INVALID"
+fi
+
+echo "[ * ] Configuring MariaDB..."
+MEM=$(awk '/MemTotal/{print $2}' /proc/meminfo)
+if   [ "$MEM" -gt 3900000 ]; then MYCNF="my-large.cnf"
+elif [ "$MEM" -gt 1200000 ]; then MYCNF="my-medium.cnf"
+else                              MYCNF="my-small.cnf"
+fi
+rm -f /etc/mysql/my.cnf
+cp -f "$HESTIA/share/mysql/$MYCNF" /etc/mysql/my.cnf
+sed -i 's|/usr/share/mysql|/usr/share/mariadb|g' /etc/mysql/my.cnf
+mariadb-install-db > /dev/null 2>&1
+systemctl -q enable mariadb 2> /dev/null
+systemctl restart mariadb
+if ! systemctl is-active --quiet mariadb; then
+	echo "ERROR: MariaDB failed to start"
+	exit "$E_RESTART"
+fi
+
+echo "[ * ] Securing MariaDB..."
+# MPASS stays a local shell var and lands only in /root/.my.cnf (0600) — never in
+# install.conf (secrets stay out of the recipe/status file, #121).
+MPASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16 || true)
+printf '[client]\npassword='"'"'%s'"'"'\n' "$MPASS" > /root/.my.cnf
+chmod 600 /root/.my.cnf
+mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$MPASS'; FLUSH PRIVILEGES;"
+mariadb -e "UPDATE mysql.global_priv SET priv=json_set(priv, '\$.password_last_changed', UNIX_TIMESTAMP(), '\$.plugin', 'mysql_native_password', '\$.authentication_string', 'invalid', '\$.auth_or', json_array(json_object(), json_object('plugin', 'unix_socket'))) WHERE User='root';"
+mariadb -e "DELETE FROM mysql.global_priv WHERE User='';"
+mariadb -e "DROP DATABASE IF EXISTS test;"
+mariadb -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%';"
+mariadb -e "FLUSH PRIVILEGES;"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+set_install_component DB_MARIADB true
+# Record the resolved version so install.conf reflects what is actually installed
+# (matters for post-install adds where the arg differs from / is absent in the
+# wizard value; h-remove-sys-mariadb clears it again).
+set_install_component DB_MARIADB_VERSION "$MARIADB_VER"
+
+# Register the local MariaDB host so the panel can manage MySQL DBs (this is the
+# sole writer of DB_SYSTEM's mysql token). MUST run BEFORE phpMyAdmin, whose guard
+# requires DB_SYSTEM to contain 'mysql' (F1).
+$BIN/h-add-database-host mysql localhost root "$MPASS" > /dev/null 2>&1 || true
+$BIN/h-change-sys-db-alias pma phpmyadmin > /dev/null 2>&1 || true
+
+# phpMyAdmin follows implicitly (derived DB_PHPMYADMIN), with local SSO (#145).
+if [ "${COMPONENT_DB_PHPMYADMIN:-}" = "true" ]; then
+	echo "[ * ] Installing phpMyAdmin..."
+	$BIN/h-add-sys-phpmyadmin || echo "[ ! ] phpMyAdmin install reported an issue"
+	$BIN/h-add-sys-pma-sso quiet || true
+fi
+
+echo "[ OK ] MariaDB installed"
+
+$BIN/h-log-action "system" "Info" "System" "MariaDB installed."
+log_event "$OK" "$ARGUMENTS"
+
+exit

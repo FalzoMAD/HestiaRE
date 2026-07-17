@@ -61,7 +61,7 @@ source "$HESTIA/func/main.sh"                  # source_conf hestia.conf, BIN, d
 # shellcheck source=/usr/local/hestia/func/helper.sh
 source "$HESTIA/func/helper.sh"                # hestia_apt, load_os_profile, seed_hestia_etc
 # shellcheck source=/etc/hestia/install.conf
-source "$INSTALL_CONF"                          # HESTIA_*, INSTALL_OS/PROFILE, COMPONENT_*, TOOLS_SELECTION, HESTIA_MPASS
+source "$INSTALL_CONF"                          # HESTIA_*, INSTALL_OS/PROFILE, COMPONENT_*, TOOLS_SELECTION
 set -e
 
 [ -n "${HESTIA_HOSTNAME:-}" ] && [ -n "${HESTIA_ADMIN:-}" ] && [ -n "${HESTIA_EMAIL:-}" ] || {
@@ -77,7 +77,6 @@ load_os_profile "$INSTALL_OS"
 # early in the run, so parse with sed; fall back to 8.3.
 PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$HESTIA/share/manifest.json" 2> /dev/null | head -n1)
 PHP_VER="${PHP_VER:-8.3}"                        # panel + default web PHP (Sury)
-ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 HESTIA_INSTALL_DIR="${HESTIA_INSTALL_DIR:-$HESTIA/install/deb}"
 HESTIA_COMMON_DIR="${HESTIA_COMMON_DIR:-$HESTIA/install/common}"
 
@@ -103,25 +102,8 @@ install_base() {
 	echo "[ * ] Adding Sury PHP repo..."
 	add_sury_repo "$CODENAME" || exit 1
 
-	# MariaDB repo only for an external-repo version; the OS version uses OS packages.
-	MARIADB_VER="${COMPONENT_DB_MARIADB_VERSION:-}"
-	case "$MARIADB_VER" in
-		12.3 | 11.8 | 11.4)
-			echo "[ * ] Adding MariaDB $MARIADB_VER repo..."
-			printf 'deb [arch=%s signed-by=/usr/share/keyrings/mariadb-keyring.gpg] https://dlm.mariadb.com/repo/mariadb-server/%s/repo/%s %s main\n' \
-				"$ARCH" "$MARIADB_VER" "$OS_ID" "$CODENAME" > /etc/apt/sources.list.d/mariadb.list
-			curl -fsSL https://mariadb.org/mariadb_release_signing_key.asc -o /tmp/mariadb_signing.asc \
-				|| { echo "ERROR: failed to download MariaDB signing key"; exit 1; }
-			gpg --dearmor < /tmp/mariadb_signing.asc > /usr/share/keyrings/mariadb-keyring.gpg \
-				|| { echo "ERROR: failed to dearmor MariaDB signing key"; exit 1; }
-			[ -s /usr/share/keyrings/mariadb-keyring.gpg ] || { echo "ERROR: MariaDB keyring empty"; exit 1; }
-			rm -f /tmp/mariadb_signing.asc
-			;;
-		*)
-			# __os__ sentinel or empty → distribution's own MariaDB, no external repo
-			echo "[ * ] MariaDB: using OS package (distribution default)"
-			;;
-	esac
+	# MariaDB repo/keyring now lives in h-add-sys-mariadb (called from install_db),
+	# which owns the full MariaDB lifecycle incl. the __os__/external repo dispatch (#121).
 
 	echo "[ * ] Installing base packages..."
 	apt-get -qq update
@@ -481,46 +463,15 @@ install_web() {
 install_db() {
 	[ -f "$CONF_DIR/.done.db" ] && { echo "[ skip ] db already configured"; return 0; }
 
+	# MariaDB — full lifecycle (repo dispatch, my.cnf, hardening, host registration,
+	# implicit phpMyAdmin) lives in h-add-sys-mariadb (#121). Hard-fail: the panel
+	# depends on a working DB, so a MariaDB failure must abort rather than leave a
+	# half-wired install that looks consistent (the #272 exit-code class).
 	if is_on "${COMPONENT_DB_MARIADB:-}"; then
-		_mdb_ver="${COMPONENT_DB_MARIADB_VERSION:-}"
-		case "$_mdb_ver" in ""|__os__) _mdb_ver="OS default";; esac
-		echo "[ * ] Installing database packages (MariaDB $_mdb_ver)..."
-		hestia_apt -y install mariadb-client mariadb-common mariadb-server
-		echo "[ * ] Configuring MariaDB..."
-		local MEM MYCNF
-		MEM=$(awk '/MemTotal/{print $2}' /proc/meminfo)
-		if   [ "$MEM" -gt 3900000 ]; then MYCNF="my-large.cnf"
-		elif [ "$MEM" -gt 1200000 ]; then MYCNF="my-medium.cnf"
-		else                              MYCNF="my-small.cnf"
-		fi
-		rm -f /etc/mysql/my.cnf
-		cp -f "$HESTIA/share/mysql/$MYCNF" /etc/mysql/my.cnf
-		sed -i 's|/usr/share/mysql|/usr/share/mariadb|g' /etc/mysql/my.cnf
-		mariadb-install-db >> "$LOG" 2>&1
-		update-rc.d mariadb defaults > /dev/null 2>&1
-		systemctl -q enable mariadb
-		systemctl start mariadb
-		echo "[ * ] Securing MariaDB..."
-		local MPASS
-		MPASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16 || true)
-		printf '[client]\npassword='"'"'%s'"'"'\n' "$MPASS" > /root/.my.cnf
-		chmod 600 /root/.my.cnf
-		mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$MPASS'; FLUSH PRIVILEGES;"
-		mariadb -e "UPDATE mysql.global_priv SET priv=json_set(priv, '\$.password_last_changed', UNIX_TIMESTAMP(), '\$.plugin', 'mysql_native_password', '\$.authentication_string', 'invalid', '\$.auth_or', json_array(json_object(), json_object('plugin', 'unix_socket'))) WHERE User='root';"
-		mariadb -e "DELETE FROM mysql.global_priv WHERE User='';"
-		mariadb -e "DROP DATABASE IF EXISTS test;"
-		mariadb -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%';"
-		mariadb -e "FLUSH PRIVILEGES;"
-		grep -q 'HESTIA_MPASS' "$INSTALL_CONF" || echo "HESTIA_MPASS=\"$MPASS\"" >> "$INSTALL_CONF"
-		HESTIA_MPASS="$MPASS"
-
-		# phpMyAdmin is installed implicitly with MariaDB (DB_PHPMYADMIN derived).
-		if is_on "${COMPONENT_DB_PHPMYADMIN:-}"; then
-			wcv "DB_PMA_ALIAS" "phpmyadmin"
-			echo "[ * ] Installing phpMyAdmin..."
-			"$BIN/h-add-sys-phpmyadmin" >> "$LOG"
-			# Local SSO (#145, no REST API) — opt-out via panel server settings
-			"$BIN/h-add-sys-pma-sso" quiet >> "$LOG"
+		echo "[ * ] Installing MariaDB..."
+		if ! "$BIN/h-add-sys-mariadb" >> "$LOG" 2>&1; then
+			echo "ERROR: MariaDB install failed — see $LOG" >&2
+			exit 1
 		fi
 	else
 		echo "[ * ] MariaDB not selected — skipping"
@@ -547,9 +498,13 @@ install_db() {
 		"$BIN/h-add-sys-adminer" >> "$LOG" 2>&1 \
 			|| echo "[ ! ] Adminer install reported an issue (see $LOG)"
 	fi
+	# Redis — general-service install/promote via its own command (#121). Fail-soft:
+	# the smoke test verifies redis independently, and a cache failure should not
+	# abort the whole install.
 	if is_on "${COMPONENT_DB_REDIS:-}"; then
-		echo "[ * ] Installing Redis (minimal — see #121)..."
-		hestia_apt -y install redis-server || true
+		echo "[ * ] Installing Redis..."
+		"$BIN/h-add-sys-redis" >> "$LOG" 2>&1 \
+			|| echo "[ ! ] Redis install reported an issue (see $LOG)"
 	fi
 
 	touch "$CONF_DIR/.done.db"
@@ -827,11 +782,8 @@ configure_hestia() {
 	"$BIN/h-change-user-language" "$HESTIA_ADMIN" en
 	"$BIN/h-change-sys-config-value" 'POLICY_SYSTEM_PROTECTED_ADMIN' 'yes'
 
-	echo "[ * ] Registering MariaDB host..."
-	if [ -f /root/.my.cnf ]; then
-		"$BIN/h-add-database-host" mysql localhost root "${HESTIA_MPASS:-}" > /dev/null 2>&1 || true
-	fi
-	"$BIN/h-change-sys-db-alias" 'pma' 'phpmyadmin' > /dev/null 2>&1 || true
+	# MariaDB host registration + phpMyAdmin alias now happen inside h-add-sys-mariadb
+	# (install_db stage), so DB_SYSTEM is composed before phpMyAdmin runs (#121 F1).
 
 	echo "[ * ] Configuring system IP..."
 	"$BIN/h-update-sys-ip" > /dev/null 2>&1 || true

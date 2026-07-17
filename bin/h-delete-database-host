@@ -49,6 +49,16 @@ sed -i "/HOST='$host' /d" "$HESTIA/conf/$type.conf"
 rm -fr $HESTIA'/web/rrd/db/'$type'_'$host'.rrd'
 rm -fr $HESTIA'/web/rrd/db/'*-$type'_'$host'.*'
 
+# Decompose DB_SYSTEM when the LAST host of this type is gone (counterpart to the
+# compose in h-add-database-host). Without this the type stayed listed forever
+# even after its last host was removed (#121), so the panel kept offering an
+# engine with no host. Keep the token while any host of the type remains.
+if ! grep -qs "HOST=" "$HESTIA/conf/$type.conf"; then
+	rm -f "$HESTIA/conf/$type.conf"
+	new_dbsys=$(echo "$DB_SYSTEM" | tr ',' '\n' | grep -vx "$type" | grep -v '^$' | paste -sd ',' -)
+	$BIN/h-change-sys-config-value 'DB_SYSTEM' "$new_dbsys" > /dev/null 2>&1
+fi
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
