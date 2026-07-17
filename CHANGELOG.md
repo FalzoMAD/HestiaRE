@@ -11,6 +11,24 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- PostgreSQL is now a fully panel-integrated, removable component:
+  `h-add-sys-postgresql` / `h-remove-sys-postgresql` (#121). Previously PostgreSQL
+  was CLI-only — the lifecycle helpers (`func/db.sh`) and web UI were present, but
+  nothing registered a pgsql host, so the panel never offered it. The add command
+  installs PostgreSQL (postgresql-common first, #353), sets a password on the
+  `postgres` superuser for loopback TCP login (socket peer-auth unaffected; the
+  distro's default pg_hba already allows scram-sha-256 on 127.0.0.1), and
+  registers the local host so the panel can create/manage PostgreSQL databases and
+  users. The `postgres` role is used (not a dedicated one) because `func/db.sh`
+  connects to the role-named database, which only `postgres` has. Readiness is
+  checked with `pg_isready`, not `systemctl is-active postgresql` — the latter is a
+  oneshot umbrella unit that reports active even when the cluster is down. Remove
+  refuses while customer databases exist (counter + live `pg_database` check),
+  purges the **versioned** packages (`postgresql-<major>`, not just the metapackage),
+  keeps the datadir by default (`PURGE_DATA=yes` to drop). Credentials live in the
+  host registry (`conf/pgsql.conf`), never install.conf. `install_db` calls the
+  command (fail-soft). No v-* symlinks.
+
 - MariaDB is now a standalone, removable component: `h-add-sys-mariadb [VERSION]`
   / `h-remove-sys-mariadb` (#121). The add command owns the full lifecycle
   (repo/keyring dispatch — `12.3|11.8|11.4` = MariaDB.org, else the OS package;
