@@ -478,16 +478,13 @@ install_db() {
 	fi
 
 	# Optional engines — minimal install; full integration tracked in #121.
+	# PostgreSQL — full lifecycle (packages, management role, host registration so
+	# the panel can manage pgsql DBs) lives in h-add-sys-postgresql (#121). Fail-soft:
+	# the smoke test verifies postgres independently, and it is an optional engine.
 	if is_on "${COMPONENT_DB_POSTGRESQL:-}"; then
-		echo "[ * ] Installing PostgreSQL (minimal — see #121)..."
-		# Install postgresql-common first, in its own transaction: the `postgresql`
-		# metapackage's debconf .config script runs `pg_lsclusters` during apt's
-		# pre-configuration phase, which happens BEFORE postgresql-common is
-		# unpacked when both are in one transaction — printing a harmless but ugly
-		# "pg_lsclusters: not found" (#353). Landing postgresql-common first puts
-		# the command on PATH before that script runs.
-		hestia_apt -y install postgresql-common || true
-		hestia_apt -y install postgresql postgresql-contrib || true
+		echo "[ * ] Installing PostgreSQL..."
+		"$BIN/h-add-sys-postgresql" >> "$LOG" 2>&1 \
+			|| echo "[ ! ] PostgreSQL install reported an issue (see $LOG)"
 	fi
 	# Adminer — vendored single-file web DB UI, offered as an addon that the
 	# wizard defaults ON when PostgreSQL is selected (#350). It is the PostgreSQL

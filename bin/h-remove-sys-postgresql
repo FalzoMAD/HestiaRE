@@ -1,0 +1,104 @@
+#!/bin/bash
+# info: remove PostgreSQL database server
+# options: NONE
+#
+# example: h-remove-sys-postgresql
+#
+# Counterpart to h-add-sys-postgresql (#121). Refuses while customer databases
+# exist (maintained counter U_DB_BASES AND a live pg_database cross-check, since
+# the counter can drift and FORCE=yes exists). Data is preserved by default: the
+# cluster datadir is kept (set PURGE_DATA=yes to drop it). PostgreSQL packages are
+# **versioned** — `apt purge postgresql` alone leaves postgresql-<major> and its
+# running cluster behind (#121 K2) — so the installed major is purged explicitly.
+#
+# Env opt-ins: FORCE=yes skips the customer-DB pre-check; PURGE_DATA=yes also
+# drops the cluster datadir + config.
+#
+# New h-* command — no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+# Not installed?
+if ! dpkg -l postgresql 2> /dev/null | grep -q '^ii'; then
+	echo "ERROR: PostgreSQL is not installed."
+	exit "$E_NOTEXIST"
+fi
+
+# Refuse while customer databases exist (unless FORCE=yes). Counter + live check
+# (templates and the default 'postgres' maintenance DB are not customer data).
+if [ "${FORCE:-}" != "yes" ]; then
+	u_db_bases=$(grep -o "U_DB_BASES='[0-9]*'" "$HESTIA/conf/pgsql.conf" 2> /dev/null | grep -o '[0-9]*' | head -1)
+	live_db=0
+	if command -v psql > /dev/null 2>&1 && pg_isready -q 2> /dev/null; then
+		live_db=$(sudo -u postgres psql -tAc \
+			"SELECT datname FROM pg_database WHERE datistemplate=false AND datname<>'postgres';" 2> /dev/null \
+			| grep -c .)
+		live_db=${live_db:-0}
+	fi
+	if [ "${u_db_bases:-0}" != "0" ] || [ "${live_db:-0}" != "0" ]; then
+		echo "ERROR: PostgreSQL still hosts customer databases (counter=${u_db_bases:-0}, live=${live_db:-0})."
+		echo "       Delete them first, or re-run with FORCE=yes."
+		exit "$E_INUSE"
+	fi
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# 1. Deregister the local host — strips the 'pgsql' token from DB_SYSTEM
+#    (h-delete-database-host). Ignore if it was never registered.
+$BIN/h-delete-database-host pgsql localhost > /dev/null 2>&1 || true
+
+# 2. Stop + purge. PostgreSQL packages are versioned: purge the installed major
+#    (server + client) explicitly, not just the `postgresql` metapackage (K2).
+echo "[ * ] Removing PostgreSQL packages..."
+PG_MAJOR=$(pg_lsclusters -h 2> /dev/null | awk 'NR==1{print $1}')
+systemctl disable --now "postgresql@${PG_MAJOR}-main" > /dev/null 2>&1 || true
+systemctl disable --now postgresql > /dev/null 2>&1 || true
+_pkgs="postgresql postgresql-contrib"
+[ -n "$PG_MAJOR" ] && _pkgs="$_pkgs postgresql-$PG_MAJOR postgresql-client-$PG_MAJOR"
+# shellcheck disable=SC2086
+DEBIAN_FRONTEND=noninteractive apt-get -y -qq purge $_pkgs > /dev/null 2>&1 || true
+
+# 3. Datadir/config: kept by default (a later re-add reuses the cluster); opt-in wipe.
+if [ "${PURGE_DATA:-}" = "yes" ]; then
+	echo "[ * ] PURGE_DATA=yes — dropping cluster datadir + config..."
+	rm -rf /var/lib/postgresql /etc/postgresql
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+set_install_component DB_POSTGRESQL false
+
+echo "[ OK ] PostgreSQL removed.$([ "${PURGE_DATA:-}" = "yes" ] && echo '' || echo ' (datadir kept — PURGE_DATA=yes to drop)')"
+
+$BIN/h-log-action "system" "Info" "System" "PostgreSQL removed."
+log_event "$OK" "$ARGUMENTS"
+
+exit

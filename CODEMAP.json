@@ -40,7 +40,7 @@
         "bin/h-update-sys-queue"
       ],
       "language": "bash",
-      "total_commands": 472,
+      "total_commands": 474,
       "command_prefixes": {
         "h-*": 468,
         "v-*": "symlinks only — see Issue #23"
