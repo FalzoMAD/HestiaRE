@@ -193,7 +193,10 @@ seed_hestia_etc() {
 	_wcv "UPGRADE_SEND_EMAIL"       "true"
 	_wcv "UPGRADE_SEND_EMAIL_LOG"   "false"
 	_wcv "ROOT_USER"                "$admin"
-	_wcv "DB_SYSTEM"                "mysql"
+	# DB_SYSTEM is composed from actually-registered hosts by h-add-database-host
+	# (via h-add-sys-mariadb/-postgresql), so seed it EMPTY — a hard "mysql" seed
+	# made a no-MariaDB install still claim MySQL (#121). Consumers tolerate empty.
+	_wcv "DB_SYSTEM"                ""
 	unset -f _wcv
 }
 
