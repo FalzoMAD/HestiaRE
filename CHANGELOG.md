@@ -26,6 +26,42 @@ section as part of its PR. On release, the section gets the version number.
   (service active, port listening, every login hangs) — a missing banner within
   5s now fails the baseline. (Line-based read on purpose: a byte-count read would
   block on short SMTP banners.)
+- SnappyMail integration had three latent defects, found in the #234 webmailer
+  baseline: (1) the installer passed the **database password as the panel port**
+  to the change-password plugin (`$argv[4]` instead of `$argv[5]`), (2)
+  `domains/hestia.json` was generated from `json_decode(<path>)` — decoding the
+  path *string* instead of the file — leaving only the two shortLogin keys
+  instead of a full clone of `default.json`, and (3) `h-change-sys-port` rewrote
+  the plugin's `"hestia_port"` line as a second `"hestia_host"` line (key typo),
+  clobbering the host on JSON parse and losing the port. Together these broke
+  password changes from SnappyMail. All three fixed; the plugin config now
+  carries the real host + port.
+- Webmailer removal state is consistent now (#234): `h-remove-sys-snappymail`'s
+  `WEBMAIL_SYSTEM` cleanup condition was inverted (it only rewrote the list when
+  snappymail was *absent* — a normal removal never cleared it); both webmailer
+  removers now strip their token robustly (no stray commas) and reset
+  `COMPONENT_MAIL_WEBMAILER` to `NONE` when the removed client was the recorded
+  selection.
+- The Roundcube logrotate fragment is actually deployed now: it existed in the
+  install tree but nothing ever copied it, while the fail2ban `roundcube-auth`
+  jail tails `/var/log/roundcube/errors.log` — an unrotated, fail2ban-watched
+  log. `h-add-sys-roundcube` installs it, `h-remove-sys-roundcube` removes it.
+
+### Changed
+
+- `h-delete-sys-roundcube` / `h-delete-sys-snappymail` renamed to
+  `h-remove-sys-roundcube` / `h-remove-sys-snappymail` (the `h-remove-sys-*`
+  convention, same hard cut as the redis rename — pre-1.0, no live systems).
+  The orphaned `v-delete-sys-snappymail` symlink is gone with the old name
+  (policy: no orphans); no new v-* symlinks.
+- Webmailer assets moved out of the legacy install tree (#119):
+  `install/common/roundcube/{hestia.php,plugins/*}` → `share/roundcube/`,
+  `install/common/snappymail/install.php` → `share/snappymail/`, and the
+  logrotate fragment → `share/roundcube/logrotate`. Five dead Roundcube files
+  (`config.inc.php`, `main.inc.php`, `mimetypes.php`, `apache.conf`,
+  `plugins/config_managesieve.inc.php` — the command writes its configs inline)
+  are deleted (recoverable from `upstream/hestiacp`). `install/common/` now
+  holds only `bubblewrap/`.
 
 ### Added
 
