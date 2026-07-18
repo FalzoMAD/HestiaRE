@@ -1,10 +1,17 @@
 #!/bin/bash
 # info: upgrade MariaDB to another version (in-place, with forced backup)
-# options: TARGET_VERSION
+# options: [TARGET_VERSION]
 #
+# example: h-upgrade-sys-mariadb           # list available targets + reachability
 # example: h-upgrade-sys-mariadb 11.8      # external MariaDB.org 11.8
-# example: h-upgrade-sys-mariadb 12.3
+# example: h-upgrade-sys-mariadb 11.4      # e.g. pin to what Magento supports
 # example: h-upgrade-sys-mariadb __os__    # distribution package
+#
+# Without an argument it LISTS the curated targets with the version each would
+# actually deliver on this system (queried live: MariaDB.org Packages index per
+# series, apt for the OS package) and whether it is reachable (upgrade / current /
+# downgrade-refused / not published for this OS). No prompt — pick, then re-run
+# with the target.
 #
 # In-place MariaDB version switch (#207): full dump (forced precondition) ->
 # repo switch (same __os__/external dispatch as h-add-sys-mariadb) -> package
@@ -68,7 +75,55 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_args '1' "$#" 'TARGET_VERSION'
+# No argument = list mode: query what each curated target would actually deliver
+# on THIS system (live from the repos) and whether it is reachable from the
+# running version. Lets you pick a specific version deliberately — e.g. Magento
+# tracks specific MariaDB versions rather than the newest. Stays non-interactive
+# (no prompt): pick from the list, then run `h-upgrade-sys-mariadb <target>`.
+if [ -z "$target" ]; then
+	if ! dpkg -l mariadb-server 2> /dev/null | grep -q '^ii'; then
+		echo "ERROR: MariaDB is not installed (use h-add-sys-mariadb)."
+		exit "$E_NOTEXIST"
+	fi
+	current=$(mariadb -N -e "SELECT VERSION();" 2> /dev/null | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
+	echo "Running:  MariaDB ${current:-unknown}  (source: ${COMPONENT_DB_MARIADB_VERSION:-?})"
+	echo ""
+	echo "Available upgrade targets:"
+	_os_id="$(. /etc/os-release; echo "$ID")"
+	_codename="$(. /etc/os-release; echo "${VERSION_CODENAME:-}")"
+	_arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+	while IFS=$'\t' read -r _val _src _descr; do
+		_cand=""
+		if [ "$_val" = "__os__" ]; then
+			# OS candidate: highest non-dlm version apt knows about
+			_cand=$(LC_ALL=C apt-cache madison mariadb-server 2> /dev/null \
+				| grep -v 'dlm.mariadb' | awk -F'|' 'NR==1{gsub(/ /,"",$2); print $2}' \
+				| sed 's/^[0-9]*://' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
+		else
+			# External candidate: parse the repo's Packages index directly (no
+			# sources.list side effects). Missing index = series not published
+			# for this OS release (e.g. 11.4 has no trixie repo).
+			_cand=$(curl -fsSL --max-time 10 \
+				"https://dlm.mariadb.com/repo/mariadb-server/${_val}/repo/${_os_id}/dists/${_codename}/main/binary-${_arch}/Packages" 2> /dev/null \
+				| awk '/^Package: mariadb-server$/{f=1} f&&/^Version:/{print $2; exit}' \
+				| sed 's/^[0-9]*://' | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
+		fi
+		if [ -z "$_cand" ]; then
+			_state="n/a for ${_codename}"
+		elif [ "$_cand" = "$current" ]; then
+			_state="current"
+		elif [ "$(printf '%s\n%s\n' "$current" "$_cand" | sort -V | tail -1)" = "$_cand" ]; then
+			_state="upgrade OK"
+		else
+			_state="downgrade (refused)"
+		fi
+		printf '  %-7s -> %-9s %-22s %s\n' "$_val" "${_cand:--}" "$_state" "${_descr}"
+	done < <(jq -r '.components.DB_MARIADB_VERSION.options[] | [.value, .source, (.description // "")] | @tsv' \
+		"$HESTIA/share/manifest.json" 2> /dev/null)
+	echo ""
+	echo "Usage: h-upgrade-sys-mariadb <target>"
+	exit 0
+fi
 
 case "$target" in
 	12.3 | 11.8 | 11.4 | __os__) ;;

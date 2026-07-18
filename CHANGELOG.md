@@ -23,7 +23,13 @@ section as part of its PR. On release, the section gets the version number.
   the unused dump removed. The rollback path (remove+`PURGE_DATA` → reinstall old
   version → restore dump) is documented in the command header. `LC_ALL=C` on the
   apt-cache parse — the output is localized and a German "Installationskandidat:"
-  silently broke the candidate match. No v-* symlink.
+  silently broke the candidate match. Without an argument the command **lists**
+  the curated targets with the version each would actually deliver on this system
+  (MariaDB.org Packages index per series, apt for the OS package) and its
+  reachability (upgrade / current / downgrade-refused / not published for this OS
+  release) — so a specific version can be targeted deliberately, e.g. the one an
+  application like Magento supports, instead of blindly going newest. No prompt;
+  pick from the list and re-run with the target. No v-* symlink.
 
 - PostgreSQL is now a fully panel-integrated, removable component:
   `h-add-sys-postgresql` / `h-remove-sys-postgresql` (#121). Previously PostgreSQL
