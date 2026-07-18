@@ -15,6 +15,13 @@
 # major version. The candidate version after the repo switch is compared to
 # the running one and the repo state is restored on refusal.
 #
+# MULTI-MAJOR JUMPS are a single direct upgrade, not a stepped one: unlike
+# MySQL, MariaDB officially supports skipping major versions, and
+# mariadb-upgrade migrates system tables across any distance (verified live:
+# 10.11.18 -> 12.3.2, skipping the whole 11.x series). Residual risk on big
+# jumps is a my.cnf option removed in a skipped series — covered by the forced
+# backup + the rollback path below.
+#
 # ROLLBACK (documented, manual): a failed/regretted upgrade cannot be undone
 # in place. Recover with the dump this command forces:
 #   1. h-remove-sys-mariadb (FORCE=yes) && PURGE_DATA=yes  # drop new-format datadir
