@@ -134,6 +134,22 @@ check_file_empty() {
 	fi
 }
 
+# check_banner <port> <label> — the service answers with a protocol banner within
+# 5s. Catches the "service active, function dead" class that check_service +
+# check_port cannot: dovecot 2.4 with a wrong default_login_user was 'active' and
+# listening, but every IMAP login hung until the client gave up (#376).
+check_banner() {
+	local banner
+	# head -n1, NOT head -c N: a byte-count read blocks until N bytes arrive, and
+	# short banners (SMTP's "220 host ESMTP" < 64 bytes) would false-FAIL.
+	banner=$(timeout 5 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1 && head -n1 <&3" 2> /dev/null)
+	if [ -n "$banner" ]; then
+		ok "port $1 ($2) answers with a banner"
+	else
+		no "port $1 ($2) gave no banner within 5s (service up but not functional?)"
+	fi
+}
+
 # check_sudoers <file> <label> — the file parses cleanly under the running sudo.
 # A single setting the local sudo rejects (e.g. requiretty, not implemented by
 # sudo-rs — Ubuntu 26's default sudo, #363) makes sudo discard the WHOLE file —
@@ -205,6 +221,12 @@ if [ -n "$PROXY_SYSTEM" ] || [ -n "$WEB_SYSTEM" ]; then
 fi
 echo "$DB_SYSTEM" | grep -qw 'mysql' && check_port 3306 "mysql"
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_port 25 "smtp"
+# Banner (not just port): IMAP/SMTP must actually answer — a misconfigured login
+# chain leaves the port listening while every login hangs (#376).
+if [ -n "$IMAP_SYSTEM" ] && [ "$IMAP_SYSTEM" != 'remote' ]; then
+	check_banner 143 "imap"
+fi
+[ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_banner 25 "smtp"
 if [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
 	# group-restricted unix sockets since #301/#321 — rspamd has no TCP ports
 	check_socket /run/rspamd/normal.sock "rspamd scan worker"

@@ -9,6 +9,24 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Fixed
+
+- dovecot 2.4 (Debian 13 / Ubuntu 26): every IMAP/POP3 login was dead on a fresh
+  install (#376) — connections to 143/993 hung without a banner until the client
+  gave up. Our 2.4 config carried `default_login_user = dovecot` (inherited from
+  upstream HestiaCP, harmless on 2.3), but the login chroot `/run/dovecot/login`
+  ended up `root:dovenull 0750`, so login processes running as `dovecot` could
+  not reach the auth socket (`auth_process_not_ready`, `Permission denied ...
+  we're not in group dovenull`). Now `default_login_user = dovenull` — the user
+  the Debian packaging is built around — which is consistent with every default
+  context the directory can be created in. Verified live on deb13 + ub26: banner
+  immediate, real IMAP login + SMTP submission + delivery + Roundcube web login
+  all green. The smoke test additionally gained a protocol **banner** check for
+  IMAP (143) and SMTP (25): `check_service` + `check_port` cannot see this class
+  (service active, port listening, every login hangs) — a missing banner within
+  5s now fails the baseline. (Line-based read on purpose: a byte-count read would
+  block on short SMTP banners.)
+
 ### Added
 
 - In-place MariaDB version switching: `h-upgrade-sys-mariadb TARGET` (#207),
