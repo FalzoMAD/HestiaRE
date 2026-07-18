@@ -71,7 +71,11 @@ else
 		sed -i "/password_hestia_port/c\$rcmail_config['password_hestia_port'] = '$PORT';" /etc/roundcube/plugins/password/config.inc.php
 	fi
 	if [ -d /etc/snappymail/ ]; then
-		sed -i "/\"hestia_port\":/c\\\"hestia_host\": $PORT" /etc/snappymail/data/_data_/_default_/configs/plugin-change-password.json
+		# Replace the hestia_port line with the SAME key (a typo here used to
+		# write a second "hestia_host" line, clobbering the host on JSON parse
+		# and losing the port entirely, #234). No trailing comma: hestia_port is
+		# the LAST member of the plugin object (see share/snappymail/install.php).
+		sed -i "/\"hestia_port\":/c\\\"hestia_port\": $PORT" /etc/snappymail/data/_data_/_default_/configs/plugin-change-password.json
 	fi
 
 	if [ -f "$CONF_DIR/firewall/rules.conf" ]; then

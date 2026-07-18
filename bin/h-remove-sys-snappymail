@@ -15,6 +15,8 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
+# live component state (COMPONENT_MAIL_WEBMAILER), if present
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
 
 # Folder paths
 SM_INSTALL_DIR="/var/lib/snappymail"
@@ -27,7 +29,7 @@ SM_LOG="/var/log/snappymail"
 
 # Checking root permissions
 if [ "x$(id -u)" != 'x0' ]; then
-	echo "ERROR: h-delete-sys-snappymail can only be executed by the root user"
+	echo "ERROR: h-remove-sys-snappymail can only be executed by the root user"
 	exit 10
 fi
 
@@ -72,15 +74,24 @@ else
 	mysql -e "DROP DATABASE snappymail" 2>&1
 	mysql -e "DROP USER snappymail@localhost"
 fi
-# Updating hestia.conf
-if [ -z "$(echo "$WEBMAIL_SYSTEM" | grep -w 'snappymail')" ]; then
-	# remove snappymail from webmail list and make sure the string doesn't start with a comma
-	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "$(echo "$WEBMAIL_SYSTEM" | sed "s/snappymail//g" | sed 's/^,//g')"
+# Updating hestia.conf — remove snappymail from the WEBMAIL_SYSTEM list. The old
+# guard here was inverted ([ -z ... ]: only rewrote when snappymail was ABSENT),
+# so a normal removal never cleared the entry (#234). Token-based strip instead
+# of sed, so no stray commas survive in any position.
+if echo "$WEBMAIL_SYSTEM" | grep -qw 'snappymail'; then
+	new_webmail=$(echo "$WEBMAIL_SYSTEM" | tr ',' '\n' | grep -vx 'snappymail' | grep -v '^$' | paste -sd ',' -)
+	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "$new_webmail"
 fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
+
+# Reset the wizard selection only if SnappyMail was the recorded webmailer —
+# removing a secondary client must not clobber another one's selection (#234).
+if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "SNAPPYMAIL" ]; then
+	set_install_component MAIL_WEBMAILER NONE
+fi
 
 $BIN/h-log-action "system" "Info" "Plugins" "SnappyMail removed (Version: $version)."
 

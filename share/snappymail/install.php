@@ -37,7 +37,10 @@ if (!file_exists($sFile)) {
 					"driver_hestia_enabled" => true,
 					"driver_hestia_allowed_emails" => "*",
 					"hestia_host" => gethostname(),
-					"hestia_port" => $argv[4], // $BACKEND_PORT
+					// $argv[5] = $BACKEND_PORT — NOT $argv[4], which is the DB
+					// password (that off-by-one shipped the DB password as the
+					// panel port and broke password changes from SnappyMail, #234)
+					"hestia_port" => $argv[5],
 				],
 			],
 			JSON_PRETTY_PRINT,
@@ -67,7 +70,13 @@ $oConfig->Save();
 
 $sFile = APP_PRIVATE_DATA . "domains/hestia.json";
 if (!file_exists($sFile)) {
-	$config = json_decode(APP_PRIVATE_DATA . "domains/default.json", true);
+	// file_get_contents, not the bare path: json_decode(<path string>) returns
+	// null, so hestia.json used to contain ONLY the two shortLogin keys instead
+	// of a full clone of default.json (#234).
+	$config = json_decode(file_get_contents(APP_PRIVATE_DATA . "domains/default.json"), true);
+	if (!is_array($config)) {
+		$config = [];
+	}
 	$config["IMAP"]["shortLogin"] = true;
 	$config["SMTP"]["shortLogin"] = true;
 	file_put_contents($sFile, json_encode($config, JSON_PRETTY_PRINT));
