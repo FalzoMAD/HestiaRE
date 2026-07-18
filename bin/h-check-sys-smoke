@@ -207,6 +207,16 @@ is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
 # serves Adminer's own login page (its own DB-credential gate), same delivery as
 # phpMyAdmin, which is also not HTTP-checked here.
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
+# Webmail via Panel-Caddy (#205): dedicated caddy FPM pool + internal loopback
+# listener per installed client — the per-domain vhosts only reverse-proxy.
+if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
+	check_socket /run/hestia-webmail-rc.sock "roundcube FPM"
+	check_http "http://127.0.0.1:8090/" "roundcube internal listener"
+fi
+if echo "$WEBMAIL_SYSTEM" | grep -qw 'snappymail'; then
+	check_socket /run/hestia-webmail-sm.sock "snappymail FPM"
+	check_http "http://127.0.0.1:8091/" "snappymail internal listener"
+fi
 # Redis: either the user's DB choice (DB_REDIS) or rspamd's always-present
 # Bayes companion (hard-capped, see share/rspamd/redis-rspamd-limit.conf).
 if is_on "${COMPONENT_DB_REDIS:-}" || [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then

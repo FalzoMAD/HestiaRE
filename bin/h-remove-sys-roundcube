@@ -72,6 +72,12 @@ rm -rf "$RC_CONFIG_DIR"
 # Remove the logrotate fragment deployed by h-add-sys-roundcube
 rm -f /etc/logrotate.d/roundcube
 
+# Panel-Caddy delivery teardown (#205): internal listener + FPM pool
+rm -f /etc/caddy/webmail-roundcube.conf
+systemctl try-restart caddy > /dev/null 2>&1 || true
+rm -f /etc/php/hestia/fpm/pool.d/roundcube.conf
+systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+
 # Update hestia.conf — remove roundcube from WEBMAIL_SYSTEM
 new_webmail=$(echo "$WEBMAIL_SYSTEM" | sed 's/roundcube,\?//g; s/,$//')
 if [ -z "$new_webmail" ]; then

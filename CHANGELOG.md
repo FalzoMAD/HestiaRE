@@ -9,6 +9,36 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Added
+
+- Webmail now renders through the Panel-Caddy instead of the customer web stack
+  (#205, part 1 — panel side). Roundcube and SnappyMail each get a dedicated
+  caddy FPM pool (`share/panel-php/pool.d/{roundcube,snappymail}.conf`, user
+  `caddy`) behind an internal loopback listener on Caddy (`127.0.0.1:8090` /
+  `:8091`, `share/panel-caddy/webmail-{roundcube,snappymail}.conf`), following
+  the phpMyAdmin/Adminer model. `h-add-sys-roundcube` / `h-add-sys-snappymail`
+  deploy the pool + listener; the `h-remove-sys-*` counterparts tear them down.
+  This is what finally makes SnappyMail usable: its data dir is owned `caddy`
+  (from #214), but the old per-domain vhost rendered PHP as `www-data` and hit
+  "Permission denied!" — now the renderer *is* caddy. Verified live: full
+  Roundcube web login (302 + mailbox) via the internal listener on deb13, and
+  SnappyMail rendering the full app (no permission error, data dir caddy-owned)
+  on ub24. The smoke test gained per-client FPM-socket + internal-listener HTTP
+  checks. (Part 2 will point the per-domain `webmail.<domain>` vhosts at these
+  listeners via reverse proxy.)
+
+### Changed
+
+- The panel PHP's curated extension set (`hestia-php-confd`) gained a webmail
+  group: `intl` + `phar` (critical) and `exif` (optional). Serving the webmail
+  clients from the panel FPM means their extensions belong to the panel set, the
+  same way `gd`/`bz2`/`pgsql` were already there for phpMyAdmin/Adminer. Without
+  `intl` Roundcube fatals on the first login (`INTL_IDNA_VARIANT_UTS46`); without
+  `phar` SnappyMail's change-password plugin blanks the page ("Class Phar not
+  found"). `php${VER}-intl` + `php${VER}-exif` are now installed unconditionally
+  in the panel stage (`phar` ships with php-common); webmail add/remove never
+  touches the panel PHP config.
+
 ### Fixed
 
 - dovecot 2.4 (Debian 13 / Ubuntu 26): every IMAP/POP3 login was dead on a fresh

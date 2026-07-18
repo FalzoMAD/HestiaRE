@@ -173,17 +173,21 @@ install_panel() {
 	echo "[ * ] Installing panel packages (Caddy, PHP $PHP_VER FPM)..."
 	# The last line covers the DB web UIs that run under the same panel FPM master
 	# (phpMyAdmin, Adminer): gd/bz2 for phpMyAdmin, pgsql (ships pdo_pgsql too) for
-	# Adminer->PostgreSQL. Installed unconditionally so the panel PHP is self-
-	# contained — no coupling of postgres add/remove to the hestia-php config.
-	# ctype/iconv/fileinfo come via php-common; the xml family via php-xml. All are
-	# wired into the isolated panel conf.d by hestia-php-confd below.
+	# Adminer->PostgreSQL. And for the webmail clients the panel FPM serves via
+	# its internal listeners (#205): intl (IDN — Roundcube fatals on login without
+	# it) and exif (Roundcube attachment previews). Installed unconditionally so
+	# the panel PHP is self-contained — no coupling of postgres/webmail add/remove
+	# to the hestia-php config. ctype/iconv/fileinfo come via php-common; the xml
+	# family via php-xml. All are wired into the isolated panel conf.d by
+	# hestia-php-confd below.
 	hestia_apt -y install \
 		caddy \
 		libphp-phpmailer \
 		php${PHP_VER}-cli php${PHP_VER}-fpm php${PHP_VER}-mysql php${PHP_VER}-curl \
 		php${PHP_VER}-zip php${PHP_VER}-gmp php${PHP_VER}-mbstring \
 		php${PHP_VER}-opcache php${PHP_VER}-xml \
-		php${PHP_VER}-gd php${PHP_VER}-bz2 php${PHP_VER}-pgsql
+		php${PHP_VER}-gd php${PHP_VER}-bz2 php${PHP_VER}-pgsql \
+		php${PHP_VER}-intl php${PHP_VER}-exif
 	echo "[ * ] Configuring panel PHP-FPM..."
 	mkdir -p /etc/php/hestia/fpm/pool.d /etc/php/hestia/cli
 	cp -f "$HESTIA/share/panel-php/php-fpm.conf" /etc/php/hestia/fpm/
