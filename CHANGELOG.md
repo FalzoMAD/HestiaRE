@@ -11,6 +11,11 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Dropped the unused `dom` extension from the panel FPM's curated optional set
+  (`hestia-php-confd`). Audit A8: no panel (`web/`), phpMyAdmin, or Adminer code
+  uses `DOMDocument`/`DOMXPath` (grep-verified in-tree + on the installed
+  phpMyAdmin), so it was whitelisted for nothing. The XML family the DB tools do
+  need (`simplexml`/`xmlwriter`/`xmlreader`) is unaffected.
 - Vendored **Adminer bumped 5.4.4 → 5.5.0** (`share/adminer/adminer.php`,
   VENDORED.json). Adminer is vendored (not the OS package) specifically because
   every target distro ships a CVE-affected version (#350); keeping the vendored
@@ -22,6 +27,11 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- PHP-version validation regex now survives a two-digit major in
+  `h-change-sys-php` and `h-delete-web-php` (`^[0-9]\.` → `^[0-9]+\.`). Audit A6:
+  the same hardening had already landed in `h-change-sys-panel-php` /
+  `h-add-web-php`, but these two siblings were missed — they would reject e.g.
+  PHP `10.0`.
 - MariaDB install aborted on Ubuntu 26.04 when the OS-repo version was chosen
   (#387): `mariadb.service` failed to start with "Table 'mysql.db' doesn't
   exist" — the system schema was never created. Ubuntu 26.04 is the only target
