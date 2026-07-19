@@ -92,14 +92,14 @@
       "path": "share/adminer/adminer.php",
       "upstream_repo": "https://github.com/vrana/adminer",
       "upstream_branch": "upstream/adminer",
-      "upstream_version": "5.4.4",
-      "source_url": "https://github.com/vrana/adminer/releases/download/v5.4.4/adminer-5.4.4-en.php",
-      "sha256": "86f5c0b857678f7bc2ac239ca42a13601c78eeca35a7592dff8dfa224f285e88",
+      "upstream_version": "5.5.0",
+      "source_url": "https://github.com/vrana/adminer/releases/download/v5.5.0/adminer-5.5.0-en.php",
+      "sha256": "efc66476330cd8059c1a37c83f583567a9559352692b9d5b410aaa9abb01ee8e",
       "license": "Apache-2.0 OR GPL-2.0",
       "license_file": "share/adminer/LICENSE-adminer.txt",
       "reason": "PostgreSQL web admin UI, offered as an addon (default-on when PostgreSQL is selected, #350). Vendored as the official pre-built single-file (EN, all drivers) rather than the OS `adminer` package: all four target distros ship CVE-affected versions (deb12/noble 4.8.1 with CVE-2023-45195/45196 + CVE-2025-43960; even 5.4.1 on 26.04 carries CVE-2026-25892, fixed only in 5.4.2) and there is no prebuilt pgsql-only asset. phpMyAdmin stays the MySQL default; the full build can also reach MySQL but is positioned as the Postgres UI. Canonical source is vrana/adminer (5.x) — NOT AdminerEvo (repo closed/dead) or AdminNeo (sidebranch).",
       "transitive_deps": [],
-      "last_verified": "2026-07-13"
+      "last_verified": "2026-07-19"
     },
     {
       "name": "adminer-login-servers",
@@ -107,14 +107,14 @@
       "path": "share/adminer/plugins/login-servers.php",
       "upstream_repo": "https://github.com/vrana/adminer",
       "upstream_branch": "upstream/adminer",
-      "upstream_version": "5.4.4",
-      "source_url": "https://raw.githubusercontent.com/vrana/adminer/v5.4.4/plugins/login-servers.php",
+      "upstream_version": "5.5.0",
+      "source_url": "https://raw.githubusercontent.com/vrana/adminer/v5.5.0/plugins/login-servers.php",
       "sha256": "aca5d179020df33419a6ac29b1c280229b6f966f1a9478798d32f22c8c027e36",
       "license": "Apache-2.0 OR GPL-2.0",
       "license_file": "share/adminer/LICENSE-adminer.txt",
       "reason": "Adminer login-servers plugin, deployed alongside adminer.php by h-add-sys-adminer as adminer-plugins/login-servers.php. Restricts the login form's Server field to a fixed localhost dropdown so the panel Adminer cannot be pointed at an arbitrary remote host (SSRF hardening, #350/#356). Same upstream repo/version as the adminer single-file. The instantiation/config (share/adminer/adminer-plugins.php, localhost-only server list) is HestiaRE eigenbau, not vendored.",
       "transitive_deps": [],
-      "last_verified": "2026-07-14"
+      "last_verified": "2026-07-19"
     }
   ],
 
