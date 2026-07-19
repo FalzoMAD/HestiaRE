@@ -290,6 +290,10 @@ configure_apache2() {
 	a2dismod -q mpm_prefork > /dev/null 2>&1 || true
 	a2enmod -q mpm_event > /dev/null 2>&1 || true
 	a2enmod -q proxy_fcgi setenvif > /dev/null 2>&1 || true
+	# proxy_http: apache-only webmail vhosts reverse-proxy to the Panel-Caddy
+	# webmail listeners (127.0.0.1:8090/8091) — mod_proxy comes with proxy_fcgi,
+	# but the http backend needs proxy_http explicitly (#205).
+	a2enmod -q proxy_http > /dev/null 2>&1 || true
 	cp -f "$HESTIA/share/apache2/hestia-event.conf" /etc/apache2/conf.d/
 
 	# No distro default site, no global Listen ports

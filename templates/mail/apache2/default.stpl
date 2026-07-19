@@ -1,55 +1,37 @@
 <VirtualHost %ip%:%web_ssl_port%>
     ServerName %domain_idn%
-    ServerAlias %alias%
-    Alias / /var/lib/roundcube/public_html/
-    Alias /error/ %home%/%user%/web/%root_domain%/document_errors/
-    #SuexecUserGroup %user% %group%
+    ServerAlias %alias_idn%
 
     SSLEngine on
     SSLVerifyClient none
     SSLCertificateFile         %home%/%user%/conf/mail/%root_domain%/ssl/%root_domain%.crt
     SSLCertificateKeyFile      %home%/%user%/conf/mail/%root_domain%/ssl/%root_domain%.key
 
-    <Directory "/usr/share/tinymce/www/">
-        Options Indexes MultiViews FollowSymLinks
-        AllowOverride None
-        Order allow,deny
-        allow from all
-    </Directory>
-
-    <Directory /var/lib/roundcube/public_html/>
-        Options +FollowSymLinks
-        # This is needed to parse /var/lib/roundcube/.htaccess. See its
-        # content before setting AllowOverride to None.
-        AllowOverride All
-        order allow,deny
-        allow from all
-    </Directory>
-
-    # Protecting basic directories:
+    # LE http-01: serve the challenge from disk, never proxy it. The apache-only
+    # branch of h-add-letsencrypt-domain writes the token to
+    # /var/lib/roundcube/.well-known/acme-challenge/.
+    ProxyPass /.well-known/acme-challenge/ !
+    Alias /.well-known/acme-challenge/ /var/lib/roundcube/.well-known/acme-challenge/
+    # The roundcube docroot ships a .htaccess with directives disallowed in this
+    # context; without AllowOverride None Apache aborts the local challenge serve
+    # and falls through to the proxy (verified live). We only serve the token here.
     <Directory /var/lib/roundcube>
-        Options -FollowSymLinks
         AllowOverride None
+    </Directory>
+    <Directory /var/lib/roundcube/.well-known/acme-challenge/>
+        Require all granted
     </Directory>
 
-    <Directory /var/lib/roundcube/config>
-        Options -FollowSymLinks
-        AllowOverride None
-    </Directory>
-
-    <Directory /var/lib/roundcube/temp>
-        Options -FollowSymLinks
-        AllowOverride None
-        Order allow,deny
-        Deny from all
-    </Directory>
-
-    <Directory /var/lib/roundcube/logs>
-        Options -FollowSymLinks
-        AllowOverride None
-        Order allow,deny
-        Deny from all
-    </Directory>
+    # Roundcube is rendered by the Panel-Caddy listener on 127.0.0.1:8090
+    # (share/panel-caddy/webmail-roundcube.conf). apache terminates TLS here and
+    # reverse-proxies plain http to the loopback listener — no local docroot, so
+    # the caddy-owned /var/lib/roundcube is never served by apache/www-data
+    # (#205). Needs mod_proxy_http (enabled at install). With nginx in front this
+    # vhost is inert; it is the public entrypoint only in the apache-only profile.
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:8090/ retry=0
+    ProxyPassReverse / http://127.0.0.1:8090/
+    RequestHeader set X-Forwarded-Proto "https"
 
     IncludeOptional %home%/%user%/conf/mail/%root_domain%/%web_system%.ssl.conf_*
 
