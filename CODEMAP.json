@@ -17,6 +17,20 @@
     "note": "install_root is intentionally identical to HestiaCP — only instance_config changed (/etc/hestiacp → /etc/hestia). See PATHS.md for full reference."
   },
 
+  "upstream_provenance": {
+    "purpose": "Maps HestiaRE files back to their HestiaCP origin so an upstream advisory or bugfix can be diffed/cherry-picked against the right file. Fork point: HestiaCP 1.9.6, kept read-only in the upstream/hestiacp branch. Each component carries an `upstream_ref` using these tags.",
+    "tags": {
+      "verbatim": "byte-identical to upstream (rare)",
+      "near-verbatim": "upstream file, renamed and/or path-migrated (v-*→h-*, /etc/hestiacp→/etc/hestia) but logic intact — cherry-pick candidate for isolated bugfixes",
+      "reimplemented": "clean HestiaRE reimplementation that diverges from upstream — do NOT cherry-pick, port by hand; the v-* symlink is usually removed (symlink_policy.escalation_rule)",
+      "moved": "upstream file relocated in-tree (mainly install/deb/* and install/common/* → share/*, #119) but otherwise near-verbatim",
+      "removed": "upstream component deleted from HestiaRE (bind9/DNS #58/#283, web terminal #59, REST API #146, SpamAssassin #284, software installer #56)",
+      "hestiare-native": "no upstream equivalent — HestiaRE-only (Caddy + hestia-php panel services, the pure-bash installer, panel Eigenbau libs, repo tooling)"
+    },
+    "cherry_pick_rule": "Direct cherry-pick ONLY for verbatim/near-verbatim files carrying an isolated, dependency-free bugfix (CLAUDE.md). reimplemented/moved/native = port manually. Always verify installed==fixed against the actual file, never the version label (#386 method).",
+    "verification_note": "The #386 triage is a worked example: near-verbatim files (func/db.sh) took a direct helper cherry-pick; reimplemented ones (func/main.sh parse_object_kv_list, the search-object commands) were confirmed safe/ported by hand, not cherry-picked."
+  },
+
   "components": {
 
     "cli_commands": {
@@ -58,6 +72,20 @@
         "letsencrypt": { "count": 8, "pattern": "bin/h-*-letsencrypt*" },
         "other": { "count": 17, "pattern": "bin/h-{acknowledge,add-domain,add-fastcgi-cache,...}" }
       },
+      "upstream_ref": {
+        "rule": "bin/h-* ← bin/v-* (rename #22/#23; v-* kept as compat symlinks). Default provenance near-verbatim (renamed + /etc/hestiacp→/etc/hestia). Listed key_files:",
+        "bin/h-add-user": "bin/v-add-user (near-verbatim)",
+        "bin/h-delete-user": "bin/v-delete-user (near-verbatim)",
+        "bin/h-add-web-domain": "bin/v-add-web-domain (near-verbatim)",
+        "bin/h-delete-web-domain": "bin/v-delete-web-domain (near-verbatim)",
+        "bin/h-add-mail-domain": "bin/v-add-mail-domain (near-verbatim)",
+        "bin/h-add-database": "bin/v-add-database (near-verbatim; SQL-escapes the password via func/db.sh, #386)",
+        "bin/h-backup-user": "bin/v-backup-user (near-verbatim)",
+        "bin/h-add-firewall-rule": "bin/v-add-firewall-rule (near-verbatim)",
+        "bin/h-update-sys-queue": "bin/v-update-sys-queue (near-verbatim; GHSA-47mf sink — see #393)",
+        "reimplemented (v-* symlink removed)": "DB-engine lifecycle h-add/remove-sys-{mariadb,postgresql} + h-upgrade-sys-mariadb (#121/#207); h-add/remove-sys-{roundcube,snappymail} (#54/#234); h-search-user-object + h-search-object (#386 cr7q)",
+        "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/remove-sys-adminer, h-add/remove-sys-{rspamd,sieve,redis}, hestia-php*, h-change-sys-panel-php"
+      },
       "dependencies": ["func_libraries", "instance_config"],
       "upstream_debt": {
         "file_count": 512,
@@ -92,6 +120,17 @@
         "backup.sh": "Local, FTP, and Restic backup/restore handlers with retention logic",
         "ip.sh": "IP address validation, RDNS checking, IPv4/IPv6 utilities",
         "firewall.sh": "iptables symlink healing helper"
+      },
+      "upstream_ref": {
+        "func/main.sh": "func/main.sh (near-verbatim; parse_object_kv_list reimplemented — PHP tokenizer replacing the upstream double-eval, GHSA-w3mx #386)",
+        "func/domain.sh": "func/domain.sh (near-verbatim)",
+        "func/rebuild.sh": "func/rebuild.sh (near-verbatim)",
+        "func/syshealth.sh": "func/syshealth.sh (near-verbatim)",
+        "func/db.sh": "func/db.sh (near-verbatim; mysql_sql_escape/sql_escape cherry-picked from 1.9.7, GHSA-8w7m #386)",
+        "func/backup.sh": "func/backup.sh (near-verbatim)",
+        "func/ip.sh": "func/ip.sh (near-verbatim)",
+        "func/firewall.sh": "func/firewall.sh (near-verbatim)",
+        "func/wizard.sh + func/helper.sh": "hestiare-native (bash installer, no upstream — see make_release)"
       },
       "dependencies": ["instance_config"],
       "upstream_debt": {
@@ -168,6 +207,18 @@
       "pma_sso": {
         "description": "phpMyAdmin SSO without REST API (#145): web/sso/phpmyadmin/ runs h-add-database-sso-token via panel sudo (temp DB user + one-time handoff file /run/hestia-sso/<token>, root:caddy 0730/640); share/phpmyadmin/hestia-sso.php (PMA pool, unprivileged) consumes the token and opens the signon session. Enable/disable: h-add-sys-pma-sso / h-delete-sys-pma-sso; PHPMYADMIN_KEY is only the enabled flag."
       },
+      "upstream_ref": {
+        "rule": "web/* ← web/* (near-verbatim + rebrand); the panel is inherited. Notable divergences:",
+        "web/index.php": "web/index.php (near-verbatim)",
+        "web/inc/main.php": "web/inc/main.php (near-verbatim + rebrand)",
+        "web/inc/helpers.php": "web/inc/helpers.php (near-verbatim; get_real_user_ip trusts CF-Connecting-IP only behind CF ranges, GHSA-73p3)",
+        "web/inc/{prevent_csrf,secure_login,i18n,policies,mail-wrapper}.php": "web/inc/* (near-verbatim; mail-wrapper shebang #25)",
+        "web/inc/2fa/": "reimplemented — Eigenbau web/inc/lib/{totp,qrcode}.php, robthree removed (#56)",
+        "web/inc/lib/quoteshellarg.php": "third-party vendored (hestiacp/phpquoteshellarg, VENDORED.json)",
+        "web/inc/cloudflare-ip.php": "hestiare-native (Eigenbau CIDR list, #248)",
+        "web/edit/server/hestia/index.php": "web/edit/server/hestiaweb/index.php (near-verbatim; hestiaweb→hestia #214; GHSA-fcq6 admin gate fixed #386)",
+        "removed": "web terminal (list_terminal, #59), DNS pages (edit_dns, #58/#283), webapp/quick-install (list_webapps/setup_webapp, #56)"
+      },
       "dependencies": ["cli_commands", "func_libraries"],
       "upstream_debt": {
         "file_count": 9,
@@ -186,6 +237,7 @@
       "themes": "Shipped: web/css/src/themes/*.css — light is the base stylesheet (css.php always loads it), overlays: dark, dark-tonal (@import dark.css + tonal green icon ladder, #260/#269), light-flat, light-green (dark green primary via brand-token redefinition, #269). Renames #269: default→light, flat→light-flat; vestia removed #259 — THEME migration + stale-file cleanup in func/helper.sh migrate_data_layout. Brand tokens --brand-* (green/anthracite, #259) in light.css :root, dark.css overrides greens brighter. Custom: web/css/src/themes/custom/*.css (instance data, gitignored). Listed by bin/h-list-sys-themes via HESTIA_THEMES/HESTIA_THEMES_CUSTOM (func/main.sh).",
       "vendored": "web/js/vendor/ (Alpine.js + collapse), web/css/vendor/ (normalize.css, Font Awesome Free solid-only). Manifest: VENDORED.json; snapshot branches: upstream/alpinejs, upstream/normalize-css, upstream/fontawesome. Updater: share/upstream/update-web-vendor.sh (--check read-only version report vs VENDORED.json; --fetch <asset>[@version] rebuilds one snapshot branch, publisher-hash-verified); hooked into share/upstream/sync-upstream.sh (author's sync instance).",
       "eigenbau": ["web/js/src/lib/randomString.js", "web/js/src/lib/passwordStrength.js", ".u-swing in web/css/src/utilities.css"],
+      "upstream_ref": "reimplemented/native: the Node/npm build step was removed (#248), so web/js/src + web/css/src are HestiaRE-native (native ES modules / native CSS, not upstream's built assets). web/{js,css}/vendor/ are upstream third-party (Alpine.js, normalize.css, Font Awesome Free) tracked in VENDORED.json + upstream/{alpinejs,normalize-css,fontawesome} snapshot branches — NOT from hestiacp; refresh via share/upstream/update-web-vendor.sh.",
       "dependencies": ["web_panel", "panel_caddy_service"]
     },
 
@@ -231,6 +283,20 @@
         "apache2": "templates/web/apache2/",
         "php_fpm": "templates/web/php-fpm/"
       },
+      "upstream_ref": {
+        "share/nginx/": "install/deb/nginx/ (moved #119)",
+        "share/apache2/": "install/deb/apache2/ (moved #119)",
+        "share/exim/": "install/deb/exim/ (moved #299; single untainted 4.95+ template)",
+        "share/mysql/": "install/deb/mysql/ (moved #119)",
+        "share/roundcube/": "install/common/roundcube/ (moved #119/#234)",
+        "share/snappymail/": "install/common/snappymail/ (moved #119)",
+        "share/sudo/hestia": "install/common/sudo/ (moved #119/#363)",
+        "share/dovecot/{2.3,2.4}/": "install/deb/dovecot/ (reimplemented; version-split, 2.4 for deb13/ub26)",
+        "install/deb/{php-fpm,fail2ban}/": "install/deb/* (in place, near-verbatim)",
+        "templates/web/, templates/mail/": "install/deb/templates/{web,mail}/ (near-verbatim; mail templates reworked to Panel-Caddy proxies #205)",
+        "packages/*.pkg": "install/deb/packages/ (moved, near-verbatim)",
+        "share/panel-caddy/, share/panel-php/, share/dovecot/": "hestiare-native (see panel_caddy_service / panel_php_service)"
+      },
       "dependencies": ["func_libraries", "make_release"],
       "upstream_debt": {
         "file_count": 0,
@@ -268,6 +334,7 @@
       ],
       "required_packages": ["caddy"],
       "note": "Installer integration completed in Issue #26a.",
+      "upstream_ref": "hestiare-native — replaces the compiled hestia-nginx package; no upstream equivalent (#24). Roundcube panel route + internal webmail listeners are HestiaRE-only (#205).",
       "dependencies": ["panel_php_service"],
       "upstream_debt": {
         "file_count": 0,
@@ -314,6 +381,7 @@
         "php8.3-opcache"
       ],
       "note": "gettext included in php8.3-common (auto dep of php8.3-fpm). Installer integration completed in Issue #26a.",
+      "upstream_ref": "hestiare-native — replaces the compiled hestia-php package with an isolated Sury FPM pool; no upstream equivalent (#25/#272).",
       "dependencies": [],
       "upstream_debt": {
         "file_count": 0,
@@ -367,6 +435,7 @@
         "gitea": "Configurable via /etc/hestia/source.conf"
       },
       "install_conf": "/etc/hestia/install.conf — written by func/wizard.sh; HESTIA_* params + COMPONENT_* selections; sourced by h-install-hestia; COMPONENT_* to be updated by h-add-*/h-remove-* (issue #103)",
+      "upstream_ref": "hestiare-native — the whole installer (install.sh, func/wizard.sh, bin/h-install-hestia, func/helper.sh) was rebuilt from scratch (Makefile→just→bash, #106/#112/#114); upstream's install/hst-install-*.sh were removed (#26). No cherry-pick path.",
       "dependencies": ["installer"],
       "upstream_debt": {
         "file_count": 0,
@@ -382,6 +451,7 @@
       "language": "curl/bash",
       "api_base": "https://git.hestiare.com/api/v1/repos/Admin/hestiare",
       "pr_target_branch": "dev",
+      "upstream_ref": "hestiare-native (Gitea workflow tooling + CLAUDE.md; no upstream).",
       "dependencies": [],
       "upstream_debt": {
         "file_count": 0,
