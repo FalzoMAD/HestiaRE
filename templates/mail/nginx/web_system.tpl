@@ -1,39 +1,30 @@
 server {
 	listen      %ip%:%web_port%;
 	server_name %domain_idn% %alias_idn%;
-	root        /var/lib/roundcube/public_html;
-	index       index.php index.html index.htm;
 	access_log  /var/log/nginx/domains/%domain%.log combined;
 	error_log   /var/log/nginx/domains/%domain%.error.log error;
 
 	include %home%/%user%/conf/mail/%root_domain%/nginx.forcessl.conf*;
 
+	# Deny dotfiles, but let ACME http-01 challenges (.well-known/…) through.
 	location ~ /\.(?!well-known\/) {
 		deny all;
 		return 404;
 	}
 
-	location ~ ^/(README.md|config|temp|logs|bin|SQL|INSTALL|LICENSE|CHANGELOG|UPGRADING)$ {
-		deny all;
-		return 404;
-	}
-
+	# Roundcube is rendered by the Panel-Caddy listener on 127.0.0.1:8090
+	# (share/panel-caddy/webmail-roundcube.conf). nginx-only case: this vhost is
+	# the public listener and reverse-proxies to it — no local docroot, so the
+	# caddy-owned /var/lib/roundcube is never served by nginx/www-data (#205).
 	location / {
-		try_files $uri $uri/ =404;
-
-		location ~ ^(.+\.php)(.*)$ {
-			include /etc/nginx/fastcgi_params;
-			fastcgi_split_path_info       ^(.+\.php)(.*)$;
-			fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    			fastcgi_param PATH_INFO       $fastcgi_path_info;
-			fastcgi_index index.php;
-			fastcgi_pass unix:/run/php/www.sock;
-		}
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_pass http://127.0.0.1:8090;
 	}
 
-	location /error/ {
-		alias /var/www/document_errors/;
-	}
-
+	# LE http-01: conf/mail/<domain>/nginx.conf_letsencrypt injects a
+	# `location ~ acme-challenge { return 200 … }` that outranks location / above.
 	include %home%/%user%/conf/mail/%root_domain%/%web_system%.conf_*;
 }

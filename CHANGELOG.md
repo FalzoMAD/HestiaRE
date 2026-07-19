@@ -11,6 +11,23 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- Per-domain `webmail.<domain>` vhosts now **reverse-proxy** to the Panel-Caddy
+  webmail listeners instead of serving the webmail docroot themselves (#205,
+  part 2 — customer side). The mail-domain templates (`templates/mail/nginx/`
+  and `templates/mail/apache2/`, both `.tpl`/`.stpl`) lost their
+  `/var/lib/{roundcube,snappymail}` docroot and now `proxy_pass` /`ProxyPass`
+  to `127.0.0.1:8090` (Roundcube) / `:8091` (SnappyMail). Consequences: the
+  caddy-owned webmail data dirs are never touched by nginx/apache/`www-data`
+  (the root cause of the old SnappyMail "Permission denied!"), and there is one
+  renderer instead of one-per-domain. Let's Encrypt is unchanged — the
+  `webmail.`/`mail.` SANs stay on the customer vhost; the http-01 challenge is
+  served locally (nginx: the inline `return 200` `nginx.conf_letsencrypt`
+  include, still pulled in; apache-only: a `.well-known/acme-challenge/` alias +
+  `ProxyPass … !` exclusion so the token file is served from disk, not proxied).
+  The apache-only special case is supported: `mod_proxy_http` is now enabled at
+  install so an apache-only public vhost can proxy to the caddy listener. The
+  "webmail disabled" fallback templates are untouched (they still point at the
+  customer's own site, not the panel).
 - Webmail now renders through the Panel-Caddy instead of the customer web stack
   (#205, part 1 — panel side). Roundcube and SnappyMail each get a dedicated
   caddy FPM pool (`share/panel-php/pool.d/{roundcube,snappymail}.conf`, user
