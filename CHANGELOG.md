@@ -36,6 +36,20 @@ section as part of its PR. On release, the section gets the version number.
   full Roundcube IMAP login (302 → mailbox) succeeds through the subdomain, the
   SnappyMail app renders with no "Permission denied", and the apache-only
   `.well-known` split serves the token locally while the app stays proxied.
+- Roundcube is reachable on the panel URL at `:8083/webmail` (#205, part 1b —
+  panel route), for admin access without a customer domain — the phpMyAdmin/
+  Adminer model: a `handle_path /webmail/*` route (`share/panel-caddy/apps/
+  webmail.tpl`, deployed to `/etc/caddy/apps/webmail.conf` by `h-add-sys-roundcube`,
+  removed by `h-remove-sys-roundcube`) sharing the Roundcube FPM pool from part 1.
+  One pool, two Caddy frontends — the panel route and the prefix-less internal
+  listener the `webmail.<domain>` vhosts proxy to. **Roundcube-only on purpose:**
+  `handle_path` strips the prefix and Roundcube emits relative asset URLs +
+  detects its sub-path base, so it runs cleanly under `/webmail/`; SnappyMail is
+  a root-mounted app (assets hard-wired to `/snappymail/…` with no prefix) and
+  cannot live under a sub-path, so it stays reachable only via `webmail.<domain>`
+  (where it is root-mounted and works). Verified live on deb13: `:8083/webmail/`
+  renders, assets load, and a full real IMAP login (302 → mailbox) succeeds
+  through the panel path; no interference with the panel root or `/phpmyadmin`.
 - Webmail now renders through the Panel-Caddy instead of the customer web stack
   (#205, part 1 — panel side). Roundcube and SnappyMail each get a dedicated
   caddy FPM pool (`share/panel-php/pool.d/{roundcube,snappymail}.conf`, user
