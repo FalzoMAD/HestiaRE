@@ -868,7 +868,9 @@ sync_cron_jobs() {
 		echo 'MAILTO=""' > $crontab
 	fi
 
-	while read line; do
+	# read -r: do not let a backslash in a stored CMD field be consumed as a
+	# line-continuation/escape while assembling the crontab (GHSA-5fpv hardening).
+	while read -r line; do
 		parse_object_kv_list "$line"
 		if [ "$SUSPENDED" = 'no' ]; then
 			echo "$MIN $HOUR $DAY $MONTH $WDAY $CMD" \
@@ -1184,6 +1186,10 @@ is_cron_command_valid_format() {
 	if [[ ! "$1" =~ ^[^\`]*?$ ]]; then
 		check_result "$E_INVALID" "Invalid cron command format"
 	fi
+	# A crontab CMD field is a single line — reject embedded newlines so a value
+	# cannot inject an extra crontab entry (GHSA-5fpv). Semicolons are allowed:
+	# they are legitimate in cron commands (multiple commands on one line).
+	is_no_new_line_format "$1"
 }
 # Database format validator
 is_database_format_valid() {
