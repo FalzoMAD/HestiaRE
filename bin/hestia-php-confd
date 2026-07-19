@@ -43,7 +43,6 @@ fi
 #       opcache          performance (Zend)
 #       curl gmp zip     panel-stage set
 #       ftp              FTP account management
-#       dom              DOMDocument (from php-xml)
 #
 # CLI (bin/hestia-php, verified against its consumers): the in-tree callers —
 # func/main.sh validators (filter_var, kv-parser), the 2FA TOTP/QR helpers,
@@ -58,7 +57,7 @@ fi
 # apcu, pspell, … (customer-app extensions). intl/exif moved into the webmail
 # set below once the panel FPM started serving Roundcube/SnappyMail (#205).
 fpm_critical="mysqlnd pdo mysqli pdo_mysql mbstring gettext"
-fpm_optional="opcache curl gmp zip ftp dom"
+fpm_optional="opcache curl gmp zip ftp"
 # App tools served by the SAME hestia FPM master (phpMyAdmin, Adminer): their
 # pools live under this master and share this conf.d, so the tools' extensions
 # must be curated here too. Without them the bundled DB web UIs die with runtime
