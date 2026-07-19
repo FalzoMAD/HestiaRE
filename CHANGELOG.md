@@ -9,6 +9,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Changed
+
+- Vendored **Adminer bumped 5.4.4 → 5.5.0** (`share/adminer/adminer.php`,
+  VENDORED.json). Adminer is vendored (not the OS package) specifically because
+  every target distro ships a CVE-affected version (#350); keeping the vendored
+  build current is part of that rationale. Fetched via
+  `share/upstream/update-web-vendor.sh --fetch adminer@5.5.0` (GitHub release
+  digest verified, `php -l` clean); `upstream/adminer` snapshot branch updated.
+  The `login-servers` SSRF-hardening plugin (#356) is re-pinned to the same
+  v5.5.0 tag — its file is byte-identical across the two releases (pin only).
+
 ### Fixed
 
 - MariaDB install aborted on Ubuntu 26.04 when the OS-repo version was chosen
