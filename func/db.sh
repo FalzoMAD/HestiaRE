@@ -91,6 +91,22 @@ mysql_connect() {
 	rm -f $mysql_out
 }
 
+# Escape a value for safe use inside a MariaDB/MySQL single-quoted SQL string
+# literal (GHSA-8w7m). MariaDB/MySQL treat backslash as an escape character by
+# default, so both backslashes and single quotes must be escaped; backslashes
+# are doubled first so the backslashes introduced by the quote-escaping are not
+# doubled again.
+mysql_sql_escape() {
+	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e "s/'/''/g"
+}
+
+# Escape a value for safe use inside a PostgreSQL single-quoted SQL string
+# literal. PostgreSQL uses standard-conforming strings by default, so a
+# backslash is NOT an escape character and must not be doubled here.
+sql_escape() {
+	printf '%s' "$1" | sed "s/'/''/g"
+}
+
 mysql_query() {
 	sql_tmp=$(mktemp)
 	echo "$1" > $sql_tmp
@@ -276,13 +292,15 @@ add_mysql_database() {
 	mysql_query "$query"
 	check_result $? "Unable to create database $database"
 
+	dbpass_esc=$(mysql_sql_escape "$dbpass")
+
 	if [ "$mysql_fork" = "mysql" ] && [ "$mysql_ver_sub" -ge 8 ]; then
 		query="CREATE USER \`$dbuser\`@\`%\`
-            IDENTIFIED BY '$dbpass'"
+            IDENTIFIED BY '$dbpass_esc'"
 		mysql_query "$query" > /dev/null
 
 		query="CREATE USER \`$dbuser\`@localhost
-            IDENTIFIED BY '$dbpass'"
+            IDENTIFIED BY '$dbpass_esc'"
 		mysql_query "$query" > /dev/null
 
 		query="GRANT ALL ON \`$database\`.* TO \`$dbuser\`@\`%\`"
@@ -292,11 +310,11 @@ add_mysql_database() {
 		mysql_query "$query" > /dev/null
 	else
 		query="GRANT ALL ON \`$database\`.* TO \`$dbuser\`@\`%\`
-            IDENTIFIED BY '$dbpass'"
+            IDENTIFIED BY '$dbpass_esc'"
 		mysql_query "$query" > /dev/null
 
 		query="GRANT ALL ON \`$database\`.* TO \`$dbuser\`@localhost
-            IDENTIFIED BY '$dbpass'"
+            IDENTIFIED BY '$dbpass_esc'"
 		mysql_query "$query" > /dev/null
 	fi
 
@@ -337,7 +355,8 @@ add_mysql_database() {
 add_pgsql_database() {
 	psql_connect $host
 
-	query="CREATE ROLE $dbuser WITH LOGIN PASSWORD '$dbpass'"
+	dbpass_esc=$(sql_escape "$dbpass")
+	query="CREATE ROLE $dbuser WITH LOGIN PASSWORD '$dbpass_esc'"
 	psql_query "$query" > /dev/null
 
 	query="CREATE DATABASE $database OWNER $dbuser"
@@ -364,16 +383,18 @@ add_mysql_database_temp_user() {
 	mysql_ver_sub=$(echo $mysql_ver | cut -d '.' -f1)
 	mysql_ver_sub_sub=$(echo $mysql_ver | cut -d '.' -f2)
 
+	dbpass_esc=$(mysql_sql_escape "$dbpass")
+
 	if [ "$mysql_fork" = "mysql" ] && [ "$mysql_ver_sub" -ge 8 ]; then
 		query="CREATE USER \`$dbuser\`@localhost
-			IDENTIFIED BY '$dbpass'"
+			IDENTIFIED BY '$dbpass_esc'"
 		mysql_query "$query" > /dev/null
 
 		query="GRANT ALL ON \`$database\`.* TO \`$dbuser\`@localhost"
 		mysql_query "$query" > /dev/null
 	else
 		query="GRANT ALL ON \`$database\`.* TO \`$dbuser\`@localhost
-    		IDENTIFIED BY '$dbpass'"
+    		IDENTIFIED BY '$dbpass_esc'"
 		mysql_query "$query" > /dev/null
 	fi
 }
@@ -410,32 +431,34 @@ change_mysql_password() {
 	mysql_ver_sub=$(echo $mysql_ver | cut -d '.' -f1)
 	mysql_ver_sub_sub=$(echo $mysql_ver | cut -d '.' -f2)
 
+	dbpass_esc=$(mysql_sql_escape "$dbpass")
+
 	if [ "$mysql_fork" = "mysql" ]; then
 		# mysql
 		if [ "$mysql_ver_sub" -ge 8 ]; then
 			# mysql >= 8
-			query="SET PASSWORD FOR \`$DBUSER\`@\`%\` = '$dbpass'"
+			query="SET PASSWORD FOR \`$DBUSER\`@\`%\` = '$dbpass_esc'"
 			mysql_query "$query" > /dev/null
-			query="SET PASSWORD FOR \`$DBUSER\`@localhost = '$dbpass'"
+			query="SET PASSWORD FOR \`$DBUSER\`@localhost = '$dbpass_esc'"
 			mysql_query "$query" > /dev/null
 		else
 			# mysql < 8
 			query="GRANT ALL ON \`$database\`.* TO \`$DBUSER\`@\`%\`
-                  IDENTIFIED BY '$dbpass'"
+                  IDENTIFIED BY '$dbpass_esc'"
 			mysql_query "$query" > /dev/null
 
 			query="GRANT ALL ON \`$database\`.* TO \`$DBUSER\`@localhost
-                  IDENTIFIED BY '$dbpass'"
+                  IDENTIFIED BY '$dbpass_esc'"
 			mysql_query "$query" > /dev/null
 		fi
 	else
 		# mariadb
 		query="GRANT ALL ON \`$database\`.* TO \`$DBUSER\`@\`%\`
-              IDENTIFIED BY '$dbpass'"
+              IDENTIFIED BY '$dbpass_esc'"
 		mysql_query "$query" > /dev/null
 
 		query="GRANT ALL ON \`$database\`.* TO \`$DBUSER\`@localhost
-              IDENTIFIED BY '$dbpass'"
+              IDENTIFIED BY '$dbpass_esc'"
 		mysql_query "$query" > /dev/null
 	fi
 
@@ -475,7 +498,8 @@ change_mysql_password() {
 # Change PostgreSQL database password
 change_pgsql_password() {
 	psql_connect $HOST
-	query="ALTER ROLE $DBUSER WITH LOGIN PASSWORD '$dbpass'"
+	dbpass_esc=$(sql_escape "$dbpass")
+	query="ALTER ROLE $DBUSER WITH LOGIN PASSWORD '$dbpass_esc'"
 	psql_query "$query" > /dev/null
 
 	query="SELECT rolpassword FROM pg_authid WHERE rolname='$DBUSER'"
