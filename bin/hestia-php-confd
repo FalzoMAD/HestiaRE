@@ -54,8 +54,9 @@ fi
 # of composer's bundled polyfills), plus curl/zip to speed up downloads and
 # archive extraction. No DB chain, no gettext — no CLI consumer uses them.
 #
-# Deliberately excluded from the panel set: imagick, imap, ldap, soap, intl,
-# bcmath, apcu, exif, pspell, … (customer-app extensions).
+# Deliberately excluded from the panel set: imagick, imap, ldap, soap, bcmath,
+# apcu, pspell, … (customer-app extensions). intl/exif moved into the webmail
+# set below once the panel FPM started serving Roundcube/SnappyMail (#205).
 fpm_critical="mysqlnd pdo mysqli pdo_mysql mbstring gettext"
 fpm_optional="opcache curl gmp zip ftp dom"
 # App tools served by the SAME hestia FPM master (phpMyAdmin, Adminer): their
@@ -71,6 +72,22 @@ fpm_optional="opcache curl gmp zip ftp dom"
 #  no symlink and is deliberately not listed.)
 fpm_apps_critical="ctype iconv fileinfo simplexml xmlwriter xmlreader"
 fpm_apps_optional="gd bz2 pgsql pdo_pgsql"
+# Webmail (Roundcube/SnappyMail) is served by the SAME hestia FPM master via the
+# internal loopback listeners on :8090/:8091 (#205), so its pools share this
+# conf.d and its extensions must be curated here too — same self-contained model
+# as the phpMyAdmin/Adminer set above.
+#   critical — intl: IDN handling (rcube_utils::idn_to_ascii ->
+#              INTL_IDNA_VARIANT_UTS46). Roundcube fatals on the very first login
+#              without it; SnappyMail needs it for internationalised addresses.
+#            phar: SnappyMail's change-password plugin scans its driver .phar
+#              files at bootstrap ("Class Phar not found" -> blank page). Ships
+#              with php-common (phar.ini in mods-available), so no apt line — it
+#              only needs the symlink the FPM set was missing.
+#   optional — exif: Roundcube image orientation for attachment previews.
+# php${VER}-intl is installed unconditionally in the panel stage (like pgsql for
+# Adminer), so webmail add/remove never has to touch the panel PHP config.
+fpm_webmail_critical="intl phar"
+fpm_webmail_optional="exif"
 cli_critical="mbstring ctype iconv phar"
 cli_optional="curl zip"
 
@@ -101,7 +118,7 @@ build_confd() {
 	done
 }
 
-build_confd /etc/php/hestia/fpm/conf.d "$fpm_critical $fpm_apps_critical" "$fpm_optional $fpm_apps_optional"
+build_confd /etc/php/hestia/fpm/conf.d "$fpm_critical $fpm_apps_critical $fpm_webmail_critical" "$fpm_optional $fpm_apps_optional $fpm_webmail_optional"
 build_confd /etc/php/hestia/cli/conf.d "$cli_critical" "$cli_optional"
 
 if [ -n "$missing_critical" ]; then

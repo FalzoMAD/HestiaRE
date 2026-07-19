@@ -170,6 +170,17 @@ chmod 750 /var/log/roundcube
 # tree (never deployed by anything) — wired up here (#234).
 cp -f "$HESTIA/share/roundcube/logrotate" /etc/logrotate.d/roundcube
 
+# Panel-Caddy delivery (#205): Roundcube renders in a dedicated caddy FPM pool
+# behind Caddy's internal loopback listener (127.0.0.1:8090); the per-domain
+# webmail.<domain> vhosts reverse-proxy to it. The temp dir must be writable by
+# the pool user (Debian ships it www-data-owned); the logs symlink already points
+# at /var/log/roundcube, chowned caddy:caddy above.
+chown caddy:caddy /var/lib/roundcube/temp 2> /dev/null || true
+cp -f "$HESTIA/share/panel-php/pool.d/roundcube.conf" /etc/php/hestia/fpm/pool.d/roundcube.conf
+systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+cp -f "$HESTIA/share/panel-caddy/webmail-roundcube.conf" /etc/caddy/webmail-roundcube.conf
+systemctl try-restart caddy > /dev/null 2>&1 || true
+
 # Update hestia.conf
 if [ -z "$(grep WEBMAIL_SYSTEM "$HESTIA/conf/hestia.conf")" ]; then
 	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' 'roundcube'

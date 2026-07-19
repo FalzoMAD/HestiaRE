@@ -63,6 +63,13 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
+# Panel-Caddy delivery teardown (#205): internal listener + FPM pool first, so
+# nothing serves from the dirs we are about to delete.
+rm -f /etc/caddy/webmail-snappymail.conf
+systemctl try-restart caddy > /dev/null 2>&1 || true
+rm -f /etc/php/hestia/fpm/pool.d/snappymail.conf
+systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+
 rm -f -r $SM_INSTALL_DIR
 rm -f -r $SM_CONFIG_DIR
 rm ~/.snappymail
