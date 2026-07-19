@@ -125,16 +125,33 @@ if [ "$UPDATE" == "no" ]; then
 	fi
 	# Temporarily set the permissions to www-data
 	chown -R www-data:www-data $SM_CONFIG_DIR/
-	php -f $HESTIA_COMMON_DIR/snappymail/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT"
+	php -f $HESTIA/share/snappymail/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT"
 
-	# Set the permissions back to caddy
+	# Set the permissions back to caddy (the FPM pool user). The data dir gets an
+	# explicit, deterministic 0750 instead of whatever the tarball/umask left —
+	# only the caddy pool ever enters it (nginx/apache proxy to Caddy now, W7/#205),
+	# so it stays caddy-private with no world access.
 	chown -R caddy:caddy $SM_CONFIG_DIR/
+	chmod -R 750 $SM_CONFIG_DIR/data
 
 	# Remove the downloaded file
 	rm ${SM_INSTALL_DIR}/${SM_FILE}
 	# Add robots.txt
 	echo "User-agent: *" > $SM_INSTALL_DIR/robots.txt
 	echo "Disallow: /" >> $SM_INSTALL_DIR/robots.txt
+
+	# Panel-Caddy delivery (#205): SnappyMail renders in a dedicated caddy FPM
+	# pool behind Caddy's internal loopback listener (127.0.0.1:8091); the
+	# per-domain webmail.<domain> vhosts reverse-proxy to it. This is what makes
+	# the caddy-owned data dir actually work (W7/#234: the old www-data pool
+	# could not enter it -> "Permission denied!").
+	mkdir -p $SM_INSTALL_DIR/tmp
+	chown caddy:caddy $SM_INSTALL_DIR/tmp
+	chmod 770 $SM_INSTALL_DIR/tmp
+	cp -f "$HESTIA/share/panel-php/pool.d/snappymail.conf" /etc/php/hestia/fpm/pool.d/snappymail.conf
+	systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+	cp -f "$HESTIA/share/panel-caddy/webmail-snappymail.conf" /etc/caddy/webmail-snappymail.conf
+	systemctl try-restart caddy > /dev/null 2>&1 || true
 
 	# Updating hestia.conf
 	if [ -z "$(grep WEBMAIL_SYSTEM $HESTIA/conf/hestia.conf)" ]; then

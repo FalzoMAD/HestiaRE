@@ -7,283 +7,277 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
-## Unreleased
+## v0.10.0 (2026-07-19)
+
+Covers everything since v0.9.0. The headline is platform reach: Ubuntu 24.04
+and 26.04 join Debian 12 and 13 as first-class targets.
+
+### Breaking / Upgrade notes
+
+- **Command renames** (hard cut, pre-1.0, no deprecation shims, no live
+  systems): `h-delete-sys-redis` → `h-remove-sys-redis`,
+  `h-delete-sys-roundcube` → `h-remove-sys-roundcube`,
+  `h-delete-sys-snappymail` → `h-remove-sys-snappymail`. The orphaned
+  `v-delete-sys-snappymail` symlink is gone with the old name; no new `v-*`
+  symlinks (#121, #234).
+- **`DB_SYSTEM` is now seeded empty** and composed from actually-registered
+  database hosts instead of hard-seeded to `mysql`. Registering the first host
+  of a type enables it; removing the last host drops the token. This is a
+  behaviour change on a contract parsed by ~466 consumers — audit anything that
+  reads `DB_SYSTEM` (mechanics under Changed) (#121).
+- **Webmail delivery re-architected** (#205): Roundcube/SnappyMail render
+  through the Panel-Caddy, and per-domain `webmail.<domain>` vhosts
+  reverse-proxy to it instead of serving a docroot. Fresh-install only, no
+  migration path — no live systems (details under Added).
+
+### Added
+
+- **Ubuntu 24.04 and 26.04 are now first-class targets, on par with Debian 12
+  and 13.** Every change is verified on all four from here on. Reaching parity
+  drove a round of installer/mail/sudo hardening specific to the Ubuntu 24/26 +
+  deb13 baseline — several release-blocking bugs surfaced only there (see the
+  `libzip` naming, dhparam ordering, sudo-rs, and dovecot 2.4 entries below).
+- Webmail is delivered through the **Panel-Caddy** instead of the customer web
+  stack (#205). Roundcube and SnappyMail each get a dedicated `caddy` FPM pool
+  (`share/panel-php/pool.d/`) behind an internal loopback listener
+  (`127.0.0.1:8090` / `:8091`) — the phpMyAdmin/Adminer model. Per-domain
+  `webmail.<domain>` vhosts **reverse-proxy** to those listeners (nginx, and the
+  apache-only case via `mod_proxy_http`), so the `caddy`-owned data dirs are
+  never touched by `www-data` — the root cause of the old SnappyMail "Permission
+  denied!" — and there is one renderer instead of one per domain. Roundcube is
+  additionally reachable on the panel URL at `:8083/webmail` (admin access
+  without a customer domain; Roundcube-only, since SnappyMail is a root-mounted
+  app that cannot live under a sub-path). Let's Encrypt is unchanged: the
+  `webmail.`/`mail.` SANs stay on the customer vhost and the http-01 challenge is
+  served locally (nginx inline `return 200`; apache-only `.well-known` alias +
+  `ProxyPass !` exclusion with `AllowOverride None` on the docroot). Verified
+  live on deb13 (Roundcube) and ub24 (SnappyMail): render, real IMAP login, and
+  the apache well-known split.
+- Adminer as the PostgreSQL web UI, an optional addon (#350):
+  `h-add-sys-adminer` / `h-remove-sys-adminer` serve a single sha256-pinned
+  vendored PHP file (`share/adminer/`) at `/adminer/` via a dedicated caddy FPM
+  pool — repo-vendored because every OS `adminer` package ships a CVE-affected
+  version. The wizard pre-selects it when PostgreSQL is chosen. phpMyAdmin/MySQL
+  is untouched.
+- PostgreSQL is a fully panel-integrated, removable component (#121):
+  `h-add-sys-postgresql` / `h-remove-sys-postgresql`. The add command installs
+  PostgreSQL (`postgresql-common` first, #353), sets a password on the
+  `postgres` superuser for loopback TCP login, and registers the local host so
+  the panel can create/manage PostgreSQL databases and users. Readiness via
+  `pg_isready` (not the oneshot `systemctl` umbrella, which reports active even
+  when the cluster is down). Remove refuses while customer databases exist and
+  keeps the datadir by default (`PURGE_DATA=yes` to drop); credentials live in
+  `conf/pgsql.conf`, never install.conf.
+- MariaDB is a standalone, removable component (#121):
+  `h-add-sys-mariadb [VERSION]` / `h-remove-sys-mariadb`, owning the full
+  lifecycle (repo/keyring dispatch — `12.3|11.8|11.4` = MariaDB.org, else the OS
+  package; RAM-tiered my.cnf; root unix_socket hardening; host registration;
+  implicit phpMyAdmin). `install_db` is now a thin orchestrator that checks exit
+  codes instead of inlining the logic, so a failed DB install no longer reports
+  "installed" (the #272 class).
+- In-place MariaDB version switching: `h-upgrade-sys-mariadb [TARGET]` (#207).
+  Forced full logical dump as a hard precondition (kept in `/root`, 0600), repo
+  switch, package upgrade, `mariadb-upgrade`, post-check, version recorded.
+  **Downgrades are refused** (MariaDB cannot open a newer-format datadir). With
+  no argument it lists the curated targets with the version each would actually
+  deliver on this system and its reachability, so a specific version can be
+  targeted deliberately.
+- Fully unattended install via `-a`/`--auto` (#198):
+  `bash install.sh <preset> -a` runs with no prompts (FQDN hostname, port 8083,
+  admin `admin`, generated + printed password), enabling scripted test-VM
+  (re)provisioning. Preset-only stays interactive for the four identity
+  questions.
 
 ### Changed
 
-- Web server + phpMyAdmin-SSO config assets moved from the legacy `install/deb/`
-  tree to `share/` (#119): `install/deb/apache2/` → `share/apache2/`,
-  `install/deb/nginx/` → `share/nginx/` (joining the `apps/` snippets already
-  there), and `install/deb/phpmyadmin/hestia-sso.php` → `share/phpmyadmin/`.
-  Consumers (`h-install-hestia`, `h-add-sys-ip`, `h-add-sys-pma-sso`) now read
-  from `$HESTIA/share/...`; `HESTIA_INSTALL_DIR` is unchanged for the remaining
-  `install/deb/` assets. Opportunistic step in dissolving `install/` — no
-  behaviour change, the deployed files are identical.
-- MariaDB `my-{small,medium,large}.cnf` moved from `install/deb/mysql/` to
-  `share/mysql/` (#119, opportunistic while fixing #226); consumer
-  `h-install-hestia` now reads `$HESTIA/share/mysql/`. No behaviour change.
-
-### Fixed
-
-- Choosing the OS-repo MariaDB ("OS default") silently installed the *external*
-  MariaDB.org build on Debian 13 / Ubuntu 26 (#226): the wizard resolved the
-  `__os__` sentinel to a bare version number before storing it, and
-  `h-install-hestia` decides the repo source by matching that number — so when the
-  OS version equalled an offered external version (both 11.8 on deb13/ub26) the
-  external repo was added instead of using OS packages. It also produced a
-  duplicate "11.8" entry in the version picker and affected the `singlephp` /
-  `mailonly` presets (both `__os__`). Fix: the `__os__` sentinel is now preserved
-  as the stored value (the OS version is shown in the label only), so the source
-  survives; `h-install-hestia` already routes `__os__` to the OS package. On
-  deb12 / ub24 (OS 10.11) the path happened to work already since 10.11 collides
-  with no external option.
+- `h-add-database-host` validates the engine against the supported types
+  (`mysql|pgsql`) instead of `DB_SYSTEM` membership, and no longer requires
+  `DB_SYSTEM` to be pre-enabled (#121): adding the first host of a type is what
+  *enables* it, so the old guards were circular — they made the first MySQL host
+  depend on a pre-seeded `DB_SYSTEM='mysql'` and made a PostgreSQL host
+  impossible to register at all. `h-delete-database-host` now decomposes
+  `DB_SYSTEM` (drops the type token when its last host is gone). `DB_SYSTEM` is
+  therefore seeded empty; the panel's add-database page filters empty tokens so
+  an empty `DB_SYSTEM` renders no ghost type. Idempotency guards on the new
+  engine commands are artefact-based (package + host registration), since
+  `COMPONENT_*` is the wizard *selection*, not install state.
+- The panel wires **Adminer** as the PostgreSQL admin tool (#365, #229): the DB
+  list shows an "Adminer" button for PostgreSQL databases (the panel's fixed
+  `/adminer/` route) when the Adminer addon is installed, replacing the dead
+  phpPgAdmin link; `h-add`/`h-remove-sys-adminer` set/clear a `DB_ADMINER_ALIAS`
+  marker the panel reads. phpMyAdmin/MySQL is untouched.
+- The panel PHP's curated extension set (`hestia-php-confd`) gained a webmail
+  group — `intl` + `phar` (critical) and `exif` (optional) — so the panel FPM
+  can serve the webmail clients: without `intl` Roundcube fatals on login
+  (`INTL_IDNA_VARIANT_UTS46`), without `phar` SnappyMail's change-password
+  plugin blanks the page. `php${VER}-intl` + `php${VER}-exif` are installed
+  unconditionally in the panel stage (#205).
+- The SnappyMail data dir (`/etc/snappymail/data`) is set to an explicit
+  `caddy:caddy 0750` instead of leaving the mode to the release tarball/umask —
+  only the caddy FPM pool enters it now (#205).
+- Curated config assets continue moving out of the legacy `install/` tree into
+  `share/` (#119, no behaviour change): the webmailer assets
+  (`share/{roundcube,snappymail}/`), the web-server + phpMyAdmin-SSO assets
+  (`share/{apache2,nginx,phpmyadmin}/`), and the MariaDB `my-{small,medium,large}.cnf`
+  (`share/mysql/`). Five dead Roundcube files are dropped (recoverable from
+  `upstream/hestiacp`); `install/common/` now holds only `bubblewrap/`.
 
 ### Removed
 
-- Dead phpPgAdmin plumbing, replaced by Adminer in #350 but never cleaned up
-  (#365). phpPgAdmin was never installed or served anymore, yet its wiring lived
-  on across the tree: `install/deb/pga/`, the `phppgadmin.*` templates under
-  `share/{panel-caddy,nginx,apache2}/apps/`, a whole unused FPM pool
-  (`share/panel-php/pool.d/phppgadmin.conf`), the `pga` branch of
-  `h-change-sys-db-alias`, the `DB_PGA_ALIAS` seeding in `func/syshealth.sh`, the
-  `DB_PGA_*` fields in `h-list-sys-config`, and the panel UI's (broken, 404-ing)
-  phpPgAdmin links/alias field. Also dropped the unused
-  `install/deb/postgresql/pg_hba.conf` (the installer never deployed it) and the
-  `phppgadmin` version pin in `manifest.json`. Recoverable from `upstream/hestiacp`.
+- Dead phpPgAdmin plumbing (#365) — superseded by Adminer in #350 but never
+  cleaned up: `install/deb/pga/`, the `phppgadmin.*` app templates, an unused
+  FPM pool, the `pga` branch of `h-change-sys-db-alias`, the `DB_PGA_*` seeding
+  and config fields, and the panel's broken phpPgAdmin links/alias field. Also
+  the unused `install/deb/postgresql/pg_hba.conf` and the `phppgadmin` pin in
+  `manifest.json`. Recoverable from `upstream/hestiacp`.
 
-### Changed
+### Fixed
 
-- The panel now wires **Adminer** into the DB UI as the PostgreSQL admin tool
-  (#365, #229): the DB list shows an "Adminer" button for PostgreSQL databases
-  (linking to the panel's fixed `/adminer/` route) instead of the dead phpPgAdmin
-  link, shown only when the Adminer addon is installed. `h-add-sys-adminer` /
-  `h-remove-sys-adminer` set/clear a `DB_ADMINER_ALIAS` marker in `hestia.conf`
-  that the panel reads to decide whether to offer the button (the phpMyAdmin
-  pattern). phpMyAdmin/MySQL is untouched.
+- **dovecot 2.4 (Debian 13 / Ubuntu 26): every IMAP/POP3 login was dead on a
+  fresh install** (#376) — a textbook "service active, port listening, every
+  login hangs" fault, invisible to a plain up/port check. The 2.4 config carried
+  `default_login_user = dovecot` (upstream heritage, harmless on 2.3), but the
+  login chroot `/run/dovecot/login` ends up `root:dovenull 0750`, so login
+  processes running as `dovecot` could not reach the auth socket
+  (`auth_process_not_ready`). Now `default_login_user = dovenull`. The smoke
+  test additionally gained a protocol **banner** check for IMAP (143) and SMTP
+  (25) — exactly the class `check_service`/`check_port` cannot see. Verified live
+  on deb13 + ub26.
+- Choosing the OS-repo MariaDB silently installed the *external* MariaDB.org
+  build on Debian 13 / Ubuntu 26 (#226): the wizard resolved the `__os__`
+  sentinel to a bare version number before storing it, and the installer picks
+  the repo by matching that number — so when the OS version equalled an offered
+  external version (both 11.8) the external repo was added. The version picker
+  now maps any non-external pick back to the `__os__` sentinel. Verified live on
+  deb12 and deb13 (the collision case).
+- phpMyAdmin and Adminer were broken under the isolated panel PHP (#227, #229):
+  both run under the shared hestia FPM master, whose curated conf.d only carried
+  the panel-UI extensions — so phpMyAdmin died with `undefined function
+  ctype_alpha()` (HTTP 500) and Adminer could never reach PostgreSQL (no
+  `pgsql`/`pdo_pgsql`). The curated FPM set now also includes the DB-UI
+  extensions (ctype, iconv, fileinfo, the xml family; gd/bz2 for phpMyAdmin,
+  pgsql/pdo_pgsql for Adminer), installed for the panel version unconditionally.
+- `h-add-sys-adminer` no longer silently ships an Adminer without SSRF hardening
+  (#229): the "already installed" guard also checks the login-servers plugin, so
+  re-running on a pre-#356 install redeploys it; a missing vendored source is now
+  a hard error, not a failed `cp` that still reports success.
+- Installer prerequisites curated to silence two harmless-but-noisy warnings
+  (#356): `apt-utils` is now a prerequisite (debconf "delaying package
+  configuration"), and `h-install-hestia` exports `DEBIAN_FRONTEND=noninteractive`
+  for the whole run (debconf "unable to initialize frontend: Dialog … Readline").
+- Install no longer aborts when rspamd's scan-worker socket is slow to appear on
+  a cold first start (#353): the wait is now 60s and — the unit already confirmed
+  active — a still-missing socket only warns instead of aborting; the smoke test
+  verifies the socket independently.
+- PostgreSQL install no longer prints `pg_lsclusters: not found` (#353):
+  `postgresql-common` is installed in a separate, earlier transaction so the
+  command is on PATH when the metapackage's debconf script runs. Cosmetic — the
+  cluster was always created correctly.
+- Installer robustness across all four targets, from the Ubuntu 24/26 + deb13
+  baseline (#347): `/etc/ssl/dhparam.pem` is laid down in the base stage (nginx
+  and dovecot both fatal at start without it — most visibly the sieve-addon
+  restart on 24.04); the `libzip` package name is fixed per release
+  (`libzip4t64` on 24.04, `libzip5` on 26.04, where plain `libzip4` aborted the
+  base stage); the non-existent `pgadmin4-web` is no longer installed, leaving
+  PostgreSQL CLI-only at that point — superseded within this release by Adminer
+  (#350) and full panel integration (#121); and the smoke test checks PostgreSQL
+  via `COMPONENT_DB_POSTGRESQL`.
+- Sieve addon is over-quota-delivery-neutral (#343): with sieve on, clean mail
+  goes through dovecot-lda, which by default *bounced* an over-quota mailbox
+  while exim's appendfile *defers*. dovecot-lda now runs with
+  `quota_full_tempfail = yes` and `return_fail_output`, so both paths defer.
+  (Also documented that sieve scripts run only on non-spam mail — spam bypasses
+  lda straight to `.Spam`.)
+- SnappyMail integration had three latent defects, found in the #234 webmailer
+  baseline: the installer passed the DB password as the panel port (`$argv[4]`
+  vs `$argv[5]`), `domains/hestia.json` was built from `json_decode(<path>)` (the
+  path string, not the file), and `h-change-sys-port` wrote a second
+  `hestia_host` line for the port (key typo) — together breaking password changes
+  from SnappyMail. All three fixed.
+- Webmailer removal state is consistent now (#234): `h-remove-sys-snappymail`'s
+  `WEBMAIL_SYSTEM` cleanup condition was inverted (only cleared when snappymail
+  was *absent*); both webmailer removers now strip their token robustly (no stray
+  commas) and reset `COMPONENT_MAIL_WEBMAILER` to `NONE` when the removed client
+  was the recorded selection.
+- The Roundcube logrotate fragment is actually deployed now (#234): it existed in
+  the install tree but nothing ever copied it, while the fail2ban `roundcube-auth`
+  jail tails the (unrotated) `/var/log/roundcube/errors.log`.
 
-### Added
+### Security
 
-- Fully unattended install via `-a`/`--auto` (#198): `bash install.sh <preset> -a`
-  now runs with no prompts at all — it takes the same defaults the pre-questions
-  would propose (hostname = FQDN, port 8083, admin `admin`, email
-  `admin@<hostname>`); the admin password is generated and printed as usual.
-  Requires a preset (fails early otherwise, since preset selection would
-  otherwise still prompt). Preset-only (`install.sh <preset>`) stays interactive
-  for the four identity questions. Enables scripted test-VM (re)provisioning.
-
-### Changed
-
-- Adminer logins are now restricted to the local server (#356): the vendored
+- rspamd controller socket is no longer reachable by the panel's app pools
+  (#341): the controller-UI proxy needs `/run/rspamd/controller.sock`, but the
+  grant was `usermod -aG _rspamd caddy` — and since the phpMyAdmin/Adminer/
+  Roundcube FPM pools also run as `caddy` (#214), they inherited it via
+  `initgroups()` and could hit the controller API (mail metadata across all
+  domains, Bayes writes) past `forward_auth`. A dedicated `_rspamd-ctrl` group
+  now owns only the socket and is granted to the Caddy *process* via a systemd
+  drop-in (`SupplementaryGroups=`), which FPM workers do not inherit — so the
+  proxy reaches the socket and the app pools do not. `h-add-sys-rspamd` strips
+  the stale `caddy`→`_rspamd` membership from pre-fix installs; smoke checks
+  assert the invariant against process credentials, not config.
+- Adminer logins are restricted to the local server (#356): the vendored
   login-servers plugin replaces the login form's free-text "Server" field with a
   fixed localhost dropdown (PostgreSQL / MySQL-MariaDB), so the panel's Adminer
   cannot be pointed at an arbitrary remote host — the SSRF follow-up from #350.
-  Username/password login is unchanged; no SSO (out of scope by decision). Fresh
-  installs get it automatically; `h-add-sys-adminer` now also deploys
-  `adminer-plugins/login-servers.php` (vendored) + `adminer-plugins.php` (the
-  localhost config).
-
-### Fixed
-
 - All hestia sudo grants were dead on Ubuntu 26 (#363): `/etc/sudoers.d/hestia`
   opened with `Defaults:root !requiretty`, but Ubuntu 26 ships **sudo-rs** (the
-  Rust reimplementation) as its default sudo, and sudo-rs does not implement the
-  obsolete `requiretty` setting — it rejects the *entire* file when it appears,
-  silently dropping the `hestia` grant the panel relies on for every privileged
-  action. (Classic sudo, incl. Debian 13's 1.9.16, still accepts it — so this is
-  a sudo-rs behaviour, not a version bump.) `requiretty` was a CentOS-era
-  workaround that was always a no-op on Debian/Ubuntu, so the line is removed
-  everywhere. The smoke test now runs `visudo -cf /etc/sudoers.d/hestia`, so a
-  file the local sudo cannot parse fails the baseline instead of silently
-  disabling the panel. The sudoers source also moved from the legacy
-  `install/common/sudo/` to `share/sudo/` (opportunistic step in dissolving
-  `install/`, #119).
-- phpMyAdmin and Adminer were broken under the isolated panel PHP (#227, #229):
-  both run under the shared hestia FPM master, but its curated conf.d
-  (`hestia-php-confd`, #272) only carried the panel-UI extension set — so
-  phpMyAdmin died with a runtime fatal (`undefined function ctype_alpha()`,
-  HTTP 500 on all OSes) and Adminer could never reach PostgreSQL (no
-  `pgsql`/`pdo_pgsql` driver). The curated FPM set now also includes the
-  extensions the bundled DB web UIs need (ctype, iconv, fileinfo, the xml
-  family; gd/bz2 for phpMyAdmin, pgsql/pdo_pgsql for Adminer), and the panel
-  stage installs `php-gd`/`php-bz2`/`php-pgsql` for the panel version
-  unconditionally — the panel PHP stays self-contained, with no coupling of
-  PostgreSQL add/remove to the hestia-php config.
-- `h-add-sys-adminer` no longer silently ships an Adminer without SSRF hardening
-  (#229): the "already installed" guard now also checks the login-servers plugin
-  files, so re-running on an install that predates the plugin (#356) redeploys
-  it instead of short-circuiting; and a missing vendored plugin source is now a
-  hard error rather than a failed `cp` that still reports success.
-- Installer prerequisites curated to silence two harmless-but-noisy warnings
-  (#356): `apt-utils` is now a prerequisite (without it debconf logs "delaying
-  package configuration" on every apt call), and `h-install-hestia` exports
-  `DEBIAN_FRONTEND=noninteractive` for the whole run so sub-commands no longer
-  trip debconf's "unable to initialize frontend: Dialog … falling back:
-  Readline" in the non-TTY install context.
-
-- Install no longer aborts when rspamd's scan-worker socket is slow to appear
-  (#353): a cold first start (Lua compile, language detector, 120+ regexps,
-  remote map fetches) can take well over the previous 15s wait, while a warm
-  restart binds the socket in ~3s. On deb12/deb13/ubuntu-26 the timeout tripped
-  and `h-add-sys-rspamd` hard-exited, leaving the mail stage half-wired
-  (`ANTISPAM_SYSTEM` unset). The wait is now 60s and — since the unit is already
-  confirmed active — a still-missing socket only warns and continues instead of
-  aborting; the smoke test verifies the socket independently. (No redis conflict
-  was involved: the 64 MB Bayes cap is applied only to rspamd's own companion
-  redis, never when the user selected a full Redis via `DB_REDIS`.)
-- PostgreSQL install no longer prints `pg_lsclusters: not found` (#353): the
-  `postgresql` metapackage's debconf pre-config script calls `pg_lsclusters`
-  before `postgresql-common` (which provides it) is unpacked when both are in one
-  apt transaction. `postgresql-common` is now installed in a separate, earlier
-  transaction so the command is on PATH. Cosmetic only — the cluster was always
-  created correctly.
-
-### Added
-
-- Adminer as the PostgreSQL web UI, offered as an optional addon (#350). It is
-  a single vendored PHP file (`share/adminer/adminer.php`, official upstream
-  5.4.4 EN build, sha256-pinned in `VENDORED.json`) served by the Panel-Caddy at
-  `/adminer/` via a dedicated caddy FPM pool — the same delivery model as
-  phpMyAdmin, but repo-vendored because every OS `adminer` package ships a
-  CVE-affected version (deb12/noble 4.8.1: CVE-2023-45195/45196 + CVE-2025-43960;
-  even 26.04's 5.4.1: CVE-2026-25892, fixed only in 5.4.2). New commands
-  `h-add-sys-adminer` / `h-remove-sys-adminer` (no v-* symlinks). The wizard
-  offers it in the addons group and pre-selects it when PostgreSQL is chosen
-  (`visible_if DB_POSTGRESQL == true`, default on), hidden otherwise — replacing
-  the old `DB_PGADMIN` derivation (pgadmin4-web is in no OS repo; phpPgAdmin is
-  dormant). The smoke test verifies the Adminer FPM socket when installed, and
-  `share/upstream/update-web-vendor.sh` gained an `adminer` target for version
-  checks and snapshot rebuilds. phpMyAdmin/MySQL is untouched — the full Adminer
-  build can also reach MySQL, but phpMyAdmin stays the default.
-
-### Fixed
-
-- Installer robustness across all four targets, from the Ubuntu 24/26 + deb13
-  baseline round (#347): (1) `/etc/ssl/dhparam.pem` is now laid down in the base
-  stage instead of the later configure stage — nginx and dovecot both reference
-  it and fatal at start if it is missing, so mail delivery could break (dovecot
-  `doveconf: Fatal … Can't open /etc/ssl/dhparam.pem`, most visibly during the
-  sieve-addon restart on Ubuntu 24.04); (2) the `libzip4` package name is fixed
-  per release — `libzip4t64` on 24.04 (t64 transition), `libzip5` on 26.04,
-  where plain `libzip4` does not exist and aborted the base stage outright;
-  (3) the non-existent `pgadmin4-web` is no longer installed (it is in no OS repo
-  and only ever errored) — PostgreSQL is CLI-only until phpPgAdmin is wired up
-  (#121); (4) the smoke test now checks PostgreSQL via `COMPONENT_DB_POSTGRESQL`
-  (it is not recorded in `DB_SYSTEM`, so it was never verified before)
-- Sieve addon no longer changes over-quota delivery behaviour: with sieve on,
-  clean mail goes through dovecot-lda, which by default *bounced* an over-quota
-  mailbox while exim's appendfile transports (spam, and all mail without the
-  addon) *defer*. dovecot-lda now runs with `quota_full_tempfail = yes` and the
-  `dovecot_virtual_delivery` transport uses `return_fail_output`, so an
-  over-quota mailbox defers on both paths — installing the addon is
-  behaviour-neutral. Documented the related property that sieve scripts run
-  only on non-spam mail (spam bypasses lda straight to `.Spam`) (#343)
-- rspamd controller socket no longer reachable by the panel's app pools
-  (#341): the controller UI needs the Panel-Caddy proxy to reach
-  `/run/rspamd/controller.sock`, but the grant was `usermod -aG _rspamd caddy`
-  — and since the phpMyAdmin/phpPgAdmin/Roundcube FPM pools also run as
-  `caddy` (#214), they inherited it via `initgroups()` and could hit the
-  controller API (mail metadata across all domains, Bayes writes) past
-  `forward_auth`. Now a dedicated `_rspamd-ctrl` group owns only the
-  controller socket and is granted to the Caddy *process* via a systemd
-  drop-in (`SupplementaryGroups=`), which FPM workers do not inherit — so the
-  proxy reaches the socket and the app pools do not. `h-add-sys-rspamd` also
-  strips the stale `caddy`→`_rspamd` membership from pre-fix installs;
-  `h-remove-sys-rspamd` cleans up the drop-in and group. New smoke checks
-  assert the invariant against process credentials, not config, so a
-  regression fails the baseline (#341)
+  Rust reimplementation), which does not implement the obsolete `requiretty` and
+  rejects the *entire* file when it appears — silently dropping the `hestia`
+  grant every privileged panel action relies on. `requiretty` (always a no-op on
+  Debian/Ubuntu) is removed everywhere; the smoke test now runs
+  `visudo -cf /etc/sudoers.d/hestia` so a file the local sudo cannot parse fails
+  the baseline.
 
 ## v0.9.0 (2026-07-13)
 
 Covers everything since v0.8.0, including the quick tags v0.8.1–v0.8.3.
 
-### Fixed
+### Added
 
-- Debian 13 mail stack: local delivery deferred for every message — the
-  dovecot-2.4 branch of the mail-account commands (upstream heritage) wrote
-  the account maildir path into the passwd home field while exim's
-  appendfile transports expect the user home. The passwd format is now
-  identical on all platforms (home in field 5; only the quota extra field
-  stays version-specific) and dovecot 2.4 derives the maildir from home in
-  10-mail.conf, matching the proven 2.3 layout. Also fixes the
-  `sssl_server_cert_file` typo that produced broken dovecot-2.4 per-domain
-  SSL configs (#329)
-
-### Removed
-
-- Dead DNS feature plumbing (#283): the last `DNS_SYSTEM`-guarded blocks and
-  every call to non-existent `h-*-dns` commands are gone from the mail/
-  letsencrypt/webmail lifecycle, backups, cpanel import and the search
-  commands; `h-list-sys-config` no longer emits the DNS_SYSTEM/DNS_CLUSTER/
-  DNSSEC keys (no panel consumer). The restic restore path called
-  `h-restore-dns-domain-restic` unconditionally — every full restore hit a
-  command-not-found; fixed by removal. `h-change-user-ns` (+ v-* symlink) and
-  the panel's orphaned nameserver-input remnants are deleted — nothing read
-  the NS values. Kept: the DKIM-DNS record display
-  (`h-list-mail-domain-dkim-dns`) and the HestiaCP-compatible user-data
-  schema (`dns.conf`, `dns/`, user.conf/package DNS fields, restore ignores
-  dns containers) so backups stay bidirectional
+- rspamd and sieve are modular addons (#122): `h-add`/`h-remove-sys-rspamd` and
+  `-sieve` install, wire and purge each service; the installer just invokes them
+  per recipe. First functional sieve support — ManageSieve on 4190, per-account
+  scripts inside the maildir, clean local delivery via dovecot-lda so scripts
+  run at delivery (spam keeps exim's direct `.Spam` path)
+- rspamd controller web UI embedded in the panel at `/list/rspamd/` (iframe,
+  admin-only), gated by Caddy `forward_auth` + a group-restricted unix socket
+  instead of TCP localhost; a home-grown override gives it a dark-theme match in
+  the same-origin iframe (#301, #319)
+- Per-domain spam tuning for customers: mark/reject thresholds and an optional
+  subject tag, plus a sender whitelist/blacklist, editable in the panel and via
+  `h-*-mail-domain-spam-*`; values live in `mail.conf`, mirrored to per-domain
+  exim files read per message (no reload), bounded by `POLICY_SPAM_*` for
+  non-admins (#318, #330)
 
 ### Changed / Rebuilt
 
 - Panel PHP CLI (`hestia-php`) now loads its own curated extension set from
   `/etc/php/hestia/cli/conf.d` (built by `hestia-php-confd` alongside the FPM
-  set from #280), isolated from the customer conf.d of the same PHP version.
-  The CLI consumers need only compiled-in PHP; the set exists for composer
-  runs (phar, mbstring/iconv/ctype, curl/zip) (#281)
-- Panel password generator: typeable-anywhere character set (no AltGr/dead
-  keys, no confusable I/l/1/O/0 or pipe/braces) with only 1–3 symbols per
-  password, so generated passwords survive being typed by hand, e.g. over
-  VNC (#316)
-- rspamd scan worker moved from TCP `127.0.0.1:11333` to a group-restricted
-  unix socket (`/run/rspamd/normal.sock`, mode 0660, group `_rspamd` — the
-  installer adds `Debian-exim`), so local shell users can no longer read the
-  rule/score configuration or submit scan jobs; same pattern as the
-  controller socket from #301 (#321)
+  set), isolated from the customer conf.d of the same PHP version (#281)
+- Panel password generator uses a typeable-anywhere character set (no AltGr/dead
+  keys, no confusable I/l/1/O/0, 1–3 symbols), so generated passwords survive
+  being typed by hand e.g. over VNC (#316)
+- rspamd scan worker moved from TCP `127.0.0.1:11333` to a group-restricted unix
+  socket (`/run/rspamd/normal.sock`, mode 0660, group `_rspamd`), so local shell
+  users can no longer read the rule/score config or submit scan jobs (#321)
 
-### Added
+### Removed
 
-- rspamd and sieve are modular addons (#122 part 1): `h-add-sys-rspamd`/
-  `h-remove-sys-rspamd` and `h-add-sys-sieve`/`h-remove-sys-sieve` install,
-  wire, unwire and purge each service at runtime; the installer now just
-  invokes them per the recipe. The sieve addon is the first FUNCTIONAL
-  sieve support: ManageSieve on 4190 (localhost consumers), per-account
-  script storage inside the account maildir, and clean local delivery
-  switched to dovecot-lda (new `SIEVE` exim macro +
-  `dovecot_virtual_delivery` transport) so scripts actually run at
-  delivery — spam keeps exim's direct `.Spam` path. Removal reverts to the
-  appendfile transport; stored scripts survive re-adding. The
-  managesieved/sieve packages left the base install set (#122)
-- rspamd controller web UI embedded in the panel at `/list/rspamd/` (iframe),
-  admin-only. Two independent access layers: Caddy `forward_auth` requires an
-  authenticated admin session, and the controller listens on a unix socket
-  (mode 0660, group `_rspamd` — the installer adds `caddy` to it) instead of
-  TCP localhost, so no local shell user (e.g. a customer with SSH) can read
-  the controller API. No separate rspamd login; installer still sets the
-  controller password overriding the stock `q1` default as defense in depth
-  (#301)
-- Embedded rspamd UI follows the panel theme: on dark panel themes a
-  home-grown override stylesheet (`web/css/src/rspamd-dark.css`) is injected
-  into the same-origin iframe — rspamd has no native dark mode below 3.14,
-  which no target platform ships; the override only touches Bootstrap colour
-  classes that are identical across rspamd 3.4/3.8/3.12 (#319)
-- Per-domain spam tuning for customers: mark threshold (preset
-  tolerant/normal/strict or custom value), reject threshold and an optional
-  spam subject tag per mail domain, editable in the panel below the Spam
-  Filter toggle and via `h-change`/`h-delete-mail-domain-spam-score`/
-  `-spam-reject-score`/`-spam-subject-tag`. Values live in `mail.conf`
-  (rebuild/restore-safe), mirrored to per-domain files read by exim per
-  message — no reload. Non-admin users are bounded by the new
-  `POLICY_SPAM_CUSTOMER_TUNING` and `POLICY_SPAM_(REJECT_)SCORE_MIN/MAX`
-  keys; exim keeps decision authority (#318)
-- Per-domain sender whitelist/blacklist (spam tuning phase 2): whitelisted
-  senders are never treated as spam (scan skipped), blacklisted senders are
-  always marked — with `.Spam` foldering and subject tag — and refused at
-  SMTP time while Reject Spam is on; whitelist wins on conflict. Patterns
-  `user@dom`, `*@dom`, `dom`, `*.dom` per line, managed via
-  `h-add|delete|list-mail-domain-spam-whitelist|-blacklist` and two
-  textareas in the mail domain editor; same exim-file data model as phase 1,
-  no reload. The per-domain greylist toggle from the plan was dropped —
-  greylisting is deliberately disabled in HestiaRE (#330)
+- Dead DNS feature plumbing (#283): the last `DNS_SYSTEM`-guarded blocks and
+  every call to non-existent `h-*-dns` commands across mail/letsencrypt/webmail,
+  backups, cpanel import and search; the DNS_SYSTEM/DNS_CLUSTER/DNSSEC keys leave
+  `h-list-sys-config`. Kept: the DKIM-DNS record display and the
+  HestiaCP-compatible dns.conf/dns/ schema so backups stay bidirectional
+
+### Fixed
+
+- Debian 13 mail stack: local delivery deferred for every message (#329) — the
+  dovecot-2.4 mail-account commands wrote the maildir path into the passwd home
+  field while exim's appendfile expects the user home. The passwd format is now
+  identical on all platforms (home in field 5) and dovecot 2.4 derives the
+  maildir from home. Also fixes the `sssl_server_cert_file` typo that produced
+  broken dovecot-2.4 per-domain SSL configs
 
 ## v0.8.0 (2026-07-11) — cumulative changes since the fork
 

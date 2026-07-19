@@ -1,8 +1,6 @@
 server {
 	listen      %ip%:%proxy_ssl_port% ssl;
 	server_name %domain_idn% %alias_idn%;
-	root        /var/lib/snappymail;
-	index       index.php index.html index.htm;
 	access_log  /var/log/nginx/domains/%domain%.log combined;
 	error_log   /var/log/nginx/domains/%domain%.error.log error;
 
@@ -16,42 +14,27 @@ server {
 	if ($anti_replay = 307) { return 307 https://$host$request_uri; }
 	if ($anti_replay = 425) { return 425; }
 
-	location ^~ /data {
+	# Deny dotfiles, but let ACME http-01 challenges (.well-known/…) through.
+	location ~ /\.(?!well-known\/) {
 		deny all;
 		return 404;
 	}
 
-	location ~ ^/(README.md|config|temp|logs|bin|SQL|INSTALL|LICENSE|CHANGELOG|UPGRADING)$ {
-		deny all;
-		return 404;
-	}
-
+	# SnappyMail is rendered by the Panel-Caddy listener on 127.0.0.1:8091
+	# (share/panel-caddy/webmail-snappymail.conf). nginx terminates TLS here and
+	# reverse-proxies plain http to the loopback listener — no local docroot, so
+	# the caddy-owned /var/lib/snappymail is never served by nginx/www-data (#205).
 	location / {
-		alias /var/lib/snappymail/;
-
-		try_files $uri $uri/ =404;
-
-		proxy_ssl_server_name on;
-		proxy_ssl_name $host;
-		proxy_pass https://%ip%:%web_ssl_port%;
-
-		location ~* ^.+\.(ogg|ogv|svg|svgz|swf|eot|otf|woff|woff2|mov|mp3|mp4|webm|flv|ttf|rss|atom|jpg|jpeg|gif|png|webp|ico|bmp|mid|midi|wav|rtf|css|js|jar)$ {
-			expires 7d;
-			fastcgi_hide_header "Set-Cookie";
-		}
-	}
-
-	location @fallback {
-		proxy_ssl_server_name on;
-		proxy_ssl_name $host;
-		proxy_pass https://%ip%:%web_ssl_port%;
-	}
-
-	location /error/ {
-		alias /var/www/document_errors/;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_pass http://127.0.0.1:8091;
 	}
 
 	proxy_hide_header Upgrade;
 
+	# LE http-01: conf/mail/<domain>/nginx.ssl.conf_letsencrypt injects a
+	# `location ~ acme-challenge { return 200 … }` that outranks location / above.
 	include %home%/%user%/conf/mail/%root_domain%/%proxy_system%.ssl.conf_*;
 }

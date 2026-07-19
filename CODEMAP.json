@@ -40,7 +40,7 @@
         "bin/h-update-sys-queue"
       ],
       "language": "bash",
-      "total_commands": 470,
+      "total_commands": 475,
       "command_prefixes": {
         "h-*": 468,
         "v-*": "symlinks only — see Issue #23"
@@ -213,7 +213,8 @@
         "packages/default.pkg",
         "packages/system.pkg",
         "templates/email/",
-        "install/common/roundcube/",
+        "share/roundcube/",
+        "share/snappymail/",
         "share/dovecot/2.3/",
         "share/dovecot/2.4/",
         "share/sudo/hestia",
@@ -243,8 +244,12 @@
       "directories": ["share/panel-caddy/"],
       "key_files": [
         "share/panel-caddy/Caddyfile",
-        "share/panel-caddy/hestia.conf"
+        "share/panel-caddy/hestia.conf",
+        "share/panel-caddy/webmail-roundcube.conf",
+        "share/panel-caddy/webmail-snappymail.conf",
+        "share/panel-caddy/apps/webmail.tpl"
       ],
+      "notes_webmail": "webmail-*.conf: internal loopback listeners (127.0.0.1:8090/8091) that render Roundcube/SnappyMail via dedicated caddy FPM pools (share/panel-php/pool.d/{roundcube,snappymail}.conf); deployed by h-add-sys-{roundcube,snappymail}. Per-domain webmail.<domain> vhosts reverse-proxy to these — templates/mail/{nginx,apache2}/{default,web_system,snappymail,default_snappymail}.{tpl,stpl} are docroot-free proxies (proxy_pass/ProxyPass to :8090 rc / :8091 sm); LE http-01 served locally (nginx inline return-200 include; apache-only .well-known alias + ProxyPass exclusion + AllowOverride None on the docroot, needs mod_proxy_http). Rendered by func/domain.sh add_webmail_config, selected by h-add-mail-domain-webmail (#205 part 2). apps/webmail.tpl -> /etc/caddy/apps/webmail.conf: handle_path /webmail/* route INSIDE the :8083 panel site (phpMyAdmin/Adminer model) sharing the Roundcube pool, so Roundcube is also reachable at :8083/webmail for admin access; Roundcube-only (SnappyMail is root-mounted, no sub-path). Deployed/removed by h-add/remove-sys-roundcube (#205 part 1b).",
       "language": "caddyfile",
       "runtime_paths": {
         "caddyfile": "/etc/caddy/Caddyfile",

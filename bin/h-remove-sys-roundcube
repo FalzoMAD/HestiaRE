@@ -16,6 +16,8 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
+# live component state (COMPONENT_MAIL_WEBMAILER), if present
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
 
 RC_CONFIG_DIR="/etc/roundcube"
 
@@ -24,7 +26,7 @@ RC_CONFIG_DIR="/etc/roundcube"
 #----------------------------------------------------------#
 
 if [ "$(id -u)" != '0' ]; then
-	echo "ERROR: h-delete-sys-roundcube must be run as root"
+	echo "ERROR: h-remove-sys-roundcube must be run as root"
 	exit 10
 fi
 
@@ -67,6 +69,16 @@ rm -f "/usr/share/roundcube/plugins/password/drivers/hestia.php"
 # Remove remaining config directory if it exists
 rm -rf "$RC_CONFIG_DIR"
 
+# Remove the logrotate fragment deployed by h-add-sys-roundcube
+rm -f /etc/logrotate.d/roundcube
+
+# Panel-Caddy delivery teardown (#205): internal listener + panel route + FPM pool
+rm -f /etc/caddy/webmail-roundcube.conf
+rm -f /etc/caddy/apps/webmail.conf
+systemctl try-restart caddy > /dev/null 2>&1 || true
+rm -f /etc/php/hestia/fpm/pool.d/roundcube.conf
+systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+
 # Update hestia.conf — remove roundcube from WEBMAIL_SYSTEM
 new_webmail=$(echo "$WEBMAIL_SYSTEM" | sed 's/roundcube,\?//g; s/,$//')
 if [ -z "$new_webmail" ]; then
@@ -78,6 +90,12 @@ fi
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
+
+# Reset the wizard selection only if Roundcube was the recorded webmailer —
+# removing a secondary client must not clobber another one's selection (#234).
+if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "ROUNDCUBE" ]; then
+	set_install_component MAIL_WEBMAILER NONE
+fi
 
 $BIN/h-log-action "system" "Info" "Plugins" "Roundcube removed."
 log_event "$OK" "$ARGUMENTS"

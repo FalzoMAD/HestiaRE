@@ -222,8 +222,10 @@ if (empty($v_dbuser)) {
 	$v_dbuser = "";
 }
 
-// List avaiable database types
-$db_types = explode(",", $_SESSION["DB_SYSTEM"]);
+// List avaiable database types. array_filter drops empty tokens: DB_SYSTEM is ""
+// when no engine is registered, and explode(",", "") returns [""] (a ghost entry),
+// which would render a bogus type option (#121).
+$db_types = array_values(array_filter(explode(",", $_SESSION["DB_SYSTEM"] ?? "")));
 
 // List available database servers
 exec(HESTIA_CMD . "h-list-database-hosts json", $output, $return_var);

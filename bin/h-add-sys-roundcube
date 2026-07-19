@@ -73,7 +73,7 @@ db_client="mysql"
 # existing user — leaving a broken but non-obvious configuration.
 if $db_client -e "SHOW DATABASES LIKE 'roundcube'" 2>/dev/null | grep -q 'roundcube'; then
 	echo "ERROR: Database 'roundcube' already exists but is not managed by this HestiaRE instance."
-	echo "       Remove it manually first, or run h-delete-sys-roundcube if it was a previous install."
+	echo "       Remove it manually first, or run h-remove-sys-roundcube if it was a previous install."
 	exit 1
 fi
 
@@ -137,7 +137,7 @@ chown root:caddy "$RC_CONFIG_DIR/config.inc.php"
 # Deploy HestiaRE password driver.
 # Extra files in apt-managed directories survive package upgrades —
 # dpkg only removes files it originally installed.
-cp -f "$HESTIA_COMMON_DIR/roundcube/hestia.php" "$RC_DRIVERS_DIR/hestia.php"
+cp -f "$HESTIA/share/roundcube/hestia.php" "$RC_DRIVERS_DIR/hestia.php"
 chmod 644 "$RC_DRIVERS_DIR/hestia.php"
 
 # Write password plugin config
@@ -156,15 +156,35 @@ chmod 644 "$RC_CONFIG_DIR/plugins/password/config.inc.php"
 chown root:caddy "$RC_CONFIG_DIR/plugins/password/config.inc.php"
 
 # Deploy plugin configs for newmail_notifier and zipdownload
-cp -f "$HESTIA_COMMON_DIR/roundcube/plugins/config_newmail_notifier.inc.php" \
+cp -f "$HESTIA/share/roundcube/plugins/config_newmail_notifier.inc.php" \
 	"/usr/share/roundcube/plugins/newmail_notifier/config.inc.php"
-cp -f "$HESTIA_COMMON_DIR/roundcube/plugins/config_zipdownload.inc.php" \
+cp -f "$HESTIA/share/roundcube/plugins/config_zipdownload.inc.php" \
 	"/usr/share/roundcube/plugins/zipdownload/config.inc.php"
 
 # Ensure log directory exists with correct ownership
 mkdir -p /var/log/roundcube
 chown caddy:caddy /var/log/roundcube
 chmod 750 /var/log/roundcube
+# Log rotation: the fail2ban roundcube-auth jail tails /var/log/roundcube/errors.log,
+# so the log must rotate. This fragment was previously an orphan in the install
+# tree (never deployed by anything) — wired up here (#234).
+cp -f "$HESTIA/share/roundcube/logrotate" /etc/logrotate.d/roundcube
+
+# Panel-Caddy delivery (#205): Roundcube renders in a dedicated caddy FPM pool
+# behind Caddy's internal loopback listener (127.0.0.1:8090); the per-domain
+# webmail.<domain> vhosts reverse-proxy to it. The temp dir must be writable by
+# the pool user (Debian ships it www-data-owned); the logs symlink already points
+# at /var/log/roundcube, chowned caddy:caddy above.
+chown caddy:caddy /var/lib/roundcube/temp 2> /dev/null || true
+cp -f "$HESTIA/share/panel-php/pool.d/roundcube.conf" /etc/php/hestia/fpm/pool.d/roundcube.conf
+systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+cp -f "$HESTIA/share/panel-caddy/webmail-roundcube.conf" /etc/caddy/webmail-roundcube.conf
+# Panel-URL route (#205): :8083/webmail serves Roundcube for admin access without a
+# customer domain (phpMyAdmin/Adminer model), sharing the pool above. Roundcube-only
+# — SnappyMail is root-mounted and cannot run under a sub-path (see the template).
+mkdir -p /etc/caddy/apps
+cp -f "$HESTIA/share/panel-caddy/apps/webmail.tpl" /etc/caddy/apps/webmail.conf
+systemctl try-restart caddy > /dev/null 2>&1 || true
 
 # Update hestia.conf
 if [ -z "$(grep WEBMAIL_SYSTEM "$HESTIA/conf/hestia.conf")" ]; then
