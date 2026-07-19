@@ -32,14 +32,15 @@ json_list_search() {
 	echo '{'
 	fileds_count=$(echo $fields | wc -w)
 	while read line; do
-		eval $line
+		parse_object_kv_list_non_eval "$line"
 		if [ -n "$list_data" ]; then
 			echo -e '        },'
 		fi
 		i=1
 		IFS=' '
 		for field in $fields; do
-			eval value=\"$field\"
+			fname=${field#\$}
+			value=${!fname}
 			value=$(echo "$value" | sed -e 's/"/\\"/g' -e "s/%quote%/'/g")
 			if [ $i -eq 1 ]; then
 				((++i))
@@ -71,8 +72,13 @@ shell_list_search() {
 		echo
 	fi
 	while read line; do
-		eval $line
-		eval echo "$fields" | sed "s/%quote%/'/g"
+		parse_object_kv_list_non_eval "$line"
+		out="$fields"
+		for field in $(grep -oE '\$[A-Za-z_][A-Za-z0-9_]*' <<< "$fields"); do
+			fname=${field#\$}
+			out=${out//$field/${!fname}}
+		done
+		echo "$out" | sed "s/%quote%/'/g"
 	done < $conf
 }
 
@@ -118,7 +124,8 @@ for user in $("$BIN/h-list-users" list); do
 		# Parsing result
 		type=$(echo $row | cut -f 1 -d : | sed "s|^$CONF_DIR/users/$user/||; s|/.*||")
 		data=$(echo $row | cut -f 2,3,4,5 -d :)
-		eval "$data"
+		# GHSA-cr7q: parse the raw conf-field payload without eval (declare -g).
+		parse_object_kv_list_non_eval "$data"
 
 		# Check WEB domain
 		if [ "$type" = 'web.conf' ]; then
