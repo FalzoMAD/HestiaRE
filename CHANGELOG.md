@@ -68,6 +68,11 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- `h-add-sys-snappymail` now sets the SnappyMail data dir (`/etc/snappymail/data`,
+  symlinked from `/var/lib/snappymail/data`) to an explicit `caddy:caddy 0750`
+  instead of leaving the mode to the release tarball/umask. It was already chowned
+  to `caddy`; the mode is now deterministic and caddy-private — only the caddy FPM
+  pool ever enters it (nginx/apache reverse-proxy to Caddy since #205).
 - The panel PHP's curated extension set (`hestia-php-confd`) gained a webmail
   group: `intl` + `phar` (critical) and `exif` (optional). Serving the webmail
   clients from the panel FPM means their extensions belong to the panel set, the

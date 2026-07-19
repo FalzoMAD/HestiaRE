@@ -127,8 +127,12 @@ if [ "$UPDATE" == "no" ]; then
 	chown -R www-data:www-data $SM_CONFIG_DIR/
 	php -f $HESTIA/share/snappymail/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT"
 
-	# Set the permissions back to caddy
+	# Set the permissions back to caddy (the FPM pool user). The data dir gets an
+	# explicit, deterministic 0750 instead of whatever the tarball/umask left —
+	# only the caddy pool ever enters it (nginx/apache proxy to Caddy now, W7/#205),
+	# so it stays caddy-private with no world access.
 	chown -R caddy:caddy $SM_CONFIG_DIR/
+	chmod -R 750 $SM_CONFIG_DIR/data
 
 	# Remove the downloaded file
 	rm ${SM_INSTALL_DIR}/${SM_FILE}
