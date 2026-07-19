@@ -179,6 +179,11 @@ chown caddy:caddy /var/lib/roundcube/temp 2> /dev/null || true
 cp -f "$HESTIA/share/panel-php/pool.d/roundcube.conf" /etc/php/hestia/fpm/pool.d/roundcube.conf
 systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
 cp -f "$HESTIA/share/panel-caddy/webmail-roundcube.conf" /etc/caddy/webmail-roundcube.conf
+# Panel-URL route (#205): :8083/webmail serves Roundcube for admin access without a
+# customer domain (phpMyAdmin/Adminer model), sharing the pool above. Roundcube-only
+# — SnappyMail is root-mounted and cannot run under a sub-path (see the template).
+mkdir -p /etc/caddy/apps
+cp -f "$HESTIA/share/panel-caddy/apps/webmail.tpl" /etc/caddy/apps/webmail.conf
 systemctl try-restart caddy > /dev/null 2>&1 || true
 
 # Update hestia.conf
