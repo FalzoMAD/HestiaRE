@@ -12,6 +12,12 @@
     # /var/lib/roundcube/.well-known/acme-challenge/.
     ProxyPass /.well-known/acme-challenge/ !
     Alias /.well-known/acme-challenge/ /var/lib/roundcube/.well-known/acme-challenge/
+    # The roundcube docroot ships a .htaccess with directives disallowed in this
+    # context; without AllowOverride None Apache aborts the local challenge serve
+    # and falls through to the proxy (verified live). We only serve the token here.
+    <Directory /var/lib/roundcube>
+        AllowOverride None
+    </Directory>
     <Directory /var/lib/roundcube/.well-known/acme-challenge/>
         Require all granted
     </Directory>

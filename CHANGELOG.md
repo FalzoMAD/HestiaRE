@@ -23,11 +23,19 @@ section as part of its PR. On release, the section gets the version number.
   `webmail.`/`mail.` SANs stay on the customer vhost; the http-01 challenge is
   served locally (nginx: the inline `return 200` `nginx.conf_letsencrypt`
   include, still pulled in; apache-only: a `.well-known/acme-challenge/` alias +
-  `ProxyPass … !` exclusion so the token file is served from disk, not proxied).
-  The apache-only special case is supported: `mod_proxy_http` is now enabled at
+  `ProxyPass … !` exclusion so the token file is served from disk, not proxied —
+  plus `<Directory /var/lib/{roundcube,snappymail}> AllowOverride None`, because
+  the webmail docroot ships a `.htaccess` with directives disallowed in this
+  context that otherwise aborts the local challenge serve and lets it fall
+  through to the proxy (found and fixed in live apache-only testing). The
+  apache-only special case is supported: `mod_proxy_http` is now enabled at
   install so an apache-only public vhost can proxy to the caddy listener. The
   "webmail disabled" fallback templates are untouched (they still point at the
-  customer's own site, not the panel).
+  customer's own site, not the panel). Verified live on deb13 (Roundcube) and
+  ub24 (SnappyMail), nginx+apache: `webmail.<domain>` renders via the proxy, a
+  full Roundcube IMAP login (302 → mailbox) succeeds through the subdomain, the
+  SnappyMail app renders with no "Permission denied", and the apache-only
+  `.well-known` split serves the token locally while the app stays proxied.
 - Webmail now renders through the Panel-Caddy instead of the customer web stack
   (#205, part 1 — panel side). Roundcube and SnappyMail each get a dedicated
   caddy FPM pool (`share/panel-php/pool.d/{roundcube,snappymail}.conf`, user
