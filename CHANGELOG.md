@@ -28,6 +28,42 @@ section as part of its PR. On release, the section gets the version number.
   profile). Verified live on ub26: the OS-repo 11.8.6 install completes, the
   profile ends up back in enforce, and runtime works under it.
 
+### Security
+
+- **GHSA-fcq6 — authenticated admin takeover fixed** (#386). The admin-only gate
+  in `web/edit/server/hestia/index.php` had a second clause comparing to a bare,
+  undefined `$ROOT_USER` — always false, so any authenticated user reached the
+  page and could rewrite the hestia panel service config and the privileged panel
+  crontab (→ root). It now gates on the role alone. Affects ≤ our 1.9.6 fork
+  point; verified against code.
+- **GHSA-8w7m — SQL injection via database password fixed** (#386). The password
+  was interpolated raw into `IDENTIFIED BY '…'` / `PASSWORD '…'` while the panel
+  permits `'` `` ` `` `\` `;`. New `mysql_sql_escape()` / `sql_escape()` helpers
+  (cherry-picked from upstream 1.9.7) are now applied at every password site in
+  `func/db.sh` (MySQL/MariaDB + PostgreSQL, create + change). db.conf stores only
+  the password hash and `func/db.sh` has no `eval`, so there is no second-order
+  path.
+- **GHSA-cr7q — root RCE via eval in search-object commands fixed** (#386).
+  `h-search-user-object` / `h-search-object` ran `eval` on the raw `KEY='value'`
+  fields grep'd from a user's own web/mail/db/cron.conf. Every eval site now uses
+  the no-eval parser (`parse_object_kv_list_non_eval`, `declare -g`) and bash
+  indirect expansion, so a quote-breaking conf value can no longer execute as
+  root.
+- **GHSA-5fpv — cron parsing hardened** (#386, defense-in-depth). The RCE sink is
+  already closed (the rebuilt quote-safe `parse_object_kv_list`), but
+  `sync_cron_jobs` now reads with `read -r` and `is_cron_command_valid_format`
+  rejects embedded newlines. **Behaviour note:** `read -r` preserves backslashes
+  the old `read` stripped one level of, so a cron `CMD` written under the old
+  behaviour may be interpreted differently — pre-1.0, no live systems.
+- Not affected, verified against code — and **GHSA-w3mx double-eval RCE
+  empirically refuted** by running the original attack against our
+  `parse_object_kv_list` (payloads stay literal, breakout rejected): GHSA-w3mx
+  (parser rebuilt), GHSA-gh6f (web terminal removed, #59), GHSA-73p3
+  (`CF-Connecting-IP` trusted only behind Cloudflare ranges), GHSA-fg7j
+  (usernames cannot carry HTML — validator charset), GHSA-47mf (queue lines carry
+  only validated identifiers). `h-check-sys-smoke` gained static invariant gates
+  for the fcq6 and cr7q fixes so they cannot silently regress.
+
 ## v0.10.0 (2026-07-19)
 
 Covers everything since v0.9.0. The headline is platform reach: Ubuntu 24.04

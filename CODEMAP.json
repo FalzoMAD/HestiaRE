@@ -84,11 +84,11 @@
       ],
       "language": "bash",
       "file_roles": {
-        "main.sh": "Core utilities: source_conf(), check_result(), output formatting, logging, JSON/shell serialization",
+        "main.sh": "Core utilities: source_conf(), check_result(), output formatting, logging, JSON/shell serialization. Object parsing: parse_object_kv_list (PHP tokenizer, quote-safe, single eval — the upstream double-eval RCE GHSA-w3mx is NOT present, empirically verified #386) and parse_object_kv_list_non_eval (declare -g, no eval — use this for any user-controlled conf-field payload).",
         "domain.sh": "Domain validation and template checking for web and mail",
-        "rebuild.sh": "User and domain rebuild logic — regenerates service configs from HestiaRE data",
+        "rebuild.sh": "User and domain rebuild logic — regenerates service configs from HestiaRE data. Queue invariant: lines appended to conf/queue/*.pipe (run via `bash` by h-update-sys-queue) must contain only validated identifiers (username/domain), never free text (GHSA-47mf).",
         "syshealth.sh": "System health monitoring, RRD graph generation, service status checks",
-        "db.sh": "MySQL/MariaDB and PostgreSQL connection helpers, host configuration",
+        "db.sh": "MySQL/MariaDB and PostgreSQL connection helpers, host configuration. Passwords entering SQL MUST go through mysql_sql_escape()/sql_escape() before 'IDENTIFIED BY'/'PASSWORD' literals (GHSA-8w7m, #386); no eval in this file.",
         "backup.sh": "Local, FTP, and Restic backup/restore handlers with retention logic",
         "ip.sh": "IP address validation, RDNS checking, IPv4/IPv6 utilities",
         "firewall.sh": "iptables symlink healing helper"
