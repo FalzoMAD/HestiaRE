@@ -7,6 +7,27 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
+## Unreleased
+
+### Fixed
+
+- MariaDB install aborted on Ubuntu 26.04 when the OS-repo version was chosen
+  (#387): `mariadb.service` failed to start with "Table 'mysql.db' doesn't
+  exist" — the system schema was never created. Ubuntu 26.04 is the only target
+  that ships an *enforced* `mariadbd` AppArmor profile (`/etc/apparmor.d/mariadbd`),
+  and it comments out `capability dac_override` — which the bootstrap `mariadbd`
+  that `mariadb-install-db` runs needs to create the initial datadir (it dies
+  with "Can't create test file … Permission denied"). Normal runtime does not
+  need the capability, so only first-init tripped it, and the failure was
+  swallowed (`> /dev/null`). `h-add-sys-mariadb` now normalises the datadir to
+  `mysql:mysql` and, only when that profile is loaded, unloads it for the
+  `mariadb-install-db` step and reloads it (back to enforce) immediately after;
+  the init is also guarded to run only when the schema is absent and now fails
+  loud (logging to `/var/log/hestia/mariadb-install-db.log`) instead of letting
+  the service start error later. No-op on deb12/deb13/ub24 (no loaded mariadbd
+  profile). Verified live on ub26: the OS-repo 11.8.6 install completes, the
+  profile ends up back in enforce, and runtime works under it.
+
 ## v0.10.0 (2026-07-19)
 
 Covers everything since v0.9.0. The headline is platform reach: Ubuntu 24.04
