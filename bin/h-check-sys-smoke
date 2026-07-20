@@ -37,6 +37,22 @@ no() {
 }
 skip() { echo "[ skip ] $1"; }
 
+# check_source_absent <label> <egrep-pattern> <path...> — a vulnerable source
+# pattern must not reappear (static invariant guarding a security fix, so the
+# fix does not silently regress on a later refactor). Comment lines (// # *) are
+# excluded so a fix's own explanatory comment does not trip the check.
+check_source_absent() {
+	local label="$1" pat="$2"
+	shift 2
+	local hit
+	hit=$(grep -rnE "$pat" "$@" 2> /dev/null | grep -vE ':[[:space:]]*(//|#|\*)')
+	if [ -z "$hit" ]; then
+		ok "invariant: $label"
+	else
+		no "invariant: $label" "$(echo "$hit" | head -n1)"
+	fi
+}
+
 # check_service <systemd-unit> <label>
 check_service() {
 	if systemctl is-active --quiet "$1"; then
@@ -253,6 +269,15 @@ check_log_clean "/var/log/hestia-php-fpm.log" "PHP (Fatal|Parse) error|\[emergen
 [ "$WEB_SYSTEM" = 'apache2' ] && check_log_clean "/var/log/apache2/error.log" "\[.*:emerg\]|\[.*:alert\]" "apache2"
 # exim writes serious problems to a dedicated paniclog — non-empty means trouble
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_file_empty "/var/log/exim4/paniclog" "exim paniclog"
+
+# --- Security invariants (static source gates for the #386 fixes) ---
+echo "-- security invariants --"
+# GHSA-fcq6: the edit/server auth gate must not compare to a bare (undefined)
+# $ROOT_USER — that is the bypass. Legit uses are $_SESSION["ROOT_USER"].
+check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$HESTIA/web"
+# GHSA-cr7q: the search-object commands must not eval raw conf-field payloads.
+check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
+	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
 
 #----------------------------------------------------------#
 #                       Result                             #

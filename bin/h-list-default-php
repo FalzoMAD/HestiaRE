@@ -66,11 +66,10 @@ csv_list() {
 #----------------------------------------------------------#
 
 declare -a versions
-# List through /etc/php
-for version in /etc/php/*/fpm/pool.d/www.conf; do
-	ver=$(echo "$version" | awk -F"/" '{ print $4 }')
-	versions+=("$ver")
-done
+# The default web PHP version is the system default (update-alternatives),
+# reported by multiphp_default_version(). It was previously inferred from the
+# presence of the shared www.conf pool, removed in #397.
+versions+=("$(multiphp_default_version)")
 
 # Listing data
 case $format in

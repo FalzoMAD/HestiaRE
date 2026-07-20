@@ -197,6 +197,10 @@ elif ! echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	fi
 fi
 
+# Re-render existing mail domains so they pick up the newly-installed client
+# immediately (#119); no-op when no mail domains exist.
+$BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#

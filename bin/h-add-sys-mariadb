@@ -118,7 +118,34 @@ fi
 rm -f /etc/mysql/my.cnf
 cp -f "$HESTIA/share/mysql/$MYCNF" /etc/mysql/my.cnf
 sed -i 's|/usr/share/mysql|/usr/share/mariadb|g' /etc/mysql/my.cnf
-mariadb-install-db > /dev/null 2>&1
+
+# Initialise the system schema when it is missing. Ubuntu 26.04 ships an
+# enforced mariadbd AppArmor profile (/etc/apparmor.d/mariadbd) that comments out
+# `capability dac_override` — which the *bootstrap* mariadbd run by
+# mariadb-install-db needs to create the initial datadir (it fails with "Can't
+# create test file … Permission denied"). Runtime does not need the capability;
+# only first-init trips it, and because the failure used to be swallowed the next
+# start aborted with "Table 'mysql.db' doesn't exist" (#387). So: normalise
+# datadir ownership, and if that profile is loaded, unload it just for the init
+# and reload it (back to enforce) immediately after. No-op on the other targets
+# (deb12/13, ub24 have no loaded mariadbd profile).
+chown -R mysql:mysql /var/lib/mysql
+if [ ! -d /var/lib/mysql/mysql ]; then
+	aa_prof="/etc/apparmor.d/mariadbd"
+	aa_unloaded=""
+	if [ -f "$aa_prof" ] && command -v apparmor_parser > /dev/null 2>&1 \
+		&& command -v aa-status > /dev/null 2>&1 && aa-status 2> /dev/null | grep -qw mariadbd; then
+		apparmor_parser -R "$aa_prof" > /dev/null 2>&1 && aa_unloaded=1
+	fi
+	mariadb-install-db --user=mysql > /var/log/hestia/mariadb-install-db.log 2>&1
+	init_rc=$?
+	[ -n "$aa_unloaded" ] && apparmor_parser -r "$aa_prof" > /dev/null 2>&1
+	if [ "$init_rc" -ne 0 ] || [ ! -d /var/lib/mysql/mysql ]; then
+		echo "ERROR: mariadb-install-db failed to initialise the system schema"
+		echo "       see /var/log/hestia/mariadb-install-db.log"
+		exit "$E_RESTART"
+	fi
+fi
 systemctl -q enable mariadb 2> /dev/null
 systemctl restart mariadb
 if ! systemctl is-active --quiet mariadb; then

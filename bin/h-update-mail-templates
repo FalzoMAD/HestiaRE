@@ -29,8 +29,8 @@ source_conf "$HESTIA/conf/hestia.conf"
 check_args '1' "$#" '[RESTART]' '[SKIP]'
 is_format_valid 'restart'
 
-# Mail templates ship at $HESTIA/templates/mail (delivered by the tarball) —
-# there is no separate install source to copy from anymore.
+# Webmail vhost templates ship at $HESTIA/share/$WEB_SYSTEM/webmail (delivered by
+# the tarball) — there is no separate install source to copy from anymore.
 # Rebuild mail domains if mail services are enabled
 if [ -z "$skip" ]; then
 	if [ -n "$MAIL_SYSTEM" ]; then

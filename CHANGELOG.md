@@ -7,6 +7,136 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
+## Unreleased
+
+### Changed
+
+- Moved the webmail vhost templates from `templates/mail/` into service-scoped
+  `share/nginx/webmail/` and `share/apache2/webmail/` (#119) — they are system
+  webmail-delivery assets (docroot-free proxies to the Panel-Caddy listeners,
+  #205), not a user-pickable template library like `templates/web/`. The
+  `nginx/apache2` split is structural (`add_webmail_config` keys on
+  `$WEB_SYSTEM`), so `MAILTPL` is retired and the resolver is now
+  `$HESTIA/share/$WEB_SYSTEM/webmail/$tpl`. Also removed the dead RainLoop
+  templates + refs (superseded by SnappyMail; never installed by HestiaRE):
+  `share/apache2/webmail/rainloop.{tpl,stpl}`, the rainloop branch in
+  `h-add-mail-domain-ssl`, and the guarded `/etc/rainloop/` block in
+  `h-change-sys-hostname`.
+- Dissolved `install/deb/ssl/` and `install/deb/logrotate/` into service-scoped
+  `share/` homes (#119). `dhparam.pem` → `share/ssl/` (it is consumed
+  cross-service — nginx `nginx.conf` and dovecot 2.3/2.4 `10-ssl.conf` both read
+  `/etc/ssl/dhparam.pem`, so not an nginx-only asset); the base-stage
+  "ship curated, regenerate as fallback" deploy is unchanged. The logrotate
+  fragments are distributed to their owning service:
+  `share/apache2/logrotate` (+ `share/apache2/httpd-prerotate/`),
+  `share/nginx/logrotate`, `share/dovecot/logrotate`, `share/hestia/logrotate`
+  — mirroring the existing `share/roundcube/logrotate` (#234). `h-install-hestia`
+  repointed; pure moves, no behaviour change.
+- Removed the shared `www.conf` PHP-FPM pool and dissolved `install/deb/php-fpm/`
+  (#397, #119). Every web domain already runs in its own per-domain FPM pool, so
+  the server-wide `www.sock` pool had no serving role left — in upstream it ran
+  as `hestiamail` to back the panel-adjacent web apps, but HestiaRE isolated
+  those into dedicated per-app Caddy pools (#205/#341), leaving only an apache
+  catch-all fallback that *executed* unclaimed `.php` as the `caddy` service user
+  unconfined. That is now hardened: `share/apache2/hestia-event.conf` denies
+  unclaimed `.php` (`Require all denied`, mirroring Debian's own php-fpm apache
+  snippet) and each per-domain vhost re-grants with `Require all granted`
+  (`templates/web/apache2/php-fpm/default.{tpl,stpl}`) — so a `.php` no domain
+  claims is refused (403) instead of run in a shared context or served as source.
+  The three curated assets (`dummy.conf`, `multiphp.tpl`, `php-fpm.conf`) moved
+  to `share/php-fpm/`; `h-list-default-php` now reports the default web version
+  via `multiphp_default_version()` (update-alternatives) instead of the removed
+  `www.conf` marker. Verified on Debian 13 (nginx+apache): claimed domain `.php`
+  executes end-to-end, unclaimed `.php` returns 403; nginx-only domains never
+  used `www.sock` and are unaffected.
+- Dropped the unused `dom` extension from the panel FPM's curated optional set
+  (`hestia-php-confd`). Audit A8: no panel (`web/`), phpMyAdmin, or Adminer code
+  uses `DOMDocument`/`DOMXPath` (grep-verified in-tree + on the installed
+  phpMyAdmin), so it was whitelisted for nothing. The XML family the DB tools do
+  need (`simplexml`/`xmlwriter`/`xmlreader`) is unaffected.
+- Vendored **Adminer bumped 5.4.4 → 5.5.0** (`share/adminer/adminer.php`,
+  VENDORED.json). Adminer is vendored (not the OS package) specifically because
+  every target distro ships a CVE-affected version (#350); keeping the vendored
+  build current is part of that rationale. Fetched via
+  `share/upstream/update-web-vendor.sh --fetch adminer@5.5.0` (GitHub release
+  digest verified, `php -l` clean); `upstream/adminer` snapshot branch updated.
+  The `login-servers` SSRF-hardening plugin (#356) is re-pinned to the same
+  v5.5.0 tag — its file is byte-identical across the two releases (pin only).
+
+### Fixed
+
+- Webmail now degrades safely when the selected client isn't installed (#119).
+  Previously `h-add-mail-domain-webmail` hard-exited `E_INVALID` if the client
+  wasn't in `WEBMAIL_SYSTEM`, `func/rebuild.sh` hardcoded `roundcube` (failing
+  when Roundcube was absent), and selection keyed off the template file existing
+  rather than the package — so a domain kept proxying to a dead `:8090/:8091`
+  after its webmailer was removed, and removing a webmailer never rebuilt mail
+  domains (stale 502 proxies). A shared `select_webmail_template()` helper
+  (`func/domain.sh`, used by both the webmail and SSL paths, killing the
+  divergent duplicate) now degrades an uninstalled/empty client to the
+  backend-safe `disabled` vhost, and `h-add/remove-sys-{roundcube,snappymail}`
+  re-render all mail domains so a webmailer install/removal takes effect
+  immediately. Verified on Debian 13 (nginx+apache): snappymail domain →
+  `:8091`; after `WEBMAIL_SYSTEM=''` → `disabled` vhost (local web stack, no 502,
+  no hard-fail); restore → `:8091`.
+- PHP-version validation regex now survives a two-digit major in
+  `h-change-sys-php` and `h-delete-web-php` (`^[0-9]\.` → `^[0-9]+\.`). Audit A6:
+  the same hardening had already landed in `h-change-sys-panel-php` /
+  `h-add-web-php`, but these two siblings were missed — they would reject e.g.
+  PHP `10.0`.
+- MariaDB install aborted on Ubuntu 26.04 when the OS-repo version was chosen
+  (#387): `mariadb.service` failed to start with "Table 'mysql.db' doesn't
+  exist" — the system schema was never created. Ubuntu 26.04 is the only target
+  that ships an *enforced* `mariadbd` AppArmor profile (`/etc/apparmor.d/mariadbd`),
+  and it comments out `capability dac_override` — which the bootstrap `mariadbd`
+  that `mariadb-install-db` runs needs to create the initial datadir (it dies
+  with "Can't create test file … Permission denied"). Normal runtime does not
+  need the capability, so only first-init tripped it, and the failure was
+  swallowed (`> /dev/null`). `h-add-sys-mariadb` now normalises the datadir to
+  `mysql:mysql` and, only when that profile is loaded, unloads it for the
+  `mariadb-install-db` step and reloads it (back to enforce) immediately after;
+  the init is also guarded to run only when the schema is absent and now fails
+  loud (logging to `/var/log/hestia/mariadb-install-db.log`) instead of letting
+  the service start error later. No-op on deb12/deb13/ub24 (no loaded mariadbd
+  profile). Verified live on ub26: the OS-repo 11.8.6 install completes, the
+  profile ends up back in enforce, and runtime works under it.
+
+### Security
+
+- **GHSA-fcq6 — authenticated admin takeover fixed** (#386). The admin-only gate
+  in `web/edit/server/hestia/index.php` had a second clause comparing to a bare,
+  undefined `$ROOT_USER` — always false, so any authenticated user reached the
+  page and could rewrite the hestia panel service config and the privileged panel
+  crontab (→ root). It now gates on the role alone. Affects ≤ our 1.9.6 fork
+  point; verified against code.
+- **GHSA-8w7m — SQL injection via database password fixed** (#386). The password
+  was interpolated raw into `IDENTIFIED BY '…'` / `PASSWORD '…'` while the panel
+  permits `'` `` ` `` `\` `;`. New `mysql_sql_escape()` / `sql_escape()` helpers
+  (cherry-picked from upstream 1.9.7) are now applied at every password site in
+  `func/db.sh` (MySQL/MariaDB + PostgreSQL, create + change). db.conf stores only
+  the password hash and `func/db.sh` has no `eval`, so there is no second-order
+  path.
+- **GHSA-cr7q — root RCE via eval in search-object commands fixed** (#386).
+  `h-search-user-object` / `h-search-object` ran `eval` on the raw `KEY='value'`
+  fields grep'd from a user's own web/mail/db/cron.conf. Every eval site now uses
+  the no-eval parser (`parse_object_kv_list_non_eval`, `declare -g`) and bash
+  indirect expansion, so a quote-breaking conf value can no longer execute as
+  root.
+- **GHSA-5fpv — cron parsing hardened** (#386, defense-in-depth). The RCE sink is
+  already closed (the rebuilt quote-safe `parse_object_kv_list`), but
+  `sync_cron_jobs` now reads with `read -r` and `is_cron_command_valid_format`
+  rejects embedded newlines. **Behaviour note:** `read -r` preserves backslashes
+  the old `read` stripped one level of, so a cron `CMD` written under the old
+  behaviour may be interpreted differently — pre-1.0, no live systems.
+- Not affected, verified against code — and **GHSA-w3mx double-eval RCE
+  empirically refuted** by running the original attack against our
+  `parse_object_kv_list` (payloads stay literal, breakout rejected): GHSA-w3mx
+  (parser rebuilt), GHSA-gh6f (web terminal removed, #59), GHSA-73p3
+  (`CF-Connecting-IP` trusted only behind Cloudflare ranges), GHSA-fg7j
+  (usernames cannot carry HTML — validator charset), GHSA-47mf (queue lines carry
+  only validated identifiers). `h-check-sys-smoke` gained static invariant gates
+  for the fcq6 and cr7q fixes so they cannot silently regress.
+
 ## v0.10.0 (2026-07-19)
 
 Covers everything since v0.9.0. The headline is platform reach: Ubuntu 24.04
