@@ -87,7 +87,7 @@ for php_folder in /etc/php/*; do
 
 	v_php="$(basename $php_folder)"
 	if [ ! -f "/etc/php/${v_php}/fpm/pool.d/dummy.conf" ]; then
-		cp -f "$HESTIA_INSTALL_DIR/php-fpm/dummy.conf" "/etc/php/${v_php}/fpm/pool.d/"
+		cp -f "$HESTIA/share/php-fpm/dummy.conf" "/etc/php/${v_php}/fpm/pool.d/"
 		sed -i "s/9999/99${v_php//./}/g" "/etc/php/${v_php}/fpm/pool.d/dummy.conf"
 	fi
 done

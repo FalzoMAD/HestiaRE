@@ -437,8 +437,14 @@ install_web() {
 		echo "[ * ] Skipping multi-PHP (PHP_MODE=${COMPONENT_PHP_MODE:-?})"
 	fi
 
-	echo "[ * ] Configuring PHP $PHP_VER web pool..."
-	cp -f "$HESTIA_INSTALL_DIR/php-fpm/www.conf" /etc/php/${PHP_VER}/fpm/pool.d/www.conf
+	echo "[ * ] Ensuring PHP $PHP_VER FPM pool..."
+	# No shared www pool anymore (removed in #397): every domain runs in its own
+	# per-domain pool, and each installed version — including the reference
+	# $PHP_VER just built by h-add-web-php — is backed by its dummy placeholder
+	# pool so php-fpm starts cleanly with zero domains. Deploy it explicitly here
+	# to keep that guarantee independent of the multi-PHP branch above.
+	cp -f "$HESTIA/share/php-fpm/dummy.conf" /etc/php/${PHP_VER}/fpm/pool.d/dummy.conf
+	sed -i "s/%backend_version%/${PHP_VER}/g" /etc/php/${PHP_VER}/fpm/pool.d/dummy.conf
 	update-rc.d php${PHP_VER}-fpm defaults > /dev/null 2>&1
 	systemctl start php${PHP_VER}-fpm
 	update-alternatives --set php /usr/bin/php${PHP_VER} > /dev/null 2>&1 || true
