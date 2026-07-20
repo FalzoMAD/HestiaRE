@@ -102,11 +102,6 @@ elif [ "$WEBMAIL" == "snappymail" ]; then
 	if [ -n "$PROXY_SYSTEM" ]; then
 		PROXY_TEMPLATE="default_snappymail"
 	fi
-elif [ "$WEBMAIL" == "rainloop" ]; then
-	WEBMAIL_TEMPLATE="rainloop"
-	if [ -n "$PROXY_SYSTEM" ]; then
-		PROXY_TEMPLATE="default_rainloop"
-	fi
 else
 	WEBMAIL_TEMPLATE="disabled"
 	if [ -n "$PROXY_SYSTEM" ]; then
