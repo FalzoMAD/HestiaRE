@@ -11,6 +11,23 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Removed the shared `www.conf` PHP-FPM pool and dissolved `install/deb/php-fpm/`
+  (#397, #119). Every web domain already runs in its own per-domain FPM pool, so
+  the server-wide `www.sock` pool had no serving role left — in upstream it ran
+  as `hestiamail` to back the panel-adjacent web apps, but HestiaRE isolated
+  those into dedicated per-app Caddy pools (#205/#341), leaving only an apache
+  catch-all fallback that *executed* unclaimed `.php` as the `caddy` service user
+  unconfined. That is now hardened: `share/apache2/hestia-event.conf` denies
+  unclaimed `.php` (`Require all denied`, mirroring Debian's own php-fpm apache
+  snippet) and each per-domain vhost re-grants with `Require all granted`
+  (`templates/web/apache2/php-fpm/default.{tpl,stpl}`) — so a `.php` no domain
+  claims is refused (403) instead of run in a shared context or served as source.
+  The three curated assets (`dummy.conf`, `multiphp.tpl`, `php-fpm.conf`) moved
+  to `share/php-fpm/`; `h-list-default-php` now reports the default web version
+  via `multiphp_default_version()` (update-alternatives) instead of the removed
+  `www.conf` marker. Verified on Debian 13 (nginx+apache): claimed domain `.php`
+  executes end-to-end, unclaimed `.php` returns 403; nginx-only domains never
+  used `www.sock` and are unaffected.
 - Dropped the unused `dom` extension from the panel FPM's curated optional set
   (`hestia-php-confd`). Audit A8: no panel (`web/`), phpMyAdmin, or Adminer code
   uses `DOMDocument`/`DOMXPath` (grep-verified in-tree + on the installed

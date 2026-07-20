@@ -258,7 +258,7 @@
         "share/nginx/",
         "share/apache2/",
         "share/exim/",
-        "install/deb/php-fpm/",
+        "share/php-fpm/",
         "share/mysql/",
         "install/deb/fail2ban/",
         "templates/web/",
@@ -292,7 +292,8 @@
         "share/snappymail/": "install/common/snappymail/ (moved #119)",
         "share/sudo/hestia": "install/common/sudo/ (moved #119/#363)",
         "share/dovecot/{2.3,2.4}/": "install/deb/dovecot/ (reimplemented; version-split, 2.4 for deb13/ub26)",
-        "install/deb/{php-fpm,fail2ban}/": "install/deb/* (in place, near-verbatim)",
+        "share/php-fpm/": "install/deb/php-fpm/ (moved #119/#397; shared www.conf pool removed #397 — per-domain pools only, apache catch-all now Require-all-denied)",
+        "install/deb/fail2ban/": "install/deb/fail2ban/ (in place, near-verbatim)",
         "templates/web/, templates/mail/": "install/deb/templates/{web,mail}/ (near-verbatim; mail templates reworked to Panel-Caddy proxies #205)",
         "packages/*.pkg": "install/deb/packages/ (moved, near-verbatim)",
         "share/panel-caddy/, share/panel-php/, share/dovecot/": "hestiare-native (see panel_caddy_service / panel_php_service)"

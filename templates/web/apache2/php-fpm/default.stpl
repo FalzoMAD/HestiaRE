@@ -33,6 +33,9 @@
 
     <FilesMatch \.php$>
         SetHandler "proxy:%backend_lsnr%|fcgi://localhost"
+        # Re-grant over the server-wide "Require all denied" fallback in
+        # conf.d/hestia-event.conf (#397): this domain claims its own .php.
+        Require all granted
     </FilesMatch>
     SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0
 
