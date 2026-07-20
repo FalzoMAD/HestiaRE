@@ -11,6 +11,16 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Dissolved `install/deb/ssl/` and `install/deb/logrotate/` into service-scoped
+  `share/` homes (#119). `dhparam.pem` → `share/ssl/` (it is consumed
+  cross-service — nginx `nginx.conf` and dovecot 2.3/2.4 `10-ssl.conf` both read
+  `/etc/ssl/dhparam.pem`, so not an nginx-only asset); the base-stage
+  "ship curated, regenerate as fallback" deploy is unchanged. The logrotate
+  fragments are distributed to their owning service:
+  `share/apache2/logrotate` (+ `share/apache2/httpd-prerotate/`),
+  `share/nginx/logrotate`, `share/dovecot/logrotate`, `share/hestia/logrotate`
+  — mirroring the existing `share/roundcube/logrotate` (#234). `h-install-hestia`
+  repointed; pure moves, no behaviour change.
 - Removed the shared `www.conf` PHP-FPM pool and dissolved `install/deb/php-fpm/`
   (#397, #119). Every web domain already runs in its own per-domain FPM pool, so
   the server-wide `www.sock` pool had no serving role left — in upstream it ran

@@ -274,7 +274,7 @@ configure_apache2() {
 	cp -f "$HESTIA/share/apache2/apache2.conf" /etc/apache2/
 	cp -f "$HESTIA/share/apache2/status.conf" /etc/apache2/mods-available/hestia-status.conf
 	cp -f /etc/apache2/mods-available/status.load /etc/apache2/mods-available/hestia-status.load
-	cp -f "$HESTIA_INSTALL_DIR/logrotate/apache2" /etc/logrotate.d/
+	cp -f "$HESTIA/share/apache2/logrotate" /etc/logrotate.d/apache2
 
 	local m
 	for m in rewrite suexec ssl actions headers; do
@@ -333,7 +333,7 @@ install_web() {
 	cp -f "$HESTIA/share/nginx/cloudflare.inc" /etc/nginx/conf.d/
 	# phpMyAdmin is no longer served via an nginx alias — it is delivered by the
 	# Panel-Caddy from a dedicated caddy FPM pool (see h-change-sys-db-alias).
-	cp -f "$HESTIA_INSTALL_DIR/logrotate/nginx" /etc/logrotate.d/
+	cp -f "$HESTIA/share/nginx/logrotate" /etc/logrotate.d/nginx
 	mkdir -p /etc/nginx/conf.d/domains /etc/nginx/conf.d/main \
 		/etc/nginx/modules-enabled /var/log/nginx/domains
 	local resolver="" ns
@@ -464,7 +464,7 @@ install_web() {
 	cp -rf "$HESTIA/templates/web/unassigned/index.html" /var/www/html/
 	cp -rf "$HESTIA/templates/web/skel/document_errors/"* /var/www/document_errors/
 	mkdir -p /etc/logrotate.d/httpd-prerotate
-	cp -f "$HESTIA_INSTALL_DIR/logrotate/httpd-prerotate/"* /etc/logrotate.d/httpd-prerotate/ 2>/dev/null || true
+	cp -f "$HESTIA/share/apache2/httpd-prerotate/"* /etc/logrotate.d/httpd-prerotate/ 2>/dev/null || true
 	rm -f /etc/cron.d/awstats
 
 	touch "$CONF_DIR/.done.web"
@@ -578,7 +578,7 @@ install_mail() {
 		# fails after auth. 2.4 ships its own curated 15-mailboxes.conf instead.
 		rm -f /etc/dovecot/conf.d/15-mailboxes.conf
 	fi
-	cp -f "$HESTIA_INSTALL_DIR/logrotate/dovecot" /etc/logrotate.d/
+	cp -f "$HESTIA/share/dovecot/logrotate" /etc/logrotate.d/dovecot
 	chown -R root:root /etc/dovecot*
 	touch /var/log/dovecot.log
 	chown dovecot:mail /var/log/dovecot.log
@@ -739,7 +739,7 @@ configure_hestia() {
 	mkdir -p /etc/sudoers.d
 	cp -f "$HESTIA/share/sudo/hestia" /etc/sudoers.d/
 	chmod 440 /etc/sudoers.d/hestia
-	cp -f "$HESTIA_INSTALL_DIR/logrotate/hestia" /etc/logrotate.d/hestia 2>/dev/null || true
+	cp -f "$HESTIA/share/hestia/logrotate" /etc/logrotate.d/hestia 2>/dev/null || true
 
 	echo "[ * ] Creating v-* symlinks..."
 	local hcmd vcmd
