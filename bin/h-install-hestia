@@ -152,8 +152,8 @@ install_base() {
 	# start if it is missing. Doing it here guarantees the file exists before any
 	# TLS-consuming service is (re)started. Fail loud: a missing DH file silently
 	# breaks mail delivery. Ship the curated file; regenerate only as a fallback.
-	if [ -s "$HESTIA_INSTALL_DIR/ssl/dhparam.pem" ]; then
-		cp -f "$HESTIA_INSTALL_DIR/ssl/dhparam.pem" /etc/ssl/dhparam.pem
+	if [ -s "$HESTIA/share/ssl/dhparam.pem" ]; then
+		cp -f "$HESTIA/share/ssl/dhparam.pem" /etc/ssl/dhparam.pem
 	else
 		echo "[ ! ] shipped dhparam.pem missing — generating (this is slow)..."
 		openssl dhparam -out /etc/ssl/dhparam.pem 2048
