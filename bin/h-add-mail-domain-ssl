@@ -87,27 +87,8 @@ fi
 # Call routine to add SSL configuration to mail domain
 add_mail_ssl_config
 
-if [ "$WEBMAIL" == "roundcube" ]; then
-	WEBMAIL_TEMPLATE="default"
-	if [ -n "$PROXY_SYSTEM" ]; then
-		PROXY_TEMPLATE="default"
-	fi
-	# Add webmail configuration to mail domain
-	WEBMAIL_TEMPLATE="default"
-	if [ "$WEB_SYSTEM" = "nginx" ]; then
-		WEBMAIL_TEMPLATE="web_system"
-	fi
-elif [ "$WEBMAIL" == "snappymail" ]; then
-	WEBMAIL_TEMPLATE="snappymail"
-	if [ -n "$PROXY_SYSTEM" ]; then
-		PROXY_TEMPLATE="default_snappymail"
-	fi
-else
-	WEBMAIL_TEMPLATE="disabled"
-	if [ -n "$PROXY_SYSTEM" ]; then
-		PROXY_TEMPLATE="default_disabled"
-	fi
-fi
+# Resolve template names (degrades to 'disabled' when the client isn't installed)
+select_webmail_template "$WEBMAIL"
 
 add_webmail_config "$WEB_SYSTEM" "${WEBMAIL_TEMPLATE}.stpl"
 

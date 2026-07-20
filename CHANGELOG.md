@@ -11,6 +11,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Moved the webmail vhost templates from `templates/mail/` into service-scoped
+  `share/nginx/webmail/` and `share/apache2/webmail/` (#119) — they are system
+  webmail-delivery assets (docroot-free proxies to the Panel-Caddy listeners,
+  #205), not a user-pickable template library like `templates/web/`. The
+  `nginx/apache2` split is structural (`add_webmail_config` keys on
+  `$WEB_SYSTEM`), so `MAILTPL` is retired and the resolver is now
+  `$HESTIA/share/$WEB_SYSTEM/webmail/$tpl`. Also removed the dead RainLoop
+  templates + refs (superseded by SnappyMail; never installed by HestiaRE):
+  `share/apache2/webmail/rainloop.{tpl,stpl}`, the rainloop branch in
+  `h-add-mail-domain-ssl`, and the guarded `/etc/rainloop/` block in
+  `h-change-sys-hostname`.
 - Dissolved `install/deb/ssl/` and `install/deb/logrotate/` into service-scoped
   `share/` homes (#119). `dhparam.pem` → `share/ssl/` (it is consumed
   cross-service — nginx `nginx.conf` and dovecot 2.3/2.4 `10-ssl.conf` both read
@@ -54,6 +65,20 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- Webmail now degrades safely when the selected client isn't installed (#119).
+  Previously `h-add-mail-domain-webmail` hard-exited `E_INVALID` if the client
+  wasn't in `WEBMAIL_SYSTEM`, `func/rebuild.sh` hardcoded `roundcube` (failing
+  when Roundcube was absent), and selection keyed off the template file existing
+  rather than the package — so a domain kept proxying to a dead `:8090/:8091`
+  after its webmailer was removed, and removing a webmailer never rebuilt mail
+  domains (stale 502 proxies). A shared `select_webmail_template()` helper
+  (`func/domain.sh`, used by both the webmail and SSL paths, killing the
+  divergent duplicate) now degrades an uninstalled/empty client to the
+  backend-safe `disabled` vhost, and `h-add/remove-sys-{roundcube,snappymail}`
+  re-render all mail domains so a webmailer install/removal takes effect
+  immediately. Verified on Debian 13 (nginx+apache): snappymail domain →
+  `:8091`; after `WEBMAIL_SYSTEM=''` → `disabled` vhost (local web stack, no 502,
+  no hard-fail); restore → `:8091`.
 - PHP-version validation regex now survives a two-digit major in
   `h-change-sys-php` and `h-delete-web-php` (`^[0-9]\.` → `^[0-9]+\.`). Audit A6:
   the same hardening had already landed in `h-change-sys-panel-php` /
