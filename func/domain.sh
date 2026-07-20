@@ -664,7 +664,7 @@ add_webmail_config() {
 	#   -If possible custom templates should be automatically upgraded to use the new format
 	#   -Alternatively a depreciation period with proper notifications should be considered
 
-	cat $MAILTPL/$1/$2 \
+	cat "$HESTIA/share/$1/webmail/$2" \
 		| sed -e "s|%ip%|$local_ip|g" \
 			-e "s|%domain%|$WEBMAIL_ALIAS.$domain|g" \
 			-e "s|%domain_idn%|$WEBMAIL_ALIAS.$domain_idn|g" \

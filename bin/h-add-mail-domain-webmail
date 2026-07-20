@@ -107,7 +107,7 @@ else
 		if [ "$WEB_SYSTEM" = "nginx" ]; then
 			WEBMAIL_TEMPLATE="web_system"
 		fi
-	elif [ -f "$HESTIA/templates/mail/$WEB_SYSTEM/$webmail.tpl" ]; then
+	elif [ -f "$HESTIA/share/$WEB_SYSTEM/webmail/$webmail.tpl" ]; then
 		WEBMAIL_TEMPLATE="$webmail"
 		if [ -n "$PROXY_SYSTEM" ]; then
 			PROXY_TEMPLATE="default_$webmail"
