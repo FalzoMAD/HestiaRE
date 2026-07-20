@@ -597,9 +597,12 @@ rebuild_mail_domain_conf() {
 			mkdir "$HOMEDIR/$user/mail/$domain_idn"
 		fi
 
-		# Webamil client
+		# Webmail client: pass '' so the default-picker chooses the last
+		# installed WEBMAIL_SYSTEM client (degrading to the 'disabled' vhost when
+		# none is installed) instead of hardcoding roundcube, which fails when
+		# roundcube is absent (#119).
 		if [ "$WEBMAIL" = '' ]; then
-			$BIN/h-add-mail-domain-webmail $user $domain 'roundcube' 'no'
+			$BIN/h-add-mail-domain-webmail $user $domain '' 'no'
 		fi
 
 		# Adding catchall email

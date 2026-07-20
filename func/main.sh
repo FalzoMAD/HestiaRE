@@ -57,7 +57,9 @@ HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 HESTIA_PHP="$HESTIA/bin/hestia-php"
 USER_DATA=$CONF_DIR/users/$user
 WEBTPL=$HESTIA/templates/web
-MAILTPL=$HESTIA/templates/mail
+# Webmail vhost templates live per serving app at $HESTIA/share/$WEB_SYSTEM/webmail/
+# (moved from templates/mail in #119) — resolved inline in add_webmail_config, so
+# no single-prefix MAILTPL var fits anymore.
 DNSTPL=$HESTIA/templates/dns
 RRD=$HESTIA/web/rrd
 SENDMAIL="$HESTIA/web/inc/mail-wrapper.php"

@@ -90,6 +90,11 @@ if echo "$WEBMAIL_SYSTEM" | grep -qw 'snappymail'; then
 	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "$new_webmail"
 fi
 
+# Re-render existing mail domains so their webmail vhosts stop proxying to the
+# now-removed listener — they fall back to the remaining client, or the safe
+# 'disabled' vhost when none is left (#119). No-op when no mail domains exist.
+$BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
