@@ -4,15 +4,10 @@
 #
 # example: h-delete-sys-postgresql
 #
-# Counterpart to h-add-sys-postgresql (#121). Refuses while customer databases
-# exist (maintained counter U_DB_BASES AND a live pg_database cross-check, since
-# the counter can drift and FORCE=yes exists). Data is preserved by default: the
-# cluster datadir is kept (set PURGE_DATA=yes to drop it). PostgreSQL packages are
-# **versioned** — `apt purge postgresql` alone leaves postgresql-<major> and its
-# running cluster behind (#121 K2) — so the installed major is purged explicitly.
-#
-# Env opt-ins: FORCE=yes skips the customer-DB pre-check; PURGE_DATA=yes also
-# drops the cluster datadir + config.
+# Counterpart to h-add-sys-postgresql. Refuses while customer DBs exist (counter +
+# live pg_database check). Datadir kept by default. Packages are versioned, so the
+# installed major (server + client) is purged explicitly, not just the metapackage.
+# Opt-ins: FORCE=yes skips the DB check; PURGE_DATA=yes drops the datadir + config.
 #
 # New h-* command — no v-* symlink.
 
@@ -69,12 +64,10 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# 1. Deregister the local host — strips the 'pgsql' token from DB_SYSTEM
-#    (h-delete-database-host). Ignore if it was never registered.
+# deregister the local host (strips DB_SYSTEM's pgsql token)
 $BIN/h-delete-database-host pgsql localhost > /dev/null 2>&1 || true
 
-# 2. Stop + purge. PostgreSQL packages are versioned: purge the installed major
-#    (server + client) explicitly, not just the `postgresql` metapackage (K2).
+# purge the installed major explicitly (versioned packages — the metapackage isn't enough)
 echo "[ * ] Removing PostgreSQL packages..."
 PG_MAJOR=$(pg_lsclusters -h 2> /dev/null | awk 'NR==1{print $1}')
 systemctl disable --now "postgresql@${PG_MAJOR}-main" > /dev/null 2>&1 || true
@@ -84,7 +77,7 @@ _pkgs="postgresql postgresql-contrib"
 # shellcheck disable=SC2086
 DEBIAN_FRONTEND=noninteractive apt-get -y -qq purge $_pkgs > /dev/null 2>&1 || true
 
-# 3. Datadir/config: kept by default (a later re-add reuses the cluster); opt-in wipe.
+# datadir/config kept by default (a re-add reuses the cluster); opt-in wipe
 if [ "${PURGE_DATA:-}" = "yes" ]; then
 	echo "[ * ] PURGE_DATA=yes — dropping cluster datadir + config..."
 	rm -rf /var/lib/postgresql /etc/postgresql

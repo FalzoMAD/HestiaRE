@@ -4,16 +4,10 @@
 #
 # example: h-delete-sys-mariadb
 #
-# Removes MariaDB again (counterpart to h-add-sys-mariadb, #121). Refuses while
-# the local host still carries customer databases — both the maintained counter
-# (U_DB_BASES) AND a live SHOW DATABASES cross-check, since the counter can drift
-# and FORCE=yes exists. Data is preserved by default: the datadir /var/lib/mysql
-# is kept (set PURGE_DATA=yes to wipe). phpMyAdmin (+SSO) is torn down first.
-#
-# Env opt-ins: FORCE=yes skips the customer-DB pre-check; PURGE_DATA=yes also
-# deletes the datadir.
-#
-# New h-* command — no v-* symlink.
+# Counterpart to h-add-sys-mariadb. Refuses while the local host still carries
+# customer DBs (counter + live SHOW DATABASES cross-check). Datadir /var/lib/mysql
+# is kept by default; phpMyAdmin (+SSO) is torn down first.
+# Opt-ins: FORCE=yes skips the customer-DB check; PURGE_DATA=yes also wipes the datadir.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -46,19 +40,13 @@ if ! dpkg -l mariadb-server 2> /dev/null | grep -q '^ii'; then
 	exit "$E_NOTEXIST"
 fi
 
-# Refuse while customer databases exist (unless FORCE=yes). Counter first, then a
-# live cross-check that ignores the server's own system schemas.
+# refuse while customer DBs exist (unless FORCE=yes): counter, then a live check
 if [ "${FORCE:-}" != "yes" ]; then
 	u_db_bases=$(grep -o "U_DB_BASES='[0-9]*'" "$HESTIA/conf/mysql.conf" 2> /dev/null | grep -o '[0-9]*' | head -1)
 	live_db=0
 	if [ -f /root/.my.cnf ]; then
-		# Exclude the server's own system schemas AND HestiaRE's app-owned DBs
-		# (phpMyAdmin config storage, Roundcube, SnappyMail) — those are not
-		# customer data and are torn down separately; counting them would falsely
-		# block the remove. Keep this safelist in sync if a new bundled app grows
-		# its own MySQL DB.
-		# grep -c always prints the count (and exits 1 at zero) — no `|| echo 0`,
-		# which would append a second line and break the numeric compare.
+		# exclude system schemas AND app-owned DBs (pma/roundcube/snappymail) — keep
+		# this safelist in sync if a new bundled app grows its own MySQL DB
 		live_db=$(mariadb -N -e "SHOW DATABASES;" 2> /dev/null \
 			| grep -vxE 'information_schema|performance_schema|mysql|sys|phpmyadmin|roundcube|snappymail' \
 			| grep -c .)
@@ -75,27 +63,22 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# 1. phpMyAdmin teardown first (SSO must go before the app, per h-delete-sys-*).
-#    Tolerant: no-op if already absent.
+# phpMyAdmin (SSO before the app), then deregister the host (strips DB_SYSTEM's mysql token)
 $BIN/h-delete-sys-pma-sso > /dev/null 2>&1 || true
 $BIN/h-delete-sys-phpmyadmin > /dev/null 2>&1 || true
-
-# 2. Deregister the local host — this strips the 'mysql' token from DB_SYSTEM
-#    (see h-delete-database-host). Ignore if it was never registered.
 $BIN/h-delete-database-host mysql localhost > /dev/null 2>&1 || true
 
-# 3. Stop + purge the packages (no autoremove — it would rip out auto-marked
-#    siblings of the shared stack; the rspamd remover follows the same caution).
+# purge packages (no autoremove — it would rip out shared-stack siblings)
 echo "[ * ] Removing MariaDB packages..."
 systemctl disable --now mariadb > /dev/null 2>&1 || true
 DEBIAN_FRONTEND=noninteractive apt-get -y -qq purge \
 	mariadb-server mariadb-client mariadb-common > /dev/null 2>&1 || true
 
-# 4. External repo cleanup (harmless if it was an OS-package install).
+# external repo cleanup (harmless on an OS-package install)
 rm -f /etc/apt/sources.list.d/mariadb.list /usr/share/keyrings/mariadb-keyring.gpg
 rm -f /root/.my.cnf
 
-# 5. Datadir: kept by default so a later re-add finds the databases; opt-in wipe.
+# datadir kept by default so a re-add finds the DBs; opt-in wipe
 if [ "${PURGE_DATA:-}" = "yes" ]; then
 	echo "[ * ] PURGE_DATA=yes — wiping /var/lib/mysql..."
 	rm -rf /var/lib/mysql
@@ -106,8 +89,7 @@ fi
 #----------------------------------------------------------#
 
 set_install_component DB_MARIADB false
-# Clear the version too — no installed engine, no version (state consistency; a
-# later re-add is explicit via h-add-sys-mariadb [VERSION]).
+# no engine, no version
 set_install_component DB_MARIADB_VERSION ""
 $BIN/h-change-sys-config-value 'DB_PMA_ALIAS' '' > /dev/null 2>&1 || true
 
