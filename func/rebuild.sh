@@ -551,10 +551,8 @@ rebuild_mail_domain_conf() {
 				> $HOMEDIR/$user/conf/mail/$domain/smtp_relay_exclude
 		fi
 
-		# Rebuild per-domain spam tuning files (#318). mail.conf holds the
-		# points value; the exim-facing score files carry integer tenths
-		# ($spam_score_int unit) without trailing newline. Empty/absent key
-		# removes a stale file so the global default applies again.
+		# rebuild per-domain spam score files (integer tenths, no newline);
+		# empty key removes the file so the global default applies
 		if [ -n "$U_SPAM_SCORE" ]; then
 			awk -v s="$U_SPAM_SCORE" 'BEGIN{printf "%d", s * 10 + 0.5}' \
 				> $HOMEDIR/$user/conf/mail/$domain/spam_score
@@ -597,10 +595,8 @@ rebuild_mail_domain_conf() {
 			mkdir "$HOMEDIR/$user/mail/$domain_idn"
 		fi
 
-		# Webmail client: pass '' so the default-picker chooses the last
-		# installed WEBMAIL_SYSTEM client (degrading to the 'disabled' vhost when
-		# none is installed) instead of hardcoding roundcube, which fails when
-		# roundcube is absent (#119).
+		# pass '' so the default-picker uses the last installed client (or 'disabled'),
+		# not a hardcoded roundcube that fails when roundcube is absent
 		if [ "$WEBMAIL" = '' ]; then
 			$BIN/h-add-mail-domain-webmail $user $domain '' 'no'
 		fi

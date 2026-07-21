@@ -638,13 +638,9 @@ del_mail_ssl_certificates() {
 	rm -f $HOMEDIR/$user/conf/mail/$domain/ssl/*
 }
 
-# Resolve the webmail vhost template names (WEBMAIL_TEMPLATE + PROXY_TEMPLATE) for
-# a chosen client, degrading to the safe 'disabled' vhost when the client is empty
-# or not installed (not in WEBMAIL_SYSTEM). This never hard-fails or proxies to a
-# dead webmail listener — a mail domain always renders a valid vhost (#119).
-# Shared by h-add-mail-domain-webmail (.tpl) and h-add-mail-domain-ssl (.stpl) so
-# the two paths cannot diverge. PROXY_TEMPLATE is only consumed when PROXY_SYSTEM
-# is set, so it is fine to always assign it.
+# resolve WEBMAIL_TEMPLATE + PROXY_TEMPLATE for a client, degrading to the safe
+# 'disabled' vhost when it's empty/not installed (never a dead proxy). Shared by
+# h-add-mail-domain-webmail (.tpl) and h-add-mail-domain-ssl (.stpl) so they can't diverge.
 select_webmail_template() {
 	local client="$1"
 	if [ -z "$client" ] \
