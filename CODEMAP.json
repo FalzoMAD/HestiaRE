@@ -39,7 +39,7 @@
         "baseline": "Each h-* command that predated Issue #23 has one v-* symlink. New h-* commands created after Issue #23 get NO v-* symlink — the v-* name never existed.",
         "escalation_rule": "When a command is substantially rewritten and diverges significantly from its HestiaCP upstream equivalent, its v-* symlink is removed. Rationale: prevent accidental upstream cherry-picks onto an internally incompatible implementation. Applied in Issue #54 (v-add-sys-roundcube removed after total rewrite for OS-package migration).",
         "deletion": "When removing an h-* command: remove its v-* symlink too — no orphans.",
-        "reconcile": "Committed v-* symlinks ship in the tarball; the install-time set is reconciled (not blanket-linked) by hestia-symlink-reconcile against the shipped allowlist share/hestia/v-commands.list (== git ls-files bin/v-*, == upstream bin/v-*). It creates/repairs listed aliases (v-x→h-x) and prunes any orphan (not in list) or dangling (h-* target gone, e.g. after a rename) — self-healing on existing installs (#123). Two gates: (1) release.yml fails the build if v-commands.list drifts from git ls-files bin/v-* (a stale list prunes valid symlinks — destructive — so it must never ship); (2) h-check-sys-smoke check_v_symlink_invariant enforces no-dangling + no-orphan at runtime. Regenerate the list: git ls-files 'bin/v-*' | sed 's|bin/||' | LC_ALL=C sort > share/hestia/v-commands.list."
+        "creation": "Committed v-* symlinks ship in the tarball, so the installer does NOT blanket-create them (a `for h-* ; ln -s v-*` loop minted an orphan alias for every HestiaRE-native command, #123). configure_hestia only prunes dangling v-* (a `find -xtype l` — e.g. an alias left pointing at a renamed/removed h-*); h-check-sys-smoke check_v_symlinks_resolve guards against a dangling alias at runtime. No allowlist: an extra working alias for a native command is harmless and not worth maintaining a list for a compat layer meant to fade out."
       },
       "entry_points": ["bin/h-*"],
       "directories": ["bin/"],
@@ -85,7 +85,7 @@
         "bin/h-add-firewall-rule": "bin/v-add-firewall-rule (near-verbatim)",
         "bin/h-update-sys-queue": "bin/v-update-sys-queue (near-verbatim; GHSA-47mf sink — see #393)",
         "reimplemented (v-* symlink removed)": "DB-engine lifecycle h-add/delete-sys-{mariadb,postgresql} + h-upgrade-sys-mariadb (#121/#207); h-add/delete-sys-{roundcube,snappymail} (#54/#234); h-search-user-object + h-search-object (#386 cr7q)",
-        "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/delete-sys-adminer, h-add/delete-sys-{rspamd,sieve,redis,proftpd}, hestia-php*, hestia-symlink-reconcile, h-change-sys-panel-php",
+        "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/delete-sys-adminer, h-add/delete-sys-{rspamd,sieve,redis,proftpd}, hestia-php*, h-change-sys-panel-php",
         "removal_verb": "Single removal verb h-delete-* across all commands (#123, upstream v-delete-* parity). The interim h-remove-sys-* names (redis in #121, etc.) were renamed to h-delete-sys-*."
       },
       "dependencies": ["func_libraries", "instance_config"],
@@ -430,7 +430,7 @@
         "install_mail": "exim4, dovecot (version-aware), rspamd (optional), webmailer roundcube/snappymail — only if COMPONENT_MAIL_BLOCK_PRESENT",
         "install_security": "iptables, ipset; fail2ban (optional); crowdsec (optional, minimal — #123)",
         "install_addons": "proftpd (→ h-add-sys-proftpd) / docker / filemanager per components (#123)",
-        "configure_hestia": "sudoers, v-* symlink reconcile (hestia-symlink-reconcile), SSL cert, admin user, firewall, default domain, crontab; writes .done.configure",
+        "configure_hestia": "sudoers, v-* dangling-symlink prune, SSL cert, admin user, firewall, default domain, crontab; writes .done.configure",
         "install_tools": "always-installed utilities + selected TOOLS_SELECTION + composer + wp-cli",
         "finalize_install": "start hestia.service, schedule LE host cert, final apt upgrade, print credentials"
       },

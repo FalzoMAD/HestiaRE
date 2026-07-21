@@ -16,10 +16,10 @@ section as part of its PR. On release, the section gets the version number.
   roundcube, rspamd, sieve, snappymail`. HestiaCP uses `v-delete-*` universally,
   so this restores cherry-pick parity and matches every object command
   (`h-delete-web-domain`, …); it reverses the interim `h-remove-sys-*` naming
-  introduced for redis in #121. No code path invoked the old names, and the v-*
-  reconcile (below) prunes the now-dangling `v-remove-sys-*` aliases on existing
-  installs — but any personal scripts calling `h-remove-sys-*`/`v-remove-sys-*`
-  must be updated.
+  introduced for redis in #121. No code path invoked the old names, and the
+  install-time dangling-symlink prune (below) clears the now-broken
+  `v-remove-sys-*` aliases on existing installs — but any personal scripts calling
+  `h-remove-sys-*`/`v-remove-sys-*` must be updated.
 - ProFTPD installs now set `FTP_SYSTEM=proftpd` (it was never recorded before,
   #123). New installs get it automatically; **pre-existing installs keep
   `FTP_SYSTEM` empty** (no migration before v1) — until re-run through
@@ -112,6 +112,11 @@ section as part of its PR. On release, the section gets the version number.
   `hestia-php-confd` now documents the full app inventory on the master plus an
   audit rule to grep all three app groups. SnappyMail was unaffected (no
   DOMDocument). Verified: `:8090` 500→200, smoke 33/0 on deb12 + ub24.
+- The installer no longer blanket-creates a `v-*` compat alias for every `h-*`
+  command (#123). Committed `v-*` symlinks already ship in the tarball, so the
+  loop only minted orphan aliases for HestiaRE-native commands. `configure_hestia`
+  now just prunes dangling `v-*` (e.g. one left by a renamed/removed `h-*`), and
+  `h-check-sys-smoke` guards that none dangle.
 - Webmail now degrades safely when the selected client isn't installed (#119).
   Previously `h-add-mail-domain-webmail` hard-exited `E_INVALID` if the client
   wasn't in `WEBMAIL_SYSTEM`, `func/rebuild.sh` hardcoded `roundcube` (failing

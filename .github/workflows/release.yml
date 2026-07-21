@@ -17,21 +17,6 @@ jobs:
       - name: Set version
         run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
 
-      # A9 guard: the v-* allowlist that drives the install-time symlink reconcile
-      # (share/hestia/v-commands.list) must match the committed v-* symlinks. A
-      # stale list prunes valid symlinks on install (destructive), so a drifted
-      # list must never ship. Fail the release if it is out of sync (#123).
-      - name: Verify v-commands.list matches committed v-* symlinks
-        run: |
-          expected=$(git ls-files 'bin/v-*' | sed 's|bin/||' | LC_ALL=C sort)
-          committed=$(LC_ALL=C sort share/hestia/v-commands.list)
-          if [ "$expected" != "$committed" ]; then
-            echo "ERROR: share/hestia/v-commands.list is out of sync with bin/v-*." >&2
-            echo "       Regenerate: git ls-files 'bin/v-*' | sed 's|bin/||' | LC_ALL=C sort > share/hestia/v-commands.list" >&2
-            diff <(echo "$committed") <(echo "$expected") || true
-            exit 1
-          fi
-
       - name: Build tarball
         run: |
           # VERSION aus dem Tag in die Datei schreiben
