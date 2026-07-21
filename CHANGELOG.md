@@ -9,6 +9,35 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Breaking / Upgrade notes
+
+- The system removal commands are unified under a single verb: `h-remove-sys-*` →
+  `h-delete-sys-*` (#123). Affected: `adminer, mariadb, postgresql, redis,
+  roundcube, rspamd, sieve, snappymail`. HestiaCP uses `v-delete-*` universally,
+  so this restores cherry-pick parity and matches every object command
+  (`h-delete-web-domain`, …); it reverses the interim `h-remove-sys-*` naming
+  introduced for redis in #121. No code path invoked the old names, and the v-*
+  reconcile (below) prunes the now-dangling `v-remove-sys-*` aliases on existing
+  installs — but any personal scripts calling `h-remove-sys-*`/`v-remove-sys-*`
+  must be updated.
+- ProFTPD installs now set `FTP_SYSTEM=proftpd` (it was never recorded before,
+  #123). New installs get it automatically; **pre-existing installs keep
+  `FTP_SYSTEM` empty** (no migration before v1) — until re-run through
+  `h-add-sys-proftpd`, the FTP machinery (`h-restart-ftp`, RRD FTP graph, smoke
+  FTP check, NAT MasqueradeAddress) stays inert on them, as it already was.
+
+### Added
+
+- `h-add-sys-proftpd` / `h-delete-sys-proftpd` — ProFTPD is now a fully modular,
+  individually-removable addon (#123). The curated config moved
+  `install/deb/proftpd/` → `share/proftpd/` (it was orphaned — never deployed, so
+  the distro default was live) and gained `Include modules.conf` (DSO loading)
+  and `Include conf.d/` (NAT MasqueradeAddress). The add command deploys the
+  config, records `FTP_SYSTEM=proftpd`, and opens the FTP firewall rule with the
+  passive range read from `PassivePorts` in the deployed config (single source);
+  the delete command purges and reverts all of it. `install_addons` delegates to
+  the add command instead of an inline `apt install`.
+
 ### Changed
 
 - Moved the webmail vhost templates from `templates/mail/` into service-scoped
@@ -85,7 +114,7 @@ section as part of its PR. On release, the section gets the version number.
   domains (stale 502 proxies). A shared `select_webmail_template()` helper
   (`func/domain.sh`, used by both the webmail and SSL paths, killing the
   divergent duplicate) now degrades an uninstalled/empty client to the
-  backend-safe `disabled` vhost, and `h-add/remove-sys-{roundcube,snappymail}`
+  backend-safe `disabled` vhost, and `h-add/delete-sys-{roundcube,snappymail}`
   re-render all mail domains so a webmailer install/removal takes effect
   immediately. Verified on Debian 13 (nginx+apache): snappymail domain →
   `:8091`; after `WEBMAIL_SYSTEM=''` → `disabled` vhost (local web stack, no 502,

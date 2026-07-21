@@ -38,7 +38,8 @@
       "symlink_policy": {
         "baseline": "Each h-* command that predated Issue #23 has one v-* symlink. New h-* commands created after Issue #23 get NO v-* symlink — the v-* name never existed.",
         "escalation_rule": "When a command is substantially rewritten and diverges significantly from its HestiaCP upstream equivalent, its v-* symlink is removed. Rationale: prevent accidental upstream cherry-picks onto an internally incompatible implementation. Applied in Issue #54 (v-add-sys-roundcube removed after total rewrite for OS-package migration).",
-        "deletion": "When removing an h-* command: remove its v-* symlink too — no orphans."
+        "deletion": "When removing an h-* command: remove its v-* symlink too — no orphans.",
+        "reconcile": "Committed v-* symlinks ship in the tarball; the install-time set is reconciled (not blanket-linked) by hestia-symlink-reconcile against the shipped allowlist share/hestia/v-commands.list (== git ls-files bin/v-*, == upstream bin/v-*). It creates/repairs listed aliases (v-x→h-x) and prunes any orphan (not in list) or dangling (h-* target gone, e.g. after a rename) — self-healing on existing installs (#123). Two gates: (1) release.yml fails the build if v-commands.list drifts from git ls-files bin/v-* (a stale list prunes valid symlinks — destructive — so it must never ship); (2) h-check-sys-smoke check_v_symlink_invariant enforces no-dangling + no-orphan at runtime. Regenerate the list: git ls-files 'bin/v-*' | sed 's|bin/||' | LC_ALL=C sort > share/hestia/v-commands.list."
       },
       "entry_points": ["bin/h-*"],
       "directories": ["bin/"],
@@ -83,8 +84,9 @@
         "bin/h-backup-user": "bin/v-backup-user (near-verbatim)",
         "bin/h-add-firewall-rule": "bin/v-add-firewall-rule (near-verbatim)",
         "bin/h-update-sys-queue": "bin/v-update-sys-queue (near-verbatim; GHSA-47mf sink — see #393)",
-        "reimplemented (v-* symlink removed)": "DB-engine lifecycle h-add/remove-sys-{mariadb,postgresql} + h-upgrade-sys-mariadb (#121/#207); h-add/remove-sys-{roundcube,snappymail} (#54/#234); h-search-user-object + h-search-object (#386 cr7q)",
-        "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/remove-sys-adminer, h-add/remove-sys-{rspamd,sieve,redis}, hestia-php*, h-change-sys-panel-php"
+        "reimplemented (v-* symlink removed)": "DB-engine lifecycle h-add/delete-sys-{mariadb,postgresql} + h-upgrade-sys-mariadb (#121/#207); h-add/delete-sys-{roundcube,snappymail} (#54/#234); h-search-user-object + h-search-object (#386 cr7q)",
+        "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/delete-sys-adminer, h-add/delete-sys-{rspamd,sieve,redis,proftpd}, hestia-php*, hestia-symlink-reconcile, h-change-sys-panel-php",
+        "removal_verb": "Single removal verb h-delete-* across all commands (#123, upstream v-delete-* parity). The interim h-remove-sys-* names (redis in #121, etc.) were renamed to h-delete-sys-*."
       },
       "dependencies": ["func_libraries", "instance_config"],
       "upstream_debt": {
@@ -298,6 +300,7 @@
         "install/deb/fail2ban/": "install/deb/fail2ban/ (in place, near-verbatim)",
         "templates/web/": "install/deb/templates/web/ (near-verbatim; user-pickable web template library)",
         "share/{nginx,apache2}/webmail/": "install/deb/templates/mail/ (reworked to Panel-Caddy proxies #205; moved per-service #119, MAILTPL retired; dead rainloop removed)",
+        "share/proftpd/": "install/deb/proftpd/ (moved #123; deployed by h-add-sys-proftpd — was orphaned; +Include modules.conf/conf.d)",
         "packages/*.pkg": "install/deb/packages/ (moved, near-verbatim)",
         "share/panel-caddy/, share/panel-php/, share/dovecot/": "hestiare-native (see panel_caddy_service / panel_php_service)"
       },
@@ -426,8 +429,8 @@
         "install_db": "MariaDB (version from COMPONENT_DB_MARIADB_VERSION); phpMyAdmin/PostgreSQL/Redis per components",
         "install_mail": "exim4, dovecot (version-aware), rspamd (optional), webmailer roundcube/snappymail — only if COMPONENT_MAIL_BLOCK_PRESENT",
         "install_security": "iptables, ipset; fail2ban (optional); crowdsec (optional, minimal — #123)",
-        "install_addons": "proftpd / docker / filemanager per components (minimal — #123)",
-        "configure_hestia": "sudoers, v-* symlinks, SSL cert, admin user, firewall, default domain, crontab; writes .done.configure",
+        "install_addons": "proftpd (→ h-add-sys-proftpd) / docker / filemanager per components (#123)",
+        "configure_hestia": "sudoers, v-* symlink reconcile (hestia-symlink-reconcile), SSL cert, admin user, firewall, default domain, crontab; writes .done.configure",
         "install_tools": "always-installed utilities + selected TOOLS_SELECTION + composer + wp-cli",
         "finalize_install": "start hestia.service, schedule LE host cert, final apt upgrade, print credentials"
       },
@@ -468,7 +471,7 @@
     "always_installed": ["nginx", "php-multi-sury", "mariadb", "phpmyadmin", "caddy", "iptables", "fail2ban", "ipset", "composer", "wp-cli"],
     "standard_profile": ["apache2-os-only", "exim4", "dovecot", "rspamd", "roundcube"],
     "minimal_profile": ["standard minus apache2 and mail stack"],
-    "optional_h_add_remove": ["proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
+    "optional_h_add_delete": ["proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
     "never_install": ["bind9", "vsftpd", "web-terminal", "spamassassin", "software-installer"],
     "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "caddyfile": "/etc/caddy/Caddyfile", "site_config": "/etc/caddy/hestia.conf", "install_source": "share/panel-caddy/" },
     "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "share/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock", "reference_version_source": "share/manifest.json -> components.PANEL_PHP.reference_version (#272): single source for installer PHP_VER + wizard checklist lock; always routed through h-add-web-php for the full extension set" }
