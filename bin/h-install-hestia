@@ -682,8 +682,8 @@ install_security() {
 install_addons() {
 	[ -f "$CONF_DIR/.done.addons" ] && { echo "[ skip ] addons already configured"; return 0; }
 	if is_on "${COMPONENT_ADDON_PROFTPD:-}"; then
-		echo "[ * ] Installing ProFTPD (minimal — see #123)..."
-		hestia_apt -y install proftpd-basic || true
+		echo "[ * ] Installing ProFTPD..."
+		"$BIN/h-add-sys-proftpd" >> "$LOG" 2>&1 || true
 	fi
 	if is_on "${COMPONENT_ADDON_DOCKER:-}"; then
 		echo "[ * ] Installing docker.io (minimal — see #123)..."
