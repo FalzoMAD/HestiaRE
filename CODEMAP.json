@@ -300,7 +300,7 @@
         "install/deb/fail2ban/": "install/deb/fail2ban/ (in place, near-verbatim)",
         "templates/web/": "install/deb/templates/web/ (near-verbatim; user-pickable web template library)",
         "share/{nginx,apache2}/webmail/": "install/deb/templates/mail/ (reworked to Panel-Caddy proxies #205; moved per-service #119, MAILTPL retired; dead rainloop removed)",
-        "share/proftpd/": "install/deb/proftpd/ (moved #123; deployed by h-add-sys-proftpd — was orphaned; +Include modules.conf/conf.d)",
+        "share/proftpd/": "install/deb/proftpd/ (moved #123; deployed by h-add-sys-proftpd — was orphaned; +Include modules.conf/conf.d; +apparmor-local for Ubuntu 26's enforced proftpd profile)",
         "packages/*.pkg": "install/deb/packages/ (moved, near-verbatim)",
         "share/panel-caddy/, share/panel-php/, share/dovecot/": "hestiare-native (see panel_caddy_service / panel_php_service)"
       },

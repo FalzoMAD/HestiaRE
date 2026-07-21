@@ -53,20 +53,38 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Install only if the package is absent. The rest of this command (config deploy,
-# FTP_SYSTEM, firewall, service enable) runs unconditionally and is idempotent —
-# so re-running heals an existing install (which never had FTP_SYSTEM set, nor
-# the curated config, since proftpd came inline from install_addons) and repairs
-# a hand-broken /etc/proftpd/proftpd.conf. The dpkg check is what gates the apt
-# step, NOT a flag: COMPONENT_ADDON_PROFTPD is the wizard selection (already
-# "true" before this first runs from the installer) (#121 F3, #123 R7).
-if ! dpkg -l proftpd-basic 2> /dev/null | grep -q '^ii'; then
-	echo "Installing proftpd-basic..."
-	apt-get -y -qq install proftpd-basic > /dev/null 2>&1
-	if ! dpkg -l proftpd-basic 2> /dev/null | grep -q '^ii'; then
-		echo "ERROR: proftpd-basic installation failed."
-		exit "$E_INVALID"
-	fi
+# Uniform package set across all targets (Debian 12/13, Ubuntu 24/26): the daemon
+# (proftpd-core), the vroot module the curated config's VRootEngine block needs,
+# and the crypto module that provides mod_tls for FTPS. All three are available
+# on every target (verified) — proftpd-basic is a bookworm-only metapackage that
+# merely pulls proftpd-core, and modern proftpd (1.3.9, and 1.3.8 on trixie/ubuntu)
+# split TLS out of the base package into proftpd-mod-crypto, so it must be named
+# explicitly or FTPS silently degrades to plaintext.
+proftpd_pkgs="proftpd-core proftpd-mod-vroot proftpd-mod-crypto"
+
+# Install the full set unconditionally — apt is idempotent, so this is a fast
+# no-op when everything is present, but it still completes a PARTIAL install
+# (e.g. proftpd-core present from the old inline install_addons path but mod-crypto
+# missing — which left mod_tls unresolvable and FTPS dead). The rest of this
+# command (config deploy, FTP_SYSTEM, firewall, service enable) is likewise
+# idempotent, so re-running heals an existing install and repairs a hand-broken
+# proftpd.conf. NOT flag-gated: COMPONENT_ADDON_PROFTPD is the wizard selection
+# (already "true" before this first runs from the installer) (#121 F3, #123 R7).
+echo "Installing ProFTPD ($proftpd_pkgs)..."
+# shellcheck disable=SC2086
+apt-get -y -qq install $proftpd_pkgs > /dev/null 2>&1
+if ! dpkg -l proftpd-core 2> /dev/null | grep -q '^ii'; then
+	echo "ERROR: ProFTPD installation failed."
+	exit "$E_INVALID"
+fi
+
+# Verify mod_tls actually landed. configtest cannot catch its absence: the TLS
+# block in tls.conf is guarded by <IfModule mod_tls.c>, so without the module the
+# config silently parses clean and proftpd serves plaintext-only (FTPS clients
+# then fail with "peer does not support SSL"). Fail loudly instead (#123).
+if ! find /usr/lib -name 'mod_tls.so' 2> /dev/null | grep -q .; then
+	echo "ERROR: mod_tls not installed — FTPS would be silently disabled."
+	exit "$E_INVALID"
 fi
 
 # Deploy the curated config over the distro default (upstream HestiaCP model:
@@ -74,6 +92,31 @@ fi
 # conf.d/ so DSO loading and the NAT MasqueradeAddress drop-in keep working.
 cp -f "$HESTIA/share/proftpd/proftpd.conf" /etc/proftpd/proftpd.conf
 cp -f "$HESTIA/share/proftpd/tls.conf" /etc/proftpd/tls.conf
+
+# AppArmor: newer proftpd packages (1.3.9-era, e.g. Ubuntu 26) ship an enforced
+# profile that denies reading the panel TLS cert under /usr/local/hestia/ssl/
+# (even as root — apparmor confines by profile, not uid), so mod_tls fatals and
+# FTPS dies. Drop a local override into the profile's `include if exists
+# <local/proftpd>` hook and reload. No-op where there is no profile (Debian,
+# Ubuntu 24) (#123).
+if [ -f /etc/apparmor.d/proftpd ]; then
+	mkdir -p /etc/apparmor.d/local
+	cp -f "$HESTIA/share/proftpd/apparmor-local" /etc/apparmor.d/local/proftpd
+	apparmor_parser -r /etc/apparmor.d/proftpd > /dev/null 2>&1 || true
+fi
+
+# Validate the deployed config before (re)starting — a syntax error or an
+# unresolvable module (e.g. mod_tls missing because a mod package did not
+# install) makes proftpd fatal on start; catch it here with a clear error
+# instead of a service that flaps. proftpd -t exits non-zero and prints the
+# offending line on failure.
+if ! proftpd -t > /tmp/hst-proftpd-test.log 2>&1; then
+	echo "ERROR: proftpd config test failed after deploying the curated config:"
+	tail -n 3 /tmp/hst-proftpd-test.log | sed 's/^/       /'
+	rm -f /tmp/hst-proftpd-test.log
+	exit "$E_INVALID"
+fi
+rm -f /tmp/hst-proftpd-test.log
 
 # Record the FTP backend — this was never set before (#123), leaving h-restart-ftp,
 # the RRD FTP grapher, the smoke FTP check and the NAT branch all inert.

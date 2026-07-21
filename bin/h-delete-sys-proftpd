@@ -42,8 +42,9 @@ check_hestia_demo_mode
 # Not-installed guard is artefact-based, NOT flag-based: existing installs got
 # proftpd from the old inline install_addons path and never had
 # COMPONENT_ADDON_PROFTPD set, so a flag guard would wrongly refuse to remove it
-# (the same twin-class trap that bit webmail). Guard on the package instead.
-if ! dpkg -l proftpd-basic 2> /dev/null | grep -q '^ii' && [ "$FORCE" != 'yes' ]; then
+# (the same twin-class trap that bit webmail). Guard on proftpd-core — the actual
+# daemon package on both Debian (via proftpd-basic) and Ubuntu.
+if ! dpkg -l proftpd-core 2> /dev/null | grep -q '^ii' && [ "$FORCE" != 'yes' ]; then
 	echo "ERROR: ProFTPD is not installed. Use FORCE=yes to clean up anyway."
 	exit "$E_NOTEXIST"
 fi
@@ -53,11 +54,22 @@ fi
 #----------------------------------------------------------#
 
 systemctl disable --now proftpd > /dev/null 2>&1 || true
-apt-get -y -qq purge proftpd-basic > /dev/null 2>&1
+# Purge whatever proftpd* packages are actually installed — OS-agnostic, so it
+# covers Debian's proftpd-basic and Ubuntu's proftpd-core plus the mod-* packages
+# without hardcoding a per-distro list (and without erroring on a name that does
+# not exist on this distro).
+proftpd_installed="$(dpkg-query -W -f='${Package} ${db:Status-Status}\n' 'proftpd*' 2> /dev/null \
+	| awk '$2 == "installed" {print $1}')"
+if [ -n "$proftpd_installed" ]; then
+	# shellcheck disable=SC2086
+	apt-get -y -qq purge $proftpd_installed > /dev/null 2>&1
+fi
 apt-get -y -qq autoremove > /dev/null 2>&1
 
-# Remove our own drop-in (not owned by the package, so purge leaves it behind).
+# Remove our own drop-ins (not owned by the package, so purge leaves them behind):
+# the NAT MasqueradeAddress include and the AppArmor cert-read override.
 rm -f /etc/proftpd/conf.d/external_ip.conf
+rm -f /etc/apparmor.d/local/proftpd
 
 # Clear the FTP backend only if it is actually proftpd — never clobber another
 # backend's value (symmetric to the add side's refusal to switch).

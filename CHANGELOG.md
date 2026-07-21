@@ -36,7 +36,14 @@ section as part of its PR. On release, the section gets the version number.
   config, records `FTP_SYSTEM=proftpd`, and opens the FTP firewall rule with the
   passive range read from `PassivePorts` in the deployed config (single source);
   the delete command purges and reverts all of it. `install_addons` delegates to
-  the add command instead of an inline `apt install`.
+  the add command instead of an inline `apt install`. Cross-distro handling
+  (verified on Debian 12/13 + Ubuntu 24/26): a uniform package set
+  (`proftpd-core proftpd-mod-vroot proftpd-mod-crypto` — `proftpd-basic` is
+  bookworm-only and modern proftpd split TLS into `proftpd-mod-crypto`), an
+  explicit `mod_tls` presence gate (its absence silently disables FTPS — the TLS
+  block is `<IfModule mod_tls.c>`-guarded), and an AppArmor local override
+  (`share/proftpd/apparmor-local`) so Ubuntu 26's enforced proftpd profile can
+  read the panel cert.
 
 ### Changed
 
