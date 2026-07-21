@@ -166,6 +166,44 @@ check_banner() {
 	fi
 }
 
+# check_v_symlink_invariant — A9: every v-* compat alias must (a) resolve to an
+# existing h-* command (no dangling) and (b) appear in the shipped allowlist
+# ($HESTIA/share/hestia/v-commands.list == upstream's bin/v-*), i.e. no orphan
+# minted for a HestiaRE-only command. This is the runtime guard for the #123
+# reconcile: a regression to a blanket `for h-* ; ln -s v-*` loop, or a rename
+# that leaves a dangling alias, fails here instead of drifting silently.
+check_v_symlink_invariant() {
+	local list="$HESTIA/share/hestia/v-commands.list"
+	if [ ! -f "$list" ]; then
+		no "A9 v-* allowlist missing ($list)"
+		return
+	fi
+	local f name dangling=0 orphan=0 first_d="" first_o=""
+	for f in "$HESTIA/bin"/v-*; do
+		[ -e "$f" ] || [ -L "$f" ] || continue
+		name="${f##*/}"
+		# A dangling symlink: it is a link but its target does not resolve.
+		if [ -L "$f" ] && [ ! -e "$f" ]; then
+			dangling=$((dangling + 1))
+			[ -z "$first_d" ] && first_d="$name"
+		fi
+		if ! grep -qxF "$name" "$list"; then
+			orphan=$((orphan + 1))
+			[ -z "$first_o" ] && first_o="$name"
+		fi
+	done
+	if [ "$dangling" -eq 0 ]; then
+		ok "A9: no dangling v-* symlinks"
+	else
+		no "A9: $dangling dangling v-* symlink(s)" "$first_d"
+	fi
+	if [ "$orphan" -eq 0 ]; then
+		ok "A9: no orphan v-* symlinks (all in allowlist)"
+	else
+		no "A9: $orphan orphan v-* symlink(s) not in allowlist" "$first_o"
+	fi
+}
+
 # check_sudoers <file> <label> — the file parses cleanly under the running sudo.
 # A single setting the local sudo rejects (e.g. requiretty, not implemented by
 # sudo-rs — Ubuntu 26's default sudo, #363) makes sudo discard the WHOLE file —
@@ -278,6 +316,8 @@ check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$
 # GHSA-cr7q: the search-object commands must not eval raw conf-field payloads.
 check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
 	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
+# A9: v-* compat symlinks reconcile to the shipped allowlist (no dangling, no orphan).
+check_v_symlink_invariant
 
 #----------------------------------------------------------#
 #                       Result                             #

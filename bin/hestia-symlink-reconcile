@@ -1,0 +1,80 @@
+#!/bin/bash
+# info: reconcile v-* compatibility symlinks against the shipped allowlist
+# options: NONE
+#
+# example: hestia-symlink-reconcile
+#
+# The v-* names are HestiaCP-compatibility aliases for our h-* commands, kept
+# only to ease cherry-picking upstream changes (Issue #23). The canonical set is
+# the one that exists upstream — shipped here as $HESTIA/share/hestia/v-commands.list
+# (generated from `git ls-files bin/v-*`, which the A9 audit proved == upstream's
+# bin/v-*). This helper makes $HESTIA/bin converge on exactly that set:
+#
+#   * create/repair — every listed v-name points at its h-* command (v-x -> h-x);
+#   * prune         — any v-* NOT in the list (an orphan a previous blanket loop
+#                     invented for a HestiaRE-only command), or any dangling v-*
+#                     (target h-* gone, e.g. after a rename), is removed.
+#
+# Idempotent and self-healing: a fresh install converges (no orphans to begin
+# with), and an existing install heals its leftovers on the next run. Replaces
+# the old blanket `for h-* ; ln -s v-*` loop in the installer, which minted an
+# orphan v-* for every new h-* command (breaking the A9 invariant at runtime).
+#
+# Not a user-facing command — no v-* symlink (it is a hestia-* internal).
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env 2> /dev/null
+[ -z "$HESTIA" ] && HESTIA="/usr/local/hestia"
+BIN="$HESTIA/bin"
+LIST="$HESTIA/share/hestia/v-commands.list"
+
+if [ "$(id -u)" != '0' ]; then
+	echo "ERROR: hestia-symlink-reconcile must be run as root" >&2
+	exit 10
+fi
+
+if [ ! -f "$LIST" ]; then
+	echo "ERROR: allowlist $LIST not found" >&2
+	exit 3
+fi
+
+created=0
+pruned=0
+
+# Allowed set (keys = valid v-* names).
+declare -A allowed=()
+while read -r v; do
+	[ -n "$v" ] && allowed["$v"]=1
+done < "$LIST"
+
+# 1. Prune: any v-* symlink in $BIN that is not in the allowlist. A listed but
+#    dangling one is left for step 2 to repair; an unlisted one is an orphan.
+for f in "$BIN"/v-*; do
+	# Guard the literal glob when no v-* exists.
+	[ -e "$f" ] || [ -L "$f" ] || continue
+	name="${f##*/}"
+	if [ -z "${allowed[$name]:-}" ]; then
+		rm -f "$f" && pruned=$((pruned + 1))
+	fi
+done
+
+# 2. Create/repair: each listed v-name must be a symlink to its h-* command.
+#    v-x -> h-x (relative), matching the committed convention (verified: all 434
+#    committed symlinks follow it). If the h-* target is gone, drop the alias
+#    rather than leave a dangling link.
+for name in "${!allowed[@]}"; do
+	target="h-${name#v-}"
+	link="$BIN/$name"
+	if [ -f "$BIN/$target" ]; then
+		# Recreate only when missing or pointing elsewhere (keeps it idempotent).
+		if [ "$(readlink "$link" 2> /dev/null)" != "$target" ]; then
+			ln -sf "$target" "$link" && created=$((created + 1))
+		fi
+	else
+		[ -L "$link" ] && rm -f "$link" && pruned=$((pruned + 1))
+	fi
+done
+
+echo "[ OK ] v-* symlinks reconciled ($created created/repaired, $pruned pruned)"
+exit 0

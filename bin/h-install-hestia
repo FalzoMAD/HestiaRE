@@ -741,12 +741,12 @@ configure_hestia() {
 	chmod 440 /etc/sudoers.d/hestia
 	cp -f "$HESTIA/share/hestia/logrotate" /etc/logrotate.d/hestia 2>/dev/null || true
 
-	echo "[ * ] Creating v-* symlinks..."
-	local hcmd vcmd
-	for hcmd in "$HESTIA/bin/h-"*; do
-		vcmd="$HESTIA/bin/v-${hcmd##*/h-}"
-		[ -L "$vcmd" ] || ln -s "$(basename "$hcmd")" "$vcmd"
-	done
+	echo "[ * ] Reconciling v-* symlinks..."
+	# Committed v-* symlinks ship in the tarball; this only reconciles $BIN to the
+	# shipped allowlist (create/repair the listed ones, prune orphans/dangling).
+	# NOT a blanket `for h-* ; ln -s` — that minted an orphan v-* for every new
+	# HestiaRE-only command and broke the A9 symlink invariant at runtime (#123).
+	"$BIN/hestia-symlink-reconcile" || true
 
 	echo "[ * ] Installing firewall data; customizing shipped packages..."
 	# packages/ and templates/ ship at the install root via the tarball — no copy.
