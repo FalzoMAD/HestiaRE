@@ -10,7 +10,7 @@
 # else COMPONENT_DB_MARIADB_VERSION, else __os__ (OS default). 12.3|11.8|11.4 pull
 # the MariaDB.org repo; __os__ uses the distribution package (#226). No prompt —
 # the interactive choice lives in the wizard; here it is arg-driven and scriptable.
-# The resolved version is recorded back into install.conf (h-remove-sys-mariadb
+# The resolved version is recorded back into install.conf (h-delete-sys-mariadb
 # clears it).
 # Reproduces the former inline installer logic (repo/keyring, RAM-tiered my.cnf,
 # root unix_socket hardening, host registration) as a standalone, idempotent,
@@ -173,7 +173,7 @@ mariadb -e "FLUSH PRIVILEGES;"
 set_install_component DB_MARIADB true
 # Record the resolved version so install.conf reflects what is actually installed
 # (matters for post-install adds where the arg differs from / is absent in the
-# wizard value; h-remove-sys-mariadb clears it again).
+# wizard value; h-delete-sys-mariadb clears it again).
 set_install_component DB_MARIADB_VERSION "$MARIADB_VER"
 
 # Register the local MariaDB host so the panel can manage MySQL DBs (this is the

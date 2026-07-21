@@ -166,6 +166,21 @@ check_banner() {
 	fi
 }
 
+# check_v_symlinks_resolve — the v-* compat aliases must not dangle: every one
+# must resolve to an existing h-* command. Catches a rename/removal that left a
+# stale alias behind (the install-time prune should have cleared it). We do NOT
+# police "extra" aliases — a harmless working alias for a native command is not
+# worth an allowlist to maintain, for a compat layer that is meant to fade out.
+check_v_symlinks_resolve() {
+	local dangling first
+	dangling=$(find "$HESTIA/bin" -maxdepth 1 -name 'v-*' -xtype l 2> /dev/null)
+	if [ -z "$dangling" ]; then
+		ok "no dangling v-* symlinks"
+	else
+		no "dangling v-* symlink(s)" "$(echo "$dangling" | head -n1 | xargs basename)"
+	fi
+}
+
 # check_sudoers <file> <label> — the file parses cleanly under the running sudo.
 # A single setting the local sudo rejects (e.g. requiretty, not implemented by
 # sudo-rs — Ubuntu 26's default sudo, #363) makes sudo discard the WHOLE file —
@@ -278,6 +293,8 @@ check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$
 # GHSA-cr7q: the search-object commands must not eval raw conf-field payloads.
 check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
 	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
+# v-* compat symlinks must all resolve (no dangling alias left by a rename).
+check_v_symlinks_resolve
 
 #----------------------------------------------------------#
 #                       Result                             #

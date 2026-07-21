@@ -2,7 +2,7 @@
 # info: remove rspamd antispam
 # options: NONE
 #
-# example: h-remove-sys-rspamd
+# example: h-delete-sys-rspamd
 #
 # Unwires and uninstalls rspamd: exim macros back to inert (mail flows
 # unscanned, per-domain antispam flags and spam-tuning files stay in place —

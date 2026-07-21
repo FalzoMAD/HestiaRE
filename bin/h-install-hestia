@@ -682,8 +682,8 @@ install_security() {
 install_addons() {
 	[ -f "$CONF_DIR/.done.addons" ] && { echo "[ skip ] addons already configured"; return 0; }
 	if is_on "${COMPONENT_ADDON_PROFTPD:-}"; then
-		echo "[ * ] Installing ProFTPD (minimal — see #123)..."
-		hestia_apt -y install proftpd-basic || true
+		echo "[ * ] Installing ProFTPD..."
+		"$BIN/h-add-sys-proftpd" >> "$LOG" 2>&1 || true
 	fi
 	if is_on "${COMPONENT_ADDON_DOCKER:-}"; then
 		echo "[ * ] Installing docker.io (minimal — see #123)..."
@@ -741,12 +741,11 @@ configure_hestia() {
 	chmod 440 /etc/sudoers.d/hestia
 	cp -f "$HESTIA/share/hestia/logrotate" /etc/logrotate.d/hestia 2>/dev/null || true
 
-	echo "[ * ] Creating v-* symlinks..."
-	local hcmd vcmd
-	for hcmd in "$HESTIA/bin/h-"*; do
-		vcmd="$HESTIA/bin/v-${hcmd##*/h-}"
-		[ -L "$vcmd" ] || ln -s "$(basename "$hcmd")" "$vcmd"
-	done
+	# Committed v-* compat symlinks ship in the tarball, so we do NOT blanket-create
+	# them (a `for h-* ; ln -s v-*` loop minted an orphan alias for every
+	# HestiaRE-native command, #123). Just prune dangling ones — e.g. a v-* left
+	# pointing at an h-* that was renamed or removed.
+	find "$HESTIA/bin" -maxdepth 1 -name 'v-*' -xtype l -delete 2> /dev/null || true
 
 	echo "[ * ] Installing firewall data; customizing shipped packages..."
 	# packages/ and templates/ ship at the install root via the tarball — no copy.
@@ -945,7 +944,7 @@ finalize_install() {
 	# Stamp install.conf as the live system-state file (HestiaRE #103). The
 	# COMPONENT_* keys written by the wizard already describe what was installed;
 	# add install metadata so install.conf is a complete system description that
-	# h-add-sys-*/h-remove-sys-* keep current via set_install_component.
+	# h-add-sys-*/h-delete-sys-* keep current via set_install_component.
 	local _ver; _ver=$(cat "$HESTIA/VERSION" 2>/dev/null || echo "dev")
 	grep -q '^INSTALL_DATE=' "$INSTALL_CONF" 2>/dev/null || echo "INSTALL_DATE=\"$(date +%F)\"" >> "$INSTALL_CONF"
 	if grep -q '^INSTALL_VERSION=' "$INSTALL_CONF" 2>/dev/null; then

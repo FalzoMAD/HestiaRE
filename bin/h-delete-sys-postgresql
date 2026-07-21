@@ -2,7 +2,7 @@
 # info: remove PostgreSQL database server
 # options: NONE
 #
-# example: h-remove-sys-postgresql
+# example: h-delete-sys-postgresql
 #
 # Counterpart to h-add-sys-postgresql (#121). Refuses while customer databases
 # exist (maintained counter U_DB_BASES AND a live pg_database cross-check, since

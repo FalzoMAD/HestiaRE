@@ -2,7 +2,7 @@
 # info: remove MariaDB database server
 # options: NONE
 #
-# example: h-remove-sys-mariadb
+# example: h-delete-sys-mariadb
 #
 # Removes MariaDB again (counterpart to h-add-sys-mariadb, #121). Refuses while
 # the local host still carries customer databases — both the maintained counter

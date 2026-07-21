@@ -72,7 +72,7 @@ CHECK_RESULT_CALLBACK=""
 # install.conf live component state (HestiaRE).
 # $CONF_DIR/install.conf is written by the wizard as the install recipe and is
 # the source of truth for which components are currently installed. h-add-sys-*/
-# h-remove-sys-* call this after a successful (un)install so the file reflects the
+# h-delete-sys-* call this after a successful (un)install so the file reflects the
 # live system without parsing service state. Idempotent: updates the key in place
 # or appends it. <id> is the manifest component id (e.g. DB_PHPMYADMIN), stored as
 # COMPONENT_<id>="<value>". No-op (and success) when install.conf is absent.

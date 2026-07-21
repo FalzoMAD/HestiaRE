@@ -31,7 +31,7 @@
 #
 # ROLLBACK (documented, manual): a failed/regretted upgrade cannot be undone
 # in place. Recover with the dump this command forces:
-#   1. h-remove-sys-mariadb (FORCE=yes) && PURGE_DATA=yes  # drop new-format datadir
+#   1. h-delete-sys-mariadb (FORCE=yes) && PURGE_DATA=yes  # drop new-format datadir
 #   2. h-add-sys-mariadb <old-version>                     # reinstall old version
 #   3. zcat <backup>.sql.gz | mariadb                      # restore the dump
 #   4. mariadb -e "FLUSH PRIVILEGES;"

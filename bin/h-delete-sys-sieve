@@ -2,7 +2,7 @@
 # info: remove sieve mail filtering
 # options: NONE
 #
-# example: h-remove-sys-sieve
+# example: h-delete-sys-sieve
 #
 # Unwires and uninstalls sieve: exim's SIEVE macro back to inert (clean local
 # delivery returns to the appendfile transport), the sieve packages are
