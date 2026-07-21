@@ -42,18 +42,33 @@ These are absolute. Never deviate, never re-suggest rejected items.
 
 ## COMMENT STYLE
 
-Comments are terse. Nobody reads a wall of them.
+Comments are terse. Nobody reads a wall of them. But some comments carry
+hard-won knowledge — condense what the code *does*, keep why it *must*.
 
-- **Inline** (mid-code): one line max, only a short *what*/*why*. Drop comments that
-  just restate the code. Keep short (≤5-word) upstream scaffolding as-is
-  (`# Includes`, section banners) — don't churn near-verbatim upstream files.
-- **Bigger explanation** → the file's header comment block, not inline. Only when it
-  carries real weight: strong upstream divergence or security. Add a date/version
-  when useful. Keep it tight.
-- **No `#NNN` issue/PR refs** in code — nobody but the author can see the tracker.
-  Keep a bare number only where it is a genuinely useful anchor (rare).
-- **Cross-subsystem "why"** (couplings you can't see from one file) belongs in
-  `CODEMAP.json`, not scattered across inline comments.
+**Keep verbatim (do NOT condense):**
+- A comment explaining a **non-obvious edge/precondition**, or referencing an
+  **issue / advisory / distro quirk** (e.g. why proftpd-basic fails, why
+  mod-crypto is needed, why the AppArmor hook exists, why a guard is artefact-
+  not flag-based). If a long rationale genuinely intrudes, move it to the file
+  **header** or **CODEMAP** — never delete it.
+
+**Do NOT touch (these are API/tooling, not prose):**
+- Header directives parsed by Hestia for `--help`: `# info:`, `# options:`,
+  `# example:`, `# labels:` (every `bin/h-*` must keep a non-empty `# info:`).
+- `# shellcheck disable=…` / `# shellcheck source=…`, editor modelines,
+  license/attribution headers from the upstream heritage.
+
+**Condense:**
+- **Inline** comments that merely restate *what* the code does → one line, or drop.
+- Keep short (≤5-word) upstream scaffolding as-is (`# Includes`, section banners);
+  don't churn near-verbatim upstream files.
+- Drop `#NNN` refs in prose (keep a bare number only as a rare useful anchor).
+
+**Verification (mechanical — the invariant is comment-only):** every added/removed
+diff line must match `^\s*#`; any line that doesn't is a hit to inspect. Never
+regex-strip trailing `#` (it is not a comment in `$#`, `${v#p}`, heredocs, awk).
+So make every change a **full-line** comment change, not a trailing one. Plus
+`bash -n` on touched scripts, `json.tool` on JSON, and a smoke run.
 
 ---
 

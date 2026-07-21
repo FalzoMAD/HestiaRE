@@ -63,9 +63,11 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# phpMyAdmin (SSO before the app), then deregister the host (strips DB_SYSTEM's mysql token)
+# phpMyAdmin teardown (SSO before the app)
 $BIN/h-delete-sys-pma-sso > /dev/null 2>&1 || true
 $BIN/h-delete-sys-phpmyadmin > /dev/null 2>&1 || true
+
+# deregister the local host (strips DB_SYSTEM's mysql token)
 $BIN/h-delete-database-host mysql localhost > /dev/null 2>&1 || true
 
 # purge packages (no autoremove — it would rip out shared-stack siblings)

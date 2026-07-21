@@ -570,7 +570,7 @@ install_security() {
 
 	# crowdsec — minimal install; full integration tracked in #123.
 	if is_on "${COMPONENT_ADDON_CROWDSEC:-}"; then
-		echo "[ * ] Installing CrowdSec (minimal)..."
+		echo "[ * ] Installing CrowdSec (minimal — see #123)..."
 		hestia_apt -y install crowdsec || true
 		# move the local API off :8080 (collides with apache2) to :8054
 		if [ -f /etc/crowdsec/config.yaml ]; then
@@ -607,7 +607,7 @@ install_addons() {
 		"$BIN/h-add-sys-proftpd" >> "$LOG" 2>&1 || true
 	fi
 	if is_on "${COMPONENT_ADDON_DOCKER:-}"; then
-		echo "[ * ] Installing docker.io (minimal)..."
+		echo "[ * ] Installing docker.io (minimal — see #123)..."
 		hestia_apt -y install docker.io || true
 	fi
 	if is_on "${COMPONENT_ADDON_FILEMANAGER:-}"; then

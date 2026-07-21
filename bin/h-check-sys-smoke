@@ -171,6 +171,25 @@ check_v_symlinks_resolve() {
 	fi
 }
 
+# check_info_headers — every h-* command must keep a non-empty `# info:` line
+# (Hestia parses it for --help/usage; a comment sweep must not eat it).
+check_info_headers() {
+	local f n miss=0 first=""
+	for f in "$HESTIA/bin"/h-*; do
+		[ -f "$f" ] || continue
+		n=$(sed -n 's/^# info:[[:space:]]*//p' "$f" | head -n1)
+		if [ -z "$n" ]; then
+			miss=$((miss + 1))
+			[ -z "$first" ] && first="$(basename "$f")"
+		fi
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "all h-* commands have a # info: line"
+	else
+		no "$miss h-* command(s) missing a # info: line" "$first"
+	fi
+}
+
 # check_sudoers <file> <label> — file parses under the running sudo. One rejected
 # setting (e.g. requiretty under sudo-rs, ub26) makes sudo drop the WHOLE file.
 check_sudoers() {
@@ -251,7 +270,8 @@ if [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
 	check_socket /run/rspamd/controller.sock "rspamd controller"
 	check_rspamd_ctrl_isolation
 fi
-[ "$SIEVE_SYSTEM" = 'yes' ] && check_port 4190 "managesieve"  # localhost-only
+# localhost-only (webmail managesieve plugin), not opened in the firewall
+[ "$SIEVE_SYSTEM" = 'yes' ] && check_port 4190 "managesieve"
 
 # --- Critical log markers ---
 echo "-- logs --"
@@ -270,6 +290,8 @@ check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:s
 	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
 # v-* compat symlinks must all resolve (no dangling alias left by a rename).
 check_v_symlinks_resolve
+# every h-* keeps its parsed # info: line (a comment sweep must not eat it).
+check_info_headers
 
 #----------------------------------------------------------#
 #                       Result                             #

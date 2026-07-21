@@ -24,7 +24,8 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"  # COMPONENT_* state
+# COMPONENT_* state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -49,7 +50,8 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-proftpd_pkgs="proftpd-core proftpd-mod-vroot proftpd-mod-crypto"  # see header
+# see header for the package rationale (core + mod-vroot + mod-crypto)
+proftpd_pkgs="proftpd-core proftpd-mod-vroot proftpd-mod-crypto"
 
 # unconditional: apt is idempotent, and this completes a partial install / repairs
 # a broken config on re-run. Guard on the package, not COMPONENT_* (wizard selection).
@@ -87,7 +89,8 @@ if ! proftpd -t > /tmp/hst-proftpd-test.log 2>&1; then
 fi
 rm -f /tmp/hst-proftpd-test.log
 
-$BIN/h-change-sys-config-value 'FTP_SYSTEM' 'proftpd'  # was unset → FTP tooling was inert
+# FTP_SYSTEM was never set before, leaving h-restart-ftp/RRD/NAT/smoke inert
+$BIN/h-change-sys-config-value 'FTP_SYSTEM' 'proftpd'
 
 # firewall: passive range read from PassivePorts (single source)
 if is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM' > /dev/null 2>&1 \

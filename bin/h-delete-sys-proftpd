@@ -20,7 +20,8 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"  # COMPONENT_* state
+# COMPONENT_* state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
