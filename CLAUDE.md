@@ -40,6 +40,23 @@ These are absolute. Never deviate, never re-suggest rejected items.
 
 ---
 
+## COMMENT STYLE
+
+Comments are terse. Nobody reads a wall of them.
+
+- **Inline** (mid-code): one line max, only a short *what*/*why*. Drop comments that
+  just restate the code. Keep short (≤5-word) upstream scaffolding as-is
+  (`# Includes`, section banners) — don't churn near-verbatim upstream files.
+- **Bigger explanation** → the file's header comment block, not inline. Only when it
+  carries real weight: strong upstream divergence or security. Add a date/version
+  when useful. Keep it tight.
+- **No `#NNN` issue/PR refs** in code — nobody but the author can see the tracker.
+  Keep a bare number only where it is a genuinely useful anchor (rare).
+- **Cross-subsystem "why"** (couplings you can't see from one file) belongs in
+  `CODEMAP.json`, not scattered across inline comments.
+
+---
+
 ## ARCHITECTURE
 
 ### Paths
