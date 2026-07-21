@@ -65,6 +65,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- Roundcube webmail returned HTTP 500 on every page — `Class "DOMDocument" not
+  found` (#402). The `dom` extension had been dropped from the panel PHP's
+  curated conf.d by an earlier audit (`hestia-php-confd`) that only checked the
+  panel/phpMyAdmin/Adminer consumers and missed the Roundcube/SnappyMail pools
+  that #205 had moved onto the same FPM master. Roundcube's template engine
+  builds every page via `DOMDocument`, so it hard-fatalled. `dom` is restored as
+  a webmail-critical extension (it ships in `php-xml`, already installed for the
+  DB tools' simplexml/xmlwriter/xmlreader, so only the symlink was missing), and
+  `hestia-php-confd` now documents the full app inventory on the master plus an
+  audit rule to grep all three app groups. SnappyMail was unaffected (no
+  DOMDocument). Verified: `:8090` 500→200, smoke 33/0 on deb12 + ub24.
 - Webmail now degrades safely when the selected client isn't installed (#119).
   Previously `h-add-mail-domain-webmail` hard-exited `E_INVALID` if the client
   wasn't in `WEBMAIL_SYSTEM`, `func/rebuild.sh` hardcoded `roundcube` (failing

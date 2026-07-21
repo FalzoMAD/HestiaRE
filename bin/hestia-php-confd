@@ -34,6 +34,19 @@ fi
 # caught here at build time instead of surfacing as a runtime fatal later; a
 # missing optional one only warns.
 #
+# APP INVENTORY — everything served by this single hestia FPM master (each app
+# gets its own pool under pool.d/, but all pools share THIS conf.d, so every
+# app's extensions must be curated here). When an app is added to / removed from
+# the master, update the matching set below AND this list:
+#   1. panel web UI (web/)                        -> fpm_*        set
+#   2. phpMyAdmin, Adminer (DB web tools)         -> fpm_apps_*   set
+#   3. Roundcube, SnappyMail (webmail, #205)      -> fpm_webmail_* set
+# Audit rule: when checking whether an extension is still needed, grep ALL three
+# app groups — not just the panel/DB tools. The A8 audit (2026-07-19) dropped
+# `dom` after checking only panel+phpMyAdmin+Adminer and missed Roundcube, which
+# #205 had already moved onto this master; that shipped a 500 on every Roundcube
+# page in v0.10.x (restored as webmail-critical below).
+#
 # FPM (the panel web UI, verified against the panel code):
 #   critical — the panel is non-functional without these:
 #       mysqlnd pdo mysqli pdo_mysql  DB access chain
@@ -82,10 +95,17 @@ fpm_apps_optional="gd bz2 pgsql pdo_pgsql"
 #              files at bootstrap ("Class Phar not found" -> blank page). Ships
 #              with php-common (phar.ini in mods-available), so no apt line — it
 #              only needs the symlink the FPM set was missing.
+#            dom: Roundcube's HTML template engine builds every page (login and
+#              UI) with DOMDocument (program/lib/Roundcube/html.php) — without it
+#              it hard-fatals "Class DOMDocument not found" -> HTTP 500 on every
+#              request. Provided by php-xml, the SAME package already pulled in
+#              for the DB tools' simplexml/xmlwriter/xmlreader, so it is present
+#              for the panel version and needs only the symlink (no apt line).
+#              SnappyMail does not need it — Roundcube is the consumer.
 #   optional — exif: Roundcube image orientation for attachment previews.
 # php${VER}-intl is installed unconditionally in the panel stage (like pgsql for
 # Adminer), so webmail add/remove never has to touch the panel PHP config.
-fpm_webmail_critical="intl phar"
+fpm_webmail_critical="intl phar dom"
 fpm_webmail_optional="exif"
 cli_critical="mbstring ctype iconv phar"
 cli_optional="curl zip"
