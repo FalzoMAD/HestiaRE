@@ -73,7 +73,7 @@ db_client="mysql"
 # existing user — leaving a broken but non-obvious configuration.
 if $db_client -e "SHOW DATABASES LIKE 'roundcube'" 2>/dev/null | grep -q 'roundcube'; then
 	echo "ERROR: Database 'roundcube' already exists but is not managed by this HestiaRE instance."
-	echo "       Remove it manually first, or run h-remove-sys-roundcube if it was a previous install."
+	echo "       Remove it manually first, or run h-delete-sys-roundcube if it was a previous install."
 	exit 1
 fi
 

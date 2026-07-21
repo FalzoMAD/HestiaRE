@@ -4,7 +4,7 @@
 # phpMyAdmin: served on the panel port, NOT behind forward_auth — the gate is
 # Adminer's own login (DB credentials required) plus firewall on :8083. The
 # unauthenticated login form can reach arbitrary DB hosts (SSRF); restricting
-# that is the #350 follow-up. Removed by h-remove-sys-adminer.
+# that is the #350 follow-up. Removed by h-delete-sys-adminer.
 redir /adminer /adminer/ 308
 handle_path /adminer/* {
     root * /usr/share/adminer

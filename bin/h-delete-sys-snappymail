@@ -29,7 +29,7 @@ SM_LOG="/var/log/snappymail"
 
 # Checking root permissions
 if [ "x$(id -u)" != 'x0' ]; then
-	echo "ERROR: h-remove-sys-snappymail can only be executed by the root user"
+	echo "ERROR: h-delete-sys-snappymail can only be executed by the root user"
 	exit 10
 fi
 

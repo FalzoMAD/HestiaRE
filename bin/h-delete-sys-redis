@@ -2,7 +2,7 @@
 # info: remove Redis as a general service
 # options: NONE
 #
-# example: h-remove-sys-redis
+# example: h-delete-sys-redis
 #
 # Removes the general-service role and records DB_REDIS=false. If rspamd is
 # installed, Redis is NOT uninstalled — rspamd depends on it as its Bayes

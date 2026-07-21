@@ -2,7 +2,7 @@
 # info: remove Adminer database management tool
 # options: NONE
 #
-# example: h-remove-sys-adminer
+# example: h-delete-sys-adminer
 #
 # Reverses h-add-sys-adminer: removes the Panel-Caddy route, the caddy FPM pool,
 # the webroot and the temp dir, then reloads the affected services. Vendored
@@ -30,7 +30,7 @@ TMPDIR="/var/lib/adminer"
 #----------------------------------------------------------#
 
 if [ "$(id -u)" != '0' ]; then
-	echo "ERROR: h-remove-sys-adminer must be run as root"
+	echo "ERROR: h-delete-sys-adminer must be run as root"
 	exit 10
 fi
 
