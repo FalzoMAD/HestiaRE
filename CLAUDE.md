@@ -174,9 +174,8 @@ type: fix | feat | refactor | remove | docs | test
 ### PR
 
 Open the PR against `dev` — never merge it yourself; the author reviews and merges.
-The remote host, the exact API call, `GITEA_TOKEN` and the test-VM fleet live in
-`CLAUDE.local.md` (untracked, so the personal Gitea host stays off the public
-GitHub mirror).
+The remote host, the exact API call, use of TOKEN and the test-VM fleet live in
+`CLAUDE.local.md` (untracked, so the personal host stays off the public GitHub mirror).
 
 ---
 
