@@ -1,0 +1,25 @@
+# .gitea/workflows/mirror-on-release.yml
+name: Mirror to GitHub on release
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+jobs:
+  mirror:
+    runs-on: hestiare
+    steps:
+      - name: Selective mirror to GitHub
+        env:
+          PUSH_TOKEN:   ${{ secrets.PUSH_TOKEN }}
+          SRC_REPO_PATH: ${{ secrets.SRC_REPO_PATH }}
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d -p /tmp mirror.XXXXXX)"
+          trap 'rm -rf "$workdir"' EXIT
+          git clone --mirror "file://${SRC_REPO_PATH}" "$workdir/repo.git"
+          cd "$workdir/repo.git"
+          git push --prune --dry-run \
+            "https://x-access-token:${PUSH_TOKEN}@github.com/FalzoMAD/HestiaRE.git" \
+            'refs/heads/main:refs/heads/main' \
+            'refs/heads/upstream/*:refs/heads/upstream/*' \
+            'refs/tags/*:refs/tags/*'
