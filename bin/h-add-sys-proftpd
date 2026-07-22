@@ -1,0 +1,129 @@
+#!/bin/bash
+# info: install ProFTPD FTP server
+# options: NONE
+#
+# example: h-add-sys-proftpd
+#
+# Modular replacement for the inline proftpd install in install_addons: deploys
+# the curated config (share/proftpd/), sets FTP_SYSTEM=proftpd, opens the FTP rule.
+# Idempotent — re-running heals a partial/broken install.
+#
+# Cross-distro (2026-07, deb12/13 + ub24/26): packages are core+mod-vroot+mod-crypto
+# — proftpd-basic is bookworm-only, and mod_tls moved into mod-crypto in proftpd
+# 1.3.9, so FTPS needs it named explicitly or it silently degrades to plaintext.
+# Ubuntu 26's enforced AppArmor profile blocks reading the panel cert → local override.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# COMPONENT_* state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "ERROR: h-add-sys-proftpd can only be executed by the root user"
+	exit 10
+fi
+
+if [ -z "$HESTIA" ]; then HESTIA="/usr/local/hestia"; fi
+
+check_hestia_demo_mode
+
+# don't hijack a foreign FTP backend (symmetric to the delete side)
+if [ -n "$FTP_SYSTEM" ] && [ "$FTP_SYSTEM" != 'proftpd' ]; then
+	echo "ERROR: FTP_SYSTEM is already '$FTP_SYSTEM' — refusing to switch to proftpd."
+	exit "$E_INVALID"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# see header for the package rationale (core + mod-vroot + mod-crypto)
+proftpd_pkgs="proftpd-core proftpd-mod-vroot proftpd-mod-crypto"
+
+# unconditional: apt is idempotent, and this completes a partial install / repairs
+# a broken config on re-run. Guard on the package, not COMPONENT_* (wizard selection).
+echo "Installing ProFTPD ($proftpd_pkgs)..."
+# shellcheck disable=SC2086
+apt-get -y -qq install $proftpd_pkgs > /dev/null 2>&1
+if ! dpkg -l proftpd-core 2> /dev/null | grep -q '^ii'; then
+	echo "ERROR: ProFTPD installation failed."
+	exit "$E_INVALID"
+fi
+
+# configtest can't see a missing mod_tls (IfModule-guarded) — check explicitly
+if ! find /usr/lib -name 'mod_tls.so' 2> /dev/null | grep -q .; then
+	echo "ERROR: mod_tls not installed — FTPS would be silently disabled."
+	exit "$E_INVALID"
+fi
+
+# full-replace the distro config (re-includes modules.conf + conf.d/)
+cp -f "$HESTIA/share/proftpd/proftpd.conf" /etc/proftpd/proftpd.conf
+cp -f "$HESTIA/share/proftpd/tls.conf" /etc/proftpd/tls.conf
+
+# AppArmor cert-read override (ub26+; see header)
+if [ -f /etc/apparmor.d/proftpd ]; then
+	mkdir -p /etc/apparmor.d/local
+	cp -f "$HESTIA/share/proftpd/apparmor-local" /etc/apparmor.d/local/proftpd
+	apparmor_parser -r /etc/apparmor.d/proftpd > /dev/null 2>&1 || true
+fi
+
+# fail loud instead of a flapping service
+if ! proftpd -t > /tmp/hst-proftpd-test.log 2>&1; then
+	echo "ERROR: proftpd config test failed after deploying the curated config:"
+	tail -n 3 /tmp/hst-proftpd-test.log | sed 's/^/       /'
+	rm -f /tmp/hst-proftpd-test.log
+	exit "$E_INVALID"
+fi
+rm -f /tmp/hst-proftpd-test.log
+
+# FTP_SYSTEM was never set before, leaving h-restart-ftp/RRD/NAT/smoke inert
+$BIN/h-change-sys-config-value 'FTP_SYSTEM' 'proftpd'
+
+# firewall: passive range read from PassivePorts (single source)
+if is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM' > /dev/null 2>&1 \
+	&& [ -f "$CONF_DIR/firewall/rules.conf" ]; then
+	pp=$(awk '/^PassivePorts/{print $2"-"$3}' /etc/proftpd/proftpd.conf)
+	if [ -n "$pp" ]; then
+		fw_ports="21,$pp"
+	else
+		echo "WARN: no PassivePorts in proftpd.conf — opening control port 21 only."
+		fw_ports="21"
+	fi
+	if ! grep -q "COMMENT='FTP'" "$CONF_DIR/firewall/rules.conf"; then
+		$BIN/h-add-firewall-rule 'ACCEPT' '0.0.0.0/0' "$fw_ports" 'TCP' 'FTP' > /dev/null 2>&1
+	fi
+fi
+
+systemctl enable proftpd > /dev/null 2>&1
+systemctl restart proftpd
+
+if ! systemctl is-active --quiet proftpd; then
+	echo "ERROR: proftpd failed to start."
+	exit "$E_RESTART"
+fi
+
+set_install_component ADDON_PROFTPD true
+
+echo "ProFTPD is now installed."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Installed ProFTPD FTP server."
+log_event "$OK" "$ARGUMENTS"
+
+exit

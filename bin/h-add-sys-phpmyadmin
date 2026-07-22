@@ -47,10 +47,7 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Prevent dbconfig-common from auto-configuring database.
-# debconf-set-selections writes to the debconf database before apt-get runs —
-# the selection persists for the entire transaction including any deferred
-# dpkg --configure calls, so no interactive DB prompt will appear.
+# preseed debconf so dbconfig-common doesn't auto-configure a DB (no interactive prompt)
 echo "phpmyadmin phpmyadmin/dbconfig-install boolean false" \
 	| debconf-set-selections
 
@@ -95,8 +92,7 @@ $db_client -e "FLUSH PRIVILEGES"
 $db_client phpmyadmin < /usr/share/phpmyadmin/sql/create_tables.sql \
 	|| { echo "ERROR: Failed to initialize phpMyAdmin config storage schema"; exit 1; }
 
-# Write config-db.php (bypasses dbconfig-common).
-# OS package config.inc.php reads this file to configure config storage.
+# config-db.php (read by the OS config.inc.php for config storage)
 mkdir -p "$PMA_CONFIG"
 cat > "$PMA_CONFIG/config-db.php" <<'PHP'
 <?php
@@ -120,8 +116,7 @@ if [ -z "$(grep DB_PMA_ALIAS "$HESTIA/conf/hestia.conf")" ]; then
 	$BIN/h-change-sys-config-value 'DB_PMA_ALIAS' 'phpmyadmin'
 fi
 
-# Deploy the dedicated caddy FPM pool and wire the Panel-Caddy route.
-# phpMyAdmin is served by Caddy on :8083 (not via nginx/apache aliases).
+# dedicated caddy FPM pool + Panel-Caddy route (served on :8083, not nginx/apache)
 cp -f "$HESTIA/share/panel-php/pool.d/phpmyadmin.conf" /etc/php/hestia/fpm/pool.d/phpmyadmin.conf
 systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
 $BIN/h-change-sys-db-alias pma "${DB_PMA_ALIAS:-phpmyadmin}" > /dev/null 2>&1 || true

@@ -1,0 +1,11 @@
+# HestiaRE local override for the distro proftpd AppArmor profile.
+# Newer proftpd packages (1.3.9-era: Ubuntu 26 and beyond) ship an enforced
+# AppArmor profile that confines the daemon to standard cert locations and denies
+# reading the panel TLS cert under /usr/local/hestia/ssl/ — even as root — so
+# mod_tls fatals ("certificate does not exist / Permission denied") and FTPS dies.
+# The stock profile ends with `include if exists <local/proftpd>`, so this file
+# grants exactly the two reads it needs, nothing more.
+# Deployed to /etc/apparmor.d/local/proftpd by h-add-sys-proftpd only when the
+# profile is present (a no-op on distros without one, e.g. Debian / Ubuntu 24).
+/usr/local/hestia/ssl/certificate.crt r,
+/usr/local/hestia/ssl/certificate.key r,

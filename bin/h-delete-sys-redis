@@ -2,15 +2,11 @@
 # info: remove Redis as a general service
 # options: NONE
 #
-# example: h-remove-sys-redis
+# example: h-delete-sys-redis
 #
-# Removes the general-service role and records DB_REDIS=false. If rspamd is
-# installed, Redis is NOT uninstalled — rspamd depends on it as its Bayes
-# backend, so it is demoted back to the hard-capped companion instead (cap
-# re-appended from share/rspamd/redis-rspamd-limit.conf, Bayes data kept).
-# Only without rspamd is redis-server actually purged. This is the "demote"
-# side of the lifecycle contract from #299/#121.
-# New h-* command — no v-* symlink.
+# Removes the general-service role (DB_REDIS=false). If rspamd is installed, Redis
+# is NOT uninstalled — it is demoted back to the hard-capped companion (cap
+# re-appended, Bayes data kept). Only without rspamd is redis-server purged.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -51,9 +47,8 @@ fi
 #----------------------------------------------------------#
 
 if [ "$ANTISPAM_SYSTEM" = "rspamd" ]; then
-	# Demote, don't uninstall: rspamd needs Redis as its Bayes backend. Re-apply
-	# the hard cap so it shrinks back to the small companion; Bayes data and
-	# TTLs survive (volatile-ttl only evicts if the cap is ever hit).
+	# demote, don't uninstall: re-apply the cap so it shrinks back to the companion
+	# (Bayes data survives — volatile-ttl only evicts if the cap is hit)
 	if ! grep -q "$limit_marker" /etc/redis/redis.conf 2> /dev/null; then
 		cat "$HESTIA/share/rspamd/redis-rspamd-limit.conf" >> /etc/redis/redis.conf
 	fi

@@ -5,23 +5,11 @@
 # example: h-add-sys-mariadb           # version from install.conf, else OS default
 # example: h-add-sys-mariadb 11.8      # explicit (post-install)
 #
-# Installs and hardens MariaDB and registers it as the local database host so the
-# panel can manage MySQL databases. The version resolves to the optional argument,
-# else COMPONENT_DB_MARIADB_VERSION, else __os__ (OS default). 12.3|11.8|11.4 pull
-# the MariaDB.org repo; __os__ uses the distribution package (#226). No prompt —
-# the interactive choice lives in the wizard; here it is arg-driven and scriptable.
-# The resolved version is recorded back into install.conf (h-remove-sys-mariadb
-# clears it).
-# Reproduces the former inline installer logic (repo/keyring, RAM-tiered my.cnf,
-# root unix_socket hardening, host registration) as a standalone, idempotent,
-# removable command (#121). phpMyAdmin follows implicitly when DB_PHPMYADMIN is set.
-#
-# Idempotency is artefact-based, NOT flag-based: COMPONENT_DB_MARIADB is the
-# wizard *selection*, not the install state (it is "true" before this ever runs).
-# "Fully installed" = package present AND local host registered; package present
-# without a host registration means an aborted first run -> resume.
-#
-# New h-* command — no v-* symlink.
+# Installs + hardens MariaDB and registers it as the local DB host. Version:
+# arg > COMPONENT_DB_MARIADB_VERSION > __os__; 12.3|11.8|11.4 pull the MariaDB.org
+# repo, __os__ the distro package. Idempotent (repo/keyring, RAM-tiered my.cnf,
+# unix_socket root, host registration); phpMyAdmin follows when DB_PHPMYADMIN is set.
+# "Fully installed" = package present AND host registered (else resume an aborted run).
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -52,9 +40,7 @@ fi
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-# Idempotency guard (artefact-based, see header). Fully installed only when the
-# package is present AND the local host is registered — then skip. A package with
-# no host registration is an aborted first run and must fall through (resume).
+# installed = package present AND host registered (see header); else resume
 if dpkg -l mariadb-server 2> /dev/null | grep -q '^ii' \
 	&& grep -qs "HOST='localhost'" "$HESTIA/conf/mysql.conf"; then
 	echo "INFO: MariaDB is already installed."
@@ -65,7 +51,7 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Version resolution: explicit arg > wizard selection > OS default. No prompt.
+# version: arg > wizard selection > OS default
 MARIADB_VER="${1:-${COMPONENT_DB_MARIADB_VERSION:-}}"
 [ -z "$MARIADB_VER" ] && MARIADB_VER="__os__"
 case "$MARIADB_VER" in
@@ -74,8 +60,7 @@ case "$MARIADB_VER" in
 esac
 ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 
-# OS_ID + CODENAME for the external repo line. Prefer the installer's profile
-# helper (handles the ubuntu-26 codename edge); fall back to /etc/os-release.
+# OS_ID + CODENAME for the external repo line (profile helper, else /etc/os-release)
 if command -v load_os_profile > /dev/null 2>&1 && [ -n "${INSTALL_OS:-}" ]; then
 	load_os_profile "$INSTALL_OS" > /dev/null 2>&1 || true
 fi
@@ -119,16 +104,9 @@ rm -f /etc/mysql/my.cnf
 cp -f "$HESTIA/share/mysql/$MYCNF" /etc/mysql/my.cnf
 sed -i 's|/usr/share/mysql|/usr/share/mariadb|g' /etc/mysql/my.cnf
 
-# Initialise the system schema when it is missing. Ubuntu 26.04 ships an
-# enforced mariadbd AppArmor profile (/etc/apparmor.d/mariadbd) that comments out
-# `capability dac_override` — which the *bootstrap* mariadbd run by
-# mariadb-install-db needs to create the initial datadir (it fails with "Can't
-# create test file … Permission denied"). Runtime does not need the capability;
-# only first-init trips it, and because the failure used to be swallowed the next
-# start aborted with "Table 'mysql.db' doesn't exist" (#387). So: normalise
-# datadir ownership, and if that profile is loaded, unload it just for the init
-# and reload it (back to enforce) immediately after. No-op on the other targets
-# (deb12/13, ub24 have no loaded mariadbd profile).
+# init the system schema if missing. Ubuntu 26's enforced mariadbd AppArmor profile
+# denies the dac_override that the mariadb-install-db bootstrap needs — unload it
+# just for the init, reload after. No-op where no such profile is loaded.
 chown -R mysql:mysql /var/lib/mysql
 if [ ! -d /var/lib/mysql/mysql ]; then
 	aa_prof="/etc/apparmor.d/mariadbd"
@@ -154,8 +132,7 @@ if ! systemctl is-active --quiet mariadb; then
 fi
 
 echo "[ * ] Securing MariaDB..."
-# MPASS stays a local shell var and lands only in /root/.my.cnf (0600) — never in
-# install.conf (secrets stay out of the recipe/status file, #121).
+# MPASS lands only in /root/.my.cnf (0600), never in install.conf (secrets stay out)
 MPASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16 || true)
 printf '[client]\npassword='"'"'%s'"'"'\n' "$MPASS" > /root/.my.cnf
 chmod 600 /root/.my.cnf
@@ -171,18 +148,14 @@ mariadb -e "FLUSH PRIVILEGES;"
 #----------------------------------------------------------#
 
 set_install_component DB_MARIADB true
-# Record the resolved version so install.conf reflects what is actually installed
-# (matters for post-install adds where the arg differs from / is absent in the
-# wizard value; h-remove-sys-mariadb clears it again).
+# record the actually-installed version (h-delete-sys-mariadb clears it)
 set_install_component DB_MARIADB_VERSION "$MARIADB_VER"
 
-# Register the local MariaDB host so the panel can manage MySQL DBs (this is the
-# sole writer of DB_SYSTEM's mysql token). MUST run BEFORE phpMyAdmin, whose guard
-# requires DB_SYSTEM to contain 'mysql' (F1).
+# register the local host (sole writer of DB_SYSTEM's mysql token); MUST precede
+# phpMyAdmin, whose guard needs 'mysql' in DB_SYSTEM
 $BIN/h-add-database-host mysql localhost root "$MPASS" > /dev/null 2>&1 || true
 $BIN/h-change-sys-db-alias pma phpmyadmin > /dev/null 2>&1 || true
 
-# phpMyAdmin follows implicitly (derived DB_PHPMYADMIN), with local SSO (#145).
 if [ "${COMPONENT_DB_PHPMYADMIN:-}" = "true" ]; then
 	echo "[ * ] Installing phpMyAdmin..."
 	$BIN/h-add-sys-phpmyadmin || echo "[ ! ] phpMyAdmin install reported an issue"

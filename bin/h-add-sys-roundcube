@@ -51,10 +51,7 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Prevent dbconfig-common from auto-configuring the database.
-# debconf-set-selections writes to the debconf database before apt-get runs —
-# the selection persists for the entire transaction including any deferred
-# dpkg --configure calls, so no interactive DB prompt will appear.
+# preseed debconf so dbconfig-common doesn't auto-configure a DB (no interactive prompt)
 echo "roundcube-core roundcube/dbconfig-install boolean false" \
 	| debconf-set-selections
 
@@ -66,14 +63,11 @@ dbpass=$(generate_password)
 db_client="mysql"
 [ -x /usr/bin/mariadb ] && db_client="mariadb"
 
-# Guard against name collision: bail if a 'roundcube' database already exists
-# from a source not managed by this HestiaRE instance. Without this check,
-# CREATE DATABASE IF NOT EXISTS would silently succeed against a foreign DB,
-# then write debian-db.php with a new password that doesn't match the
-# existing user — leaving a broken but non-obvious configuration.
+# bail on a foreign 'roundcube' DB — CREATE IF NOT EXISTS would adopt it and write
+# a mismatched password, leaving a silently-broken config
 if $db_client -e "SHOW DATABASES LIKE 'roundcube'" 2>/dev/null | grep -q 'roundcube'; then
 	echo "ERROR: Database 'roundcube' already exists but is not managed by this HestiaRE instance."
-	echo "       Remove it manually first, or run h-remove-sys-roundcube if it was a previous install."
+	echo "       Remove it manually first, or run h-delete-sys-roundcube if it was a previous install."
 	exit 1
 fi
 
@@ -87,8 +81,7 @@ $db_client -e "FLUSH PRIVILEGES"
 $db_client roundcube < /usr/share/roundcube/SQL/mysql.initial.sql \
 	|| { echo "ERROR: Failed to initialize roundcube database schema"; exit 1; }
 
-# Write /etc/roundcube/debian-db.php (bypasses debconf DB configuration).
-# roundcube-core reads this file via debian-db-roundcube.php to build the DSN.
+# debian-db.php (read by roundcube-core via debian-db-roundcube.php for the DSN)
 cat > "$RC_CONFIG_DIR/debian-db.php" <<'PHP'
 <?php
 $dbtype='mysql';
@@ -134,15 +127,12 @@ sed -i "s/_DES_KEY_/$des_key/" "$RC_CONFIG_DIR/config.inc.php"
 chmod 644 "$RC_CONFIG_DIR/config.inc.php"
 chown root:caddy "$RC_CONFIG_DIR/config.inc.php"
 
-# Deploy HestiaRE password driver.
-# Extra files in apt-managed directories survive package upgrades —
-# dpkg only removes files it originally installed.
+# HestiaRE password driver. Extra files in apt-managed dirs survive upgrades —
+# dpkg only removes files it installed.
 cp -f "$HESTIA/share/roundcube/hestia.php" "$RC_DRIVERS_DIR/hestia.php"
 chmod 644 "$RC_DRIVERS_DIR/hestia.php"
 
-# Write password plugin config
-# The OS package provides /etc/roundcube/plugins/password/ with a symlink from
-# /usr/share/roundcube/plugins/password/config.inc.php — we just write our config.
+# password plugin config (the OS package already symlinks this into place)
 cat > "$RC_CONFIG_DIR/plugins/password/config.inc.php" <<'PHP'
 <?php
 $config['password_driver'] = 'hestia';
@@ -165,23 +155,17 @@ cp -f "$HESTIA/share/roundcube/plugins/config_zipdownload.inc.php" \
 mkdir -p /var/log/roundcube
 chown caddy:caddy /var/log/roundcube
 chmod 750 /var/log/roundcube
-# Log rotation: the fail2ban roundcube-auth jail tails /var/log/roundcube/errors.log,
-# so the log must rotate. This fragment was previously an orphan in the install
-# tree (never deployed by anything) — wired up here (#234).
+# the fail2ban roundcube-auth jail tails errors.log, so the log must rotate
 cp -f "$HESTIA/share/roundcube/logrotate" /etc/logrotate.d/roundcube
 
-# Panel-Caddy delivery (#205): Roundcube renders in a dedicated caddy FPM pool
-# behind Caddy's internal loopback listener (127.0.0.1:8090); the per-domain
-# webmail.<domain> vhosts reverse-proxy to it. The temp dir must be writable by
-# the pool user (Debian ships it www-data-owned); the logs symlink already points
-# at /var/log/roundcube, chowned caddy:caddy above.
+# Panel-Caddy delivery: caddy FPM pool behind the :8090 loopback listener; the
+# temp dir must be writable by the pool user (Debian ships it www-data-owned)
 chown caddy:caddy /var/lib/roundcube/temp 2> /dev/null || true
 cp -f "$HESTIA/share/panel-php/pool.d/roundcube.conf" /etc/php/hestia/fpm/pool.d/roundcube.conf
 systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
 cp -f "$HESTIA/share/panel-caddy/webmail-roundcube.conf" /etc/caddy/webmail-roundcube.conf
-# Panel-URL route (#205): :8083/webmail serves Roundcube for admin access without a
-# customer domain (phpMyAdmin/Adminer model), sharing the pool above. Roundcube-only
-# — SnappyMail is root-mounted and cannot run under a sub-path (see the template).
+# :8083/webmail route for admin access without a customer domain. Roundcube-only —
+# SnappyMail is root-mounted and can't run under a sub-path.
 mkdir -p /etc/caddy/apps
 cp -f "$HESTIA/share/panel-caddy/apps/webmail.tpl" /etc/caddy/apps/webmail.conf
 systemctl try-restart caddy > /dev/null 2>&1 || true
@@ -197,8 +181,7 @@ elif ! echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	fi
 fi
 
-# Re-render existing mail domains so they pick up the newly-installed client
-# immediately (#119); no-op when no mail domains exist.
+# re-render mail domains so they pick up the new client immediately
 $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 
 #----------------------------------------------------------#

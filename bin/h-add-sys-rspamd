@@ -4,16 +4,10 @@
 #
 # example: h-add-sys-rspamd
 #
-# Installs and wires rspamd as the antispam system: curated local.d set
-# (controller and scan worker on group-restricted unix sockets), random
-# controller password (overrides the stock "q1"), panel web UI via
-# Panel-Caddy (/list/rspamd/, admin-session-gated), exim integration by
-# enabling the RSPAMD/SPAM_SCORE macros in the active template. Redis comes
-# along as the Bayes backend: unrestricted if selected as a general service
-# (DB_REDIS), otherwise as the hard-capped companion — lifecycle contract
-# from #299/#121 (h-add/h-delete-sys-redis promote/demote it).
-# Also called by the installer (COMPONENT_ADDON_RSPAMD).
-# New h-* command — no v-* symlink.
+# Installs and wires rspamd as the antispam system: curated local.d set (controller
+# + scan worker on group-restricted sockets), random controller password, panel web
+# UI via Panel-Caddy, exim macros. Redis is the Bayes backend — unrestricted if
+# DB_REDIS, else the hard-capped companion (h-add/delete-sys-redis promote/demote it).
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -71,23 +65,15 @@ systemctl restart redis-server 2> /dev/null || true
 mkdir -p /etc/rspamd/local.d
 cp -f "$HESTIA/share/rspamd/local.d/"* /etc/rspamd/local.d/
 
-# Dedicated group for the controller socket (see worker-controller.inc). Its
-# only purpose is reaching /run/rspamd/controller.sock. _rspamd joins it so the
-# worker can chgrp its own socket to it — must exist before rspamd starts so
-# the socket comes up with the right group. The Panel-Caddy PROXY is granted
-# this group process-scoped (systemd drop-in below), not the caddy user, so app
-# FPM pools running as caddy cannot inherit it (#341).
+# dedicated group for the controller socket; _rspamd joins it so the worker can
+# chgrp the socket. Must exist before rspamd starts. The proxy gets it process-
+# scoped (drop-in below), not the caddy user, so app FPM pools can't inherit it.
 groupadd -r _rspamd-ctrl 2> /dev/null || true
 usermod -aG _rspamd-ctrl _rspamd
-# Heal pre-#341 installs: earlier versions added the caddy USER to _rspamd in
-# /etc/group, which leaks controller access into the app FPM pools. Remove that
-# stale membership — the proxy now gets _rspamd-ctrl process-scoped instead.
+# heal older installs that put the caddy USER in _rspamd (leaked controller access)
 gpasswd -d caddy _rspamd > /dev/null 2>&1 || true
-# Controller (stats/web UI) password. The in-panel UI never uses it —
-# forward_auth + the secure unix-socket connection skip the rspamd login (see
-# share/panel-caddy/apps/rspamd.tpl). It is set only so no known default
-# password is active: both password (read) and enable_password (write) get
-# the same random hash, overriding the stock worker-controller.inc "q1".
+# controller password: only set so no known default ("q1") is active — the panel
+# UI skips the rspamd login (forward_auth + unix socket). Same random hash for both.
 rspamd_pw=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 24 || true)
 rspamd_hash=$(rspamadm pw --password "$rspamd_pw")
 printf 'password = "%s";\nenable_password = "%s";\n' "$rspamd_hash" "$rspamd_hash" \
@@ -98,49 +84,32 @@ if ! systemctl is-active --quiet rspamd; then
 	echo "ERROR: rspamd failed to start."
 	exit "$E_RESTART"
 fi
-# the workers create their unix sockets shortly after the unit is active — but a
-# COLD first start (Lua compile, language detector, 120+ regexps, remote map
-# fetches from maps.rspamd.com) legitimately takes far longer than a warm restart
-# (~3s). Wait up to 60s so a slow first start does not abort the whole install.
+# wait up to 60s for the sockets: a cold first start (Lua compile, maps fetch) is
+# far slower than a warm restart, and must not abort the install
 for _ in $(seq 1 60); do
 	[ -S /run/rspamd/normal.sock ] && [ -S /run/rspamd/controller.sock ] && break
 	sleep 1
 done
 if [ ! -S /run/rspamd/normal.sock ]; then
-	# The unit is active (checked above) — the socket is merely slow to bind on
-	# this box. Do NOT abort the install for that: rspamd is running and the
-	# socket materialises once the cold start finishes; the exim restart below
-	# happens several steps later, and the smoke test verifies the socket
-	# independently. Aborting here left mail installs half-wired (#353).
+	# unit is active, socket just slow to bind — don't abort (smoke test verifies it)
 	echo "WARNING: rspamd scan worker socket not up after 60s — continuing (rspamd is active; smoke test will verify)."
 fi
 
-# Scan worker socket: Debian-exim (spam scan -> normal.sock) joins the _rspamd
-# group so exim can reach it. This is a service account, not a shared web
-# identity, so the /etc/group grant is fine here. Must precede the exim restart
-# below so the running process picks up the membership.
+# exim joins _rspamd to reach the scan socket (service account, /etc/group grant is fine)
 usermod -aG _rspamd Debian-exim
 
-# Controller socket: grant the Caddy PROXY process the _rspamd-ctrl group via a
-# systemd drop-in (process-scoped), NOT the caddy user in /etc/group — app FPM
-# pools also run as caddy and would otherwise inherit it through initgroups()
-# and reach the controller past forward_auth (#341). caddy.service uses
-# User=caddy, so systemd applies SupplementaryGroups to the process.
+# grant the controller group to the Caddy PROXY process only (systemd drop-in), NOT
+# the caddy user — app FPM pools run as caddy and would otherwise inherit it
 mkdir -p /etc/systemd/system/caddy.service.d
 cp -f "$HESTIA/share/rspamd/caddy-service.d/rspamd-ctrl.conf" \
 	/etc/systemd/system/caddy.service.d/rspamd-ctrl.conf
 systemctl daemon-reload
 
-# Publish the controller UI via Panel-Caddy — reached from the panel page
-# /list/rspamd/ (iframe), gated behind the admin session. try-restart: only
-# bounce Caddy if it is already running — on a fresh install it starts later
-# (finalize stage, after daemon-reload here) and would fail without the panel
-# SSL cert; either way it starts with the drop-in's group.
+# publish the controller UI via Panel-Caddy; try-restart only bounces a running Caddy
 cp -f "$HESTIA/share/panel-caddy/apps/rspamd.tpl" /etc/caddy/apps/rspamd.conf
 systemctl try-restart caddy 2> /dev/null || true
 
-# Wire exim to rspamd: enable the RSPAMD/SPAM_SCORE macros in the active
-# template (the .ifdef RSPAMD blocks are inert until this) and restart
+# enable the RSPAMD/SPAM_SCORE macros in the exim template and restart
 sed -i -e 's/^#RSPAMD = yes/RSPAMD = yes/' \
 	-e 's/^#SPAM_SCORE = /SPAM_SCORE = /' \
 	-e 's/^#SPAM_REJECT_SCORE = /SPAM_REJECT_SCORE = /' \

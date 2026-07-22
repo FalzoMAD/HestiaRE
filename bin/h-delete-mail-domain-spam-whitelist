@@ -4,10 +4,8 @@
 #
 # example: h-delete-mail-domain-spam-whitelist user domain.tld partner@example.com
 #
-# Removes a sender pattern from the domain's spam whitelist (see
-# h-add-mail-domain-spam-whitelist). Idempotent; the mirrored per-domain file
-# is removed when the list becomes empty.
-# New h-* command — no v-* symlink.
+# Removes a sender pattern from the domain's spam whitelist. Idempotent; the
+# mirrored per-domain file is removed when the list becomes empty.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

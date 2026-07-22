@@ -4,11 +4,8 @@
 #
 # example: h-delete-mail-domain-relay-exclude user domain.tld datev.de
 #
-# Removes RECIPIENT_DOMAIN from the mail domain's smtp_relay_exclude list.
-# When the last entry is removed, the file is deleted so the bypass router
-# declines without any lookup cost (pure opt-in behavior). The file is read
-# per message — no exim reload needed.
-# New h-* command — no v-* symlink.
+# Removes RECIPIENT_DOMAIN from the domain's smtp_relay_exclude list. The file is
+# deleted at the last entry so the bypass router declines with no lookup cost.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

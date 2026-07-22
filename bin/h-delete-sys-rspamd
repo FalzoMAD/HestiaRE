@@ -2,14 +2,12 @@
 # info: remove rspamd antispam
 # options: NONE
 #
-# example: h-remove-sys-rspamd
+# example: h-delete-sys-rspamd
 #
-# Unwires and uninstalls rspamd: exim macros back to inert (mail flows
-# unscanned, per-domain antispam flags and spam-tuning files stay in place —
-# they become active again on h-add-sys-rspamd), panel UI route removed,
-# package purged. Redis is removed with it unless it is the user's general
-# service (DB_REDIS, lifecycle contract from #299/#121).
-# New h-* command — no v-* symlink.
+# Unwires and uninstalls rspamd: exim macros back to inert (mail flows unscanned;
+# per-domain flags + spam-tuning files stay, reactivating on h-add-sys-rspamd),
+# panel UI route removed, package purged. Redis goes with it unless it is the
+# user's general service (DB_REDIS).
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -58,12 +56,11 @@ if ! systemctl is-active --quiet exim4; then
 	exit "$E_RESTART"
 fi
 
-# Panel UI route + the controller-socket group grant for the Caddy process
-# (drop-in from h-add-sys-rspamd). Remove both so nothing is left half-wired.
+# panel UI route + the Caddy controller-socket group drop-in
 rm -f /etc/caddy/apps/rspamd.conf
 rm -f /etc/systemd/system/caddy.service.d/rspamd-ctrl.conf
 rmdir /etc/systemd/system/caddy.service.d 2> /dev/null || true
-# Also drop any stale caddy membership in _rspamd left by pre-#341 installs.
+# drop any stale caddy membership in _rspamd from older installs
 gpasswd -d caddy _rspamd > /dev/null 2>&1 || true
 systemctl daemon-reload
 systemctl try-restart caddy 2> /dev/null || true
@@ -71,19 +68,15 @@ systemctl try-restart caddy 2> /dev/null || true
 systemctl disable --now rspamd > /dev/null 2>&1
 apt-get -y -qq purge rspamd > /dev/null 2>&1
 
-# The dedicated controller-socket group is rspamd-only — drop it with the
-# package so it does not linger as a stale entry (the _rspamd user is removed
-# by the purge above).
+# the controller-socket group is rspamd-only — drop it with the package
 groupdel _rspamd-ctrl 2> /dev/null || true
 
-# Redis: only the rspamd Bayes companion goes away with it — as a general
-# service (DB_REDIS) it stays untouched
+# Redis: the Bayes companion goes with rspamd; a general service (DB_REDIS) stays
 if [ "${COMPONENT_DB_REDIS:-}" != "true" ]; then
 	systemctl disable --now redis-server > /dev/null 2>&1
 	apt-get -y -qq purge redis-server > /dev/null 2>&1
 fi
-# no autoremove: it would rip out auto-marked siblings of the shared stack
-# (seen on deb13: purging the sieve packages autoremoved dovecot-core)
+# no autoremove: it would rip out shared-stack siblings
 
 $BIN/h-change-sys-config-value 'ANTISPAM_SYSTEM' ''
 set_install_component ADDON_RSPAMD false

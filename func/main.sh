@@ -44,22 +44,16 @@ BACKUP_DISK_LIMIT=95
 BACKUP_LA_LIMIT=$(grep -c '^processor' /proc/cpuinfo)
 RRD_STEP=300
 BIN=$HESTIA/bin
-# Instance config root (/etc/hestia). Exported by hestia.env on fresh installs;
-# this fallback is the reliable source — main.sh ships in the tarball, so it also
-# covers existing installs whose hestia.env predates the variable.
+# instance config root; fallback covers installs whose hestia.env predates the var
 CONF_DIR="${CONF_DIR:-/etc/hestia}"
 HESTIA_INSTALL_DIR="$HESTIA/install/deb"
 HESTIA_COMMON_DIR="$HESTIA/install/common"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
-# HestiaRE bundles no PHP — CLI helpers go through the hestia-php wrapper, which
-# resolves the panel PHP version from /etc/php/hestia/php-version (single point,
-# survives a Sury->OS-repo switch).
+# CLI helpers run through the hestia-php wrapper (panel PHP version indirection)
 HESTIA_PHP="$HESTIA/bin/hestia-php"
 USER_DATA=$CONF_DIR/users/$user
 WEBTPL=$HESTIA/templates/web
-# Webmail vhost templates live per serving app at $HESTIA/share/$WEB_SYSTEM/webmail/
-# (moved from templates/mail in #119) — resolved inline in add_webmail_config, so
-# no single-prefix MAILTPL var fits anymore.
+# webmail templates live per app at $HESTIA/share/$WEB_SYSTEM/webmail/ (no MAILTPL var)
 DNSTPL=$HESTIA/templates/dns
 RRD=$HESTIA/web/rrd
 SENDMAIL="$HESTIA/web/inc/mail-wrapper.php"
@@ -69,13 +63,8 @@ HESTIA_THEMES_CUSTOM="$HESTIA/web/css/src/themes/custom"
 SCRIPT="$(basename $0)"
 CHECK_RESULT_CALLBACK=""
 
-# install.conf live component state (HestiaRE).
-# $CONF_DIR/install.conf is written by the wizard as the install recipe and is
-# the source of truth for which components are currently installed. h-add-sys-*/
-# h-remove-sys-* call this after a successful (un)install so the file reflects the
-# live system without parsing service state. Idempotent: updates the key in place
-# or appends it. <id> is the manifest component id (e.g. DB_PHPMYADMIN), stored as
-# COMPONENT_<id>="<value>". No-op (and success) when install.conf is absent.
+# mark a component installed/removed in install.conf (COMPONENT_<id>="<value>").
+# Called by h-add/delete-sys-* after (un)install. Idempotent; no-op if file absent.
 set_install_component() {
 	local id="$1" value="$2"
 	local conf="$CONF_DIR/install.conf"
@@ -342,10 +331,7 @@ is_backup_scheduled() {
 	fi
 }
 
-# Resolve an object's .conf path. Global objects (firewall rules/ipset, database
-# hosts) pass an absolute path and are used as-is; everything else resolves under
-# the per-user $USER_DATA — so the same helpers serve user and global objects
-# without the fragile ../../../ traversal that depended on $USER_DATA's depth (#154).
+# resolve an object's .conf path: absolute (global objects) as-is, else under $USER_DATA
 _object_conf() {
 	case "$1" in
 		/*) printf '%s' "$1.conf" ;;
@@ -1419,9 +1405,7 @@ is_password_format_valid() {
 		check_result "$E_INVALID" "invalid password format :: $1"
 	fi
 }
-# Missing function -
-# Before: validate_format_shell
-# After: is_format_valid_shell
+# shell must be listed in /etc/shells
 is_format_valid_shell() {
 	if [ -z "$(grep -w $1 /etc/shells)" ]; then
 		echo "Error: shell $1 is not valid"
@@ -1720,10 +1704,7 @@ is_hestia_package() {
 	fi
 }
 
-# Run arbitrary cli commands with dropped privileges
-# Note: setpriv --init-groups is not available on debian9 (util-linux 2.29.2)
-# Input:
-#     - $user : Vaild hestia user
+# run a command as $user with dropped privileges
 user_exec() {
 	is_object_valid 'user' 'USER' "$user"
 

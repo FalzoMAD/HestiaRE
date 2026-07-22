@@ -4,16 +4,18 @@
 #
 # example: hestia-php-confd 8.3
 #
-# The panel PHP runs with PHP_INI_SCAN_DIR pointing at its own conf.d (set by
-# the hestia-php-fpm and hestia-php wrappers) so it loads a fixed, curated
-# extension set instead of whatever customers have enabled/disabled on the same
-# PHP version's conf.d. This helper (re)builds both directories —
-# /etc/php/hestia/fpm/conf.d and /etc/php/hestia/cli/conf.d — from the
-# version's mods-available, keeping the Debian priority prefixes. Run after the
-# panel install and by h-change-sys-panel-php (the mods-available path is
-# version-specific, so it must follow the pinned version).
+# The panel PHP (hestia-php-fpm/hestia-php wrappers, PHP_INI_SCAN_DIR) loads a
+# curated extension set from its own conf.d, independent of what customers toggle
+# on the same version. This (re)builds /etc/php/hestia/{fpm,cli}/conf.d from the
+# version's mods-available, keeping Debian priority prefixes. Run after panel
+# install and by h-change-sys-panel-php (version-specific path).
 #
-# Not a user-facing command — no v-* symlink.
+# EVERY app on the single hestia FPM master shares this fpm conf.d — panel UI,
+# phpMyAdmin/Adminer, and the webmail clients (Roundcube/SnappyMail). Before
+# dropping any extension, check all three groups (fpm_*, fpm_apps_*,
+# fpm_webmail_*): a 2026-07 audit removed `dom` after checking only panel + DB
+# tools and 500'd every Roundcube page. Critical = hard build-time failure;
+# optional = warn. See CODEMAP panel_php_service.confd_isolation for the coupling.
 
 version="${1:-$(cat /etc/php/hestia/php-version 2> /dev/null)}"
 
@@ -29,64 +31,16 @@ if [ ! -d "$mods" ]; then
 	exit 1
 fi
 
-# Extension sets per target, split by how badly the consumer breaks without
-# them: a missing critical extension is a hard failure so a degraded panel is
-# caught here at build time instead of surfacing as a runtime fatal later; a
-# missing optional one only warns.
-#
-# FPM (the panel web UI, verified against the panel code):
-#   critical — the panel is non-functional without these:
-#       mysqlnd pdo mysqli pdo_mysql  DB access chain
-#       mbstring                      string handling throughout the UI
-#       gettext                       i18n — the panel's _() translation calls
-#   optional — used but not fatal on every render:
-#       opcache          performance (Zend)
-#       curl gmp zip     panel-stage set
-#       ftp              FTP account management
-#
-# CLI (bin/hestia-php, verified against its consumers): the in-tree callers —
-# func/main.sh validators (filter_var, kv-parser), the 2FA TOTP/QR helpers,
-# h-add-web-domain-redirect (parse_url) — need only compiled-in PHP. The
-# curated set exists for composer, which h-add-sys-filemanager runs through
-# hestia-php: phar (composer IS a phar; openssl for its downloads is
-# compiled-in on Debian/Sury), mbstring/iconv/ctype (real extensions instead
-# of composer's bundled polyfills), plus curl/zip to speed up downloads and
-# archive extraction. No DB chain, no gettext — no CLI consumer uses them.
-#
-# Deliberately excluded from the panel set: imagick, imap, ldap, soap, bcmath,
-# apcu, pspell, … (customer-app extensions). intl/exif moved into the webmail
-# set below once the panel FPM started serving Roundcube/SnappyMail (#205).
+# panel UI: DB chain + mbstring + gettext(i18n) critical; perf/stage extras optional
 fpm_critical="mysqlnd pdo mysqli pdo_mysql mbstring gettext"
 fpm_optional="opcache curl gmp zip ftp"
-# App tools served by the SAME hestia FPM master (phpMyAdmin, Adminer): their
-# pools live under this master and share this conf.d, so the tools' extensions
-# must be curated here too. Without them the bundled DB web UIs die with runtime
-# fatals (e.g. phpMyAdmin: "undefined function ctype_alpha()") instead of the
-# clean build-time error this script exists to give.
-#   critical — always present via php-common (ctype/iconv/fileinfo) and php-xml
-#              (simplexml/xmlwriter/xmlreader); phpMyAdmin hard-needs them.
-#   optional — installed for the panel version in the panel stage: gd/bz2 for
-#              phpMyAdmin, pgsql/pdo_pgsql for Adminer->PostgreSQL.
-# (sodium is compiled-in on Debian/Sury — no mods-available .ini — so it needs
-#  no symlink and is deliberately not listed.)
+# phpMyAdmin/Adminer: ctype/iconv/fileinfo (php-common) + xml family (php-xml) critical
 fpm_apps_critical="ctype iconv fileinfo simplexml xmlwriter xmlreader"
 fpm_apps_optional="gd bz2 pgsql pdo_pgsql"
-# Webmail (Roundcube/SnappyMail) is served by the SAME hestia FPM master via the
-# internal loopback listeners on :8090/:8091 (#205), so its pools share this
-# conf.d and its extensions must be curated here too — same self-contained model
-# as the phpMyAdmin/Adminer set above.
-#   critical — intl: IDN handling (rcube_utils::idn_to_ascii ->
-#              INTL_IDNA_VARIANT_UTS46). Roundcube fatals on the very first login
-#              without it; SnappyMail needs it for internationalised addresses.
-#            phar: SnappyMail's change-password plugin scans its driver .phar
-#              files at bootstrap ("Class Phar not found" -> blank page). Ships
-#              with php-common (phar.ini in mods-available), so no apt line — it
-#              only needs the symlink the FPM set was missing.
-#   optional — exif: Roundcube image orientation for attachment previews.
-# php${VER}-intl is installed unconditionally in the panel stage (like pgsql for
-# Adminer), so webmail add/remove never has to touch the panel PHP config.
-fpm_webmail_critical="intl phar"
+# webmail: intl(IDN), phar(SnappyMail plugins), dom(Roundcube renders every page) critical
+fpm_webmail_critical="intl phar dom"
 fpm_webmail_optional="exif"
+# CLI (bin/hestia-php): only composer needs these; no DB chain, no gettext
 cli_critical="mbstring ctype iconv phar"
 cli_optional="curl zip"
 
@@ -111,7 +65,7 @@ build_confd() {
 			esac
 			continue
 		fi
-		# Keep the Debian load-order prefix (e.g. 10-opcache, 20-curl); default 20.
+		# keep the Debian load-order prefix (10-opcache, 20-curl); default 20
 		prio=$(sed -n 's/^; *priority=\([0-9]\{1,\}\).*/\1/p' "$src" | head -n1)
 		ln -sf "$src" "$dst/${prio:-20}-$e.ini"
 	done

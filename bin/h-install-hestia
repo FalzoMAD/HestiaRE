@@ -12,10 +12,7 @@
 
 set -eo pipefail
 
-# Non-interactive for the whole install run: sub-commands (h-add-sys-*) and
-# maintainer scripts inherit this, so debconf uses its Noninteractive frontend
-# instead of trying Dialog and falling back to Readline in the non-TTY install
-# context ("unable to initialize frontend: Dialog … falling back: Readline").
+# inherited by all sub-commands so debconf uses the Noninteractive frontend
 export DEBIAN_FRONTEND=noninteractive
 
 CONF_DIR="/etc/hestia"
@@ -50,9 +47,8 @@ for _f in "$INSTALL_CONF" $CONF_DIR/hestia.env $CONF_DIR/conf/hestia.conf; do
 done
 
 # ── Sources: env -> core lib -> helper lib -> recipe ────────────────────────
-# Sourced with errexit OFF: these libs are written to be sourced by ordinary h-*
-# commands (which do not run under set -e), so a benign non-zero last statement
-# (e.g. hestia.env's local.conf include) must not abort the installer.
+# errexit OFF: these libs expect to be sourced without set -e (a benign non-zero
+# last statement must not abort the installer)
 set +e
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env                 # sets HESTIA
@@ -72,9 +68,7 @@ set -e
 load_os_profile "$INSTALL_OS"
 
 # ── Install-time variables ──────────────────────────────────────────────────
-# Panel/reference PHP version — single source of truth in the manifest so the
-# wizard (checklist lock) and the installer agree. jq is not guaranteed this
-# early in the run, so parse with sed; fall back to 8.3.
+# panel/reference PHP version from the manifest (sed, not jq — not guaranteed yet)
 PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$HESTIA/share/manifest.json" 2> /dev/null | head -n1)
 PHP_VER="${PHP_VER:-8.3}"                        # panel + default web PHP (Sury)
 HESTIA_INSTALL_DIR="${HESTIA_INSTALL_DIR:-$HESTIA/install/deb}"
@@ -96,14 +90,11 @@ install_base() {
 	echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/90nolang
 	mkdir -p /root/.gnupg && chmod 700 /root/.gnupg
 
-	# Sury PHP repo (panel + multi-PHP are built on Sury). Shared helper so the
-	# wizard's discovery pass and this stage produce ONE identical repo definition
-	# (avoids apt's "Conflicting values set for option Signed-By").
+	# shared helper so the wizard and this stage emit an identical Sury repo definition
 	echo "[ * ] Adding Sury PHP repo..."
 	add_sury_repo "$CODENAME" || exit 1
 
-	# MariaDB repo/keyring now lives in h-add-sys-mariadb (called from install_db),
-	# which owns the full MariaDB lifecycle incl. the __os__/external repo dispatch (#121).
+	# MariaDB repo/keyring lives in h-add-sys-mariadb (owns the full DB lifecycle)
 
 	echo "[ * ] Installing base packages..."
 	apt-get -qq update
@@ -122,8 +113,7 @@ install_base() {
 	id hestia &> /dev/null || useradd hestia -c "HestiaRE Panel" --no-create-home -s /sbin/nologin
 	getent group hestia-users &> /dev/null || groupadd hestia-users
 	usermod -aG hestia-users hestia
-	# caddy joins hestia-users in the panel stage (the caddy user does not exist yet
-	# here; it is created when the caddy package is installed).
+	# caddy joins hestia-users in the panel stage (user doesn't exist yet here)
 
 	echo "[ * ] Hardening SSH..."
 	if grep -qiE "^#?.*Subsystem.+(sftp )?sftp-server" /etc/ssh/sshd_config; then
@@ -146,12 +136,9 @@ install_base() {
 		&& echo "@reboot root sleep 5 && mount -o remount,defaults,hidepid=2 /proc" > /etc/cron.d/hestia-proc \
 		|| echo "Info: Cannot remount /proc (LXC — skip hidepid)"
 
-	# DH params: laid down in the base stage on purpose — BOTH nginx (install_web,
-	# ssl_dhparam in nginx.conf) and dovecot (install_mail, ssl_dh in 10-ssl.conf,
-	# incl. the sieve-addon restart) reference /etc/ssl/dhparam.pem and fatal at
-	# start if it is missing. Doing it here guarantees the file exists before any
-	# TLS-consuming service is (re)started. Fail loud: a missing DH file silently
-	# breaks mail delivery. Ship the curated file; regenerate only as a fallback.
+	# DH params in the base stage: nginx and dovecot both fatal without
+	# /etc/ssl/dhparam.pem, so it must exist before any TLS service starts. Ship
+	# the curated file; regenerate only as a fallback.
 	if [ -s "$HESTIA/share/ssl/dhparam.pem" ]; then
 		cp -f "$HESTIA/share/ssl/dhparam.pem" /etc/ssl/dhparam.pem
 	else
@@ -171,15 +158,8 @@ install_base() {
 install_panel() {
 	[ -f "$CONF_DIR/.done.panel" ] && { echo "[ skip ] panel already configured"; return 0; }
 	echo "[ * ] Installing panel packages (Caddy, PHP $PHP_VER FPM)..."
-	# The last line covers the DB web UIs that run under the same panel FPM master
-	# (phpMyAdmin, Adminer): gd/bz2 for phpMyAdmin, pgsql (ships pdo_pgsql too) for
-	# Adminer->PostgreSQL. And for the webmail clients the panel FPM serves via
-	# its internal listeners (#205): intl (IDN — Roundcube fatals on login without
-	# it) and exif (Roundcube attachment previews). Installed unconditionally so
-	# the panel PHP is self-contained — no coupling of postgres/webmail add/remove
-	# to the hestia-php config. ctype/iconv/fileinfo come via php-common; the xml
-	# family via php-xml. All are wired into the isolated panel conf.d by
-	# hestia-php-confd below.
+	# gd/bz2/pgsql (phpMyAdmin/Adminer) + intl/exif (webmail) installed unconditionally
+	# so the panel PHP is self-contained; wired into the isolated conf.d by hestia-php-confd
 	hestia_apt -y install \
 		caddy \
 		libphp-phpmailer \
@@ -194,20 +174,16 @@ install_panel() {
 	cp -f "$HESTIA/share/panel-php/fpm/php.ini" /etc/php/hestia/fpm/php.ini
 	cp -f "$HESTIA/share/panel-php/pool.d/panel.conf" /etc/php/hestia/fpm/pool.d/
 	cp -f "$HESTIA/share/panel-php/cli/php.ini" /etc/php/hestia/cli/php.ini
-	# Single source of truth for the panel PHP version (read by the hestia-php /
-	# hestia-php-fpm wrappers). A future Sury->OS-repo switch only rewrites this.
+	# single source of truth for the panel PHP version (read by the wrappers)
 	echo "$PHP_VER" > /etc/php/hestia/php-version
-	# Build the panel's isolated conf.d before starting, so it comes up with only
-	# the curated panel extension set (independent of customer conf.d).
+	# build the isolated conf.d before starting (curated extension set)
 	"$BIN/hestia-php-confd" "$PHP_VER"
 	cp -f "$HESTIA/share/panel-php/hestia-php.service" /etc/systemd/system/
 	systemctl daemon-reload
 	systemctl enable hestia-php
 	systemctl start hestia-php
 
-	# Panel TLS cert must exist before caddy starts (its config references it).
-	# Use $HESTIA_HOSTNAME (known from install.conf) — the system hostname is set
-	# later in the configure stage. A real cert replaces this via Let's Encrypt.
+	# panel cert must exist before caddy starts; LE replaces it later
 	echo "[ * ] Generating panel SSL certificate..."
 	"$BIN/h-generate-ssl-cert" "$HESTIA_HOSTNAME" '' 'US' 'California' 'San Francisco' 'HestiaRE' 'IT' > /tmp/hst.pem
 	local CRT_END KEY_START KEY_END
@@ -229,23 +205,17 @@ install_panel() {
 
 	echo "[ * ] Configuring Caddy..."
 	mkdir -p /etc/caddy
-	# Caddy logs to /var/log/caddy as the caddy user (it cannot write /var/log/hestia).
+	# caddy logs to /var/log/caddy (cannot write /var/log/hestia)
 	mkdir -p /var/log/caddy
 	chown caddy:caddy /var/log/caddy 2> /dev/null || true
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
-	# Panel-app route snippets (phpMyAdmin, Adminer) are written here by
-	# h-change-sys-db-alias. Ship a placeholder so `import /etc/caddy/apps/*.conf`
-	# inside hestia.conf is never an empty glob on the first caddy start.
+	# placeholder so `import apps/*.conf` is never an empty glob on first start
 	mkdir -p /etc/caddy/apps
 	[ -e /etc/caddy/apps/00-placeholder.conf ] \
 		|| echo "# app route snippets are written here by h-change-sys-db-alias" \
 			> /etc/caddy/apps/00-placeholder.conf
-	# caddy runs as the unprivileged caddy user. Add it to:
-	#  - mail:         read the shared panel cert (root:mail 660, used by nginx/exim/…)
-	#  - hestia-users: app FPM pools run as caddy (replaces the former hestiamail role)
-	# The panel FPM socket is reached via listen.group=caddy (see panel.conf),
-	# so caddy needs no extra group membership for it.
+	# caddy user groups: mail (read the shared panel cert), hestia-users (app FPM pools run as caddy)
 	usermod -aG mail,hestia-users caddy 2> /dev/null || true
 	systemctl enable caddy
 	# restart, not start: apt already started caddy with its default Caddyfile
@@ -260,11 +230,9 @@ install_panel() {
 # Stage: web — nginx (+ optional apache2), PHP multi-version, web pool
 # ════════════════════════════════════════════════════════════════════════════
 
-# Install and configure apache2 as the customer web server (WEB_SYSTEM).
-# ports.conf is emptied on purpose: Listen directives come per IP from
-# h-add-sys-ip (conf.d/<ip>.conf). Until the first IP is registered the
-# hestia-status module keeps a 127.0.0.1:8081 listener, so apache2 can
-# start (with zero Listen directives it would refuse to).
+# apache2 = customer web server. ports.conf emptied on purpose: Listen comes per
+# IP from h-add-sys-ip; the hestia-status 127.0.0.1:8081 listener keeps it startable
+# until the first IP registers.
 configure_apache2() {
 	echo "[ * ] Installing apache2..."
 	hestia_apt -y install apache2 apache2-suexec-custom libapache2-mod-fcgid
@@ -283,20 +251,15 @@ configure_apache2() {
 	a2dismod -q status > /dev/null 2>&1 || true
 	a2enmod -q hestia-status > /dev/null 2>&1 || true
 
-	# WEB_BACKEND is php-fpm: event MPM + proxy_fcgi for the FastCGI
-	# SetHandler directives (default pool via hestia-event.conf and the
-	# per-domain vhost templates). h-add-web-php re-checks proxy_fcgi, but
-	# it must not depend on the multi-PHP loop running.
+	# php-fpm backend: event MPM + proxy_fcgi for the FastCGI SetHandler directives
 	a2dismod -q mpm_prefork > /dev/null 2>&1 || true
 	a2enmod -q mpm_event > /dev/null 2>&1 || true
 	a2enmod -q proxy_fcgi setenvif > /dev/null 2>&1 || true
-	# proxy_http: apache-only webmail vhosts reverse-proxy to the Panel-Caddy
-	# webmail listeners (127.0.0.1:8090/8091) — mod_proxy comes with proxy_fcgi,
-	# but the http backend needs proxy_http explicitly (#205).
+	# proxy_http: apache webmail vhosts reverse-proxy to the Caddy webmail listeners
 	a2enmod -q proxy_http > /dev/null 2>&1 || true
 	cp -f "$HESTIA/share/apache2/hestia-event.conf" /etc/apache2/conf.d/
 
-	# No distro default site, no global Listen ports
+	# no distro default site, no global Listen ports
 	a2dissite -q 000-default > /dev/null 2>&1 || true
 	echo "# Powered by hestia" > /etc/apache2/ports.conf
 
@@ -308,8 +271,7 @@ configure_apache2() {
 	chmod 751 /var/log/apache2/domains
 
 	update-rc.d apache2 defaults > /dev/null 2>&1
-	# Restart, not start: the package install already started apache2 with
-	# the distro ports.conf (Listen 80) — our config must replace it now.
+	# restart, not start: replace the distro config the package start brought up
 	systemctl restart apache2
 }
 
@@ -331,8 +293,7 @@ install_web() {
 	cp -f "$HESTIA/share/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
 	cp -f "$HESTIA/share/nginx/agents.conf" /etc/nginx/conf.d/
 	cp -f "$HESTIA/share/nginx/cloudflare.inc" /etc/nginx/conf.d/
-	# phpMyAdmin is no longer served via an nginx alias — it is delivered by the
-	# Panel-Caddy from a dedicated caddy FPM pool (see h-change-sys-db-alias).
+	# phpMyAdmin is delivered by Panel-Caddy now, not an nginx alias
 	cp -f "$HESTIA/share/nginx/logrotate" /etc/logrotate.d/nginx
 	mkdir -p /etc/nginx/conf.d/domains /etc/nginx/conf.d/main \
 		/etc/nginx/modules-enabled /var/log/nginx/domains
@@ -358,21 +319,12 @@ install_web() {
 		echo "  Cloudflare ranges updated"
 	fi
 	update-rc.d nginx defaults > /dev/null 2>&1
-	# Restart, not start: the package install already started nginx with the
-	# distro default site on :80 — our nginx.conf (no sites-enabled include,
-	# status only) must replace it now, also to free :80 before apache2 is
-	# installed (its package start would otherwise fail on the bind).
+	# restart, not start: replace the distro default site and free :80 before apache2
 	systemctl restart nginx
 
-	# Web server selection from the wizard (APACHE / NGINX / BOTH) and the
-	# resulting port model (#247):
-	#   BOTH:   nginx (PROXY_SYSTEM) 80/443  ->  apache2 (WEB_SYSTEM) 8080/8443
-	#   APACHE: apache2 (WEB_SYSTEM) 80/443, no proxy
-	#   NGINX:  nginx (WEB_SYSTEM) 80/443, no proxy
-	# Listen directives are written per IP by h-add-sys-ip (conf.d/<ip>.conf),
-	# so the values must be in hestia.conf BEFORE the system IP is registered
-	# (configure stage) and before the multi-PHP loop below (h-add-web-php
-	# reads WEB_SYSTEM to wire apache2 FastCGI modules).
+	# web-server choice → port model: BOTH = nginx proxy 80/443 -> apache2 8080/8443;
+	# APACHE/NGINX = that server on 80/443, no proxy. Must land in hestia.conf before
+	# the IP is registered and before the multi-PHP loop (h-add-web-php reads WEB_SYSTEM).
 	local web_server="${COMPONENT_WEB_SERVER:-NGINX}"
 	case "$web_server" in
 		APACHE)
@@ -421,10 +373,7 @@ install_web() {
 		local v
 		for v in $php_versions; do
 			echo "  php$v..."
-			# Do not swallow the exit code: the reference version is essential
-			# (the panel pool below and the panel FPM depend on it), so a failure
-			# there aborts the install. A failed *extra* customer version only
-			# warns so one bad version does not kill an otherwise good install.
+			# reference version failure aborts; an extra customer version only warns
 			if ! "$BIN/h-add-web-php" "$v" >> "$LOG" 2>&1; then
 				if [ "$v" = "$PHP_VER" ]; then
 					echo "ERROR: reference PHP $v failed to install — see $LOG" >&2
@@ -438,11 +387,8 @@ install_web() {
 	fi
 
 	echo "[ * ] Ensuring PHP $PHP_VER FPM pool..."
-	# No shared www pool anymore (removed in #397): every domain runs in its own
-	# per-domain pool, and each installed version — including the reference
-	# $PHP_VER just built by h-add-web-php — is backed by its dummy placeholder
-	# pool so php-fpm starts cleanly with zero domains. Deploy it explicitly here
-	# to keep that guarantee independent of the multi-PHP branch above.
+	# no shared www pool: each version needs its dummy placeholder pool so php-fpm
+	# starts with zero domains. Deploy it here independent of the multi-PHP branch.
 	cp -f "$HESTIA/share/php-fpm/dummy.conf" /etc/php/${PHP_VER}/fpm/pool.d/dummy.conf
 	sed -i "s/%backend_version%/${PHP_VER}/g" /etc/php/${PHP_VER}/fpm/pool.d/dummy.conf
 	update-rc.d php${PHP_VER}-fpm defaults > /dev/null 2>&1
@@ -477,10 +423,7 @@ install_web() {
 install_db() {
 	[ -f "$CONF_DIR/.done.db" ] && { echo "[ skip ] db already configured"; return 0; }
 
-	# MariaDB — full lifecycle (repo dispatch, my.cnf, hardening, host registration,
-	# implicit phpMyAdmin) lives in h-add-sys-mariadb (#121). Hard-fail: the panel
-	# depends on a working DB, so a MariaDB failure must abort rather than leave a
-	# half-wired install that looks consistent (the #272 exit-code class).
+	# MariaDB lifecycle lives in h-add-sys-mariadb. Hard-fail: the panel needs a DB.
 	if is_on "${COMPONENT_DB_MARIADB:-}"; then
 		echo "[ * ] Installing MariaDB..."
 		if ! "$BIN/h-add-sys-mariadb" >> "$LOG" 2>&1; then
@@ -491,27 +434,18 @@ install_db() {
 		echo "[ * ] MariaDB not selected — skipping"
 	fi
 
-	# Optional engines — minimal install; full integration tracked in #121.
-	# PostgreSQL — full lifecycle (packages, management role, host registration so
-	# the panel can manage pgsql DBs) lives in h-add-sys-postgresql (#121). Fail-soft:
-	# the smoke test verifies postgres independently, and it is an optional engine.
+	# PostgreSQL lifecycle in h-add-sys-postgresql. Fail-soft: optional, smoke-verified.
 	if is_on "${COMPONENT_DB_POSTGRESQL:-}"; then
 		echo "[ * ] Installing PostgreSQL..."
 		"$BIN/h-add-sys-postgresql" >> "$LOG" 2>&1 \
 			|| echo "[ ! ] PostgreSQL install reported an issue (see $LOG)"
 	fi
-	# Adminer — vendored single-file web DB UI, offered as an addon that the
-	# wizard defaults ON when PostgreSQL is selected (#350). It is the PostgreSQL
-	# web UI here (the OS pgadmin4-web package does not exist; phpPgAdmin is
-	# dormant). The full build can also reach MySQL, but phpMyAdmin stays the
-	# untouched MySQL default. Engine-agnostic, so it is keyed on its own flag.
+	# Adminer: vendored web DB UI, the PostgreSQL front-end (phpMyAdmin stays MySQL default)
 	if is_on "${COMPONENT_ADDON_ADMINER:-}"; then
 		"$BIN/h-add-sys-adminer" >> "$LOG" 2>&1 \
 			|| echo "[ ! ] Adminer install reported an issue (see $LOG)"
 	fi
-	# Redis — general-service install/promote via its own command (#121). Fail-soft:
-	# the smoke test verifies redis independently, and a cache failure should not
-	# abort the whole install.
+	# Redis install/promote in h-add-sys-redis. Fail-soft: a cache must not abort install.
 	if is_on "${COMPONENT_DB_REDIS:-}"; then
 		echo "[ * ] Installing Redis..."
 		"$BIN/h-add-sys-redis" >> "$LOG" 2>&1 \
@@ -528,18 +462,14 @@ install_db() {
 install_mail() {
 	[ -f "$CONF_DIR/.done.mail" ] && { echo "[ skip ] mail already configured"; return 0; }
 	echo "[ * ] Installing mail packages (exim4, dovecot)..."
-	# managesieved/sieve packages are NOT part of the base set — the sieve
-	# addon (h-add-sys-sieve, below) installs and wires them when selected
+	# sieve packages are not here — the sieve addon installs them when selected
 	hestia_apt -y install \
 		exim4 exim4-daemon-heavy \
 		dovecot-imapd dovecot-pop3d
 
 	echo "[ * ] Configuring Exim4..."
 	gpasswd -a "$EXIM_USR" mail > /dev/null 2>&1 || true
-	# Single template, written for exim >= 4.95 (dsearch-untainted paths — all
-	# target OSes ship >= 4.95, upstream serves deb12/deb13/ubuntu with the same
-	# one; the pre-4.95 variant broke local delivery on exim 4.96+ with
-	# "Tainted filename" errors and was removed).
+	# single template for exim >= 4.95 (all target OSes; pre-4.95 variant removed)
 	cp -f "$HESTIA/share/exim/exim4.conf.template" /etc/exim4/
 	cp -f "$HESTIA/share/exim/dnsbl.conf" /etc/exim4/
 	cp -f "$HESTIA/share/exim/spam-blocks.conf" /etc/exim4/
@@ -572,10 +502,8 @@ install_mail() {
 	cp -f "$DCDIR/dovecot.conf" /etc/dovecot/
 	cp -f "$DCDIR/conf.d/"* /etc/dovecot/conf.d/
 	if [ "$DCDIR" = "$HESTIA/share/dovecot/2.3" ]; then
-		# 2.3: our dovecot.conf defines the (anonymous) inbox namespace itself;
-		# the Debian stock 15-mailboxes.conf declares a second one with the same
-		# empty prefix -> "Duplicate namespace prefix" -> every IMAP/POP3 login
-		# fails after auth. 2.4 ships its own curated 15-mailboxes.conf instead.
+		# our dovecot.conf defines the inbox namespace; the stock file's duplicate
+		# prefix would break every login. 2.4 ships its own curated 15-mailboxes.conf.
 		rm -f /etc/dovecot/conf.d/15-mailboxes.conf
 	fi
 	cp -f "$HESTIA/share/dovecot/logrotate" /etc/logrotate.d/dovecot
@@ -588,10 +516,7 @@ install_mail() {
 
 	wcv "MAIL_SYSTEM"  "exim4"
 	wcv "IMAP_SYSTEM"  "dovecot"
-	# rspamd and sieve are modular addons (#122): the full install/unwire logic
-	# lives in h-add-sys-rspamd / h-add-sys-sieve (and their h-remove-*
-	# counterparts), the installer just invokes them per the recipe. They write
-	# ANTISPAM_SYSTEM / SIEVE_SYSTEM into hestia.conf themselves.
+	# rspamd/sieve are modular addons — their commands write ANTISPAM_SYSTEM/SIEVE_SYSTEM
 	if is_on "${COMPONENT_ADDON_RSPAMD:-}"; then
 		echo "[ * ] Installing & configuring rspamd (with Bayes Redis)..."
 		"$BIN/h-add-sys-rspamd" >> "$LOG"
@@ -647,9 +572,7 @@ install_security() {
 	if is_on "${COMPONENT_ADDON_CROWDSEC:-}"; then
 		echo "[ * ] Installing CrowdSec (minimal — see #123)..."
 		hestia_apt -y install crowdsec || true
-		# CrowdSec's Local API defaults to 127.0.0.1:8080, which collides with the
-		# apache2 backend. Move it to 127.0.0.1:8054 (LAPI is local-only); update
-		# both the server listen_uri and the agent's credentials, then restart.
+		# move the local API off :8080 (collides with apache2) to :8054
 		if [ -f /etc/crowdsec/config.yaml ]; then
 			sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/config.yaml
 			[ -f /etc/crowdsec/local_api_credentials.yaml ] \
@@ -668,9 +591,7 @@ install_security() {
 		mkdir -p /etc/ipset
 		cp -f "$HESTIA_INSTALL_DIR/ipset/"*.conf /etc/ipset/ 2>/dev/null || true
 	fi
-	# NOTE: system IP / user-counter setup runs in the configure stage, after the
-	# admin user exists (h-update-sys-ip there). Calling it here would fail with
-	# "user admin doesn't exist" (#164).
+	# system IP setup runs in the configure stage (needs the admin user to exist)
 
 	touch "$CONF_DIR/.done.security"
 	echo "[ OK ] security complete"
@@ -682,8 +603,8 @@ install_security() {
 install_addons() {
 	[ -f "$CONF_DIR/.done.addons" ] && { echo "[ skip ] addons already configured"; return 0; }
 	if is_on "${COMPONENT_ADDON_PROFTPD:-}"; then
-		echo "[ * ] Installing ProFTPD (minimal — see #123)..."
-		hestia_apt -y install proftpd-basic || true
+		echo "[ * ] Installing ProFTPD..."
+		"$BIN/h-add-sys-proftpd" >> "$LOG" 2>&1 || true
 	fi
 	if is_on "${COMPONENT_ADDON_DOCKER:-}"; then
 		echo "[ * ] Installing docker.io (minimal — see #123)..."
@@ -741,12 +662,9 @@ configure_hestia() {
 	chmod 440 /etc/sudoers.d/hestia
 	cp -f "$HESTIA/share/hestia/logrotate" /etc/logrotate.d/hestia 2>/dev/null || true
 
-	echo "[ * ] Creating v-* symlinks..."
-	local hcmd vcmd
-	for hcmd in "$HESTIA/bin/h-"*; do
-		vcmd="$HESTIA/bin/v-${hcmd##*/h-}"
-		[ -L "$vcmd" ] || ln -s "$(basename "$hcmd")" "$vcmd"
-	done
+	# committed v-* symlinks ship in the tarball; don't blanket-create (orphans native
+	# commands) — just prune dangling ones left by a renamed/removed h-*
+	find "$HESTIA/bin" -maxdepth 1 -name 'v-*' -xtype l -delete 2> /dev/null || true
 
 	echo "[ * ] Installing firewall data; customizing shipped packages..."
 	# packages/ and templates/ ship at the install root via the tarball — no copy.
@@ -778,9 +696,7 @@ configure_hestia() {
 			"$TLS13" >> /etc/ssl/openssl.cnf
 	fi
 
-	# Panel SSL certificate is generated earlier, in the panel stage (caddy needs
-	# it at start). DH params (/etc/ssl/dhparam.pem) are laid down in install_base
-	# now — nginx/dovecot need them before this stage runs (see install_base).
+	# panel cert is generated in the panel stage, DH params in install_base
 
 	echo "[ * ] Enabling SFTP and SSH jails..."
 	"$BIN/h-add-sys-sftp-jail" > /dev/null 2>&1 || true
@@ -793,8 +709,7 @@ configure_hestia() {
 	"$BIN/h-change-user-language" "$HESTIA_ADMIN" en
 	"$BIN/h-change-sys-config-value" 'POLICY_SYSTEM_PROTECTED_ADMIN' 'yes'
 
-	# MariaDB host registration + phpMyAdmin alias now happen inside h-add-sys-mariadb
-	# (install_db stage), so DB_SYSTEM is composed before phpMyAdmin runs (#121 F1).
+	# DB host registration + phpMyAdmin alias happen inside h-add-sys-mariadb (db stage)
 
 	echo "[ * ] Configuring system IP..."
 	"$BIN/h-update-sys-ip" > /dev/null 2>&1 || true
@@ -803,20 +718,16 @@ configure_hestia() {
 	IP="$(ip -4 -d -j addr show "$DEFAULT_NIC" 2>/dev/null \
 		| jq -r '.[] | .addr_info[] | if .scope == "global" then .local else empty end' 2>/dev/null \
 		| head -n1 || hostname -I | awk '{print $1}')"
-	# Authoritative IP is the object h-update-sys-ip registered; prefer it if our
-	# NIC detection differs or the detected IP is not registered.
+	# prefer the IP object h-update-sys-ip registered over our NIC detection
 	if [ -z "$IP" ] || [ ! -e "$CONF_DIR/ips/$IP" ]; then
 		_reg_ip="$(ls -t "$CONF_DIR/ips/" 2>/dev/null | head -n1)"
 		[ -n "$_reg_ip" ] && IP="$_reg_ip"
 	fi
 	PUB_IP="$(curl -fsLm5 --retry 2 --ipv4 https://ip.hestiacp.com/ 2>/dev/null || echo "")"
 	if [ -n "$PUB_IP" ] && [ "$PUB_IP" != "$IP" ]; then
-		# NAT: the interface holds a private IP ($IP) and reaches the internet via
-		# PUB_IP. Record PUB_IP as the NAT address of the (already-registered) local
-		# IP object. The default domain is created on the LOCAL IP — its NAT field
-		# carries the public IP for DNS/display. Do NOT set IP=PUB_IP: there is no
-		# /etc/hestia/ips/<public> object, so h-add-web-domain would fail
-		# ("admin user can't use IP <public>").
+		# NAT: record PUB_IP as the NAT address of the local IP object; the default
+		# domain stays on the LOCAL IP (no ips/<public> object exists) with PUB_IP in
+		# its NAT field for DNS/display
 		[ -e /etc/rc.local ] && sed -i '/exit 0/d' /etc/rc.local || touch /etc/rc.local
 		grep -q '^#!' /etc/rc.local || echo '#!/bin/sh' >> /etc/rc.local
 		echo "$HESTIA/bin/h-update-sys-ip" >> /etc/rc.local
@@ -827,10 +738,7 @@ configure_hestia() {
 	fi
 	"$BIN/h-update-firewall" || true
 
-	# BOTH (#247): apache2 sits behind the nginx proxy — logs and PHP must see
-	# the real client IP, not the proxy. nginx templates pass X-Real-IP;
-	# mod_remoteip translates it. h-add-sys-ip appends further proxy IPs to
-	# mods-enabled/remoteip.conf when additional IPs are registered.
+	# BOTH: apache2 behind nginx must see the real client IP via mod_remoteip (X-Real-IP)
 	if [ "${COMPONENT_WEB_SERVER:-NGINX}" = "BOTH" ]; then
 		echo "[ * ] Configuring apache2 remoteip (client IP behind nginx)..."
 		{
@@ -875,8 +783,7 @@ configure_hestia() {
 	} > /var/spool/cron/crontabs/hestia
 	chmod 600 /var/spool/cron/crontabs/hestia
 	chown hestia:hestia /var/spool/cron/crontabs/hestia
-	# No package auto-update cron: HestiaRE updates via the release tarball
-	# (h-update-hestia), not an apt/git package auto-updater (#128).
+	# no auto-update cron: HestiaRE updates via the release tarball, not apt/git
 	"$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" > /dev/null 2>&1 || true
 	"$BIN/h-update-sys-defaults" > /dev/null 2>&1 || true
 	[ -f /root/.bashrc ] && grep -q 'hestia.sh' /root/.bashrc \
@@ -942,10 +849,7 @@ finalize_install() {
 		HESTIA_PASS="(not found — use h-change-user-password $HESTIA_ADMIN <newpass>)"
 	fi
 
-	# Stamp install.conf as the live system-state file (HestiaRE #103). The
-	# COMPONENT_* keys written by the wizard already describe what was installed;
-	# add install metadata so install.conf is a complete system description that
-	# h-add-sys-*/h-remove-sys-* keep current via set_install_component.
+	# stamp install.conf with install metadata (date + version)
 	local _ver; _ver=$(cat "$HESTIA/VERSION" 2>/dev/null || echo "dev")
 	grep -q '^INSTALL_DATE=' "$INSTALL_CONF" 2>/dev/null || echo "INSTALL_DATE=\"$(date +%F)\"" >> "$INSTALL_CONF"
 	if grep -q '^INSTALL_VERSION=' "$INSTALL_CONF" 2>/dev/null; then
@@ -955,8 +859,7 @@ finalize_install() {
 	fi
 
 	echo "[ * ] Restarting panel services (Caddy + hestia-php)..."
-	# No bundled hestia.service — the panel is Caddy + the hestia-php FPM pool.
-	# Restart both so the configure-stage changes (SSL cert, panel port) take effect.
+	# restart both so configure-stage changes (SSL cert, panel port) take effect
 	systemctl restart caddy hestia-php 2>/dev/null || true
 	chown hestia:hestia "$HESTIA/.sessions"
 	mkdir -p /backup && chmod 755 /backup

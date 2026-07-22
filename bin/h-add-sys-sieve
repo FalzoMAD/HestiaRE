@@ -4,21 +4,15 @@
 #
 # example: h-add-sys-sieve
 #
-# Installs dovecot-managesieved + dovecot-sieve and wires them up: the
-# version-specific sieve conf.d overlay (share/dovecot/<ver>/sieve/) enables
-# the sieve protocol on port 4190 (localhost consumers like the webmail
-# managesieve plugin; not opened in the firewall) and stores scripts per
-# account inside the account maildir. exim's SIEVE macro switches clean local
-# delivery to dovecot-lda so the scripts actually run at delivery time; spam
-# keeps the direct .Spam appendfile path (exim's verdict is final).
+# Installs dovecot-managesieved + dovecot-sieve: the version-specific sieve conf.d
+# overlay enables sieve on port 4190 (localhost-only) and stores per-account
+# scripts in the maildir. exim's SIEVE macro switches clean local delivery to
+# dovecot-lda so scripts run at delivery; spam keeps the direct .Spam appendfile.
 #
-# Consequence to be aware of: sieve scripts run ONLY on non-spam mail. Messages
-# rspamd marks as spam bypass dovecot-lda and land in .Spam directly, so a
-# customer's own sieve rules never see them (spam foldering is exim's job, not
-# sieve's). Over-quota behaviour is kept identical on both paths (defer, not
-# bounce) via quota_full_tempfail + return_fail_output — see share/dovecot/
-# <ver>/sieve/15-lda.conf and the dovecot_virtual_delivery transport.
-# Also called by the installer (COMPONENT_ADDON_SIEVE).
+# QUIRK: sieve runs ONLY on non-spam mail — rspamd-tagged spam bypasses dovecot-lda
+# and lands in .Spam directly, so customer sieve rules never see it (spam foldering
+# is exim's job). Over-quota behaviour is identical on both paths (defer, not bounce)
+# via quota_full_tempfail + return_fail_output.
 # New h-* command — no v-* symlink.
 
 #----------------------------------------------------------#
@@ -67,8 +61,7 @@ if ! dpkg -l dovecot-managesieved 2> /dev/null | grep -q '^ii'; then
 	exit "$E_INVALID"
 fi
 
-# Version-specific overlay (2.3 deb12 / 2.4 deb13) — replaces the package
-# defaults: sieve protocol, per-account script storage, dovecot-lda plugins
+# version-specific overlay (2.3/2.4) replacing the package defaults
 DOVECOT_VER=$(dovecot --version 2> /dev/null | cut -d. -f1,2 || echo "2.3")
 if [ "$(printf '%s\n2.4' "$DOVECOT_VER" | sort -V | head -1)" = "2.4" ]; then
 	DCDIR="$HESTIA/share/dovecot/2.4"
@@ -85,8 +78,7 @@ if ! systemctl is-active --quiet dovecot; then
 	exit "$E_RESTART"
 fi
 
-# Switch clean local delivery to dovecot-lda (dovecot_virtual_delivery
-# transport) so sieve scripts run at delivery
+# switch clean local delivery to dovecot-lda so sieve scripts run at delivery
 sed -i 's/^#SIEVE = yes/SIEVE = yes/' /etc/exim4/exim4.conf.template
 systemctl restart exim4
 if ! systemctl is-active --quiet exim4; then

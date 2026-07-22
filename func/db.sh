@@ -91,18 +91,14 @@ mysql_connect() {
 	rm -f $mysql_out
 }
 
-# Escape a value for safe use inside a MariaDB/MySQL single-quoted SQL string
-# literal (GHSA-8w7m). MariaDB/MySQL treat backslash as an escape character by
-# default, so both backslashes and single quotes must be escaped; backslashes
-# are doubled first so the backslashes introduced by the quote-escaping are not
-# doubled again.
+# escape a value for a MariaDB/MySQL single-quoted string literal (GHSA-8w7m):
+# double backslashes first, then single quotes (backslash is an escape char here)
 mysql_sql_escape() {
 	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e "s/'/''/g"
 }
 
-# Escape a value for safe use inside a PostgreSQL single-quoted SQL string
-# literal. PostgreSQL uses standard-conforming strings by default, so a
-# backslash is NOT an escape character and must not be doubled here.
+# escape a value for a PostgreSQL single-quoted string literal (standard-conforming
+# strings: backslash is NOT an escape char, so only quotes are doubled)
 sql_escape() {
 	printf '%s' "$1" | sed "s/'/''/g"
 }
