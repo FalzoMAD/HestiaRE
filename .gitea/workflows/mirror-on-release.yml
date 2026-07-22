@@ -18,7 +18,7 @@ jobs:
           trap 'rm -rf "$workdir"' EXIT
           git clone --mirror "file://${SRC_REPO_PATH}" "$workdir/repo.git"
           cd "$workdir/repo.git"
-          git push --prune --dry-run \
+          git push --prune \
             "https://x-access-token:${PUSH_TOKEN}@github.com/FalzoMAD/HestiaRE.git" \
             'refs/heads/main:refs/heads/main' \
             'refs/heads/upstream/*:refs/heads/upstream/*' \
