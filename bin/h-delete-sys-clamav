@@ -1,0 +1,90 @@
+#!/bin/bash
+# info: remove ClamAV mail antivirus
+# options: [FORCE]
+#
+# example: h-delete-sys-clamav
+#
+# Unwires and uninstalls ClamAV: the exim CLAMD macro back to inert (mail flows
+# unscanned), packages purged, ANTIVIRUS_SYSTEM cleared. Saved-state (like rspamd):
+# per-domain antivirus flags + mail.conf ANTIVIRUS='yes' STAY — the macro gate makes
+# them inert, and h-add-sys-clamav restores them on reinstall. The virus DB in
+# /var/lib/clamav is kept by default (PURGE_DATA=yes wipes it).
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+FORCE=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+EXIM_USER="Debian-exim"
+EXIM_TPL="/etc/exim4/exim4.conf.template"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+# guard on the package, not COMPONENT_* — an install that timed out on the DB may
+# have ADDON_CLAMAV=true but never armed; the package is the honest signal.
+if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii' && [ "$FORCE" != 'yes' ]; then
+	echo "ERROR: ClamAV is not installed. Use FORCE=yes to clean up anyway."
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# unwire exim first so mail keeps flowing (unscanned) while clamav goes away
+sed -i 's/^CLAMD = yes/#CLAMD = yes/' "$EXIM_TPL"
+systemctl restart exim4
+if ! systemctl is-active --quiet exim4; then
+	echo "ERROR: exim4 failed to restart without ClamAV."
+	exit "$E_RESTART"
+fi
+
+# drop exim's socket-group membership
+gpasswd -d "$EXIM_USER" clamav > /dev/null 2>&1 || true
+
+systemctl disable --now clamav-daemon clamav-freshclam > /dev/null 2>&1
+# no autoremove: it would rip out shared-stack siblings
+apt-get -y -qq purge clamav clamav-daemon clamav-freshclam > /dev/null 2>&1
+
+# virus DB kept by default (a re-add reuses it instead of re-downloading ~230 MB)
+if [ "${PURGE_DATA:-}" = "yes" ]; then
+	echo "[ * ] PURGE_DATA=yes — wiping /var/lib/clamav..."
+	rm -rf /var/lib/clamav
+fi
+
+$BIN/h-change-sys-config-value 'ANTIVIRUS_SYSTEM' ''
+set_install_component ADDON_CLAMAV false
+
+# per-domain antivirus flags + mail.conf ANTIVIRUS='yes' are left intact (saved
+# state) — inert via the macro gate, restored by h-add-sys-clamav on reinstall.
+
+echo "ClamAV has been removed (mail is delivered unscanned)."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Removed ClamAV mail antivirus."
+log_event "$OK" "$ARGUMENTS"
+
+exit

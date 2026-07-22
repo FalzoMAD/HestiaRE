@@ -28,6 +28,24 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- `h-add-sys-clamav` / `h-delete-sys-clamav` — ClamAV mail antivirus is now a
+  modular addon (#123). It was missing from the manifest and installer entirely,
+  even though the exim antivirus machinery (`.ifdef CLAMD` block: `av_scanner`,
+  per-domain antivirus ACL, `deny malware = */defer_ok`) already shipped inert.
+  Anchored in `share/manifest.json` as `ADDON_CLAMAV` (mail-block only, **never
+  preselected** — clamd holds the whole signature DB, ~1-2 GB RAM); the orphaned
+  `install/deb/clamav/clamd.conf` moved to `share/clamav/` and hardened
+  (`LocalSocketMode 666`→`660`, `LogVerbose` off). `h-add-sys-clamav` installs the
+  daemon + freshclam, deploys the config, joins `Debian-exim` to the `clamav`
+  group, waits for the virus DB (via the freshclam service — no manual `freshclam`
+  that would collide with its lock), and **arms the exim `CLAMD` macro +
+  `ANTIVIRUS_SYSTEM=clamav` only once clamd answers on the socket** (`clamdscan
+  --ping`). If the DB is still downloading it leaves the macro OFF with a WARN to
+  re-run — because `defer_ok` is **fail-open** (a dead clamd accepts mail
+  *unscanned*, not deferred), so an armed-but-blind macro would silently pass
+  mail. Delete is saved-state (per-domain flags preserved, restored on reinstall;
+  DB kept unless `PURGE_DATA=yes`). Verified on all four distros incl. an EICAR
+  test over SMTP.
 - `h-add-sys-proftpd` / `h-delete-sys-proftpd` — ProFTPD is now a fully modular,
   individually-removable addon (#123). The curated config moved
   `install/deb/proftpd/` → `share/proftpd/` (it was orphaned — never deployed, so
@@ -101,6 +119,13 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- The mail-domain list no longer shows a stale "Anti-Virus / Spam Filter:
+  Enabled" icon for domains when the addon isn't installed (#123). Those two
+  columns in `list_mail.php` rendered straight from each domain's stored
+  `ANTIVIRUS`/`ANTISPAM` value with no gate; they now gate on
+  `ANTIVIRUS_SYSTEM`/`ANTISPAM_SYSTEM` (neutral dash when the system is absent),
+  matching the add/edit forms — so deleting clamav or rspamd leaves no misleading
+  green check while the saved per-domain preference waits for a reinstall.
 - Roundcube webmail returned HTTP 500 on every page — `Class "DOMDocument" not
   found` (#402). The `dom` extension had been dropped from the panel PHP's
   curated conf.d by an earlier audit (`hestia-php-confd`) that only checked the

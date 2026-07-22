@@ -353,6 +353,16 @@
       "note": "Ausgeblendet bei nomail (kein Mail-Block)."
     },
 
+    "ADDON_CLAMAV": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "ClamAV",
+      "description": "Mail antivirus (mail block only; resource-heavy)",
+      "visible_if": "MAIL_BLOCK_PRESENT == true",
+      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false, "custom": null },
+      "note": "Ausgeblendet bei nomail (kein Mail-Block). NIE vorausgewaehlt — clamd haelt die komplette Signatur-DB im RAM (~1-2 GB). h-add-sys-clamav setzt ANTIVIRUS_SYSTEM=clamav (neue Mail-Domains scannen per Default, opt-out pro Domain) und schaltet den exim-CLAMD-Macro ERST scharf, wenn clamd am Socket antwortet. Der Macro nutzt malware=*/defer_ok = FAIL-OPEN: bei totem clamd wird Mail ungescannt angenommen (Verfuegbarkeit ueber Sicherheit), daher kein Scharfschalten ohne lebenden clamd. Delete = Saved-State (per-Domain-Flags bleiben, reaktivieren bei Reinstall)."
+    },
+
     "ADDON_DOCKER": {
       "group": "addons",
       "type": "checkbox",

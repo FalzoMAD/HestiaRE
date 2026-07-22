@@ -87,7 +87,7 @@
         "bin/h-add-firewall-rule": "bin/v-add-firewall-rule (near-verbatim)",
         "bin/h-update-sys-queue": "bin/v-update-sys-queue (near-verbatim; GHSA-47mf sink — see #393)",
         "reimplemented (v-* symlink removed)": "DB-engine lifecycle h-add/delete-sys-{mariadb,postgresql} + h-upgrade-sys-mariadb (#121/#207); h-add/delete-sys-{roundcube,snappymail} (#54/#234); h-search-user-object + h-search-object (#386 cr7q)",
-        "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/delete-sys-adminer, h-add/delete-sys-{rspamd,sieve,redis,proftpd}, hestia-php*, h-change-sys-panel-php",
+        "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/delete-sys-adminer, h-add/delete-sys-{rspamd,sieve,redis,proftpd,clamav}, hestia-php*, h-change-sys-panel-php",
         "removal_verb": "Single removal verb h-delete-* across all commands (#123, upstream v-delete-* parity). The interim h-remove-sys-* names (redis in #121, etc.) were renamed to h-delete-sys-*."
       },
       "dependencies": ["func_libraries", "instance_config"],
@@ -303,6 +303,7 @@
         "templates/web/": "install/deb/templates/web/ (near-verbatim; user-pickable web template library)",
         "share/{nginx,apache2}/webmail/": "install/deb/templates/mail/ (reworked to Panel-Caddy proxies #205; moved per-service #119, MAILTPL retired; dead rainloop removed)",
         "share/proftpd/": "install/deb/proftpd/ (moved #123; deployed by h-add-sys-proftpd — was orphaned; +Include modules.conf/conf.d; +apparmor-local for Ubuntu 26's enforced proftpd profile). h-add-sys-proftpd now sets FTP_SYSTEM=proftpd (never set before, so h-restart-ftp / RRD FTP graph / smoke FTP check / the NAT MasqueradeAddress branch were all inert on pre-#123 installs).",
+        "share/clamav/": "install/deb/clamav/ (moved #123; deployed by h-add-sys-clamav — was orphaned; hardened LocalSocketMode 666→660 + LogVerbose off). ClamAV is the antivirus analogue of rspamd: the exim `.ifdef CLAMD` block (av_scanner=clamd: + per-domain antivirus ACL + `deny malware=*/defer_ok`) was fully shipped but inert (macro commented). h-add-sys-clamav sets ANTIVIRUS_SYSTEM=clamav and arms the CLAMD macro ONLY after clamd answers on the socket (clamdscan --ping) — DB-download timeout leaves it OFF + honest WARN, because `defer_ok` is FAIL-OPEN (dead clamd → mail accepted UNSCANNED, not deferred), so an armed-but-blind macro would silently pass mail. Delete = saved-state (per-domain flags kept, restored on reinstall). list_mail.php AV/spam columns now gate on ANTIVIRUS_SYSTEM/ANTISPAM_SYSTEM (neutral dash when the addon is gone).",
         "packages/*.pkg": "install/deb/packages/ (moved, near-verbatim)",
         "share/panel-caddy/, share/panel-php/, share/dovecot/": "hestiare-native (see panel_caddy_service / panel_php_service)"
       },

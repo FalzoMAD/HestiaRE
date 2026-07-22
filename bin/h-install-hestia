@@ -525,6 +525,10 @@ install_mail() {
 		echo "[ * ] Installing & configuring sieve..."
 		"$BIN/h-add-sys-sieve" >> "$LOG"
 	fi
+	if is_on "${COMPONENT_ADDON_CLAMAV:-}"; then
+		echo "[ * ] Installing & configuring ClamAV (mail antivirus)..."
+		"$BIN/h-add-sys-clamav" >> "$LOG"
+	fi
 
 	# Webmailer choice (ROUNDCUBE / SNAPPYMAIL / NONE)
 	case "${COMPONENT_MAIL_WEBMAILER:-NONE}" in
