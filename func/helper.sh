@@ -13,9 +13,7 @@
 # Requires $LOG to point at the install log for hestia_apt.                 #
 #===========================================================================#
 
-# ── apt wrapper with spinner ───────────────────────────────────────────────
-# stdout (verbose package text) -> log only
-# stderr (apt errors/warnings)  -> terminal + log
+# ── apt wrapper with spinner (stdout -> log, stderr -> terminal + log) ──────
 _hestia_spin_pid=""
 
 _hestia_spin_start() {
@@ -51,14 +49,8 @@ hestia_apt() {
 }
 
 # ── Sury PHP repository (shared by wizard + installer) ──────────────────────
-# Canonical, idempotent Sury setup. BOTH func/wizard.sh (PHP version discovery)
-# and bin/h-install-hestia (base stage) call this, so the repo is defined exactly
-# ONCE — same keyring, same signed-by, same source file. Two diverging
-# definitions of packages.sury.org/php trip apt's
-#   "Conflicting values set for option Signed-By"
-# error and abort apt-get update. Canonical layout:
-#   keyring: /usr/share/keyrings/sury-keyring.gpg
-#   source : /etc/apt/sources.list.d/php.list   (deb [… signed-by=…] …)
+# Idempotent, single canonical definition (keyring + signed-by + source file) —
+# two diverging ones trip apt's "Conflicting values set for option Signed-By".
 # Usage: add_sury_repo <codename>
 add_sury_repo() {
 	local codename="$1"
@@ -67,7 +59,7 @@ add_sury_repo() {
 	arch="$(dpkg --print-architecture 2>/dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 	keyring="/usr/share/keyrings/sury-keyring.gpg"
 	list="/etc/apt/sources.list.d/php.list"
-	# Drop any legacy/foreign Sury definition that would conflict on Signed-By.
+	# drop any legacy/foreign Sury definition that would conflict on Signed-By
 	rm -f /etc/apt/sources.list.d/sury-php.list /etc/apt/trusted.gpg.d/sury-php.gpg
 	if [ ! -s "$keyring" ]; then
 		curl -fsSL https://packages.sury.org/php/apt.gpg -o /tmp/sury_apt.gpg \
@@ -82,10 +74,7 @@ add_sury_repo() {
 }
 
 # ── per-OS data ─────────────────────────────────────────────────────────────
-# Given the INSTALL_OS token (debian-bookworm, debian-trixie, ubuntu-noble,
-# ubuntu-26lts) sets: OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA.
-# Replaces the per-file just/<os>.sh data modules. All four targets are
-# first-class — deb13/ub26 are not stubbed.
+# INSTALL_OS token -> OS_ID, CODENAME, RELEASE, EXIM_USR, BASE_PKGS_EXTRA
 load_os_profile() {
 	case "$1" in
 		debian-bookworm)
@@ -101,20 +90,15 @@ load_os_profile() {
 		ubuntu-noble)
 			OS_ID="ubuntu"; CODENAME="noble"; RELEASE="24"
 			EXIM_USR="Debian-exim"
-			# libzip: 24.04 renamed libzip4 -> libzip4t64 in the time_t (t64)
-			# transition. Plain `libzip4` still resolves via a Provides here, but is
-			# gone entirely on 26.04 (see below) — pin the real name per release.
+			# libzip4t64: t64 transition renamed libzip4 on 24.04
 			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip4t64 apparmor-utils"
 			;;
 		ubuntu-26lts)
-			# TODO: pin the official 26.04 LTS codename once confirmed. Until then
-			# read it from /etc/os-release at runtime so APT repo lines are correct.
+			# TODO: pin the official 26.04 codename; until then read it at runtime
 			OS_ID="ubuntu"; RELEASE="26"
 			CODENAME="$(. /etc/os-release 2>/dev/null; echo "${VERSION_CODENAME:-}")"
 			EXIM_USR="Debian-exim"
-			# 26.04 (resolute) ships libzip5; libzip4/libzip4t64 do not exist here,
-			# not even as a virtual package -> `apt-get install libzip4` aborts the
-			# whole base stage with "Unable to locate package".
+			# 26.04 ships libzip5; libzip4/libzip4t64 do not exist here at all
 			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip5 apparmor-utils"
 			;;
 		*)
@@ -126,10 +110,8 @@ load_os_profile() {
 }
 
 # ── seed /etc/hestia ────────────────────────────────────────────────────────
-# Creates /etc/hestia/hestia.env, /etc/profile.d/hestia.sh and a seed
-# $HESTIA/conf/hestia.conf with install-independent defaults — BEFORE any h-*
-# command runs, so func/main.sh can source hestia.env + hestia.conf safely.
-# Reads HESTIA_ADMIN / HESTIA_PANEL_PORT from install.conf (if present).
+# Create hestia.env, /etc/profile.d/hestia.sh and a seed hestia.conf before any
+# h-* command runs, so main.sh can source them safely.
 seed_hestia_etc() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
 	local install_conf="/etc/hestia/install.conf"
@@ -143,27 +125,21 @@ seed_hestia_etc() {
 	version=$(cat "$hestia_root/VERSION" 2>/dev/null || echo "dev")
 
 	mkdir -p /etc/hestia
-	# Always (re)generate hestia.env. Use an `if`-form for the local.conf include
-	# so the file's LAST statement returns 0 — a trailing `[[ -f x ]] && source x`
-	# returns 1 when x is absent, which aborts any caller running under `set -e`.
+	# if-form for the local.conf include so the file's last statement returns 0
+	# (a trailing `&& source` returns 1 when absent and aborts callers under set -e)
 	printf '%s\n' \
 		"# Do not edit — use /etc/hestia/local.conf instead" \
 		"export HESTIA='$hestia_root'" \
 		"export CONF_DIR='/etc/hestia'" \
 		"if [ -f /etc/hestia/local.conf ]; then . /etc/hestia/local.conf; fi" \
 		> /etc/hestia/hestia.env
-	# Root-only (0600): only root/operators need $HESTIA + bin on the interactive
-	# PATH. /etc/profile skips it for non-root (its `[ -r ]` test fails on a 0600
-	# root file), so customer/login users are not exposed to it. Runtime commands
-	# get $HESTIA from hestia.env, not from here (#210).
+	# root-only (0600): /etc/profile skips it for non-root, so login users aren't exposed
 	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$PATH:%s/bin\nexport PATH\n' \
 		"$hestia_root" "$hestia_root" > /etc/profile.d/hestia.sh
 	chmod 600 /etc/profile.d/hestia.sh
 
-	# Instance config lives in /etc/hestia/conf (PATHS.md §5a). Bridge the historic
-	# $HESTIA/conf path with a directory symlink so the ~466 commands referencing
-	# $HESTIA/conf/hestia.conf keep working AND sed -i (33 writers) stays safe
-	# (only file symlinks break under sed -i; directory symlinks do not).
+	# instance config lives in /etc/hestia/conf; bridge $HESTIA/conf as a DIRECTORY
+	# symlink (file symlinks break under the 33 sed -i writers, directory ones don't)
 	local conf_dir="/etc/hestia/conf"
 	mkdir -p "$conf_dir"
 	if [ ! -L "$hestia_root/conf" ]; then
@@ -193,25 +169,18 @@ seed_hestia_etc() {
 	_wcv "UPGRADE_SEND_EMAIL"       "true"
 	_wcv "UPGRADE_SEND_EMAIL_LOG"   "false"
 	_wcv "ROOT_USER"                "$admin"
-	# DB_SYSTEM is composed from actually-registered hosts by h-add-database-host
-	# (via h-add-sys-mariadb/-postgresql), so seed it EMPTY — a hard "mysql" seed
-	# made a no-MariaDB install still claim MySQL (#121). Consumers tolerate empty.
+	# seed DB_SYSTEM empty — it is composed from registered hosts by h-add-database-host
 	_wcv "DB_SYSTEM"                ""
 	unset -f _wcv
 }
 
 # ── migrate $HESTIA/data/* to their PATHS.md targets on upgrade ──────────────
-# Real move (no symlink bridge). Idempotent: each dir is only touched when the
-# old path still exists and the new target is absent, so re-runs are no-ops and
-# fresh installs (which create the new layout directly) skip everything.
-# Extended per data/-dissolution PR (#148 = extensions/ips/queue/sessions).
+# Real move, idempotent (only when old exists + new absent), so fresh installs skip it.
 migrate_data_layout() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
 	local d
 
-	# ips + firewall + users -> $CONF_DIR (plain move). users is the per-user
-	# config tree; the backup format is location-agnostic (archives store relative
-	# paths, restore writes to $USER_DATA), so old archives still restore.
+	# ips + firewall + users -> $CONF_DIR (plain move; backup format is location-agnostic)
 	for d in ips firewall users; do
 		if [ -d "$hestia_root/data/$d" ] && [ ! -e "$CONF_DIR/$d" ]; then
 			mkdir -p $CONF_DIR
@@ -222,9 +191,7 @@ migrate_data_layout() {
 	# data/ is fully dissolved — drop the empty husk if nothing else remains.
 	rmdir "$hestia_root/data" 2> /dev/null || true
 
-	# extensions/ is dissolved: the PSL cache becomes a single file and the
-	# optional operator mail-domain hooks join the other $CONF_DIR/hooks;
-	# then drop the (now empty) dir. rmdir keeps any unexpected leftovers safe.
+	# extensions/ dissolved: PSL cache -> file, mail-domain hooks -> $CONF_DIR/hooks
 	if [ -d "$hestia_root/data/extensions" ]; then
 		mkdir -p $CONF_DIR/hooks
 		local h
@@ -256,10 +223,7 @@ migrate_data_layout() {
 		rm -rf "$hestia_root/data/queue"
 	fi
 
-	# Repo-root assets (packages, templates): shipped defaults arrive via the
-	# tarball at $hestia_root/{packages,templates}. Preserve operator-added files
-	# from the old data/ dir (cp -n won't clobber the refreshed defaults), then
-	# drop the old dir. (#150)
+	# packages/templates ship via the tarball; preserve operator-added files (cp -n) then drop old
 	for d in packages templates; do
 		if [ -d "$hestia_root/data/$d" ]; then
 			mkdir -p "$hestia_root/$d"
@@ -268,10 +232,7 @@ migrate_data_layout() {
 		fi
 	done
 
-	# Theme renames: vestia removed (#259), default→light and flat→light-flat
-	# (#269). css.php would silently skip a missing overlay anyway; migrating
-	# keeps the configs truthful. Stale theme files are removed because the
-	# update deploy (cp -r) does not delete.
+	# theme renames: vestia removed, default->light, flat->light-flat; drop stale files
 	local theme_sed="s/^THEME='vestia'/THEME='light'/; s/^THEME='default'/THEME='light'/; s/^THEME='flat'/THEME='light-flat'/"
 	local conf
 	for conf in "$hestia_root/conf/hestia.conf" "$CONF_DIR/conf/hestia.conf"; do
@@ -284,15 +245,11 @@ migrate_data_layout() {
 		"$hestia_root/web/css/src/themes/default.css" \
 		"$hestia_root/web/css/src/themes/flat.css"
 
-	# Panel FPM conf.d isolation (#272): build the curated panel extension dir so
-	# the panel loads its own set instead of the customer version's conf.d. The
-	# hestia-php-fpm wrapper falls back to the shared dir until this exists, so
-	# this is what activates the isolation on existing installs. Best-effort.
+	# build the isolated panel conf.d — activates the isolation on existing installs
 	if [ -x "$hestia_root/bin/hestia-php-confd" ] && [ -f /etc/php/hestia/php-version ]; then
 		"$hestia_root/bin/hestia-php-confd" > /dev/null 2>&1 || true
 	fi
 
-	# Restrict the shell-profile snippet to root on existing installs (#210): it was
-	# world-readable (0755) before and exposed $HESTIA + bin to every login user.
+	# restrict the shell-profile snippet to root on existing installs (was world-readable)
 	[ -f /etc/profile.d/hestia.sh ] && chmod 600 /etc/profile.d/hestia.sh
 }

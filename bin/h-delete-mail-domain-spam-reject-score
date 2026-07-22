@@ -4,10 +4,8 @@
 #
 # example: h-delete-mail-domain-spam-reject-score user domain.tld
 #
-# Removes the per-domain spam reject threshold override set by
-# h-change-mail-domain-spam-reject-score; the domain falls back to the global
-# SPAM_REJECT_SCORE default. Idempotent.
-# New h-* command — no v-* symlink.
+# Removes the per-domain spam reject threshold override; the domain falls back to
+# the global SPAM_REJECT_SCORE default. Idempotent.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

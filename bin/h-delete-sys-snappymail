@@ -63,8 +63,7 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Panel-Caddy delivery teardown (#205): internal listener + FPM pool first, so
-# nothing serves from the dirs we are about to delete.
+# Panel-Caddy teardown first (listener + FPM pool), so nothing serves from the dirs we delete
 rm -f /etc/caddy/webmail-snappymail.conf
 systemctl try-restart caddy > /dev/null 2>&1 || true
 rm -f /etc/php/hestia/fpm/pool.d/snappymail.conf
@@ -81,26 +80,22 @@ else
 	mysql -e "DROP DATABASE snappymail" 2>&1
 	mysql -e "DROP USER snappymail@localhost"
 fi
-# Updating hestia.conf — remove snappymail from the WEBMAIL_SYSTEM list. The old
-# guard here was inverted ([ -z ... ]: only rewrote when snappymail was ABSENT),
-# so a normal removal never cleared the entry (#234). Token-based strip instead
-# of sed, so no stray commas survive in any position.
+# remove snappymail from WEBMAIL_SYSTEM. Token-based strip (not sed) so no stray
+# commas survive in any position.
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'snappymail'; then
 	new_webmail=$(echo "$WEBMAIL_SYSTEM" | tr ',' '\n' | grep -vx 'snappymail' | grep -v '^$' | paste -sd ',' -)
 	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "$new_webmail"
 fi
 
-# Re-render existing mail domains so their webmail vhosts stop proxying to the
-# now-removed listener — they fall back to the remaining client, or the safe
-# 'disabled' vhost when none is left (#119). No-op when no mail domains exist.
+# re-render mail domains so vhosts stop proxying to the removed listener
+# (fall back to the remaining client, or the safe 'disabled' vhost)
 $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Reset the wizard selection only if SnappyMail was the recorded webmailer —
-# removing a secondary client must not clobber another one's selection (#234).
+# reset the wizard selection only if SnappyMail was the recorded one (don't clobber a secondary)
 if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "SNAPPYMAIL" ]; then
 	set_install_component MAIL_WEBMAILER NONE
 fi

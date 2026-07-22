@@ -127,10 +127,7 @@ if [ "$UPDATE" == "no" ]; then
 	chown -R www-data:www-data $SM_CONFIG_DIR/
 	php -f $HESTIA/share/snappymail/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT"
 
-	# Set the permissions back to caddy (the FPM pool user). The data dir gets an
-	# explicit, deterministic 0750 instead of whatever the tarball/umask left —
-	# only the caddy pool ever enters it (nginx/apache proxy to Caddy now, W7/#205),
-	# so it stays caddy-private with no world access.
+	# back to caddy (the FPM pool user); explicit 0750 keeps the data dir caddy-private
 	chown -R caddy:caddy $SM_CONFIG_DIR/
 	chmod -R 750 $SM_CONFIG_DIR/data
 
@@ -140,11 +137,8 @@ if [ "$UPDATE" == "no" ]; then
 	echo "User-agent: *" > $SM_INSTALL_DIR/robots.txt
 	echo "Disallow: /" >> $SM_INSTALL_DIR/robots.txt
 
-	# Panel-Caddy delivery (#205): SnappyMail renders in a dedicated caddy FPM
-	# pool behind Caddy's internal loopback listener (127.0.0.1:8091); the
-	# per-domain webmail.<domain> vhosts reverse-proxy to it. This is what makes
-	# the caddy-owned data dir actually work (W7/#234: the old www-data pool
-	# could not enter it -> "Permission denied!").
+	# Panel-Caddy delivery: caddy FPM pool behind the :8091 loopback listener
+	# (the caddy-owned data dir only works because the pool runs as caddy)
 	mkdir -p $SM_INSTALL_DIR/tmp
 	chown caddy:caddy $SM_INSTALL_DIR/tmp
 	chmod 770 $SM_INSTALL_DIR/tmp
@@ -178,7 +172,7 @@ else
 	mkdir -p /tmp/snappy/
 	tar -xzf snappymail-latest.tar.gz -C /tmp/snappy/
 	version_source=$(cat /tmp/snappy/data/VERSION)
-	# Check version inside .tar.gz file in case hestia didn't update yet
+	# check the version in the tarball in case hestia hasn't updated yet
 	if [ "$version" != "$version_source" ]; then
 		tar -xzf ${SM_INSTALL_DIR}/${SM_FILE}
 		rm $SM_INSTALL_DIR/$SM_FILE
@@ -186,8 +180,7 @@ else
 	rm -fr /tmp/snappy
 fi
 
-# Re-render existing mail domains so they pick up the newly-installed client
-# immediately (#119); no-op when no mail domains exist.
+# re-render mail domains so they pick up the new client immediately
 $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 
 #----------------------------------------------------------#

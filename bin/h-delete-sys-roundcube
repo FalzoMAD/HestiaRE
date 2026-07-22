@@ -48,11 +48,8 @@ DEBIAN_FRONTEND=noninteractive apt-get -y purge \
 	roundcube roundcube-core roundcube-mysql roundcube-plugins
 DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
 
-# Drop database and user.
-# INTENTIONAL DATA LOSS: the roundcube DB is dropped completely. This is by
-# design — Roundcube stores only UI preferences and contacts, not emails (those
-# live in Dovecot). A subsequent h-add-sys-roundcube creates a clean DB from
-# scratch. There is no migration path across a delete/re-add cycle.
+# INTENTIONAL DATA LOSS: the roundcube DB (UI prefs + contacts, NOT mail — that
+# lives in Dovecot) is dropped; no migration across a delete/re-add cycle.
 db_client="mysql"
 [ -x /usr/bin/mariadb ] && db_client="mariadb"
 
@@ -72,7 +69,7 @@ rm -rf "$RC_CONFIG_DIR"
 # Remove the logrotate fragment deployed by h-add-sys-roundcube
 rm -f /etc/logrotate.d/roundcube
 
-# Panel-Caddy delivery teardown (#205): internal listener + panel route + FPM pool
+# Panel-Caddy teardown: listener + panel route + FPM pool
 rm -f /etc/caddy/webmail-roundcube.conf
 rm -f /etc/caddy/apps/webmail.conf
 systemctl try-restart caddy > /dev/null 2>&1 || true
@@ -87,17 +84,15 @@ else
 	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "$new_webmail"
 fi
 
-# Re-render existing mail domains so their webmail vhosts stop proxying to the
-# now-removed listener — they fall back to the remaining client, or the safe
-# 'disabled' vhost when none is left (#119). No-op when no mail domains exist.
+# re-render mail domains so vhosts stop proxying to the removed listener
+# (fall back to the remaining client, or the safe 'disabled' vhost)
 $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Reset the wizard selection only if Roundcube was the recorded webmailer —
-# removing a secondary client must not clobber another one's selection (#234).
+# reset the wizard selection only if Roundcube was the recorded one (don't clobber a secondary)
 if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "ROUNDCUBE" ]; then
 	set_install_component MAIL_WEBMAILER NONE
 fi

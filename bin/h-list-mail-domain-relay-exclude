@@ -4,9 +4,8 @@
 #
 # example: h-list-mail-domain-relay-exclude user domain.tld json
 #
-# Lists the recipient domains excluded from the SMTP relay for this mail
-# domain (delivered directly via DNS/MX by the bypass_smtp_relay router).
-# New h-* command — no v-* symlink.
+# Lists the recipient domains excluded from the SMTP relay (delivered directly
+# via DNS/MX by the bypass_smtp_relay router).
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

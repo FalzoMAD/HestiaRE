@@ -4,9 +4,8 @@
 #
 # example: h-delete-sys-proftpd
 #
-# Purges proftpd-basic, removes the HestiaRE drop-ins, clears FTP_SYSTEM and the
-# FTP firewall rule. Counterpart to h-add-sys-proftpd (#123).
-# New h-* command — no v-* symlink.
+# Counterpart to h-add-sys-proftpd: purges all proftpd* packages, removes our
+# drop-ins, clears FTP_SYSTEM and the FTP firewall rule.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -21,14 +20,13 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-# live component state
+# COMPONENT_* state
 [ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-# Checking root permissions
 if [ "x$(id -u)" != 'x0' ]; then
 	echo "ERROR: h-delete-sys-proftpd can only be executed by the root user"
 	exit 10
@@ -36,14 +34,9 @@ fi
 
 if [ -z "$HESTIA" ]; then HESTIA="/usr/local/hestia"; fi
 
-# Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-# Not-installed guard is artefact-based, NOT flag-based: existing installs got
-# proftpd from the old inline install_addons path and never had
-# COMPONENT_ADDON_PROFTPD set, so a flag guard would wrongly refuse to remove it
-# (the same twin-class trap that bit webmail). Guard on proftpd-core — the actual
-# daemon package on both Debian (via proftpd-basic) and Ubuntu.
+# guard on the package, not COMPONENT_* — old inline installs never set the flag
 if ! dpkg -l proftpd-core 2> /dev/null | grep -q '^ii' && [ "$FORCE" != 'yes' ]; then
 	echo "ERROR: ProFTPD is not installed. Use FORCE=yes to clean up anyway."
 	exit "$E_NOTEXIST"
@@ -54,9 +47,7 @@ fi
 #----------------------------------------------------------#
 
 systemctl disable --now proftpd > /dev/null 2>&1 || true
-# Purge every installed proftpd* package (core + mod-vroot + mod-crypto, and any
-# other proftpd module) — glob-based so it is OS-agnostic and never errors on a
-# package name that does not exist on this distro.
+# purge every installed proftpd* package (glob — OS-agnostic, no error on absent names)
 proftpd_installed="$(dpkg-query -W -f='${Package} ${db:Status-Status}\n' 'proftpd*' 2> /dev/null \
 	| awk '$2 == "installed" {print $1}')"
 if [ -n "$proftpd_installed" ]; then
@@ -65,24 +56,20 @@ if [ -n "$proftpd_installed" ]; then
 fi
 apt-get -y -qq autoremove > /dev/null 2>&1
 
-# Remove our own drop-ins (not owned by the package, so purge leaves them behind):
-# the NAT MasqueradeAddress include and the AppArmor cert-read override.
+# our own drop-ins (purge leaves them behind): NAT include + AppArmor override
 rm -f /etc/proftpd/conf.d/external_ip.conf
 rm -f /etc/apparmor.d/local/proftpd
-# Reload the AppArmor profile if it somehow survived the purge (e.g. FORCE=yes on
-# a box where the package was already gone) so our removed override stops granting
-# the cert read — symmetric to the reload h-add-sys-proftpd does when placing it.
+# reload if the profile outlived the purge (FORCE=yes edge) so the override stops applying
 if [ -f /etc/apparmor.d/proftpd ]; then
 	apparmor_parser -r /etc/apparmor.d/proftpd > /dev/null 2>&1 || true
 fi
 
-# Clear the FTP backend only if it is actually proftpd — never clobber another
-# backend's value (symmetric to the add side's refusal to switch).
+# clear FTP_SYSTEM only if it is proftpd (symmetric to the add side)
 if [ "$FTP_SYSTEM" = 'proftpd' ]; then
 	$BIN/h-change-sys-config-value 'FTP_SYSTEM' ''
 fi
 
-# Firewall: drop the FTP rule by locating its id via COMMENT='FTP'.
+# firewall: drop the FTP rule by its COMMENT='FTP' id
 if is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM' > /dev/null 2>&1 \
 	&& [ -f "$CONF_DIR/firewall/rules.conf" ]; then
 	ftp_rule=$(grep "COMMENT='FTP'" "$CONF_DIR/firewall/rules.conf" \

@@ -5,17 +5,11 @@
 # example: h-add-mail-domain-spam-whitelist user domain.tld partner@example.com
 # example: h-add-mail-domain-spam-whitelist user domain.tld '*.example.com'
 #
-# Adds a sender pattern to the domain's spam whitelist. Matching mail is
-# never treated as spam: the rspamd scan is skipped entirely for
-# matching senders — no marking, no reject, no .Spam foldering. The
-# whitelist wins over the blacklist.
-# Patterns: user@example.com, *@example.com, example.com, *.example.com —
-# matched against the lowercased envelope sender and its domain
-# (wildlsearch). Only applied while the domain's Spam Filter is enabled.
-# Stored in mail.conf as U_SPAM_WHITELIST (source of truth), mirrored one per
-# line to /home/$user/conf/mail/$domain/spam_whitelist (symlinked into
-# /etc/exim4/domains/), read by exim per message — no reload needed.
-# New h-* command — no v-* symlink.
+# Adds a sender pattern to the domain's spam whitelist: matching mail is never
+# treated as spam (rspamd scan skipped entirely). Whitelist wins over blacklist.
+# Patterns match the lowercased envelope sender + its domain (wildlsearch); only
+# applied while Spam Filter is enabled. Source of truth: U_SPAM_WHITELIST in
+# mail.conf, mirrored one-per-line to the spam_whitelist file exim reads per message.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

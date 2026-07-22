@@ -4,11 +4,9 @@
 #
 # example: h-add-sys-redis
 #
-# Installs redis-server (OS repo) as an unrestricted general service and records
-# DB_REDIS=true. If Redis is already present as rspamd's hard-capped Bayes
-# companion (see share/rspamd/redis-rspamd-limit.conf), the cap is removed —
-# this is the "promote" side of the lifecycle contract from #299/#121.
-# New h-* command — no v-* symlink.
+# Installs redis-server as an unrestricted general service (DB_REDIS=true). If it
+# is already present as rspamd's hard-capped Bayes companion, the cap is removed
+# (the "promote" side of the lifecycle contract; h-delete-sys-redis demotes).
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -39,11 +37,8 @@ fi
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-# Idempotency guard is artefact-based, NOT flag-based: COMPONENT_DB_REDIS is the
-# wizard *selection*, not the install state (it is "true" before this ever runs),
-# so a flag guard would early-exit the installer's own first call (#121 F3).
-# Already the general service = redis-server installed AND not the rspamd-capped
-# companion. Installed-but-capped falls through to promote (cap removed below).
+# installed = redis-server present AND not the rspamd-capped companion; capped
+# falls through to promote. Guard on the artefact, not COMPONENT_* (wizard selection).
 if dpkg -l redis-server 2> /dev/null | grep -q '^ii' \
 	&& ! grep -q "$limit_marker" /etc/redis/redis.conf 2> /dev/null; then
 	echo "INFO: Redis is already installed as a general service."
@@ -64,9 +59,7 @@ if ! dpkg -l redis-server 2> /dev/null | grep -q '^ii'; then
 	fi
 fi
 
-# Promote: drop the rspamd-bayes hard cap, if present. The capped block is the
-# verbatim tail appended from share/rspamd/redis-rspamd-limit.conf (comment
-# lines through maxmemory-policy).
+# promote: drop the rspamd-bayes cap block (the tail from redis-rspamd-limit.conf)
 if grep -q "$limit_marker" /etc/redis/redis.conf 2> /dev/null; then
 	sed -i "/$limit_marker/,/^maxmemory-policy/d" /etc/redis/redis.conf
 	echo "Removed the rspamd-bayes memory cap (Redis promoted to general service)."

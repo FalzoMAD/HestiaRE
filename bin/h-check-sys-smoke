@@ -37,10 +37,8 @@ no() {
 }
 skip() { echo "[ skip ] $1"; }
 
-# check_source_absent <label> <egrep-pattern> <path...> — a vulnerable source
-# pattern must not reappear (static invariant guarding a security fix, so the
-# fix does not silently regress on a later refactor). Comment lines (// # *) are
-# excluded so a fix's own explanatory comment does not trip the check.
+# check_source_absent <label> <pattern> <path...> — a vulnerable pattern must not
+# reappear (static regression guard for a security fix). Comment lines excluded.
 check_source_absent() {
 	local label="$1" pat="$2"
 	shift 2
@@ -91,11 +89,9 @@ check_http() {
 	fi
 }
 
-# check_rspamd_ctrl_isolation — the #341 invariant: the rspamd controller
-# socket is reachable by the Caddy PROXY process but NOT by the app FPM pools
-# that share the caddy user. Verified against process credentials + /etc/group,
-# not config, so a regression (e.g. re-adding `usermod -aG _rspamd caddy`)
-# fails here. Catches the whole "socket grant leaks into the wrong role" class.
+# check_rspamd_ctrl_isolation — the controller socket must be reachable by the
+# Caddy proxy process but NOT by the app FPM pools that share the caddy user.
+# Checked against live process creds + /etc/group, so a config regression fails here.
 check_rspamd_ctrl_isolation() {
 	local gid pid pgroups
 	gid=$(getent group _rspamd-ctrl | cut -d: -f3)
@@ -109,14 +105,13 @@ check_rspamd_ctrl_isolation() {
 	else
 		no "controller socket not group _rspamd-ctrl" "$(stat -c '%G' /run/rspamd/controller.sock 2> /dev/null)"
 	fi
-	# 2. the caddy USER must NOT be in the controller group (nor _rspamd) in
-	#    /etc/group — otherwise app pools inherit it via initgroups()
+	# 2. caddy user NOT in the controller group (else app pools inherit via initgroups)
 	if id -nG caddy 2> /dev/null | tr ' ' '\n' | grep -qxE '_rspamd(-ctrl)?'; then
 		no "caddy user is in an rspamd group (app pools would inherit socket access)" "$(id -nG caddy)"
 	else
 		ok "caddy user not in any rspamd group (app pools isolated)"
 	fi
-	# 3. the caddy PROXY process must actually hold the group (else UI breaks)
+	# 3. caddy proxy process DOES hold the group (else controller UI breaks)
 	pid=$(systemctl show -p MainPID --value caddy.service 2> /dev/null)
 	pgroups=$(grep -E '^Groups:' /proc/"${pid:-0}"/status 2> /dev/null)
 	if echo "$pgroups" | tr ' \t' '\n' | grep -qx "$gid"; then
@@ -150,14 +145,12 @@ check_file_empty() {
 	fi
 }
 
-# check_banner <port> <label> — the service answers with a protocol banner within
-# 5s. Catches the "service active, function dead" class that check_service +
-# check_port cannot: dovecot 2.4 with a wrong default_login_user was 'active' and
-# listening, but every IMAP login hung until the client gave up (#376).
+# check_banner <port> <label> — service answers with a protocol banner in 5s.
+# Catches "active + listening but dead" (e.g. dovecot IMAP login hangs) that
+# check_service/check_port miss.
 check_banner() {
 	local banner
-	# head -n1, NOT head -c N: a byte-count read blocks until N bytes arrive, and
-	# short banners (SMTP's "220 host ESMTP" < 64 bytes) would false-FAIL.
+	# head -n1, NOT head -c N: a byte-count read blocks until N bytes arrive
 	banner=$(timeout 5 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1 && head -n1 <&3" 2> /dev/null)
 	if [ -n "$banner" ]; then
 		ok "port $1 ($2) answers with a banner"
@@ -166,11 +159,8 @@ check_banner() {
 	fi
 }
 
-# check_v_symlinks_resolve — the v-* compat aliases must not dangle: every one
-# must resolve to an existing h-* command. Catches a rename/removal that left a
-# stale alias behind (the install-time prune should have cleared it). We do NOT
-# police "extra" aliases — a harmless working alias for a native command is not
-# worth an allowlist to maintain, for a compat layer that is meant to fade out.
+# check_v_symlinks_resolve — no v-* compat alias may dangle (catches a rename/
+# removal the install-time prune should have cleared). Extra aliases are fine.
 check_v_symlinks_resolve() {
 	local dangling first
 	dangling=$(find "$HESTIA/bin" -maxdepth 1 -name 'v-*' -xtype l 2> /dev/null)
@@ -181,10 +171,27 @@ check_v_symlinks_resolve() {
 	fi
 }
 
-# check_sudoers <file> <label> — the file parses cleanly under the running sudo.
-# A single setting the local sudo rejects (e.g. requiretty, not implemented by
-# sudo-rs — Ubuntu 26's default sudo, #363) makes sudo discard the WHOLE file —
-# silently dropping every grant in it. visudo -cf catches that at baseline time.
+# check_info_headers — every h-* command must keep a non-empty `# info:` line
+# (Hestia parses it for --help/usage; a comment sweep must not eat it).
+check_info_headers() {
+	local f n miss=0 first=""
+	for f in "$HESTIA/bin"/h-*; do
+		[ -f "$f" ] || continue
+		n=$(sed -n 's/^# info:[[:space:]]*//p' "$f" | head -n1)
+		if [ -z "$n" ]; then
+			miss=$((miss + 1))
+			[ -z "$first" ] && first="$(basename "$f")"
+		fi
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "all h-* commands have a # info: line"
+	else
+		no "$miss h-* command(s) missing a # info: line" "$first"
+	fi
+}
+
+# check_sudoers <file> <label> — file parses under the running sudo. One rejected
+# setting (e.g. requiretty under sudo-rs, ub26) makes sudo drop the WHOLE file.
 check_sudoers() {
 	if [ ! -f "$1" ]; then
 		no "sudoers $2 ($1) missing"
@@ -209,8 +216,7 @@ check_service caddy "panel webserver"
 check_service hestia-php "panel PHP-FPM"
 check_port "${BACKEND_PORT:-8083}" "panel"
 check_http "https://127.0.0.1:${BACKEND_PORT:-8083}/login/" "panel login page"
-# The panel drives every privileged action by calling h-* through sudo as the
-# hestia user — an invalid /etc/sudoers.d/hestia means no privileged action works.
+# invalid sudoers → no privileged panel action works
 check_sudoers /etc/sudoers.d/hestia "hestia grant"
 
 # --- Configured subsystems (derived from *_SYSTEM) ---
@@ -224,22 +230,14 @@ echo "-- services --"
 [ -n "$CRON_SYSTEM" ] && check_service "$CRON_SYSTEM" "cron"
 is_on() { [ "${1:-}" = "true" ] || [ "${1:-}" = "yes" ]; }
 if echo "$DB_SYSTEM" | grep -qw 'mysql'; then check_service mariadb "database (mysql)"; fi
-# PostgreSQL: selected as an optional engine (COMPONENT_DB_POSTGRESQL), which does
-# NOT write 'pgsql' into DB_SYSTEM — so keying off DB_SYSTEM alone missed it
-# entirely. Honour the component flag (and DB_SYSTEM for forward-compat).
+# postgres flag does NOT write 'pgsql' into DB_SYSTEM → key off the component flag too
 if echo "$DB_SYSTEM" | grep -qw 'pgsql' || is_on "${COMPONENT_DB_POSTGRESQL:-}"; then
 	check_service postgresql "database (pgsql)"
 fi
-# Optional addons (only if the install recipe enabled them)
 is_on "${COMPONENT_ADDON_FAIL2BAN:-}" && check_service fail2ban "fail2ban"
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
-# Adminer: served by the Panel-Caddy from a dedicated caddy FPM pool (no own
-# daemon) — verify its FPM socket is listening. Not HTTP-checked: the endpoint
-# serves Adminer's own login page (its own DB-credential gate), same delivery as
-# phpMyAdmin, which is also not HTTP-checked here.
+# adminer/webmail: no own daemon — served by a caddy FPM pool, so check the socket
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
-# Webmail via Panel-Caddy (#205): dedicated caddy FPM pool + internal loopback
-# listener per installed client — the per-domain vhosts only reverse-proxy.
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	check_socket /run/hestia-webmail-rc.sock "roundcube FPM"
 	check_http "http://127.0.0.1:8090/" "roundcube internal listener"
@@ -248,8 +246,7 @@ if echo "$WEBMAIL_SYSTEM" | grep -qw 'snappymail'; then
 	check_socket /run/hestia-webmail-sm.sock "snappymail FPM"
 	check_http "http://127.0.0.1:8091/" "snappymail internal listener"
 fi
-# Redis: either the user's DB choice (DB_REDIS) or rspamd's always-present
-# Bayes companion (hard-capped, see share/rspamd/redis-rspamd-limit.conf).
+# redis: user's DB choice or rspamd's always-present Bayes companion
 if is_on "${COMPONENT_DB_REDIS:-}" || [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
 	check_service redis-server "redis"
 fi
@@ -262,19 +259,18 @@ if [ -n "$PROXY_SYSTEM" ] || [ -n "$WEB_SYSTEM" ]; then
 fi
 echo "$DB_SYSTEM" | grep -qw 'mysql' && check_port 3306 "mysql"
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_port 25 "smtp"
-# Banner (not just port): IMAP/SMTP must actually answer — a misconfigured login
-# chain leaves the port listening while every login hangs (#376).
+# banner, not just port: IMAP/SMTP must actually answer (a hung login still listens)
 if [ -n "$IMAP_SYSTEM" ] && [ "$IMAP_SYSTEM" != 'remote' ]; then
 	check_banner 143 "imap"
 fi
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_banner 25 "smtp"
 if [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
-	# group-restricted unix sockets since #301/#321 — rspamd has no TCP ports
+	# group-restricted unix sockets — rspamd has no TCP ports
 	check_socket /run/rspamd/normal.sock "rspamd scan worker"
 	check_socket /run/rspamd/controller.sock "rspamd controller"
 	check_rspamd_ctrl_isolation
 fi
-# localhost consumers only (webmail plugin) — not opened in the firewall
+# localhost-only (webmail managesieve plugin), not opened in the firewall
 [ "$SIEVE_SYSTEM" = 'yes' ] && check_port 4190 "managesieve"
 
 # --- Critical log markers ---
@@ -285,16 +281,17 @@ check_log_clean "/var/log/hestia-php-fpm.log" "PHP (Fatal|Parse) error|\[emergen
 # exim writes serious problems to a dedicated paniclog — non-empty means trouble
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_file_empty "/var/log/exim4/paniclog" "exim paniclog"
 
-# --- Security invariants (static source gates for the #386 fixes) ---
+# --- Security invariants (static source gates) ---
 echo "-- security invariants --"
-# GHSA-fcq6: the edit/server auth gate must not compare to a bare (undefined)
-# $ROOT_USER — that is the bypass. Legit uses are $_SESSION["ROOT_USER"].
+# GHSA-fcq6: auth gate must not compare a bare $ROOT_USER (legit: $_SESSION["ROOT_USER"])
 check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$HESTIA/web"
-# GHSA-cr7q: the search-object commands must not eval raw conf-field payloads.
+# GHSA-cr7q: search-object commands must not eval raw conf-field payloads
 check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
 	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
 # v-* compat symlinks must all resolve (no dangling alias left by a rename).
 check_v_symlinks_resolve
+# every h-* keeps its parsed # info: line (a comment sweep must not eat it).
+check_info_headers
 
 #----------------------------------------------------------#
 #                       Result                             #

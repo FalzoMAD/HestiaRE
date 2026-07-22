@@ -4,26 +4,12 @@
 #
 # example: h-add-sys-postgresql
 #
-# Installs PostgreSQL and registers it as a local database host so the panel can
-# create and manage PostgreSQL databases + users (#121, full integration — the
-# lifecycle helpers in func/db.sh and the web UI were already present; only the
-# host registration was missing, which is why PostgreSQL was CLI-only before).
-#
-# The panel connects as the `postgres` superuser over TCP loopback (parity with
-# the MariaDB root credential): a password is set on it (its socket peer-auth is
-# unaffected), and Debian/Ubuntu's default pg_hba already allows scram-sha-256 on
-# 127.0.0.1, so no pg_hba edit is needed. The `postgres` role is used rather than a
-# dedicated one because func/db.sh connects without an explicit -d, i.e. to the
-# role-named database — which only `postgres` has. The credential lives in the host
-# registry (conf/pgsql.conf, 0660 root), never in install.conf.
-#
-# Idempotency is artefact-based (package + host registration), NOT the wizard
-# COMPONENT_DB_POSTGRESQL flag (that is the selection, not the install state, #121).
-# Readiness is checked with pg_isready, NOT `systemctl is-active postgresql` — the
-# latter is a oneshot umbrella unit that reports active even when the cluster is
-# down (#121 K2).
-#
-# New h-* command — no v-* symlink.
+# Installs PostgreSQL and registers it as a local DB host so the panel can manage
+# pgsql databases + users. The panel connects as the `postgres` superuser over TCP
+# loopback (a password is set; socket peer-auth is unaffected, default pg_hba
+# already allows scram on 127.0.0.1). Credential lives in conf/pgsql.conf (0660),
+# never install.conf. Idempotency = package + host registration; readiness via
+# pg_isready (systemctl is-active lies — the umbrella unit reports active when down).
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -52,7 +38,7 @@ fi
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-# Idempotency guard (artefact-based). Package + registered host = fully installed.
+# installed = package present AND host registered
 if dpkg -l postgresql 2> /dev/null | grep -q '^ii' \
 	&& grep -qs "HOST='localhost'" "$HESTIA/conf/pgsql.conf"; then
 	echo "INFO: PostgreSQL is already installed."
@@ -65,9 +51,8 @@ fi
 
 echo "[ * ] Installing PostgreSQL packages..."
 apt-get -qq update
-# postgresql-common first, in its own transaction: the postgresql metapackage's
-# debconf .config runs pg_lsclusters during pre-configuration, before
-# postgresql-common is unpacked when both are in one transaction (#353).
+# postgresql-common first, own transaction: the metapackage's debconf runs
+# pg_lsclusters before postgresql-common is unpacked when both are together
 DEBIAN_FRONTEND=noninteractive apt-get -y -qq install postgresql-common > /dev/null 2>&1 || true
 DEBIAN_FRONTEND=noninteractive apt-get -y -qq install postgresql postgresql-contrib > /dev/null 2>&1
 if ! dpkg -l postgresql 2> /dev/null | grep -q '^ii'; then
@@ -75,7 +60,7 @@ if ! dpkg -l postgresql 2> /dev/null | grep -q '^ii'; then
 	exit "$E_INVALID"
 fi
 
-# Ensure the versioned cluster is up, then verify with pg_isready (K2).
+# bring the versioned cluster up, verify with pg_isready
 PG_MAJOR=$(pg_lsclusters -h 2> /dev/null | awk 'NR==1{print $1}')
 systemctl enable postgresql > /dev/null 2>&1 || true
 systemctl start "postgresql@${PG_MAJOR}-main" > /dev/null 2>&1 \
@@ -91,8 +76,7 @@ if [ "$_ready" != 1 ]; then
 fi
 
 echo "[ * ] Setting management credentials..."
-# Set a password on the postgres superuser for loopback TCP login by the panel.
-# Socket peer-auth (sudo -u postgres psql) is unaffected — peer ignores passwords.
+# password for the panel's loopback TCP login (socket peer-auth is unaffected)
 PGPASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16 || true)
 sudo -u postgres psql -qc "ALTER ROLE postgres WITH PASSWORD '$PGPASS';" > /dev/null 2>&1
 
@@ -102,10 +86,7 @@ sudo -u postgres psql -qc "ALTER ROLE postgres WITH PASSWORD '$PGPASS';" > /dev/
 
 set_install_component DB_POSTGRESQL true
 
-# Register the local host — composes DB_SYSTEM+=pgsql (the h-add-database-host
-# guard fix from #121 makes the first pgsql host registrable; is_pgsql_host_alive
-# verifies the TCP + password login works). This is what lets the panel offer and
-# manage PostgreSQL databases.
+# register the local host — composes DB_SYSTEM+=pgsql, letting the panel manage pgsql DBs
 if ! "$BIN/h-add-database-host" pgsql localhost "$MGMT_ROLE" "$PGPASS" > /dev/null 2>&1; then
 	echo "[ ! ] PostgreSQL host registration reported an issue"
 fi

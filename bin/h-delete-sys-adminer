@@ -4,9 +4,8 @@
 #
 # example: h-delete-sys-adminer
 #
-# Reverses h-add-sys-adminer: removes the Panel-Caddy route, the caddy FPM pool,
-# the webroot and the temp dir, then reloads the affected services. Vendored
-# single file — nothing is purged via apt. New h-* command — no v-* symlink.
+# Reverses h-add-sys-adminer: removes the route, FPM pool, webroot and temp dir,
+# then reloads. Vendored single file — nothing is purged via apt.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -60,7 +59,7 @@ rm -rf "$TMPDIR"
 #----------------------------------------------------------#
 
 set_install_component ADDON_ADMINER false
-# Clear the panel marker so the DB list stops offering the Adminer button.
+# clear the panel marker so the DB list drops the Adminer button
 $BIN/h-change-sys-config-value 'DB_ADMINER_ALIAS' ''
 
 echo "[ OK ] Adminer removed."
