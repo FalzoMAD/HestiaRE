@@ -1,6 +1,6 @@
 [Unit]
 Description=HestiaRE panel PHP FastCGI Process Manager
-Documentation=https://git.hestiare.com/Admin/hestiare
+Documentation=https://hestiare.com
 After=network.target
 
 [Service]

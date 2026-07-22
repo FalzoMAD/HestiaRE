@@ -189,9 +189,8 @@ source $USER_DATA/ssl/le.conf
 
 # Checking wildcard alias
 if [ "$aliases" = "*.$domain" ]; then
-	# Wildcard certificates require DNS-01 challenge which depends on DNS zone management.
-	# DNS zone management is not part of HestiaRE — manage DNS at your external provider.
-	# See: https://git.hestiare.com/Admin/HestiaRE/issues/58
+	# Wildcard certs need the DNS-01 challenge, which needs DNS zone management —
+	# not part of HestiaRE (manage DNS at your external provider).
 	check_result "$E_NOTEXIST" "Wildcard certificates (DNS-01) are not supported — HestiaRE has no DNS zone management. Request a non-wildcard certificate or complete DNS-01 manually."
 else
 	proto="http-01"
