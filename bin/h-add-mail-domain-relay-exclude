@@ -5,17 +5,13 @@
 # example: h-add-mail-domain-relay-exclude user domain.tld datev.de
 # example: h-add-mail-domain-relay-exclude user domain.tld '*.datev.de'
 #
-# Excludes RECIPIENT_DOMAIN from the configured SMTP relay for this mail
-# domain: exim's bypass_smtp_relay router delivers matching mail directly via
-# DNS/MX (local DKIM signing and OUTGOING_IP apply). Patterns are stored one
-# per line in /home/$user/conf/mail/$domain/smtp_relay_exclude (symlinked into
-# /etc/exim4/domains/), wildcard patterns like *.datev.de are allowed
-# (wildlsearch). The file is read per message — no exim reload needed.
-# Admin note: excluded recipients get mail directly from the server IP, so the
-# sender domain's SPF must include the server IP in addition to the relay
-# include, the local DKIM record (selector mail) must be published, outbound
-# port 25 must be open and the PTR correct.
-# New h-* command — no v-* symlink.
+# Excludes RECIPIENT_DOMAIN from the domain's SMTP relay: exim's
+# bypass_smtp_relay router delivers matching mail directly via DNS/MX (local DKIM
+# + OUTGOING_IP apply). Patterns stored one-per-line in smtp_relay_exclude, read
+# per message (no reload); wildcards like *.datev.de allowed (wildlsearch).
+# ADMIN NOTE: excluded recipients get mail direct from the server IP, so SPF must
+# include the server IP, the local DKIM record (selector mail) must be published,
+# outbound :25 must be open and the PTR correct.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

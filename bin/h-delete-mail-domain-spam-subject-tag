@@ -4,9 +4,7 @@
 #
 # example: h-delete-mail-domain-spam-subject-tag user domain.tld
 #
-# Removes the spam subject tag set by h-change-mail-domain-spam-subject-tag;
-# subjects of spam mail are no longer rewritten. Idempotent.
-# New h-* command — no v-* symlink.
+# Removes the spam subject tag; spam subjects are no longer rewritten. Idempotent.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

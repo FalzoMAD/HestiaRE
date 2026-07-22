@@ -4,13 +4,11 @@
 #
 # example: h-add-database-sso-token admin admin_wp 203.0.113.5
 #
-# Called by the panel (via sudo) when a user clicks the phpMyAdmin SSO button.
-# Creates a temporary database user (h-add-database-temp-user, 60 min TTL) and
-# stores its credentials in a one-time handoff file under /run/hestia-sso/,
-# readable only by the phpMyAdmin FPM pool user (caddy). Prints the token to
-# stdout; the panel redirects the browser to hestia-sso.php?token=<token>,
-# which consumes the file and opens the signon session. This replaces the
-# former REST-API path (#145) — the phpMyAdmin pool itself needs no sudo rule.
+# Called by the panel (via sudo) on a phpMyAdmin SSO click. Creates a temporary
+# DB user (60 min TTL) and stores its credentials in a one-time handoff file under
+# /run/hestia-sso/, readable only by the phpMyAdmin pool user (caddy). Prints a
+# token; the panel redirects to hestia-sso.php?token=<token>, which consumes the
+# file and opens the session — so the phpMyAdmin pool itself needs no sudo rule.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

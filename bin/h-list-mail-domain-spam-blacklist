@@ -4,9 +4,7 @@
 #
 # example: h-list-mail-domain-spam-blacklist user domain.tld json
 #
-# Lists the sender patterns on the domain's spam blacklist (see
-# h-add-mail-domain-spam-blacklist).
-# New h-* command — no v-* symlink.
+# Lists the sender patterns on the domain's spam blacklist.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
