@@ -4,13 +4,9 @@
 #
 # example: h-delete-sys-sieve
 #
-# Unwires and uninstalls sieve: exim's SIEVE macro back to inert (clean local
-# delivery returns to the appendfile transport), the sieve packages are
-# purged and the sieve-flavoured 15-lda.conf is restored to the base variant
-# (it belongs to dovecot-core, purging the sieve packages does not bring it
-# back). Stored per-account scripts stay in the maildirs — they become
-# active again on h-add-sys-sieve.
-# New h-* command — no v-* symlink.
+# Unwires and uninstalls sieve: exim's SIEVE macro back to inert, sieve packages
+# purged, and 15-lda.conf restored to the base variant (it belongs to dovecot-core,
+# so the purge does not bring it back). Per-account scripts stay in the maildirs.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -56,9 +52,8 @@ if ! systemctl is-active --quiet exim4; then
 	exit "$E_RESTART"
 fi
 
-# Take the sieve configs out BEFORE purging: the dovecot conf.d files are
-# maintainer-script managed (not dpkg conffiles), and the purge triggers a
-# dovecot restart that would fail while sieve settings are still referenced
+# remove the sieve configs BEFORE purging: they are maintainer-script managed, and
+# the purge's dovecot restart would fail while sieve settings are still referenced
 rm -f /etc/dovecot/conf.d/20-managesieve.conf \
 	/etc/dovecot/conf.d/90-sieve.conf \
 	/etc/dovecot/conf.d/90-sieve-extprograms.conf
@@ -78,10 +73,8 @@ if ! systemctl is-active --quiet dovecot; then
 fi
 
 apt-get -y -qq purge dovecot-managesieved dovecot-sieve > /dev/null 2>&1
-# no autoremove: it would rip out auto-marked siblings of the shared stack
-# (seen on deb13: purging the sieve packages autoremoved dovecot-core)
-# the package maintainer scripts may stop dovecot during the purge (seen on
-# deb13) — make sure it is running again
+# no autoremove: it would rip out shared-stack siblings (deb13 autoremoved dovecot-core).
+# the purge may stop dovecot (deb13) — bring it back up.
 systemctl start dovecot 2> /dev/null || true
 if ! systemctl is-active --quiet dovecot; then
 	echo "ERROR: dovecot did not come back up after the sieve purge."
