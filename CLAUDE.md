@@ -11,7 +11,8 @@ HestiaRE (Refined Edition) is a lean, official derivative of HestiaCP.
 Author is an original HestiaCP co-founder. This is a personal professional
 tool, not a community project, not commercial.
 
-Primary targets: Debian 12, Ubuntu 24.04 LTS, Debian 13 (priority 2 since June 2026).
+Targets (all first-class, equal priority): Debian 12, Debian 13, Ubuntu 24.04 LTS,
+Ubuntu 26.04 LTS. Every feature must work on all four; test on the VM fleet.
 Scale: ~300 domains, ~30 customers, ~15-20 servers.
 
 Tagline: "Rethink. Rebuild. Reboot."
@@ -88,9 +89,12 @@ v-*    symlinks only — ease of cherry-picking HestiaCP upstream changes
 ```
 
 Symlink rules (non-negotiable):
-- Existing h-* commands: one v-* symlink each (created in Issue #23)
-- New h-* commands added after Issue #23: NO symlink — the v-* name never existed
-- When removing a h-* command: remove the v-* symlink too — no orphans
+- Committed v-* symlinks ship in the tarball; they exist only where upstream has the
+  v-* command. New HestiaRE-native h-* commands get NO symlink.
+- The installer does NOT blanket-create symlinks — `configure_hestia` only prunes
+  dangling v-* (an alias whose h-* target was renamed/removed). `h-check-sys-smoke`
+  guards that none dangle.
+- Removal verb is `h-delete-*` across the board (upstream `v-delete-*` parity).
 
 ### Panel webserver
 Caddy (OS repo, port 8083) — replaces hestia-nginx.
@@ -109,7 +113,7 @@ nginx acts as reverse proxy in front of apache2 for customer vhosts.
 ### Minimal profile
 Standard install minus apache2 and mail stack.
 
-### Optional (h-add-*/h-remove-* commands)
+### Optional (h-add-*/h-delete-* commands)
 proftpd, clamav, postgresql, redis, opensearch, docker-proxy, filemanager
 
 ---
@@ -132,7 +136,7 @@ func/helper.sh    installer helpers: hestia_apt, load_os_profile, seed_hestia_et
 bin/h-install-hestia  non-interactive installer (reads install.conf, COMPONENT_*-gated)
 bin/hestia        umbrella: hestia install|configure|update|uninstall|status
 VERSION           empty placeholder, filled at build time — never edit
-codemap.json      component map — read before exploring the codebase
+CODEMAP.json      component map — read before exploring the codebase
 CLAUDE.md         this file
 ```
 
@@ -155,7 +159,7 @@ conf/             service configuration templates
 3. Make changes, commit with: `[#N] type: description`
    — larger changes also add a `CHANGELOG.md` entry (Unreleased section) in the same PR
 4. Push: `git push origin feature/N-short-desc`
-5. Open PR to `dev` via Gitea API (see below)
+5. Open PR to `dev` (host + API call in `CLAUDE.local.md`)
 6. Stop. Do not merge. Author reviews and merges.
 
 **Never push to `dev`, `main`, or `upstream/hestiacp` directly.**
@@ -167,20 +171,12 @@ conf/             service configuration templates
 type: fix | feat | refactor | remove | docs | test
 ```
 
-### PR via Gitea API
-```bash
-curl -s -X POST "https://git.hestiare.com/api/v1/repos/Admin/hestiare/pulls" \
-  -H "Authorization: token $GITEA_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Short description (#N)",
-    "body": "Closes #N\n\nWhat changed and why.",
-    "head": "feature/N-short-desc",
-    "base": "dev"
-  }'
-```
+### PR
 
-`GITEA_TOKEN` is available as environment variable — do not hardcode.
+Open the PR against `dev` — never merge it yourself; the author reviews and merges.
+The remote host, the exact API call, `GITEA_TOKEN` and the test-VM fleet live in
+`CLAUDE.local.md` (untracked, so the personal Gitea host stays off the public
+GitHub mirror).
 
 ---
 
