@@ -1,10 +1,12 @@
 {
   "_meta": {
-    "generated": "2026-06-09",
+    "generated": "2026-07-22",
     "project": "HestiaRE",
     "version_ref": "1.9.6",
     "description": "Machine-readable component map. Read before exploring the codebase. Update as part of every feature branch that adds or moves components.",
-    "upstream_debt_legend": "Files/dirs still using HestiaCP-specific paths (/usr/local/hestia, /etc/hestiacp, hestia-nginx, hestia-php) that need migration to HestiaRE conventions."
+    "upstream_debt_legend": "Files/dirs still using HestiaCP-specific paths (/usr/local/hestia, /etc/hestiacp, hestia-nginx, hestia-php) that need migration to HestiaRE conventions.",
+    "os_targets": "All four are first-class, equal-priority: debian-bookworm (12), debian-trixie (13), ubuntu-noble (24.04), ubuntu-26lts (26.04). load_os_profile (func/helper.sh) is the single source for OS_ID/CODENAME/RELEASE/EXIM_USR/BASE_PKGS_EXTRA. Every feature must work on all four; verify on the VM fleet before a PR.",
+    "distro_quirks": "Cross-cutting gotchas that bite more than one service (grep these before assuming a service failure is your bug): (1) Ubuntu 26.04 ships ENFORCED AppArmor profiles that deny access other distros allow — proftpd can't read the panel cert under /usr/local/hestia/ssl (h-add-sys-proftpd drops share/proftpd/apparmor-local into the profile's local/ hook), and mariadbd's profile denies the dac_override the mariadb-install-db bootstrap needs (h-add-sys-mariadb unloads it for the init, reloads after). Suspect AppArmor on any 'Permission denied as root' on ub26. (2) Package names/splits differ by distro+version: proftpd-basic is bookworm-only (else proftpd-core), and modern proftpd (1.3.9 / 1.3.8 on trixie+ubuntu) moved mod_tls into proftpd-mod-crypto — omitting it silently disables FTPS. libzip is libzip4t64 on ub24 (t64 transition) but libzip5 on ub26. (3) apt-cache/apt-get output is localized — always LC_ALL=C before grepping for 'Candidate:' etc. (4) dovecot 2.3 (deb12) vs 2.4 (deb13/ub26) need version-split configs (share/dovecot/{2.3,2.4}/)."
   },
 
   "install_paths": {
@@ -300,7 +302,7 @@
         "install/deb/fail2ban/": "install/deb/fail2ban/ (in place, near-verbatim)",
         "templates/web/": "install/deb/templates/web/ (near-verbatim; user-pickable web template library)",
         "share/{nginx,apache2}/webmail/": "install/deb/templates/mail/ (reworked to Panel-Caddy proxies #205; moved per-service #119, MAILTPL retired; dead rainloop removed)",
-        "share/proftpd/": "install/deb/proftpd/ (moved #123; deployed by h-add-sys-proftpd — was orphaned; +Include modules.conf/conf.d; +apparmor-local for Ubuntu 26's enforced proftpd profile)",
+        "share/proftpd/": "install/deb/proftpd/ (moved #123; deployed by h-add-sys-proftpd — was orphaned; +Include modules.conf/conf.d; +apparmor-local for Ubuntu 26's enforced proftpd profile). h-add-sys-proftpd now sets FTP_SYSTEM=proftpd (never set before, so h-restart-ftp / RRD FTP graph / smoke FTP check / the NAT MasqueradeAddress branch were all inert on pre-#123 installs).",
         "packages/*.pkg": "install/deb/packages/ (moved, near-verbatim)",
         "share/panel-caddy/, share/panel-php/, share/dovecot/": "hestiare-native (see panel_caddy_service / panel_php_service)"
       },
@@ -441,7 +443,7 @@
         "github": "https://github.com/FalzoMAD/HestiaRE (default)",
         "gitea": "Configurable via /etc/hestia/source.conf"
       },
-      "install_conf": "/etc/hestia/install.conf — written by func/wizard.sh; HESTIA_* params + COMPONENT_* selections; sourced by h-install-hestia; COMPONENT_* to be updated by h-add-*/h-remove-* (issue #103)",
+      "install_conf": "/etc/hestia/install.conf — written by func/wizard.sh; HESTIA_* params + COMPONENT_* selections; sourced by h-install-hestia; COMPONENT_* kept current by h-add-*/h-delete-* via set_install_component",
       "upstream_ref": "hestiare-native — the whole installer (install.sh, func/wizard.sh, bin/h-install-hestia, func/helper.sh) was rebuilt from scratch (Makefile→just→bash, #106/#112/#114); upstream's install/hst-install-*.sh were removed (#26). No cherry-pick path.",
       "dependencies": ["installer"],
       "upstream_debt": {
@@ -451,14 +453,13 @@
     },
 
     "pr_api": {
-      "description": "Gitea API integration for PR creation. Used in the CLAUDE.md workflow. Token from $GITEA_TOKEN env var.",
+      "description": "Repo API integration for PR creation. The remote host, API call and use of TOKEN live in CLAUDE.local.md (untracked — kept off the public GitHub mirror), NOT here.",
       "entry_points": [],
       "directories": [],
-      "key_files": ["CLAUDE.md"],
+      "key_files": ["CLAUDE.local.md"],
       "language": "curl/bash",
-      "api_base": "https://git.hestiare.com/api/v1/repos/Admin/hestiare",
       "pr_target_branch": "dev",
-      "upstream_ref": "hestiare-native (Gitea workflow tooling + CLAUDE.md; no upstream).",
+      "upstream_ref": "hestiare-native (Repo workflow tooling; no upstream).",
       "dependencies": [],
       "upstream_debt": {
         "file_count": 0,
