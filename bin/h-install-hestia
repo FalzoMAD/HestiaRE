@@ -516,14 +516,16 @@ install_mail() {
 
 	wcv "MAIL_SYSTEM"  "exim4"
 	wcv "IMAP_SYSTEM"  "dovecot"
-	# rspamd/sieve are modular addons — their commands write ANTISPAM_SYSTEM/SIEVE_SYSTEM
+	# rspamd/sieve are modular addons — their commands write ANTISPAM_SYSTEM/SIEVE_SYSTEM.
+	# || true (like proftpd/clamav): a flaky addon install must not abort install_mail
+	# under set -e — the addon is logged as failed and can be re-run.
 	if is_on "${COMPONENT_ADDON_RSPAMD:-}"; then
 		echo "[ * ] Installing & configuring rspamd (with Bayes Redis)..."
-		"$BIN/h-add-sys-rspamd" >> "$LOG"
+		"$BIN/h-add-sys-rspamd" >> "$LOG" 2>&1 || true
 	fi
 	if is_on "${COMPONENT_ADDON_SIEVE:-}"; then
 		echo "[ * ] Installing & configuring sieve..."
-		"$BIN/h-add-sys-sieve" >> "$LOG"
+		"$BIN/h-add-sys-sieve" >> "$LOG" 2>&1 || true
 	fi
 	if is_on "${COMPONENT_ADDON_CLAMAV:-}"; then
 		echo "[ * ] Installing & configuring ClamAV (mail antivirus)..."
