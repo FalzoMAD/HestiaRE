@@ -1,6 +1,6 @@
 {
-  "$comment": "HestiaRE Installer Manifest - Version 1 Zielarchitektur. Dies ist eine Spezifikation (Soll-Zustand), nicht unbedingt der heutige Implementierungsstand. Wird von install.sh gelesen, um den interaktiven Fragenkatalog zu steuern. Bei jedem Release-Refresh gegen tatsaechlich verfuegbare Repo-Versionen pruefen (siehe 'dynamic'-Felder).",
-  "$parser": "jq (nicht python3 - zu schwergewichtig nur fuer JSON-Parsing). install.sh muss jq als allererste Abhaengigkeit pruefen/installieren, noch vor dem whiptail-Check, da das Manifest vor jeder Frage gelesen werden muss. jq ist ~113 KB Installed-Size + libjq1/libonig5, deutlich schlanker als eine python3-Abhaengigkeit.",
+  "$comment": "HestiaRE installer manifest - version 1 target architecture. This is a specification (target state), not necessarily the current implementation status. Read by install.sh to drive the interactive question catalog. Re-check against actually available repo versions on every release refresh (see the 'dynamic' fields).",
+  "$parser": "jq (not python3 - too heavyweight just for JSON parsing). install.sh must check/install jq as the very first dependency, before the whiptail check, since the manifest must be read before every question. jq is ~113 KB installed size + libjq1/libonig5, much leaner than a python3 dependency.",
   "manifest_version": 1,
 
   "software_versions": {
@@ -34,7 +34,7 @@
       "question": "Panel port:",
       "default": 8083,
       "stage": "pre_preset",
-      "note": "Bei allen Presets abgefragt, inkl. standard"
+      "note": "Asked in every preset, including standard."
     },
     {
       "id": "ADMIN_USERNAME",
@@ -52,7 +52,7 @@
       "id": "ADMIN_PASSWORD",
       "type": "generated",
       "stage": "post_install",
-      "note": "Kein interaktiver Prompt. Wird von h-install-hestia (configure-Stage) nach Abschluss zufaellig generiert (openssl rand) und einmalig ausgegeben. Wird nicht in install.conf gespeichert, kein Klartext-Parameter-Durchreichen."
+      "note": "No interactive prompt. Generated randomly (openssl rand) by h-install-hestia (configure stage) at the end and printed once. Not stored in install.conf, no cleartext parameter pass-through."
     }
   ],
 
@@ -86,7 +86,7 @@
       "fixed_no_prompt": {
         "mailonly": "NGINX"
       },
-      "note": "Bei mailonly fest auf NGINX, keine Abfrage (Roundcube-Reverse-Proxy + ACME-Terminierung). Repo-Quelle (OS vs. Sury-Apache / nginx.org) folgt repo_strategy, siehe WEB_REPO_SOURCE."
+      "note": "Fixed to NGINX on mailonly, not asked (Roundcube reverse proxy + ACME termination). Repo source (OS vs. Sury Apache / nginx.org) follows repo_strategy, see WEB_REPO_SOURCE."
     },
 
     "WEB_REPO_SOURCE": {
@@ -130,7 +130,7 @@
       "fixed_no_prompt": {
         "mailonly": "os_single"
       },
-      "note": "Panel-PHP nutzt bei mailonly ebenfalls os_single (kein zusaetzliches PHP ueber Panel-PHP hinaus)."
+      "note": "On mailonly, Panel-PHP also uses os_single (no additional PHP beyond Panel-PHP)."
     },
 
     "PHP_MULTIPHP_VERSIONS": {
@@ -147,7 +147,7 @@
         "nomail":    "skip_newest:1,take:3",
         "custom":    null
       },
-      "note": "install.sh muss das Sury-Repo vor dieser Frage als APT-Quelle eintragen (inkl. apt-get update), um die Optionsliste per apt-cache madison o.ae. zu ermitteln. Keine Verfuegbarkeitsgarantie laut Sury-Maintainer - bei jedem Release-Refresh pruefen."
+      "note": "install.sh must add the Sury repo as an APT source before this question (incl. apt-get update) to derive the option list via apt-cache madison or similar. No availability guarantee per the Sury maintainer - re-check on every release refresh."
     },
 
     "DB_MARIADB": {
@@ -165,7 +165,7 @@
         "mailonly":  true,
         "custom":    null
       },
-      "note": "DB-Server-Engine. Wird mit DB_POSTGRESQL + DB_REDIS als gemeinsamer Mehrfachauswahl-Screen angezeigt (Gruppe 'db' in grouped_prompts). phpMyAdmin folgt implizit (DB_PHPMYADMIN, type derived)."
+      "note": "DB server engine. Shown together with DB_POSTGRESQL + DB_REDIS as a shared multi-select screen (group 'db' in grouped_prompts). phpMyAdmin follows implicitly (DB_PHPMYADMIN, type derived)."
     },
 
     "DB_POSTGRESQL": {
@@ -206,14 +206,14 @@
         "mailonly":  "__os__",
         "custom":    null
       },
-      "note": "Nur sichtbar/abgefragt, wenn MariaDB gewaehlt wurde (visible_if DB_MARIADB == true). 11.4 wegen Magento 2.4.9 (Adobe-freigegeben); 10.6 und aelter ausgeschlossen (EOL 2026-07-06). __os__ wird zur Laufzeit ermittelt."
+      "note": "Only shown/asked when MariaDB was chosen (visible_if DB_MARIADB == true). 11.4 because of Magento 2.4.9 (Adobe-approved); 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime."
     },
 
     "DB_PHPMYADMIN": {
       "group": "db",
       "type": "derived",
       "derived_from": "DB_MARIADB",
-      "note": "Implizit: wird ohne eigene Frage mitinstalliert, sobald MariaDB gewaehlt ist (Wert = DB_MARIADB)."
+      "note": "Implicit: installed without its own question as soon as MariaDB is chosen (value = DB_MARIADB)."
     },
 
     "MAIL_BLOCK_PRESENT": {
@@ -234,7 +234,7 @@
         "mailonly":  true,
         "custom":    null
       },
-      "note": "Bei false (nomail): Dovecot entfaellt komplett, Exim laeuft nur als Transactional-MTA (kein Postfach-Empfang). Bei true: Dovecot ist fix gesetzt, kein eigener An/Aus-Schalter."
+      "note": "When false (nomail): Dovecot is dropped entirely, Exim runs as a transactional-only MTA (no mailbox reception). When true: Dovecot is fixed on, no separate on/off toggle."
     },
 
     "MAIL_WEBMAILER": {
@@ -255,7 +255,7 @@
         "mailonly":  "ROUNDCUBE",
         "custom":    null
       },
-      "note": "Roundcube/SnappyMail werden architektonisch ueber Panel-Caddy+Panel-PHP ausgeliefert; der jeweilige Web-Server (nginx/Apache) fungiert nur als Reverse-Proxy zur Webmail-Subdomain. DKIM laeuft unabhaengig davon ueber den bestehenden Exim+OpenSSL-Mechanismus (aus HestiaCP-Upstream uebernommen, kein rspamd dkim_signing)."
+      "note": "Roundcube/SnappyMail are served architecturally via Panel-Caddy+Panel-PHP; the respective web server (nginx/Apache) only acts as a reverse proxy to the webmail subdomain. DKIM runs independently via the existing Exim+OpenSSL mechanism (inherited from HestiaCP upstream, not rspamd dkim_signing)."
     },
 
     "PANEL_CADDY": {
@@ -269,7 +269,7 @@
       "type": "fixed",
       "always_installed": true,
       "reference_version": "8.3",
-      "note": "Nur ein Wrapper um eine PHP-Instanz fuer das Panel selbst. Nutzt bei mailonly os_single, sonst abhaengig von PHP_MODE. reference_version = die vom Panel-FPM genutzte + immer voll installierte Referenz-Version (#272); Single Source of Truth fuer Installer (PHP_VER) und Wizard-Checklist-Lock."
+      "note": "Just a wrapper around a PHP instance for the panel itself. Uses os_single on mailonly, otherwise depends on PHP_MODE. reference_version = the reference version used by Panel-FPM and always fully installed (#272); single source of truth for the installer (PHP_VER) and the wizard checklist lock."
     },
 
     "PANEL_IPTABLES": {
@@ -282,7 +282,7 @@
       "group": "panel",
       "type": "fixed",
       "always_installed": true,
-      "note": "Immer installiert. Betriebsmodus (voller MTA mit Dovecot-Anbindung vs. reiner Versand) ergibt sich implizit aus MAIL_BLOCK_PRESENT, keine eigene Abfrage. DKIM-Signierung erfolgt granular pro Domain via OpenSSL (bestehender HestiaCP-Mechanismus), unabhaengig von rspamd."
+      "note": "Always installed. The operating mode (full MTA with Dovecot integration vs. send-only) derives implicitly from MAIL_BLOCK_PRESENT, no separate question. DKIM signing is done granularly per domain via OpenSSL (existing HestiaCP mechanism), independent of rspamd."
     },
 
     "ADDON_ADMINER": {
@@ -292,7 +292,7 @@
       "description": "Web DB UI for PostgreSQL (vendored single-file). MySQL keeps phpMyAdmin.",
       "visible_if": "DB_POSTGRESQL == true",
       "default": true,
-      "note": "Nur sichtbar/vorausgewaehlt, wenn PostgreSQL gewaehlt wurde (visible_if DB_POSTGRESQL == true, default true) — ohne PostgreSQL ausgeblendet und damit nicht installiert. Ersetzt die fruehere DB_PGADMIN-Ableitung (pgadmin4-web existiert in keinem OS-Repo, phpPgAdmin dormant; #350). Vendored aus share/adminer/ statt OS-Paket (OS-Versionen CVE-behaftet). Full-Build kann auch MySQL, aber phpMyAdmin bleibt unangetastet der MySQL-Default."
+      "note": "Only shown/preselected when PostgreSQL was chosen (visible_if DB_POSTGRESQL == true, default true) - hidden and thus not installed without PostgreSQL. Replaces the former DB_PGADMIN derivation (pgadmin4-web exists in no OS repo, phpPgAdmin dormant; #350). Vendored from share/adminer/ instead of an OS package (OS versions are CVE-prone). A full build can also do MySQL, but phpMyAdmin remains untouched as the MySQL default."
     },
 
     "ADDON_COMPOSER": {
@@ -305,7 +305,7 @@
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
         "singlephp": "os_package", "nomail": "os_package"
       },
-      "note": "latest nutzt Upstream-Installer-Skript (getcomposer.org) statt OS-Paket fuer aktuellere Version. Backlog: h-update-sys-composer Command fuer nachtraegliche Quellumstellung."
+      "note": "latest uses the upstream installer script (getcomposer.org) instead of the OS package for a more current version. Backlog: an h-update-sys-composer command to switch the source afterwards."
     },
 
     "ADDON_CROWDSEC": {
@@ -314,7 +314,7 @@
       "label": "CrowdSec",
       "description": "Collaborative intrusion prevention",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null },
-      "note": "Unabhaengig von Fail2Ban waehlbar, kein Exklusiv-OR. Beide koennen parallel laufen."
+      "note": "Selectable independently of Fail2Ban, not an exclusive-or. Both can run in parallel."
     },
 
     "ADDON_FAIL2BAN": {
@@ -340,7 +340,7 @@
       "description": "Spam filter incl. Bayes learning (mail block only; brings a small capped Redis)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "mailonly": true, "custom": null },
-      "note": "Ausgeblendet bei nomail (kein Mail-Block). Reine Spamfilter-Komponente, NICHT fuer DKIM zustaendig (siehe PANEL_EXIM note). Bringt IMMER einen Redis als Bayes-Backend mit: ohne DB_REDIS hart limitiert auf 64 MB (share/rspamd/redis-rspamd-limit.conf), mit DB_REDIS wird die General-Purpose-Instanz unlimitiert mitgenutzt. h-add-sys-redis muss das Limit entfernen (promote), h-delete-sys-redis es wiederherstellen statt zu deinstallieren (demote)."
+      "note": "Hidden on nomail (no mail block). Pure spam-filter component, NOT responsible for DKIM (see the PANEL_EXIM note). ALWAYS brings a Redis as the Bayes backend: without DB_REDIS hard-limited to 64 MB (share/rspamd/redis-rspamd-limit.conf), with DB_REDIS the general-purpose instance is shared unlimited. h-add-sys-redis must remove the limit (promote), h-delete-sys-redis must restore it instead of uninstalling (demote)."
     },
 
     "ADDON_SIEVE": {
@@ -350,7 +350,7 @@
       "description": "Server-side mail filters (mail block only)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false, "custom": null },
-      "note": "Ausgeblendet bei nomail (kein Mail-Block)."
+      "note": "Hidden on nomail (no mail block)."
     },
 
     "ADDON_CLAMAV": {
@@ -360,7 +360,7 @@
       "description": "Mail antivirus (mail block only; resource-heavy)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false, "custom": null },
-      "note": "Ausgeblendet bei nomail (kein Mail-Block). NIE vorausgewaehlt — clamd haelt die komplette Signatur-DB im RAM (~1-2 GB). h-add-sys-clamav setzt ANTIVIRUS_SYSTEM=clamav (neue Mail-Domains scannen per Default, opt-out pro Domain) und schaltet den exim-CLAMD-Macro ERST scharf, wenn clamd am Socket antwortet. Der Macro nutzt malware=*/defer_ok = FAIL-OPEN: bei totem clamd wird Mail ungescannt angenommen (Verfuegbarkeit ueber Sicherheit), daher kein Scharfschalten ohne lebenden clamd. Delete = Saved-State (per-Domain-Flags bleiben, reaktivieren bei Reinstall)."
+      "note": "Hidden on nomail (no mail block). NEVER preselected - clamd holds the entire signature DB in RAM (~1-2 GB). h-add-sys-clamav sets ANTIVIRUS_SYSTEM=clamav (new mail domains scan by default, opt-out per domain) and arms the exim CLAMD macro ONLY once clamd answers on the socket. The macro uses malware=*/defer_ok = FAIL-OPEN: with a dead clamd, mail is accepted unscanned (availability over security), hence no arming without a live clamd. Delete = saved state (per-domain flags stay, reactivate on reinstall)."
     },
 
     "ADDON_DOCKER": {
@@ -369,7 +369,7 @@
       "label": "Docker",
       "description": "Container runtime (proxy)",
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Bei allen Presets sichtbar, nirgends vorbelegt. Echter Ressourcen-Fussabdruck (RAM/Disk), bewusst keine automatische Aktivierung."
+      "note": "Shown in all presets, preset nowhere. Real resource footprint (RAM/disk), deliberately no automatic activation."
     },
 
     "ADDON_FILEMANAGER": {
@@ -378,7 +378,7 @@
       "label": "FileManager",
       "description": "Web file manager",
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Bei allen Presets inkl. mailonly sichtbar, nirgends vorbelegt. TODO: Abhaengigkeiten von PHP-Version/-Modus noch zu pruefen vor Produktivnutzung."
+      "note": "Shown in all presets incl. mailonly, preset nowhere. TODO: dependencies on PHP version/mode still to be checked before production use."
     },
 
     "ADDON_UTILITIES": {
@@ -388,7 +388,7 @@
       "description": "System utilities (opens tool selection)",
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null },
       "opens_followup": "TOOLS_SELECTION",
-      "note": "Bei Aktivierung oeffnet sich die Tools-Folgeseite (siehe tools-Sektion unten)."
+      "note": "When enabled, the tools follow-up page opens (see the tools section below)."
     }
   },
 
@@ -413,7 +413,7 @@
         "mailonly":  ["rsync", "net-tools", "vnstat", "parted", "telnet"],
         "custom":    []
       },
-      "note": "restic: Backend-Funktionen (v-backup-user-restic, v-backup-users-restic) existieren bereits im Code, nur Paketinstallation fehlt - hoehere Backlog-Prioritaet als die anderen unbelegten Tools."
+      "note": "restic: backend functions (v-backup-user-restic, v-backup-users-restic) already exist in the code, only the package install is missing - higher backlog priority than the other unset tools."
     }
   },
 
@@ -424,13 +424,13 @@
   "fasttrack": {
     "supported": true,
     "syntax": "curl -fsSL <install_url> | bash -s -- <preset>",
-    "note": "Uebernimmt nur Komponentenwahl aus dem Preset, ueberspringt alle Komponenten-Fragen. Hostname/Port/Username/E-Mail bleiben weiterhin interaktive Pflichtabfragen, kein Passwort-Parameter (siehe ADMIN_PASSWORD). 'custom' ist im Fasttrack-Modus nicht waehlbar.",
-    "status": "Idee/Backlog, noch nicht Kernarbeit dieser Iteration"
+    "note": "Takes only the component selection from the preset, skips all component questions. Hostname/port/username/email remain mandatory interactive prompts, no password parameter (see ADMIN_PASSWORD). 'custom' is not selectable in fasttrack mode.",
+    "status": "Idea/backlog, not yet core work of this iteration"
   },
 
   "_open_questions": [
-    "DKIM-Mechanismus: bestaetigt - bestehender HestiaCP Exim+OpenSSL-Weg bleibt, kein rspamd dkim_signing",
-    "nginx-lite fuer mailonly: spaeter pruefen, ob ein schlankeres nginx-Build ohne PHP-Hosting-Module ausreicht",
-    "Filesystem Quota und Resource Limitation: bewusst nicht im Manifest enthalten (Reifegrad-/Bug-Historie im Original-Upstream), Backlog-Punkt: spaeter erneut bewerten und entscheiden ob zugehoerige h-* Commands entfernt oder belassen werden"
+    "DKIM mechanism: confirmed - the existing HestiaCP Exim+OpenSSL path stays, no rspamd dkim_signing",
+    "nginx-lite for mailonly: check later whether a leaner nginx build without PHP-hosting modules suffices",
+    "Filesystem quota and resource limitation: deliberately not included in the manifest (maturity/bug history in the original upstream), backlog item: re-evaluate later and decide whether the associated h-* commands are removed or kept"
   ]
 }
