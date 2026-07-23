@@ -68,10 +68,8 @@ rm -f /etc/systemd/system/clamav-daemon.socket.d/hardening.conf
 rmdir /etc/systemd/system/clamav-daemon.socket.d 2> /dev/null || true
 systemctl daemon-reload
 
-# Preserve the virus DB across the purge: `apt purge clamav-freshclam` wipes
-# /var/lib/clamav via its postrm, so a plain rm-guard after the purge is too late.
-# Move it aside first, restore it after — a re-add then reuses it instead of
-# re-downloading ~230 MB. PURGE_DATA=yes skips the save (DB goes with the purge).
+# apt purge clamav-freshclam wipes /var/lib/clamav, so move the DB aside before the
+# purge and restore it after (a re-add reuses it). PURGE_DATA=yes skips the save.
 if [ "${PURGE_DATA:-}" != "yes" ] && [ -d /var/lib/clamav ]; then
 	rm -rf /var/lib/clamav.saved
 	mv /var/lib/clamav /var/lib/clamav.saved
@@ -93,8 +91,7 @@ fi
 $BIN/h-change-sys-config-value 'ANTIVIRUS_SYSTEM' ''
 set_install_component ADDON_CLAMAV false
 
-# per-domain antivirus flags + mail.conf ANTIVIRUS='yes' are left intact (saved
-# state) — inert via the macro gate, restored by h-add-sys-clamav on reinstall.
+# per-domain flags + mail.conf ANTIVIRUS='yes' stay (saved state), restored on reinstall
 
 echo "ClamAV has been removed (mail is delivered unscanned)."
 
