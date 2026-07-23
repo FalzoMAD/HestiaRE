@@ -70,7 +70,16 @@ systemctl daemon-reload
 
 # apt purge clamav-freshclam wipes /var/lib/clamav, so move the DB aside before the
 # purge and restore it after (a re-add reuses it). PURGE_DATA=yes skips the save.
+# A trap does the restore so an aborted purge / killed script can't strand the DB
+# under .saved (invisible to a later reinstall); h-add-sys-clamav also reclaims it.
+restore_clamav_db() {
+	if [ -d /var/lib/clamav.saved ]; then
+		rm -rf /var/lib/clamav
+		mv /var/lib/clamav.saved /var/lib/clamav
+	fi
+}
 if [ "${PURGE_DATA:-}" != "yes" ] && [ -d /var/lib/clamav ]; then
+	trap restore_clamav_db EXIT
 	rm -rf /var/lib/clamav.saved
 	mv /var/lib/clamav /var/lib/clamav.saved
 fi
@@ -81,12 +90,9 @@ rm -f /etc/apparmor.d/local/usr.sbin.clamd
 # no autoremove: it would rip out shared-stack siblings
 apt-get -y -qq purge clamav clamav-daemon clamav-freshclam > /dev/null 2>&1
 
-if [ -d /var/lib/clamav.saved ]; then
-	rm -rf /var/lib/clamav
-	mv /var/lib/clamav.saved /var/lib/clamav
-elif [ "${PURGE_DATA:-}" = "yes" ]; then
-	echo "[ * ] PURGE_DATA=yes — virus DB removed with the purge."
-fi
+restore_clamav_db
+trap - EXIT
+[ "${PURGE_DATA:-}" = "yes" ] && echo "[ * ] PURGE_DATA=yes — virus DB removed with the purge."
 
 $BIN/h-change-sys-config-value 'ANTIVIRUS_SYSTEM' ''
 set_install_component ADDON_CLAMAV false

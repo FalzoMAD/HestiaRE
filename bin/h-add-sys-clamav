@@ -56,6 +56,15 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
+# a delete interrupted mid-purge can strand the DB under .saved. Reclaim it BEFORE
+# installing, so the packages find the DB already in place (the fast, reliable path)
+# instead of freshclam re-downloading it during the postinst — and so a stranded
+# .saved can never block a reinstall.
+if [ -d "$CLAMD_DB_DIR.saved" ]; then
+	rm -rf "$CLAMD_DB_DIR"
+	mv "$CLAMD_DB_DIR.saved" "$CLAMD_DB_DIR"
+fi
+
 # clamav pkg = the clamdscan client used for the ping (daemon only recommends it)
 if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii'; then
 	echo "Installing ClamAV (clamav clamav-daemon clamav-freshclam)..."
@@ -72,7 +81,7 @@ cp -f "$HESTIA/share/clamav/clamd.conf" /etc/clamav/clamd.conf
 usermod -aG "$CLAMD_USER" "$EXIM_USER"
 usermod -aG "$EXIM_USER" "$CLAMD_USER"
 
-# reclaim a DB preserved across purge/reinstall in case the clamav uid changed
+# reclaim DB ownership in case the clamav uid changed across a purge/reinstall
 [ -d "$CLAMD_DB_DIR" ] && chown -R "$CLAMD_USER:$CLAMD_USER" "$CLAMD_DB_DIR"
 
 # socket 0660: clamd is socket-activated, so the .socket unit owns the live mode,
