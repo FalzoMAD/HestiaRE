@@ -527,7 +527,9 @@ install_mail() {
 	fi
 	if is_on "${COMPONENT_ADDON_CLAMAV:-}"; then
 		echo "[ * ] Installing & configuring ClamAV (mail antivirus)..."
-		"$BIN/h-add-sys-clamav" >> "$LOG"
+		# || true (like proftpd): a flaky first install (freshclam's blocking initial
+		# download timing out under IO load) must not abort install_mail under set -e
+		"$BIN/h-add-sys-clamav" >> "$LOG" 2>&1 || true
 	fi
 
 	# Webmailer choice (ROUNDCUBE / SNAPPYMAIL / NONE)

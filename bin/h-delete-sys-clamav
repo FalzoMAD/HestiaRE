@@ -78,7 +78,10 @@ restore_clamav_db() {
 		mv /var/lib/clamav.saved /var/lib/clamav
 	fi
 }
-if [ "${PURGE_DATA:-}" != "yes" ] && [ -d /var/lib/clamav ]; then
+if [ "${PURGE_DATA:-}" = "yes" ]; then
+	# honour the intent: drop any stale stash so restore_clamav_db can't resurrect it
+	rm -rf /var/lib/clamav.saved
+elif [ -d /var/lib/clamav ]; then
 	trap restore_clamav_db EXIT
 	rm -rf /var/lib/clamav.saved
 	mv /var/lib/clamav /var/lib/clamav.saved
@@ -92,7 +95,10 @@ apt-get -y -qq purge clamav clamav-daemon clamav-freshclam > /dev/null 2>&1
 
 restore_clamav_db
 trap - EXIT
-[ "${PURGE_DATA:-}" = "yes" ] && echo "[ * ] PURGE_DATA=yes — virus DB removed with the purge."
+if [ "${PURGE_DATA:-}" = "yes" ]; then
+	rm -rf /var/lib/clamav   # drop the empty dir the purge leaves behind
+	echo "[ * ] PURGE_DATA=yes — virus DB removed with the purge."
+fi
 
 $BIN/h-change-sys-config-value 'ANTIVIRUS_SYSTEM' ''
 set_install_component ADDON_CLAMAV false

@@ -69,6 +69,13 @@ fi
 if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii'; then
 	echo "Installing ClamAV (clamav clamav-daemon clamav-freshclam)..."
 	apt-get -y -qq install clamav clamav-daemon clamav-freshclam > /dev/null 2>&1
+	# clamav-freshclam's postinst does a blocking `invoke-rc.d clamav-freshclam start`
+	# (initial DB download) with no `|| true`; under IO load that can time out and
+	# leave the set half-configured (iF/iU) though the binaries are fine. Retry the
+	# configure before giving up — clamd-not-ready is then handled by the WARN path.
+	if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii'; then
+		dpkg --configure -a > /dev/null 2>&1 || true
+	fi
 	if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii'; then
 		echo "ERROR: ClamAV installation failed."
 		exit "$E_INVALID"
