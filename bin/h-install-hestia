@@ -525,6 +525,12 @@ install_mail() {
 		echo "[ * ] Installing & configuring sieve..."
 		"$BIN/h-add-sys-sieve" >> "$LOG"
 	fi
+	if is_on "${COMPONENT_ADDON_CLAMAV:-}"; then
+		echo "[ * ] Installing & configuring ClamAV (mail antivirus)..."
+		# || true (like proftpd): a flaky first install (freshclam's blocking initial
+		# download timing out under IO load) must not abort install_mail under set -e
+		"$BIN/h-add-sys-clamav" >> "$LOG" 2>&1 || true
+	fi
 
 	# Webmailer choice (ROUNDCUBE / SNAPPYMAIL / NONE)
 	case "${COMPONENT_MAIL_WEBMAILER:-NONE}" in

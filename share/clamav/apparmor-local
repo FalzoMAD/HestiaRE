@@ -1,0 +1,7 @@
+# HestiaRE local override for the clamd AppArmor profile.
+# The stock usr.sbin.clamd already grants the exim-spool read, so this is redundant
+# there; it re-asserts it for a stricter/custom base profile that omits it (else clamd
+# gets "Permission denied" on the spool -> fail-open). Honoured via the profile's
+# local/ include; a no-op where no clamd profile ships.
+/var/spool/exim4/ r,
+/var/spool/exim4/** r,
