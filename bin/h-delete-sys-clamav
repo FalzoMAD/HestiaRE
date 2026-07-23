@@ -63,13 +63,31 @@ fi
 gpasswd -d "$EXIM_USER" clamav > /dev/null 2>&1 || true
 
 systemctl disable --now clamav-daemon clamav-freshclam > /dev/null 2>&1
+# drop the socket-hardening override (purge removes the unit; the drop-in would dangle)
+rm -f /etc/systemd/system/clamav-daemon.socket.d/hardening.conf
+rmdir /etc/systemd/system/clamav-daemon.socket.d 2> /dev/null || true
+systemctl daemon-reload
+
+# Preserve the virus DB across the purge: `apt purge clamav-freshclam` wipes
+# /var/lib/clamav via its postrm, so a plain rm-guard after the purge is too late.
+# Move it aside first, restore it after — a re-add then reuses it instead of
+# re-downloading ~230 MB. PURGE_DATA=yes skips the save (DB goes with the purge).
+if [ "${PURGE_DATA:-}" != "yes" ] && [ -d /var/lib/clamav ]; then
+	rm -rf /var/lib/clamav.saved
+	mv /var/lib/clamav /var/lib/clamav.saved
+fi
+
+# drop our AppArmor spool-read override (the purge removes the profile itself)
+rm -f /etc/apparmor.d/local/usr.sbin.clamd
+
 # no autoremove: it would rip out shared-stack siblings
 apt-get -y -qq purge clamav clamav-daemon clamav-freshclam > /dev/null 2>&1
 
-# virus DB kept by default (a re-add reuses it instead of re-downloading ~230 MB)
-if [ "${PURGE_DATA:-}" = "yes" ]; then
-	echo "[ * ] PURGE_DATA=yes — wiping /var/lib/clamav..."
+if [ -d /var/lib/clamav.saved ]; then
 	rm -rf /var/lib/clamav
+	mv /var/lib/clamav.saved /var/lib/clamav
+elif [ "${PURGE_DATA:-}" = "yes" ]; then
+	echo "[ * ] PURGE_DATA=yes — virus DB removed with the purge."
 fi
 
 $BIN/h-change-sys-config-value 'ANTIVIRUS_SYSTEM' ''

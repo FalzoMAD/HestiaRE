@@ -29,6 +29,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 [ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
 
 EXIM_USER="Debian-exim"
+CLAMD_USER="clamav"
 CLAMD_DB_DIR="/var/lib/clamav"
 EXIM_TPL="/etc/exim4/exim4.conf.template"
 
@@ -70,9 +71,37 @@ if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii'; then
 	fi
 fi
 
-# hardened config + exim socket access (both idempotent)
+# hardened config + BIDIRECTIONAL group access (both idempotent):
+#  - exim joins clamav  → write to the clamd socket
+#  - clamav joins exim  → READ the exim spool (/var/spool/exim4/scan, 0750 exim:exim)
+# The second is load-bearing: without it clamd hits "Permission denied" on the spool,
+# ClamAV returns ERROR, and malware=*/defer_ok (fail-open) delivers mail UNSCANNED.
 cp -f "$HESTIA/share/clamav/clamd.conf" /etc/clamav/clamd.conf
-usermod -aG clamav "$EXIM_USER"
+usermod -aG "$CLAMD_USER" "$EXIM_USER"
+usermod -aG "$EXIM_USER" "$CLAMD_USER"
+
+# A DB preserved by h-delete-sys-clamav may carry a stale uid/gid if the purge+reinstall
+# re-allocated the clamav system user — reclaim it so freshclam/clamd can read+update it.
+[ -d "$CLAMD_DB_DIR" ] && chown -R "$CLAMD_USER:$CLAMD_USER" "$CLAMD_DB_DIR"
+
+# socket 0660: clamd is socket-activated, so the .socket unit (default 0666) — not
+# clamd.conf's LocalSocketMode — owns the live mode. A drop-in enforces 0660; the
+# restart recreates /run/clamav/clamd.ctl with it (see share/clamav/socket-hardening.conf).
+mkdir -p /etc/systemd/system/clamav-daemon.socket.d
+cp -f "$HESTIA/share/clamav/socket-hardening.conf" \
+	/etc/systemd/system/clamav-daemon.socket.d/hardening.conf
+systemctl daemon-reload
+systemctl restart clamav-daemon.socket > /dev/null 2>&1
+
+# AppArmor: guarantee clamd can read the exim spool it scans. The stock profile
+# already allows it, but a stricter base-install profile might not — and then clamd
+# errors and defer_ok fails OPEN (mail unscanned). Local override, mirror of proftpd;
+# a no-op where no clamd profile ships.
+if [ -f /etc/apparmor.d/usr.sbin.clamd ]; then
+	mkdir -p /etc/apparmor.d/local
+	cp -f "$HESTIA/share/clamav/apparmor-local" /etc/apparmor.d/local/usr.sbin.clamd
+	apparmor_parser -r /etc/apparmor.d/usr.sbin.clamd > /dev/null 2>&1 || true
+fi
 
 # Virus DB: let the clamav-freshclam SERVICE pull it. Do NOT run freshclam by hand
 # — the service (started by apt) holds the lock; a manual run dies with "freshclam
@@ -90,7 +119,11 @@ for _ in $(seq 1 300); do
 done
 
 # clamd only starts once the DB exists; then it needs a bit to load it into RAM.
-systemctl enable --now clamav-daemon > /dev/null 2>&1
+# restart (not just enable --now): apt's postinst may already have forked clamd
+# BEFORE the usermod above, so a plain start wouldn't refresh its groups — restart
+# guarantees a fresh fork carrying the Debian-exim group + the 0660 socket.
+systemctl enable clamav-daemon > /dev/null 2>&1
+systemctl restart clamav-daemon > /dev/null 2>&1
 clamd_up=0
 if [ "$db_ready" = 1 ]; then
 	for _ in $(seq 1 60); do

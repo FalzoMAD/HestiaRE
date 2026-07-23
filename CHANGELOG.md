@@ -36,16 +36,28 @@ section as part of its PR. On release, the section gets the version number.
   preselected** — clamd holds the whole signature DB, ~1-2 GB RAM); the orphaned
   `install/deb/clamav/clamd.conf` moved to `share/clamav/` and hardened
   (`LocalSocketMode 666`→`660`, `LogVerbose` off). `h-add-sys-clamav` installs the
-  daemon + freshclam, deploys the config, joins `Debian-exim` to the `clamav`
-  group, waits for the virus DB (via the freshclam service — no manual `freshclam`
-  that would collide with its lock), and **arms the exim `CLAMD` macro +
-  `ANTIVIRUS_SYSTEM=clamav` only once clamd answers on the socket** (`clamdscan
+  daemon + freshclam, deploys the config, wires **bidirectional group access**
+  (`Debian-exim`→`clamav` to write the clamd socket, **and `clamav`→`Debian-exim`
+  to read the exim spool it scans** — the latter is load-bearing: without it clamd
+  hits "Permission denied" on the spool and the fail-open scanner passes mail
+  unscanned), waits for the virus DB (via the freshclam service — no manual
+  `freshclam` that would collide with its lock), and **arms the exim `CLAMD` macro
+  + `ANTIVIRUS_SYSTEM=clamav` only once clamd answers on the socket** (`clamdscan
   --ping`). If the DB is still downloading it leaves the macro OFF with a WARN to
   re-run — because `defer_ok` is **fail-open** (a dead clamd accepts mail
   *unscanned*, not deferred), so an armed-but-blind macro would silently pass
-  mail. Delete is saved-state (per-domain flags preserved, restored on reinstall;
-  DB kept unless `PURGE_DATA=yes`). Verified on all four distros incl. an EICAR
-  test over SMTP.
+  mail. Two hardening details found in live testing: the socket mode is enforced
+  by a systemd drop-in (`share/clamav/socket-hardening.conf`, `SocketMode=0660`)
+  because clamd is socket-activated so the `.socket` unit — not `clamd.conf`'s
+  `LocalSocketMode` — owns the live socket; and a local AppArmor override
+  (`share/clamav/apparmor-local`) guarantees the spool read even under a stricter
+  base profile than the stock one (which already allows it). Delete is saved-state
+  (per-domain flags preserved, restored on reinstall; the DB is moved aside across
+  the purge and restored, since `apt purge clamav-freshclam` wipes `/var/lib/clamav`
+  — kept unless `PURGE_DATA=yes`). Verified live on all four distros: EICAR over
+  SMTP rejected from an untrusted host, clean mail delivered, socket `660 clamav`,
+  fail-open window, delete-disarm + reinstall-restore, and correct behaviour with
+  AppArmor absent entirely.
 - `h-add-sys-proftpd` / `h-delete-sys-proftpd` — ProFTPD is now a fully modular,
   individually-removable addon (#123). The curated config moved
   `install/deb/proftpd/` → `share/proftpd/` (it was orphaned — never deployed, so

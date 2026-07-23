@@ -1,0 +1,10 @@
+# HestiaRE local override for the distro clamd AppArmor profile.
+# The stock usr.sbin.clamd profile already grants `/var/spool/exim4/** r,`, so on a
+# standard install this is redundant. But on a base install with a stricter or custom
+# clamd profile that omits it, clamd hits "Permission denied" reading the exim spool
+# it must scan — ClamAV returns ERROR and malware=*/defer_ok fails OPEN (mail accepted
+# UNSCANNED). This re-asserts exactly the spool read, nothing more. The stock profile
+# ends with `#include <local/usr.sbin.clamd>`, so it is honoured when the profile is
+# present; a no-op on a base install that ships no clamd profile at all.
+/var/spool/exim4/ r,
+/var/spool/exim4/** r,
