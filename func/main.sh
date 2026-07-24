@@ -1772,63 +1772,16 @@ change_sys_value() {
 }
 
 
+# SFTP jail membership (#413): the sftp-jailed group is the sshd chroot selector and
+# the pam_namespace scope; the jail is built per session (h-add-sys-sftp-jail).
 add_chroot_jail() {
 	local user=$1
-
-	mkdir -p /srv/jail/$user
-	chown 0:0 /srv /srv/jail /srv/jail/$user
-	chmod 755 /srv /srv/jail /srv/jail/$user
-	if [ ! -d /srv/jail/$user/home ]; then
-		mkdir -p /srv/jail/$user/home
-		chown 0:0 /srv/jail/$user/home
-		chmod 755 /srv/jail/$user/home
-	fi
-	if [ ! -d /srv/jail/$user/home/$user ]; then
-		mkdir -p /srv/jail/$user/home/$user
-		chown 0:0 /srv/jail/$user/home/$user
-		chmod 755 /srv/jail/$user/home/$user
-	fi
-
-	systemd=$(systemd-escape -p --suffix=mount "/srv/jail/$user/home/$user")
-	cat > "/etc/systemd/system/$systemd" << EOF
-[Unit]
-Description=Mount $user's home directory to the jail chroot
-Before=local-fs.target
-
-[Mount]
-What=$(getent passwd $user | cut -d : -f 6)
-Where=/srv/jail/$user/home/$user
-Type=none
-Options=bind
-LazyUnmount=yes
-
-[Install]
-RequiredBy=local-fs.target
-EOF
-
-	systemctl daemon-reload > /dev/null 2>&1
-	systemctl enable "$systemd" > /dev/null 2>&1
-	systemctl start "$systemd" > /dev/null 2>&1
+	getent group sftp-jailed > /dev/null 2>&1 || groupadd sftp-jailed
+	usermod -aG sftp-jailed "$user" > /dev/null 2>&1
 }
 
 delete_chroot_jail() {
-	local user=$1
-
-	# Backwards compatibility with old style home jail
-	systemd=$(systemd-escape -p --suffix=mount "/srv/jail/$user/home")
-	systemctl stop "$systemd" > /dev/null 2>&1
-	systemctl disable "$systemd" > /dev/null 2>&1
-	rm -f "/etc/systemd/system/$systemd"
-
-	# Remove the new style home jail
-	systemd=$(systemd-escape -p --suffix=mount "/srv/jail/$user/home/$user")
-	systemctl stop "$systemd" > /dev/null 2>&1
-	systemctl disable "$systemd" > /dev/null 2>&1
-	rm -f "/etc/systemd/system/$systemd"
-
-	systemctl daemon-reload > /dev/null 2>&1
-	rm -r /srv/jail/$user/ > /dev/null 2>&1
-	rmdir /srv/jail/$user > /dev/null 2>&1
+	gpasswd -d "$1" sftp-jailed > /dev/null 2>&1 || true
 }
 
 # Co-maintain the SSH AllowUsers allowlist (#412). Opt-in: acts only if a line exists

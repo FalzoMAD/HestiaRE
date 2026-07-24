@@ -4,7 +4,9 @@
 #
 # example: h-add-sys-sftp-jail yes
 #
-# This function enables sftp jailed environment.
+# Installs the pam_namespace SFTP jail (#413): tmpfiles mountpoint, iscript,
+# namespace.conf, PAM group-gate, and one static `Match Group sftp-jailed` block.
+# Idempotent; also called by the installer. Design: PR #417 / CHANGELOG.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -20,6 +22,12 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 restart=$1
 
+config='/etc/ssh/sshd_config'
+pam='/etc/pam.d/sshd'
+nsconf='/etc/security/namespace.conf'
+nsdir='/etc/security/namespace.d'
+nsinit="$nsdir/hestia-jail.init"
+
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -31,64 +39,85 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Checking sshd directives
-config='/etc/ssh/sshd_config'
-sftp_n=$(grep -n "Subsystem.*sftp" $config | grep -v internal | grep -v /usr/lib/sftp-server | grep -v ":#")
-sftp_i=$(grep -n "^# Hestia SFTP Chroot" $config)
+getent group sftp-jailed > /dev/null 2>&1 || groupadd sftp-jailed
 
-# Disabling normal sftp
+# Runtime mountpoint (create now so the first login works)
+cp -f "$HESTIA/share/tmpfiles.d/hestia-jail.conf" /etc/tmpfiles.d/hestia-jail.conf
+systemd-tmpfiles --create /etc/tmpfiles.d/hestia-jail.conf > /dev/null 2>&1
+
+# Per-session jail builder for pam_namespace
+mkdir -p "$nsdir"
+cp -f "$HESTIA/share/security/hestia-jail.init" "$nsinit"
+chmod 755 "$nsinit"
+
+# namespace.conf (field 4 blank — the PAM stack already scopes to the group)
+nsline="/run/hestia/jail   /run/hestia/jail-inst/   tmpfs:mntopts=size=1M,nosuid,nodev,noexec:iscript=hestia-jail.init"
+if ! grep -q '^/run/hestia/jail[[:space:]]' "$nsconf" 2> /dev/null; then
+	echo "$nsline" >> "$nsconf"
+fi
+
+# PAM: pam_succeed_if success=1 skips pam_namespace when the user is NOT in the group,
+# so it runs only for jailed members (the two lines must stay adjacent)
+if ! grep -q 'pam_namespace.so' "$pam" 2> /dev/null; then
+	{
+		echo ""
+		echo "# HestiaRE SFTP jail (#413): run pam_namespace only for the sftp-jailed group"
+		echo "session [success=1 default=ignore] pam_succeed_if.so quiet user notingroup sftp-jailed"
+		echo "session required     pam_namespace.so"
+	} >> "$pam"
+fi
+
+# internal-sftp (required for ChrootDirectory)
+sftp_n=$(grep -n "Subsystem.*sftp" $config | grep -v internal | grep -v /usr/lib/sftp-server | grep -v ":#")
 if [ -n "$sftp_n" ]; then
 	fline=$(echo $sftp_n | cut -f 1 -d :)
 	sed -i "${fline}s/Subsystem.*sftp.*/Subsystem sftp internal-sftp/" $config
 	restart='yes'
 fi
 
-# Enabling jailed sftp
-if [ -z "$sftp_i" ]; then
-	echo " " >> $config
-	echo "# Hestia SFTP Chroot" >> $config
-	echo "Match User sftp_dummy99" >> $config
-	echo "    ChrootDirectory /srv/jail/%u" >> $config
-	echo "    X11Forwarding no" >> $config
-	echo "    AllowTCPForwarding no" >> $config
-	echo "    ForceCommand internal-sftp -d /home/%u" >> $config
+# Replace any existing "# Hestia SFTP Chroot" block (marker + following Match/indented
+# lines) with the single static Match Group block
+if grep -q "^# Hestia SFTP Chroot" $config; then
+	awk '
+		/^# Hestia SFTP Chroot$/ { skip=1; next }
+		skip && (/^Match / || /^[[:space:]]/) { next }
+		skip { skip=0 }
+		{ print }
+	' "$config" > "$config.hst" && cat "$config.hst" > "$config" && rm -f "$config.hst"
 	restart='yes'
 fi
+{
+	echo ""
+	echo "# Hestia SFTP Chroot"
+	echo "Match Group sftp-jailed"
+	echo "    ChrootDirectory /run/hestia/jail/%u"
+	echo "    X11Forwarding no"
+	echo "    AllowTCPForwarding no"
+	echo "    ForceCommand internal-sftp"
+} >> $config
+restart='yes'
 
-# Validating opensshd config
-if [ "$restart" = 'yes' ]; then
-	subj="OpenSSH restart failed"
-	email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" | cut -f 2 -d \')
-	/usr/sbin/sshd -t > /dev/null 2>&1
-	if [ "$?" -ne 0 ]; then
-		mail_text="OpenSSH can not be restarted. Please check config:
-            \n\n$(/usr/sbin/sshd -t)"
-		echo -e "$mail_text" | $SENDMAIL -s "$subj" $email
-	else
-		service ssh restart > /dev/null 2>&1
-	fi
+# Validate before restarting; mail root on failure (never leave sshd unrestartable)
+subj="OpenSSH restart failed"
+email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" 2> /dev/null | cut -f 2 -d \')
+if ! /usr/sbin/sshd -t > /dev/null 2>&1; then
+	mail_text="OpenSSH can not be restarted. Please check config:
+            \n\n$(/usr/sbin/sshd -t 2>&1)"
+	[ -n "$email" ] && echo -e "$mail_text" | $SENDMAIL -s "$subj" $email
+	echo "ERROR: sshd config invalid after SFTP jail setup — not restarting."
+	log_event "$E_INVALID" "$ARGUMENTS"
+	exit "$E_INVALID"
 fi
 
-# Checking users
+# Migrate existing jailed users (nologin/rssh shells) into the group
 shells="rssh|nologin"
 for user in $(grep "$HOMEDIR" /etc/passwd | egrep "$shells" | cut -f 1 -d:); do
-	if [ -d "/home/$user" ]; then
-		# Include all users h-add-user-sftp-jail will handle it
-		$BIN/h-add-user-sftp-jail "$user" "no"
-	fi
+	usermod -aG sftp-jailed "$user" > /dev/null 2>&1
 done
 
-# Restart ssh service
-if [ "$restart" = 'no' ]; then
-	# Skip restart of SSH daemon
-	echo "" > /dev/null 2>&1
-else
+# Restart ssh (unless explicitly told not to)
+if [ "$restart" != 'no' ]; then
 	service ssh restart > /dev/null 2>&1
-fi
-
-# Add h-add-sys-sftp-jail to startup
-if [ ! -e "/etc/cron.d/hestia-sftp" ]; then
-	echo "@reboot root sleep 60 && /usr/local/hestia/bin/h-add-sys-sftp-jail > /dev/null" > /etc/cron.d/hestia-sftp
 fi
 
 #----------------------------------------------------------#

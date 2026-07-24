@@ -11,6 +11,9 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Breaking / Upgrade notes
 
+- The SFTP jail no longer uses `/srv/jail` (#413) — it is now built per session under
+  `/run/hestia/jail` by `pam_namespace`. Fresh installs get this automatically; there
+  are no live installs pre-v1, so no migration/cleanup path is carried.
 - The system removal commands are unified under a single verb: `h-remove-sys-*` →
   `h-delete-sys-*` (#123). Affected: `adminer, mariadb, postgresql, redis,
   roundcube, rspamd, sieve, snappymail`. HestiaCP uses `v-delete-*` universally,
@@ -28,6 +31,33 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- The SFTP jail is rebuilt on `pam_namespace` (#413), replacing the `/srv/jail`
+  systemd bind-mount machinery. Per session, `pam_namespace` mounts a private tmpfs on
+  `/run/hestia/jail` (via `share/tmpfiles.d/hestia-jail.conf`) and runs
+  `share/security/hestia-jail.init` inside the new mount namespace — as root, before
+  sshd chroots — building the jail at the **fidelity path**
+  (`/run/hestia/jail/<user>/<real-home>`, from `getent passwd`) and bind-mounting the
+  real home there. One generic rule now serves **both** panel users and domain-FTP
+  sub-accounts (whose home is user-owned deep under `web/<domain>` — a case native
+  chroot cannot handle); the SFTP client sees its true path (e.g.
+  `/home/alice/web/site.tld/public_html`). Fail-closed rides on sshd's own
+  `safely_chroot()`: the fresh tmpfs root is `1777`, the init builds everything while
+  it is still `1777`, and `chmod 755` on the root is the **last** action — so any
+  failure leaves the root world-writable and sshd refuses the session (pam_namespace
+  ignores the init exit code, so this is the real gate). Scope is the `sftp-jailed`
+  group, used both as the sshd chroot selector (a single static `Match Group` block,
+  no more growing `Match User` list) and the PAM scope (a `pam_succeed_if` gate, so
+  non-members log in completely unchanged). No `/home` ownership flip any more (the
+  chroot root is root-owned in the tmpfs; homes keep normal user ownership). No
+  persistent state — no `/srv/jail`, no per-user `.mount` units, no `@reboot` cron;
+  `/run/hestia/jail` is tmpfs and self-heals on reboot. Verified live on OpenSSH
+  9.2/9.6/10.0/10.2 (deb12/ub24/deb13/ub26), including ub26 with the unprivileged-
+  userns restriction active and **no** bwrap/userns involved.
+- SSH `AllowUsers` co-maintenance now also covers domain-FTP sub-accounts (#413,
+  deferred from #412): `h-add-web-domain-ftp` adds the FTP account and
+  `h-delete-web-domain-ftp` removes it via `manage_sshd_allowusers`, so an active
+  allowlist no longer silently locks out FTP sub-accounts (rebuild goes through
+  `h-add-web-domain-ftp`, so it is covered too).
 - SSH `AllowUsers` allowlist co-maintenance (#412). HestiaRE now keeps the hestia
   panel accounts in sync on an `AllowUsers` line in `/etc/ssh/sshd_config` — a
   defense-in-depth SSH login allowlist. The installer seeds a **commented** (inert)
