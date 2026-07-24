@@ -30,7 +30,18 @@
       "hestiare-native": "no upstream equivalent — HestiaRE-only (Caddy + hestia-php panel services, the pure-bash installer, panel Eigenbau libs, repo tooling)"
     },
     "cherry_pick_rule": "Direct cherry-pick ONLY for verbatim/near-verbatim files carrying an isolated, dependency-free bugfix (CLAUDE.md). reimplemented/moved/native = port manually. Always verify installed==fixed against the actual file, never the version label (#386 method).",
-    "verification_note": "The #386 triage is a worked example: near-verbatim files (func/db.sh) took a direct helper cherry-pick; reimplemented ones (func/main.sh parse_object_kv_list, the search-object commands) were confirmed safe/ported by hand, not cherry-picked."
+    "verification_note": "The #386 triage is a worked example: near-verbatim files (func/db.sh) took a direct helper cherry-pick; reimplemented ones (func/main.sh parse_object_kv_list, the search-object commands) were confirmed safe/ported by hand, not cherry-picked.",
+    "drift_watch": {
+      "purpose": "Machine-checkable per-file drift markers (#412). share/upstream/sync-upstream.sh reads this map and, after refreshing the upstream/hestiacp snapshot, flags any listed file that upstream MOVED since its checked_ref — so drift is caught deterministically, not by chance (the jailbash 5-bind drift behind `--tmpfs /usr/share` was a lucky find). checked_ref is the upstream/hestiacp commit the HestiaRE copy was last human-verified against; bump it ONLY after re-verifying the file against the newer upstream. upstream_path handles renames (v-*→h-*). A ref-stamp (not a flat ignore list) distinguishes 'deliberately diverged, verified at ref X' from 'not looked at yet'.",
+      "upstream_branch": "upstream/hestiacp",
+      "files": {
+        "install/common/bubblewrap/jailbash": {
+          "upstream_path": "install/common/bubblewrap/jailbash",
+          "checked_ref": "a872270f04aa8682aa30abb1798b59438e9595f1",
+          "note": "byte-identical to upstream at this ref (#412 re-sync of the 5 --tmpfs /usr/share binds)"
+        }
+      }
+    }
   },
 
   "components": {
