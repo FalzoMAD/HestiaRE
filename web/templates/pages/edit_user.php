@@ -200,6 +200,14 @@
 						<label for="v_shell" class="form-label"><?= tohtml( _("SSH Access")) ?></label>
 						<select class="form-select" name="v_shell" id="v_shell">
 							<?php
+								// Preserve an existing off-allowlist shell (e.g. a legacy
+								// dash/rssh) as the selected option so saving the form
+								// unchanged does not silently reset it (#412). Only the
+								// curated shells below are newly selectable.
+								$cur_shell = trim($v_shell, "'");
+								if ($cur_shell !== "" && !in_array($cur_shell, $shells, true)) {
+									echo "\t\t\t\t<option value=\"".htmlentities($cur_shell)."\" selected>".htmlentities($cur_shell)." "._("(current)")."</option>\n";
+								}
 								foreach ($shells as $key => $value) {
 									echo "\t\t\t\t<option value=\"".htmlentities($value)."\"";
 									$svalue = "'".$value."'";

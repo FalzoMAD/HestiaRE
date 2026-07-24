@@ -28,6 +28,51 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- SSH `AllowUsers` allowlist co-maintenance (#412). HestiaRE now keeps the hestia
+  panel accounts in sync on an `AllowUsers` line in `/etc/ssh/sshd_config` — a
+  defense-in-depth SSH login allowlist. The installer seeds a **commented** (inert)
+  `#AllowUsers` line with guidance unless one already exists; `h-add-user` adds the
+  new account, `h-delete-user` removes it, and `rebuild_user` (`func/rebuild.sh`)
+  re-adds it — so restore/rebuild, which bypass `h-add-user`, can't leave a restored
+  user off an active line and silently locked out (shared helper
+  `manage_sshd_allowusers` in `func/main.sh`). It edits **only** the token matching the account, so operator
+  entries (`root@10.0.0.5`, maintenance, emergency accounts) and the commented-vs-
+  active state of the line are preserved; the change is validated with `sshd -t`
+  (left unchanged on rejection) and sshd is reloaded only when the line is active. A
+  delete that would leave an *active* line empty re-comments it instead of locking
+  everyone out (including root). Membership tracks account existence (no suspend
+  hook). Domain-FTP sub-accounts are out of scope here (they follow in the SFTP
+  transport rebuild). Nothing changes until the operator removes the leading `#`.
+- `h-add-sys-clamav` / `h-delete-sys-clamav` — ClamAV mail antivirus is now a
+  modular addon (#123). It was missing from the manifest and installer entirely,
+  even though the exim antivirus machinery (`.ifdef CLAMD` block: `av_scanner`,
+  per-domain antivirus ACL, `deny malware = */defer_ok`) already shipped inert.
+  Anchored in `share/manifest.json` as `ADDON_CLAMAV` (mail-block only, **never
+  preselected** — clamd holds the whole signature DB, ~1-2 GB RAM); the orphaned
+  `install/deb/clamav/clamd.conf` moved to `share/clamav/` and hardened
+  (`LocalSocketMode 666`→`660`, `LogVerbose` off). `h-add-sys-clamav` installs the
+  daemon + freshclam, deploys the config, wires **bidirectional group access**
+  (`Debian-exim`→`clamav` to write the clamd socket, **and `clamav`→`Debian-exim`
+  to read the exim spool it scans** — the latter is load-bearing: without it clamd
+  hits "Permission denied" on the spool and the fail-open scanner passes mail
+  unscanned), waits for the virus DB (via the freshclam service — no manual
+  `freshclam` that would collide with its lock), and **arms the exim `CLAMD` macro
+  + `ANTIVIRUS_SYSTEM=clamav` only once clamd answers on the socket** (`clamdscan
+  --ping`). If the DB is still downloading it leaves the macro OFF with a WARN to
+  re-run — because `defer_ok` is **fail-open** (a dead clamd accepts mail
+  *unscanned*, not deferred), so an armed-but-blind macro would silently pass
+  mail. Two hardening details found in live testing: the socket mode is enforced
+  by a systemd drop-in (`share/clamav/socket-hardening.conf`, `SocketMode=0660`)
+  because clamd is socket-activated so the `.socket` unit — not `clamd.conf`'s
+  `LocalSocketMode` — owns the live socket; and a local AppArmor override
+  (`share/clamav/apparmor-local`) guarantees the spool read even under a stricter
+  base profile than the stock one (which already allows it). Delete is saved-state
+  (per-domain flags preserved, restored on reinstall; the DB is moved aside across
+  the purge and restored, since `apt purge clamav-freshclam` wipes `/var/lib/clamav`
+  — kept unless `PURGE_DATA=yes`). Verified live on all four distros: EICAR over
+  SMTP rejected from an untrusted host, clean mail delivered, socket `660 clamav`,
+  fail-open window, delete-disarm + reinstall-restore, and correct behaviour with
+  AppArmor absent entirely.
 - `h-add-sys-proftpd` / `h-delete-sys-proftpd` — ProFTPD is now a fully modular,
   individually-removable addon (#123). The curated config moved
   `install/deb/proftpd/` → `share/proftpd/` (it was orphaned — never deployed, so
@@ -47,6 +92,24 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- SSH-access shells are now a curated allowlist (#412). `is_format_valid_shell`
+  (`func/main.sh`) and `h-list-sys-shells` (the panel's single shell source, used by
+  the user and package editors) share one list — `HESTIA_SHELL_ALLOWLIST` = `nologin`
+  (SFTP-only, default) · `jailbash` (bwrap sandbox) · `bash` (unconfined) · `sh` (POSIX
+  `/bin/sh`), intersected with `/etc/shells` (so a shell absent on the node, e.g.
+  `jailbash` without the SSH jail, isn't offered) with `nologin` guaranteed. The
+  upstream `dash`/`rbash`/`rssh`/`screen`/`tmux` options are dropped (`rssh` no longer
+  exists on Debian and silently degrades to `nologin`; `screen`/`tmux` are meaningless
+  as a login shell). Also fixes
+  an unquoted, word-based `grep -w $1 /etc/shells` in the old validator that let a bare
+  `bash` validate against the `/bin/bash` line. The validator is genuinely hard (not a
+  UI-only filter): `h-change-user-shell` gates every real change through it, but allows
+  re-asserting the user's *current* shell (in-allowlist **or** identical to the shell
+  already set) so a legacy off-allowlist shell a restore left in place can be re-set
+  without a new off-allowlist shell slipping in. Existing users/packages keep any
+  off-allowlist shell: `rebuild.sh` restores it straight from `/etc/shells`, and the
+  user/package editors now render it as the selected "(current)" option so saving the
+  form unchanged never silently resets it — only the curated shells are newly assignable.
 - Moved the webmail vhost templates from `templates/mail/` into service-scoped
   `share/nginx/webmail/` and `share/apache2/webmail/` (#119) — they are system
   webmail-delivery assets (docroot-free proxies to the Panel-Caddy listeners,
@@ -101,6 +164,13 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- The mail-domain list no longer shows a stale "Anti-Virus / Spam Filter:
+  Enabled" icon for domains when the addon isn't installed (#123). Those two
+  columns in `list_mail.php` rendered straight from each domain's stored
+  `ANTIVIRUS`/`ANTISPAM` value with no gate; they now gate on
+  `ANTIVIRUS_SYSTEM`/`ANTISPAM_SYSTEM` (neutral dash when the system is absent),
+  matching the add/edit forms — so deleting clamav or rspamd leaves no misleading
+  green check while the saved per-domain preference waits for a reinstall.
 - Roundcube webmail returned HTTP 500 on every page — `Class "DOMDocument" not
   found` (#402). The `dom` extension had been dropped from the panel PHP's
   curated conf.d by an earlier audit (`hestia-php-confd`) that only checked the

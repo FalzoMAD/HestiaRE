@@ -30,7 +30,18 @@
       "hestiare-native": "no upstream equivalent — HestiaRE-only (Caddy + hestia-php panel services, the pure-bash installer, panel Eigenbau libs, repo tooling)"
     },
     "cherry_pick_rule": "Direct cherry-pick ONLY for verbatim/near-verbatim files carrying an isolated, dependency-free bugfix (CLAUDE.md). reimplemented/moved/native = port manually. Always verify installed==fixed against the actual file, never the version label (#386 method).",
-    "verification_note": "The #386 triage is a worked example: near-verbatim files (func/db.sh) took a direct helper cherry-pick; reimplemented ones (func/main.sh parse_object_kv_list, the search-object commands) were confirmed safe/ported by hand, not cherry-picked."
+    "verification_note": "The #386 triage is a worked example: near-verbatim files (func/db.sh) took a direct helper cherry-pick; reimplemented ones (func/main.sh parse_object_kv_list, the search-object commands) were confirmed safe/ported by hand, not cherry-picked.",
+    "drift_watch": {
+      "purpose": "Machine-checkable per-file drift markers (#412). share/upstream/sync-upstream.sh reads this map and, after refreshing the upstream/hestiacp snapshot, flags any listed file that upstream MOVED since its checked_ref — so drift is caught deterministically, not by chance (the jailbash 5-bind drift behind `--tmpfs /usr/share` was a lucky find). checked_ref is the upstream/hestiacp commit the HestiaRE copy was last human-verified against; bump it ONLY after re-verifying the file against the newer upstream. upstream_path handles renames (v-*→h-*). A ref-stamp (not a flat ignore list) distinguishes 'deliberately diverged, verified at ref X' from 'not looked at yet'.",
+      "upstream_branch": "upstream/hestiacp",
+      "files": {
+        "install/common/bubblewrap/jailbash": {
+          "upstream_path": "install/common/bubblewrap/jailbash",
+          "checked_ref": "a872270f04aa8682aa30abb1798b59438e9595f1",
+          "note": "byte-identical to upstream at this ref (#412 re-sync of the 5 --tmpfs /usr/share binds)"
+        }
+      }
+    }
   },
 
   "components": {
@@ -87,7 +98,7 @@
         "bin/h-add-firewall-rule": "bin/v-add-firewall-rule (near-verbatim)",
         "bin/h-update-sys-queue": "bin/v-update-sys-queue (near-verbatim; GHSA-47mf sink — see #393)",
         "reimplemented (v-* symlink removed)": "DB-engine lifecycle h-add/delete-sys-{mariadb,postgresql} + h-upgrade-sys-mariadb (#121/#207); h-add/delete-sys-{roundcube,snappymail} (#54/#234); h-search-user-object + h-search-object (#386 cr7q)",
-        "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/delete-sys-adminer, h-add/delete-sys-{rspamd,sieve,redis,proftpd}, hestia-php*, h-change-sys-panel-php",
+        "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/delete-sys-adminer, h-add/delete-sys-{rspamd,sieve,redis,proftpd,clamav}, hestia-php*, h-change-sys-panel-php",
         "removal_verb": "Single removal verb h-delete-* across all commands (#123, upstream v-delete-* parity). The interim h-remove-sys-* names (redis in #121, etc.) were renamed to h-delete-sys-*."
       },
       "dependencies": ["func_libraries", "instance_config"],
@@ -116,7 +127,7 @@
       ],
       "language": "bash",
       "file_roles": {
-        "main.sh": "Core utilities: source_conf(), check_result(), output formatting, logging, JSON/shell serialization. Object parsing: parse_object_kv_list (PHP tokenizer, quote-safe, single eval — the upstream double-eval RCE GHSA-w3mx is NOT present, empirically verified #386) and parse_object_kv_list_non_eval (declare -g, no eval — use this for any user-controlled conf-field payload).",
+        "main.sh": "Core utilities: source_conf(), check_result(), output formatting, logging, JSON/shell serialization. Object parsing: parse_object_kv_list (PHP tokenizer, quote-safe, single eval — the upstream double-eval RCE GHSA-w3mx is NOT present, empirically verified #386) and parse_object_kv_list_non_eval (declare -g, no eval — use this for any user-controlled conf-field payload). SFTP jail helpers add_chroot_jail/delete_chroot_jail (systemd bind-mount of the home into /srv/jail). manage_sshd_allowusers add|del <user> (#412): co-maintains the AllowUsers login allowlist in /etc/ssh/sshd_config for panel users — opt-in (acts only if an AllowUsers line exists; installer seeds one commented), edits ONLY the token whose base==user so operator entries (root@IP, maintenance) and the commented/active state survive, validates with `sshd -t` before swapping, reloads sshd only when active, re-comments rather than leaving an active line empty (lockout guard); called from h-add-user/h-delete-user AND rebuild_user (func/rebuild.sh) so restore/rebuild — which bypass h-add-user — re-add the user (else a restored user is missing from an active line and silently locked out).",
         "domain.sh": "Domain validation and template checking for web and mail",
         "rebuild.sh": "User and domain rebuild logic — regenerates service configs from HestiaRE data. Queue invariant: lines appended to conf/queue/*.pipe (run via `bash` by h-update-sys-queue) must contain only validated identifiers (username/domain), never free text (GHSA-47mf).",
         "syshealth.sh": "System health monitoring, RRD graph generation, service status checks",
@@ -143,6 +154,27 @@
           "$HESTIA variable unchanged (/usr/local/hestia) — no path migration needed in func/*"
         ]
       }
+    },
+
+    "ssh_shell_jail": {
+      "description": "SSH/SFTP access control: the 3-tier access ladder — nologin (SFTP-only chroot, the default) · jailbash (bubblewrap-sandboxed interactive shell, opt-in) · bash (unconfined). #223 was the baseline check; the non-SFTP hardening landed in #412 (Story 1). The SFTP transport/chroot rebuild (drop /srv/jail bind-mounts, domain-FTP sub-accounts) is deferred to Story 2 — see docs branch jail-chroot-story{1,2}-plan.md.",
+      "key_files": [
+        "install/common/bubblewrap/jailbash",
+        "func/main.sh",
+        "bin/h-list-sys-shells",
+        "bin/h-add-sys-ssh-jail",
+        "bin/h-delete-sys-ssh-jail",
+        "bin/h-add-sys-sftp-jail",
+        "bin/h-add-user-sftp-jail",
+        "bin/h-delete-user-sftp-jail",
+        "bin/h-change-user-shell"
+      ],
+      "jailbash": "install/common/bubblewrap/jailbash — bwrap wrapper run as the jailbash login shell: reuses host /usr read-only but with private /tmp,/home,/var,/run and stub passwd/group, --unshare-all (incl. pid → fresh /proc) --share-net. NEAR-VERBATIM UPSTREAM (origin/upstream/hestiacp) — tracked for drift (the #412 5-bind re-sync of zoneinfo/php/ca-certificates/i18n + /etc/php, lost behind `--tmpfs /usr/share`, was a chance find; a CI drift-gate is planned). Registered as a login shell in /etc/shells by h-add-sys-ssh-jail. NOTE: --share-net means 127.0.0.1 inside the jail is the HOST loopback (a jailbash user reaches host-bound services: redis:6379, webmail FPM :8090/:8091, panel, adminer) — an open isolation question tracked in Story 1 verification, not yet closed.",
+      "apparmor_userns_quirk": "On Ubuntu 24.04+/kernels with apparmor_restrict_unprivileged_userns=1, unprivileged user namespaces are blocked and bwrap fails without the `bwrap-userns-restrict` AppArmor profile. That profile is installed ONLY when /etc/apparmor.d/abi/4.0 exists (the artefact-based guard, NOT an OS-version flag). Keep this rationale verbatim — hard-won.",
+      "shell_allowlist": "func/main.sh HESTIA_SHELL_ALLOWLIST + list_allowed_shells (#412): the single curated source (nologin/jailbash/bash/sh ∩ /etc/shells, nologin guaranteed) shared by is_format_valid_shell (hard validator) AND h-list-sys-shells (the panel dropdown source for web/edit/user + web/{add,edit}/package). Dropped from upstream: rssh (gone from Debian, silently degrades to nologin), screen/tmux (useless as login shell), dash/rbash. The validator is genuinely hard (not a UI-only filter): h-change-user-shell gates every genuine change through it, EXCEPT re-asserting the user's current shell (in-allowlist OR ==current — so a legacy off-list shell a restore left in place can be re-set, but no new off-list shell slips in). rebuild.sh sets the shell straight from /etc/shells (bypasses the validator) so restore stays tolerant; the user/package editors render an existing off-allowlist shell as a selected \"(current)\" option so an unchanged save never resets it. FTP_SHELL (domain-FTP sub-accounts, h-add-web-domain-ftp/rebuild.sh) is a SECOND shell source that bypasses both panel and validator → Story 2.",
+      "allowusers": "func/main.sh manage_sshd_allowusers add|del <user> (#412) — co-maintains an AllowUsers login allowlist in /etc/ssh/sshd_config for panel users; installer seeds it commented/inert. See func_libraries.file_roles.main.sh for the full contract. Domain-FTP sub-accounts → Story 2.",
+      "srv_jail": "add_chroot_jail/delete_chroot_jail (func/main.sh) build a per-user systemd bind-mount of the real home into /srv/jail/$user for the SFTP ChrootDirectory (h-add-sys-sftp-jail: `Match User` + ChrootDirectory /srv/jail/%u + internal-sftp). The bind is cosmetic PATH FIDELITY (same inodes) — the permission mechanism is the root-ownership flip of /home/$user. This whole /srv/jail machinery + the growing `Match User` list are what Story 2 replaces (pam_namespace primary candidate).",
+      "dependencies": ["func_libraries", "cli_commands", "installer"]
     },
 
     "web_panel": {
@@ -303,6 +335,7 @@
         "templates/web/": "install/deb/templates/web/ (near-verbatim; user-pickable web template library)",
         "share/{nginx,apache2}/webmail/": "install/deb/templates/mail/ (reworked to Panel-Caddy proxies #205; moved per-service #119, MAILTPL retired; dead rainloop removed)",
         "share/proftpd/": "install/deb/proftpd/ (moved #123; deployed by h-add-sys-proftpd — was orphaned; +Include modules.conf/conf.d; +apparmor-local for Ubuntu 26's enforced proftpd profile). h-add-sys-proftpd now sets FTP_SYSTEM=proftpd (never set before, so h-restart-ftp / RRD FTP graph / smoke FTP check / the NAT MasqueradeAddress branch were all inert on pre-#123 installs).",
+        "share/clamav/": "install/deb/clamav/clamd.conf moved here (#123; deployed by h-add-sys-clamav — was orphaned; hardened LocalSocketMode 666→660 + LogVerbose off) plus two NEW curated files: socket-hardening.conf (systemd .socket drop-in) and apparmor-local. ClamAV is the antivirus analogue of rspamd: the exim `.ifdef CLAMD` block (av_scanner=clamd: + per-domain antivirus ACL + `deny malware=*/defer_ok`) was fully shipped but inert (macro commented). h-add-sys-clamav sets ANTIVIRUS_SYSTEM=clamav and arms the CLAMD macro ONLY after clamd answers on the socket (clamdscan --ping) — DB-download timeout leaves it OFF + honest WARN, because `defer_ok` is FAIL-OPEN (dead clamd → mail accepted UNSCANNED, not deferred), so an armed-but-blind macro would silently pass mail. THREE non-obvious wiring facts, all found in live testing: (1) BIDIRECTIONAL group membership — exim joins clamav (write the socket) AND clamav joins Debian-exim (READ /var/spool/exim4/scan, 0750 exim:exim); the second is load-bearing, without it clamd errors 'Permission denied' on the spool → fail-open passes mail unscanned. (2) The 660 socket is enforced by socket-hardening.conf (SocketMode=0660), NOT clamd.conf's LocalSocketMode — clamd is socket-activated so the clamav-daemon.socket unit owns the live /run/clamav/clamd.ctl mode (default 0666); the add script installs the drop-in + `systemctl restart clamav-daemon.socket`, and restarts the daemon (not enable --now) so it re-forks with the new group + socket. (3) apparmor-local re-asserts `/var/spool/exim4/** r,` into the clamd profile's local hook — the stock usr.sbin.clamd profile already grants it (0 denials on all 4 distros), this is defensive for a stricter base install; guarded on the profile file + `apparmor_parser … || true`, so a no-AppArmor host installs fine and the exim chain still scans (it relies on unix group perms, not AppArmor). Delete = saved-state (per-domain flags kept, restored on reinstall); the virus DB is moved aside across the purge and restored (apt purge clamav-freshclam wipes /var/lib/clamav) unless PURGE_DATA=yes, and the add script chowns it back to clamav in case the purge/reinstall re-allocated the uid. list_mail.php AV/spam columns now gate on ANTIVIRUS_SYSTEM/ANTISPAM_SYSTEM (neutral dash when the addon is gone).",
         "packages/*.pkg": "install/deb/packages/ (moved, near-verbatim)",
         "share/panel-caddy/, share/panel-php/, share/dovecot/": "hestiare-native (see panel_caddy_service / panel_php_service)"
       },
@@ -425,7 +458,7 @@
         "bin/h-list-sys-install": "Status report: version, source, OS, profile, .done.* phases, COMPONENT_*."
       },
       "stages": {
-        "install_base": "APT repos (Sury always; MariaDB only for an external-repo version), base packages, system users, SSH hardening, NTP, /proc",
+        "install_base": "APT repos (Sury always; MariaDB only for an external-repo version), base packages, system users, SSH hardening (Subsystem internal-sftp, LoginGraceTime 1m, DebianBanner no, and a commented #AllowUsers allowlist seed co-maintained by manage_sshd_allowusers, #412), NTP, /proc",
         "install_panel": "Caddy + hestia-php.service",
         "install_web": "nginx + apache2 per WEB_SERVER with port model #247 (BOTH: nginx proxy 80/443 -> apache2 8080/8443; APACHE/NGINX alone: 80/443; Listen per IP via h-add-sys-ip, ports.conf emptied, mod_remoteip for client IP behind proxy), multi-PHP via COMPONENT_PHP_MULTIPHP_VERSIONS when sury_multi, web pool",
         "install_db": "MariaDB (version from COMPONENT_DB_MARIADB_VERSION); phpMyAdmin/PostgreSQL/Redis per components",

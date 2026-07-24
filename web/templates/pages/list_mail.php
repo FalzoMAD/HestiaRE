@@ -323,11 +323,19 @@
 				</div>
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("Anti-Virus")) ?>:</span>
-					<i class="fas <?= tohtml($antivirus_icon) ?>" title="<?= tohtml($antivirus_title) ?>"></i>
+					<?php if (!empty($_SESSION["ANTIVIRUS_SYSTEM"])) { ?>
+						<i class="fas <?= tohtml($antivirus_icon) ?>" title="<?= tohtml($antivirus_title) ?>"></i>
+					<?php } else { ?>
+						<span class="u-text-muted" title="<?= tohtml( _("Not installed")) ?>">&mdash;</span>
+					<?php } ?>
 				</div>
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("Spam Filter")) ?>:</span>
-					<i class="fas <?= tohtml($antispam_icon) ?>" title="<?= tohtml($antispam_title) ?>"></i>
+					<?php if (!empty($_SESSION["ANTISPAM_SYSTEM"])) { ?>
+						<i class="fas <?= tohtml($antispam_icon) ?>" title="<?= tohtml($antispam_title) ?>"></i>
+					<?php } else { ?>
+						<span class="u-text-muted" title="<?= tohtml( _("Not installed")) ?>">&mdash;</span>
+					<?php } ?>
 				</div>
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("DKIM")) ?>:</span>

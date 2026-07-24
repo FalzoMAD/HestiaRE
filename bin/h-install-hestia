@@ -47,8 +47,7 @@ for _f in "$INSTALL_CONF" $CONF_DIR/hestia.env $CONF_DIR/conf/hestia.conf; do
 done
 
 # ── Sources: env -> core lib -> helper lib -> recipe ────────────────────────
-# errexit OFF: these libs expect to be sourced without set -e (a benign non-zero
-# last statement must not abort the installer)
+# errexit OFF: these libs expect to be sourced without set -e (a benign non-zero last statement must not abort the installer)
 set +e
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env                 # sets HESTIA
@@ -121,6 +120,15 @@ install_base() {
 	fi
 	sed -i 's/[#]LoginGraceTime [[:digit:]]m/LoginGraceTime 1m/g' /etc/ssh/sshd_config
 	grep -q "^DebianBanner no" /etc/ssh/sshd_config || echo 'DebianBanner no' >> /etc/ssh/sshd_config
+	# Seed a commented (inert) AllowUsers line unless one already exists
+	if ! grep -qiE '^[[:space:]]*#?[[:space:]]*AllowUsers([[:space:]]|$)' /etc/ssh/sshd_config; then
+		cat >> /etc/ssh/sshd_config << 'EOF'
+
+# AllowUsers login allowlist — added by HestiaRE, panel users auto-synced. Add your
+# own entries (root@IP, emergency), then uncomment to activate (incomplete = lockout).
+#AllowUsers
+EOF
+	fi
 	systemctl restart ssh
 
 	echo "[ * ] Configuring NTP..."
@@ -136,9 +144,8 @@ install_base() {
 		&& echo "@reboot root sleep 5 && mount -o remount,defaults,hidepid=2 /proc" > /etc/cron.d/hestia-proc \
 		|| echo "Info: Cannot remount /proc (LXC — skip hidepid)"
 
-	# DH params in the base stage: nginx and dovecot both fatal without
-	# /etc/ssl/dhparam.pem, so it must exist before any TLS service starts. Ship
-	# the curated file; regenerate only as a fallback.
+	# DH params in the base stage: nginx and dovecot both fatal without /etc/ssl/dhparam.pem, 
+    # so it must exist before any TLS service starts. Ship the curated file; regenerate only as a fallback.
 	if [ -s "$HESTIA/share/ssl/dhparam.pem" ]; then
 		cp -f "$HESTIA/share/ssl/dhparam.pem" /etc/ssl/dhparam.pem
 	else
@@ -207,7 +214,7 @@ install_panel() {
 	mkdir -p /etc/caddy
 	# caddy logs to /var/log/caddy (cannot write /var/log/hestia)
 	mkdir -p /var/log/caddy
-	chown caddy:caddy /var/log/caddy 2> /dev/null || true
+	chown caddy:caddy /var/log/caddy 2> /dev/null || 
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
 	# placeholder so `import apps/*.conf` is never an empty glob on first start
@@ -516,14 +523,21 @@ install_mail() {
 
 	wcv "MAIL_SYSTEM"  "exim4"
 	wcv "IMAP_SYSTEM"  "dovecot"
-	# rspamd/sieve are modular addons — their commands write ANTISPAM_SYSTEM/SIEVE_SYSTEM
+	# rspamd/sieve are modular addons — their commands write ANTISPAM_SYSTEM/SIEVE_SYSTEM.
+	# || true (like proftpd/clamav): a flaky addon install must not abort install_mail
 	if is_on "${COMPONENT_ADDON_RSPAMD:-}"; then
 		echo "[ * ] Installing & configuring rspamd (with Bayes Redis)..."
-		"$BIN/h-add-sys-rspamd" >> "$LOG"
+		"$BIN/h-add-sys-rspamd" >> "$LOG" 2>&1 || true
 	fi
 	if is_on "${COMPONENT_ADDON_SIEVE:-}"; then
 		echo "[ * ] Installing & configuring sieve..."
-		"$BIN/h-add-sys-sieve" >> "$LOG"
+		"$BIN/h-add-sys-sieve" >> "$LOG" 2>&1 || true
+	fi
+	if is_on "${COMPONENT_ADDON_CLAMAV:-}"; then
+		echo "[ * ] Installing & configuring ClamAV (mail antivirus)..."
+		# || true (like proftpd): a flaky first install (freshclam's blocking initial
+		# download timing out under IO load) must not abort install_mail under set -e
+		"$BIN/h-add-sys-clamav" >> "$LOG" 2>&1 || true
 	fi
 
 	# Webmailer choice (ROUNDCUBE / SNAPPYMAIL / NONE)

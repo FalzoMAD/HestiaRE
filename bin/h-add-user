@@ -282,6 +282,9 @@ fi
 # Adding jailed sftp env
 $BIN/h-add-user-sftp-jail $user
 
+# Co-maintain the SSH AllowUsers allowlist (no-op unless the operator seeded/activated one)
+manage_sshd_allowusers add "$user"
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#

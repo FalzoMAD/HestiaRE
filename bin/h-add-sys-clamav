@@ -1,0 +1,162 @@
+#!/bin/bash
+# info: install ClamAV mail antivirus
+# options: NONE
+#
+# example: h-add-sys-clamav
+#
+# Installs ClamAV and wires it as the mail antivirus, mirroring h-add-sys-rspamd.
+# Arms the exim CLAMD macro + ANTIVIRUS_SYSTEM=clamav ONLY once clamd answers on the
+# socket: av_scanner=clamd: with malware=*/defer_ok is FAIL-OPEN, so an armed-but-blind
+# clamd would silently accept mail unscanned. DB still downloading -> macro stays OFF
+# + WARN to re-run. Idempotent. Also called by the installer.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+EXIM_USER="Debian-exim"
+CLAMD_USER="clamav"
+CLAMD_DB_DIR="/var/lib/clamav"
+EXIM_TPL="/etc/exim4/exim4.conf.template"
+
+# clamd answers on its socket = the only proof it can actually scan
+clamd_alive() { clamdscan --ping 1 > /dev/null 2>&1; }
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+
+check_hestia_demo_mode
+
+# already fully active? idempotent early-exit
+if grep -q '^CLAMD = yes' "$EXIM_TPL" 2> /dev/null \
+	&& [ "$ANTIVIRUS_SYSTEM" = 'clamav' ] && clamd_alive; then
+	echo "INFO: ClamAV is already installed and active."
+	exit 0
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# a delete interrupted mid-purge can strand the DB under .saved. Reclaim it BEFORE
+# installing, so the packages find the DB already in place (the fast, reliable path)
+# instead of freshclam re-downloading it during the postinst — and so a stranded
+# .saved can never block a reinstall.
+if [ -d "$CLAMD_DB_DIR.saved" ]; then
+	rm -rf "$CLAMD_DB_DIR"
+	mv "$CLAMD_DB_DIR.saved" "$CLAMD_DB_DIR"
+fi
+
+# clamav pkg = the clamdscan client used for the ping (daemon only recommends it)
+if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii'; then
+	echo "Installing ClamAV (clamav clamav-daemon clamav-freshclam)..."
+	apt-get -y -qq install clamav clamav-daemon clamav-freshclam > /dev/null 2>&1
+	# clamav-freshclam's postinst does a blocking `invoke-rc.d clamav-freshclam start`
+	# (initial DB download) with no `|| true`; under IO load that can time out and
+	# leave the set half-configured (iF/iU) though the binaries are fine. Retry the
+	# configure before giving up — clamd-not-ready is then handled by the WARN path.
+	if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii'; then
+		dpkg --configure -a > /dev/null 2>&1 || true
+	fi
+	if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii'; then
+		echo "ERROR: ClamAV installation failed."
+		exit "$E_INVALID"
+	fi
+fi
+
+# bidirectional groups: exim->clamav (write socket) + clamav->exim (read spool).
+# The second is load-bearing — without it clamd can't read the spool -> fail-open.
+cp -f "$HESTIA/share/clamav/clamd.conf" /etc/clamav/clamd.conf
+usermod -aG "$CLAMD_USER" "$EXIM_USER"
+usermod -aG "$EXIM_USER" "$CLAMD_USER"
+
+# reclaim DB ownership in case the clamav uid changed across a purge/reinstall
+[ -d "$CLAMD_DB_DIR" ] && chown -R "$CLAMD_USER:$CLAMD_USER" "$CLAMD_DB_DIR"
+
+# socket 0660: clamd is socket-activated, so the .socket unit owns the live mode,
+# not clamd.conf's LocalSocketMode. Drop-in enforces it; restart re-creates the socket.
+mkdir -p /etc/systemd/system/clamav-daemon.socket.d
+cp -f "$HESTIA/share/clamav/socket-hardening.conf" \
+	/etc/systemd/system/clamav-daemon.socket.d/hardening.conf
+systemctl daemon-reload
+systemctl restart clamav-daemon.socket > /dev/null 2>&1
+
+# AppArmor: ensure clamd can read the exim spool even under a stricter base profile
+# than the stock one (which already allows it). No-op where no clamd profile ships.
+if [ -f /etc/apparmor.d/usr.sbin.clamd ]; then
+	mkdir -p /etc/apparmor.d/local
+	cp -f "$HESTIA/share/clamav/apparmor-local" /etc/apparmor.d/local/usr.sbin.clamd
+	apparmor_parser -r /etc/apparmor.d/usr.sbin.clamd > /dev/null 2>&1 || true
+fi
+
+# let the freshclam SERVICE pull the DB — a manual freshclam collides with its lock.
+# Bounded-wait on the DB files while it downloads.
+systemctl enable --now clamav-freshclam > /dev/null 2>&1
+echo "Waiting for the virus database (freshclam, up to 5 min)..."
+db_ready=0
+for _ in $(seq 1 300); do
+	if { [ -e "$CLAMD_DB_DIR/main.cvd" ] || [ -e "$CLAMD_DB_DIR/main.cld" ]; } \
+		&& { [ -e "$CLAMD_DB_DIR/daily.cvd" ] || [ -e "$CLAMD_DB_DIR/daily.cld" ]; }; then
+		db_ready=1
+		break
+	fi
+	sleep 1
+done
+
+# restart (not enable --now): apt may have forked clamd before the usermod above,
+# so restart forces a fresh fork with the new group + 0660 socket.
+systemctl enable clamav-daemon > /dev/null 2>&1
+systemctl restart clamav-daemon > /dev/null 2>&1
+clamd_up=0
+if [ "$db_ready" = 1 ]; then
+	for _ in $(seq 1 60); do
+		clamd_alive && { clamd_up=1; break; }
+		sleep 1
+	done
+fi
+
+# Arm ONLY when clamd answers — otherwise leave the macro off and stay honest.
+if [ "$clamd_up" = 1 ]; then
+	sed -i 's/^#CLAMD = yes/CLAMD = yes/' "$EXIM_TPL"
+	systemctl restart exim4
+	if ! systemctl is-active --quiet exim4; then
+		echo "ERROR: exim4 failed to restart with ClamAV enabled."
+		exit "$E_RESTART"
+	fi
+	$BIN/h-change-sys-config-value 'ANTIVIRUS_SYSTEM' 'clamav'
+	echo "ClamAV is now active (mail antivirus)."
+else
+	# installed but blind: macro OFF so no flagged-but-unscanned mail hits fail-open
+	echo "WARNING: ClamAV installed, but clamd is not answering yet (virus DB still"
+	echo "         downloading). Antivirus is NOT active. Re-run 'h-add-sys-clamav'"
+	echo "         once the DB is ready to activate scanning."
+fi
+
+set_install_component ADDON_CLAMAV true
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Installed ClamAV mail antivirus."
+log_event "$OK" "$ARGUMENTS"
+
+exit

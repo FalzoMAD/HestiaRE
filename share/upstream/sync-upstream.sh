@@ -42,6 +42,38 @@ else
   git -C "$HESTIACP_DIR" diff --name-only "$BEFORE" "$AFTER"
 fi
 
+# ── 1.4 near-verbatim drift check (CODEMAP drift_watch) ──────────────────────
+# Deterministically catch upstream movement on files CODEMAP marks near-verbatim
+# with a checked-against ref. The jailbash 5-bind drift (#412) was a chance find —
+# this turns it into a signal. Each file's checked_ref is bumped by hand only after
+# re-verifying it against the newer upstream (the marker records "verified at X",
+# not just "ignore"). Runs after 1.2, so upstream/hestiacp is already current.
+echo ""
+echo "==> Checking near-verbatim drift (CODEMAP drift_watch)..."
+CODEMAP="$HESTIARE_DIR/CODEMAP.json"
+UPSTREAM_REF="upstream/hestiacp"
+drift=0
+if ! command -v jq > /dev/null 2>&1 || [ ! -f "$CODEMAP" ]; then
+  echo "    SKIP: jq or CODEMAP.json missing."
+else
+  while IFS=$'\t' read -r file upath ref; do
+    [ -n "$file" ] || continue
+    if ! git -C "$HESTIARE_DIR" cat-file -e "$ref^{commit}" 2> /dev/null; then
+      echo "    WARN: $file — checked_ref ${ref:0:12} not found (stale marker?)"
+      drift=1
+      continue
+    fi
+    if ! git -C "$HESTIARE_DIR" diff --quiet "$ref".."$UPSTREAM_REF" -- "$upath"; then
+      echo "    DRIFT: upstream moved $upath since ${ref:0:12}"
+      echo "           → re-verify $file, then bump its checked_ref in CODEMAP.json"
+      drift=1
+    fi
+  done < <(jq -r '.upstream_provenance.drift_watch.files
+                  | to_entries[]
+                  | [.key, .value.upstream_path, .value.checked_ref] | @tsv' "$CODEMAP")
+  [ "$drift" = 0 ] && echo "    No drift — all watched files current with upstream."
+fi
+
 # ════════════════════════════════════════════════════════════════════════════
 # PART 2 — phpquoteshellarg (single vendored file, tag-based, rare changes)
 # ════════════════════════════════════════════════════════════════════════════

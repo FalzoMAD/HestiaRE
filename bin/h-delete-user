@@ -102,6 +102,9 @@ rm -f /var/spool/cron/$user
 rm -f /var/spool/cron/crontabs/$user
 rm -rf $USER_DATA
 
+# Co-maintain the SSH AllowUsers allowlist (no-op unless the operator seeded/activated one)
+manage_sshd_allowusers del "$user"
+
 # Updating admin counter
 if [ "$user" != "$ROOT_USER" ]; then
 	decrease_user_value "$ROOT_USER" '$U_USERS'

@@ -216,6 +216,13 @@
 					<div class="u-mb10">
 						<label for="v_shell" class="form-label"><?= tohtml( _("SSH Access")) ?></label>
 						<select class="form-select" name="v_shell" id="v_shell">
+							<?php
+								// Preserve an existing off-allowlist shell as the selected
+								// option so saving unchanged does not silently reset it (#412).
+								$cur_shell = trim($v_shell, "'");
+								if ($cur_shell !== "" && !in_array($cur_shell, $shells, true)): ?>
+							<option value="<?= tohtml($cur_shell) ?>" selected><?= tohtml($cur_shell) ?> <?= _("(current)") ?></option>
+							<?php endif; ?>
 							<?php foreach ($shells as $key => $value): ?>
 								<option value="<?= tohtml($value) ?>"
 									<?php if (!empty($v_shell) && $value == trim($v_shell, "''")): ?>
