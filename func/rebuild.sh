@@ -89,6 +89,11 @@ rebuild_user_conf() {
 	# Update user shell
 	/usr/bin/chsh -s "$shell" "$user" &> /dev/null
 
+	# Keep the user on the SSH AllowUsers allowlist — restore/rebuild bypasses
+	# h-add-user, so without this a restored user is missing from an active AllowUsers
+	# line and silently locked out of SSH/SFTP after the restore (#412)
+	manage_sshd_allowusers add "$user"
+
 	# Update password
 	chmod u+w /etc/shadow
 	sed -i "s|^$user:[^:]*:|$user:$MD5:|" /etc/shadow
