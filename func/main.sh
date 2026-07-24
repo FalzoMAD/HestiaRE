@@ -1405,9 +1405,31 @@ is_password_format_valid() {
 		check_result "$E_INVALID" "invalid password format :: $1"
 	fi
 }
-# shell must be listed in /etc/shells
+# Curated login-shell allowlist (#412): one source for the panel (h-list-sys-shells)
+# and the validator (is_format_valid_shell). Dropped rssh — gone from Debian since
+# bullseye, it selects a missing binary and silently acts like nologin. screen/tmux/
+# dash/rbash dropped too. Existing off-list shells are kept (rebuild.sh), not offered.
+HESTIA_SHELL_ALLOWLIST="nologin jailbash bash sh"
+
+# Emit the effective shells: allowlist ∩ /etc/shells, one basename per line, ladder
+# order. nologin is emitted unconditionally — it is the default shell of every new
+# user, so it must stay assignable even if /etc/shells has not been seeded yet.
+list_allowed_shells() {
+	local allow
+	for allow in $HESTIA_SHELL_ALLOWLIST; do
+		if [ "$allow" = 'nologin' ]; then
+			echo 'nologin'
+		elif grep -qE "/${allow}\$" /etc/shells 2> /dev/null; then
+			echo "$allow"
+		fi
+	done
+}
+
+# shell must be one of the curated, /etc/shells-backed login shells (#412)
 is_format_valid_shell() {
-	if [ -z "$(grep -w $1 /etc/shells)" ]; then
+	local shell
+	shell=$(basename -- "$1")
+	if ! list_allowed_shells | grep -qxF "$shell"; then
 		echo "Error: shell $1 is not valid"
 		log_event "$E_INVALID" "$EVENT"
 		exit $E_INVALID
