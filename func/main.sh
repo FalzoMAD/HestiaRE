@@ -1809,3 +1809,70 @@ delete_chroot_jail() {
 	rm -r /srv/jail/$user/ > /dev/null 2>&1
 	rmdir /srv/jail/$user > /dev/null 2>&1
 }
+
+# Co-maintain the SSH AllowUsers allowlist (#412). Opt-in: acts only if a line exists
+# (installer seeds one commented). Touches only the $user token (base before @), so
+# operator entries + the commented/active state survive. add=append, del=drop; sshd -t
+# rollback, reload only when active, re-comments rather than leave an active line empty.
+manage_sshd_allowusers() {
+	local action=$1 user=$2
+	local config='/etc/ssh/sshd_config'
+	[ -f "$config" ] || return 0
+
+	# first managed AllowUsers line (commented or active); none -> nothing to maintain
+	local lineno
+	lineno=$(grep -niE '^[[:space:]]*#?[[:space:]]*AllowUsers([[:space:]]|$)' "$config" \
+		| head -n1 | cut -d: -f1)
+	[ -n "$lineno" ] || return 0
+
+	local line
+	line=$(sed -n "${lineno}p" "$config")
+
+	# commented if the first non-space char is '#'
+	local prefix=''
+	[[ "$line" =~ ^[[:space:]]*# ]] && prefix='#'
+
+	# tokens after the keyword (may be empty); drop $user's, re-add on 'add'
+	local rest
+	rest=$(echo "$line" | sed -E 's/^[[:space:]]*#?[[:space:]]*AllowUsers[[:space:]]*//')
+	local -a tokens=() kept=()
+	read -r -a tokens <<< "$rest"
+	local t present=0
+	for t in "${tokens[@]}"; do
+		[ "${t%%@*}" = "$user" ] && present=1
+	done
+	# add of an already-listed user is a true no-op (keep order, skip rewrite/reload)
+	[ "$action" = 'add' ] && [ "$present" = 1 ] && return 0
+	for t in "${tokens[@]}"; do
+		[ "${t%%@*}" = "$user" ] || kept+=("$t")
+	done
+	[ "$action" = 'add' ] && kept+=("$user")
+
+	# lockout guard: never leave an ACTIVE AllowUsers with zero tokens
+	if [ -z "$prefix" ] && [ "${#kept[@]}" -eq 0 ]; then
+		prefix='#'
+		echo "WARNING: AllowUsers would be empty and active — re-commented to avoid lockout."
+	fi
+
+	local newline="${prefix}AllowUsers"
+	[ "${#kept[@]}" -gt 0 ] && newline="$newline ${kept[*]}"
+	[ "$newline" = "$line" ] && return 0
+
+	# swap the line on a temp copy, keep it only if sshd accepts the whole config
+	# (ENVIRON, not -v, so awk doesn't reinterpret backslashes in the value)
+	local tmp
+	tmp=$(mktemp) || return 0
+	newline_env="$newline" awk -v n="$lineno" \
+		'NR==n{print ENVIRON["newline_env"]; next} {print}' "$config" > "$tmp"
+	if ! /usr/sbin/sshd -t -f "$tmp" > /dev/null 2>&1; then
+		echo "WARNING: sshd rejected the AllowUsers update — left unchanged."
+		rm -f "$tmp"
+		return 0
+	fi
+	cat "$tmp" > "$config"
+	rm -f "$tmp"
+
+	# reload only when the line is active (commented = inert, no reload needed)
+	[ -z "$prefix" ] && systemctl reload ssh > /dev/null 2>&1
+	return 0
+}

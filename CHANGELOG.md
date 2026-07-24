@@ -28,6 +28,19 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- SSH `AllowUsers` allowlist co-maintenance (#412). HestiaRE now keeps the hestia
+  panel accounts in sync on an `AllowUsers` line in `/etc/ssh/sshd_config` — a
+  defense-in-depth SSH login allowlist. The installer seeds a **commented** (inert)
+  `#AllowUsers` line with guidance unless one already exists; `h-add-user` adds the
+  new account, `h-delete-user` removes it (shared helper `manage_sshd_allowusers` in
+  `func/main.sh`). It edits **only** the token matching the account, so operator
+  entries (`root@10.0.0.5`, maintenance, emergency accounts) and the commented-vs-
+  active state of the line are preserved; the change is validated with `sshd -t`
+  (left unchanged on rejection) and sshd is reloaded only when the line is active. A
+  delete that would leave an *active* line empty re-comments it instead of locking
+  everyone out (including root). Membership tracks account existence (no suspend
+  hook). Domain-FTP sub-accounts are out of scope here (they follow in the SFTP
+  transport rebuild). Nothing changes until the operator removes the leading `#`.
 - `h-add-sys-clamav` / `h-delete-sys-clamav` — ClamAV mail antivirus is now a
   modular addon (#123). It was missing from the manifest and installer entirely,
   even though the exim antivirus machinery (`.ifdef CLAMD` block: `av_scanner`,
