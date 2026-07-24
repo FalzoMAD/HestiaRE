@@ -119,12 +119,15 @@ install_base() {
 	fi
 	sed -i 's/[#]LoginGraceTime [[:digit:]]m/LoginGraceTime 1m/g' /etc/ssh/sshd_config
 	grep -q "^DebianBanner no" /etc/ssh/sshd_config || echo 'DebianBanner no' >> /etc/ssh/sshd_config
-	# Seed a commented (inert) AllowUsers line unless one already exists
-	if ! grep -qiE '^[[:space:]]*#?[[:space:]]*AllowUsers([[:space:]]|$)' /etc/ssh/sshd_config; then
+	# Seed a commented (inert) AllowUsers directive unless one already exists. The
+	# guidance lines must NOT begin with "AllowUsers" (they use "# SSH login ...");
+	# manage_sshd_allowusers keys on the bare "#AllowUsers" directive form and would
+	# otherwise mistake a "# AllowUsers ..." prose line for the directive.
+	if ! grep -qiE '^[[:space:]]*#?AllowUsers([[:space:]]|$)' /etc/ssh/sshd_config; then
 		cat >> /etc/ssh/sshd_config << 'EOF'
 
-# AllowUsers login allowlist — added by HestiaRE, panel users auto-synced. Add your
-# own entries (root@IP, emergency), then uncomment to activate (incomplete = lockout).
+# SSH login allowlist (managed by HestiaRE; panel users auto-synced). Add your own
+# entries (root@IP, emergency), then uncomment the line below — incomplete = lockout.
 #AllowUsers
 EOF
 	fi

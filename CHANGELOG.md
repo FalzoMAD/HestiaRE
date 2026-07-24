@@ -171,6 +171,15 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- AllowUsers co-maintenance (#412) edited the wrong line: the seeded guidance
+  comment began with "# AllowUsers …", and `manage_sshd_allowusers`' detection regex
+  (`#?[[:space:]]*AllowUsers`) matched that prose line, so `h-add-user` tokenised the
+  sentence and appended the username to it — mangling the comment and leaving the real
+  `#AllowUsers` directive empty. Tightened the regex to the directive form
+  (`#?AllowUsers`, no space between `#` and the keyword — sshd's own commented-directive
+  style) and reworded the seed so its guidance no longer starts with "AllowUsers".
+  Existing installs carry a mangled seed comment; re-seed `/etc/ssh/sshd_config` (the
+  line is commented/inert, so there is no access impact). Found in fleet verification.
 - Panel Caddy failed to come up on fresh installs — the panel `Caddyfile` was
   never deployed, so Caddy kept serving the distro-default site on `:80` and the
   panel on `:8083` was unreachable. A stray `||` line-continuation

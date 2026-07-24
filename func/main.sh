@@ -1840,9 +1840,13 @@ manage_sshd_allowusers() {
 	local config='/etc/ssh/sshd_config'
 	[ -f "$config" ] || return 0
 
-	# first managed AllowUsers line (commented or active); none -> nothing to maintain
+	# First managed AllowUsers line (commented or active); none -> nothing to maintain.
+	# The '#' must sit DIRECTLY on the keyword (#AllowUsers) — that is sshd's own
+	# commented-directive form. We must NOT match a prose line like "# AllowUsers is a
+	# login allowlist ..." (space after the #), or we would tokenise the sentence and
+	# append the user to it, mangling the comment and never touching the real directive.
 	local lineno
-	lineno=$(grep -niE '^[[:space:]]*#?[[:space:]]*AllowUsers([[:space:]]|$)' "$config" \
+	lineno=$(grep -niE '^[[:space:]]*#?AllowUsers([[:space:]]|$)' "$config" \
 		| head -n1 | cut -d: -f1)
 	[ -n "$lineno" ] || return 0
 
@@ -1855,7 +1859,7 @@ manage_sshd_allowusers() {
 
 	# tokens after the keyword (may be empty); drop $user's, re-add on 'add'
 	local rest
-	rest=$(echo "$line" | sed -E 's/^[[:space:]]*#?[[:space:]]*AllowUsers[[:space:]]*//')
+	rest=$(echo "$line" | sed -E 's/^[[:space:]]*#?AllowUsers[[:space:]]*//')
 	local -a tokens=() kept=()
 	read -r -a tokens <<< "$rest"
 	local t present=0
