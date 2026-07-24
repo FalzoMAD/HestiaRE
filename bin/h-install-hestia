@@ -214,7 +214,7 @@ install_panel() {
 	mkdir -p /etc/caddy
 	# caddy logs to /var/log/caddy (cannot write /var/log/hestia)
 	mkdir -p /var/log/caddy
-	chown caddy:caddy /var/log/caddy 2> /dev/null || 
+	chown caddy:caddy /var/log/caddy 2> /dev/null || true
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
 	# placeholder so `import apps/*.conf` is never an empty glob on first start

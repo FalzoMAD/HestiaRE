@@ -164,7 +164,19 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
-- The mail-domain list no longer shows a stale "Anti-Virus / Spam Filter:
+- Panel Caddy failed to come up on fresh installs — the panel `Caddyfile` was
+  never deployed, so Caddy kept serving the distro-default site on `:80` and the
+  panel on `:8083` was unreachable. A stray `||` line-continuation
+  (`chown … || ` + newline before the `cp`) had turned the unconditional
+  `cp share/panel-caddy/Caddyfile /etc/caddy/Caddyfile` into the failure branch of
+  the preceding `chown`, so it only ran when the chown failed (it never does).
+  Restored `chown … || true` so the `cp` runs unconditionally. (`hestia.conf` on
+  the next line still copied, which is why only the listener was wrong.)
+- `h-restart-service hestia` no longer fails with "Restart of hestia failed" —
+  `hestia` is the legacy single-service name from the hestia-nginx era and has no
+  `hestia.service` unit; it now maps to the real panel pair `caddy hestia-php`
+  (matching the existing `php-fpm` multi-service handling). Callers
+  `h-change-sys-port` and `h-update-host-certificate` restart the panel cleanly.
   Enabled" icon for domains when the addon isn't installed (#123). Those two
   columns in `list_mail.php` rendered straight from each domain's stored
   `ANTIVIRUS`/`ANTISPAM` value with no gate; they now gate on

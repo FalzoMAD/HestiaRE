@@ -47,6 +47,12 @@ if [ "$service" = "php-fpm" ]; then
 	for version in $php_versions; do
 		service_list="${service_list} php${version}-fpm"
 	done
+elif [ "$service" = "hestia" ]; then
+	# "hestia" is the legacy single-service name from the hestia-nginx era; the
+	# HestiaRE panel is Caddy (webserver, :8083) + hestia-php (FPM). There is no
+	# hestia.service, so map it to the real pair (callers: h-change-sys-port,
+	# h-update-host-certificate).
+	service_list="caddy hestia-php"
 else
 	service_list="$service"
 fi
