@@ -92,6 +92,13 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Moved the bubblewrap assets `jailbash` (the sandboxed login-shell wrapper) and
+  `bwrap-userns-restrict` (the AppArmor profile for the Ubuntu 24.04+ unprivileged-
+  userns restriction) from `install/common/bubblewrap/` to `share/bubblewrap/`,
+  matching the curated-asset convention (`share/proftpd`, `share/clamav`, …).
+  `h-add-sys-ssh-jail` deploys them from the new path. Since bubblewrap was the only
+  thing under `install/common/`, the now-unused `HESTIA_COMMON_DIR` variable and the
+  empty `install/common/` directory were removed.
 - SSH-access shells are now a curated allowlist (#412). `is_format_valid_shell`
   (`func/main.sh`) and `h-list-sys-shells` (the panel's single shell source, used by
   the user and package editors) share one list — `HESTIA_SHELL_ALLOWLIST` = `nologin`

@@ -71,7 +71,6 @@ load_os_profile "$INSTALL_OS"
 PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$HESTIA/share/manifest.json" 2> /dev/null | head -n1)
 PHP_VER="${PHP_VER:-8.3}"                        # panel + default web PHP (Sury)
 HESTIA_INSTALL_DIR="${HESTIA_INSTALL_DIR:-$HESTIA/install/deb}"
-HESTIA_COMMON_DIR="${HESTIA_COMMON_DIR:-$HESTIA/install/common}"
 
 # write a config value to hestia.conf
 wcv() { echo "$1='$2'" >> "$HESTIA/conf/hestia.conf"; }
