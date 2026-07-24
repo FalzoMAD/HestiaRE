@@ -92,6 +92,13 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Moved the bubblewrap assets `jailbash` (the sandboxed login-shell wrapper) and
+  `bwrap-userns-restrict` (the AppArmor profile for the Ubuntu 24.04+ unprivileged-
+  userns restriction) from `install/common/bubblewrap/` to `share/bubblewrap/`,
+  matching the curated-asset convention (`share/proftpd`, `share/clamav`, …).
+  `h-add-sys-ssh-jail` deploys them from the new path. Since bubblewrap was the only
+  thing under `install/common/`, the now-unused `HESTIA_COMMON_DIR` variable and the
+  empty `install/common/` directory were removed.
 - SSH-access shells are now a curated allowlist (#412). `is_format_valid_shell`
   (`func/main.sh`) and `h-list-sys-shells` (the panel's single shell source, used by
   the user and package editors) share one list — `HESTIA_SHELL_ALLOWLIST` = `nologin`
@@ -164,7 +171,28 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
-- The mail-domain list no longer shows a stale "Anti-Virus / Spam Filter:
+- AllowUsers co-maintenance (#412) edited the wrong line: the seeded guidance
+  comment began with "# AllowUsers …", and `manage_sshd_allowusers`' detection regex
+  (`#?[[:space:]]*AllowUsers`) matched that prose line, so `h-add-user` tokenised the
+  sentence and appended the username to it — mangling the comment and leaving the real
+  `#AllowUsers` directive empty. Tightened the regex to the directive form
+  (`#?AllowUsers`, no space between `#` and the keyword — sshd's own commented-directive
+  style) and reworded the seed so its guidance no longer starts with "AllowUsers".
+  Existing installs carry a mangled seed comment; re-seed `/etc/ssh/sshd_config` (the
+  line is commented/inert, so there is no access impact). Found in fleet verification.
+- Panel Caddy failed to come up on fresh installs — the panel `Caddyfile` was
+  never deployed, so Caddy kept serving the distro-default site on `:80` and the
+  panel on `:8083` was unreachable. A stray `||` line-continuation
+  (`chown … || ` + newline before the `cp`) had turned the unconditional
+  `cp share/panel-caddy/Caddyfile /etc/caddy/Caddyfile` into the failure branch of
+  the preceding `chown`, so it only ran when the chown failed (it never does).
+  Restored `chown … || true` so the `cp` runs unconditionally. (`hestia.conf` on
+  the next line still copied, which is why only the listener was wrong.)
+- `h-restart-service hestia` no longer fails with "Restart of hestia failed" —
+  `hestia` is the legacy single-service name from the hestia-nginx era and has no
+  `hestia.service` unit; it now maps to the real panel pair `caddy hestia-php`
+  (matching the existing `php-fpm` multi-service handling). Callers
+  `h-change-sys-port` and `h-update-host-certificate` restart the panel cleanly.
   Enabled" icon for domains when the addon isn't installed (#123). Those two
   columns in `list_mail.php` rendered straight from each domain's stored
   `ANTIVIRUS`/`ANTISPAM` value with no gate; they now gate on
