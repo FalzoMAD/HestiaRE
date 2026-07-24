@@ -145,6 +145,27 @@
       }
     },
 
+    "ssh_shell_jail": {
+      "description": "SSH/SFTP access control: the 3-tier access ladder — nologin (SFTP-only chroot, the default) · jailbash (bubblewrap-sandboxed interactive shell, opt-in) · bash (unconfined). #223 was the baseline check; the non-SFTP hardening landed in #412 (Story 1). The SFTP transport/chroot rebuild (drop /srv/jail bind-mounts, domain-FTP sub-accounts) is deferred to Story 2 — see docs branch jail-chroot-story{1,2}-plan.md.",
+      "key_files": [
+        "install/common/bubblewrap/jailbash",
+        "func/main.sh",
+        "bin/h-list-sys-shells",
+        "bin/h-add-sys-ssh-jail",
+        "bin/h-delete-sys-ssh-jail",
+        "bin/h-add-sys-sftp-jail",
+        "bin/h-add-user-sftp-jail",
+        "bin/h-delete-user-sftp-jail",
+        "bin/h-change-user-shell"
+      ],
+      "jailbash": "install/common/bubblewrap/jailbash — bwrap wrapper run as the jailbash login shell: reuses host /usr read-only but with private /tmp,/home,/var,/run and stub passwd/group, --unshare-all (incl. pid → fresh /proc) --share-net. NEAR-VERBATIM UPSTREAM (origin/upstream/hestiacp) — tracked for drift (the #412 5-bind re-sync of zoneinfo/php/ca-certificates/i18n + /etc/php, lost behind `--tmpfs /usr/share`, was a chance find; a CI drift-gate is planned). Registered as a login shell in /etc/shells by h-add-sys-ssh-jail. NOTE: --share-net means 127.0.0.1 inside the jail is the HOST loopback (a jailbash user reaches host-bound services: redis:6379, webmail FPM :8090/:8091, panel, adminer) — an open isolation question tracked in Story 1 verification, not yet closed.",
+      "apparmor_userns_quirk": "On Ubuntu 24.04+/kernels with apparmor_restrict_unprivileged_userns=1, unprivileged user namespaces are blocked and bwrap fails without the `bwrap-userns-restrict` AppArmor profile. That profile is installed ONLY when /etc/apparmor.d/abi/4.0 exists (the artefact-based guard, NOT an OS-version flag). Keep this rationale verbatim — hard-won.",
+      "shell_allowlist": "func/main.sh HESTIA_SHELL_ALLOWLIST + list_allowed_shells (#412): the single curated source (nologin/jailbash/bash/sh ∩ /etc/shells, nologin guaranteed) shared by is_format_valid_shell (hard validator, hit by h-change-user-shell and any command routing a `shell` arg) AND h-list-sys-shells (the panel dropdown source for web/edit/user + web/{add,edit}/package). Dropped from upstream: rssh (gone from Debian, silently degrades to nologin), screen/tmux (useless as login shell), dash/rbash. rebuild.sh sets the shell straight from /etc/shells (bypasses the validator) so restore stays tolerant; the user/package editors render an existing off-allowlist shell as a selected \"(current)\" option so an unchanged save never resets it. FTP_SHELL (domain-FTP sub-accounts, h-add-web-domain-ftp/rebuild.sh) is a SECOND shell source that bypasses both panel and validator → Story 2.",
+      "allowusers": "func/main.sh manage_sshd_allowusers add|del <user> (#412) — co-maintains an AllowUsers login allowlist in /etc/ssh/sshd_config for panel users; installer seeds it commented/inert. See func_libraries.file_roles.main.sh for the full contract. Domain-FTP sub-accounts → Story 2.",
+      "srv_jail": "add_chroot_jail/delete_chroot_jail (func/main.sh) build a per-user systemd bind-mount of the real home into /srv/jail/$user for the SFTP ChrootDirectory (h-add-sys-sftp-jail: `Match User` + ChrootDirectory /srv/jail/%u + internal-sftp). The bind is cosmetic PATH FIDELITY (same inodes) — the permission mechanism is the root-ownership flip of /home/$user. This whole /srv/jail machinery + the growing `Match User` list are what Story 2 replaces (pam_namespace primary candidate).",
+      "dependencies": ["func_libraries", "cli_commands", "installer"]
+    },
+
     "web_panel": {
       "description": "Plain-PHP control panel UI. No framework. Action-based routing via directory structure. Served by Caddy + PHP 8.3 FPM (hestia-php.service) on port 8083.",
       "entry_points": ["web/index.php"],
