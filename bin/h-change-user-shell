@@ -27,9 +27,17 @@ source $HESTIA/conf/hestia.conf
 #----------------------------------------------------------#
 
 check_args '2' "$#" 'USER SHELL'
-is_format_valid 'user' 'shell'
+is_format_valid 'user'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
+
+# Gate the shell against the curated allowlist (#412) — EXCEPT when it equals the
+# user's current shell: re-asserting an existing, possibly legacy off-allowlist shell
+# (e.g. one a restore left in place) is always allowed; only a genuine change is gated.
+cur_shell=$(basename -- "$(getent passwd "$user" | cut -d : -f 7)")
+if [ "$(basename -- "$shell")" != "$cur_shell" ]; then
+	is_format_valid_shell "$shell"
+fi
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode

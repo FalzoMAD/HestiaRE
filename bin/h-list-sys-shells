@@ -65,8 +65,8 @@ csv_list() {
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Defining system shells
-shells=$(grep -v '#' /etc/shells | awk -F '/' '{print $NF}' | sort -u)
+# Curated shells (allowlist ∩ /etc/shells) — the panel's single shell source (#412)
+shells=$(list_allowed_shells)
 
 # Listing data
 case $format in

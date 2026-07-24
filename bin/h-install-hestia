@@ -120,6 +120,15 @@ install_base() {
 	fi
 	sed -i 's/[#]LoginGraceTime [[:digit:]]m/LoginGraceTime 1m/g' /etc/ssh/sshd_config
 	grep -q "^DebianBanner no" /etc/ssh/sshd_config || echo 'DebianBanner no' >> /etc/ssh/sshd_config
+	# Seed a commented (inert) AllowUsers line unless one already exists
+	if ! grep -qiE '^[[:space:]]*#?[[:space:]]*AllowUsers([[:space:]]|$)' /etc/ssh/sshd_config; then
+		cat >> /etc/ssh/sshd_config << 'EOF'
+
+# AllowUsers login allowlist — added by HestiaRE, panel users auto-synced. Add your
+# own entries (root@IP, emergency), then uncomment to activate (incomplete = lockout).
+#AllowUsers
+EOF
+	fi
 	systemctl restart ssh
 
 	echo "[ * ] Configuring NTP..."
