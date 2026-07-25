@@ -4,7 +4,8 @@
 #
 # example: h-delete-user-sftp-jail whistler
 #
-# This function disables sftp jailed environment for USER
+# Removes a user from the sftp-jailed group (#413); the per-session jail stops being
+# built on the next login. No persistent state to tear down.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -32,16 +33,6 @@ if [ -z "$user_str" ]; then
 	exit
 fi
 
-# Get current users and split into array
-ssh_users=$(grep -A1 "^# Hestia SFTP Chroot" /etc/ssh/sshd_config | sed -n 2p | sed 's/Match User //')
-IFS=',' read -r -a users <<< "$ssh_users"
-
-match_string="$ssh_users,"
-# Check if jail exist
-if [[ ! "$match_string" =~ ,$user, ]]; then
-	exit 2
-fi
-
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
@@ -49,34 +40,13 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Remove user from array
-for sftp_user in "${users[@]}"; do
-	if [ "$sftp_user" != "$user" ]; then
-		new_users+=($sftp_user)
-	fi
-done
+delete_chroot_jail "$user"
 
-# Write new user list to config
-users=$(
-	IFS=','
-	echo "${new_users[*]// /|}"
-	IFS=$' \t\n'
-)
-sed -i "s/$ssh_users/$users/g" /etc/ssh/sshd_config
-
-# chown permissions back to user:user
-if [ -d "/home/$user" ]; then
-	chown $user:$user /home/$user
-fi
-
-# Deleting chroot jail for SFTP and FTP
-delete_chroot_jail $user
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Restart ssh service
-service ssh restart > /dev/null 2>&1
+# Group change applies at next login; no per-user sshd_config change → no restart.
 
 # Logging
 log_event "$OK" "$ARGUMENTS"

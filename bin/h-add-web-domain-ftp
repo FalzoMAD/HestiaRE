@@ -112,6 +112,9 @@ ftp_md5=$(awk -v user=$ftp_user -F : 'user == $1 {print $2}' /etc/shadow)
 # Adding jailed sftp env
 $BIN/h-add-user-sftp-jail "$ftp_user"
 
+# SSH AllowUsers co-maintenance for the FTP sub-account (#413)
+manage_sshd_allowusers add "$ftp_user"
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#

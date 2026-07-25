@@ -1,0 +1,46 @@
+#!/bin/sh
+# HestiaRE SFTP jail builder (#413), run by pam_namespace inside the per-session mount
+# namespace as $1=polydir $2=instance $3=new $4=user. Builds the jail at the fidelity
+# path and binds the real home. See PR #417 / CHANGELOG for the design.
+#
+# INVOKED ONLY BY pam_namespace — never run directly. Outside the per-session namespace
+# it has no slave-propagation, so `mount --bind` leaks the bind onto the HOST. The
+# mountpoint guard below enforces this (pam_namespace mounts the tmpfs on the polydir
+# before calling us, so it is a mountpoint here; a hand-run is not).
+#
+# NON-OBVIOUS: pam_namespace ignores this script's exit code, so fail-closed rides on
+# sshd's safely_chroot() instead — it rejects a chroot component that is not root-owned
+# or is group/other-writable. The fresh tmpfs root is 1777, so we build everything
+# while it is still 1777 and `chmod 755` the root LAST: any earlier failure leaves it
+# 1777 -> session refused. Keep the final chmod as the very last action.
+polydir="$1"
+user="$4"
+tag="hestia-jail"
+
+[ "$polydir" = "/run/hestia/jail" ] || exit 0
+
+# mechanical guard against a direct/standalone run (would leak the bind to the host)
+if ! mountpoint -q "$polydir"; then
+	logger -t "$tag" "refusing standalone run: $polydir is not a pam_namespace tmpfs"
+	exit 0
+fi
+
+# only build for jailed accounts (the PAM stack already gates on the group)
+id -nG "$user" 2>/dev/null | tr ' ' '\n' | grep -qx "sftp-jailed" || exit 0
+
+home="$(getent passwd "$user" | cut -d: -f6)"
+if [ -z "$home" ] || [ ! -d "$home" ]; then
+	logger -t "$tag" "FAIL $user: home '$home' missing"
+	exit 1
+fi
+
+root="$polydir/$user"
+target="$root$home"
+mkdir -p "$target" || { logger -t "$tag" "FAIL $user: mkdir $target"; exit 1; }
+mount --bind "$home" "$target" || { logger -t "$tag" "FAIL $user: bind $home"; exit 1; }
+
+# commit point (see header): the polydir chmod is the last action
+chown root:root "$root" "$polydir" || { logger -t "$tag" "FAIL $user: chown"; exit 1; }
+chmod 755 "$root"
+chmod 755 "$polydir"
+exit 0
