@@ -795,7 +795,8 @@ if [ "$udir" != 'no' ]; then
 				$BIN/h-extract-fs-archive "$user" "$tmpdir/user_dir/$user_dir.tar.gz" "$HOMEDIR/$user"
 			fi
 			cmdstatus="$?"
-			chown root:root "$HOMEDIR/$user"
+			# home stays user-owned (#413: the pam_namespace jail needs no root flip)
+			chown "$user:$user" "$HOMEDIR/$user"
 			if [ "$cmdstatus" -ne 0 ]; then
 				rm -rf $tmpdir
 				error="Can't unpack $user_dir user dir container"

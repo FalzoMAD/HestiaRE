@@ -11,6 +11,9 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Breaking / Upgrade notes
 
+- The SFTP jail no longer uses `/srv/jail` (#413) — it is now built per session under
+  `/run/hestia/jail` by `pam_namespace`. Fresh installs get this automatically; there
+  are no live installs pre-v1, so no migration/cleanup path is carried.
 - The system removal commands are unified under a single verb: `h-remove-sys-*` →
   `h-delete-sys-*` (#123). Affected: `adminer, mariadb, postgresql, redis,
   roundcube, rspamd, sieve, snappymail`. HestiaCP uses `v-delete-*` universally,
@@ -28,6 +31,33 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- The SFTP jail is rebuilt on `pam_namespace` (#413), replacing the `/srv/jail`
+  systemd bind-mount machinery. Per session, `pam_namespace` mounts a private tmpfs on
+  `/run/hestia/jail` (via `share/tmpfiles.d/hestia-jail.conf`) and runs
+  `share/security/hestia-jail.init` inside the new mount namespace — as root, before
+  sshd chroots — building the jail at the **fidelity path**
+  (`/run/hestia/jail/<user>/<real-home>`, from `getent passwd`) and bind-mounting the
+  real home there. One generic rule now serves **both** panel users and domain-FTP
+  sub-accounts (whose home is user-owned deep under `web/<domain>` — a case native
+  chroot cannot handle); the SFTP client sees its true path (e.g.
+  `/home/alice/web/site.tld/public_html`). Fail-closed rides on sshd's own
+  `safely_chroot()`: the fresh tmpfs root is `1777`, the init builds everything while
+  it is still `1777`, and `chmod 755` on the root is the **last** action — so any
+  failure leaves the root world-writable and sshd refuses the session (pam_namespace
+  ignores the init exit code, so this is the real gate). Scope is the `sftp-jailed`
+  group, used both as the sshd chroot selector (a single static `Match Group` block,
+  no more growing `Match User` list) and the PAM scope (a `pam_succeed_if` gate, so
+  non-members log in completely unchanged). No `/home` ownership flip any more (the
+  chroot root is root-owned in the tmpfs; homes keep normal user ownership). No
+  persistent state — no `/srv/jail`, no per-user `.mount` units, no `@reboot` cron;
+  `/run/hestia/jail` is tmpfs and self-heals on reboot. Verified live on OpenSSH
+  9.2/9.6/10.0/10.2 (deb12/ub24/deb13/ub26), including ub26 with the unprivileged-
+  userns restriction active and **no** bwrap/userns involved.
+- SSH `AllowUsers` co-maintenance now also covers domain-FTP sub-accounts (#413,
+  deferred from #412): `h-add-web-domain-ftp` adds the FTP account and
+  `h-delete-web-domain-ftp` removes it via `manage_sshd_allowusers`, so an active
+  allowlist no longer silently locks out FTP sub-accounts (rebuild goes through
+  `h-add-web-domain-ftp`, so it is covered too).
 - SSH `AllowUsers` allowlist co-maintenance (#412). HestiaRE now keeps the hestia
   panel accounts in sync on an `AllowUsers` line in `/etc/ssh/sshd_config` — a
   defense-in-depth SSH login allowlist. The installer seeds a **commented** (inert)
@@ -92,6 +122,13 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Moved the bubblewrap assets `jailbash` (the sandboxed login-shell wrapper) and
+  `bwrap-userns-restrict` (the AppArmor profile for the Ubuntu 24.04+ unprivileged-
+  userns restriction) from `install/common/bubblewrap/` to `share/bubblewrap/`,
+  matching the curated-asset convention (`share/proftpd`, `share/clamav`, …).
+  `h-add-sys-ssh-jail` deploys them from the new path. Since bubblewrap was the only
+  thing under `install/common/`, the now-unused `HESTIA_COMMON_DIR` variable and the
+  empty `install/common/` directory were removed.
 - SSH-access shells are now a curated allowlist (#412). `is_format_valid_shell`
   (`func/main.sh`) and `h-list-sys-shells` (the panel's single shell source, used by
   the user and package editors) share one list — `HESTIA_SHELL_ALLOWLIST` = `nologin`
@@ -164,7 +201,28 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
-- The mail-domain list no longer shows a stale "Anti-Virus / Spam Filter:
+- AllowUsers co-maintenance (#412) edited the wrong line: the seeded guidance
+  comment began with "# AllowUsers …", and `manage_sshd_allowusers`' detection regex
+  (`#?[[:space:]]*AllowUsers`) matched that prose line, so `h-add-user` tokenised the
+  sentence and appended the username to it — mangling the comment and leaving the real
+  `#AllowUsers` directive empty. Tightened the regex to the directive form
+  (`#?AllowUsers`, no space between `#` and the keyword — sshd's own commented-directive
+  style) and reworded the seed so its guidance no longer starts with "AllowUsers".
+  Existing installs carry a mangled seed comment; re-seed `/etc/ssh/sshd_config` (the
+  line is commented/inert, so there is no access impact). Found in fleet verification.
+- Panel Caddy failed to come up on fresh installs — the panel `Caddyfile` was
+  never deployed, so Caddy kept serving the distro-default site on `:80` and the
+  panel on `:8083` was unreachable. A stray `||` line-continuation
+  (`chown … || ` + newline before the `cp`) had turned the unconditional
+  `cp share/panel-caddy/Caddyfile /etc/caddy/Caddyfile` into the failure branch of
+  the preceding `chown`, so it only ran when the chown failed (it never does).
+  Restored `chown … || true` so the `cp` runs unconditionally. (`hestia.conf` on
+  the next line still copied, which is why only the listener was wrong.)
+- `h-restart-service hestia` no longer fails with "Restart of hestia failed" —
+  `hestia` is the legacy single-service name from the hestia-nginx era and has no
+  `hestia.service` unit; it now maps to the real panel pair `caddy hestia-php`
+  (matching the existing `php-fpm` multi-service handling). Callers
+  `h-change-sys-port` and `h-update-host-certificate` restart the panel cleanly.
   Enabled" icon for domains when the addon isn't installed (#123). Those two
   columns in `list_mail.php` rendered straight from each domain's stored
   `ANTIVIRUS`/`ANTISPAM` value with no gate; they now gate on

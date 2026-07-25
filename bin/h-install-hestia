@@ -71,7 +71,6 @@ load_os_profile "$INSTALL_OS"
 PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$HESTIA/share/manifest.json" 2> /dev/null | head -n1)
 PHP_VER="${PHP_VER:-8.3}"                        # panel + default web PHP (Sury)
 HESTIA_INSTALL_DIR="${HESTIA_INSTALL_DIR:-$HESTIA/install/deb}"
-HESTIA_COMMON_DIR="${HESTIA_COMMON_DIR:-$HESTIA/install/common}"
 
 # write a config value to hestia.conf
 wcv() { echo "$1='$2'" >> "$HESTIA/conf/hestia.conf"; }
@@ -120,12 +119,15 @@ install_base() {
 	fi
 	sed -i 's/[#]LoginGraceTime [[:digit:]]m/LoginGraceTime 1m/g' /etc/ssh/sshd_config
 	grep -q "^DebianBanner no" /etc/ssh/sshd_config || echo 'DebianBanner no' >> /etc/ssh/sshd_config
-	# Seed a commented (inert) AllowUsers line unless one already exists
-	if ! grep -qiE '^[[:space:]]*#?[[:space:]]*AllowUsers([[:space:]]|$)' /etc/ssh/sshd_config; then
+	# Seed a commented (inert) AllowUsers directive unless one already exists. The
+	# guidance lines must NOT begin with "AllowUsers" (they use "# SSH login ...");
+	# manage_sshd_allowusers keys on the bare "#AllowUsers" directive form and would
+	# otherwise mistake a "# AllowUsers ..." prose line for the directive.
+	if ! grep -qiE '^[[:space:]]*#?AllowUsers([[:space:]]|$)' /etc/ssh/sshd_config; then
 		cat >> /etc/ssh/sshd_config << 'EOF'
 
-# AllowUsers login allowlist — added by HestiaRE, panel users auto-synced. Add your
-# own entries (root@IP, emergency), then uncomment to activate (incomplete = lockout).
+# SSH login allowlist (managed by HestiaRE; panel users auto-synced). Add your own
+# entries (root@IP, emergency), then uncomment the line below — incomplete = lockout.
 #AllowUsers
 EOF
 	fi
@@ -214,7 +216,7 @@ install_panel() {
 	mkdir -p /etc/caddy
 	# caddy logs to /var/log/caddy (cannot write /var/log/hestia)
 	mkdir -p /var/log/caddy
-	chown caddy:caddy /var/log/caddy 2> /dev/null || 
+	chown caddy:caddy /var/log/caddy 2> /dev/null || true
 	cp -f "$HESTIA/share/panel-caddy/Caddyfile" /etc/caddy/Caddyfile
 	cp -f "$HESTIA/share/panel-caddy/hestia.conf" /etc/caddy/hestia.conf
 	# placeholder so `import apps/*.conf` is never an empty glob on first start

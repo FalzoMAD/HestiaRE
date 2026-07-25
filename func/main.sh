@@ -47,7 +47,6 @@ BIN=$HESTIA/bin
 # instance config root; fallback covers installs whose hestia.env predates the var
 CONF_DIR="${CONF_DIR:-/etc/hestia}"
 HESTIA_INSTALL_DIR="$HESTIA/install/deb"
-HESTIA_COMMON_DIR="$HESTIA/install/common"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 # CLI helpers run through the hestia-php wrapper (panel PHP version indirection)
 HESTIA_PHP="$HESTIA/bin/hestia-php"
@@ -1773,63 +1772,16 @@ change_sys_value() {
 }
 
 
+# SFTP jail membership (#413): the sftp-jailed group is the sshd chroot selector and
+# the pam_namespace scope; the jail is built per session (h-add-sys-sftp-jail).
 add_chroot_jail() {
 	local user=$1
-
-	mkdir -p /srv/jail/$user
-	chown 0:0 /srv /srv/jail /srv/jail/$user
-	chmod 755 /srv /srv/jail /srv/jail/$user
-	if [ ! -d /srv/jail/$user/home ]; then
-		mkdir -p /srv/jail/$user/home
-		chown 0:0 /srv/jail/$user/home
-		chmod 755 /srv/jail/$user/home
-	fi
-	if [ ! -d /srv/jail/$user/home/$user ]; then
-		mkdir -p /srv/jail/$user/home/$user
-		chown 0:0 /srv/jail/$user/home/$user
-		chmod 755 /srv/jail/$user/home/$user
-	fi
-
-	systemd=$(systemd-escape -p --suffix=mount "/srv/jail/$user/home/$user")
-	cat > "/etc/systemd/system/$systemd" << EOF
-[Unit]
-Description=Mount $user's home directory to the jail chroot
-Before=local-fs.target
-
-[Mount]
-What=$(getent passwd $user | cut -d : -f 6)
-Where=/srv/jail/$user/home/$user
-Type=none
-Options=bind
-LazyUnmount=yes
-
-[Install]
-RequiredBy=local-fs.target
-EOF
-
-	systemctl daemon-reload > /dev/null 2>&1
-	systemctl enable "$systemd" > /dev/null 2>&1
-	systemctl start "$systemd" > /dev/null 2>&1
+	getent group sftp-jailed > /dev/null 2>&1 || groupadd sftp-jailed
+	usermod -aG sftp-jailed "$user" > /dev/null 2>&1
 }
 
 delete_chroot_jail() {
-	local user=$1
-
-	# Backwards compatibility with old style home jail
-	systemd=$(systemd-escape -p --suffix=mount "/srv/jail/$user/home")
-	systemctl stop "$systemd" > /dev/null 2>&1
-	systemctl disable "$systemd" > /dev/null 2>&1
-	rm -f "/etc/systemd/system/$systemd"
-
-	# Remove the new style home jail
-	systemd=$(systemd-escape -p --suffix=mount "/srv/jail/$user/home/$user")
-	systemctl stop "$systemd" > /dev/null 2>&1
-	systemctl disable "$systemd" > /dev/null 2>&1
-	rm -f "/etc/systemd/system/$systemd"
-
-	systemctl daemon-reload > /dev/null 2>&1
-	rm -r /srv/jail/$user/ > /dev/null 2>&1
-	rmdir /srv/jail/$user > /dev/null 2>&1
+	gpasswd -d "$1" sftp-jailed > /dev/null 2>&1 || true
 }
 
 # Co-maintain the SSH AllowUsers allowlist (#412). Opt-in: acts only if a line exists
@@ -1841,9 +1793,13 @@ manage_sshd_allowusers() {
 	local config='/etc/ssh/sshd_config'
 	[ -f "$config" ] || return 0
 
-	# first managed AllowUsers line (commented or active); none -> nothing to maintain
+	# First managed AllowUsers line (commented or active); none -> nothing to maintain.
+	# The '#' must sit DIRECTLY on the keyword (#AllowUsers) — that is sshd's own
+	# commented-directive form. We must NOT match a prose line like "# AllowUsers is a
+	# login allowlist ..." (space after the #), or we would tokenise the sentence and
+	# append the user to it, mangling the comment and never touching the real directive.
 	local lineno
-	lineno=$(grep -niE '^[[:space:]]*#?[[:space:]]*AllowUsers([[:space:]]|$)' "$config" \
+	lineno=$(grep -niE '^[[:space:]]*#?AllowUsers([[:space:]]|$)' "$config" \
 		| head -n1 | cut -d: -f1)
 	[ -n "$lineno" ] || return 0
 
@@ -1856,7 +1812,7 @@ manage_sshd_allowusers() {
 
 	# tokens after the keyword (may be empty); drop $user's, re-add on 'add'
 	local rest
-	rest=$(echo "$line" | sed -E 's/^[[:space:]]*#?[[:space:]]*AllowUsers[[:space:]]*//')
+	rest=$(echo "$line" | sed -E 's/^[[:space:]]*#?AllowUsers[[:space:]]*//')
 	local -a tokens=() kept=()
 	read -r -a tokens <<< "$rest"
 	local t present=0
