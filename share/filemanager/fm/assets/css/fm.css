@@ -9,25 +9,11 @@
 	margin-right: auto;
 }
 
-/* Dark theme: the stock inline colours are light-only (body #222, filename links
-   #222, light borders). Let Bootstrap's data-bs-theme drive them so the panel dark
-   theme carries through legibly (S2). */
+/* Dark theme: the stock inline body colours are light-only; let Bootstrap's
+   data-bs-theme drive the page surface so the panel dark theme carries through (S2). */
 [data-bs-theme="dark"] body {
 	color: var(--bs-body-color);
 	background: var(--bs-body-bg);
-}
-[data-bs-theme="dark"] #main-table .filename a {
-	color: var(--bs-body-color);
-}
-[data-bs-theme="dark"] .table-bordered td,
-[data-bs-theme="dark"] .table-bordered th {
-	border-color: var(--bs-border-color);
-}
-
-/* Panel-style top bar: account name + back-to-panel (#218). */
-.fm-account {
-	font-weight: 600;
-	margin-right: .5rem;
 }
 
 /* Native uploader drop area (#218 P6, replaces Dropzone's styling). */
