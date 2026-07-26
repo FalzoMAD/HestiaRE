@@ -2504,6 +2504,25 @@ function fm_prism_lang($ext)
 }
 
 /**
+ * The customer account this FM instance belongs to (#218). The pool runs AS the
+ * customer, so the process UID names them; fall back to the routing host
+ * (fm-<user>.local) if posix is unavailable.
+ */
+function fm_account_name()
+{
+    if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+        $pw = @posix_getpwuid(posix_geteuid());
+        if ($pw && !empty($pw['name']) && $pw['name'] !== 'root') {
+            return $pw['name'];
+        }
+    }
+    if (isset($_SERVER['HTTP_HOST']) && preg_match('/^fm-([A-Za-z0-9._-]+)\.local$/', $_SERVER['HTTP_HOST'], $m)) {
+        return $m[1];
+    }
+    return '';
+}
+
+/**
  * Verify CSRF TOKEN and remove after certified
  * @param string $token
  * @return bool
@@ -3856,12 +3875,9 @@ function fm_show_nav_path($path)
     global $lang, $sticky_navbar, $editFile;
     $isStickyNavBar = $sticky_navbar ? 'fixed-top' : '';
 ?>
-    <nav class="navbar navbar-expand-lg mb-4 main-nav <?php echo $isStickyNavBar ?> bg-body-tertiary" data-bs-theme="<?php echo FM_THEME; ?>">
+    <nav class="navbar navbar-expand mb-4 main-nav <?php echo $isStickyNavBar ?> bg-body-tertiary" data-bs-theme="<?php echo FM_THEME; ?>">
         <a class="navbar-brand"> <?php echo lng('AppTitle') ?> </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <div class="navbar-collapse" id="navbarSupportedContent">
 
             <?php
             $path = fm_clean_path($path);
@@ -3906,27 +3922,21 @@ function fm_show_nav_path($path)
                             <a title="<?php echo lng('NewItem') ?>" class="nav-link" href="#createNewItem" data-bs-toggle="modal" data-bs-target="#createNewItem"><i class="fa-solid fa-square-plus"></i> <?php echo lng('NewItem') ?></a>
                         </li>
                     <?php endif; ?>
-                    <?php if (FM_USE_AUTH): ?>
-                        <li class="nav-item avatar dropdown">
-                            <a class="nav-link dropdown-toggle" id="navbarDropdownMenuLink-5" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fa-solid fa-circle-user"></i>
-                            </a>
-
-                            <div class="dropdown-menu dropdown-menu-end text-small shadow" aria-labelledby="navbarDropdownMenuLink-5" data-bs-theme="<?php echo FM_THEME; ?>">
-                                <?php if (!FM_READONLY): ?>
-                                    <a title="<?php echo lng('Settings') ?>" class="dropdown-item nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;settings=1"><i class="fa-solid fa-gear" aria-hidden="true"></i> <?php echo lng('Settings') ?></a>
-                                <?php endif ?>
-                                <a title="<?php echo lng('Help') ?>" class="dropdown-item nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;help=2"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> <?php echo lng('Help') ?></a>
-                                <a title="<?php echo lng('Logout') ?>" class="dropdown-item nav-link" href="?logout=1"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i> <?php echo lng('Logout') ?></a>
-                            </div>
+                    <?php
+                    // HestiaCP's FileGator shows the account + a way back to the panel;
+                    // the FM runs as one customer with no own auth, so instead of TFM's
+                    // login/settings/logout menu we show the account name and a
+                    // back-to-panel link (#218). The panel is the same origin.
+                    $fm_account = fm_account_name();
+                    ?>
+                    <?php if ($fm_account !== ''): ?>
+                        <li class="nav-item d-flex align-items-center">
+                            <span class="navbar-text fm-account"><i class="fa-solid fa-circle-user"></i> <?php echo fm_enc($fm_account) ?></span>
                         </li>
-                    <?php else: ?>
-                        <?php if (!FM_READONLY): ?>
-                            <li class="nav-item">
-                                <a title="<?php echo lng('Settings') ?>" class="dropdown-item nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;settings=1"><i class="fa-solid fa-gear" aria-hidden="true"></i> <?php echo lng('Settings') ?></a>
-                            </li>
-                        <?php endif; ?>
                     <?php endif; ?>
+                    <li class="nav-item">
+                        <a title="Back to panel" class="nav-link" href="/"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Panel</a>
+                    </li>
                 </ul>
             </div>
         </div>
