@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Central manifest of all third-party code vendored into this repository, OS packages the panel depends on at runtime, and Eigenbau components with notable upstream inspiration. Update this file whenever a component is added, upgraded, or removed. License files for inline-vendored code must remain in their respective directories; this manifest points to them but does not replace them.",
-    "last_updated": "2026-07-04",
+    "last_updated": "2026-07-26",
     "source_type_values": {
       "inline":     "Third-party source copied into the repo. HestiaRE carries the full license-compliance obligation — license file must live alongside the code.",
       "os-package": "Installed via apt. The distro ships the code; HestiaRE only declares the dependency. Verify GPL compatibility, but no obligation to ship a separate license file.",
@@ -115,9 +115,64 @@
       "reason": "Adminer login-servers plugin, deployed alongside adminer.php by h-add-sys-adminer as adminer-plugins/login-servers.php. Restricts the login form's Server field to a fixed localhost dropdown so the panel Adminer cannot be pointed at an arbitrary remote host (SSRF hardening, #350/#356). Same upstream repo/version as the adminer single-file. The instantiation/config (share/adminer/adminer-plugins.php, localhost-only server list) is HestiaRE eigenbau, not vendored.",
       "transitive_deps": [],
       "last_verified": "2026-07-19"
+    },
+    {
+      "name": "bootstrap-css",
+      "source_type": "inline",
+      "path": "share/filemanager/fm/assets/css/bootstrap.min.css",
+      "upstream_repo": "https://github.com/twbs/bootstrap",
+      "upstream_branch": "upstream/bootstrap-css",
+      "upstream_version": "5.2.3",
+      "source_url": "https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css",
+      "sha256": "c0bcf7898fdc3b87babca678cd19a8e3ef570e931c80a3afbffcc453738c951a",
+      "license": "MIT",
+      "license_file": "share/filemanager/fm/assets/LICENSE-vendored.md",
+      "reason": "Base UI styling for the File Manager (#218). The vendored TinyFileManager keeps Bootstrap's CSS (author decision: no reskin) while its Bootstrap-JS, jQuery, DataTables and Dropzone are dropped for vanilla JS + a tiny shim. Only dist/css/bootstrap.min.css is vendored — none of the JS bundle.",
+      "transitive_deps": [],
+      "last_verified": "2026-07-26"
+    },
+    {
+      "name": "prismjs",
+      "source_type": "inline",
+      "path": "share/filemanager/fm/assets/js/prism.js + share/filemanager/fm/assets/css/prism-{light,dark,linenumbers}.css",
+      "upstream_repo": "https://github.com/PrismJS/prism",
+      "upstream_branch": "upstream/prismjs",
+      "upstream_version": "1.29.0",
+      "source_url": "jsDelivr /combine of prismjs@1.29.0 components: core,markup,css,clike,javascript,markup-templating,php,python,c,cpp,rust,yaml,batch,go,markdown,handlebars,csharp,powershell,apacheconf,json,bash,sql,ini,nginx,docker,perl,ruby,java,typescript + plugins/line-numbers; themes prism.min.css, prism-tomorrow.min.css, line-numbers.min.css",
+      "sha256": {
+        "prism.js": "b4e93d86fad989e9a2417fa1590c0b86e5a5d78535e47a03771838cedf3160dc",
+        "prism-light.css": "928e23e6b9fcef82c5f1d1f05b6f7fc5a6e187c60195e59fbf16fc9d071ee057",
+        "prism-dark.css": "1b15fe2971998a048aebb60f26f6eed76122071db9ef3b995abd003224f52a98",
+        "prism-linenumbers.css": "e0244e08ecf5ea74636a7bb1320864cd9cc239d9b02d7c45a823025bb5c6fe50"
+      },
+      "license": "MIT",
+      "license_file": "share/filemanager/fm/assets/LICENSE-vendored.md",
+      "modifications": "prism.js is a combined build (core + the 29 languages the FM highlights + the line-numbers plugin), assembled via jsDelivr /combine in the source_url order; the trailing sourceMappingURL comment is stripped. The three CSS files are the stock prism / prism-tomorrow / line-numbers themes, byte-identical.",
+      "reason": "Syntax highlighting + line numbers for the FM read-only view and its Prism-overlay code editor (#218 P4/P5, no preview). Replaces the removed Ace + highlight.js.",
+      "transitive_deps": [],
+      "last_verified": "2026-07-26"
+    },
+    {
+      "name": "tinyfilemanager",
+      "source_type": "inline",
+      "path": "share/filemanager/fm/index.php",
+      "upstream_repo": "https://github.com/prasathmani/tinyfilemanager",
+      "upstream_branch": "upstream/tinyfilemanager",
+      "upstream_version": "2.6",
+      "source_url": "https://raw.githubusercontent.com/prasathmani/tinyfilemanager/2.6/tinyfilemanager.php",
+      "source_sha256": "ebe21835602c1f892cfdf1ab37aa64edd37a1c79203dce90b1d7ccf64c0f7017",
+      "sha256": "be1594aabd952b793d3c42779bc452e9cd1994e7d8e32ffdd6523211f9739213",
+      "license": "GPL-3.0",
+      "license_file": "share/filemanager/fm/LICENSE-tinyfilemanager.md",
+      "modifications": "MAINTAINED FORK, not a verbatim copy. Pristine 2.6 baseline lives on upstream/tinyfilemanager; dev carries the HestiaRE integration + diet: run AS the customer (P2 $use_auth=false, P3 FM_ROOT, P-selfurl relative self-URLs), asset diet (P1 no CDN; Bootstrap-CSS + Prism vendored, FA7 from the panel), Ace->Prism overlay (P4), highlight.js->Prism (P5), Dropzone/DataTables/Bootstrap-JS/jQuery->vanilla+shim (P6-P9), FA4->FA7 (P10), sharing/direct-link removed (P11), plus a ?media= streaming handler and X-Hestia-Theme passthrough. sha256 is HestiaRE's forked file (changes each patch); source_sha256 is the pristine 2.6 baseline.",
+      "reason": "The File Manager application (#218/#419 rebuild, replaces FileGator). Single-file PHP; runs in a per-customer php-fpm pool AS the customer so the kernel UID is the file-access boundary.",
+      "transitive_deps": [
+        "bootstrap-css",
+        "prismjs"
+      ],
+      "last_verified": "2026-07-26"
     }
   ],
-
   "os_packages": [
     {
       "name": "libphp-phpmailer",
@@ -135,7 +190,6 @@
       "installed_by": "make/panel.mk"
     }
   ],
-
   "eigenbau": [
     {
       "name": "cloudflare-ip",
