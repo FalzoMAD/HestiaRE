@@ -131,6 +131,15 @@ rebuild_user_conf() {
 
 	$BIN/h-add-user-sftp-jail "$user"
 
+	# Rebuild the file manager pool + vhost if the user had it enabled (#419). Restore
+	# bypasses h-add-user-filemanager, so without this a restored user keeps the flag +
+	# panel menu but has no working FM — the same lockout class as AllowUsers above.
+	# Guarded on the secret so it is a no-op when the module is not installed here (a
+	# later h-add-sys-filemanager reactivates the saved flag).
+	if [ "$FILE_MANAGER" = "yes" ] && [ -s /etc/hestia/conf/.filemanager.key ]; then
+		$BIN/h-add-user-filemanager "$user" > /dev/null 2>&1 || true
+	fi
+
 	# Update disk pipe
 	sed -i "/ $user$/d" $CONF_DIR/queue/disk.pipe
 	echo "$BIN/h-update-user-disk $user" >> $CONF_DIR/queue/disk.pipe
