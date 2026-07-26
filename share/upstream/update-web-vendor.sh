@@ -9,11 +9,14 @@
 # Maintains the READ-ONLY snapshot branches (one per vendor project, files in
 # HestiaRE target structure + VERSIONS.md), analog to upstream/phpquoteshellarg:
 #
-#   asset          branch                  files
-#   alpinejs       upstream/alpinejs       web/js/vendor/alpinejs*.min.js + LICENSE
-#   fontawesome    upstream/fontawesome    web/css/vendor/fontawesome/* + web/webfonts/fa-solid-900.woff2
-#   normalize-css  upstream/normalize-css  web/css/vendor/normalize.css + LICENSE
-#   adminer        upstream/adminer        share/adminer/adminer.php + LICENSE
+#   asset            branch                    files
+#   alpinejs         upstream/alpinejs         web/js/vendor/alpinejs*.min.js + LICENSE
+#   fontawesome      upstream/fontawesome      web/css/vendor/fontawesome/* + web/webfonts/fa-solid-900.woff2
+#   normalize-css    upstream/normalize-css    web/css/vendor/normalize.css + LICENSE
+#   adminer          upstream/adminer          share/adminer/adminer.php + LICENSE
+#   bootstrap-css    upstream/bootstrap-css    share/filemanager/fm/assets/css/bootstrap.min.css + LICENSE
+#   prismjs          upstream/prismjs          share/filemanager/fm/assets/{js/prism.js,css/prism-*.css} + LICENSE
+#   tinyfilemanager  upstream/tinyfilemanager  share/filemanager/fm/index.php (PRISTINE baseline; dev is a fork) + LICENSE
 #
 # --check is strictly read-only (network: npm registry / GitHub API only).
 # --fetch works per asset: downloads exactly one project at the given (or
@@ -56,7 +59,10 @@ latest_version() {
 		normalize-css) api "https://api.github.com/repos/necolas/normalize.css/tags?per_page=100" \
 			| jq -r '.[].name | ltrimstr("v")' | sort -V | tail -1 ;;
 		adminer) api "https://api.github.com/repos/vrana/adminer/releases/latest" | jq -r '.tag_name | ltrimstr("v")' ;;
-		*) fail "unknown asset: $1 (known: alpinejs fontawesome normalize-css adminer)" ;;
+		bootstrap-css) api "https://registry.npmjs.org/bootstrap/latest" | jq -r '.version' ;;
+		prismjs) api "https://registry.npmjs.org/prismjs/latest" | jq -r '.version' ;;
+		tinyfilemanager) api "https://api.github.com/repos/prasathmani/tinyfilemanager/releases/latest" | jq -r '.tag_name | ltrimstr("v")' ;;
+		*) fail "unknown asset: $1 (known: alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager)" ;;
 	esac
 }
 
@@ -289,24 +295,138 @@ EOF
 	close_worktree
 }
 
+fetch_bootstrap_css() {
+	local version=$1 branch="upstream/bootstrap-css" dir tb sha
+	# Only the compiled dist CSS is vendored (the FM keeps Bootstrap's CSS, drops its JS).
+	open_worktree "$branch"
+	dir="$WT/share/filemanager/fm/assets/css"
+	tb=$(npm_fetch_file "bootstrap" "$version" "dist/css/bootstrap.min.css" "$dir/bootstrap.min.css")
+	curl -fsSL -A "$UA" -o "$dir/LICENSE-bootstrap.txt" \
+		"https://raw.githubusercontent.com/twbs/bootstrap/v$version/LICENSE" || true
+	sha=$(file_sha256 "$dir/bootstrap.min.css")
+	cat > "$dir/VERSIONS.md" << EOF
+# Vendored artifact — Bootstrap CSS (twbs/bootstrap)
+
+Branch \`$branch\`: READ ONLY snapshot of the published dist CSS,
+laid out in HestiaRE target structure for direct merge/cherry-pick into dev.
+Update via share/upstream/update-web-vendor.sh (--fetch bootstrap-css[@version]).
+
+Source: $tb (dist/css/bootstrap.min.css)
+
+| File | Version | Modification | sha256 (as vendored) |
+|---|---|---|---|
+| bootstrap.min.css | $version | none (byte-identical to the npm dist CSS) | $sha |
+
+License: MIT (LICENSE-bootstrap.txt). Only the CSS is shipped — the Bootstrap JS
+bundle is intentionally NOT vendored (the FM replaces it with vanilla JS + a shim).
+EOF
+	commit_snapshot "bootstrap-css" "$version" "$branch"
+	close_worktree
+}
+
+fetch_prismjs() {
+	local version=$1 branch="upstream/prismjs" dir url first c comps sha_js
+	# Combined build: core + the languages the FM highlights + the line-numbers plugin,
+	# assembled via the jsDelivr /combine endpoint (deterministic for pinned versions).
+	comps="core markup css clike javascript markup-templating php python c cpp rust yaml batch go markdown handlebars csharp powershell apacheconf json bash sql ini nginx docker perl ruby java typescript"
+	open_worktree "$branch"
+	dir="$WT/share/filemanager/fm/assets"
+	mkdir -p "$dir/js" "$dir/css"
+	url="https://cdn.jsdelivr.net/combine/"
+	first=1
+	for c in $comps; do
+		[ $first -eq 1 ] && first=0 || url="$url,"
+		url="${url}npm/prismjs@$version/components/prism-$c.min.js"
+	done
+	url="$url,npm/prismjs@$version/plugins/line-numbers/prism-line-numbers.min.js"
+	curl -fsSL -A "$UA" "$url" | sed 's|//# sourceMappingURL=.*||' > "$dir/js/prism.js"
+	curl -fsSL -A "$UA" -o "$dir/css/prism-light.css" \
+		"https://cdn.jsdelivr.net/npm/prismjs@$version/themes/prism.min.css"
+	curl -fsSL -A "$UA" -o "$dir/css/prism-dark.css" \
+		"https://cdn.jsdelivr.net/npm/prismjs@$version/themes/prism-tomorrow.min.css"
+	curl -fsSL -A "$UA" -o "$dir/css/prism-linenumbers.css" \
+		"https://cdn.jsdelivr.net/npm/prismjs@$version/plugins/line-numbers/prism-line-numbers.min.css"
+	curl -fsSL -A "$UA" -o "$dir/LICENSE-prism.txt" \
+		"https://raw.githubusercontent.com/PrismJS/prism/v$version/LICENSE" || true
+	sha_js=$(file_sha256 "$dir/js/prism.js")
+	cat > "$dir/VERSIONS.md" << EOF
+# Vendored artifact — PrismJS (PrismJS/prism), combined build
+
+Branch \`$branch\`: READ ONLY snapshot, laid out in HestiaRE target structure.
+Update via share/upstream/update-web-vendor.sh (--fetch prismjs[@version]).
+
+prism.js is core + these languages + the line-numbers plugin, in this order,
+concatenated by jsDelivr /combine (sourceMappingURL comment stripped):
+$comps line-numbers
+Themes: prism.min.css -> prism-light.css, prism-tomorrow.min.css -> prism-dark.css,
+line-numbers plugin css -> prism-linenumbers.css (all byte-identical to upstream).
+
+prism.js sha256 (as vendored): $sha_js
+
+License: MIT (LICENSE-prism.txt). No publisher hash exists for a combined build;
+the combine is deterministic for pinned component versions.
+EOF
+	commit_snapshot "prismjs" "$version" "$branch"
+	close_worktree
+}
+
+fetch_tinyfilemanager() {
+	local version=$1 branch="upstream/tinyfilemanager" dir sha
+	# The PRISTINE upstream single file — the diff reference for HestiaRE's fork in dev
+	# (share/filemanager/fm/index.php). NOT the shipped app.
+	open_worktree "$branch"
+	dir="$WT/share/filemanager/fm"
+	mkdir -p "$dir"
+	curl -fsSL -A "$UA" -o "$dir/index.php" \
+		"https://raw.githubusercontent.com/prasathmani/tinyfilemanager/$version/tinyfilemanager.php"
+	php -l "$dir/index.php" > /dev/null 2>&1 || fail "downloaded tinyfilemanager fails php -l"
+	curl -fsSL -A "$UA" -o "$dir/LICENSE" \
+		"https://raw.githubusercontent.com/prasathmani/tinyfilemanager/$version/LICENSE" || true
+	sha=$(file_sha256 "$dir/index.php")
+	cat > "$dir/VERSIONS.md" << EOF
+# Vendored artifact — TinyFileManager (prasathmani/tinyfilemanager)
+
+Branch \`$branch\`: READ ONLY snapshot of the PRISTINE upstream single file.
+Update via share/upstream/update-web-vendor.sh (--fetch tinyfilemanager[@version]).
+
+This is the diff reference only. The shipped app in dev
+(share/filemanager/fm/index.php) is a MAINTAINED FORK of this baseline — see
+share/filemanager/fm/LICENSE-tinyfilemanager.md and VENDORED.json. Compare with:
+  git diff $branch..dev -- share/filemanager/fm/index.php
+
+Source: https://raw.githubusercontent.com/prasathmani/tinyfilemanager/$version/tinyfilemanager.php
+
+| File | Version | sha256 (pristine) |
+|---|---|---|
+| index.php | $version | $sha |
+
+License: GPL-3.0 (LICENSE, from the same tag).
+EOF
+	commit_snapshot "tinyfilemanager" "$version" "$branch"
+	close_worktree
+}
+
 # ── modes ──────────────────────────────────────────────────
 
 do_check() {
 	local assets=$1 a pinned latest mark
-	[ "$assets" = "all" ] && assets="alpinejs fontawesome normalize-css adminer"
-	printf '%-15s %-10s %-10s %s\n' "ASSET" "PINNED" "LATEST" "STATUS"
+	[ "$assets" = "all" ] && assets="alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager"
+	printf '%-16s %-10s %-10s %s\n' "ASSET" "PINNED" "LATEST" "STATUS"
 	for a in $assets; do
 		case "$a" in
 			alpinejs) pinned=$(pinned_version alpinejs) ;;
 			fontawesome) pinned=$(pinned_version fontawesome-free) ;;
 			normalize-css) pinned=$(pinned_version normalize.css) ;;
 			adminer) pinned=$(pinned_version adminer) ;;
-			*) fail "unknown asset: $a (known: alpinejs fontawesome normalize-css adminer)" ;;
+			bootstrap-css) pinned=$(pinned_version bootstrap-css) ;;
+			prismjs) pinned=$(pinned_version prismjs) ;;
+			tinyfilemanager) pinned=$(pinned_version tinyfilemanager) ;;
+			*) fail "unknown asset: $a (known: alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager)" ;;
 		esac
 		latest=$(latest_version "$a")
 		mark="up to date"
 		[ "$pinned" != "$latest" ] && mark="UPDATE AVAILABLE (--fetch $a@$latest)"
-		printf '%-15s %-10s %-10s %s\n' "$a" "${pinned:-?}" "${latest:-?}" "$mark"
+		printf '%-16s %-10s %-10s %s\n' "$a" "${pinned:-?}" "${latest:-?}" "$mark"
 	done
 }
 
@@ -322,7 +442,10 @@ do_fetch() {
 		fontawesome) fetch_fontawesome "$version" ;;
 		normalize-css) fetch_normalize "$version" ;;
 		adminer) fetch_adminer "$version" ;;
-		*) fail "unknown asset: $asset (known: alpinejs fontawesome normalize-css adminer)" ;;
+		bootstrap-css) fetch_bootstrap_css "$version" ;;
+		prismjs) fetch_prismjs "$version" ;;
+		tinyfilemanager) fetch_tinyfilemanager "$version" ;;
+		*) fail "unknown asset: $asset (known: alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager)" ;;
 	esac
 }
 
