@@ -78,11 +78,13 @@ if [ "$restart" != 'no' ]; then
 	$BIN/h-restart-service "$fm_web" > /dev/null 2>&1 || true
 fi
 
-# Set the flag (saved state); add the key if this user.conf predates it
+# Set the flag (saved state). If the key predates this feature, insert it BEFORE the
+# TIME line — never append at EOF: update_user_value deletes+reinserts by line number,
+# and a last-line key fails to reinsert (the address lands past EOF) and vanishes.
 if grep -q "^FILE_MANAGER='" "$USER_DATA/user.conf" 2> /dev/null; then
 	update_user_value "$user" '$FILE_MANAGER' 'yes'
 else
-	echo "FILE_MANAGER='yes'" >> "$USER_DATA/user.conf"
+	sed -i "/^TIME=/i FILE_MANAGER='yes'" "$USER_DATA/user.conf"
 fi
 
 #----------------------------------------------------------#

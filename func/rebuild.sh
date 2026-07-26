@@ -62,6 +62,9 @@ rebuild_user_conf() {
 	if [ -z "${RATE_LIMIT+x}" ]; then
 		sed -i "/MAIL_ACCOUNTS/a RATE_LIMIT='200'" $USER_DATA/user.conf
 	fi
+	if [ -z "${FILE_MANAGER+x}" ]; then
+		sed -i "/RATE_LIMIT/a FILE_MANAGER=''" $USER_DATA/user.conf
+	fi
 	# Run template trigger
 	if [ -x "$HESTIA/packages/$PACKAGE.sh" ]; then
 		$HESTIA/packages/$PACKAGE.sh "$user" "$CONTACT" "$NAME"
