@@ -173,20 +173,20 @@ if (is_readable($config_file)) {
 define('ACE_FONTSIZE', isset($ace_fontsize) ? $ace_fontsize : 12);
 define('ACE_THEME', isset($ace_theme) ? $ace_theme : 'textmate');
 
-// External CDN resources that can be used in the HTML (replace for GDPR compliance)
+// Front-end assets. HestiaRE serves everything same-origin (no external CDN — GDPR,
+// offline installs, panel CSP): local files come from the private FM listener under
+// /fm/assets, and shared libraries (Bootstrap-CSS excepted) are referenced by their
+// ABSOLUTE panel path since the FM is same-origin with the panel (:8083/fm/) — so
+// FontAwesome and AlpineJS are the very files the panel already ships, and a panel
+// update carries straight through with no copy here (#218 P1, §10.4).
 $external = array(
-    'css-bootstrap' => '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">',
-    'css-dropzone' => '<link href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.css" rel="stylesheet">',
-    'css-font-awesome' => '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" crossorigin="anonymous">',
-    'css-highlightjs' => '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/' . $highlightjs_style . '.min.css">',
-    'js-ace' => '<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>',
-    'js-bootstrap' => '<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>',
-    'js-dropzone' => '<script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.js"></script>',
-    'js-jquery' => '<script src="https://code.jquery.com/jquery-3.6.1.min.js" integrity="sha256-o88AwQnZB+VDvE9tvIXrMQaPlFFSUTR+nldQm1LuPXQ=" crossorigin="anonymous"></script>',
-    'js-jquery-datatables' => '<script src="https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js" crossorigin="anonymous" defer></script>',
-    'js-highlightjs' => '<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>',
-    'pre-jsdelivr' => '<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/><link rel="dns-prefetch" href="https://cdn.jsdelivr.net"/>',
-    'pre-cloudflare' => '<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin/><link rel="dns-prefetch" href="https://cdnjs.cloudflare.com"/>'
+    // Local, vendored under share/filemanager/fm/assets/.
+    'css-bootstrap'   => '<link rel="stylesheet" href="/fm/assets/css/bootstrap.min.css">',
+    'css-fm'          => '<link rel="stylesheet" href="/fm/assets/css/fm.css">',
+    'js-prism'        => '<script src="/fm/assets/js/prism.js"></script>',
+    'js-editor'       => '<script src="/fm/assets/js/fm-editor.js"></script>',
+    // Panel-origin (the panel's own copy; keeps in step automatically).
+    'css-font-awesome' => '<link rel="stylesheet" href="/css/vendor/fontawesome/fontawesome.css"><link rel="stylesheet" href="/css/vendor/fontawesome/solid.css">',
 );
 
 // --- EDIT BELOW CAREFULLY OR DO NOT EDIT AT ALL ---
@@ -217,8 +217,12 @@ $report_errors = isset($cfg->data['error_reporting']) ? $cfg->data['error_report
 // Hide Permissions and Owner cols in file-listing
 $hide_Cols = isset($cfg->data['hide_Cols']) ? $cfg->data['hide_Cols'] : true;
 
-// Theme
-$theme = isset($cfg->data['theme']) ? $cfg->data['theme'] : 'light';
+// Theme — driven by the customer's panel setting (#218 S2). fm-auth.php reads the
+// panel session theme and returns it as X-Hestia-Theme, which Caddy copies onto the
+// proxied request. Panel theme names are light*/dark* families; Bootstrap's
+// data-bs-theme only knows light|dark, so anything starting "dark" maps to dark.
+$panel_theme = isset($_SERVER['HTTP_X_HESTIA_THEME']) ? $_SERVER['HTTP_X_HESTIA_THEME'] : '';
+$theme = (strpos($panel_theme, 'dark') === 0) ? 'dark' : 'light';
 
 define('FM_THEME', $theme);
 
@@ -970,6 +974,32 @@ if (isset($_GET['dl'], $_POST['token'])) {
     }
 }
 
+// Inline media stream (#218). The customer home is NOT under the web root — the
+// private FM listener serves the code dir — so <img>/<audio>/<video> in the view
+// page cannot point at a raw file URL. They point here instead and we stream the
+// file through PHP. No token: this is a GET reached through Caddy's forward_auth,
+// so the session is already proven (same gate as rendering the view page itself).
+if (isset($_GET['media'])) {
+    $media = fm_clean_path(urldecode($_GET['media']));
+    $media = str_replace('/', '', $media); // stay in the current folder, no traversal
+    $path = FM_ROOT_PATH . (FM_PATH != '' ? '/' . FM_PATH : '');
+    $full = $path . '/' . $media;
+    if ($media !== '' && is_file($full) && fm_is_exclude_items($media, $full)) {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        $mime = fm_get_mime_type($full);
+        header('Content-Type: ' . ($mime ?: 'application/octet-stream'));
+        header('Content-Length: ' . filesize($full));
+        header('Content-Disposition: inline; filename="' . basename($full) . '"');
+        header('X-Content-Type-Options: nosniff');
+        readfile($full);
+    } else {
+        http_response_code(404);
+    }
+    exit;
+}
+
 // Upload
 if (!empty($_FILES) && !FM_READONLY) {
     if (isset($_POST['token'])) {
@@ -1409,34 +1439,32 @@ if (isset($_GET['upload']) && !FM_READONLY) {
         return '';
     }
     ?>
-    <?php print_external('css-dropzone'); ?>
     <div class="path">
 
         <div class="card mb-2 fm-upload-wrapper" data-bs-theme="<?php echo FM_THEME; ?>">
             <div class="card-header">
                 <ul class="nav nav-tabs card-header-tabs">
                     <li class="nav-item">
-                        <a class="nav-link active" href="#fileUploader" data-target="#fileUploader"><i class="fa fa-arrow-circle-o-up"></i> <?php echo lng('UploadingFiles') ?></a>
+                        <a class="nav-link active" href="#fileUploader" data-target="#fileUploader"><i class="fa-solid fa-circle-up"></i> <?php echo lng('UploadingFiles') ?></a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#urlUploader" class="js-url-upload" data-target="#urlUploader"><i class="fa fa-link"></i> <?php echo lng('Upload from URL') ?></a>
+                        <a class="nav-link" href="#urlUploader" data-target="#urlUploader"><i class="fa-solid fa-link"></i> <?php echo lng('Upload from URL') ?></a>
                     </li>
                 </ul>
             </div>
             <div class="card-body">
                 <p class="card-text">
-                    <a href="?p=<?php echo FM_PATH ?>" class="float-right"><i class="fa fa-chevron-circle-left go-back"></i> <?php echo lng('Back') ?></a>
+                    <a href="?p=<?php echo FM_PATH ?>" class="float-right"><i class="fa-solid fa-circle-chevron-left go-back"></i> <?php echo lng('Back') ?></a>
                     <strong><?php echo lng('DestinationFolder') ?></strong>: <?php echo fm_enc(fm_convert_win(FM_PATH)) ?>
                 </p>
 
-                <form action="<?php echo htmlspecialchars(FM_SELF_URL) . '?p=' . fm_enc(FM_PATH) ?>" class="dropzone card-tabs-container" id="fileUploader" enctype="multipart/form-data">
-                    <input type="hidden" name="p" value="<?php echo fm_enc(FM_PATH) ?>">
-                    <input type="hidden" name="fullpath" id="fullpath" value="<?php echo fm_enc(FM_PATH) ?>">
-                    <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-                    <div class="fallback">
-                        <input name="file" type="file" multiple />
+                <div class="card-tabs-container" id="fileUploader">
+                    <div id="fm-dropzone" class="fm-dropzone">
+                        <p class="fm-dropzone__hint"><i class="fa-solid fa-cloud-arrow-up"></i> <?php echo lng('UploadingFiles') ?></p>
+                        <input name="file" id="fm-file-input" type="file" multiple hidden />
                     </div>
-                </form>
+                    <div id="fm-upload-list" class="mt-3"></div>
+                </div>
 
                 <div class="upload-url-wrapper card-tabs-container hidden" id="urlUploader">
                     <form id="js-form-url-upload" class="row row-cols-lg-auto g-3 align-items-center" onsubmit="return upload_from_url(this);" method="POST" action="">
@@ -1455,41 +1483,110 @@ if (isset($_GET['upload']) && !FM_READONLY) {
             </div>
         </div>
     </div>
-    <?php print_external('js-dropzone'); ?>
     <script>
-        Dropzone.options.fileUploader = {
-            chunking: true,
-            chunkSize: <?php echo UPLOAD_CHUNK_SIZE; ?>,
-            forceChunking: true,
-            retryChunks: true,
-            retryChunksLimit: 3,
-            parallelUploads: 1,
-            parallelChunkUploads: false,
-            timeout: 120000,
-            maxFilesize: "<?php echo MAX_UPLOAD_SIZE; ?>",
-            acceptedFiles: "<?php echo getUploadExt() ?>",
-            init: function() {
-                this.on("sending", function(file, xhr, formData) {
-                    let _path = (file.fullPath) ? file.fullPath : file.name;
-                    document.getElementById("fullpath").value = _path;
-                    xhr.ontimeout = (function() {
-                        toast('Error: Server Timeout');
-                    });
-                }).on("success", function(res) {
-                    try {
-                        let _response = JSON.parse(res.xhr.response);
+        /* Native chunked uploader (#218 P6, replaces Dropzone). Chunks are POSTed
+           sequentially with the same fields the server expects (dzchunkindex /
+           dztotalchunkcount / fullpath), so the PHP handler is untouched. Folder
+           drops are walked so sub-paths are recreated server-side via fullpath. */
+        (function() {
+            var CHUNK = <?php echo (int) UPLOAD_CHUNK_SIZE; ?>;
+            var ACCEPT = "<?php echo getUploadExt() ?>";
+            var URL_ = "<?php echo htmlspecialchars(FM_SELF_URL) . '?p=' . fm_enc(FM_PATH) ?>";
+            var TOKEN = "<?php echo $_SESSION['token']; ?>";
+            var BASE = "<?php echo fm_enc(FM_PATH) ?>";
+            var dz = document.getElementById('fm-dropzone');
+            var input = document.getElementById('fm-file-input');
+            var list = document.getElementById('fm-upload-list');
+            if (!dz) return;
 
-                        if (_response.status == "error") {
-                            toast(_response.info);
-                        }
-                    } catch (e) {
-                        toast("Error: Invalid JSON response");
-                    }
-                }).on("error", function(file, response) {
-                    toast(response);
-                });
+            function accepted(name) {
+                if (!ACCEPT) return true;
+                var ext = '.' + name.split('.').pop().toLowerCase();
+                return ACCEPT.split(',').indexOf(ext) > -1;
             }
-        }
+            function addRow(label) {
+                var row = document.createElement('div');
+                row.className = 'fm-up-row';
+                row.innerHTML = '<div class="small">' + label + '</div>' +
+                    '<div class="progress" style="height:6px"><div class="progress-bar" role="progressbar" style="width:0%"></div></div>';
+                list.appendChild(row);
+                return row;
+            }
+            function setProgress(row, frac) {
+                var bar = row.querySelector('.progress-bar');
+                if (bar) bar.style.width = Math.round(frac * 100) + '%';
+            }
+            function setError(row, msg) {
+                var bar = row.querySelector('.progress-bar');
+                if (bar) bar.classList.add('bg-danger');
+                row.querySelector('.small').innerHTML += ' — <span class="text-danger">' + msg + '</span>';
+            }
+            function setDone(row) {
+                var bar = row.querySelector('.progress-bar');
+                if (bar) { bar.style.width = '100%'; bar.classList.add('bg-success'); }
+            }
+            function upload(file, rel) {
+                rel = rel || file.webkitRelativePath || file.name;
+                if (!accepted(file.name)) { addRow(rel + ' — <span class="text-danger">not allowed</span>'); return; }
+                var total = Math.max(1, Math.ceil(file.size / CHUNK));
+                var row = addRow(rel);
+                var idx = 0;
+                function send() {
+                    var blob = file.slice(idx * CHUNK, idx * CHUNK + CHUNK);
+                    var fd = new FormData();
+                    fd.append('p', BASE);
+                    fd.append('fullpath', rel);
+                    fd.append('token', TOKEN);
+                    fd.append('dzchunkindex', idx);
+                    fd.append('dztotalchunkcount', total);
+                    fd.append('file', blob, file.name);
+                    fetch(URL_, { method: 'POST', body: fd })
+                        .then(function(r) { return r.text(); })
+                        .then(function(txt) {
+                            var resp = {};
+                            try { resp = JSON.parse(txt); } catch (e) {}
+                            if (resp.status === 'error') { setError(row, resp.info || 'Error'); return; }
+                            idx++;
+                            setProgress(row, idx / total);
+                            if (idx < total) send(); else setDone(row);
+                        })
+                        .catch(function() { setError(row, 'Upload failed'); });
+                }
+                send();
+            }
+            function handleFiles(files) { Array.prototype.forEach.call(files, function(f) { upload(f); }); }
+
+            function walkEntry(entry, path) {
+                if (entry.isFile) {
+                    entry.file(function(file) { upload(file, path + file.name); });
+                } else if (entry.isDirectory) {
+                    entry.createReader().readEntries(function(ents) {
+                        ents.forEach(function(en) { walkEntry(en, path + entry.name + '/'); });
+                    });
+                }
+            }
+
+            dz.addEventListener('click', function() { input.click(); });
+            input.addEventListener('change', function() { handleFiles(this.files); this.value = ''; });
+            ['dragenter', 'dragover'].forEach(function(ev) {
+                dz.addEventListener(ev, function(e) { e.preventDefault(); dz.classList.add('fm-dropzone--hover'); });
+            });
+            ['dragleave', 'drop'].forEach(function(ev) {
+                dz.addEventListener(ev, function(e) { e.preventDefault(); dz.classList.remove('fm-dropzone--hover'); });
+            });
+            dz.addEventListener('drop', function(e) {
+                e.preventDefault();
+                var items = e.dataTransfer.items;
+                if (items && items.length && items[0].webkitGetAsEntry) {
+                    for (var i = 0; i < items.length; i++) {
+                        var en = items[i].webkitGetAsEntry();
+                        if (en) walkEntry(en, '');
+                    }
+                } else {
+                    handleFiles(e.dataTransfer.files);
+                }
+            });
+        })();
     </script>
 <?php
     fm_show_footer();
@@ -1531,9 +1628,9 @@ if (isset($_POST['copy']) && !FM_READONLY) {
                         <label for="js-move-files" class="custom-control-label ms-2"><?php echo lng('Move') ?></label>
                     </p>
                     <p>
-                        <b><a href="?p=<?php echo urlencode(FM_PATH) ?>" class="btn btn-outline-danger"><i class="fa fa-times-circle"></i> <?php echo lng('Cancel') ?></a></b>&nbsp;
+                        <b><a href="?p=<?php echo urlencode(FM_PATH) ?>" class="btn btn-outline-danger"><i class="fa-solid fa-circle-xmark"></i> <?php echo lng('Cancel') ?></a></b>&nbsp;
                         <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-                        <button type="submit" class="btn btn-success"><i class="fa fa-check-circle"></i> <?php echo lng('Copy') ?></button>
+                        <button type="submit" class="btn btn-success"><i class="fa-solid fa-circle-check"></i> <?php echo lng('Copy') ?></button>
                     </p>
                 </form>
             </div>
@@ -1564,22 +1661,22 @@ if (isset($_GET['copy']) && !isset($_GET['finish']) && !FM_READONLY) {
             <strong>Destination folder:</strong> <?php echo fm_enc(fm_convert_win(FM_ROOT_PATH . '/' . FM_PATH)) ?>
         </p>
         <p>
-            <b><a href="?p=<?php echo urlencode(FM_PATH) ?>&amp;copy=<?php echo urlencode($copy) ?>&amp;finish=1"><i class="fa fa-check-circle"></i> Copy</a></b> &nbsp;
-            <b><a href="?p=<?php echo urlencode(FM_PATH) ?>&amp;copy=<?php echo urlencode($copy) ?>&amp;finish=1&amp;move=1"><i class="fa fa-check-circle"></i> Move</a></b> &nbsp;
-            <b><a href="?p=<?php echo urlencode(FM_PATH) ?>" class="text-danger"><i class="fa fa-times-circle"></i> Cancel</a></b>
+            <b><a href="?p=<?php echo urlencode(FM_PATH) ?>&amp;copy=<?php echo urlencode($copy) ?>&amp;finish=1"><i class="fa-solid fa-circle-check"></i> Copy</a></b> &nbsp;
+            <b><a href="?p=<?php echo urlencode(FM_PATH) ?>&amp;copy=<?php echo urlencode($copy) ?>&amp;finish=1&amp;move=1"><i class="fa-solid fa-circle-check"></i> Move</a></b> &nbsp;
+            <b><a href="?p=<?php echo urlencode(FM_PATH) ?>" class="text-danger"><i class="fa-solid fa-circle-xmark"></i> Cancel</a></b>
         </p>
         <p><i><?php echo lng('Select folder') ?></i></p>
         <ul class="folders break-word">
             <?php
             if ($parent !== false) {
             ?>
-                <li><a href="?p=<?php echo urlencode($parent) ?>&amp;copy=<?php echo urlencode($copy) ?>"><i class="fa fa-chevron-circle-left"></i> ..</a></li>
+                <li><a href="?p=<?php echo urlencode($parent) ?>&amp;copy=<?php echo urlencode($copy) ?>"><i class="fa-solid fa-circle-chevron-left"></i> ..</a></li>
             <?php
             }
             foreach ($folders as $f) {
             ?>
                 <li>
-                    <a href="?p=<?php echo urlencode(trim(FM_PATH . '/' . $f, '/')) ?>&amp;copy=<?php echo urlencode($copy) ?>"><i class="fa fa-folder-o"></i> <?php echo fm_convert_win($f) ?></a>
+                    <a href="?p=<?php echo urlencode(trim(FM_PATH . '/' . $f, '/')) ?>&amp;copy=<?php echo urlencode($copy) ?>"><i class="fa-solid fa-folder"></i> <?php echo fm_convert_win($f) ?></a>
                 </li>
             <?php
             }
@@ -1600,8 +1697,8 @@ if (isset($_GET['settings']) && !FM_READONLY) {
     <div class="col-md-8 offset-md-2 pt-3">
         <div class="card mb-2" data-bs-theme="<?php echo FM_THEME; ?>">
             <h6 class="card-header d-flex justify-content-between">
-                <span><i class="fa fa-cog"></i> <?php echo lng('Settings') ?></span>
-                <a href="?p=<?php echo FM_PATH ?>" class="text-danger"><i class="fa fa-times-circle-o"></i> <?php echo lng('Cancel') ?></a>
+                <span><i class="fa-solid fa-gear"></i> <?php echo lng('Settings') ?></span>
+                <a href="?p=<?php echo FM_PATH ?>" class="text-danger"><i class="fa-solid fa-circle-xmark"></i> <?php echo lng('Cancel') ?></a>
             </h6>
             <div class="card-body">
                 <form id="js-settings-form" action="" method="post" data-type="ajax" onsubmit="return save_settings(this)">
@@ -1670,7 +1767,7 @@ if (isset($_GET['settings']) && !FM_READONLY) {
 
                     <div class="mb-3 row">
                         <div class="col-sm-10">
-                            <button type="submit" class="btn btn-success"> <i class="fa fa-check-circle"></i> <?php echo lng('Save'); ?></button>
+                            <button type="submit" class="btn btn-success"> <i class="fa-solid fa-circle-check"></i> <?php echo lng('Save'); ?></button>
                         </div>
                     </div>
 
@@ -1693,8 +1790,8 @@ if (isset($_GET['help'])) {
     <div class="col-md-8 offset-md-2 pt-3">
         <div class="card mb-2" data-bs-theme="<?php echo FM_THEME; ?>">
             <h6 class="card-header d-flex justify-content-between">
-                <span><i class="fa fa-exclamation-circle"></i> <?php echo lng('Help') ?></span>
-                <a href="?p=<?php echo FM_PATH ?>" class="text-danger"><i class="fa fa-times-circle-o"></i> <?php echo lng('Cancel') ?></a>
+                <span><i class="fa-solid fa-circle-exclamation"></i> <?php echo lng('Help') ?></span>
+                <a href="?p=<?php echo FM_PATH ?>" class="text-danger"><i class="fa-solid fa-circle-xmark"></i> <?php echo lng('Cancel') ?></a>
             </h6>
             <div class="card-body">
                 <div class="row">
@@ -1708,10 +1805,10 @@ if (isset($_GET['help'])) {
                     <div class="col-xs-12 col-sm-6">
                         <div class="card">
                             <ul class="list-group list-group-flush">
-                                <li class="list-group-item"><a href="https://github.com/prasathmani/tinyfilemanager/wiki" target="_blank"><i class="fa fa-question-circle"></i> <?php echo lng('Help Documents') ?> </a> </li>
-                                <li class="list-group-item"><a href="https://github.com/prasathmani/tinyfilemanager/issues" target="_blank"><i class="fa fa-bug"></i> <?php echo lng('Report Issue') ?></a></li>
+                                <li class="list-group-item"><a href="https://github.com/prasathmani/tinyfilemanager/wiki" target="_blank"><i class="fa-solid fa-circle-question"></i> <?php echo lng('Help Documents') ?> </a> </li>
+                                <li class="list-group-item"><a href="https://github.com/prasathmani/tinyfilemanager/issues" target="_blank"><i class="fa-solid fa-bug"></i> <?php echo lng('Report Issue') ?></a></li>
                                 <?php if (!FM_READONLY) { ?>
-                                    <li class="list-group-item"><a href="javascript:show_new_pwd();"><i class="fa fa-lock"></i> <?php echo lng('Generate new password hash') ?></a></li>
+                                    <li class="list-group-item"><a href="javascript:show_new_pwd();"><i class="fa-solid fa-lock"></i> <?php echo lng('Generate new password hash') ?></a></li>
                                 <?php } ?>
                             </ul>
                         </div>
@@ -1756,6 +1853,8 @@ if (isset($_GET['view'])) {
     fm_show_nav_path(FM_PATH); // current path
 
     $file_url = FM_ROOT_URL . fm_convert_win((FM_PATH != '' ? '/' . FM_PATH : '') . '/' . $file);
+    // Media (img/audio/video/open) streams through PHP — the home isn't web-served (#218).
+    $media_url = FM_SELF_URL . '?p=' . urlencode(FM_PATH) . '&media=' . urlencode($file);
     $file_path = $path . '/' . $file;
 
     $ext = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
@@ -1846,12 +1945,12 @@ if (isset($_GET['view'])) {
             <div class="btn-group btn-group-sm flex-wrap" role="group">
                 <form method="post" class="d-inline mb-0 btn btn-outline-primary" action="?p=<?php echo urlencode(FM_PATH) ?>&amp;dl=<?php echo urlencode($file) ?>">
                     <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-                    <button type="submit" class="btn btn-link btn-sm text-decoration-none fw-bold p-0"><i class="fa fa-cloud-download"></i> <?php echo lng('Download') ?></button> &nbsp;
+                    <button type="submit" class="btn btn-link btn-sm text-decoration-none fw-bold p-0"><i class="fa-solid fa-cloud-arrow-down"></i> <?php echo lng('Download') ?></button> &nbsp;
                 </form>
                 <?php if (!FM_READONLY): ?>
-                    <a class="fw-bold btn btn-outline-primary" title="<?php echo lng('Delete') ?>" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;del=<?php echo urlencode($file) ?>" onclick="confirmDialog(event, 1209, '<?php echo lng('Delete') . ' ' . lng('File'); ?>','<?php echo urlencode($file); ?>', this.href);"> <i class="fa fa-trash"></i> Delete</a>
+                    <a class="fw-bold btn btn-outline-primary" title="<?php echo lng('Delete') ?>" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;del=<?php echo urlencode($file) ?>" onclick="confirmDialog(event, 1209, '<?php echo lng('Delete') . ' ' . lng('File'); ?>','<?php echo urlencode($file); ?>', this.href);"> <i class="fa-solid fa-trash"></i> Delete</a>
                 <?php endif; ?>
-                <a class="fw-bold btn btn-outline-primary" href="<?php echo fm_enc($file_url) ?>" target="_blank"><i class="fa fa-external-link-square"></i> <?php echo lng('Open') ?></a></b>
+                <a class="fw-bold btn btn-outline-primary" href="<?php echo fm_enc($media_url) ?>" target="_blank"><i class="fa-solid fa-square-up-right"></i> <?php echo lng('Open') ?></a></b>
                 <?php
                 // ZIP actions
                 if (!FM_READONLY && ($is_zip || $is_gzip) && $filenames !== false) {
@@ -1860,26 +1959,26 @@ if (isset($_GET['view'])) {
                     <form method="post" class="d-inline btn btn-outline-primary mb-0">
                         <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                         <input type="hidden" name="unzip" value="<?php echo urlencode($file); ?>">
-                        <button type="submit" class="btn btn-link text-decoration-none fw-bold p-0 border-0" style="font-size: 14px;"><i class="fa fa-check-circle"></i> <?php echo lng('UnZip') ?></button>
+                        <button type="submit" class="btn btn-link text-decoration-none fw-bold p-0 border-0" style="font-size: 14px;"><i class="fa-solid fa-circle-check"></i> <?php echo lng('UnZip') ?></button>
                     </form>
                     <form method="post" class="d-inline btn btn-outline-primary mb-0">
                         <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
                         <input type="hidden" name="unzip" value="<?php echo urlencode($file); ?>">
                         <input type="hidden" name="tofolder" value="1">
-                        <button type="submit" class="btn btn-link text-decoration-none fw-bold p-0" style="font-size: 14px;" title="UnZip to <?php echo fm_enc($zip_name) ?>"><i class="fa fa-check-circle"></i> <?php echo lng('UnZipToFolder') ?></button>
+                        <button type="submit" class="btn btn-link text-decoration-none fw-bold p-0" style="font-size: 14px;" title="UnZip to <?php echo fm_enc($zip_name) ?>"><i class="fa-solid fa-circle-check"></i> <?php echo lng('UnZipToFolder') ?></button>
                     </form>
                 <?php
                 }
                 if ($is_text && !FM_READONLY) {
                 ?>
                     <a class="fw-bold btn btn-outline-primary" href="?p=<?php echo urlencode(trim(FM_PATH)) ?>&amp;edit=<?php echo urlencode($file) ?>" class="edit-file">
-                        <i class="fa fa-pencil-square"></i> <?php echo lng('Edit') ?>
+                        <i class="fa-solid fa-pen-to-square"></i> <?php echo lng('Edit') ?>
                     </a>
                     <a class="fw-bold btn btn-outline-primary" href="?p=<?php echo urlencode(trim(FM_PATH)) ?>&amp;edit=<?php echo urlencode($file) ?>&env=ace"
-                        class="edit-file"><i class="fa fa-pencil-square"></i> <?php echo lng('AdvancedEditor') ?>
+                        class="edit-file"><i class="fa-solid fa-pen-to-square"></i> <?php echo lng('AdvancedEditor') ?>
                     </a>
                 <?php } ?>
-                <a class="fw-bold btn btn-outline-primary" href="?p=<?php echo urlencode(FM_PATH) ?>"><i class="fa fa-chevron-circle-left go-back"></i> <?php echo lng('Back') ?></a>
+                <a class="fw-bold btn btn-outline-primary" href="?p=<?php echo urlencode(FM_PATH) ?>"><i class="fa-solid fa-circle-chevron-left go-back"></i> <?php echo lng('Back') ?></a>
             </div>
             <div class="row mt-3">
                 <?php
@@ -1907,35 +2006,23 @@ if (isset($_GET['view'])) {
                 } elseif ($is_image) {
                     // Image content
                     if (in_array($ext, array('gif', 'jpg', 'jpeg', 'png', 'bmp', 'ico', 'svg', 'webp', 'avif'))) {
-                        echo '<p><input type="checkbox" id="preview-img-zoomCheck"><label for="preview-img-zoomCheck"><img src="' . fm_enc($file_url) . '" alt="image" class="preview-img"></label></p>';
+                        echo '<p><input type="checkbox" id="preview-img-zoomCheck"><label for="preview-img-zoomCheck"><img src="' . fm_enc($media_url) . '" alt="image" class="preview-img"></label></p>';
                     }
                 } elseif ($is_audio) {
                     // Audio content
-                    echo '<p><audio src="' . fm_enc($file_url) . '" controls preload="metadata"></audio></p>';
+                    echo '<p><audio src="' . fm_enc($media_url) . '" controls preload="metadata"></audio></p>';
                 } elseif ($is_video) {
                     // Video content
-                    echo '<div class="preview-video"><video src="' . fm_enc($file_url) . '" width="640" height="360" controls preload="metadata"></video></div>';
+                    echo '<div class="preview-video"><video src="' . fm_enc($media_url) . '" width="640" height="360" controls preload="metadata"></video></div>';
                 } elseif ($is_text) {
-                    if (FM_USE_HIGHLIGHTJS) {
-                        // highlight
-                        $hljs_classes = array(
-                            'shtml' => 'xml',
-                            'htaccess' => 'apache',
-                            'phtml' => 'php',
-                            'lock' => 'json',
-                            'svg' => 'xml',
-                        );
-                        $hljs_class = isset($hljs_classes[$ext]) ? 'lang-' . $hljs_classes[$ext] : 'lang-' . $ext;
-                        if (empty($ext) || in_array(strtolower($file), fm_get_text_names()) || preg_match('#\.min\.(css|js)$#i', $file)) {
-                            $hljs_class = 'nohighlight';
-                        }
-                        $content = '<pre class="with-hljs"><code class="' . $hljs_class . '">' . fm_enc($content) . '</code></pre>';
-                    } elseif (in_array($ext, array('php', 'php4', 'php5', 'phtml', 'phps'))) {
-                        // php highlight
-                        $content = highlight_string($content, true);
-                    } else {
-                        $content = '<pre>' . fm_enc($content) . '</pre>';
+                    // Read-only highlighted view via Prism (#218 P5, replaces highlight.js).
+                    // Prism.highlightAll() in the footer paints the classes below; an
+                    // unknown/opted-out type falls back to language-none (plain text).
+                    $plang = fm_prism_lang($ext);
+                    if (empty($ext) || in_array(strtolower($file), fm_get_text_names()) || preg_match('#\.min\.(css|js)$#i', $file)) {
+                        $plang = 'none';
                     }
+                    $content = '<pre class="language-' . $plang . ' line-numbers"><code class="language-' . $plang . '">' . fm_enc($content) . '</code></pre>';
                     echo $content;
                 }
                 ?>
@@ -1998,38 +2085,22 @@ if (isset($_GET['edit']) && !FM_READONLY) {
         <div class="row">
             <div class="col-xs-12 col-sm-5 col-lg-6 pt-1">
                 <div class="btn-toolbar" role="toolbar">
-                    <?php if (!$isNormalEditor) { ?>
-                        <div class="btn-group js-ace-toolbar">
-                            <button data-cmd="none" data-option="fullscreen" class="btn btn-sm btn-outline-secondary" id="js-ace-fullscreen" title="<?php echo lng('Fullscreen') ?>"><i class="fa fa-expand" title="<?php echo lng('Fullscreen') ?>"></i></button>
-                            <button data-cmd="find" class="btn btn-sm btn-outline-secondary" id="js-ace-search" title="<?php echo lng('Search') ?>"><i class="fa fa-search" title="<?php echo lng('Search') ?>"></i></button>
-                            <button data-cmd="undo" class="btn btn-sm btn-outline-secondary" id="js-ace-undo" title="<?php echo lng('Undo') ?>"><i class="fa fa-undo" title="<?php echo lng('Undo') ?>"></i></button>
-                            <button data-cmd="redo" class="btn btn-sm btn-outline-secondary" id="js-ace-redo" title="<?php echo lng('Redo') ?>"><i class="fa fa-repeat" title="<?php echo lng('Redo') ?>"></i></button>
-                            <button data-cmd="none" data-option="wrap" class="btn btn-sm btn-outline-secondary" id="js-ace-wordWrap" title="<?php echo lng('Word Wrap') ?>"><i class="fa fa-text-width" title="<?php echo lng('Word Wrap') ?>"></i></button>
-                            <select id="js-ace-mode" data-type="mode" title="<?php echo lng('Select Document Type') ?>" class="btn-outline-secondary border-start-0 d-none d-md-block">
-                                <option>-- <?php echo lng('Select Mode') ?> --</option>
-                            </select>
-                            <select id="js-ace-theme" data-type="theme" title="<?php echo lng('Select Theme') ?>" class="btn-outline-secondary border-start-0 d-none d-lg-block">
-                                <option>-- <?php echo lng('Select Theme') ?> --</option>
-                            </select>
-                            <select id="js-ace-fontSize" data-type="fontSize" title="<?php echo lng('Select Font Size') ?>" class="btn-outline-secondary border-start-0 d-none d-lg-block">
-                                <option>-- <?php echo lng('Select Font Size') ?> --</option>
-                            </select>
-                        </div>
-                    <?php } ?>
+                    <?php /* Ace toolbar removed (#218 P4). The Prism overlay is a light
+                       highlighter (line numbers + colours), no per-editor theme/mode picker. */ ?>
                 </div>
             </div>
             <div class="edit-file-actions col-xs-12 col-sm-7 col-lg-6 text-end pt-1">
                 <div class="btn-group">
-                    <a title=" <?php echo lng('Back') ?>" class="btn btn-sm btn-outline-primary" href="?p=<?php echo urlencode(trim(FM_PATH)) ?>&amp;view=<?php echo urlencode($file) ?>"><i class="fa fa-reply-all"></i> <?php echo lng('Back') ?></a>
-                    <a title="<?php echo lng('BackUp') ?>" class="btn btn-sm btn-outline-primary" href="javascript:void(0);" onclick="backup('<?php echo urlencode(trim(FM_PATH)) ?>','<?php echo urlencode($file) ?>')"><i class="fa fa-database"></i> <?php echo lng('BackUp') ?></a>
+                    <a title=" <?php echo lng('Back') ?>" class="btn btn-sm btn-outline-primary" href="?p=<?php echo urlencode(trim(FM_PATH)) ?>&amp;view=<?php echo urlencode($file) ?>"><i class="fa-solid fa-reply-all"></i> <?php echo lng('Back') ?></a>
+                    <a title="<?php echo lng('BackUp') ?>" class="btn btn-sm btn-outline-primary" href="javascript:void(0);" onclick="backup('<?php echo urlencode(trim(FM_PATH)) ?>','<?php echo urlencode($file) ?>')"><i class="fa-solid fa-database"></i> <?php echo lng('BackUp') ?></a>
                     <?php if ($is_text) { ?>
                         <?php if ($isNormalEditor) { ?>
-                            <a title="Advanced" class="btn btn-sm btn-outline-primary" href="?p=<?php echo urlencode(trim(FM_PATH)) ?>&amp;edit=<?php echo urlencode($file) ?>&amp;env=ace"><i class="fa fa-pencil-square-o"></i> <?php echo lng('AdvancedEditor') ?></a>
-                            <button type="button" class="btn btn-sm btn-success" name="Save" data-url="<?php echo fm_enc($file_url) ?>" onclick="edit_save(this,'nrl')"><i class="fa fa-floppy-o"></i> Save
+                            <a title="Advanced" class="btn btn-sm btn-outline-primary" href="?p=<?php echo urlencode(trim(FM_PATH)) ?>&amp;edit=<?php echo urlencode($file) ?>&amp;env=ace"><i class="fa-solid fa-pen-to-square"></i> <?php echo lng('AdvancedEditor') ?></a>
+                            <button type="button" class="btn btn-sm btn-success" name="Save" data-url="<?php echo fm_enc($file_url) ?>" onclick="edit_save(this,'nrl')"><i class="fa-solid fa-floppy-disk"></i> Save
                             </button>
                         <?php } else { ?>
-                            <a title="Plain Editor" class="btn btn-sm btn-outline-primary" href="?p=<?php echo urlencode(trim(FM_PATH)) ?>&amp;edit=<?php echo urlencode($file) ?>"><i class="fa fa-text-height"></i> <?php echo lng('NormalEditor') ?></a>
-                            <button type="button" class="btn btn-sm btn-success" name="Save" data-url="<?php echo fm_enc($file_url) ?>" onclick="edit_save(this,'ace')"><i class="fa fa-floppy-o"></i> <?php echo lng('Save') ?>
+                            <a title="Plain Editor" class="btn btn-sm btn-outline-primary" href="?p=<?php echo urlencode(trim(FM_PATH)) ?>&amp;edit=<?php echo urlencode($file) ?>"><i class="fa-solid fa-text-height"></i> <?php echo lng('NormalEditor') ?></a>
+                            <button type="button" class="btn btn-sm btn-success" name="Save" data-url="<?php echo fm_enc($file_url) ?>" onclick="edit_save(this,'ace')"><i class="fa-solid fa-floppy-disk"></i> <?php echo lng('Save') ?>
                             </button>
                         <?php } ?>
                     <?php } ?>
@@ -2041,7 +2112,13 @@ if (isset($_GET['edit']) && !FM_READONLY) {
             echo '<textarea class="mt-2" id="normal-editor" rows="33" cols="120" style="width: 99.5%;">' . htmlspecialchars($content) . '</textarea>';
             echo '<script>document.addEventListener("keydown", function(e) {if ((window.navigator.platform.match("Mac") ? e.metaKey : e.ctrlKey)  && e.keyCode == 83) { e.preventDefault();edit_save(this,"nrl");}}, false);</script>';
         } elseif ($is_text) {
-            echo '<div id="editor" contenteditable="true">' . htmlspecialchars($content) . '</div>';
+            // Prism-overlay editor (#218 P4): a transparent textarea over a highlighted
+            // <pre>; fm-editor.js syncs them and highlightElement paints the colours.
+            $plang = fm_prism_lang($ext);
+            echo '<div class="fm-editor" data-language="' . $plang . '">'
+                . '<pre class="fm-editor__pre language-' . $plang . ' line-numbers" aria-hidden="true"><code class="language-' . $plang . '"></code></pre>'
+                . '<textarea class="fm-editor__input" id="advanced-editor" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off">' . htmlspecialchars($content) . '</textarea>'
+                . '</div>';
         } else {
             fm_set_msg(lng('FILE EXTENSION IS NOT SUPPORTED'), 'error');
         }
@@ -2114,8 +2191,8 @@ if (isset($_GET['chmod']) && !FM_READONLY && !FM_IS_WIN) {
 
                     <p>
                         <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-                        <b><a href="?p=<?php echo urlencode(FM_PATH) ?>" class="btn btn-outline-primary"><i class="fa fa-times-circle"></i> <?php echo lng('Cancel') ?></a></b>&nbsp;
-                        <button type="submit" class="btn btn-success"><i class="fa fa-check-circle"></i> <?php echo lng('Change') ?></button>
+                        <b><a href="?p=<?php echo urlencode(FM_PATH) ?>" class="btn btn-outline-primary"><i class="fa-solid fa-circle-xmark"></i> <?php echo lng('Cancel') ?></a></b>&nbsp;
+                        <button type="submit" class="btn btn-success"><i class="fa-solid fa-circle-check"></i> <?php echo lng('Change') ?></button>
                     </p>
                 </form>
             </div>
@@ -2167,7 +2244,7 @@ $all_files_size = 0;
             ?>
                 <tr><?php if (!FM_READONLY): ?>
                         <td class="nosort"></td><?php endif; ?>
-                    <td class="border-0" data-sort><a href="?p=<?php echo urlencode($parent) ?>"><i class="fa fa-chevron-circle-left go-back"></i> ..</a></td>
+                    <td class="border-0" data-sort><a href="?p=<?php echo urlencode($parent) ?>"><i class="fa-solid fa-circle-chevron-left go-back"></i> ..</a></td>
                     <td class="border-0" data-order></td>
                     <td class="border-0" data-order></td>
                     <td class="border-0"></td>
@@ -2181,7 +2258,7 @@ $all_files_size = 0;
             $ii = 3399;
             foreach ($folders as $f) {
                 $is_link = is_link($path . '/' . $f);
-                $img = $is_link ? 'icon-link_folder' : 'fa fa-folder-o';
+                $img = $is_link ? 'icon-link_folder' : 'fa-solid fa-folder';
                 $modif_raw = filemtime($path . '/' . $f);
                 $modif = date(FM_DATETIME_FORMAT, $modif_raw);
                 $date_sorting = strtotime(date("F d Y H:i:s.", $modif_raw));
@@ -2237,9 +2314,9 @@ $all_files_size = 0;
                         </td>
                     <?php endif; ?>
                     <td class="inline-actions"><?php if (!FM_READONLY): ?>
-                            <a title="<?php echo lng('Delete') ?>" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;del=<?php echo urlencode($f) ?>" onclick="confirmDialog(event, '1028','<?php echo lng('Delete') . ' ' . lng('Folder'); ?>','<?php echo urlencode($f) ?>', this.href);"> <i class="fa fa-trash-o" aria-hidden="true"></i></a>
-                            <a title="<?php echo lng('Rename') ?>" href="#" onclick="rename('<?php echo fm_enc(addslashes(FM_PATH)) ?>', '<?php echo fm_enc(addslashes($f)) ?>');return false;"><i class="fa fa-pencil-square-o" aria-hidden="true"></i></a>
-                            <a title="<?php echo lng('CopyTo') ?>..." href="?p=&amp;copy=<?php echo urlencode(trim(FM_PATH . '/' . $f, '/')) ?>"><i class="fa fa-files-o" aria-hidden="true"></i></a>
+                            <a title="<?php echo lng('Delete') ?>" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;del=<?php echo urlencode($f) ?>" onclick="confirmDialog(event, '1028','<?php echo lng('Delete') . ' ' . lng('Folder'); ?>','<?php echo urlencode($f) ?>', this.href);"> <i class="fa-solid fa-trash-can" aria-hidden="true"></i></a>
+                            <a title="<?php echo lng('Rename') ?>" href="#" onclick="rename('<?php echo fm_enc(addslashes(FM_PATH)) ?>', '<?php echo fm_enc(addslashes($f)) ?>');return false;"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i></a>
+                            <a title="<?php echo lng('CopyTo') ?>..." href="?p=&amp;copy=<?php echo urlencode(trim(FM_PATH . '/' . $f, '/')) ?>"><i class="fa-solid fa-copy" aria-hidden="true"></i></a>
                         <?php endif; ?>
                         <?php /* DirectLink removed (#218 P11): file sharing disabled — a direct file URL breaks forward_auth and must not expose files above public_html */ ?>
                     </td>
@@ -2251,7 +2328,7 @@ $all_files_size = 0;
             $ik = 8002;
             foreach ($files as $f) {
                 $is_link = is_link($path . '/' . $f);
-                $img = $is_link ? 'fa fa-file-text-o' : fm_get_file_icon_class($path . '/' . $f);
+                $img = $is_link ? 'fa-solid fa-file-lines' : fm_get_file_icon_class($path . '/' . $f);
                 $modif_raw = filemtime($path . '/' . $f);
                 $modif = date(FM_DATETIME_FORMAT, $modif_raw);
                 $date_sorting = strtotime(date("F d Y H:i:s.", $modif_raw));
@@ -2314,13 +2391,13 @@ $all_files_size = 0;
                     <?php endif; ?>
                     <td class="inline-actions">
                         <?php if (!FM_READONLY): ?>
-                            <a title="<?php echo lng('Delete') ?>" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;del=<?php echo urlencode($f) ?>" onclick="confirmDialog(event, 1209, '<?php echo lng('Delete') . ' ' . lng('File'); ?>','<?php echo urlencode($f); ?>', this.href);"> <i class="fa fa-trash-o"></i></a>
-                            <a title="<?php echo lng('Rename') ?>" href="#" onclick="rename('<?php echo fm_enc(addslashes(FM_PATH)) ?>', '<?php echo fm_enc(addslashes($f)) ?>');return false;"><i class="fa fa-pencil-square-o"></i></a>
+                            <a title="<?php echo lng('Delete') ?>" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;del=<?php echo urlencode($f) ?>" onclick="confirmDialog(event, 1209, '<?php echo lng('Delete') . ' ' . lng('File'); ?>','<?php echo urlencode($f); ?>', this.href);"> <i class="fa-solid fa-trash-can"></i></a>
+                            <a title="<?php echo lng('Rename') ?>" href="#" onclick="rename('<?php echo fm_enc(addslashes(FM_PATH)) ?>', '<?php echo fm_enc(addslashes($f)) ?>');return false;"><i class="fa-solid fa-pen-to-square"></i></a>
                             <a title="<?php echo lng('CopyTo') ?>..."
-                                href="?p=<?php echo urlencode(FM_PATH) ?>&amp;copy=<?php echo urlencode(trim(FM_PATH . '/' . $f, '/')) ?>"><i class="fa fa-files-o"></i></a>
+                                href="?p=<?php echo urlencode(FM_PATH) ?>&amp;copy=<?php echo urlencode(trim(FM_PATH . '/' . $f, '/')) ?>"><i class="fa-solid fa-copy"></i></a>
                         <?php endif; ?>
                         <?php /* DirectLink removed (#218 P11): file sharing disabled */ ?>
-                        <a title="<?php echo lng('Download') ?>" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;dl=<?php echo urlencode($f) ?>" onclick="confirmDialog(event, 1211, '<?php echo lng('Download'); ?>','<?php echo urlencode($f); ?>', this.href);"><i class="fa fa-download"></i></a>
+                        <a title="<?php echo lng('Download') ?>" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;dl=<?php echo urlencode($f) ?>" onclick="confirmDialog(event, 1211, '<?php echo lng('Download'); ?>','<?php echo urlencode($f); ?>', this.href);"><i class="fa-solid fa-download"></i></a>
                     </td>
                 </tr>
             <?php
@@ -2354,17 +2431,17 @@ $all_files_size = 0;
         <?php if (!FM_READONLY): ?>
             <div class="col-xs-12 col-sm-9">
                 <div class="btn-group flex-wrap" data-toggle="buttons" role="toolbar">
-                    <a href="#/select-all" class="btn btn-small btn-outline-primary btn-2" onclick="select_all();return false;"><i class="fa fa-check-square"></i> <?php echo lng('SelectAll') ?> </a>
-                    <a href="#/unselect-all" class="btn btn-small btn-outline-primary btn-2" onclick="unselect_all();return false;"><i class="fa fa-window-close"></i> <?php echo lng('UnSelectAll') ?> </a>
-                    <a href="#/invert-all" class="btn btn-small btn-outline-primary btn-2" onclick="invert_all();return false;"><i class="fa fa-th-list"></i> <?php echo lng('InvertSelection') ?> </a>
+                    <a href="#/select-all" class="btn btn-small btn-outline-primary btn-2" onclick="select_all();return false;"><i class="fa-solid fa-square-check"></i> <?php echo lng('SelectAll') ?> </a>
+                    <a href="#/unselect-all" class="btn btn-small btn-outline-primary btn-2" onclick="unselect_all();return false;"><i class="fa-solid fa-rectangle-xmark"></i> <?php echo lng('UnSelectAll') ?> </a>
+                    <a href="#/invert-all" class="btn btn-small btn-outline-primary btn-2" onclick="invert_all();return false;"><i class="fa-solid fa-list"></i> <?php echo lng('InvertSelection') ?> </a>
                     <input type="submit" class="hidden" name="delete" id="a-delete" value="Delete" onclick="return confirm('<?php echo lng('Delete selected files and folders?'); ?>')">
-                    <a href="javascript:document.getElementById('a-delete').click();" class="btn btn-small btn-outline-primary btn-2"><i class="fa fa-trash"></i> <?php echo lng('Delete') ?> </a>
+                    <a href="javascript:document.getElementById('a-delete').click();" class="btn btn-small btn-outline-primary btn-2"><i class="fa-solid fa-trash"></i> <?php echo lng('Delete') ?> </a>
                     <input type="submit" class="hidden" name="zip" id="a-zip" value="zip" onclick="return confirm('<?php echo lng('Create archive?'); ?>')">
-                    <a href="javascript:document.getElementById('a-zip').click();" class="btn btn-small btn-outline-primary btn-2"><i class="fa fa-file-archive-o"></i> <?php echo lng('Zip') ?> </a>
+                    <a href="javascript:document.getElementById('a-zip').click();" class="btn btn-small btn-outline-primary btn-2"><i class="fa-solid fa-file-zipper"></i> <?php echo lng('Zip') ?> </a>
                     <input type="submit" class="hidden" name="tar" id="a-tar" value="tar" onclick="return confirm('<?php echo lng('Create archive?'); ?>')">
-                    <a href="javascript:document.getElementById('a-tar').click();" class="btn btn-small btn-outline-primary btn-2"><i class="fa fa-file-archive-o"></i> <?php echo lng('Tar') ?> </a>
+                    <a href="javascript:document.getElementById('a-tar').click();" class="btn btn-small btn-outline-primary btn-2"><i class="fa-solid fa-file-zipper"></i> <?php echo lng('Tar') ?> </a>
                     <input type="submit" class="hidden" name="copy" id="a-copy" value="Copy">
-                    <a href="javascript:document.getElementById('a-copy').click();" class="btn btn-small btn-outline-primary btn-2"><i class="fa fa-files-o"></i> <?php echo lng('Copy') ?> </a>
+                    <a href="javascript:document.getElementById('a-copy').click();" class="btn btn-small btn-outline-primary btn-2"><i class="fa-solid fa-copy"></i> <?php echo lng('Copy') ?> </a>
                 </div>
             </div>
             <div class="col-3 d-none d-sm-block"><a href="https://tinyfilemanager.github.io" target="_blank" class="float-right text-muted"><?php echo lng("AppName")." ".VERSION; ?></a></div>
@@ -2396,6 +2473,34 @@ function print_external($key)
     }
 
     echo "$external[$key]";
+}
+
+/**
+ * Map a file extension to a Prism language id for the view/edit highlighter
+ * (#218 P4/P5). Only the languages bundled in the vendored prism.js are mapped;
+ * anything unlisted returns 'none' (plain, unhighlighted text).
+ */
+function fm_prism_lang($ext)
+{
+    static $map = array(
+        'js' => 'javascript', 'mjs' => 'javascript', 'cjs' => 'javascript', 'jsx' => 'javascript',
+        'ts' => 'typescript', 'py' => 'python', 'rb' => 'ruby', 'pl' => 'perl', 'pm' => 'perl',
+        'c' => 'c', 'h' => 'c', 'cpp' => 'cpp', 'cc' => 'cpp', 'cxx' => 'cpp', 'hpp' => 'cpp',
+        'rs' => 'rust', 'go' => 'go', 'java' => 'java', 'cs' => 'csharp',
+        'ps1' => 'powershell', 'sh' => 'bash', 'bash' => 'bash', 'bat' => 'batch', 'cmd' => 'batch',
+        'yml' => 'yaml', 'yaml' => 'yaml', 'json' => 'json', 'lock' => 'json',
+        'md' => 'markdown', 'markdown' => 'markdown', 'sql' => 'sql',
+        'ini' => 'ini', 'conf' => 'ini', 'cfg' => 'ini', 'env' => 'ini',
+        'css' => 'css', 'scss' => 'css', 'sass' => 'css', 'less' => 'css',
+        'html' => 'markup', 'htm' => 'markup', 'xml' => 'markup', 'svg' => 'markup',
+        'shtml' => 'markup', 'xhtml' => 'markup', 'rss' => 'markup', 'vue' => 'markup',
+        'php' => 'php', 'phtml' => 'php', 'php3' => 'php', 'php4' => 'php', 'php5' => 'php', 'php7' => 'php',
+        'hbs' => 'handlebars', 'handlebars' => 'handlebars',
+        'htaccess' => 'apacheconf', 'conf.d' => 'nginx',
+        'dockerfile' => 'docker',
+    );
+    $ext = strtolower($ext);
+    return isset($map[$ext]) ? $map[$ext] : 'none';
 }
 
 /**
@@ -2954,7 +3059,7 @@ function fm_get_file_icon_class($path)
         case 'webp':
         case 'avif':
         case 'svg':
-            $img = 'fa fa-picture-o';
+            $img = 'fa-solid fa-image';
             break;
         case 'passwd':
         case 'ftpquota':
@@ -2982,7 +3087,7 @@ function fm_get_file_icon_class($path)
         case 'lock':
         case 'dtd':
         case 'ps1':
-            $img = 'fa fa-file-code-o';
+            $img = 'fa-solid fa-file-code';
             break;
         case 'txt':
         case 'ini':
@@ -2999,13 +3104,13 @@ function fm_get_file_icon_class($path)
         case 'bak':
         case 'htpasswd':
         case 'pl':
-            $img = 'fa fa-file-text-o';
+            $img = 'fa-solid fa-file-lines';
             break;
         case 'css':
         case 'less':
         case 'sass':
         case 'scss':
-            $img = 'fa fa-css3';
+            $img = 'fa-solid fa-code';
             break;
         case 'bz2':
         case 'tbz2':
@@ -3020,24 +3125,24 @@ function fm_get_file_icon_class($path)
         case 'txz':
         case 'zst':
         case 'tzst':
-            $img = 'fa fa-file-archive-o';
+            $img = 'fa-solid fa-file-zipper';
             break;
         case 'php':
         case 'php4':
         case 'php5':
         case 'phps':
         case 'phtml':
-            $img = 'fa fa-code';
+            $img = 'fa-solid fa-code';
             break;
         case 'htm':
         case 'html':
         case 'shtml':
         case 'xhtml':
-            $img = 'fa fa-html5';
+            $img = 'fa-solid fa-code';
             break;
         case 'xml':
         case 'xsl':
-            $img = 'fa fa-file-excel-o';
+            $img = 'fa-solid fa-file-excel';
             break;
         case 'wav':
         case 'mp3':
@@ -3051,14 +3156,14 @@ function fm_get_file_icon_class($path)
         case 'flac':
         case 'ac3':
         case 'tds':
-            $img = 'fa fa-music';
+            $img = 'fa-solid fa-music';
             break;
         case 'm3u':
         case 'm3u8':
         case 'pls':
         case 'cue':
         case 'xspf':
-            $img = 'fa fa-headphones';
+            $img = 'fa-solid fa-headphones';
             break;
         case 'avi':
         case 'mpg':
@@ -3075,32 +3180,32 @@ function fm_get_file_icon_class($path)
         case 'asf':
         case 'wmv':
         case 'webm':
-            $img = 'fa fa-file-video-o';
+            $img = 'fa-solid fa-file-video';
             break;
         case 'eml':
         case 'msg':
-            $img = 'fa fa-envelope-o';
+            $img = 'fa-solid fa-envelope';
             break;
         case 'xls':
         case 'xlsx':
         case 'ods':
-            $img = 'fa fa-file-excel-o';
+            $img = 'fa-solid fa-file-excel';
             break;
         case 'csv':
-            $img = 'fa fa-file-text-o';
+            $img = 'fa-solid fa-file-lines';
             break;
         case 'bak':
         case 'swp':
-            $img = 'fa fa-clipboard';
+            $img = 'fa-solid fa-clipboard';
             break;
         case 'doc':
         case 'docx':
         case 'odt':
-            $img = 'fa fa-file-word-o';
+            $img = 'fa-solid fa-file-word';
             break;
         case 'ppt':
         case 'pptx':
-            $img = 'fa fa-file-powerpoint-o';
+            $img = 'fa-solid fa-file-powerpoint';
             break;
         case 'ttf':
         case 'ttc':
@@ -3109,27 +3214,27 @@ function fm_get_file_icon_class($path)
         case 'woff2':
         case 'eot':
         case 'fon':
-            $img = 'fa fa-font';
+            $img = 'fa-solid fa-font';
             break;
         case 'pdf':
-            $img = 'fa fa-file-pdf-o';
+            $img = 'fa-solid fa-file-pdf';
             break;
         case 'psd':
         case 'ai':
         case 'eps':
         case 'fla':
         case 'swf':
-            $img = 'fa fa-file-image-o';
+            $img = 'fa-solid fa-file-image';
             break;
         case 'exe':
         case 'msi':
-            $img = 'fa fa-file-o';
+            $img = 'fa-solid fa-file';
             break;
         case 'bat':
-            $img = 'fa fa-terminal';
+            $img = 'fa-solid fa-terminal';
             break;
         default:
-            $img = 'fa fa-info-circle';
+            $img = 'fa-solid fa-circle-info';
     }
 
     return $img;
@@ -3760,7 +3865,7 @@ function fm_show_nav_path($path)
 
             <?php
             $path = fm_clean_path($path);
-            $root_url = "<a href='?p='><i class='fa fa-home' aria-hidden='true' title='" . FM_ROOT_PATH . "'></i></a>";
+            $root_url = "<a href='?p='><i class='fa-solid fa-house' aria-hidden='true' title='" . FM_ROOT_PATH . "'></i></a>";
             $sep = '<i class="bread-crumb"> / </i>';
             if ($path != '') {
                 $exploded = explode('/', $path);
@@ -3783,7 +3888,7 @@ function fm_show_nav_path($path)
                         <div class="input-group input-group-sm mr-1" style="margin-top:4px;">
                             <input type="text" class="form-control" placeholder="<?php echo lng('Search') ?>" aria-label="<?php echo lng('Search') ?>" aria-describedby="search-addon2" id="search-addon">
                             <div class="input-group-append">
-                                <span class="input-group-text brl-0 brr-0" id="search-addon2"><i class="fa fa-search"></i></span>
+                                <span class="input-group-text brl-0 brr-0" id="search-addon2"><i class="fa-solid fa-magnifying-glass"></i></span>
                             </div>
                             <div class="input-group-append btn-group">
                                 <span class="input-group-text dropdown-toggle brl-0" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"></span>
@@ -3795,30 +3900,30 @@ function fm_show_nav_path($path)
                     </li>
                     <?php if (!FM_READONLY): ?>
                         <li class="nav-item">
-                            <a title="<?php echo lng('Upload') ?>" class="nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;upload"><i class="fa fa-cloud-upload" aria-hidden="true"></i> <?php echo lng('Upload') ?></a>
+                            <a title="<?php echo lng('Upload') ?>" class="nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;upload"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> <?php echo lng('Upload') ?></a>
                         </li>
                         <li class="nav-item">
-                            <a title="<?php echo lng('NewItem') ?>" class="nav-link" href="#createNewItem" data-bs-toggle="modal" data-bs-target="#createNewItem"><i class="fa fa-plus-square"></i> <?php echo lng('NewItem') ?></a>
+                            <a title="<?php echo lng('NewItem') ?>" class="nav-link" href="#createNewItem" data-bs-toggle="modal" data-bs-target="#createNewItem"><i class="fa-solid fa-square-plus"></i> <?php echo lng('NewItem') ?></a>
                         </li>
                     <?php endif; ?>
                     <?php if (FM_USE_AUTH): ?>
                         <li class="nav-item avatar dropdown">
                             <a class="nav-link dropdown-toggle" id="navbarDropdownMenuLink-5" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fa fa-user-circle"></i>
+                                <i class="fa-solid fa-circle-user"></i>
                             </a>
 
                             <div class="dropdown-menu dropdown-menu-end text-small shadow" aria-labelledby="navbarDropdownMenuLink-5" data-bs-theme="<?php echo FM_THEME; ?>">
                                 <?php if (!FM_READONLY): ?>
-                                    <a title="<?php echo lng('Settings') ?>" class="dropdown-item nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;settings=1"><i class="fa fa-cog" aria-hidden="true"></i> <?php echo lng('Settings') ?></a>
+                                    <a title="<?php echo lng('Settings') ?>" class="dropdown-item nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;settings=1"><i class="fa-solid fa-gear" aria-hidden="true"></i> <?php echo lng('Settings') ?></a>
                                 <?php endif ?>
-                                <a title="<?php echo lng('Help') ?>" class="dropdown-item nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;help=2"><i class="fa fa-exclamation-circle" aria-hidden="true"></i> <?php echo lng('Help') ?></a>
-                                <a title="<?php echo lng('Logout') ?>" class="dropdown-item nav-link" href="?logout=1"><i class="fa fa-sign-out" aria-hidden="true"></i> <?php echo lng('Logout') ?></a>
+                                <a title="<?php echo lng('Help') ?>" class="dropdown-item nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;help=2"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> <?php echo lng('Help') ?></a>
+                                <a title="<?php echo lng('Logout') ?>" class="dropdown-item nav-link" href="?logout=1"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i> <?php echo lng('Logout') ?></a>
                             </div>
                         </li>
                     <?php else: ?>
                         <?php if (!FM_READONLY): ?>
                             <li class="nav-item">
-                                <a title="<?php echo lng('Settings') ?>" class="dropdown-item nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;settings=1"><i class="fa fa-cog" aria-hidden="true"></i> <?php echo lng('Settings') ?></a>
+                                <a title="<?php echo lng('Settings') ?>" class="dropdown-item nav-link" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;settings=1"><i class="fa-solid fa-gear" aria-hidden="true"></i> <?php echo lng('Settings') ?></a>
                             </li>
                         <?php endif; ?>
                     <?php endif; ?>
@@ -3868,8 +3973,8 @@ function fm_show_header_login()
             echo '<link rel="icon" href="' . fm_enc($favicon_path) . '" type="image/png">';
         } ?>
         <title><?php echo fm_enc(APP_TITLE) ?></title>
-        <?php print_external('pre-jsdelivr'); ?>
         <?php print_external('css-bootstrap'); ?>
+        <?php print_external('css-font-awesome'); ?>
         <style>
             body.fm-login-page {
                 background-color: #f7f9fb;
@@ -3995,8 +4100,6 @@ function fm_show_header_login()
     {
         ?>
         </div>
-        <?php print_external('js-jquery'); ?>
-        <?php print_external('js-bootstrap'); ?>
     </body>
 
     </html>
@@ -4031,12 +4134,15 @@ function fm_show_header_login()
             echo '<link rel="icon" href="' . fm_enc($favicon_path) . '" type="image/png">';
         } ?>
         <title><?php echo fm_enc(APP_TITLE) ?> | <?php echo (isset($_GET['view']) ? $_GET['view'] : ((isset($_GET['edit'])) ? $_GET['edit'] : "H3K")); ?></title>
-        <?php print_external('pre-jsdelivr'); ?>
-        <?php print_external('pre-cloudflare'); ?>
         <?php print_external('css-bootstrap'); ?>
         <?php print_external('css-font-awesome'); ?>
-        <?php if (FM_USE_HIGHLIGHTJS && isset($_GET['view'])): ?>
-            <?php print_external('css-highlightjs'); ?>
+        <?php print_external('css-fm'); ?>
+        <?php if (isset($_GET['view']) || isset($_GET['edit'])): ?>
+            <link rel="stylesheet" href="/fm/assets/css/prism-<?php echo (FM_THEME === 'dark') ? 'dark' : 'light'; ?>.css">
+            <link rel="stylesheet" href="/fm/assets/css/prism-linenumbers.css">
+        <?php endif; ?>
+        <?php if (isset($_GET['edit'])): ?>
+            <link rel="stylesheet" href="/fm/assets/css/fm-editor.css">
         <?php endif; ?>
         <script type="text/javascript">
             window.csrf = '<?php echo $_SESSION['token']; ?>';
@@ -4151,17 +4257,6 @@ function fm_show_header_login()
 
             .hidden {
                 display: none
-            }
-
-            pre.with-hljs {
-                padding: 0;
-                overflow: hidden;
-            }
-
-            pre.with-hljs code {
-                margin: 0;
-                border: 0;
-                overflow: scroll;
             }
 
             code.maxheight,
@@ -4746,7 +4841,7 @@ function fm_show_header_login()
                 <div class="modal-dialog" role="document">
                     <form class="modal-content" method="post">
                         <div class="modal-header">
-                            <h5 class="modal-title" id="newItemModalLabel"><i class="fa fa-plus-square fa-fw"></i><?php echo lng('CreateNewItem') ?></h5>
+                            <h5 class="modal-title" id="newItemModalLabel"><i class="fa-solid fa-square-plus fa-fw"></i><?php echo lng('CreateNewItem') ?></h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
@@ -4765,8 +4860,8 @@ function fm_show_header_login()
                         </div>
                         <div class="modal-footer">
                             <input type="hidden" name="token" value="<?php echo $_SESSION['token']; ?>">
-                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal"><i class="fa fa-times-circle"></i> <?php echo lng('Cancel') ?></button>
-                            <button type="submit" class="btn btn-success"><i class="fa fa-check-circle"></i> <?php echo lng('CreateNow') ?></button>
+                            <button type="button" class="btn btn-outline-primary" data-bs-dismiss="modal"><i class="fa-solid fa-circle-xmark"></i> <?php echo lng('Cancel') ?></button>
+                            <button type="submit" class="btn btn-success"><i class="fa-solid fa-circle-check"></i> <?php echo lng('CreateNow') ?></button>
                         </div>
                     </form>
                 </div>
@@ -4780,7 +4875,7 @@ function fm_show_header_login()
                             <h5 class="modal-title col-10" id="searchModalLabel">
                                 <div class="input-group mb-3">
                                     <input type="text" class="form-control" placeholder="<?php echo lng('Search') ?> <?php echo lng('a files') ?>" aria-label="<?php echo lng('Search') ?>" aria-describedby="search-addon3" id="advanced-search" autofocus required>
-                                    <span class="input-group-text" id="search-addon3"><i class="fa fa-search"></i></span>
+                                    <span class="input-group-text" id="search-addon3"><i class="fa-solid fa-magnifying-glass"></i></span>
                                 </div>
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -4850,17 +4945,18 @@ function fm_show_header_login()
         global $ext_language;
         ?>
         </div>
-        <?php print_external('js-jquery'); ?>
-        <?php print_external('js-bootstrap'); ?>
-        <?php print_external('js-jquery-datatables'); ?>
-        <?php if (FM_USE_HIGHLIGHTJS && isset($_GET['view'])): ?>
-            <?php print_external('js-highlightjs'); ?>
-            <script>
-                hljs.highlightAll();
-                var isHighlightingEnabled = true;
-            </script>
+        <?php if (isset($_GET['view']) || isset($_GET['edit'])): ?>
+            <?php print_external('js-prism'); ?>
+        <?php endif; ?>
+        <?php if (isset($_GET['view'])): ?>
+            <script>Prism.highlightAll();</script>
         <?php endif; ?>
         <script>
+            /* In-house replacements for the removed jQuery / Bootstrap-JS / DataTables
+               (#218 P7/P8/P9). Only the behaviours the FM actually uses are implemented,
+               against the vendored Bootstrap 5 CSS markup (data-bs-*). */
+
+            // Tiny micro-template used by confirmDialog().
             function template(html, options) {
                 var re = /<\%([^\%>]+)?\%>/g,
                     reExp = /(^( )?(if|for|else|switch|case|break|{|}))(.*)?/g,
@@ -4880,11 +4976,44 @@ function fm_show_header_login()
                 return new Function(code.replace(/[\r\t\n]/g, '')).apply(options)
             }
 
+            // Bootstrap-compatible modal controller (show/hide + backdrop).
+            var fmModal = (function() {
+                var backdrop;
+                function show(sel) {
+                    var m = typeof sel === 'string' ? document.querySelector(sel) : sel;
+                    if (!m) return;
+                    if (!backdrop) { backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop fade show'; }
+                    document.body.appendChild(backdrop);
+                    m.classList.add('show');
+                    m.style.display = 'block';
+                    m.removeAttribute('aria-hidden');
+                    document.body.classList.add('modal-open');
+                }
+                function hide(sel) {
+                    var m = typeof sel === 'string' ? document.querySelector(sel) : sel;
+                    if (!m) return;
+                    m.classList.remove('show');
+                    m.style.display = 'none';
+                    m.setAttribute('aria-hidden', 'true');
+                    if (backdrop && backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+                    document.body.classList.remove('modal-open');
+                }
+                return { show: show, hide: hide };
+            })();
+
+            function fmToggleDropdown(btn) {
+                var menu = btn.parentNode.querySelector('.dropdown-menu');
+                if (!menu) return;
+                var open = menu.classList.contains('show');
+                document.querySelectorAll('.dropdown-menu.show').forEach(function(m) { m.classList.remove('show'); });
+                if (!open) menu.classList.add('show');
+            }
+
             function rename(e, t) {
                 if (t) {
-                    $("#js-rename-from").val(t);
-                    $("#js-rename-to").val(t);
-                    $("#renameDialog").modal('show');
+                    document.getElementById('js-rename-from').value = t;
+                    document.getElementById('js-rename-to').value = t;
+                    fmModal.show('#renameDialog');
                 }
             }
 
@@ -4897,22 +5026,10 @@ function fm_show_header_login()
                 return t
             }
 
-            function select_all() {
-                change_checkboxes(get_checkboxes(), !0)
-            }
-
-            function unselect_all() {
-                change_checkboxes(get_checkboxes(), !1)
-            }
-
-            function invert_all() {
-                change_checkboxes(get_checkboxes())
-            }
-
-            function checkbox_toggle() {
-                var e = get_checkboxes();
-                e.push(this), change_checkboxes(e)
-            }
+            function select_all() { change_checkboxes(get_checkboxes(), !0) }
+            function unselect_all() { change_checkboxes(get_checkboxes(), !1) }
+            function invert_all() { change_checkboxes(get_checkboxes()) }
+            function checkbox_toggle() { var e = get_checkboxes(); e.push(this), change_checkboxes(e) }
 
             // Create file backup with .bck
             function backup(e, t) {
@@ -4928,127 +5045,87 @@ function fm_show_header_login()
                 var x = document.getElementById("snackbar");
                 x.innerHTML = txt;
                 x.className = "show";
-                setTimeout(function() {
-                    x.className = x.className.replace("show", "");
-                }, 3000);
+                setTimeout(function() { x.className = x.className.replace("show", ""); }, 3000);
             }
 
-            // Save file
+            // Save file — reads the Prism overlay (advanced) or the plain textarea.
             function edit_save(e, t) {
-                var n = "ace" == t ? editor.getSession().getValue() : document.getElementById("normal-editor").value;
-                if (typeof n !== 'undefined' && n !== null) {
-                    if (true) {
-                        var data = {
-                            ajax: true,
-                            content: n,
-                            type: 'save',
-                            token: window.csrf
-                        };
-
-                        $.ajax({
-                            type: "POST",
-                            url: window.location,
-                            data: JSON.stringify(data),
-                            contentType: "application/json; charset=utf-8",
-                            success: function(mes) {
-                                toast("<?php echo lng("Saved Successfully"); ?>");
-                                window.onbeforeunload = function() {
-                                    return
-                                }
-                            },
-                            failure: function(mes) {
-                                toast("<?php echo lng("Error: try again"); ?>");
-                            },
-                            error: function(mes) {
-                                toast(`<p style="background-color:red">${mes.responseText}</p>`);
-                            }
-                        });
+                var host = document.querySelector('.fm-editor');
+                var n = (t === 'ace' && host && host.fmValue) ? host.fmValue()
+                    : (document.getElementById('normal-editor') ? document.getElementById('normal-editor').value : null);
+                if (n === undefined || n === null) return;
+                fetch(window.location, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                    body: JSON.stringify({ ajax: true, content: n, type: 'save', token: window.csrf })
+                }).then(function(r) {
+                    if (r.ok) {
+                        toast("<?php echo lng("Saved Successfully"); ?>");
+                        window.onbeforeunload = function() { return };
                     } else {
-                        var a = document.createElement("form");
-                        a.setAttribute("method", "POST"), a.setAttribute("action", "");
-                        var o = document.createElement("textarea");
-                        o.setAttribute("type", "textarea"), o.setAttribute("name", "savedata");
-                        let cx = document.createElement("input");
-                        cx.setAttribute("type", "hidden");
-                        cx.setAttribute("name", "token");
-                        cx.setAttribute("value", window.csrf);
-                        var c = document.createTextNode(n);
-                        o.appendChild(c), a.appendChild(o), a.appendChild(cx), document.body.appendChild(a), a.submit()
+                        return r.text().then(function(txt) { toast('<p style="background-color:red">' + txt + '</p>'); });
                     }
-                }
+                }).catch(function() { toast("<?php echo lng("Error: try again"); ?>"); });
             }
 
             function show_new_pwd() {
-                $(".js-new-pwd").toggleClass('hidden');
+                document.querySelectorAll('.js-new-pwd').forEach(function(el) { el.classList.toggle('hidden'); });
+            }
+
+            // Serialize a form to URLSearchParams and append the CSRF token + ajax flag.
+            function fmSerialize(form) {
+                var d = new URLSearchParams(new FormData(form));
+                d.append('token', window.csrf);
+                d.append('ajax', 'true');
+                return d;
             }
 
             // Save Settings
-            function save_settings($this) {
-                let form = $($this);
-                $.ajax({
-                    type: form.attr('method'),
-                    url: form.attr('action'),
-                    data: form.serialize() + "&token=" + window.csrf + "&ajax=" + true,
-                    success: function(data) {
-                        if (data) {
-                            window.location.reload();
-                        }
-                    }
-                });
+            function save_settings(form) {
+                fetch(form.getAttribute('action') || window.location, {
+                    method: form.getAttribute('method') || 'POST',
+                    body: fmSerialize(form)
+                }).then(function(r) { return r.text(); }).then(function(data) { if (data) window.location.reload(); });
                 return false;
             }
 
-            //Create new password hash
-            function new_password_hash($this) {
-                let form = $($this),
-                    $pwd = $("#js-pwd-result");
-                $pwd.val('');
-                $.ajax({
-                    type: form.attr('method'),
-                    url: form.attr('action'),
-                    data: form.serialize() + "&token=" + window.csrf + "&ajax=" + true,
-                    success: function(data) {
-                        if (data) {
-                            $pwd.val(data);
-                        }
-                    }
-                });
+            // Create new password hash
+            function new_password_hash(form) {
+                var out = document.getElementById('js-pwd-result');
+                if (out) out.value = '';
+                fetch(form.getAttribute('action') || window.location, {
+                    method: form.getAttribute('method') || 'POST',
+                    body: fmSerialize(form)
+                }).then(function(r) { return r.text(); }).then(function(data) { if (data && out) out.value = data; });
                 return false;
             }
 
-            // Upload files using URL @param {Object}
-            function upload_from_url($this) {
-                let form = $($this),
-                    resultWrapper = $("div#js-url-upload__list");
-                $.ajax({
-                    type: form.attr('method'),
-                    url: form.attr('action'),
-                    data: form.serialize() + "&token=" + window.csrf + "&ajax=" + true,
-                    beforeSend: function() {
-                        form.find("input[name=uploadurl]").attr("disabled", "disabled");
-                        form.find("button").hide();
-                        form.find(".lds-facebook").addClass('show-me');
-                    },
-                    success: function(data) {
-                        if (data) {
-                            data = JSON.parse(data);
-                            if (data.done) {
-                                resultWrapper.append('<div class="alert alert-success row"><?php echo lng("Uploaded Successful"); ?>: ' + data.done.name + '</div>');
-                                form.find("input[name=uploadurl]").val('');
-                            } else if (data['fail']) {
-                                resultWrapper.append('<div class="alert alert-danger row"><?php echo lng("Error"); ?>: ' + data.fail.message + '</div>');
-                            }
-                            form.find("input[name=uploadurl]").removeAttr("disabled");
-                            form.find("button").show();
-                            form.find(".lds-facebook").removeClass('show-me');
+            // Upload files using URL
+            function upload_from_url(form) {
+                var resultWrapper = document.getElementById('js-url-upload__list');
+                var urlInput = form.querySelector('input[name=uploadurl]');
+                var btn = form.querySelector('button');
+                var loader = form.querySelector('.lds-facebook');
+                if (urlInput) urlInput.setAttribute('disabled', 'disabled');
+                if (btn) btn.style.display = 'none';
+                if (loader) loader.classList.add('show-me');
+                fetch(form.getAttribute('action') || window.location, {
+                    method: form.getAttribute('method') || 'POST',
+                    body: fmSerialize(form)
+                }).then(function(r) { return r.text(); }).then(function(data) {
+                    if (data) {
+                        data = JSON.parse(data);
+                        if (data.done) {
+                            resultWrapper.insertAdjacentHTML('beforeend', '<div class="alert alert-success row"><?php echo lng("Uploaded Successful"); ?>: ' + data.done.name + '</div>');
+                            if (urlInput) urlInput.value = '';
+                        } else if (data['fail']) {
+                            resultWrapper.insertAdjacentHTML('beforeend', '<div class="alert alert-danger row"><?php echo lng("Error"); ?>: ' + data.fail.message + '</div>');
                         }
-                    },
-                    error: function(xhr) {
-                        form.find("input[name=uploadurl]").removeAttr("disabled");
-                        form.find("button").show();
-                        form.find(".lds-facebook").removeClass('show-me');
-                        console.error(xhr);
                     }
+                }).catch(function(xhr) { console.error(xhr); }).finally(function() {
+                    if (urlInput) urlInput.removeAttribute('disabled');
+                    if (btn) btn.style.display = '';
+                    if (loader) loader.classList.remove('show-me');
                 });
                 return false;
             }
@@ -5056,456 +5133,172 @@ function fm_show_header_login()
             // Search template
             function search_template(data) {
                 var response = "";
-                $.each(data, function(key, val) {
+                data.forEach(function(val) {
                     response += `<li><a href="?p=${val.path}&view=${val.name}">${val.path}/${val.name}</a></li>`;
                 });
                 return response;
             }
 
-            // Advance search
+            // Advanced search
             function fm_search() {
-                var searchTxt = $("input#advanced-search").val(),
-                    searchWrapper = $("ul#search-wrapper"),
-                    path = $("#js-search-modal").attr("href"),
-                    _html = "",
-                    $loader = $("div.lds-facebook");
+                var searchInput = document.getElementById('advanced-search');
+                var searchTxt = searchInput ? searchInput.value : '';
+                var searchWrapper = document.getElementById('search-wrapper');
+                var pathEl = document.getElementById('js-search-modal');
+                var path = pathEl ? pathEl.getAttribute('href') : null;
+                var loader = document.querySelector('div.lds-facebook');
                 if (!!searchTxt && searchTxt.length > 2 && path) {
-                    var data = {
-                        ajax: true,
-                        content: searchTxt,
-                        path: path,
-                        type: 'search',
-                        token: window.csrf
-                    };
-                    $.ajax({
-                        type: "POST",
-                        url: window.location,
-                        data: data,
-                        beforeSend: function() {
-                            searchWrapper.html('');
-                            $loader.addClass('show-me');
-                        },
-                        success: function(data) {
-                            $loader.removeClass('show-me');
-                            data = JSON.parse(data);
-                            if (data && data.length) {
-                                _html = search_template(data);
-                                searchWrapper.html(_html);
-                            } else {
-                                searchWrapper.html('<p class="m-2"><?php echo lng("No result found!"); ?><p>');
-                            }
-                        },
-                        error: function(xhr) {
-                            $loader.removeClass('show-me');
-                            searchWrapper.html('<p class="m-2"><?php echo lng("ERROR: Try again later!"); ?></p>');
-                        },
-                        failure: function(mes) {
-                            $loader.removeClass('show-me');
-                            searchWrapper.html('<p class="m-2"><?php echo lng("ERROR: Try again later!"); ?></p>');
-                        }
+                    var body = new URLSearchParams();
+                    body.append('ajax', 'true');
+                    body.append('content', searchTxt);
+                    body.append('path', path);
+                    body.append('type', 'search');
+                    body.append('token', window.csrf);
+                    if (searchWrapper) searchWrapper.innerHTML = '';
+                    if (loader) loader.classList.add('show-me');
+                    fetch(window.location, { method: 'POST', body: body }).then(function(r) { return r.text(); }).then(function(data) {
+                        if (loader) loader.classList.remove('show-me');
+                        data = JSON.parse(data);
+                        if (data && data.length) { searchWrapper.innerHTML = search_template(data); }
+                        else { searchWrapper.innerHTML = '<p class="m-2"><?php echo lng("No result found!"); ?><p>'; }
+                    }).catch(function() {
+                        if (loader) loader.classList.remove('show-me');
+                        if (searchWrapper) searchWrapper.innerHTML = '<p class="m-2"><?php echo lng("ERROR: Try again later!"); ?></p>';
                     });
-                } else {
-                    searchWrapper.html("<?php echo lng("OOPS: minimum 3 characters required!"); ?>");
+                } else if (searchWrapper) {
+                    searchWrapper.innerHTML = "<?php echo lng("OOPS: minimum 3 characters required!"); ?>";
                 }
             }
 
             // action confirm dialog modal
             function confirmDialog(e, id = 0, title = "Action", content = "", action = null) {
                 e.preventDefault();
-                const tplObj = {
-                    id,
-                    title,
-                    content: decodeURIComponent(content.replace(/\+/g, ' ')),
-                    action
-                };
-                let tpl = $("#js-tpl-confirm").html();
-                $(".modal.confirmDialog").remove();
-                $('#wrapper').append(template(tpl, tplObj));
-                const $confirmDialog = $("#confirmDialog-" + tplObj.id);
-                $confirmDialog.modal('show');
+                const tplObj = { id, title, content: decodeURIComponent(content.replace(/\+/g, ' ')), action };
+                let tpl = document.getElementById("js-tpl-confirm").innerHTML;
+                document.querySelectorAll(".modal.confirmDialog").forEach(function(m) { m.remove(); });
+                document.getElementById('wrapper').insertAdjacentHTML('beforeend', template(tpl, tplObj));
+                fmModal.show("#confirmDialog-" + tplObj.id);
                 return false;
             }
 
-            // on mouse hover image preview
-            ! function(s) {
-                s.previewImage = function(e) {
-                    var o = s(document),
-                        t = ".previewImage",
-                        a = s.extend({
-                            xOffset: 20,
-                            yOffset: -20,
-                            fadeIn: "fast",
-                            css: {
-                                padding: "5px",
-                                border: "1px solid #cccccc",
-                                "background-color": "#fff"
-                            },
-                            eventSelector: "[data-preview-image]",
-                            dataKey: "previewImage",
-                            overlayId: "preview-image-plugin-overlay"
-                        }, e);
-                    return o.off(t), o.on("mouseover" + t, a.eventSelector, function(e) {
-                        s("p#" + a.overlayId).remove();
-                        var o = s("<p>").attr("id", a.overlayId).css("position", "absolute").css("display", "none").append(s('<img class="c-preview-img">').attr("src", s(this).data(a.dataKey)));
-                        a.css && o.css(a.css), s("body").append(o), o.css("top", e.pageY + a.yOffset + "px").css("left", e.pageX + a.xOffset + "px").fadeIn(a.fadeIn)
-                    }), o.on("mouseout" + t, a.eventSelector, function() {
-                        s("#" + a.overlayId).remove()
-                    }), o.on("mousemove" + t, a.eventSelector, function(e) {
-                        s("#" + a.overlayId).css("top", e.pageY + a.yOffset + "px").css("left", e.pageX + a.xOffset + "px")
-                    }), this
-                }, s.previewImage()
-            }(jQuery);
+            // On-hover image preview (native replacement of the jQuery plugin).
+            (function() {
+                var overlay;
+                function move(e) {
+                    if (!overlay) return;
+                    overlay.style.top = (e.pageY - 20) + "px";
+                    overlay.style.left = (e.pageX + 20) + "px";
+                }
+                document.addEventListener("mouseover", function(e) {
+                    var el = e.target.closest("[data-preview-image]");
+                    if (!el) return;
+                    if (overlay) overlay.remove();
+                    overlay = document.createElement("p");
+                    overlay.id = "preview-image-plugin-overlay";
+                    overlay.style.position = "absolute";
+                    overlay.innerHTML = '<img class="c-preview-img" src="' + el.getAttribute("data-preview-image") + '">';
+                    document.body.appendChild(overlay);
+                    move(e);
+                });
+                document.addEventListener("mouseout", function(e) {
+                    if (e.target.closest("[data-preview-image]") && overlay) { overlay.remove(); overlay = null; }
+                });
+                document.addEventListener("mousemove", function(e) { if (e.target.closest("[data-preview-image]")) move(e); });
+            })();
 
-            // Dom Ready Events
-            $(document).ready(function() {
-                // dataTable init
-                var $table = $('#main-table'),
-                    tableLng = $table.find('th').length,
-                    _targets = (tableLng && tableLng == 7) ? [0, 4, 5, 6] : tableLng == 5 ? [0, 4] : [3];
-                mainTable = $('#main-table').DataTable({
-                    paging: false,
-                    info: false,
-                    order: [],
-                    columnDefs: [{
-                        targets: _targets,
-                        orderable: false
-                    }]
+            // Client-side filter + column sort over the listing (replaces DataTables).
+            function fmInitTable() {
+                var table = document.getElementById('main-table');
+                if (!table || !table.tBodies[0] || !table.tHead) return;
+                var tbody = table.tBodies[0];
+                function isParent(row) { return !!row.querySelector('.go-back'); }
+                function cellKey(cell) {
+                    if (!cell) return '';
+                    return (cell.getAttribute('data-order') || cell.getAttribute('data-sort') || cell.textContent || '').trim();
+                }
+                var filterBox = document.getElementById('search-addon');
+                if (filterBox) filterBox.addEventListener('keyup', function() {
+                    var q = this.value.toLowerCase();
+                    Array.prototype.forEach.call(tbody.rows, function(row) {
+                        if (isParent(row)) return;
+                        row.style.display = row.textContent.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+                    });
+                });
+                var ths = table.tHead.rows[0].cells;
+                function refRow() {
+                    for (var i = 0; i < tbody.rows.length; i++) { if (!isParent(tbody.rows[i])) return tbody.rows[i]; }
+                    return null;
+                }
+                function sortable(idx) {
+                    var r = refRow();
+                    var c = r ? r.cells[idx] : null;
+                    return !!(c && (c.hasAttribute('data-order') || c.hasAttribute('data-sort')));
+                }
+                Array.prototype.forEach.call(ths, function(th, idx) {
+                    if (!sortable(idx)) return;
+                    th.style.cursor = 'pointer';
+                    th.addEventListener('click', function() {
+                        var dir = th.getAttribute('data-sort-dir') === 'asc' ? 'desc' : 'asc';
+                        Array.prototype.forEach.call(ths, function(o) { o.removeAttribute('data-sort-dir'); });
+                        th.setAttribute('data-sort-dir', dir);
+                        var all = Array.prototype.slice.call(tbody.rows);
+                        var pinned = all.filter(isParent);
+                        var rows = all.filter(function(r) { return !isParent(r); });
+                        rows.sort(function(a, b) {
+                            var cmp = cellKey(a.cells[idx]).localeCompare(cellKey(b.cells[idx]), undefined, { numeric: true, sensitivity: 'base' });
+                            return dir === 'asc' ? cmp : -cmp;
+                        });
+                        pinned.concat(rows).forEach(function(r) { tbody.appendChild(r); });
+                    });
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                fmInitTable();
+
+                var adv = document.getElementById('advanced-search');
+                if (adv) adv.addEventListener('keyup', function(e) { if (e.keyCode === 13) fm_search(); });
+                var advBtn = document.getElementById('search-addon3');
+                if (advBtn) advBtn.addEventListener('click', fm_search);
+
+                // Upload nav tabs
+                document.querySelectorAll('.fm-upload-wrapper .card-header-tabs a').forEach(function(a) {
+                    a.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        var target = this.getAttribute('data-target');
+                        document.querySelectorAll('.fm-upload-wrapper .card-header-tabs a').forEach(function(x) { x.classList.remove('active'); });
+                        this.classList.add('active');
+                        document.querySelectorAll('.fm-upload-wrapper .card-tabs-container').forEach(function(c) { c.classList.add('hidden'); });
+                        var el = document.querySelector(target);
+                        if (el) el.classList.remove('hidden');
+                    });
                 });
 
-                // filter table
-                $('#search-addon').on('keyup', function() {
-                    mainTable.search(this.value).draw();
-                });
-
-                $("input#advanced-search").on('keyup', function(e) {
-                    if (e.keyCode === 13) {
-                        fm_search();
+                // Bootstrap-compatible delegation: modal open/close + dropdown toggle.
+                document.addEventListener('click', function(e) {
+                    var open = e.target.closest('[data-bs-toggle="modal"]');
+                    if (open) { e.preventDefault(); var sel = open.getAttribute('data-bs-target'); if (sel) fmModal.show(sel); return; }
+                    var dismiss = e.target.closest('[data-bs-dismiss="modal"]');
+                    if (dismiss) { e.preventDefault(); var m = dismiss.closest('.modal'); if (m) fmModal.hide(m); return; }
+                    var dd = e.target.closest('[data-bs-toggle="dropdown"]');
+                    if (dd) { e.preventDefault(); fmToggleDropdown(dd); return; }
+                    if (!e.target.closest('.dropdown-menu')) {
+                        document.querySelectorAll('.dropdown-menu.show').forEach(function(m) { m.classList.remove('show'); });
                     }
-                });
-
-                $('#search-addon3').on('click', function() {
-                    fm_search();
-                });
-
-                //upload nav tabs
-                $(".fm-upload-wrapper .card-header-tabs").on("click", 'a', function(e) {
-                    e.preventDefault();
-                    let target = $(this).data('target');
-                    $(".fm-upload-wrapper .card-header-tabs a").removeClass('active');
-                    $(this).addClass('active');
-                    $(".fm-upload-wrapper .card-tabs-container").addClass('hidden');
-                    $(target).removeClass('hidden');
                 });
             });
         </script>
 
-        <?php if (isset($_GET['edit']) && isset($_GET['env']) && FM_EDIT_FILE && !FM_READONLY):
-            $ext = pathinfo($_GET["edit"], PATHINFO_EXTENSION);
-            $ext =  isset($ext_language[$ext]) ? $ext_language[$ext] :  $ext;
-        ?>
-            <?php print_external('js-ace'); ?>
+
+        <?php if (isset($_GET['edit']) && isset($_GET['env']) && FM_EDIT_FILE && !FM_READONLY): ?>
+            <?php print_external('js-editor'); ?>
             <script>
-                var editor = ace.edit("editor");
-                editor.getSession().setMode({
-                    path: "ace/mode/<?php echo $ext; ?>",
-                    inline: true
-                });
-                editor.setTheme("ace/theme/<?php echo ACE_THEME; ?>"); // Dark Theme
-                editor.setShowPrintMargin(false); // Hide the vertical ruler
-                function ace_commend(cmd) {
-                    editor.commands.exec(cmd, editor);
-                }
-                editor.commands.addCommands([{
-                    name: 'save',
-                    bindKey: {
-                        win: 'Ctrl-S',
-                        mac: 'Command-S'
-                    },
-                    exec: function(editor) {
+                // Ctrl/Cmd-S saves from the Prism-overlay editor (#218 P4).
+                document.addEventListener('keydown', function(e) {
+                    if ((navigator.platform.match('Mac') ? e.metaKey : e.ctrlKey) && (e.key === 's' || e.keyCode === 83)) {
+                        e.preventDefault();
                         edit_save(this, 'ace');
                     }
-                }]);
-
-                function renderThemeMode() {
-                    var $modeEl = $("select#js-ace-mode"),
-                        $themeEl = $("select#js-ace-theme"),
-                        $fontSizeEl = $("select#js-ace-fontSize"),
-                        optionNode = function(type, arr) {
-                            var $Option = "";
-                            $.each(arr, function(i, val) {
-                                $Option += "<option value='" + type + i + "'>" + val + "</option>";
-                            });
-                            return $Option;
-                        },
-                        _data = {
-                            "aceTheme": {
-                                "bright": {
-                                    "chrome": "Chrome",
-                                    "clouds": "Clouds",
-                                    "crimson_editor": "Crimson Editor",
-                                    "dawn": "Dawn",
-                                    "dreamweaver": "Dreamweaver",
-                                    "eclipse": "Eclipse",
-                                    "github": "GitHub",
-                                    "iplastic": "IPlastic",
-                                    "solarized_light": "Solarized Light",
-                                    "textmate": "TextMate",
-                                    "tomorrow": "Tomorrow",
-                                    "xcode": "XCode",
-                                    "kuroir": "Kuroir",
-                                    "katzenmilch": "KatzenMilch",
-                                    "sqlserver": "SQL Server"
-                                },
-                                "dark": {
-                                    "ambiance": "Ambiance",
-                                    "chaos": "Chaos",
-                                    "clouds_midnight": "Clouds Midnight",
-                                    "dracula": "Dracula",
-                                    "cobalt": "Cobalt",
-                                    "gruvbox": "Gruvbox",
-                                    "gob": "Green on Black",
-                                    "idle_fingers": "idle Fingers",
-                                    "kr_theme": "krTheme",
-                                    "merbivore": "Merbivore",
-                                    "merbivore_soft": "Merbivore Soft",
-                                    "mono_industrial": "Mono Industrial",
-                                    "monokai": "Monokai",
-                                    "pastel_on_dark": "Pastel on dark",
-                                    "solarized_dark": "Solarized Dark",
-                                    "terminal": "Terminal",
-                                    "tomorrow_night": "Tomorrow Night",
-                                    "tomorrow_night_blue": "Tomorrow Night Blue",
-                                    "tomorrow_night_bright": "Tomorrow Night Bright",
-                                    "tomorrow_night_eighties": "Tomorrow Night 80s",
-                                    "twilight": "Twilight",
-                                    "vibrant_ink": "Vibrant Ink"
-                                }
-                            },
-                            "aceMode": {
-                                "javascript": "JavaScript",
-                                "abap": "ABAP",
-                                "abc": "ABC",
-                                "actionscript": "ActionScript",
-                                "ada": "ADA",
-                                "apache_conf": "Apache Conf",
-                                "asciidoc": "AsciiDoc",
-                                "asl": "ASL",
-                                "assembly_x86": "Assembly x86",
-                                "autohotkey": "AutoHotKey",
-                                "apex": "Apex",
-                                "batchfile": "BatchFile",
-                                "bro": "Bro",
-                                "c_cpp": "C and C++",
-                                "c9search": "C9Search",
-                                "cirru": "Cirru",
-                                "clojure": "Clojure",
-                                "cobol": "Cobol",
-                                "coffee": "CoffeeScript",
-                                "coldfusion": "ColdFusion",
-                                "csharp": "C#",
-                                "csound_document": "Csound Document",
-                                "csound_orchestra": "Csound",
-                                "csound_score": "Csound Score",
-                                "css": "CSS",
-                                "curly": "Curly",
-                                "d": "D",
-                                "dart": "Dart",
-                                "diff": "Diff",
-                                "dockerfile": "Dockerfile",
-                                "dot": "Dot",
-                                "drools": "Drools",
-                                "edifact": "Edifact",
-                                "eiffel": "Eiffel",
-                                "ejs": "EJS",
-                                "elixir": "Elixir",
-                                "elm": "Elm",
-                                "erlang": "Erlang",
-                                "forth": "Forth",
-                                "fortran": "Fortran",
-                                "fsharp": "FSharp",
-                                "fsl": "FSL",
-                                "ftl": "FreeMarker",
-                                "gcode": "Gcode",
-                                "gherkin": "Gherkin",
-                                "gitignore": "Gitignore",
-                                "glsl": "Glsl",
-                                "gobstones": "Gobstones",
-                                "golang": "Go",
-                                "graphqlschema": "GraphQLSchema",
-                                "groovy": "Groovy",
-                                "haml": "HAML",
-                                "handlebars": "Handlebars",
-                                "haskell": "Haskell",
-                                "haskell_cabal": "Haskell Cabal",
-                                "haxe": "haXe",
-                                "hjson": "Hjson",
-                                "html": "HTML",
-                                "html_elixir": "HTML (Elixir)",
-                                "html_ruby": "HTML (Ruby)",
-                                "ini": "INI",
-                                "io": "Io",
-                                "jack": "Jack",
-                                "jade": "Jade",
-                                "java": "Java",
-                                "json": "JSON",
-                                "jsoniq": "JSONiq",
-                                "jsp": "JSP",
-                                "jssm": "JSSM",
-                                "jsx": "JSX",
-                                "julia": "Julia",
-                                "kotlin": "Kotlin",
-                                "latex": "LaTeX",
-                                "less": "LESS",
-                                "liquid": "Liquid",
-                                "lisp": "Lisp",
-                                "livescript": "LiveScript",
-                                "logiql": "LogiQL",
-                                "lsl": "LSL",
-                                "lua": "Lua",
-                                "luapage": "LuaPage",
-                                "lucene": "Lucene",
-                                "makefile": "Makefile",
-                                "markdown": "Markdown",
-                                "mask": "Mask",
-                                "matlab": "MATLAB",
-                                "maze": "Maze",
-                                "mel": "MEL",
-                                "mixal": "MIXAL",
-                                "mushcode": "MUSHCode",
-                                "mysql": "MySQL",
-                                "nix": "Nix",
-                                "nsis": "NSIS",
-                                "objectivec": "Objective-C",
-                                "ocaml": "OCaml",
-                                "pascal": "Pascal",
-                                "perl": "Perl",
-                                "perl6": "Perl 6",
-                                "pgsql": "pgSQL",
-                                "php_laravel_blade": "PHP (Blade Template)",
-                                "php": "PHP",
-                                "puppet": "Puppet",
-                                "pig": "Pig",
-                                "powershell": "Powershell",
-                                "praat": "Praat",
-                                "prolog": "Prolog",
-                                "properties": "Properties",
-                                "protobuf": "Protobuf",
-                                "python": "Python",
-                                "r": "R",
-                                "razor": "Razor",
-                                "rdoc": "RDoc",
-                                "red": "Red",
-                                "rhtml": "RHTML",
-                                "rst": "RST",
-                                "ruby": "Ruby",
-                                "rust": "Rust",
-                                "sass": "SASS",
-                                "scad": "SCAD",
-                                "scala": "Scala",
-                                "scheme": "Scheme",
-                                "scss": "SCSS",
-                                "sh": "SH",
-                                "sjs": "SJS",
-                                "slim": "Slim",
-                                "smarty": "Smarty",
-                                "snippets": "snippets",
-                                "soy_template": "Soy Template",
-                                "space": "Space",
-                                "sql": "SQL",
-                                "sqlserver": "SQLServer",
-                                "stylus": "Stylus",
-                                "svg": "SVG",
-                                "swift": "Swift",
-                                "tcl": "Tcl",
-                                "terraform": "Terraform",
-                                "tex": "Tex",
-                                "text": "Text",
-                                "textile": "Textile",
-                                "toml": "Toml",
-                                "tsx": "TSX",
-                                "twig": "Twig",
-                                "typescript": "Typescript",
-                                "vala": "Vala",
-                                "vbscript": "VBScript",
-                                "velocity": "Velocity",
-                                "verilog": "Verilog",
-                                "vhdl": "VHDL",
-                                "visualforce": "Visualforce",
-                                "wollok": "Wollok",
-                                "xml": "XML",
-                                "xquery": "XQuery",
-                                "yaml": "YAML",
-                                "django": "Django"
-                            },
-                            "fontSize": {
-                                8: 8,
-                                10: 10,
-                                11: 11,
-                                12: 12,
-                                13: 13,
-                                14: 14,
-                                15: 15,
-                                16: 16,
-                                17: 17,
-                                18: 18,
-                                20: 20,
-                                22: 22,
-                                24: 24,
-                                26: 26,
-                                30: 30
-                            }
-                        };
-                    if (_data && _data.aceMode) {
-                        $modeEl.html(optionNode("ace/mode/", _data.aceMode));
-                    }
-                    if (_data && _data.aceTheme) {
-                        var lightTheme = optionNode("ace/theme/", _data.aceTheme.bright),
-                            darkTheme = optionNode("ace/theme/", _data.aceTheme.dark);
-                        $themeEl.html("<optgroup label=\"Bright\">" + lightTheme + "</optgroup><optgroup label=\"Dark\">" + darkTheme + "</optgroup>");
-                    }
-                    if (_data && _data.fontSize) {
-                        $fontSizeEl.html(optionNode("", _data.fontSize));
-                    }
-                    $modeEl.val(editor.getSession().$modeId);
-                    $themeEl.val(editor.getTheme());
-                    $(function() {
-                        // Apply font size directly, then sync dropdown
-                        editor.setFontSize(<?php echo (int) ACE_FONTSIZE; ?>);
-                        $fontSizeEl.val(<?php echo (int) ACE_FONTSIZE; ?>);
-                    });
-                }
-
-                $(function() {
-                    renderThemeMode();
-                    $(".js-ace-toolbar").on("click", 'button', function(e) {
-                        e.preventDefault();
-                        let cmdValue = $(this).attr("data-cmd"),
-                            editorOption = $(this).attr("data-option");
-                        if (cmdValue && cmdValue != "none") {
-                            ace_commend(cmdValue);
-                        } else if (editorOption) {
-                            if (editorOption == "fullscreen") {
-                                (void 0 !== document.fullScreenElement && null === document.fullScreenElement || void 0 !== document.msFullscreenElement && null === document.msFullscreenElement || void 0 !== document.mozFullScreen && !document.mozFullScreen || void 0 !== document.webkitIsFullScreen && !document.webkitIsFullScreen) &&
-                                (editor.container.requestFullScreen ? editor.container.requestFullScreen() : editor.container.mozRequestFullScreen ? editor.container.mozRequestFullScreen() : editor.container.webkitRequestFullScreen ? editor.container.webkitRequestFullScreen(Element.ALLOW_KEYBOARD_INPUT) : editor.container.msRequestFullscreen && editor.container.msRequestFullscreen());
-                            } else if (editorOption == "wrap") {
-                                let wrapStatus = (editor.getSession().getUseWrapMode()) ? false : true;
-                                editor.getSession().setUseWrapMode(wrapStatus);
-                            }
-                        }
-                    });
-
-                    $("select#js-ace-mode, select#js-ace-theme, select#js-ace-fontSize").on("change", function(e) {
-                        e.preventDefault();
-                        let selectedValue = $(this).val(),
-                            selectionType = $(this).attr("data-type");
-                        if (selectedValue && selectionType == "mode") {
-                            editor.getSession().setMode(selectedValue);
-                        } else if (selectedValue && selectionType == "theme") {
-                            editor.setTheme(selectedValue);
-                        } else if (selectedValue && selectionType == "fontSize") {
-                            editor.setFontSize(parseInt(selectedValue));
-                        }
-                    });
                 });
             </script>
         <?php endif; ?>

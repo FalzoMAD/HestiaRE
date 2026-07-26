@@ -1,0 +1,48 @@
+/* Overlay layout for the Prism-overlay code editor (#218 P4). The Prism token
+   colours come from the vendored prism-light.css / prism-dark.css (one is linked
+   per panel theme); the line-number gutter from prism-linenumbers.css. This file
+   only positions the transparent <textarea> exactly over the highlighted <pre>. */
+.fm-editor {
+	position: relative;
+	height: 70vh;
+	margin-top: .5rem;
+	border: 1px solid var(--bs-border-color, #ced4da);
+	border-radius: .375rem;
+	overflow: hidden;
+}
+/* Both layers must share identical text metrics or the caret drifts. */
+.fm-editor__pre,
+.fm-editor__input {
+	margin: 0;
+	position: absolute;
+	inset: 0;
+	box-sizing: border-box;
+	font-family: Consolas, Monaco, "Ubuntu Mono", monospace;
+	font-size: 13px;
+	line-height: 1.5;
+	tab-size: 2;
+	-moz-tab-size: 2;
+	white-space: pre;
+	padding: 1em;
+}
+.fm-editor__pre {
+	pointer-events: none;
+	overflow: hidden;
+	border-radius: inherit;
+}
+.fm-editor__input {
+	z-index: 2;
+	color: transparent;
+	caret-color: #000;
+	background: transparent;
+	border: 0;
+	outline: none;
+	resize: none;
+	overflow: auto;
+}
+[data-bs-theme="dark"] .fm-editor__input { caret-color: #fff; }
+
+/* The line-numbers plugin pads the <pre> by 3.8em; match it on the textarea so
+   the caret starts after the gutter. */
+.fm-editor__pre.line-numbers { padding-left: 3.8em; }
+.fm-editor__input { padding-left: 3.8em; }

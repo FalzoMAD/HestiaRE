@@ -1,0 +1,35 @@
+/* HestiaRE File Manager overrides on top of vendored Bootstrap (#218 S1 + polish).
+   The stock TinyFileManager stretches full-viewport; the panel it lives inside uses
+   a fixed max content width, so constrain the FM the same way for a consistent feel. */
+.container-fluid,
+.fm-body-wrapper > .container,
+#wrapper {
+	max-width: 1600px;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* Dark theme: the stock inline body colours are light-only; let Bootstrap's
+   data-bs-theme drive the page surface so the panel dark theme carries through (S2). */
+[data-bs-theme="dark"] body {
+	color: var(--bs-body-color);
+	background: var(--bs-body-bg);
+}
+
+/* Native uploader drop area (#218 P6, replaces Dropzone's styling). */
+.fm-dropzone {
+	border: 2px dashed var(--bs-border-color, #ced4da);
+	border-radius: .375rem;
+	padding: 2.5rem 1rem;
+	text-align: center;
+	cursor: pointer;
+	color: var(--bs-secondary-color, #6c757d);
+	transition: border-color .15s, background-color .15s;
+}
+.fm-dropzone:hover,
+.fm-dropzone--hover {
+	border-color: var(--bs-primary, #0d6efd);
+	background: rgba(13, 110, 253, .05);
+}
+.fm-dropzone__hint { margin: 0; font-size: 1.1rem; }
+.fm-up-row { margin-bottom: .5rem; }

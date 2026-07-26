@@ -45,6 +45,13 @@ if (file_exists("/run/hestia/fm/" . $user . ".sock")) {
 	// Caddy copies this onto the proxied request and derives the pool Host from it;
 	// the vhost side overwrites any client-supplied value, so it is authoritative.
 	header("X-Hestia-User: " . $user);
+	// Pass the customer's panel theme through so the FM matches light/dark (#218 S2).
+	// The panel stores it in the session (userTheme, THEME fallback — see css.php);
+	// the FM maps light*/dark* families onto Bootstrap's data-bs-theme.
+	$theme = !empty($_SESSION["userTheme"]) ? $_SESSION["userTheme"] : ($_SESSION["THEME"] ?? "");
+	if (preg_match('/^[A-Za-z0-9._-]+$/', $theme)) {
+		header("X-Hestia-Theme: " . $theme);
+	}
 	http_response_code(204);
 } else {
 	http_response_code(403);
