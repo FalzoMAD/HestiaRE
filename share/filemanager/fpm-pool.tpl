@@ -18,6 +18,11 @@ pm.max_children = 4
 pm.process_idle_timeout = 10s
 pm.max_requests = 500
 
+; FM app errors are otherwise hard to find (the app runs as the customer). Route the
+; worker output to the php-fpm log tagged [pool fm-%user%] — no extra file, no perms.
+catch_workers_output = yes
+php_admin_flag[log_errors] = on
+
 ; open_basedir = read-only shared app code + the customer's own home (nothing else).
 ; A path-traversal in the app therefore cannot leave files the customer already owns.
 php_admin_value[open_basedir] = /usr/share/filemanager/fm:/home/%user%
