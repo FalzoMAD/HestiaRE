@@ -11,6 +11,16 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Breaking / Upgrade notes
 
+- File manager rebuilt (#419, replaces FileGator + the SFTP-loopback connector). The
+  `h-add-sys-filemanager`/`h-delete-sys-filemanager` commands no longer download FileGator
+  or run composer; the app now runs in a per-customer php-fpm pool **as the customer** (the
+  kernel UID is the isolation boundary), reached via Panel-Caddy `/fm/` → `forward_auth`
+  (`web/fm-auth.php`) → a private loopback listener. New per-user commands
+  `h-add-user-filemanager`/`h-delete-user-filemanager`, saved-state on module delete, and a
+  `rebuild_user` restore hook. Phase 1 (integration skeleton) only — the vendored app follows
+  in Phase 2 (#218). No live installs pre-v1, so no migration path; the old
+  `/usr/local/hestia/web/fm` tree is unused.
+
 - The SFTP jail no longer uses `/srv/jail` (#413) — it is now built per session under
   `/run/hestia/jail` by `pam_namespace`. Fresh installs get this automatically; there
   are no live installs pre-v1, so no migration/cleanup path is carried.

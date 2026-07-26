@@ -1,0 +1,64 @@
+#!/bin/bash
+# info: disable the file manager for a user
+# options: USER [RESTART]
+#
+# example: h-delete-user-filemanager alice
+#
+# Removes the customer's FM pool + vhost, drops the socket, and clears FILE_MANAGER.
+# Idempotent. Reverse of h-add-user-filemanager.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user="$1"
+restart="$2"
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+[ "$(id -u)" = '0' ] || { echo "ERROR: h-delete-user-filemanager must be run as root"; exit 10; }
+check_hestia_demo_mode
+is_format_valid 'user'
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Pool (whichever php version holds it) + reload that fpm
+for pool in /etc/php/*/fpm/pool.d/fm-"$user".conf; do
+	[ -f "$pool" ] || continue
+	ver=$(echo "$pool" | sed -nE 's|/etc/php/([^/]+)/.*|\1|p')
+	rm -f "$pool"
+	systemctl reload "php$ver-fpm" 2> /dev/null || systemctl restart "php$ver-fpm" 2> /dev/null || true
+done
+
+# vhost (nginx or apache) + stray socket
+rm -f "/etc/nginx/conf.d/fm-$user.conf" "/etc/apache2/conf.d/fm-$user.conf"
+rm -f "/run/hestia/fm/$user.sock"
+if [ "$restart" != 'no' ]; then
+	[ -n "$PROXY_SYSTEM" ] && $BIN/h-restart-service "$PROXY_SYSTEM" > /dev/null 2>&1 || true
+	$BIN/h-restart-service "$WEB_SYSTEM" > /dev/null 2>&1 || true
+fi
+
+# Clear the flag if present
+if grep -q "^FILE_MANAGER='" "$USER_DATA/user.conf" 2> /dev/null; then
+	update_user_value "$user" '$FILE_MANAGER' 'no'
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "Plugins" "File manager disabled for $user."
+log_event "$OK" "$ARGUMENTS"
+exit
