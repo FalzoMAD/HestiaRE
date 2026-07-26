@@ -23,7 +23,7 @@ handle /fm/* {
             env SCRIPT_FILENAME /usr/local/hestia/web/fm-auth.php
             env SCRIPT_NAME /fm-auth.php
         }
-        copy_headers X-Hestia-User
+        copy_headers X-Hestia-User X-Hestia-Theme
     }
     reverse_proxy 127.0.0.1:%FILE_MANAGER_PORT% {
         header_up Host fm-{http.request.header.X-Hestia-User}.local

@@ -21,6 +21,16 @@ section as part of its PR. On release, the section gets the version number.
   in Phase 2 (#218). No live installs pre-v1, so no migration path; the old
   `/usr/local/hestia/web/fm` tree is unused.
 
+- File manager Phase 2 — vendored TinyFileManager put on a diet (#218). All external
+  CDN assets are dropped (GDPR/offline/CSP): Bootstrap-CSS + a combined Prism build are
+  vendored under `share/filemanager/fm/assets/`, FontAwesome is referenced from the panel's
+  own FA7 copy (same-origin). jQuery, Bootstrap-JS, DataTables, Dropzone and Ace are removed
+  — replaced by vanilla JS + a tiny Bootstrap-compatible modal/dropdown shim, a native
+  chunked uploader, native table filter/sort, and a Prism-overlay code editor (highlighting +
+  line numbers, no preview). FA4 icons remapped to FA7. File sharing/direct-links removed
+  (P11). The panel light/dark theme now drives the FM (`fm-auth` passes `X-Hestia-Theme`), and
+  in-page media (img/audio/video) streams through PHP since the customer home is not web-served.
+
 - The SFTP jail no longer uses `/srv/jail` (#413) — it is now built per session under
   `/run/hestia/jail` by `pam_namespace`. Fresh installs get this automatically; there
   are no live installs pre-v1, so no migration/cleanup path is carried.
