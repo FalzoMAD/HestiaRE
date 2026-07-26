@@ -68,6 +68,12 @@ sed "s|%user%|$user|g" "$HESTIA/share/filemanager/fpm-pool.tpl" > "$pool"
 chmod 644 "$pool"
 systemctl reload "php$ver-fpm" 2> /dev/null || systemctl restart "php$ver-fpm" 2> /dev/null || true
 
+# Wait for the pool's listen socket before returning: php-fpm creates it a moment
+# after the reload, and fm-auth's enabled-gate IS that socket — so a click that
+# immediately follows enabling would otherwise race a 403 ("not enabled yet").
+sock="/run/hestia/fm/$user.sock"
+for _ in $(seq 1 50); do [ -S "$sock" ] && break; sleep 0.1; done
+
 # Private-listener vhost (secret-gated)
 sed -e "s|%user%|$user|g" \
 	-e "s|%FILE_MANAGER_PORT%|$FILE_MANAGER_PORT|g" \

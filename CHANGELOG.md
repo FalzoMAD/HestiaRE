@@ -21,6 +21,13 @@ section as part of its PR. On release, the section gets the version number.
   in Phase 2 (#218). No live installs pre-v1, so no migration path; the old
   `/usr/local/hestia/web/fm` tree is unused.
 
+- File manager Phase 4 — panel menu + robustness (#218). The panel's "File manager"
+  menu entry now follows the customer's own `FILE_MANAGER` flag (exposed via
+  `h-list-user`, surfaced as `USER_FILE_MANAGER` for the effective/impersonated user)
+  instead of the legacy system-wide FileGator toggle. `h-add-user-filemanager` waits
+  for the pool socket before returning, so clicking the menu right after enabling never
+  races a not-yet-ready socket.
+
 - File manager Phase 2 — vendored TinyFileManager put on a diet (#218). All external
   CDN assets are dropped (GDPR/offline/CSP): Bootstrap-CSS + a combined Prism build are
   vendored under `share/filemanager/fm/assets/`, FontAwesome is referenced from the panel's
