@@ -254,6 +254,14 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- Suspending a user now also cuts their **File Manager** access (#434). The FM pool
+  runs as the customer over an FPM socket, so `usermod --lock` (which stops
+  SFTP/FTP/SSH) never touched it — a suspended customer kept full FM access,
+  including an already-open panel session. `h-suspend-user` now tears the FM
+  listener down (keeping the saved `FILE_MANAGER='yes'`) and `h-unsuspend-user`
+  restores it, both gated by the same `POLICY_USER_VIEW_SUSPENDED` policy as
+  SFTP/FTP/SSH — so "view suspended" deliberately keeps the FM reachable for data
+  cleanup.
 - `update_user_value()` silently dropped a key that sat on the **last line** of
   `user.conf` (#433). It deleted the line then inserted the new value *before* the
   same line number — but after the delete that address is past EOF, so `sed`
@@ -352,6 +360,11 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Security
 
+- File manager media handler — the inline-media allowlist gained a runtime guard
+  that refuses any active `Content-Type` (svg/html/xml/script) even if one were
+  ever added to the map (#432). Serving media from a separate origin was considered
+  and **rejected**: it would force a DNS record on every install, and the allowlist
+  + `nosniff` + CSP `sandbox` already make it unnecessary.
 - **File manager media handler — panel-origin XSS hardened** (#218). The FM is
   same-origin with the panel (`:8083/fm/`), so the `?media=` stream serves
   customer-controlled bytes on the panel origin. It now derives `Content-Type`

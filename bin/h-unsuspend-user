@@ -49,6 +49,13 @@ if [ -z "$POLICY_USER_VIEW_SUSPENDED" ] || [ "$POLICY_USER_VIEW_SUSPENDED" = 'no
 	for ftp in $(grep "^${user}_" /etc/passwd | cut -f 1 -d :); do
 		/usr/sbin/usermod --unlock $ftp 2> /dev/null
 	done
+
+	# Restore the file manager listener if the user had it enabled and the module is
+	# installed (mirror of the suspend teardown; the saved FILE_MANAGER='yes' drives
+	# it). restart='no' — the web/proxy restart below picks the vhost up.
+	if [ -n "$FILE_MANAGER_PORT" ] && grep -q "^FILE_MANAGER='yes'" "$CONF_DIR/users/$user/user.conf" 2> /dev/null; then
+		$BIN/h-add-user-filemanager "$user" no > /dev/null 2>&1 || true
+	fi
 fi
 
 # Changing suspend value

@@ -1013,7 +1013,14 @@ if (isset($_GET['media'])) {
         header('X-Content-Type-Options: nosniff');
         header("Content-Security-Policy: default-src 'none'; sandbox");
         header('Content-Length: ' . filesize($full));
-        if (isset($inline_types[$ext_l])) {
+        // INVARIANT (#432): $inline_types must map ONLY to inert types (raster
+        // image / audio / video). Never add svg/html/xhtml/xml/js — those execute
+        // in the panel origin (the FM is same-origin with :8083). This guard makes
+        // the invariant self-enforcing: even if an active type slips into the map,
+        // the file is downloaded, never rendered. (Serving media from a separate
+        // origin was considered and rejected — it would force a DNS record on every
+        // install; with the allowlist + nosniff + CSP sandbox it is not needed.)
+        if (isset($inline_types[$ext_l]) && !preg_match('~(svg|html|xml|script)~i', $inline_types[$ext_l])) {
             header('Content-Type: ' . $inline_types[$ext_l]);
             header('Content-Disposition: inline; filename="' . $fn . '"');
         } else {
