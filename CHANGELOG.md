@@ -21,6 +21,11 @@ section as part of its PR. On release, the section gets the version number.
   in Phase 2 (#218). No live installs pre-v1, so no migration path; the old
   `/usr/local/hestia/web/fm` tree is unused.
 
+- File manager — bumped vendored Bootstrap-CSS 5.2.3 → 5.3.8 and PrismJS 1.29.0 → 1.30.0
+  (#218). Bootstrap 5.3 adds native `data-bs-theme` colour modes, which the FM's theme
+  passthrough (S2) relies on — 5.2.3 ignored `data-bs-theme` entirely. upstream/* snapshot
+  branches + VENDORED.json pins updated accordingly.
+
 - File manager Phase 4 — panel menu + robustness (#218). The panel's "File manager"
   menu entry now follows the customer's own `FILE_MANAGER` flag (exposed via
   `h-list-user`, surfaced as `USER_FILE_MANAGER` for the effective/impersonated user)
