@@ -18,5 +18,10 @@
 
     <FilesMatch \.php$>
         SetHandler "proxy:unix:/run/hestia/fm/%user%.sock|fcgi://localhost"
+        # The Directory Require above only gates static assets; a .php handled by
+        # SetHandler proxy is authorized in THIS FilesMatch context, where the
+        # server-wide "Require all denied" fallback (conf.d/hestia-event.conf, #397)
+        # otherwise wins. Re-assert the secret gate here so index.php runs.
+        Require expr "%{HTTP:X-Hestia-FM-Auth} == '%FM_SECRET%'"
     </FilesMatch>
 </VirtualHost>
