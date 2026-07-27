@@ -76,6 +76,14 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- File manager can now be enabled/disabled **per user from the Edit User page** (#218)
+  — an admin-only "Enable File Manager" checkbox under Advanced Options that calls
+  `h-add-user-filemanager` / `h-delete-user-filemanager` on save (so it builds/tears down
+  the customer's FPM pool + private-listener vhost, not just a flag). The checkbox and the
+  panel's File-Manager menu entry only appear while the system module is installed:
+  `h-list-sys-config` now exports `FILE_MANAGER_PORT` (set by `h-add-sys-filemanager`,
+  cleared by `h-delete-sys-filemanager`), and both gates check it — so uninstalling the
+  module hides the menu even for users whose saved `FILE_MANAGER='yes'` flag is retained.
 - The SFTP jail is rebuilt on `pam_namespace` (#413), replacing the `/srv/jail`
   systemd bind-mount machinery. Per session, `pam_namespace` mounts a private tmpfs on
   `/run/hestia/jail` (via `share/tmpfiles.d/hestia-jail.conf`) and runs
