@@ -264,12 +264,6 @@ function syshealth_repair_system_config() {
 		$BIN/h-change-sys-config-value 'UPGRADE_SEND_EMAIL_LOG' 'false'
 	fi
 
-	# File Manager
-	if [[ -z $(check_key_exists 'FILE_MANAGER') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: FILE_MANAGER ('true')"
-		$BIN/h-add-sys-filemanager quiet
-	fi
-
 	# Support for ZSTD / GZIP Change
 	if [[ -z $(check_key_exists 'BACKUP_MODE') ]]; then
 		echo "[ ! ] Setting zstd backup compression type as default..."

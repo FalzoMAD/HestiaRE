@@ -49,7 +49,7 @@ if [ -z "$HESTIA" ]; then
 	HESTIA="/usr/local/hestia"
 fi
 
-if [ -z "$HOMEDIR" ] || [ -z "$HESTIA_INSTALL_DIR" ]; then
+if [ -z "$HOMEDIR" ]; then
 	echo "ERROR: Environment variables not present, installation aborted."
 	exit 2
 fi

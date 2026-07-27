@@ -70,7 +70,6 @@ load_os_profile "$INSTALL_OS"
 # panel/reference PHP version from the manifest (sed, not jq — not guaranteed yet)
 PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$HESTIA/share/manifest.json" 2> /dev/null | head -n1)
 PHP_VER="${PHP_VER:-8.3}"                        # panel + default web PHP (Sury)
-HESTIA_INSTALL_DIR="${HESTIA_INSTALL_DIR:-$HESTIA/install/deb}"
 
 # write a config value to hestia.conf
 wcv() { echo "$1='$2'" >> "$HESTIA/conf/hestia.conf"; }
@@ -577,8 +576,8 @@ install_security() {
 		hestia_apt -y install fail2ban
 		wcv "FIREWALL_EXTENSION" "fail2ban"
 		mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
-		cp -rf "$HESTIA_INSTALL_DIR/fail2ban/filter.d/"*.conf /etc/fail2ban/filter.d/
-		cp -f "$HESTIA_INSTALL_DIR/fail2ban/jail.local" /etc/fail2ban/
+		cp -rf "$HESTIA/share/fail2ban/filter.d/"*.conf /etc/fail2ban/filter.d/
+		cp -f "$HESTIA/share/fail2ban/jail.local" /etc/fail2ban/
 		update-rc.d fail2ban defaults > /dev/null 2>&1
 		systemctl enable fail2ban
 		systemctl start fail2ban
@@ -597,17 +596,8 @@ install_security() {
 		fi
 	fi
 
-	echo "[ * ] Configuring iptables/ipset..."
-	if [ -d "$HESTIA_INSTALL_DIR/iptables" ]; then
-		mkdir -p /etc/iptables
-		cp -f "$HESTIA_INSTALL_DIR/iptables/rules.v4" /etc/iptables/ 2>/dev/null || true
-		cp -f "$HESTIA_INSTALL_DIR/iptables/rules.v6" /etc/iptables/ 2>/dev/null || true
-	fi
-	if [ -d "$HESTIA_INSTALL_DIR/ipset" ]; then
-		mkdir -p /etc/ipset
-		cp -f "$HESTIA_INSTALL_DIR/ipset/"*.conf /etc/ipset/ 2>/dev/null || true
-	fi
-	# system IP setup runs in the configure stage (needs the admin user to exist)
+	# system IP setup (iptables/ipset rules) runs in the configure stage — the
+	# rules live under /etc/hestia now, not in the install tree.
 
 	touch "$CONF_DIR/.done.security"
 	echo "[ OK ] security complete"

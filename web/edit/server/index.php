@@ -488,30 +488,6 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Set File Manager support
-	if (empty($_SESSION["error_msg"])) {
-		if (
-			!empty($_POST["v_filemanager"]) &&
-			$_SESSION["FILE_MANAGER"] != $_POST["v_filemanager"]
-		) {
-			if ($_POST["v_filemanager"] == "true") {
-				exec(HESTIA_CMD . "h-add-sys-filemanager", $output, $return_var);
-				check_return_code($return_var, $output);
-				unset($output);
-				if (empty($_SESSION["error_msg"])) {
-					$_SESSION["FILE_MANAGER"] = "true";
-				}
-			} else {
-				exec(HESTIA_CMD . "h-delete-sys-filemanager", $output, $return_var);
-				check_return_code($return_var, $output);
-				unset($output);
-				if (empty($_SESSION["error_msg"])) {
-					$_SESSION["FILE_MANAGER"] = "false";
-				}
-			}
-		}
-	}
-
 	// Set phpMyAdmin SSO key
 	if (empty($_SESSION["error_msg"])) {
 		if (!empty($_POST["v_phpmyadmin_key"])) {
