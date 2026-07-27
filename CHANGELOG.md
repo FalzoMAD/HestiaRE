@@ -11,6 +11,19 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Breaking / Upgrade notes
 
+- The `install/` tree is dissolved and `HESTIA_INSTALL_DIR` retired (#119). fail2ban's
+  config (`jail.local`, `filter.d/`, `action.d/`) moved `install/deb/fail2ban/` →
+  `share/fail2ban/` (the installer copies from there now); it was the last holdout.
+  The stale iptables/ipset copy-blocks in `h-install-hestia` (which sourced from the
+  now-vacated `install/` tree) were removed — those rules are set up in the configure
+  stage from `/etc/hestia`. No live installs pre-v1, so no migration path.
+- Removed the leftover **FileGator** plumbing after the FM rebuild (#218): the
+  `install/deb/filemanager/` composer overlay, the `filegator` manifest pin, the
+  system-wide File-Manager server toggle (edit/server), the FileGator `configuration.php`
+  hook in `h-change-sys-config-value`, the vestigial system `FILE_MANAGER` /
+  `PLUGIN_FILE_MANAGER` keys in `h-list-sys-config`, and the `syshealth` block that
+  auto-installed the module. The FM is per-customer now (`FILE_MANAGER` in user.conf).
+
 - File manager rebuilt (#419, replaces FileGator + the SFTP-loopback connector). The
   `h-add-sys-filemanager`/`h-delete-sys-filemanager` commands no longer download FileGator
   or run composer; the app now runs in a per-customer php-fpm pool **as the customer** (the

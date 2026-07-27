@@ -46,7 +46,6 @@ RRD_STEP=300
 BIN=$HESTIA/bin
 # instance config root; fallback covers installs whose hestia.env predates the var
 CONF_DIR="${CONF_DIR:-/etc/hestia}"
-HESTIA_INSTALL_DIR="$HESTIA/install/deb"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 # CLI helpers run through the hestia-php wrapper (panel PHP version indirection)
 HESTIA_PHP="$HESTIA/bin/hestia-php"

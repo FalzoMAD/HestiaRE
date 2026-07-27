@@ -215,9 +215,9 @@
 							<?php } else { ?>
 								<?php if ($panel[$user]["SUSPENDED"] === "no") { ?>
 									<li class="top-bar-menu-item">
-										<a title="<?= htmlspecialchars($user) ?> (<?= htmlspecialchars($panel[$user]["NAME"]) ?>)" class="top-bar-menu-link" href="/edit/user/?user=<?= $user ?>&token=<?= $_SESSION["token"] ?>">
+										<a title="<?= htmlspecialchars($user) . (!empty($panel[$user]["NAME"]) ? " (" . htmlspecialchars($panel[$user]["NAME"]) . ")" : "") ?>" class="top-bar-menu-link" href="/edit/user/?user=<?= $user ?>&token=<?= $_SESSION["token"] ?>">
 											<i class="fas fa-circle-user"></i>
-											<span class="top-bar-menu-link-label u-hide-desktop"><?= htmlspecialchars($user) ?> (<?= htmlspecialchars($panel[$user]["NAME"]) ?>)</span>
+											<span class="top-bar-menu-link-label u-hide-desktop"><?= htmlspecialchars($user) . (!empty($panel[$user]["NAME"]) ? " (" . htmlspecialchars($panel[$user]["NAME"]) . ")" : "") ?></span>
 										</a>
 									</li>
 								<?php } ?>

@@ -144,7 +144,7 @@ CLAUDE.md         this file
 ```
 bin/              CLI commands (h-*; v-* symlinks via Issue #23)
 func/             shared bash function libraries
-install/          installer data: packages, templates, configs per distro
+share/            install-time service configs + assets (absorbed the old install/ tree, #119)
 web/              panel UI (plain PHP, no framework)
 src/              frontend assets
 conf/             service configuration templates
