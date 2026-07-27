@@ -5010,16 +5010,45 @@ function fm_show_header_login()
 
             // Bootstrap-compatible modal controller (show/hide + backdrop).
             var fmModal = (function() {
-                var backdrop;
+                // Native shim for the accessibility behaviour Bootstrap-JS used to
+                // provide (#434): focus-trap while open, ESC to close, and focus
+                // returned to the opener on close. One modal is open at a time.
+                var backdrop, lastFocus = null, keyHandler = null;
+                function focusables(m) {
+                    var q = 'a[href],button:not([disabled]),textarea:not([disabled]),' +
+                        'input:not([disabled]):not([type=hidden]),select:not([disabled]),' +
+                        '[tabindex]:not([tabindex="-1"])';
+                    return Array.prototype.slice.call(m.querySelectorAll(q)).filter(function(el) {
+                        return el.offsetParent !== null; // visible only
+                    });
+                }
                 function show(sel) {
                     var m = typeof sel === 'string' ? document.querySelector(sel) : sel;
                     if (!m) return;
+                    lastFocus = document.activeElement; // restored on close
                     if (!backdrop) { backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop fade show'; }
                     document.body.appendChild(backdrop);
                     m.classList.add('show');
                     m.style.display = 'block';
                     m.removeAttribute('aria-hidden');
+                    m.setAttribute('aria-modal', 'true');
                     document.body.classList.add('modal-open');
+                    // Move focus into the dialog: an [autofocus] field, else the first
+                    // focusable, else the dialog itself.
+                    var f = m.querySelector('[autofocus]') || focusables(m)[0] || m;
+                    setTimeout(function() { try { f.focus(); } catch (e) {} }, 0);
+                    keyHandler = function(e) {
+                        // Honour data-bs-keyboard="false" (static dialogs opt out of ESC).
+                        if (e.key === 'Escape' && m.getAttribute('data-bs-keyboard') !== 'false') { hide(m); return; }
+                        if (e.key !== 'Tab') return;
+                        var els = focusables(m);
+                        if (!els.length) { e.preventDefault(); return; }
+                        var first = els[0], last = els[els.length - 1];
+                        if (!m.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+                        else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+                    };
+                    document.addEventListener('keydown', keyHandler, true);
                 }
                 function hide(sel) {
                     var m = typeof sel === 'string' ? document.querySelector(sel) : sel;
@@ -5027,18 +5056,31 @@ function fm_show_header_login()
                     m.classList.remove('show');
                     m.style.display = 'none';
                     m.setAttribute('aria-hidden', 'true');
+                    m.removeAttribute('aria-modal');
                     if (backdrop && backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
                     document.body.classList.remove('modal-open');
+                    if (keyHandler) { document.removeEventListener('keydown', keyHandler, true); keyHandler = null; }
+                    if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} } // return focus to opener
+                    lastFocus = null;
                 }
                 return { show: show, hide: hide };
             })();
+
+            function fmCloseDropdowns() {
+                // Close every open menu and reset its toggle's aria-expanded (#434).
+                document.querySelectorAll('.dropdown-menu.show').forEach(function(m) {
+                    m.classList.remove('show');
+                    var t = m.parentNode.querySelector('[data-bs-toggle="dropdown"]');
+                    if (t) t.setAttribute('aria-expanded', 'false');
+                });
+            }
 
             function fmToggleDropdown(btn) {
                 var menu = btn.parentNode.querySelector('.dropdown-menu');
                 if (!menu) return;
                 var open = menu.classList.contains('show');
-                document.querySelectorAll('.dropdown-menu.show').forEach(function(m) { m.classList.remove('show'); });
-                if (!open) menu.classList.add('show');
+                fmCloseDropdowns();
+                if (!open) { menu.classList.add('show'); btn.setAttribute('aria-expanded', 'true'); }
             }
 
             function rename(e, t) {
@@ -5314,9 +5356,19 @@ function fm_show_header_login()
                     if (dismiss) { e.preventDefault(); var m = dismiss.closest('.modal'); if (m) fmModal.hide(m); return; }
                     var dd = e.target.closest('[data-bs-toggle="dropdown"]');
                     if (dd) { e.preventDefault(); fmToggleDropdown(dd); return; }
-                    if (!e.target.closest('.dropdown-menu')) {
-                        document.querySelectorAll('.dropdown-menu.show').forEach(function(m) { m.classList.remove('show'); });
-                    }
+                    if (!e.target.closest('.dropdown-menu')) { fmCloseDropdowns(); }
+                });
+
+                // ESC closes an open dropdown and returns focus to its toggle (#434).
+                // (Modals handle their own ESC in fmModal; when one is open there is
+                // no open dropdown, so this is a no-op then.)
+                document.addEventListener('keydown', function(e) {
+                    if (e.key !== 'Escape') return;
+                    var openMenu = document.querySelector('.dropdown-menu.show');
+                    if (!openMenu) return;
+                    var t = openMenu.parentNode.querySelector('[data-bs-toggle="dropdown"]');
+                    fmCloseDropdowns();
+                    if (t) { try { t.focus(); } catch (e2) {} }
                 });
             });
         </script>

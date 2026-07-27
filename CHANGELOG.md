@@ -254,6 +254,12 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- File manager — the native modal/dropdown shim (which replaced Bootstrap-JS in the
+  diet) regained the keyboard accessibility Bootstrap-JS used to provide (#434):
+  modals now trap focus, close on Escape (honoring `data-bs-keyboard="false"` on
+  static dialogs), and return focus to the element that opened them; they carry
+  `aria-modal="true"` while open. Dropdowns track `aria-expanded` and close on
+  Escape (returning focus to their toggle) as well as on outside click.
 - Suspending a user now also cuts their **File Manager** access (#434). The FM pool
   runs as the customer over an FPM socket, so `usermod --lock` (which stops
   SFTP/FTP/SSH) never touched it — a suspended customer kept full FM access,
