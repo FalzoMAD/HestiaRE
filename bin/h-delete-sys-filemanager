@@ -1,17 +1,16 @@
 #!/bin/bash
-# info: remove file manager functionality from Hestia Control Panel
-# options: [MODE]
+# info: remove the web file manager
+# options: NONE
 #
 # example: h-delete-sys-filemanager
 #
-# This function removes the File Manager and its entry points
+# Reverses h-add-sys-filemanager: route first, then every per-customer pool + vhost,
+# the code, secret, tmpfiles and port. Per-user FILE_MANAGER flags STAY (saved state)
+# — a later h-add-sys-filemanager reactivates them (see saved-state pattern).
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
 #----------------------------------------------------------#
-
-MODE=$1
-FORCE=$2
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -21,56 +20,52 @@ source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
-FM_INSTALL_DIR="$HESTIA/web/fm"
+CODE_DIR="/usr/share/filemanager"
+SECRET_FILE="/etc/hestia/conf/.filemanager.key"
+ROUTE="/etc/caddy/apps/filemanager.conf"
+TMPFILES="/etc/tmpfiles.d/hestia-fm.conf"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-# Checking root permissions
-if [ "x$(id -u)" != 'x0' ]; then
-	echo "Error: Script can be run executed only by root"
-	exit 10
-fi
-
-# Ensure that $HESTIA (/usr/local/hestia/) and other variables are valid.
-if [ -z "$HESTIA" ]; then
-	HESTIA="/usr/local/hestia"
-fi
-
-if [ -z "$HOMEDIR" ] || [ -z "$HESTIA_INSTALL_DIR" ]; then
-	echo "Error: Hestia environment vars not present"
-	exit 2
-fi
-
-# Perform verification if read-only mode is enabled
+[ "$(id -u)" = '0' ] || { echo "ERROR: h-delete-sys-filemanager must be run as root"; exit 10; }
 check_hestia_demo_mode
-
-# Check if File Manager components are installed
-if [ "$FORCE" != "yes" ] && [ ! -e "$FM_INSTALL_DIR" ]; then
-	echo "ERROR: File Manager components are not installed."
-	exit 1
-fi
-
-if [ "$FORCE" != "yes" ] && [ "$FILE_MANAGER" = "false" ]; then
-	echo "ERROR: File Manager is not enabled."
-	exit 1
-fi
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-rm --recursive --force "$FM_INSTALL_DIR"
-$BIN/h-change-sys-config-value 'FILE_MANAGER' 'false'
+echo "[ * ] Removing file manager module..."
 
-if [ "$MODE" != "quiet" ]; then
-	echo "File Manager has been removed from the system."
-fi
+# 1. Route first, so the endpoint stops answering
+rm -f "$ROUTE"
+$BIN/h-restart-service caddy > /dev/null 2>&1 || true
+
+# 2. Every per-customer pool + vhost (flags stay = saved state)
+for pool in /etc/php/*/fpm/pool.d/fm-*.conf; do
+	[ -f "$pool" ] || continue
+	ver=$(echo "$pool" | sed -nE 's|/etc/php/([^/]+)/.*|\1|p')
+	rm -f "$pool"
+	systemctl reload "php$ver-fpm" 2> /dev/null || true
+done
+rm -f /etc/nginx/conf.d/fm-*.conf /etc/apache2/conf.d/fm-*.conf /etc/apache2/conf.d/fm-listen.conf
+rm -rf /run/hestia/fm
+[ -n "$PROXY_SYSTEM" ] && $BIN/h-restart-service "$PROXY_SYSTEM" > /dev/null 2>&1 || true
+$BIN/h-restart-service "$WEB_SYSTEM" > /dev/null 2>&1 || true
+
+# 3. Code, secret, tmpfiles, port
+rm -rf "$CODE_DIR"
+rm -f "$SECRET_FILE" "$TMPFILES"
+$BIN/h-change-sys-config-value 'FILE_MANAGER_PORT' ''
+
+set_install_component ADDON_FILEMANAGER false
 
 #----------------------------------------------------------#
-#                       Logging                            #
+#                       Hestia                             #
 #----------------------------------------------------------#
 
-$BIN/h-log-action "system" "Info" "Plugins" "File Manager disabled."
+echo "[ OK ] File manager removed (per-user flags kept as saved state)."
+$BIN/h-log-action "system" "Info" "Plugins" "File manager removed."
 log_event "$OK" "$ARGUMENTS"
+exit

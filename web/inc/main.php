@@ -295,6 +295,12 @@ function top_panel($user, $TAB) {
 		}
 	}
 
+	// File manager menu visibility follows the EFFECTIVE user's per-user flag (#218
+	// Phase 4): a customer sees it when they have it, and an admin impersonating a
+	// customer sees that customer's. Kept in its own session key so it never mixes
+	// with the legacy system-wide FILE_MANAGER (FileGator) key.
+	$_SESSION["USER_FILE_MANAGER"] = (($panel[$user]["FILE_MANAGER"] ?? "") === "yes") ? "yes" : "";
+
 	include dirname(__FILE__) . "/../templates/includes/panel.php";
 	return $panel;
 }

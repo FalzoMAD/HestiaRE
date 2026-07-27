@@ -11,6 +11,38 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Breaking / Upgrade notes
 
+- File manager rebuilt (#419, replaces FileGator + the SFTP-loopback connector). The
+  `h-add-sys-filemanager`/`h-delete-sys-filemanager` commands no longer download FileGator
+  or run composer; the app now runs in a per-customer php-fpm pool **as the customer** (the
+  kernel UID is the isolation boundary), reached via Panel-Caddy `/fm/` → `forward_auth`
+  (`web/fm-auth.php`) → a private loopback listener. New per-user commands
+  `h-add-user-filemanager`/`h-delete-user-filemanager`, saved-state on module delete, and a
+  `rebuild_user` restore hook. Phase 1 (integration skeleton) only — the vendored app follows
+  in Phase 2 (#218). No live installs pre-v1, so no migration path; the old
+  `/usr/local/hestia/web/fm` tree is unused.
+
+- File manager — bumped vendored Bootstrap-CSS 5.2.3 → 5.3.8 and PrismJS 1.29.0 → 1.30.0
+  (#218). Bootstrap 5.3 adds native `data-bs-theme` colour modes, which the FM's theme
+  passthrough (S2) relies on — 5.2.3 ignored `data-bs-theme` entirely. upstream/* snapshot
+  branches + VENDORED.json pins updated accordingly.
+
+- File manager Phase 4 — panel menu + robustness (#218). The panel's "File manager"
+  menu entry now follows the customer's own `FILE_MANAGER` flag (exposed via
+  `h-list-user`, surfaced as `USER_FILE_MANAGER` for the effective/impersonated user)
+  instead of the legacy system-wide FileGator toggle. `h-add-user-filemanager` waits
+  for the pool socket before returning, so clicking the menu right after enabling never
+  races a not-yet-ready socket.
+
+- File manager Phase 2 — vendored TinyFileManager put on a diet (#218). All external
+  CDN assets are dropped (GDPR/offline/CSP): Bootstrap-CSS + a combined Prism build are
+  vendored under `share/filemanager/fm/assets/`, FontAwesome is referenced from the panel's
+  own FA7 copy (same-origin). jQuery, Bootstrap-JS, DataTables, Dropzone and Ace are removed
+  — replaced by vanilla JS + a tiny Bootstrap-compatible modal/dropdown shim, a native
+  chunked uploader, native table filter/sort, and a Prism-overlay code editor (highlighting +
+  line numbers, no preview). FA4 icons remapped to FA7. File sharing/direct-links removed
+  (P11). The panel light/dark theme now drives the FM (`fm-auth` passes `X-Hestia-Theme`), and
+  in-page media (img/audio/video) streams through PHP since the customer home is not web-served.
+
 - The SFTP jail no longer uses `/srv/jail` (#413) — it is now built per session under
   `/run/hestia/jail` by `pam_namespace`. Fresh installs get this automatically; there
   are no live installs pre-v1, so no migration/cleanup path is carried.

@@ -1,0 +1,102 @@
+#!/bin/bash
+# info: enable the file manager for a user
+# options: USER [RESTART]
+#
+# example: h-add-user-filemanager alice
+#
+# Creates the customer's file-manager FPM pool (runs as the customer, so the kernel
+# UID is the file boundary) and the private-listener vhost, then sets FILE_MANAGER=yes.
+# Idempotent; also called by rebuild/restore (func/rebuild.sh) and by
+# h-add-sys-filemanager to reactivate saved flags. Reverse: h-delete-user-filemanager.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user="$1"
+restart="$2"
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+SECRET_FILE="/etc/hestia/conf/.filemanager.key"
+CODE_DIR="/usr/share/filemanager/fm"
+: "${FILE_MANAGER_PORT:=8092}"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+[ "$(id -u)" = '0' ] || { echo "ERROR: h-add-user-filemanager must be run as root"; exit 10; }
+check_hestia_demo_mode
+is_format_valid 'user'
+
+# System module must be installed first (secret + code + port)
+if [ ! -s "$SECRET_FILE" ] || [ ! -f "$CODE_DIR/index.php" ]; then
+	echo "ERROR: file manager module not installed — run h-add-sys-filemanager first"
+	exit "$E_NOTEXIST"
+fi
+secret="$(cat "$SECRET_FILE")"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# PHP version = the server default; never pin one as mandatory (multiphp)
+ver="$(multiphp_default_version)"
+pool="/etc/php/$ver/fpm/pool.d/fm-$user.conf"
+
+# FM front: nginx if it fronts the stack (nginx-only or nginx+apache), else apache
+if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
+	fm_web='nginx'; vhost="/etc/nginx/conf.d/fm-$user.conf"; tpl='nginx'
+else
+	fm_web='apache2'; vhost="/etc/apache2/conf.d/fm-$user.conf"; tpl='apache'
+fi
+
+# Customer-owned session/upload dir (the one the web pool uses; persists over reboot)
+mkdir -p "$HOMEDIR/$user/tmp"
+chown "$user:$user" "$HOMEDIR/$user/tmp"
+
+# Pool (runs as the customer)
+mkdir -p "$(dirname "$pool")"
+sed "s|%user%|$user|g" "$HESTIA/share/filemanager/fpm-pool.tpl" > "$pool"
+chmod 644 "$pool"
+systemctl reload "php$ver-fpm" 2> /dev/null || systemctl restart "php$ver-fpm" 2> /dev/null || true
+
+# Wait for the pool's listen socket before returning: php-fpm creates it a moment
+# after the reload, and fm-auth's enabled-gate IS that socket — so a click that
+# immediately follows enabling would otherwise race a 403 ("not enabled yet").
+sock="/run/hestia/fm/$user.sock"
+for _ in $(seq 1 50); do [ -S "$sock" ] && break; sleep 0.1; done
+
+# Private-listener vhost (secret-gated)
+sed -e "s|%user%|$user|g" \
+	-e "s|%FILE_MANAGER_PORT%|$FILE_MANAGER_PORT|g" \
+	-e "s|%FM_SECRET%|$secret|g" \
+	"$HESTIA/share/filemanager/$tpl.tpl" > "$vhost"
+chmod 644 "$vhost"
+if [ "$restart" != 'no' ]; then
+	$BIN/h-restart-service "$fm_web" > /dev/null 2>&1 || true
+fi
+
+# Set the flag (saved state). If the key predates this feature, insert it BEFORE the
+# TIME line — never append at EOF: update_user_value deletes+reinserts by line number,
+# and a last-line key fails to reinsert (the address lands past EOF) and vanishes.
+if grep -q "^FILE_MANAGER='" "$USER_DATA/user.conf" 2> /dev/null; then
+	update_user_value "$user" '$FILE_MANAGER' 'yes'
+else
+	sed -i "/^TIME=/i FILE_MANAGER='yes'" "$USER_DATA/user.conf"
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "Plugins" "File manager enabled for $user."
+log_event "$OK" "$ARGUMENTS"
+exit

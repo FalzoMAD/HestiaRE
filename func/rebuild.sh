@@ -62,6 +62,9 @@ rebuild_user_conf() {
 	if [ -z "${RATE_LIMIT+x}" ]; then
 		sed -i "/MAIL_ACCOUNTS/a RATE_LIMIT='200'" $USER_DATA/user.conf
 	fi
+	if [ -z "${FILE_MANAGER+x}" ]; then
+		sed -i "/RATE_LIMIT/a FILE_MANAGER=''" $USER_DATA/user.conf
+	fi
 	# Run template trigger
 	if [ -x "$HESTIA/packages/$PACKAGE.sh" ]; then
 		$HESTIA/packages/$PACKAGE.sh "$user" "$CONTACT" "$NAME"
@@ -130,6 +133,15 @@ rebuild_user_conf() {
 	chown root:root $HOMEDIR/$user/conf
 
 	$BIN/h-add-user-sftp-jail "$user"
+
+	# Rebuild the file manager pool + vhost if the user had it enabled (#419). Restore
+	# bypasses h-add-user-filemanager, so without this a restored user keeps the flag +
+	# panel menu but has no working FM — the same lockout class as AllowUsers above.
+	# Guarded on the secret so it is a no-op when the module is not installed here (a
+	# later h-add-sys-filemanager reactivates the saved flag).
+	if [ "$FILE_MANAGER" = "yes" ] && [ -s /etc/hestia/conf/.filemanager.key ]; then
+		$BIN/h-add-user-filemanager "$user" > /dev/null 2>&1 || true
+	fi
 
 	# Update disk pipe
 	sed -i "/ $user$/d" $CONF_DIR/queue/disk.pipe
