@@ -1,11 +1,13 @@
 #!/bin/bash
 # info: disable the file manager for a user
-# options: USER [RESTART]
+# options: USER [RESTART] [KEEP_FLAG]
 #
 # example: h-delete-user-filemanager alice
 #
 # Removes the customer's FM pool + vhost, drops the socket, and clears FILE_MANAGER.
-# Idempotent. Reverse of h-add-user-filemanager.
+# Idempotent. Reverse of h-add-user-filemanager. A non-empty KEEP_FLAG tears the
+# listener down but LEAVES FILE_MANAGER as-is — used by h-suspend-user, which must
+# keep the saved 'yes' so h-unsuspend-user can restore the listener.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -13,6 +15,7 @@
 
 user="$1"
 restart="$2"
+keep_flag="$3"
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -50,8 +53,9 @@ if [ "$restart" != 'no' ]; then
 	$BIN/h-restart-service "$WEB_SYSTEM" > /dev/null 2>&1 || true
 fi
 
-# Clear the flag if present
-if grep -q "^FILE_MANAGER='" "$USER_DATA/user.conf" 2> /dev/null; then
+# Clear the flag if present — unless the caller asked to keep it (suspend path
+# tears the listener down but preserves FILE_MANAGER='yes' as saved state).
+if [ -z "$keep_flag" ] && grep -q "^FILE_MANAGER='" "$USER_DATA/user.conf" 2> /dev/null; then
 	update_user_value "$user" '$FILE_MANAGER' 'no'
 fi
 
