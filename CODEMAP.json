@@ -325,9 +325,6 @@
         "install.sh"
       ],
       "directories": [
-        "install/",
-        "install/deb/",
-        "install/common/",
         "share/panel-caddy/",
         "share/panel-php/",
         "share/dovecot/"
@@ -338,7 +335,7 @@
         "share/exim/",
         "share/php-fpm/",
         "share/mysql/",
-        "install/deb/fail2ban/",
+        "share/fail2ban/",
         "templates/web/",
         "packages/default.pkg",
         "packages/system.pkg",
@@ -373,7 +370,7 @@
         "share/php-fpm/": "install/deb/php-fpm/ (moved #119/#397; shared www.conf pool removed #397 — per-domain pools only, apache catch-all now Require-all-denied)",
         "share/ssl/": "install/deb/ssl/ (moved #119; cross-service dhparam.pem — nginx + dovecot 2.3/2.4)",
         "share/{apache2,nginx,dovecot,hestia}/logrotate + share/apache2/httpd-prerotate/": "install/deb/logrotate/ (moved #119; distributed per-service, dir dissolved — cf. share/roundcube/logrotate #234)",
-        "install/deb/fail2ban/": "install/deb/fail2ban/ (in place, near-verbatim)",
+        "share/fail2ban/": "install/deb/fail2ban/ (moved #119 — the last holdout; the install/ tree is now fully dissolved and HESTIA_INSTALL_DIR retired)",
         "templates/web/": "install/deb/templates/web/ (near-verbatim; user-pickable web template library)",
         "share/{nginx,apache2}/webmail/": "install/deb/templates/mail/ (reworked to Panel-Caddy proxies #205; moved per-service #119, MAILTPL retired; dead rainloop removed)",
         "share/bubblewrap/": "jailbash (bwrap wrapper, the sandboxed login shell) + bwrap-userns-restrict (AppArmor profile for the Ubuntu 24.04+ unprivileged-userns restriction). Moved here from install/common/bubblewrap/ (the only thing that lived under install/common/, so HESTIA_COMMON_DIR was retired with the move). Deployed by h-add-sys-ssh-jail to /usr/sbin/jailbash and /etc/apparmor.d/bwrap-userns-restrict (the latter only when /etc/apparmor.d/abi/4.0 exists). jailbash is near-verbatim upstream — see ssh_shell_jail.jailbash + upstream_provenance.drift_watch.",
