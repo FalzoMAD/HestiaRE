@@ -408,6 +408,28 @@ EOF
 
 # ── modes ──────────────────────────────────────────────────
 
+# Gate (#434): the maintained TinyFileManager fork must carry NO external http(s)
+# resource references — the whole diet is "everything vendored" (GDPR/offline/CSP).
+# A stray one (like the Google/MS doc-viewer iframes caught in #435) must fail here
+# instead of surviving on a human noticing. Comment lines and SVG xmlns namespaces
+# are not references; the app's own project/help nav links (clickable, not loaded)
+# are allowlisted — extend the allowlist deliberately if a new one is ever added.
+check_fm_external_refs() {
+	local f="$REPO_ROOT/share/filemanager/fm/index.php" hits
+	[ -f "$f" ] || return 0
+	hits=$(grep -nE 'https?://' "$f" \
+		| grep -vE '^[0-9]+:[[:space:]]*(//|#|\*)' \
+		| grep -vE 'w3\.org|schemas\.|tinyfilemanager\.github\.io|github\.com/prasathmani')
+	if [ -n "$hits" ]; then
+		printf '%-16s %-10s %-10s %s\n' "fm-ext-refs" "-" "-" "FAIL — external ref(s):"
+		echo "$hits" | sed 's/^/    /'
+		echo "  (diet = vendor everything; if this is a NEW allowed link, extend the allowlist in check_fm_external_refs)"
+		return 1
+	fi
+	printf '%-16s %-10s %-10s %s\n' "fm-ext-refs" "-" "-" "OK (no external refs in the fork)"
+	return 0
+}
+
 do_check() {
 	local assets=$1 a pinned latest mark
 	[ "$assets" = "all" ] && assets="alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager"
@@ -428,6 +450,10 @@ do_check() {
 		[ "$pinned" != "$latest" ] && mark="UPDATE AVAILABLE (--fetch $a@$latest)"
 		printf '%-16s %-10s %-10s %s\n' "$a" "${pinned:-?}" "${latest:-?}" "$mark"
 	done
+	# Run the FM external-ref gate alongside the tinyfilemanager asset check.
+	case " $assets " in
+		*" tinyfilemanager "*) check_fm_external_refs || return 1 ;;
+	esac
 }
 
 do_fetch() {
