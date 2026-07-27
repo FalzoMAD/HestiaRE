@@ -101,11 +101,11 @@ $favicon_path = '';
 $exclude_items = array();
 
 // Online office Docs Viewer
-// Available rules are 'google', 'microsoft' or false
-// Google => View documents using Google Docs Viewer
-// Microsoft => View documents using Microsoft Web Apps Viewer
-// false => disable online doc viewer
-$online_viewer = 'google';
+// Online doc viewer disabled (#218 hardening): the Google/Microsoft embeds
+// leak the file URL to a third party AND cannot work in the private per-customer
+// FM (the file is not reachable off-box). The rendering branch was removed too;
+// keep this 'false' so nothing re-enables it via FM_DOC_VIEWER.
+$online_viewer = 'false';
 
 // Sticky Nav bar
 // true => enable sticky header
@@ -988,11 +988,38 @@ if (isset($_GET['media'])) {
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_write_close();
         }
-        $mime = fm_get_mime_type($full);
-        header('Content-Type: ' . ($mime ?: 'application/octet-stream'));
-        header('Content-Length: ' . filesize($full));
-        header('Content-Disposition: inline; filename="' . basename($full) . '"');
+        // The FM is same-origin with the panel (:8083), so this streams
+        // customer-controlled bytes on the panel origin. The Content-Type is
+        // therefore decided ONLY by a server-side extension allowlist — never
+        // from the file content (finfo) or the client. A content-sniffed
+        // image/svg+xml or text/html would execute script under the panel
+        // session (and in an admin's own context when viewing via "login as").
+        // Anything not on the allowlist — SVG included — is forced to download.
+        $inline_types = array(
+            'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
+            'gif' => 'image/gif', 'webp' => 'image/webp', 'bmp' => 'image/bmp',
+            'ico' => 'image/x-icon', 'avif' => 'image/avif',
+            'mp3' => 'audio/mpeg', 'm4a' => 'audio/mp4', 'aac' => 'audio/aac',
+            'oga' => 'audio/ogg', 'ogg' => 'audio/ogg', 'opus' => 'audio/ogg',
+            'wav' => 'audio/wav', 'flac' => 'audio/flac',
+            'mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'webm' => 'video/webm',
+            'ogv' => 'video/ogg', 'mov' => 'video/quicktime',
+        );
+        $ext_l = strtolower(pathinfo($full, PATHINFO_EXTENSION));
+        // Quotes/CRLF stripped so a crafted filename cannot break out of the header.
+        $fn = str_replace(array('"', "\r", "\n"), '', basename($full));
+        // Never sniffed; the locked-down CSP + sandbox neutralises anything that
+        // still reaches a top-level navigation (belt to the allowlist's braces).
         header('X-Content-Type-Options: nosniff');
+        header("Content-Security-Policy: default-src 'none'; sandbox");
+        header('Content-Length: ' . filesize($full));
+        if (isset($inline_types[$ext_l])) {
+            header('Content-Type: ' . $inline_types[$ext_l]);
+            header('Content-Disposition: inline; filename="' . $fn . '"');
+        } else {
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename="' . $fn . '"');
+        }
         readfile($full);
     } else {
         http_response_code(404);
@@ -1982,13 +2009,9 @@ if (isset($_GET['view'])) {
             </div>
             <div class="row mt-3">
                 <?php
-                if ($is_onlineViewer) {
-                    if ($online_viewer == 'google') {
-                        echo '<iframe src="https://docs.google.com/viewer?embedded=true&hl=en&url=' . fm_enc($file_url) . '" frameborder="no" style="width:100%;min-height:460px"></iframe>';
-                    } else if ($online_viewer == 'microsoft') {
-                        echo '<iframe src="https://view.officeapps.live.com/op/embed.aspx?src=' . fm_enc($file_url) . '" frameborder="no" style="width:100%;min-height:460px"></iframe>';
-                    }
-                } elseif ($is_zip) {
+                // (Online third-party doc viewer removed in #218 hardening — see
+                // $online_viewer above. Unpreviewable docs just offer Download.)
+                if ($is_zip) {
                     // ZIP content
                     if ($filenames !== false) {
                         echo '<code class="maxheight">';
@@ -2004,8 +2027,10 @@ if (isset($_GET['view'])) {
                         echo '<p>' . lng('Error while fetching archive info') . '</p>';
                     }
                 } elseif ($is_image) {
-                    // Image content
-                    if (in_array($ext, array('gif', 'jpg', 'jpeg', 'png', 'bmp', 'ico', 'svg', 'webp', 'avif'))) {
+                    // Image content. SVG is intentionally absent: the media handler
+                    // streams it as a download (never image/svg+xml inline), so an
+                    // <img> would only show broken — offer Download instead (#218).
+                    if (in_array($ext, array('gif', 'jpg', 'jpeg', 'png', 'bmp', 'ico', 'webp', 'avif'))) {
                         echo '<p><input type="checkbox" id="preview-img-zoomCheck"><label for="preview-img-zoomCheck"><img src="' . fm_enc($media_url) . '" alt="image" class="preview-img"></label></p>';
                     }
                 } elseif ($is_audio) {
