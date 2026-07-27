@@ -4,14 +4,11 @@ Branch `upstream/bootstrap-css`: READ ONLY snapshot of the published dist CSS,
 laid out in HestiaRE target structure for direct merge/cherry-pick into dev.
 Update via share/upstream/update-web-vendor.sh (--fetch bootstrap-css[@version]).
 
-Source: https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css
+Source: https://registry.npmjs.org/bootstrap/-/bootstrap-5.3.8.tgz (dist/css/bootstrap.min.css)
 
 | File | Version | Modification | sha256 (as vendored) |
 |---|---|---|---|
-| bootstrap.min.css | 5.2.3 | none (byte-identical to the npm dist CSS) | c0bcf7898fdc3b87babca678cd19a8e3ef570e931c80a3afbffcc453738c951a |
+| bootstrap.min.css | 5.3.8 | none (byte-identical to the npm dist CSS) | d85327d99c7a3ee1f9b5d0500d1370acea3ad2db39c163c2f51f232baedbdede |
 
-License: MIT. Only the CSS is shipped — the Bootstrap JS bundle is intentionally
-NOT vendored (the FM replaces it with vanilla JS + a shim).
-
-NOTE: initial pre-fill from the shipped artifact; LICENSE-bootstrap.txt + publisher
-hash are added when refreshed on the sync host (--fetch bootstrap-css@5.2.3 --push).
+License: MIT (LICENSE-bootstrap.txt). Only the CSS is shipped — the Bootstrap JS
+bundle is intentionally NOT vendored (the FM replaces it with vanilla JS + a shim).
