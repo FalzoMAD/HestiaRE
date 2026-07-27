@@ -1348,20 +1348,6 @@
 				</summary>
 				<div class="box-collapse-content">
 					<div class="u-mb10">
-						<label for="v_filemanager" class="form-label">
-							<?= tohtml( _("File Manager")) ?>
-						</label>
-						<select class="form-select" name="v_filemanager" id="v_filemanager">
-							<option value="false">
-								<?= tohtml( _("No")) ?>
-							</option>
-							<option value="true" <?= tohtml($_SESSION["FILE_MANAGER"] == "true" ? "selected" : "") ?>>
-								<?= tohtml( _("Yes")) ?>
-							</option>
-						</select>
-					</div>
-
-					<div class="u-mb10">
 						<label for="v_resources_limit" class="form-label">
 							<?= tohtml( _("Limit System Resources")) ?>
 						</label>
