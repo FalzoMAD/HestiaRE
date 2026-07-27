@@ -687,8 +687,12 @@ update_user_value() {
 	key="${2//$/}"
 	lnr=$(grep -m 1 -n "^$key='" $CONF_DIR/users/$1/user.conf | cut -f 1 -d ':')
 	if [ -n "$lnr" ]; then
-		sed -i "$lnr d" $CONF_DIR/users/$1/user.conf
-		sed -i "$lnr i\\$key='${3}'" $CONF_DIR/users/$1/user.conf
+		# Rewrite the line in place with 'c' (change). The old delete+insert lost a
+		# key that sat on the LAST line: after deleting line $lnr the file was
+		# $lnr-1 long, so "insert before $lnr" addressed past EOF and silently wrote
+		# nothing — the value just vanished (#433). 'c' rewrites any line, last
+		# included, and (unlike 's') has no delimiter that a value could contain.
+		sed -i "${lnr}c\\$key='${3}'" $CONF_DIR/users/$1/user.conf
 	fi
 }
 
