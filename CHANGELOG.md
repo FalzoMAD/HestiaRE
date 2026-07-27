@@ -76,6 +76,12 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- `share/upstream/update-web-vendor.sh --check` now also gates the File Manager fork
+  against external `http(s)` resource references (#434). The diet's "vendor
+  everything" rule (GDPR/offline/CSP) is enforced mechanically — a stray ref (like
+  the Google/MS doc-viewer iframes removed in #435) fails the check instead of
+  surviving on review. Comment lines, SVG `xmlns` namespaces and the app's own
+  project/help nav links are allowlisted.
 - File manager can now be enabled/disabled **per user from the Edit User page** (#218)
   — an admin-only "Enable File Manager" checkbox under Advanced Options that calls
   `h-add-user-filemanager` / `h-delete-user-filemanager` on save (so it builds/tears down
