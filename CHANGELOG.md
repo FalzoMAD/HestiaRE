@@ -254,6 +254,14 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- `update_user_value()` silently dropped a key that sat on the **last line** of
+  `user.conf` (#433). It deleted the line then inserted the new value *before* the
+  same line number — but after the delete that address is past EOF, so `sed`
+  wrote nothing and the value vanished (no error). It now rewrites the line in
+  place with `sed` `c`, which works on any line including the last (and, unlike
+  `s`, has no delimiter a value could contain). The FM `FILE_MANAGER` case had a
+  call-site workaround (insert before `TIME=`); this fixes the shared helper for
+  all ~20 callers. A regression test lives on the `docs` branch.
 - File manager gave a 403 for every request on **apache-only** installs (#218): the
   private-listener template gated the secret only in the `<Directory>` block, which
   authorizes static assets but not a `.php` handled by `SetHandler proxy`. That request
