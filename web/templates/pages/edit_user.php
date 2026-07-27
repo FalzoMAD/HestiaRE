@@ -38,6 +38,7 @@
 		x-data="{
 			loginDisabled: <?= tohtml($v_login_disabled === "yes" ? "true" : "false") ?>,
 			useIpAllowList: <?= tohtml($v_login_use_iplist === "yes" ? "true" : "false") ?>,
+			fileManager: <?= tohtml($v_file_manager === "yes" ? "true" : "false") ?>,
 			showAdvanced: false,
 		}"
 		id="main-form"
@@ -219,6 +220,16 @@
 							?>
 						</select>
 					</div>
+					<?php if ($_SESSION["userContext"] === "admin" && !empty($_SESSION["FILE_MANAGER_PORT"])) { ?>
+						<div class="u-mb10">
+							<div class="form-check">
+								<input x-model="fileManager" class="form-check-input" type="checkbox" name="v_file_manager" id="v_file_manager">
+								<label for="v_file_manager">
+									<?= tohtml( _("Enable File Manager")) ?>
+								</label>
+							</div>
+						</div>
+					<?php } ?>
 					<div class="u-mb10">
 						<label for="v_phpcli" class="form-label"><?= tohtml( _("PHP CLI Version")) ?></label>
 						<select class="form-select" name="v_phpcli" id="v_phpcli">

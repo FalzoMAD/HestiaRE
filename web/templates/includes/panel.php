@@ -168,8 +168,11 @@
 					<div x-cloak x-show="open" x-on:click.outside="open = false" class="top-bar-menu-panel">
 						<ul class="top-bar-menu-list">
 
-							<!-- File Manager -->
-							<?php if (($_SESSION["USER_FILE_MANAGER"] ?? "") === "yes") { ?>
+							<!-- File Manager (per-user flag AND the system module still installed:
+							     h-delete-sys-filemanager clears FILE_MANAGER_PORT but keeps the
+							     saved per-user flags, so gate on the port too or the menu would
+							     point at a torn-down listener). -->
+							<?php if ((($_SESSION["USER_FILE_MANAGER"] ?? "") === "yes") && !empty($_SESSION["FILE_MANAGER_PORT"])) { ?>
 								<?php if ($_SESSION["userContext"] === "admin" && $_SESSION["look"] === "admin" && $_SESSION["POLICY_SYSTEM_PROTECTED_ADMIN"] == "yes") { ?>
 									<!-- Hide file manager when impersonating admin-->
 								<?php } else { ?>
