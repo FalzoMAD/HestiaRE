@@ -246,6 +246,14 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- File manager gave a 403 for every request on **apache-only** installs (#218): the
+  private-listener template gated the secret only in the `<Directory>` block, which
+  authorizes static assets but not a `.php` handled by `SetHandler proxy`. That request
+  is authorized in the `<FilesMatch \.php$>` context, where the server-wide
+  `Require all denied` fallback (`conf.d/hestia-event.conf`, #397) otherwise wins — so
+  `index.php` was denied before it ran. Re-assert the secret gate inside `<FilesMatch>`
+  (same pattern the customer web templates already use). nginx-fronted profiles were
+  unaffected. Found on a fresh apache-only build in fleet verification.
 - AllowUsers co-maintenance (#412) edited the wrong line: the seeded guidance
   comment began with "# AllowUsers …", and `manage_sshd_allowusers`' detection regex
   (`#?[[:space:]]*AllowUsers`) matched that prose line, so `h-add-user` tokenised the
