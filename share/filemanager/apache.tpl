@@ -11,6 +11,9 @@
 
     <Directory /usr/share/filemanager>
         # Only Caddy knows the secret; a forged/missing header is 403 — the §7.2 gate.
+        # This gates the STATIC assets; the .php twin below re-asserts the SAME check
+        # in <FilesMatch> (apache authorizes proxied .php there, not here). Both copies
+        # must stay identical — do NOT "de-duplicate" one away.
         Require expr "%{HTTP:X-Hestia-FM-Auth} == '%FM_SECRET%'"
         DirectoryIndex index.php
         AllowOverride None

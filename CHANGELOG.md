@@ -344,6 +344,21 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Security
 
+- **File manager media handler — panel-origin XSS hardened** (#218). The FM is
+  same-origin with the panel (`:8083/fm/`), so the `?media=` stream serves
+  customer-controlled bytes on the panel origin. It now derives `Content-Type`
+  **only** from a server-side extension allowlist (never from file content or the
+  client), forces everything outside it — **SVG included** — to
+  `application/octet-stream` + `Content-Disposition: attachment`, and always sends
+  `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`.
+  Previously the type came from `finfo` (content-sniffed), so a customer's
+  `evil.svg` / `x.html` opened via the handler executed script under the panel
+  session — including an admin's own context when viewing via "login as". The
+  third-party Google/Microsoft document-viewer iframes were removed as well (they
+  leaked the file URL off-box and could not work in the private per-customer FM).
+  Caddy now also strips **all** inbound `X-Hestia-*` headers before re-setting the
+  trusted ones (`request_header -X-Hestia-*`), making the §7.2 header invariant
+  structural instead of an overwrite-list that must stay complete.
 - **GHSA-fcq6 — authenticated admin takeover fixed** (#386). The admin-only gate
   in `web/edit/server/hestia/index.php` had a second clause comparing to a bare,
   undefined `$ROOT_USER` — always false, so any authenticated user reached the

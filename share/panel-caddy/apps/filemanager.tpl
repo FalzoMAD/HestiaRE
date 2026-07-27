@@ -17,6 +17,11 @@
 # /fm is deliberately NOT stripped: TFM builds its self-URLs from PHP_SELF, so
 # keeping the prefix keeps its links/asset refs correct without patching the app.
 handle /fm/* {
+    # Structural form of the §7.2 invariant: DROP every inbound X-Hestia-* before
+    # auth, so a client can never smuggle one in. The trusted values are set below
+    # (X-Hestia-User/Theme from the forward_auth response, X-Hestia-FM-Auth by us).
+    # Wildcard, so a future X-Hestia-* header is covered without editing this list.
+    request_header -X-Hestia-*
     forward_auth unix//run/hestia-php.sock {
         uri /fm-auth.php
         transport fastcgi {
