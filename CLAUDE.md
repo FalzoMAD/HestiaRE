@@ -50,8 +50,10 @@ don't narrate it. Condense what the code *does*, keep why it *must*.
 **No em-dashes (ground rule).** Never use an em-dash (`—`) or en-dash (`–`) in code
 or comments; use a plain ASCII hyphen (`-`) or restructure. A hyphen reads the same
 in every editor and terminal and avoids the 3-byte-per-character width surprise.
-Prose docs and the translations under `web/locale/` are exempt; a smoke guard
-enforces it for the panel and CLI (`bin/`, `web/` minus `web/locale/`).
+Prose docs and the translations under `web/locale/` are exempt. This is a cosmetic
+convention, not security-relevant and not smoke-enforced (the check was dropped);
+sweep for it opportunistically in code/comment cleanup rounds over the panel and CLI
+(`bin/`, `web/` minus `web/locale/`).
 
 **Keep verbatim (do NOT condense):**
 - A comment explaining a **non-obvious edge/precondition**, or referencing an

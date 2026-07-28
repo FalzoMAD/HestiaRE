@@ -1,4 +1,4 @@
-# UPSTREAM-DELTA.md - structural divergence from HestiaCP
+# STRUCTURE.md - structural divergence from HestiaCP
 
 > Read `CLAUDE.md` for the rules, `CODEMAP.json` for component-to-file mapping, and
 > `PATHS.md` for the filesystem layout. **This file is the layer underneath those:**
