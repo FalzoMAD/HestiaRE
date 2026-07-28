@@ -274,7 +274,9 @@ section as part of its PR. On release, the section gets the version number.
   with the download path `basename()`-guarded against traversal. RRD stats images stay on
   X-Accel (a caddy-readable panel file under the web root). Note: `readfile()` binds a
   panel FPM worker for the download's duration — fine at this scale; revisit with a
-  dedicated pool if large parallel downloads ever starve the panel.
+  the pool's `pm` limits if large parallel downloads ever pressure the panel
+  (these are manual, logged-in, click-driven downloads — concurrency is minimal
+  even at hundreds of users, so no dedicated download pool is warranted).
 - File manager — the native modal/dropdown shim (which replaced Bootstrap-JS in the
   diet) regained the keyboard accessibility Bootstrap-JS used to provide (#434):
   modals now trap focus, close on Escape (honoring `data-bs-keyboard="false"` on
