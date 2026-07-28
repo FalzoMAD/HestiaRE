@@ -111,11 +111,6 @@ admin privilege, and the GHSA-* advisories against the 1.9.6 fork point are fixe
 
 ### Changed
 
-- Ground rule: no em-dashes (or en-dashes) in code or comments (#445). Existing
-  occurrences were swept to plain ASCII hyphens across 70 code/config files
-  (comment/string only, no logic touched); `web/locale/` translations are exempt. A
-  smoke guard (`check_no_emdash`) fails the run if one reappears in the installed
-  panel or CLI.
 - SSH-access shells are now a curated allowlist (#412): `nologin` (default) ·
   `jailbash` (bwrap sandbox) · `bash` · `sh`, intersected with `/etc/shells`, shared
   by the hard validator and the panel's single shell source. The upstream
