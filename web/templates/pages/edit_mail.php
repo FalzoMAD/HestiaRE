@@ -110,7 +110,7 @@ $spam_tuning_allowed =
 								<option value="strict" <?php if ($v_spam_sensitivity === 'strict') echo 'selected'; ?>><?= tohtml( _("Strict")) ?> (3.5)</option>
 								<option value="custom" <?php if ($v_spam_sensitivity === 'custom') echo 'selected'; ?>><?= tohtml( _("Custom threshold")) ?></option>
 							</select>
-							<small class="hint"><?= tohtml( _("Mail scoring above the threshold is marked as spam — lower means stricter.")) ?></small>
+							<small class="hint"><?= tohtml( _("Mail scoring above the threshold is marked as spam - lower means stricter.")) ?></small>
 						</div>
 						<div x-cloak x-show="spamSensitivity === 'custom'" class="u-mb10">
 							<label for="v_spam_score" class="form-label">
@@ -269,7 +269,7 @@ $spam_tuning_allowed =
 						<?= tohtml( _("Excluded Recipient Domains")) ?> <span class="optional">(<?= tohtml( _("Optional")) ?>)</span>
 					</label>
 					<textarea class="form-control u-min-height100" name="v_smtp_relay_exclude" id="v_smtp_relay_exclude" placeholder="*.example.com"><?= tohtml($v_smtp_relay_exclude ?? "") ?></textarea>
-					<small class="hint"><?= tohtml( _("One recipient domain per line, wildcards like *.example.com allowed. Delivered directly instead of via the relay — requires valid SPF and DKIM for this server.")) ?></small>
+					<small class="hint"><?= tohtml( _("One recipient domain per line, wildcards like *.example.com allowed. Delivered directly instead of via the relay - requires valid SPF and DKIM for this server.")) ?></small>
 				</div>
 			</div>
 		</div>

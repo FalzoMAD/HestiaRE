@@ -1,6 +1,6 @@
 <?php /* Panel JS is served build-free: own code as native ES modules straight
 from js/src (module scripts defer by default and execute in document order with
-the deferred vendor scripts below — our alpine:init listeners register before
+the deferred vendor scripts below - our alpine:init listeners register before
 the Alpine core runs). Vendored libs come from upstream/* branches, see
 VENDORED.json. */ ?>
 <script type="module" src="/js/src/index.js?<?= JS_LATEST_UPDATE ?>"></script>

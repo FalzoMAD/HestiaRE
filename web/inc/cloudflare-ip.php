@@ -1,5 +1,5 @@
 <?php
-// Static Cloudflare IP ranges (Eigenbau — replaces divinity76/cloudflare-ip-validator).
+// Static Cloudflare IP ranges (Eigenbau - replaces divinity76/cloudflare-ip-validator).
 // Source: https://www.cloudflare.com/ips/ (fetched 2026-06-21)
 // Update procedure: run `curl -s https://www.cloudflare.com/ips-v4/` and
 // `curl -s https://www.cloudflare.com/ips-v6/` and replace the arrays below.

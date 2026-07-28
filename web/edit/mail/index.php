@@ -1015,7 +1015,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	}
 
 	// Update SMTP relay exclude list (recipient domains delivered directly
-	// via DNS/MX). Only processed while the relay toggle is on — with the
+	// via DNS/MX). Only processed while the relay toggle is on - with the
 	// relay off the list is kept untouched for a later re-enable.
 	if (empty($_SESSION["error_msg"]) && isset($_POST["v_smtp_relay"])) {
 		$current_excludes = array_filter(explode("\n", $v_smtp_relay_exclude));

@@ -21,7 +21,7 @@
 
     # Roundcube is rendered by the Panel-Caddy listener on 127.0.0.1:8090
     # (share/panel-caddy/webmail-roundcube.conf). This vhost only reverse-proxies
-    # to it — no local docroot, so the caddy-owned /var/lib/roundcube is never
+    # to it - no local docroot, so the caddy-owned /var/lib/roundcube is never
     # served by apache/www-data (#205). Needs mod_proxy_http (enabled at install).
     # With nginx in front (standard profile) this vhost is inert; it is the public
     # entrypoint only in the apache-only profile.

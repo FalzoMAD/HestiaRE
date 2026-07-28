@@ -1,18 +1,18 @@
-# File manager — per-customer FPM pool behind a panel-authenticated proxy (#419).
+# File manager - per-customer FPM pool behind a panel-authenticated proxy (#419).
 # Rendered (port + secret substituted) to /etc/caddy/apps/filemanager.conf by
 # h-add-sys-filemanager, 0640 root:caddy because it carries the shared secret.
 # Removed by h-delete-sys-filemanager → /fm/ becomes a 404 when not installed.
 #
-# Two OVERWRITTEN headers are the entire Caddy-side trust model (§7.2 invariant —
+# Two OVERWRITTEN headers are the entire Caddy-side trust model (§7.2 invariant -
 # guarded by a smoke test). Neither may ever come from the client:
-#   Host              fm-<user>.local  — taken from the forward_auth response
+#   Host              fm-<user>.local  - taken from the forward_auth response
 #                     (X-Hestia-User), NEVER the client; selects the customer's
 #                     vhost on the private listener.
-#   X-Hestia-FM-Auth  <secret>         — proves the request came from Caddy; the
+#   X-Hestia-FM-Auth  <secret>         - proves the request came from Caddy; the
 #                     private listener 403s without it. A client value is replaced.
 # The customer identity is decided ONLY by fm-auth.php (valid panel session + that
 # user's FILE_MANAGER='yes'). The pool then runs as that customer, so the kernel
-# UID — not this proxy — is the actual file-access boundary.
+# UID - not this proxy - is the actual file-access boundary.
 #
 # /fm is deliberately NOT stripped: TFM builds its self-URLs from PHP_SELF, so
 # keeping the prefix keeps its links/asset refs correct without patching the app.

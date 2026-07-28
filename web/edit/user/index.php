@@ -214,7 +214,7 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Update File Manager access (admin only, and only while the system module is
-	// installed — FILE_MANAGER_PORT is set by h-add-sys-filemanager, cleared by
+	// installed - FILE_MANAGER_PORT is set by h-add-sys-filemanager, cleared by
 	// h-delete-sys-filemanager). The dedicated commands build/tear down the
 	// per-customer FPM pool + private-listener vhost + socket AND set the flag, so
 	// this is NOT a plain h-change-user-config-value.

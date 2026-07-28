@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /**
- * HestiaTOTP — single-file pure-PHP TOTP implementation.
+ * HestiaTOTP - single-file pure-PHP TOTP implementation.
  * RFC 6238 (TOTP) + RFC 4226 (HOTP), SHA-1, 6 digits, 30 s period.
  * No dependencies. Requires only PHP built-ins: random_bytes, hash_hmac, hash_equals.
  */

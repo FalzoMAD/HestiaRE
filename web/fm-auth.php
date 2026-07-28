@@ -4,7 +4,7 @@
 // request through to that customer's own FPM pool, anything else blocks it.
 // This is the ONLY authorization stop: the FM pool listens on a private loopback
 // listener the browser can never reach directly, so the app itself runs with its
-// login disabled ($use_auth = false) — the process is the tenant.
+// login disabled ($use_auth = false) - the process is the tenant.
 //
 // Deliberately minimal, like rspamd-auth.php: no config/helper includes, no shell
 // calls. It runs in the panel FPM pool (as `hestia`) and sees the same PHPSESSID
@@ -38,7 +38,7 @@ if (!preg_match('/^[A-Za-z0-9._-]+$/', $user) || $user === "." || $user === ".."
 // the pool (listen socket /run/hestia/fm/<user>.sock), h-delete-user-filemanager
 // removes it. We test the socket, NOT the FILE_MANAGER flag in user.conf: this runs
 // as `hestia`, which cannot read /etc/hestia (700 root:root) without a sudo h-list-user
-// per request — whereas /run/hestia is world-traversable (0755), so the socket is a
+// per request - whereas /run/hestia is world-traversable (0755), so the socket is a
 // cheap stat. Its existence IS the structural truth of "enabled" (no pool → the proxy
 // to fm-<user>.local has no vhost anyway → fail-closed).
 if (file_exists("/run/hestia/fm/" . $user . ".sock")) {
@@ -46,7 +46,7 @@ if (file_exists("/run/hestia/fm/" . $user . ".sock")) {
 	// the vhost side overwrites any client-supplied value, so it is authoritative.
 	header("X-Hestia-User: " . $user);
 	// Pass the customer's panel theme through so the FM matches light/dark (#218 S2).
-	// The panel stores it in the session (userTheme, THEME fallback — see css.php);
+	// The panel stores it in the session (userTheme, THEME fallback - see css.php);
 	// the FM maps light*/dark* families onto Bootstrap's data-bs-theme.
 	$theme = !empty($_SESSION["userTheme"]) ? $_SESSION["userTheme"] : ($_SESSION["THEME"] ?? "");
 	if (preg_match('/^[A-Za-z0-9._-]+$/', $theme)) {

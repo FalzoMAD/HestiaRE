@@ -674,7 +674,7 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// (PostgreSQL uses Adminer on a fixed /adminer/ route — no configurable alias.)
+	// (PostgreSQL uses Adminer on a fixed /adminer/ route - no configurable alias.)
 
 	// Update send notification setting
 	if (empty($_SESSION["error_msg"])) {

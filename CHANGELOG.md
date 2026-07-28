@@ -181,6 +181,10 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Ground rule: no em-dashes (or en-dashes) in code or comments (#445). Existing
+  occurrences were swept to plain ASCII hyphens across 70 code/config files (comment-
+  and string-only, no logic touched); `web/locale/` translations are exempt. A smoke
+  guard (`check_no_emdash`) fails the run if one reappears in the installed panel or CLI.
 - Starting or ending user impersonation ("login as" / return) now rotates the panel
   session id (#438, session-fixation defense). **Behaviour side effect:** any other
   tab sharing that session — a second admin tab, or an open File Manager tab — is

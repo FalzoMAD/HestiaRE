@@ -2,7 +2,7 @@
 // Forward-auth endpoint for the rspamd web UI reverse proxy (Panel-Caddy).
 // Caddy calls this for every /rspamd/* request; a 2xx response lets the
 // request reach the controller, anything else blocks it. This is what keeps
-// the controller — which trusts localhost without a password (secure_ip) —
+// the controller - which trusts localhost without a password (secure_ip) -
 // from being reachable by anyone who hits port 8083: only an authenticated
 // admin panel session passes.
 //
