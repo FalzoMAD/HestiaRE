@@ -28,7 +28,6 @@
 ├── .sessions/         PHP panel session files (owner: hestia)
 │                      (data/ fully dissolved — see /etc/hestia below)
 ├── func/              Shared bash function libraries
-├── install/           Installer data (deployed with package)
 ├── log -> /var/log/hestia   Symlink
 ├── ssl/               Panel SSL certificate and key
 └── web/               Panel PHP UI
@@ -75,7 +74,7 @@ Current state and migration steps are documented in Section 5.
 | Access log | `/var/log/hestia/caddy-access.log` |
 | Error log | `/var/log/hestia/caddy-error.log` |
 | Systemd unit | `caddy.service` |
-| Install source | `conf/panel-caddy/` |
+| Install source | `share/panel-caddy/` |
 
 ### Panel PHP — Sury PHP 8.3 FPM (replaces hestia-php)
 
@@ -88,7 +87,7 @@ Current state and migration steps are documented in Section 5.
 | PID file | `/run/hestia-php.pid` |
 | Error log | `/var/log/hestia/php-fpm.log` |
 | Systemd unit | `hestia-php.service` (independent of standard php8.3-fpm.service) |
-| Install source | `conf/panel-php/` |
+| Install source | `share/panel-php/` |
 | Required packages | `php8.3-fpm php8.3-mysql php8.3-curl php8.3-zip php8.3-gmp php8.3-mbstring php8.3-opcache` |
 
 ### nginx (frontend proxy / webserver)
@@ -184,7 +183,6 @@ Variables set in `func/main.sh`:
 | `HOMEDIR` | `/home` |
 | `USER_DATA` | `$CONF_DIR/users/$user` |
 | `WEBTPL` | `$HESTIA/templates/web` |
-| `MAILTPL` | `$HESTIA/templates/mail` |
 | `DNSTPL` | `$HESTIA/templates/dns` |
 | `RRD` | `$HESTIA/web/rrd` |
 | `SENDMAIL` | `$HESTIA/web/inc/mail-wrapper.php` |
