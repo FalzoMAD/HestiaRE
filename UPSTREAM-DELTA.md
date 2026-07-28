@@ -1,0 +1,411 @@
+# UPSTREAM-DELTA.md - structural divergence from HestiaCP
+
+> Read `CLAUDE.md` for the rules, `CODEMAP.json` for component-to-file mapping, and
+> `PATHS.md` for the filesystem layout. **This file is the layer underneath those:**
+> *why* HestiaRE's structure diverges from HestiaCP and *what each divergence forces*.
+
+The interesting fact about `hestia-nginx -> Caddy` is not the swap itself; it is that
+it forced the protected-download path to change, the panel to run as a different user,
+and app serving to move to loopback listeners. Those cascades are easy to re-derive
+wrong. This document records them once, per delta, in a uniform shape:
+
+**Upstream** (what HestiaCP does) -> **HestiaRE** (what we do) -> **Why** -> **Follow-on**
+(what else this forced, with `file:line` anchors).
+
+Baselines: upstream = git branch `origin/upstream/hestiacp`; HestiaRE = `origin/dev`.
+Anchors are on `origin/dev` unless prefixed `upstream:`.
+
+**Living doc.** When a structural decision lands (a service swap, a user/isolation
+change, a new config location, a removal), add or update the entry here in the same PR.
+A point-in-time line-count/churn snapshot lives separately on the `docs` branch
+(`codebase-divergence-analysis.md`); this file is the durable, shipped reference.
+
+---
+
+## System-user model (the spine of deltas 1-6)
+
+Several deltas below are consequences of one decision: **who a process runs as**.
+Upstream ran the whole panel stack (UI + phpMyAdmin + webmail) as a single
+`hestiaweb` user, and served customer files through an `nginx` worker that could read
+them. HestiaRE splits by trust boundary:
+
+| Concern | Upstream user | HestiaRE user | Access boundary |
+|---|---|---|---|
+| Panel UI (PHP) | `hestiaweb` | **`hestia`** | owns `/etc/hestia`, `/backup`; may `exec` h-*/v-* |
+| Panel webserver | `hestiaweb` (bundled nginx) | **`caddy`** (OS pkg) | cannot read customer files |
+| phpMyAdmin / Adminer | `hestiaweb` | **`caddy`** | app-login gated |
+| Roundcube / SnappyMail | `hestiaweb` | **`caddy`** | matches `caddy:caddy` app state (#234) |
+| Customer domains (PHP) | the customer | the customer | kernel UID = boundary |
+| File Manager (PHP) | `ROOT_USER` (in panel) | **the customer** | kernel UID = boundary (#419) |
+
+Rule of thumb for future work: **the panel FPM pool is `hestia`, everything Caddy
+proxies for apps is `caddy`, and anything touching a customer's files runs as that
+customer.** Ownership mismatches against this table are the source of several past
+bugs (#234, #441).
+
+---
+
+## 1. Panel webserver: bundled `hestia-nginx` -> OS-repo Caddy
+
+**Upstream.** A purpose-compiled `hestia-nginx` binary, shipped as a `.deb`. Server
+block `upstream:src/deb/nginx/nginx.conf`: master runs `user hestiaweb`, panel on
+`8083 ssl`, protected assets served via nginx `internal;` locations (`/backup/`,
+`/rrd/`, `/error/`).
+
+**HestiaRE.** Caddy from the OS repo, configured by static files under
+`share/panel-caddy/` deployed to `/etc/caddy/`:
+- `share/panel-caddy/Caddyfile` - global `admin off`, `auto_https disable_redirects`,
+  then `import /etc/caddy/*.conf`.
+- `share/panel-caddy/hestia.conf` - panel vhost `https://:8083` (`:4`), explicit `tls`
+  cert / no ACME (`:5`), `root /usr/local/hestia/web` (`:7`), a `route` block doing
+  path canonicalisation + `reverse_proxy @php unix//run/hestia-php.sock` (`:82`).
+- Apps pulled in via `import /etc/caddy/apps/*.conf` (`hestia.conf:55`); templates in
+  `share/panel-caddy/apps/*.tpl`.
+
+**Why.** Drop the maintenance burden of a forked/compiled `hestia-nginx` in favour of
+a stock OS Caddy (the HestiaRE OS-repo-first principle). See also
+`webserver-model-switch-plan.md` on the `docs` branch for the customer-webserver model.
+
+**Follow-on.**
+- `auto_https disable_redirects` is **required** so Caddy does not bind `:80` and grab
+  the port the customer-facing nginx needs (`Caddyfile`, comment).
+- The panel now depends on a separate FPM service over `/run/hestia-php.sock`
+  (delta 2), not an in-binary PHP.
+- Upstream update tooling keyed on the `hestia-nginx` deb name
+  (`v-update-sys-hestia`) does not apply.
+- Protected downloads had to change because Caddy's `file_server` runs as `caddy`
+  (delta 3).
+
+---
+
+## 2. Panel PHP backend: bundled `hestia-php` -> Sury FPM + a pool per concern
+
+**Premise correction.** Upstream does **not** compile customer PHP - it installs
+customer multi-version PHP from **Sury apt** too (`upstream:install/hst-install-debian.sh:865-868`,
+`upstream:bin/v-add-web-php`). What upstream compiles/bundles is the single **panel
+backend**: the `hestia-php` + `hestia-nginx` debs. So the real divergence is (a) the
+panel backend, and (b) the pool topology - not the customer PHP source.
+
+**Upstream.** One bundled panel pool `[www]` (`upstream:src/deb/php/php-fpm.conf`,
+`user=hestiaweb`, socket `/run/hestia-php.sock`). Panel UI, phpMyAdmin and webmail all
+run through that one `hestiaweb` pool. Customer domains get per-domain Sury pools.
+
+**HestiaRE.** Sury repo factored into one idempotent helper `add_sury_repo <codename>`
+(`func/helper.sh:55-74`), called by both wizard-discovery (`func/wizard.sh:267`) and
+installer (`bin/h-install-hestia:92`) so only one Sury stanza is ever written (avoids
+apt's "Conflicting Signed-By"). The panel runs on a **dedicated PHP tree**
+`/etc/php/hestia/` (Sury reference version), not a deb, launched by the wrapper
+`bin/hestia-php-fpm` (reads `/etc/php/hestia/php-version`, `exec`s the right
+`php-fpm<ver>`) under `share/panel-php/hestia-php.service`. The single pool explodes
+into **five** on that one `hestia` master:
+
+| Pool (`share/panel-php/pool.d/`) | Runs as | Socket | Client |
+|---|---|---|---|
+| `panel.conf` | `hestia` | `/run/hestia-php.sock` | Caddy panel |
+| `phpmyadmin.conf` | `caddy` | `/run/hestia-pma.sock` | Caddy `/phpmyadmin` |
+| `adminer.conf` | `caddy` | `/run/hestia-adminer.sock` | Caddy `/adminer` |
+| `roundcube.conf` | `caddy` | `/run/hestia-webmail-rc.sock` | Caddy `:8090` |
+| `snappymail.conf` | `caddy` | `/run/hestia-webmail-sm.sock` | Caddy `:8091` |
+
+Plus per-customer pools on the **customer** PHP (`share/php-fpm/multiphp.tpl`,
+`user=%user%`) and the FM pool (delta 5).
+
+**Why.** Isolate by trust boundary (see the system-user table): the panel keeps
+`exec` (its php.ini disables only `pcntl_*`, `share/panel-php/fpm/php.ini:16`), apps
+and webmail run as `caddy` to match `caddy:caddy` data ownership (fixes #234), and the
+panel gets `env[HESTIA]=/usr/local/hestia` as a **literal** because php-fpm wipes the
+master env (a bare `$HESTIA` expands empty -> 502).
+
+**Follow-on.**
+- One `hestia` master hosts five co-tenant pools sharing **one** curated `conf.d`
+  extension set built by `bin/hestia-php-confd` - pruning an extension can break a
+  co-tenant (the Roundcube `dom` 500 regression, #402; documented in
+  `bin/hestia-php-confd` header).
+- "PHP pools on the box" now spans two trees: `/etc/php/hestia/fpm/pool.d/*`
+  (hestia/caddy) and `/etc/php/<ver>/fpm/pool.d/*` (customers + `fm-<user>` + `dummy`).
+- Panel PHP version is switchable with rollback (`bin/h-change-sys-panel-php:83-91`);
+  upstream had no analogue (fixed by the deb).
+- `WEB_BACKEND=php-fpm` + `%backend_lsnr%` wiring is otherwise unchanged
+  (`func/domain.sh:100-131`).
+
+---
+
+## 3. Protected downloads: nginx `X-Accel-Redirect` -> PHP byte-streaming
+
+**Premise correction.** It is **not** that Caddy lacks an X-Accel equivalent -
+HestiaRE implements one (`share/panel-caddy/hestia.conf:87-91`, still used by
+`web/list/rrd/image.php`). The real blocker is the **user**: Caddy's `file_server`
+runs as `caddy`, which cannot read customer-owned `/backup` files; the panel FPM pool
+runs as `hestia`, which owns them.
+
+**Upstream.** PHP validates auth, then hands the file to nginx via
+`X-Accel-Redirect`; the `internal;` `/backup/` location serves the bytes as
+`hestiaweb`. PHP never streams (`upstream:web/download/backup/index.php` etc.).
+
+**HestiaRE.** A shared helper `serve_download($file, $ctype, $allow_range=false)`
+(`web/inc/download.php:10`) clears buffers and streams via an
+`fopen`/`fread(8192)`/`echo`/`flush` loop guarded by `connection_aborted()` (`:70`),
+with optional **single**-range support (hard cap of one range, comma guard against
+multi-range amplification, #443). The three handlers include it:
+`backup/index.php` (range allowed - static archive), `database/index.php` and
+`site/index.php` (no range - regenerated per request). X-Accel is retained **only**
+for caddy-readable panel files under the web root (rrd).
+
+**Why.** Serving customer-owned files through Caddy would require granting `caddy`
+read access to customer files - the exact capability HestiaRE avoids (same rationale
+as the File Manager). Streaming from the `hestia`-owned pool keeps it contained
+(#441; comment `web/inc/download.php:3`).
+
+**Follow-on.**
+- **Backup chown flipped**: `bin/h-download-backup:92` chowns fetched backups to
+  `hestia:hestia` (upstream `hestiaweb:hestiaweb`) so the panel pool can read them.
+- **Gzip disabled on `/download/*`** (`hestia.conf` `@encodable not path /download/*`,
+  #443) - re-gzipping GB archives wastes CPU and breaks ranges.
+- Panel pool `pm.max_children = 8` headroom: each download now pins a worker for the
+  whole transfer (`share/panel-php/pool.d/panel.conf`, comment).
+- Range/416/comma-guard logic is new panel surface that nginx previously owned.
+- Traversal + impersonation hardening rides along: `basename()` guard and scoping on
+  the impersonated user, not raw `$_SESSION["user"]` (#438).
+
+---
+
+## 4. Webmail / apps: `hestiaweb`/`hestiamail` www-data vhosts -> Caddy loopback listeners
+
+**Premise correction.** There is **no** discrete `hestia-mail` systemd service in
+either tree (`git grep hestia-mail` is empty upstream). The removed artifact is the
+`hestiamail`/`hestiaweb` **system-user** model plus www-data-served webmail vhosts
+(#214, `CHANGELOG.md:448,464`). State it as user-model + serving-model, not a service.
+
+**Upstream.** Webmail served by the **customer web stack**: per-mail-domain
+`webmail.<domain>` vhosts with a docroot at `/var/lib/roundcube` etc., executed as
+`www-data`.
+
+**HestiaRE.** Two Caddy **loopback listeners**, each backed by a `caddy` FPM pool:
+Roundcube `http://:8090 bind 127.0.0.1` -> `/run/hestia-webmail-rc.sock`
+(`share/panel-caddy/webmail-roundcube.conf:34-52`), SnappyMail `:8091`. Customer
+`webmail.<domain>` vhosts become **thin reverse proxies with no docroot** that
+`proxy_pass` to the loopback listener (`share/nginx/webmail/default.tpl:25`,
+`share/apache2/webmail/default.tpl:29`), TLS terminating at the vhost with the
+customer LE cert. Admin panel access without a customer domain is the `:8083/webmail`
+route (`share/panel-caddy/apps/webmail.tpl`).
+
+Two load-bearing Caddy subtleties: the site address is `http://:8090` + `bind
+127.0.0.1` (a Host in the address would make a proxied `Host: webmail.<domain>` match
+no site -> empty 200); and it is a loopback **port, not a unix socket** (OS Caddy
+2.6.x can't set socket mode for the www-data proxy workers). **SnappyMail is
+root-mount-only** (assets hard-wired to `/snappymail/...`), so it has no `:8083`
+sub-path route - only the `webmail.<domain>` path.
+
+**Why.** App state (`/var/lib/roundcube`) is `caddy`-owned; a `www-data` pool
+rendering caddy-owned state was the #234 permission bug. Running the pool as `caddy`
+aligns pool user <-> data ownership <-> log dir. Ports 8090/8091 sit above the fixed
+web-stack ports and below the customer FPM backend range (from 9000), so they can
+never collide.
+
+**Follow-on.**
+- Customer-webserver hardening (open_basedir etc.) no longer applies to webmail - the
+  trust boundary moved to the `caddy` pool.
+- Webmail availability now depends on Caddy + hestia-php; if Caddy is down, all
+  `webmail.<domain>` vhosts 502 even with nginx up.
+- Backporting upstream `templates/mail/` changes is structurally incompatible: upstream
+  `.tpl` carry docroot+fastcgi, HestiaRE `.tpl` carry `proxy_pass`. Cherry-picks
+  conflict by design.
+
+---
+
+## 5. File Manager: FileGator (in-panel) -> TinyFileManager (per-customer process)
+
+**Upstream.** FileGator (`upstream:bin/v-add-sys-filemanager`): a Composer/Vue app in
+`$HESTIA/web/fm` running **inside the panel** as `ROOT_USER`; file access rides the
+panel process, not the kernel UID. System-wide, no per-customer isolation.
+
+**HestiaRE.** A vendored, forked single-file TinyFileManager with app-auth disabled,
+in a three-layer model (#218/#419):
+1. **Shared code**, one root-owned copy: `/usr/share/filemanager/fm`
+   (`bin/h-add-sys-filemanager:60-65`).
+2. **Per-customer FPM pool run AS the customer**: `fm-<user>` on the customer PHP,
+   `user=%user%`, `listen=/run/hestia/fm/<user>.sock`,
+   `open_basedir=/usr/share/filemanager/fm:/home/%user%`, `env[FM_ROOT]=/home/%user%`
+   (`share/filemanager/fpm-pool.tpl`, deployed by `bin/h-add-user-filemanager`). The
+   kernel UID is the file-access boundary.
+3. **Caddy `forward_auth` gate** (`share/panel-caddy/apps/filemanager.tpl`): strips
+   inbound `X-Hestia-*`, calls `/fm-auth.php` on the `hestia` pool to resolve identity
+   (honouring impersonation), then reverse-proxies to a secret-gated per-user loopback
+   vhost on `FILE_MANAGER_PORT` (default **8092**), overwriting `Host
+   fm-<user>.local` and injecting the shared `X-Hestia-FM-Auth` secret. The listener
+   403s without the secret (`share/filemanager/nginx.tpl:12`; apache re-asserts the
+   `Require expr` in both `<Directory>` and `<FilesMatch php>`, #429/#397).
+
+**Why.** Per-customer UID isolation: a path-traversal in the app can only reach files
+the customer already owns. No Composer/Node dependency. Identity is decided **only**
+by `fm-auth.php`, never the client (the "§7.2 invariant").
+
+**Follow-on.**
+- Spawns **one php-fpm pool per enabled customer** (`pm=ondemand, max_children=4`);
+  cost scales with enabled users, and enabling races the socket (mitigated by a 5s
+  socket-wait that fails closed before writing the flag).
+- The runtime enable-gate is **socket existence** (`/run/hestia/fm/<user>.sock`), not
+  the `FILE_MANAGER` flag, because the low-priv `hestia` pool cannot read
+  `/etc/hestia` (700). See `web/fm-auth.php:34-58` and delta 8.
+- Two-flag lifecycle: system module (`h-add-sys-filemanager`, provides
+  `FILE_MANAGER_PORT`) must exist before per-user enable; the edit-user toggle and the
+  `/fm/` menu both gate on `FILE_MANAGER_PORT` **and** per-user `FILE_MANAGER=yes`
+  (`web/templates/includes/panel.php:175`).
+- DirectLink sharing removed (a direct URL bypasses forward_auth). Backporting upstream
+  FM changes is a non-starter (different app entirely); re-vendoring is controlled via
+  `share/upstream/update-web-vendor.sh`.
+
+---
+
+## 6. SFTP jail: static `/srv/jail` bind-mounts -> per-session `pam_namespace` tmpfs
+
+**Upstream.** `add_chroot_jail()` (`upstream:func/main.sh:1986`) creates
+`/srv/jail/$user`, `chown 0:0`, and writes a **persistent systemd `.mount` unit**
+bind-mounting the real home into the jail; `v-add-user-sftp-jail` appends the user to a
+growing `Match User a|b|c` sshd list and does `chown root:root /home/$user` (ownership
+flip so the chroot component is root-owned). A `@reboot` cron re-seeds the dummy block.
+
+**HestiaRE.** Group-scoped, per-session, zero persistent on-disk jail state (#413):
+- `add_chroot_jail()` (`func/main.sh:1780`) reduces to `groupadd sftp-jailed` +
+  `usermod -aG sftp-jailed`; delete is `gpasswd -d`. No mounts, no sshd edits per user.
+- `bin/h-add-sys-sftp-jail` installs the machinery once: a tmpfiles mountpoint
+  (`/run/hestia/jail` 0755 root:root - sshd's `safely_chroot()` refuses a writable
+  one), a per-session builder `share/security/hestia-jail.init` wired via
+  `/etc/security/namespace.conf`, a PAM gate in `/etc/pam.d/sshd` that runs
+  `pam_namespace` **only** for `sftp-jailed` members, and one static `Match Group
+  sftp-jailed -> ChrootDirectory /run/hestia/jail/%u` block. Validated with `sshd -t`,
+  restores sshd_config on failure.
+- The init script builds the jail at `/run/hestia/jail/<user>/<real-home>` mirroring
+  the **actual** passwd home (path fidelity), so one generic rule serves FTP
+  sub-accounts whose home is deep under `web/<domain>` - a case native
+  `ChrootDirectory` cannot handle. **Fail-closed**: `chmod 755` on the jail root is the
+  last action, so any earlier failure leaves it world-writable and sshd rejects the
+  session.
+
+**Why.** Eliminate persistent jail state and the `chown root:root /home/$user`
+ownership flip; rebuild the jail per login on tmpfs, leaving the real home untouched
+(`CHANGELOG.md:36-38,90-101`).
+
+**Follow-on.**
+- **No migration** from `/srv/jail` (explicit): an in-place upgrade orphans
+  `/srv/jail/*`, `.mount` units and `/etc/cron.d/hestia-sftp` - not cleaned up.
+- Requires `pam_namespace` + per-session mount-namespace propagation (verified OpenSSH
+  9.2-10.2 across the four distros incl. ub26 userns restriction).
+- O(1) group membership replaces the O(n) `Match User` regex rewrite - no sshd restart
+  per user.
+- `jailbash` (interactive shell sandbox) is **shared** with upstream, only relocated
+  `install/common/bubblewrap` -> `share/bubblewrap/` (#119); the shell allowlist was
+  trimmed to `nologin jailbash bash sh` (`func/main.sh:1414`, #412).
+
+---
+
+## 7. SSH `AllowUsers` co-maintenance - NEW subsystem (#412)
+
+**Upstream.** No `AllowUsers` handling at all (`git grep AllowUsers` empty upstream).
+
+**HestiaRE.** The installer seeds a **commented, inert** `#AllowUsers` directive plus
+guidance (`bin/h-install-hestia:121-131`); nothing is enforced until the operator
+uncomments it. `manage_sshd_allowusers(add|del, user)` (`func/main.sh:1794-1860`)
+edits only the `$user` token (comparing `${t%%@*}` so `root@ip` operator entries
+survive), preserves commented/active state, applies a **lockout guard** (re-comments
+rather than leave an active line with zero tokens), validates on a temp copy with
+`sshd -t -f`, and reloads ssh **only if the line is active**. Hooked from
+`h-add-user`, `h-delete-user`, `func/rebuild.sh:95` (restore path - bypasses
+`h-add-user`, so without this a restored user is silently locked out), and the FTP
+sub-account add/delete hooks.
+
+**Why.** Give operators a maintained SSH allowlist without changing default behaviour
+(opt-in). The `rebuild.sh` hook closes the restore gap.
+
+**Follow-on.**
+- Opt-in: no behaviour change until uncommented; once active, any account-creating path
+  that bypasses these hooks locks the account out.
+- **#416 seed/regex bug**: the original regex matched the guidance comment, appending
+  usernames to prose. Fixed to sshd's `#?AllowUsers` form + reworded seed
+  (`func/main.sh:1800-1805`). Existing installs carry the mangled comment; remediation
+  is to re-seed (inert, no access impact).
+
+---
+
+## 8. Config locations: `$HESTIA/data` + `/etc/hestiacp` -> `/etc/hestia` (`CONF_DIR`)
+
+**Upstream.** Mutable state lives inside the install root (`$HESTIA/data/`,
+`$HESTIA/conf/`); bootstrap is `/etc/hestiacp/hestia.conf`. Update overwrites the tree.
+
+**HestiaRE.** A single instance-config dir `/etc/hestia`, outside git, surviving
+updates. `CONF_DIR="${CONF_DIR:-/etc/hestia}"` (`func/main.sh:48`), exported via
+`func/helper.sh:133`. New residents that upstream lacks:
+
+| Path | Role |
+|---|---|
+| `/etc/hestia/hestia.env` | bootstrap file (renamed from `hestia.conf`, #81) |
+| `/etc/hestia/local.conf` | operator overrides, survive upgrades |
+| `/etc/hestia/source.conf` | update-channel config (repo/token/channel) |
+| `/etc/hestia/install.conf` | wizard recipe **and** live `COMPONENT_*` state (#103) |
+| `/etc/hestia/conf/` | panel config; `$HESTIA/conf` is now a **symlink** here (#129) |
+| `/etc/hestia/{firewall,ips,queue,users}/` | moved out of `$HESTIA/data/` (#148/#154/#156) |
+| `/etc/hestia/.done.*` | installer idempotency sentinels |
+
+The `$HESTIA/data/` tree is **fully dissolved**. `install/` (build-time tree) was split
+into `share/` (shipped runtime assets) + `templates/` (`WEBTPL`) + `packages/` (#119,
+#150); `HESTIA_INSTALL_DIR`/`HESTIA_COMMON_DIR` no longer exist.
+
+**Why.** Separate mutable instance state from the git-managed code tree so a tarball
+extraction into `/usr/local/hestia` never clobbers config or user data. The install
+root stays `/usr/local/hestia`; the only per-command change was
+`source /etc/hestiacp/hestia.conf` -> `source /etc/hestia/hestia.env`.
+
+**Follow-on.**
+- `/etc/hestia` is `700 root:root`: the unprivileged `hestia` user **cannot read it**,
+  so any gate that must be visible to `hestia` uses structural truth (e.g. FM socket
+  existence), not a config flag (delta 5).
+- `$HESTIA/conf` is a **symlink**: code that stats/replaces the dir itself must respect
+  it; `sed -i` on files within is safe.
+- Nothing may assume `$HESTIA/data/...`, `HESTIA_INSTALL_DIR`, or `HESTIA_COMMON_DIR`
+  exists. Version/upgrade pins live in `share/manifest.json`, not
+  `install/upgrade/versions/`.
+
+---
+
+## 9. Permanent removals as structural gaps
+
+These are settled decisions (`README.md:53-59`, registry `CODEMAP.json` `removed`),
+**never** to be reintroduced. Each leaves a plumbing gap future work must respect.
+
+| Removed | Was | Gap to respect |
+|---|---|---|
+| **bind9 / DNS** (#58/#283) | ~50 `*-dns-*` commands, `templates/dns`, `edit_dns` page | No DNS zone-management code path. DNS is external/managed. Only `h-list-mail-domain-dkim-dns` kept. `DNSTPL`/`templates/dns` are **vestigial** (still referenced in `func/main.sh` + `PATHS.md`, but nothing populates zones - a known inconsistency, not a live feature). |
+| **REST API** (#146) | `v-*-api-*`, web API endpoint, key auth | No programmatic surface. Entry points are the panel UI and `h-*` CLI only; integrations shell out to `h-*`. |
+| **Web Terminal** (#59) | node sidecar service, `list_terminal` page, `/_shell/` | No browser->shell bridge; `/_shell/` absent by design. Operators use SSH. Closed GHSA-gh6f. |
+| **vsftpd** (#213) | `install/deb/vsftpd` | FTP is **ProFTPd only** (`share/proftpd/`); `FTP_SYSTEM` must not branch on vsftpd. |
+| **SpamAssassin / spamd** (#284) | spamd config + panel spam-editor | **rspamd is the sole filter**; `ANTISPAM_SYSTEM` has no spamassassin branch. Config targets `/etc/rspamd/`. |
+| **Software Installer** (#56) | webapp catalog, Node build chain | No one-click app-install surface. Composer/WP-CLI exist as CLI tools; there is no panel installer to extend. |
+
+---
+
+## 10. Build / release: `.deb` + apt repo -> source tarball + CI
+
+**Upstream.** Versioned Debian `.deb` packages (incl. compiled binaries) served from a
+custom apt repository.
+
+**HestiaRE.** No packages, no binaries - source only (`README.md:32-46`): a `v*` git
+tag triggers CI (`.github/workflows/release.yml`), which stamps `VERSION` and packs the
+tree into one `hestiare-<version>.tar.gz`; `install.sh` fetches + extracts it into
+`/usr/local/hestia` and hands off to the wizard -> `bin/h-install-hestia`. Source/channel
+is overridable via `/etc/hestia/source.conf`. The release actually runs on the public
+GitHub mirror (Gitea has no release workflow); see `project-release-github-mirror` in
+memory for the full Gitea-release -> mirror -> GitHub chain. No compiled artifact, no
+private repo, no build toolchain on target (the earlier `just`/Make dependency was
+removed - pure bash).
+
+**Follow-on.** `VERSION` is stamped by CI, never edited. Upstream update tooling keyed
+on deb package names does not apply. The panel and its PHP are OS/Sury packages + local
+wrappers (deltas 1-2), so there is no `hestia-nginx`/`hestia-php` deb to update.
+
+---
+
+## Known inconsistencies (flagged, not yet resolved)
+
+- `DNSTPL` / `templates/dns` remain referenced despite DNS removal (delta 9) - vestigial.
+- Per-domain backup special-cases per-domain backend tpls (`h-backup-user`), but the FM
+  pool and the panel pools are outside the per-user domain backup path (delta 2/5).
