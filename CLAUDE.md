@@ -44,8 +44,14 @@ These are absolute. Never deviate, never re-suggest rejected items.
 ## COMMENT STYLE
 
 Comments are terse. Nobody reads a wall of them. A comment earns its place by
-explaining **why** the code must be this way; the **how** is the code's job —
+explaining **why** the code must be this way; the **how** is the code's job, so
 don't narrate it. Condense what the code *does*, keep why it *must*.
+
+**No em-dashes (ground rule).** Never use an em-dash (`—`) or en-dash (`–`) in code
+or comments; use a plain ASCII hyphen (`-`) or restructure. A hyphen reads the same
+in every editor and terminal and avoids the 3-byte-per-character width surprise.
+Prose docs and the translations under `web/locale/` are exempt; a smoke guard
+enforces it for the panel and CLI (`bin/`, `web/` minus `web/locale/`).
 
 **Keep verbatim (do NOT condense):**
 - A comment explaining a **non-obvious edge/precondition**, or referencing an
