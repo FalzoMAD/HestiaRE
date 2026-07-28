@@ -9,7 +9,14 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- `UPSTREAM-DELTA.md` (repo root): a structural-divergence reference mapping each
+  major difference from HestiaCP to its follow-on implications (panel Caddy/Sury,
+  the system-user split, protected downloads, webmail loopback, FileManager and
+  SFTP-jail rebuilds, `/etc/hestia`, permanent removals). Registered in
+  `CODEMAP.json` `_meta.reference_docs`. Living doc: keep current with each
+  structural change. (#451)
 
 ## v0.11.0 (2026-07-28)
 
