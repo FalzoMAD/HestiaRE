@@ -17,7 +17,6 @@ exec(
 );
 
 if ($return_var == 0) {
-	// No Range: h-dump-database regenerates the dump per request, so a resume request
-	// would stream a different file — serve whole (see inc/download.php).
+	// No Range: h-dump-database regenerates the dump per request, so a resume would stream a different file.
 	serve_download($output[0], "application/sql");
 }

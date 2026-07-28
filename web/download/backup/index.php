@@ -8,8 +8,7 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/download.php";
 // Check token
 verify_csrf($_GET);
 
-// basename(): $backup becomes a filesystem path below and the pool can read more
-// than the old caddy file_server could — keep it a bare filename, no traversal.
+// basename() → bare filename, no traversal: the pool reads more of the fs than caddy's file_server.
 $backup = basename($_GET["backup"]);
 
 if (!file_exists("/backup/" . $backup)) {
@@ -31,11 +30,9 @@ if (!file_exists("/backup/" . $backup)) {
 	header("Location: /list/backup/");
 	exit();
 } else {
-	// Admin may fetch any backup; a customer only their own. Scope on the EFFECTIVE
-	// user ($user_plain is look-aware, set in inc/main.php) — not the raw session
-	// user — so an admin impersonating a customer scopes to the customer, not the
-	// admin (#438).
-	// A stored backup is a static file → Range/resume is safe (3rd arg true).
+	// Admin fetches any backup, a customer only their own. Scope on $user_plain (look-aware, from
+	// inc/main.php), not the raw session user, so an impersonating admin scopes to the customer (#438).
+	// A stored backup is static, so Range/resume is safe (3rd arg true).
 	if ($_SESSION["userContext"] === "admin") {
 		serve_download("/backup/" . $backup, "application/gzip", true);
 	}
@@ -44,8 +41,7 @@ if (!file_exists("/backup/" . $backup)) {
 			serve_download("/backup/" . $backup, "application/gzip", true);
 		}
 	}
-	// serve_download() exits; reaching here means the customer asked for a backup that
-	// is not theirs. Refuse explicitly (#443) instead of falling through to a blank 200.
+	// serve_download() exits; reaching here = a customer asked for a backup that isn't theirs.
 	$_SESSION["error_msg"] = _("You are not allowed to access this backup.");
 	header("Location: /list/backup/");
 	exit();

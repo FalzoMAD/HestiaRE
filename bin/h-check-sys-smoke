@@ -78,12 +78,10 @@ templates/pages/list_search.php templates/pages/list_user.php"
 	fi
 }
 
-# check_xaccel_allowlist <webdir> — only list/rrd/image.php may EMIT X-Accel-Redirect.
-# Panel Caddy intercepts it (handle_response @accel → file_server), but file_server
-# runs as `caddy`, which reads only web-root files it owns (the RRD images). A download
-# handler that emits it for a customer-owned file hits the caddy-can't-read wall (#441);
-# stream via inc/download.php as `hestia` instead. Matches header("X-Accel-Redirect ...
-# emission only, so the download handlers' prose ("not X-Accel-Redirect") does not trip.
+# check_xaccel_allowlist <webdir> — only list/rrd/image.php may EMIT X-Accel-Redirect. Caddy serves it
+# via file_server as `caddy`, which reads only the web-root files it owns (the RRD images); a download
+# handler emitting it for a customer file hits the caddy-can't-read wall (#441) — stream via
+# inc/download.php as `hestia` instead. Matches header(...) emission, not the handlers' prose.
 check_xaccel_allowlist() {
 	local webdir="$1" bad="" f rel
 	local allow="list/rrd/image.php"

@@ -13,8 +13,7 @@ $site = quoteshellarg($_GET["site"]);
 exec(HESTIA_CMD . "h-dump-site " . $user . " " . $site . " full", $output, $return_var);
 
 if ($return_var == 0) {
-	// $output[1] is the /backup/<file>.zip path; its basename is the display name
-	// (== $output[0]). No Range: h-dump-site regenerates the archive per request
-	// (see inc/download.php).
+	// $output[1] = the /backup/<file>.zip path (basename == the $output[0] display name). No Range:
+	// h-dump-site regenerates the archive per request.
 	serve_download($output[1], "application/zip");
 }

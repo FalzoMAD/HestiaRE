@@ -1,32 +1,20 @@
 <?php
-// Shared streaming helper for the panel download handlers (download/{backup,database,
-// site}). We stream straight from PHP instead of nginx X-Accel-Redirect (#441): the
-// panel is Caddy-fronted and its file_server would run as `caddy`, which cannot read
-// the customer-owned files — and granting caddy that read is the capability we avoid
-// (same reason as the file manager). The panel pool runs as `hestia`, owner of every
-// /backup file, so it can stream them.
-//
-// serve_download() must survive multi-GB files (#443): the 60 KB #441 corpus hid the
-// class readfile() bites in at scale.
+// Shared streaming helper for the panel download handlers. We stream from PHP, not nginx
+// X-Accel-Redirect (#441): Caddy's file_server would run as `caddy`, which can't read the
+// customer-owned files, and granting it that read is the capability we avoid (as with the file
+// manager). The panel pool runs as `hestia`, owner of every /backup file. Must hold at GB scale.
 
-// Stream $file to the client as an attachment of type $ctype.
-//
-// $allow_range: honour a client Range: header (206/416) so an aborted large download
-// can resume. ONLY safe for a STATIC file (a stored backup). The db/site archives are
-// regenerated per request by h-dump-*, so a resume request would re-run the dump and
-// the byte offsets would not match the earlier archive → corrupt file. Those callers
-// pass false and we advertise no Accept-Ranges for them.
+// Stream $file as an attachment. $allow_range honours a client Range: header — safe ONLY for a
+// static file (a stored backup); db/site archives are regenerated per request, so a resumed range
+// would land in a differently-generated file. Those callers leave it false.
 function serve_download($file, $ctype, $allow_range = false)
 {
-	// Drain every output buffer so the bytes stream straight to the socket instead
-	// of piling up in memory (a 20 GB readfile with a buffer active blows memory_limit)
-	// AND so a client disconnect is seen at the next write — with a buffer swallowing
-	// the writes it never is, and the FPM worker hangs (only 4 in the panel pool).
+	// Stream to the socket, not into memory_limit, and let a client disconnect be seen at the next
+	// write — a live output buffer swallows the writes and hangs the worker.
 	while (ob_get_level()) {
 		ob_end_clean();
 	}
-	// Default is already Off, but be explicit: abort the script when the client goes
-	// away so the worker frees immediately rather than streaming into the void.
+	// Free the worker the moment the client goes away (explicit, not relying on the ini default).
 	ignore_user_abort(false);
 
 	$size = filesize($file);
@@ -38,22 +26,19 @@ function serve_download($file, $ctype, $allow_range = false)
 
 	if ($allow_range) {
 		header("Accept-Ranges: bytes");
-		// SINGLE range only (bytes=A-B, bytes=A-, bytes=-N) — a hard cap of one. A
-		// comma-separated multi-range list is the classic amplification vector
-		// (bytes=0-0,0-0,0-0,… turns a tiny request into a huge multipart response;
-		// nginx/Apache cap the count for exactly this reason). We never build multipart:
-		// any list (comma), or a malformed/overlapping/descending spec, falls back to the
-		// whole file (200). A download resume only ever needs one range, so nothing real
-		// is lost. The comma guard is explicit so a later regex tweak can't reopen it.
+		// Single range only — a hard cap of one. A comma multi-range list is the amplification
+		// vector (bytes=0-0,0-0,… → a huge multipart response from a tiny request); we never build
+		// multipart, so any list or malformed/descending spec falls back to the whole file. A resume
+		// needs one range. The comma guard is explicit so a later regex tweak can't quietly reopen it.
 		if (
 			isset($_SERVER["HTTP_RANGE"]) &&
 			strpos($_SERVER["HTTP_RANGE"], ",") === false &&
 			preg_match('/^bytes=(\d*)-(\d*)$/', $_SERVER["HTTP_RANGE"], $m)
 		) {
 			if ($m[1] === "" && $m[2] === "") {
-				// bytes=- is malformed; ignore and serve whole.
+				// bytes=- : serve whole
 			} elseif ($m[1] === "") {
-				// bytes=-N → final N bytes.
+				// suffix: final N bytes
 				$start = max(0, $size - (int) $m[2]);
 			} else {
 				$start = (int) $m[1];
