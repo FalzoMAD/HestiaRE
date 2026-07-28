@@ -78,6 +78,26 @@ templates/pages/list_search.php templates/pages/list_user.php"
 	fi
 }
 
+# check_xaccel_allowlist <webdir> — only list/rrd/image.php may EMIT X-Accel-Redirect. Caddy serves it
+# via file_server as `caddy`, which reads only the web-root files it owns (the RRD images); a download
+# handler emitting it for a customer file hits the caddy-can't-read wall (#441) — stream via
+# inc/download.php as `hestia` instead. Matches header(...) emission, not the handlers' prose.
+check_xaccel_allowlist() {
+	local webdir="$1" bad="" f rel
+	local allow="list/rrd/image.php"
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		rel=${f#"$webdir"/}
+		case " $allow " in *" $rel "*) continue ;; esac
+		bad="$bad $rel"
+	done <<< "$(grep -rlE 'header\(["'"'"']X-Accel-Redirect' "$webdir" 2> /dev/null)"
+	if [ -z "$bad" ]; then
+		ok "invariant: X-Accel-Redirect only emitted by allowlisted files (#441/#443)"
+	else
+		no "invariant: X-Accel-Redirect emitted by non-allowlisted file (caddy-can't-read wall)" "${bad# }"
+	fi
+}
+
 # check_service <systemd-unit> <label>
 check_service() {
 	if systemctl is-active --quiet "$1"; then
@@ -324,6 +344,9 @@ check_session_user_allowlist "$HESTIA/web"
 # onto userContext) — a divergent mirror would silently split the gate surface.
 check_source_absent "no gating on the effective-mirror \$_SESSION[role] (#438 — use userContext)" \
 	'\$_SESSION\["role"\][[:space:]]*(==|!=)' "$HESTIA/web"
+# #441/#443: X-Accel-Redirect only from the allowlisted RRD handler; a new download
+# emitting it would hit the caddy-can't-read wall (stream via inc/download.php instead).
+check_xaccel_allowlist "$HESTIA/web"
 # v-* compat symlinks must all resolve (no dangling alias left by a rename).
 check_v_symlinks_resolve
 # every h-* keeps its parsed # info: line (a comment sweep must not eat it).

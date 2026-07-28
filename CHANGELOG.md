@@ -273,10 +273,30 @@ section as part of its PR. On release, the section gets the version number.
   `readfile()` from the panel pool (which runs as `hestia`, the owner of those files),
   with the download path `basename()`-guarded against traversal. RRD stats images stay on
   X-Accel (a caddy-readable panel file under the web root). Note: `readfile()` binds a
-  panel FPM worker for the download's duration — fine at this scale; revisit with a
+  panel FPM worker for the download's duration — fine at this scale; revisit
   the pool's `pm` limits if large parallel downloads ever pressure the panel
   (these are manual, logged-in, click-driven downloads — concurrency is minimal
   even at hundreds of users, so no dedicated download pool is warranted).
+- Panel downloads — hardened the #441 stream for GB-scale files (#443). The `readfile()`
+  in the three handlers is consolidated into `web/inc/download.php` and now: drains every
+  output buffer and sets `ignore_user_abort(false)` so a multi-GB backup streams straight
+  to the socket (not into `memory_limit`) and a client disconnect frees the FPM worker at
+  the next chunk instead of hanging it; writes in flushed 8 KB chunks; and — for the
+  **stored backup only** — honours a `Range:` request (206/416 + `Accept-Ranges`) so an
+  aborted large download resumes instead of restarting from zero. The db/site archives are
+  regenerated per request, so they deliberately do **not** advertise ranges (a resume would
+  stream a differently-generated file). Range parsing is capped at a **single** range — a
+  comma-separated multi-range list (the `bytes=0-0,0-0,…` amplification vector) or any
+  malformed/descending spec falls back to the whole file rather than building a multipart
+  response. The panel php.ini pins `output_buffering = Off` / `zlib.output_compression = Off`,
+  and Caddy's `encode gzip` now skips `/download/*` (re-gzipping an already-compressed archive
+  burns CPU for no win and can interfere with ranges). A cross-customer backup request is
+  refused with an explicit redirect to `/list/backup/` instead of a blank page. `pm.max_children`
+  on the panel pool is raised 4 → 8: a download now binds a worker for the whole transfer, so
+  the short-request sizing no longer held — the cheap hedge that keeps a couple of concurrent
+  downloads from blocking the UI without opening a second, dedicated download pool. A smoke
+  guard allowlists X-Accel-Redirect *emitters* to `list/rrd/image.php`, so a future download
+  copying that idiom fails the smoke rather than silently hitting the caddy-can't-read wall.
 - File manager — the native modal/dropdown shim (which replaced Bootstrap-JS in the
   diet) regained the keyboard accessibility Bootstrap-JS used to provide (#434):
   modals now trap focus, close on Escape (honoring `data-bs-keyboard="false"` on
