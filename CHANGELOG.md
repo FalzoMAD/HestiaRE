@@ -181,6 +181,11 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Starting or ending user impersonation ("login as" / return) now rotates the panel
+  session id (#438, session-fixation defense). **Behaviour side effect:** any other
+  tab sharing that session — a second admin tab, or an open File Manager tab — is
+  logged out at the switch. This is intentional (you cannot be admin and a customer
+  at the same time), but is a visible change someone may report as a bug.
 - Moved the bubblewrap assets `jailbash` (the sandboxed login-shell wrapper) and
   `bwrap-userns-restrict` (the AppArmor profile for the Ubuntu 24.04+ unprivileged-
   userns restriction) from `install/common/bubblewrap/` to `share/bubblewrap/`,
@@ -383,10 +388,16 @@ section as part of its PR. On release, the section gets the version number.
   is **regenerated at both transitions** (enter and return), so an id captured
   during impersonation cannot regain admin after return. `web/download/backup`
   scoping was corrected to the effective user (it read the raw session user =
-  admin), and `h-check-sys-smoke` gains a static guard against that mis-target
-  idiom. Scope note: this shrinks the reachable surface; it does not draw a
-  privilege boundary (the panel process still runs as `hestia`), and impersonating
-  another **admin** account keeps admin — there is no boundary between admins.
+  admin), and `h-check-sys-smoke` gains an **allowlist** guard so only vetted files
+  may read the real `$_SESSION["user"]` at all (plus a guard that the old
+  effective-mirror `$_SESSION["role"]` is never gated on again — it was unified onto
+  `userContext`). Scope note: this shrinks the reachable surface; it does **not**
+  draw a privilege boundary — the panel process still runs as `hestia` and may call
+  any `h-*`, so a panel-PHP RCE is game-over regardless — and impersonating another
+  **admin** keeps admin (no boundary between admins). The impersonation session can
+  do only what the **customer** could, which *includes what the customer can do*: a
+  same-origin script in it still writes the customer's own web root (e.g. via the
+  file manager). That is the accepted residual risk.
 - File manager media handler — the inline-media allowlist gained a runtime guard
   that refuses any active `Content-Type` (svg/html/xml/script) even if one were
   ever added to the map (#432). Serving media from a separate origin was considered
