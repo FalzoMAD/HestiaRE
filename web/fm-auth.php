@@ -18,11 +18,11 @@ if (empty($_SESSION["user"])) {
 	exit();
 }
 
-// Effective user: admin impersonation via "look", otherwise the session user
-// (same rule as inc/main.php). This is what makes the admin "look" open that
-// customer's file manager rather than the admin's own.
+// Effective user: admin impersonation via "look", otherwise the session user.
+// This is an OFF-CHAIN route (it does not run inc/main.php), so it reads the
+// DURABLE adminContext + look, never the derived userContext (#438 principle).
 $user =
-	!empty($_SESSION["look"]) && ($_SESSION["userContext"] ?? "") === "admin"
+	!empty($_SESSION["look"]) && ($_SESSION["adminContext"] ?? "") === "admin"
 		? $_SESSION["look"]
 		: $_SESSION["user"];
 
