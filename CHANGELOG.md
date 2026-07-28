@@ -11,7 +11,7 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
-- `UPSTREAM-DELTA.md` (repo root): a structural-divergence reference mapping each
+- `STRUCTURE.md` (repo root): a structural-divergence reference mapping each
   major difference from HestiaCP to its follow-on implications (panel Caddy/Sury,
   the system-user split, protected downloads, webmail loopback, FileManager and
   SFTP-jail rebuilds, `/etc/hestia`, permanent removals). Registered in
