@@ -265,6 +265,18 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- Panel file downloads — **user backups, database dumps and site archives** were broken
+  on the Caddy-fronted panel (#441). They emitted `X-Accel-Redirect` (an nginx idiom);
+  the panel's Caddy config *does* intercept it, but serves via `file_server` as the
+  `caddy` user, which cannot read the customer-owned files (`hestia:<user>` `0640`) — so
+  an admin downloading a backup got a **404**, not the archive. They now stream via PHP
+  `readfile()` from the panel pool (which runs as `hestia`, the owner of those files),
+  with the download path `basename()`-guarded against traversal. RRD stats images stay on
+  X-Accel (a caddy-readable panel file under the web root). Note: `readfile()` binds a
+  panel FPM worker for the download's duration — fine at this scale; revisit with a
+  the pool's `pm` limits if large parallel downloads ever pressure the panel
+  (these are manual, logged-in, click-driven downloads — concurrency is minimal
+  even at hundreds of users, so no dedicated download pool is warranted).
 - File manager — the native modal/dropdown shim (which replaced Bootstrap-JS in the
   diet) regained the keyboard accessibility Bootstrap-JS used to provide (#434):
   modals now trap focus, close on Escape (honoring `data-bs-keyboard="false"` on
