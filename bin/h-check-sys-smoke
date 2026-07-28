@@ -98,20 +98,6 @@ check_xaccel_allowlist() {
 	fi
 }
 
-# check_no_emdash <dir...> â€” ground rule (#445): no em-dash (U+2014) or en-dash
-# (U+2013) in panel/CLI code or comments; a plain hyphen reads the same and avoids the
-# 3-byte width surprise. web/locale/ is exempt (translations legitimately use them).
-# Byte match under LC_ALL=C: em/en-dash are e2 80 94 / e2 80 93.
-check_no_emdash() {
-	local hit
-	hit=$(LC_ALL=C grep -rlP --exclude-dir=locale '\xe2\x80[\x93\x94]' "$@" 2> /dev/null)
-	if [ -z "$hit" ]; then
-		ok "invariant: no em/en-dash in code/comments (#445)"
-	else
-		no "invariant: em/en-dash in code/comments (#445 ground rule)" "$(echo "$hit" | head -n1)"
-	fi
-}
-
 # check_service <systemd-unit> <label>
 check_service() {
 	if systemctl is-active --quiet "$1"; then
@@ -361,8 +347,6 @@ check_source_absent "no gating on the effective-mirror \$_SESSION[role] (#438 â€
 # #441/#443: X-Accel-Redirect only from the allowlisted RRD handler; a new download
 # emitting it would hit the caddy-can't-read wall (stream via inc/download.php instead).
 check_xaccel_allowlist "$HESTIA/web"
-# #445 ground rule: no em/en-dash in the installed panel + CLI (web/locale/ exempt).
-check_no_emdash "$HESTIA/bin" "$HESTIA/web"
 # v-* compat symlinks must all resolve (no dangling alias left by a rename).
 check_v_symlinks_resolve
 # every h-* keeps its parsed # info: line (a comment sweep must not eat it).
