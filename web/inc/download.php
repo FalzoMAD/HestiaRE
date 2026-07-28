@@ -38,10 +38,18 @@ function serve_download($file, $ctype, $allow_range = false)
 
 	if ($allow_range) {
 		header("Accept-Ranges: bytes");
-		// Single range only (bytes=A-B, bytes=A-, bytes=-N). Multipart ranges are
-		// not worth the complexity for a backup download; a suffix/open range covers
-		// every real resume case.
-		if (isset($_SERVER["HTTP_RANGE"]) && preg_match('/^bytes=(\d*)-(\d*)$/', $_SERVER["HTTP_RANGE"], $m)) {
+		// SINGLE range only (bytes=A-B, bytes=A-, bytes=-N) — a hard cap of one. A
+		// comma-separated multi-range list is the classic amplification vector
+		// (bytes=0-0,0-0,0-0,… turns a tiny request into a huge multipart response;
+		// nginx/Apache cap the count for exactly this reason). We never build multipart:
+		// any list (comma), or a malformed/overlapping/descending spec, falls back to the
+		// whole file (200). A download resume only ever needs one range, so nothing real
+		// is lost. The comma guard is explicit so a later regex tweak can't reopen it.
+		if (
+			isset($_SERVER["HTTP_RANGE"]) &&
+			strpos($_SERVER["HTTP_RANGE"], ",") === false &&
+			preg_match('/^bytes=(\d*)-(\d*)$/', $_SERVER["HTTP_RANGE"], $m)
+		) {
 			if ($m[1] === "" && $m[2] === "") {
 				// bytes=- is malformed; ignore and serve whole.
 			} elseif ($m[1] === "") {

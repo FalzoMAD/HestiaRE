@@ -44,4 +44,9 @@ if (!file_exists("/backup/" . $backup)) {
 			serve_download("/backup/" . $backup, "application/gzip", true);
 		}
 	}
+	// serve_download() exits; reaching here means the customer asked for a backup that
+	// is not theirs. Refuse explicitly (#443) instead of falling through to a blank 200.
+	$_SESSION["error_msg"] = _("You are not allowed to access this backup.");
+	header("Location: /list/backup/");
+	exit();
 }
