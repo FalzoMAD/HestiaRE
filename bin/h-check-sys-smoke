@@ -288,6 +288,11 @@ check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$
 # GHSA-cr7q: search-object commands must not eval raw conf-field payloads
 check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
 	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
+# #438: never scope a name/path by the RAW session user — during impersonation
+# $_SESSION["user"] is still the admin (the customer is in "look"), so a strpos()
+# scope on it mis-targets the admin account. Use the look-aware $user/$user_plain.
+check_source_absent "no name-scoping by raw \$_SESSION[user] (#438 impersonation mis-target)" \
+	'strpos\([^,]*,[[:space:]]*\$_SESSION\["user"\]' "$HESTIA/web"
 # v-* compat symlinks must all resolve (no dangling alias left by a rename).
 check_v_symlinks_resolve
 # every h-* keeps its parsed # info: line (a comment sweep must not eat it).

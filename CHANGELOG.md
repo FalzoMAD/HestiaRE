@@ -372,6 +372,21 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Security
 
+- Impersonation ("login as") now **drops admin privilege** while acting as a
+  customer (#438). Previously `$_SESSION["userContext"]` stayed `"admin"` for the
+  whole impersonation, so every admin-only route (161 gates) remained reachable —
+  a same-origin script running in an impersonation session (the FM media handler
+  was one such path, #435) could drive admin endpoints. `userContext` is now the
+  **effective** (impersonated) role, so those gates refuse automatically; a new
+  durable `adminContext` holds the real logged-in role for the impersonation
+  controls and off-chain routes (`fm-auth.php`, download handlers). The session id
+  is **regenerated at both transitions** (enter and return), so an id captured
+  during impersonation cannot regain admin after return. `web/download/backup`
+  scoping was corrected to the effective user (it read the raw session user =
+  admin), and `h-check-sys-smoke` gains a static guard against that mis-target
+  idiom. Scope note: this shrinks the reachable surface; it does not draw a
+  privilege boundary (the panel process still runs as `hestia`), and impersonating
+  another **admin** account keeps admin — there is no boundary between admins.
 - File manager media handler — the inline-media allowlist gained a runtime guard
   that refuses any active `Content-Type` (svg/html/xml/script) even if one were
   ever added to the map (#432). Serving media from a separate origin was considered
