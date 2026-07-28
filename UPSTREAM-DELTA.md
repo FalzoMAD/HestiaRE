@@ -24,24 +24,36 @@ A point-in-time line-count/churn snapshot lives separately on the `docs` branch
 
 ## System-user model (the spine of deltas 1-6)
 
-Several deltas below are consequences of one decision: **who a process runs as**.
-Upstream ran the whole panel stack (UI + phpMyAdmin + webmail) as a single
-`hestiaweb` user, and served customer files through an `nginx` worker that could read
-them. HestiaRE splits by trust boundary:
+Several deltas below are consequences of one decision: **who a process runs as**. And
+there are always **two** users per concern - the **webserver** user (serves/proxies)
+and the **PHP-pool** user (executes PHP). Conflating them hides the actual isolation.
 
-| Concern | Upstream user | HestiaRE user | Access boundary |
+Upstream already split these: the bundled `hestia-nginx` webserver ran as `hestiaweb`,
+the panel UI's own PHP pool ran as `hestiaweb` (`upstream:src/deb/php/php-fpm.conf:13`,
+socket `/run/hestia-php.sock`), but the **phpMyAdmin / webmail PHP pool ran as a
+distinct `hestiamail`** (`upstream:install/deb/php-fpm/www.conf:9`, socket
+`/run/php/www.sock`) precisely to keep an app compromise off panel-owned files.
+HestiaRE keeps two users too, but **moves the axis of separation**: the privileged
+thing held apart is now the **panel PHP** (`hestia`), while the webserver and the app
+PHP pools all run as `caddy` - because app state (`/var/lib/roundcube` etc.) is
+`caddy`-owned, so pool-user == data-owner (fixes #234).
+
+| Concern | Upstream: web / PHP-pool | HestiaRE: web / PHP-pool | Access boundary |
 |---|---|---|---|
-| Panel UI (PHP) | `hestiaweb` | **`hestia`** | owns `/etc/hestia`, `/backup`; may `exec` h-*/v-* |
-| Panel webserver | `hestiaweb` (bundled nginx) | **`caddy`** (OS pkg) | cannot read customer files |
-| phpMyAdmin / Adminer | `hestiaweb` | **`caddy`** | app-login gated |
-| Roundcube / SnappyMail | `hestiaweb` | **`caddy`** | matches `caddy:caddy` app state (#234) |
-| Customer domains (PHP) | the customer | the customer | kernel UID = boundary |
-| File Manager (PHP) | `ROOT_USER` (in panel) | **the customer** | kernel UID = boundary (#419) |
+| Panel UI | `hestiaweb` / `hestiaweb` | `caddy` / **`hestia`** | `hestia` owns `/etc/hestia`, `/backup`; may `exec` h-*/v-* |
+| phpMyAdmin / Adminer | `hestiaweb` / **`hestiamail`** | `caddy` / `caddy` | app-login gated |
+| Roundcube / SnappyMail | `hestiaweb` / **`hestiamail`** | `caddy` / `caddy` | pool-user == `caddy:caddy` app state (#234) |
+| Customer domains | nginx/apache / **the customer** | nginx/apache / **the customer** | kernel UID |
+| File Manager | `hestiaweb` / `hestiaweb` (FileGator in-panel, `ROOT_USER` ctx) | loopback nginx/apache + `caddy` forward_auth / **the customer** | kernel UID (#419) |
 
-Rule of thumb for future work: **the panel FPM pool is `hestia`, everything Caddy
-proxies for apps is `caddy`, and anything touching a customer's files runs as that
-customer.** Ownership mismatches against this table are the source of several past
-bugs (#234, #441).
+The two upstream PHP users (`hestiaweb` panel, `hestiamail` apps) map onto HestiaRE's
+two (`hestia` panel, `caddy` apps); what changed is which side the webserver shares a
+user with (upstream: webserver == panel PHP; HestiaRE: webserver == app PHP).
+
+Rule of thumb for future work: **the panel FPM pool is `hestia`, the webserver and
+everything Caddy proxies for apps are `caddy`, and anything touching a customer's files
+runs as that customer.** Ownership mismatches against this table are the source of
+several past bugs (#234, #441).
 
 ---
 
@@ -86,9 +98,12 @@ customer multi-version PHP from **Sury apt** too (`upstream:install/hst-install-
 backend**: the `hestia-php` + `hestia-nginx` debs. So the real divergence is (a) the
 panel backend, and (b) the pool topology - not the customer PHP source.
 
-**Upstream.** One bundled panel pool `[www]` (`upstream:src/deb/php/php-fpm.conf`,
-`user=hestiaweb`, socket `/run/hestia-php.sock`). Panel UI, phpMyAdmin and webmail all
-run through that one `hestiaweb` pool. Customer domains get per-domain Sury pools.
+**Upstream.** Two panel-plane pools, already split by trust: the panel UI pool `[www]`
+as `hestiaweb` (`upstream:src/deb/php/php-fpm.conf:13`, socket `/run/hestia-php.sock`),
+and a **separate** phpMyAdmin/webmail pool `[www]` as `hestiamail`
+(`upstream:install/deb/php-fpm/www.conf:9`, socket `/run/php/www.sock`) - so an app
+compromise cannot reach panel-owned files. Customer domains get per-domain Sury pools
+as the customer.
 
 **HestiaRE.** Sury repo factored into one idempotent helper `add_sury_repo <codename>`
 (`func/helper.sh:55-74`), called by both wizard-discovery (`func/wizard.sh:267`) and
@@ -110,11 +125,13 @@ into **five** on that one `hestia` master:
 Plus per-customer pools on the **customer** PHP (`share/php-fpm/multiphp.tpl`,
 `user=%user%`) and the FM pool (delta 5).
 
-**Why.** Isolate by trust boundary (see the system-user table): the panel keeps
-`exec` (its php.ini disables only `pcntl_*`, `share/panel-php/fpm/php.ini:16`), apps
-and webmail run as `caddy` to match `caddy:caddy` data ownership (fixes #234), and the
-panel gets `env[HESTIA]=/usr/local/hestia` as a **literal** because php-fpm wipes the
-master env (a bare `$HESTIA` expands empty -> 502).
+**Why.** Isolate by trust boundary (see the system-user table). Upstream already
+separated the app PHP pool (`hestiamail`) from the panel; HestiaRE keeps the split but
+draws the line around the **panel** pool: `panel` runs as `hestia` and keeps `exec`
+(its php.ini disables only `pcntl_*`, `share/panel-php/fpm/php.ini:16`), while apps and
+webmail run as `caddy` to match `caddy:caddy` data ownership (fixes #234). The panel
+gets `env[HESTIA]=/usr/local/hestia` as a **literal** because php-fpm wipes the master
+env (a bare `$HESTIA` expands empty -> 502).
 
 **Follow-on.**
 - One `hestia` master hosts five co-tenant pools sharing **one** curated `conf.d`
@@ -173,12 +190,14 @@ as the File Manager). Streaming from the `hestia`-owned pool keeps it contained
 
 **Premise correction.** There is **no** discrete `hestia-mail` systemd service in
 either tree (`git grep hestia-mail` is empty upstream). The removed artifact is the
-`hestiamail`/`hestiaweb` **system-user** model plus www-data-served webmail vhosts
-(#214, `CHANGELOG.md:448,464`). State it as user-model + serving-model, not a service.
+`hestiamail`/`hestiaweb` **system-user** model (#214, `CHANGELOG.md:448,464`) - state
+it as user-model + serving-model, not a service.
 
-**Upstream.** Webmail served by the **customer web stack**: per-mail-domain
-`webmail.<domain>` vhosts with a docroot at `/var/lib/roundcube` etc., executed as
-`www-data`.
+**Upstream.** Webmail vhosts with a docroot at `/var/lib/roundcube` etc.; the PHP runs
+on the dedicated **`hestiamail`** pool (`upstream:install/deb/php-fpm/www.conf:9`,
+socket `/run/php/www.sock`), a distinct user from the `hestiaweb` panel - not a
+customer `www-data` pool. (`v-add-sys-roundcube` chowns the app tree
+`hestiamail:www-data`.)
 
 **HestiaRE.** Two Caddy **loopback listeners**, each backed by a `caddy` FPM pool:
 Roundcube `http://:8090 bind 127.0.0.1` -> `/run/hestia-webmail-rc.sock`
