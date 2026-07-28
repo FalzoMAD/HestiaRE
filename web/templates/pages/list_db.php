@@ -6,7 +6,7 @@ if (!empty($_SESSION["DB_PMA_ALIAS"])) {
 	$db_myadmin_link = "//" . $http_host . "/" . $_SESSION["DB_PMA_ALIAS"] . "/";
 }
 // Adminer (the PostgreSQL UI) is served by the Panel-Caddy on the panel origin at
-// a fixed /adminer/ route — not via the customer-domain proxy phpMyAdmin uses — so
+// a fixed /adminer/ route - not via the customer-domain proxy phpMyAdmin uses - so
 // it is linked panel-relative. Shown only when the addon is installed
 // (DB_ADMINER_ALIAS marker, set by h-add-sys-adminer).
 $db_adminer_link = "/" . (!empty($_SESSION["DB_ADMINER_ALIAS"]) ? $_SESSION["DB_ADMINER_ALIAS"] : "adminer") . "/";

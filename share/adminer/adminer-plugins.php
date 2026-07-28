@@ -11,11 +11,11 @@
  *
  * We load ONLY the login-servers plugin, pinned to the LOCAL server. This turns
  * the login form's free-text "Server" field into a fixed dropdown of localhost
- * entries — so the panel's Adminer cannot be pointed at an arbitrary remote host
+ * entries - so the panel's Adminer cannot be pointed at an arbitrary remote host
  * (SSRF hardening, #350). Username/password login is unchanged; there is no SSO
- * (out of scope by decision — the regular DB login is enough for this niche).
+ * (out of scope by decision - the regular DB login is enough for this niche).
  *
- * This is HestiaRE configuration, not vendored upstream code — the plugin class
+ * This is HestiaRE configuration, not vendored upstream code - the plugin class
  * it instantiates (adminer-plugins/login-servers.php) is the vendored artifact.
  */
 

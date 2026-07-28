@@ -690,7 +690,7 @@ update_user_value() {
 		# Rewrite the line in place with 'c' (change). The old delete+insert lost a
 		# key that sat on the LAST line: after deleting line $lnr the file was
 		# $lnr-1 long, so "insert before $lnr" addressed past EOF and silently wrote
-		# nothing — the value just vanished (#433). 'c' rewrites any line, last
+		# nothing - the value just vanished (#433). 'c' rewrites any line, last
 		# included, and (unlike 's') has no delimiter that a value could contain.
 		sed -i "${lnr}c\\$key='${3}'" $CONF_DIR/users/$1/user.conf
 	fi
@@ -1176,7 +1176,7 @@ is_cron_command_valid_format() {
 	if [[ ! "$1" =~ ^[^\`]*?$ ]]; then
 		check_result "$E_INVALID" "Invalid cron command format"
 	fi
-	# A crontab CMD field is a single line — reject embedded newlines so a value
+	# A crontab CMD field is a single line - reject embedded newlines so a value
 	# cannot inject an extra crontab entry (GHSA-5fpv). Semicolons are allowed:
 	# they are legitimate in cron commands (multiple commands on one line).
 	is_no_new_line_format "$1"
@@ -1408,13 +1408,13 @@ is_password_format_valid() {
 	fi
 }
 # Curated login-shell allowlist (#412): one source for the panel (h-list-sys-shells)
-# and the validator (is_format_valid_shell). Dropped rssh — gone from Debian since
+# and the validator (is_format_valid_shell). Dropped rssh - gone from Debian since
 # bullseye, it selects a missing binary and silently acts like nologin. screen/tmux/
 # dash/rbash dropped too. Existing off-list shells are kept (rebuild.sh), not offered.
 HESTIA_SHELL_ALLOWLIST="nologin jailbash bash sh"
 
 # Emit the effective shells: allowlist ∩ /etc/shells, one basename per line, ladder
-# order. nologin is emitted unconditionally — it is the default shell of every new
+# order. nologin is emitted unconditionally - it is the default shell of every new
 # user, so it must stay assignable even if /etc/shells has not been seeded yet.
 list_allowed_shells() {
 	local allow
@@ -1797,7 +1797,7 @@ manage_sshd_allowusers() {
 	[ -f "$config" ] || return 0
 
 	# First managed AllowUsers line (commented or active); none -> nothing to maintain.
-	# The '#' must sit DIRECTLY on the keyword (#AllowUsers) — that is sshd's own
+	# The '#' must sit DIRECTLY on the keyword (#AllowUsers) - that is sshd's own
 	# commented-directive form. We must NOT match a prose line like "# AllowUsers is a
 	# login allowlist ..." (space after the #), or we would tokenise the sentence and
 	# append the user to it, mangling the comment and never touching the real directive.
@@ -1832,7 +1832,7 @@ manage_sshd_allowusers() {
 	# lockout guard: never leave an ACTIVE AllowUsers with zero tokens
 	if [ -z "$prefix" ] && [ "${#kept[@]}" -eq 0 ]; then
 		prefix='#'
-		echo "WARNING: AllowUsers would be empty and active — re-commented to avoid lockout."
+		echo "WARNING: AllowUsers would be empty and active - re-commented to avoid lockout."
 	fi
 
 	local newline="${prefix}AllowUsers"
@@ -1846,7 +1846,7 @@ manage_sshd_allowusers() {
 	newline_env="$newline" awk -v n="$lineno" \
 		'NR==n{print ENVIRON["newline_env"]; next} {print}' "$config" > "$tmp"
 	if ! /usr/sbin/sshd -t -f "$tmp" > /dev/null 2>&1; then
-		echo "WARNING: sshd rejected the AllowUsers update — left unchanged."
+		echo "WARNING: sshd rejected the AllowUsers update - left unchanged."
 		rm -f "$tmp"
 		return 0
 	fi

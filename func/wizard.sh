@@ -2,7 +2,7 @@
 
 # ======================================================== #
 #
-# HestiaRE Installer — Interactive Configuration Wizard
+# HestiaRE Installer - Interactive Configuration Wizard
 #
 # Manifest-driven whiptail (with bash fallback) Q&A that writes the install
 # recipe to $CONF_DIR/install.conf. Called by install.sh after the release
@@ -29,7 +29,7 @@ MANIFEST="${INSTALL_DIR}/share/manifest.json"
 LOG_DIR="/var/log/hestia"
 
 # Shared install-time helpers (add_sury_repo, …). Sourcing only defines
-# functions — no side effects — so it is safe in the standalone wizard too.
+# functions - no side effects - so it is safe in the standalone wizard too.
 # shellcheck source=func/helper.sh
 [ -f "${INSTALL_DIR}/func/helper.sh" ] && . "${INSTALL_DIR}/func/helper.sh"
 
@@ -122,7 +122,7 @@ fn_manifest_load() {
 }
 
 # ════════════════════════════════════════════════════════════
-# TUI helpers — whiptail with bash fallback
+# TUI helpers - whiptail with bash fallback
 # ════════════════════════════════════════════════════════════
 
 _wt_inputbox() {
@@ -246,7 +246,7 @@ fn_ask_preset() {
         }
         if [ "$INSTALL_PROFILE" = "custom" ]; then
             FASTTRACK_PRESET=""
-            echo "[ * ] Preset 'custom' — full interactive configuration (no defaults)"
+            echo "[ * ] Preset 'custom' - full interactive configuration (no defaults)"
             return
         fi
         echo "[ * ] Fasttrack preset: $INSTALL_PROFILE"
@@ -255,7 +255,7 @@ fn_ask_preset() {
     local -a items=()
     while IFS=$'\t' read -r key label; do items+=("$key" "$label"); done \
         < <(mq '.presets | to_entries[] | [.key, .value.label] | @tsv')
-    INSTALL_PROFILE=$(_wt_menu "HestiaRE — Preset" "Select installation preset:" "${items[@]}")
+    INSTALL_PROFILE=$(_wt_menu "HestiaRE - Preset" "Select installation preset:" "${items[@]}")
     [ -n "$INSTALL_PROFILE" ] || { echo "ERROR: No preset selected." >&2; exit 1; }
 }
 
@@ -270,7 +270,7 @@ fn_discover_php_versions() {
     # Same canonical repo definition the installer's base stage writes, so the
     # later apt-get update in h-install-hestia does not see a conflicting entry.
     if ! command -v add_sury_repo >/dev/null 2>&1 || ! add_sury_repo "$codename"; then
-        echo "[ ! ] Sury repo setup failed — using built-in PHP version list" >&2
+        echo "[ ! ] Sury repo setup failed - using built-in PHP version list" >&2
         PHP_VERSIONS_AVAILABLE="8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6"
         echo "[ * ] Available PHP versions: $PHP_VERSIONS_AVAILABLE"
         return 0
@@ -281,7 +281,7 @@ fn_discover_php_versions() {
         | grep -oE '[0-9]+\.[0-9]+' \
         | sort -Vr | uniq | tr '\n' ' ' | sed 's/ $//' || true)
     [ -n "$PHP_VERSIONS_AVAILABLE" ] || {
-        echo "[ ! ] Sury version discovery failed — using built-in fallback list" >&2
+        echo "[ ! ] Sury version discovery failed - using built-in fallback list" >&2
         PHP_VERSIONS_AVAILABLE="8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6"
     }
     echo "[ * ] Available PHP versions: $PHP_VERSIONS_AVAILABLE"
@@ -309,7 +309,7 @@ fn_pre_discovery() {
 }
 
 # ════════════════════════════════════════════════════════════
-# default_rule — PHP version selection
+# default_rule - PHP version selection
 # ════════════════════════════════════════════════════════════
 
 fn_apply_default_rule() {
@@ -379,7 +379,7 @@ fn_tools_default_for_preset() {
 
 _ask_radio() {
     local id="$1" question="$2" default_val="$3"
-    # options: plain strings or { value, label, description }; store .value, show "label — description"
+    # options: plain strings or { value, label, description }; store .value, show "label - description"
     local -a items=()
     local value text
     while IFS=$'\t' read -r value text; do
@@ -390,10 +390,10 @@ _ask_radio() {
         | if type=="object" then
             [ .value,
               ((.label // .value)
-               + (if (.description // "") != "" then "  —  " + .description else "" end)) ]
+               + (if (.description // "") != "" then "  -  " + .description else "" end)) ]
           else [ ., . ] end
         | @tsv')
-    COMP_VALUES["$id"]=$(_wt_radiolist "HestiaRE — $id" "$question" "${items[@]}")
+    COMP_VALUES["$id"]=$(_wt_radiolist "HestiaRE - $id" "$question" "${items[@]}")
 }
 
 _ask_checkbox() {
@@ -401,7 +401,7 @@ _ask_checkbox() {
     local state="OFF"; [ "$default_val" = "true" ] && state="ON"
     if [ "$HAS_WHIPTAIL" = true ]; then
         local result
-        result=$(whiptail --title "HestiaRE — $id" --checklist "$question" 10 60 1 "$id" "" "$state" 3>&1 1>&2 2>&3 3>&- || true)
+        result=$(whiptail --title "HestiaRE - $id" --checklist "$question" 10 60 1 "$id" "" "$state" 3>&1 1>&2 2>&3 3>&- || true)
         echo "$result" | grep -q "$id" && COMP_VALUES["$id"]="true" || COMP_VALUES["$id"]="false"
     else
         local yn_default; [ "$state" = "ON" ] && yn_default="y" || yn_default="n"
@@ -435,7 +435,7 @@ _ask_checklist() {
             readarray -t default_opts < <(echo "$default_val" | jq -r '.[]?' 2>/dev/null || echo "$default_val" | tr ' ' '\n')
         fi
     fi
-    # reference PHP is always installed by the installer — keep it out of the checklist, show a note
+    # reference PHP is always installed by the installer - keep it out of the checklist, show a note
     local text="$question"
     if [ "$dynamic_source" = "sury_repo_metadata" ]; then
         local ref; ref=$(mq '.components.PANEL_PHP.reference_version // empty')
@@ -451,7 +451,7 @@ _ask_checklist() {
         local state="OFF"; for d in "${default_opts[@]}"; do [ "$d" = "$opt" ] && state="ON" && break; done
         items+=("$opt" "$opt" "$state")
     done
-    local selected; selected=$(_wt_checklist "HestiaRE — $id" "$text" "${items[@]}")
+    local selected; selected=$(_wt_checklist "HestiaRE - $id" "$text" "${items[@]}")
     COMP_VALUES["$id"]=$(fn_normalize_list "$selected")
 }
 
@@ -479,7 +479,7 @@ _ask_version_select() {
         fi
         items+=("$display_val" "$display_label" "$state")
     done < <(mq --arg id "$id" '.components[$id].options[] | [.value, .source, (.label_template // ""), (.description // "")] | join("\u001f")')
-    local _sel; _sel=$(_wt_radiolist "HestiaRE — $id" "$question" "${items[@]}")
+    local _sel; _sel=$(_wt_radiolist "HestiaRE - $id" "$question" "${items[@]}")
     # map the OS-default pick back to __os__ (a bare number would force the external
     # repo): any selection not in the external version values is the OS-default row
     if [ "$has_os" -eq 1 ] && [ -n "$_sel" ]; then
@@ -503,7 +503,7 @@ _ask_tools_selection() {
         local state="OFF"; for d in "${default_tools[@]}"; do [ "$d" = "$opt" ] && state="ON" && break; done
         items+=("$opt" "$opt" "$state")
     done
-    local _sel; _sel=$(_wt_checklist "HestiaRE — Tools" "$question" "${items[@]}")
+    local _sel; _sel=$(_wt_checklist "HestiaRE - Tools" "$question" "${items[@]}")
     TOOLS_SELECTION=$(fn_normalize_list "$_sel")
 }
 
@@ -569,7 +569,7 @@ fn_ask_group_checklist() {
     done
     [ ${#shown[@]} -gt 0 ] || return 0
     local question; question=$(mq --arg g "$group" '.group_questions[$g] // ("Select: " + $g)')
-    local selected; selected=" $(fn_normalize_list "$(_wt_checklist "HestiaRE — $group" "$question" "${items[@]}")") "
+    local selected; selected=" $(fn_normalize_list "$(_wt_checklist "HestiaRE - $group" "$question" "${items[@]}")") "
     for id in "${shown[@]}"; do COMP_VALUES["$id"]="false"; done
     local lbl
     for lbl in "${!lbl2id[@]}"; do
@@ -658,7 +658,7 @@ fn_write_install_conf() {
     local ids=(); readarray -t ids < <(mq '.components | keys_unsorted[]')
     {
         echo "# HestiaRE install.conf"
-        echo "# Written by func/wizard.sh — do not edit manually."
+        echo "# Written by func/wizard.sh - do not edit manually."
         echo "# Re-run the wizard to change parameters."
         echo ""
         echo "HESTIA_HOSTNAME=\"${HESTIA_HOSTNAME}\""

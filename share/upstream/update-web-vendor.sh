@@ -22,7 +22,7 @@
 # --fetch works per asset: downloads exactly one project at the given (or
 # latest) version, verifies publisher hashes where available (npm integrity,
 # GitHub release digest), applies the FA webfont-path rewrite and commits the
-# result to the asset's upstream/* branch — one commit per asset. Adoption
+# result to the asset's upstream/* branch - one commit per asset. Adoption
 # into dev happens separately via merge/cherry-pick + PR, never here.
 #
 # Dependencies: bash, git, curl, jq, tar, unzip, sha256sum, sha512sum, base64
@@ -55,7 +55,7 @@ latest_version() {
 	case "$1" in
 		alpinejs) api "https://registry.npmjs.org/alpinejs/latest" | jq -r '.version' ;;
 		fontawesome) api "https://api.github.com/repos/FortAwesome/Font-Awesome/releases/latest" | jq -r '.tag_name' ;;
-		# no GitHub releases upstream, only tags — highest version wins
+		# no GitHub releases upstream, only tags - highest version wins
 		normalize-css) api "https://api.github.com/repos/necolas/normalize.css/tags?per_page=100" \
 			| jq -r '.[].name | ltrimstr("v")' | sort -V | tail -1 ;;
 		adminer) api "https://api.github.com/repos/vrana/adminer/releases/latest" | jq -r '.tag_name | ltrimstr("v")' ;;
@@ -126,7 +126,7 @@ commit_snapshot() {
 	local asset=$1 version=$2 branch=$3
 	git -C "$WT" add -A
 	if git -C "$WT" diff --cached --quiet; then
-		echo "$asset $version: snapshot identical to $branch — nothing to commit."
+		echo "$asset $version: snapshot identical to $branch - nothing to commit."
 		return 0
 	fi
 	git -C "$WT" commit -qm "upstream: $asset artifacts snapshot $version"
@@ -153,7 +153,7 @@ fetch_alpinejs() {
 	sha1=$(file_sha256 "$dir/alpinejs.min.js")
 	sha2=$(file_sha256 "$dir/alpinejs-collapse.min.js")
 	cat > "$dir/VERSIONS.md" << EOF
-# Vendored artifacts — Alpine.js project (alpinejs/alpine monorepo)
+# Vendored artifacts - Alpine.js project (alpinejs/alpine monorepo)
 
 Branch \`$branch\`: READ ONLY snapshot of the published build artifacts,
 laid out in HestiaRE target structure for direct merge/cherry-pick into dev.
@@ -165,7 +165,7 @@ Update via src/update-web-vendor.sh (--fetch alpinejs[@version]).
 | alpinejs-collapse.min.js | @alpinejs/collapse | $version | $tb2 (dist/cdn.min.js) | $sha2 |
 
 License: MIT (LICENSE-alpinejs.md, from https://github.com/alpinejs/alpine v$version).
-Note: the GitHub repo commits no dist files and attaches no release assets —
+Note: the GitHub repo commits no dist files and attaches no release assets -
 the npm registry tarball is the project's official publish artifact.
 EOF
 	commit_snapshot "alpinejs" "$version" "$branch"
@@ -184,7 +184,7 @@ fetch_normalize() {
 		|| fail "downloaded normalize.css does not carry version banner v$version"
 	sha=$(file_sha256 "$dir/normalize.css")
 	cat > "$dir/VERSIONS.md" << EOF
-# Vendored artifacts — normalize.css (necolas/normalize.css)
+# Vendored artifacts - normalize.css (necolas/normalize.css)
 
 Branch \`$branch\`: READ ONLY snapshot of the upstream file,
 laid out in HestiaRE target structure for direct merge/cherry-pick into dev.
@@ -195,7 +195,7 @@ Update via src/update-web-vendor.sh (--fetch normalize-css[@version]).
 | normalize.css | $version | $raw/normalize.css | $sha |
 
 License: MIT (LICENSE-normalize.md, from the same tag).
-Note: upstream is finished software — last release 2018; expect no updates.
+Note: upstream is finished software - last release 2018; expect no updates.
 EOF
 	commit_snapshot "normalize-css" "$version" "$branch"
 	close_worktree
@@ -226,7 +226,7 @@ fetch_fontawesome() {
 	cp "$TMP/fa/fontawesome-free-$version-web/LICENSE.txt" "$dir/LICENSE.txt"
 	cp "$TMP/fa/fontawesome-free-$version-web/webfonts/fa-solid-900.woff2" "$WT/web/webfonts/fa-solid-900.woff2"
 	cat > "$dir/VERSIONS.md" << EOF
-# Vendored artifacts — Font Awesome Free (FortAwesome/Font-Awesome)
+# Vendored artifacts - Font Awesome Free (FortAwesome/Font-Awesome)
 
 Branch \`$branch\`: READ ONLY snapshot of the official release
 artifact contents, laid out in HestiaRE target structure for direct
@@ -243,7 +243,7 @@ Artifact sha256: ${digest:-"(no digest published for this release)"}
 | solid.css | $version | ../webfonts/ -> /webfonts/ | $(file_sha256 "$dir/solid.css") |
 | fa-solid-900.woff2 | $version | none (byte-identical to webfonts/fa-solid-900.woff2) | $(file_sha256 "$WT/web/webfonts/fa-solid-900.woff2") |
 
-License: CC BY 4.0 (icons) / SIL OFL 1.1 (fonts) / MIT (CSS code) — LICENSE.txt
+License: CC BY 4.0 (icons) / SIL OFL 1.1 (fonts) / MIT (CSS code) - LICENSE.txt
 from the same artifact.
 Scope: Solid style only. The panel uses .fas exclusively (grep-verified);
 regular/brands CSS and webfonts are intentionally not vendored (YAGNI).
@@ -254,9 +254,9 @@ EOF
 
 fetch_adminer() {
 	local version=$1 branch="upstream/adminer" dir release digest url asset sha
-	# EN build, all drivers — the official pre-built single-file release asset.
+	# EN build, all drivers - the official pre-built single-file release asset.
 	# (There is no prebuilt pgsql-only asset; the full build is vendored and
-	# positioned as the Postgres UI — see VENDORED.json / #350.)
+	# positioned as the Postgres UI - see VENDORED.json / #350.)
 	asset="adminer-$version-en.php"
 	release=$(api "https://api.github.com/repos/vrana/adminer/releases/tags/v$version")
 	url=$(echo "$release" | jq -r --arg n "$asset" '.assets[] | select(.name == $n) | .browser_download_url')
@@ -273,7 +273,7 @@ fetch_adminer() {
 		"https://raw.githubusercontent.com/vrana/adminer/v$version/LICENSE"
 	sha=$(file_sha256 "$dir/adminer.php")
 	cat > "$dir/VERSIONS.md" << EOF
-# Vendored artifact — Adminer (vrana/adminer)
+# Vendored artifact - Adminer (vrana/adminer)
 
 Branch \`$branch\`: READ ONLY snapshot of the official release asset,
 laid out in HestiaRE target structure for direct merge/cherry-pick into dev.
@@ -288,7 +288,7 @@ Artifact sha256: ${digest:-"(no digest published for this release)"}
 | adminer.php | $version | none (byte-identical to $asset) | $sha |
 
 License: Apache-2.0 OR GPL-2.0 (LICENSE-adminer.txt, from the same tag).
-Canonical source: vrana/adminer (5.x) — NOT AdminerEvo (repo closed/dead) or
+Canonical source: vrana/adminer (5.x) - NOT AdminerEvo (repo closed/dead) or
 AdminNeo (sidebranch). EN build, all drivers; phpMyAdmin stays the MySQL default.
 EOF
 	commit_snapshot "adminer" "$version" "$branch"
@@ -305,7 +305,7 @@ fetch_bootstrap_css() {
 		"https://raw.githubusercontent.com/twbs/bootstrap/v$version/LICENSE" || true
 	sha=$(file_sha256 "$dir/bootstrap.min.css")
 	cat > "$dir/VERSIONS.md" << EOF
-# Vendored artifact — Bootstrap CSS (twbs/bootstrap)
+# Vendored artifact - Bootstrap CSS (twbs/bootstrap)
 
 Branch \`$branch\`: READ ONLY snapshot of the published dist CSS,
 laid out in HestiaRE target structure for direct merge/cherry-pick into dev.
@@ -317,7 +317,7 @@ Source: $tb (dist/css/bootstrap.min.css)
 |---|---|---|---|
 | bootstrap.min.css | $version | none (byte-identical to the npm dist CSS) | $sha |
 
-License: MIT (LICENSE-bootstrap.txt). Only the CSS is shipped — the Bootstrap JS
+License: MIT (LICENSE-bootstrap.txt). Only the CSS is shipped - the Bootstrap JS
 bundle is intentionally NOT vendored (the FM replaces it with vanilla JS + a shim).
 EOF
 	commit_snapshot "bootstrap-css" "$version" "$branch"
@@ -350,7 +350,7 @@ fetch_prismjs() {
 		"https://raw.githubusercontent.com/PrismJS/prism/v$version/LICENSE" || true
 	sha_js=$(file_sha256 "$dir/js/prism.js")
 	cat > "$dir/VERSIONS.md" << EOF
-# Vendored artifact — PrismJS (PrismJS/prism), combined build
+# Vendored artifact - PrismJS (PrismJS/prism), combined build
 
 Branch \`$branch\`: READ ONLY snapshot, laid out in HestiaRE target structure.
 Update via share/upstream/update-web-vendor.sh (--fetch prismjs[@version]).
@@ -372,7 +372,7 @@ EOF
 
 fetch_tinyfilemanager() {
 	local version=$1 branch="upstream/tinyfilemanager" dir sha
-	# The PRISTINE upstream single file — the diff reference for HestiaRE's fork in dev
+	# The PRISTINE upstream single file - the diff reference for HestiaRE's fork in dev
 	# (share/filemanager/fm/index.php). NOT the shipped app.
 	open_worktree "$branch"
 	dir="$WT/share/filemanager/fm"
@@ -384,13 +384,13 @@ fetch_tinyfilemanager() {
 		"https://raw.githubusercontent.com/prasathmani/tinyfilemanager/$version/LICENSE" || true
 	sha=$(file_sha256 "$dir/index.php")
 	cat > "$dir/VERSIONS.md" << EOF
-# Vendored artifact — TinyFileManager (prasathmani/tinyfilemanager)
+# Vendored artifact - TinyFileManager (prasathmani/tinyfilemanager)
 
 Branch \`$branch\`: READ ONLY snapshot of the PRISTINE upstream single file.
 Update via share/upstream/update-web-vendor.sh (--fetch tinyfilemanager[@version]).
 
 This is the diff reference only. The shipped app in dev
-(share/filemanager/fm/index.php) is a MAINTAINED FORK of this baseline — see
+(share/filemanager/fm/index.php) is a MAINTAINED FORK of this baseline - see
 share/filemanager/fm/LICENSE-tinyfilemanager.md and VENDORED.json. Compare with:
   git diff $branch..dev -- share/filemanager/fm/index.php
 
@@ -409,11 +409,11 @@ EOF
 # ── modes ──────────────────────────────────────────────────
 
 # Gate (#434): the maintained TinyFileManager fork must carry NO external http(s)
-# resource references — the whole diet is "everything vendored" (GDPR/offline/CSP).
+# resource references - the whole diet is "everything vendored" (GDPR/offline/CSP).
 # A stray one (like the Google/MS doc-viewer iframes caught in #435) must fail here
 # instead of surviving on a human noticing. Comment lines and SVG xmlns namespaces
 # are not references; the app's own project/help nav links (clickable, not loaded)
-# are allowlisted — extend the allowlist deliberately if a new one is ever added.
+# are allowlisted - extend the allowlist deliberately if a new one is ever added.
 check_fm_external_refs() {
 	local f="$REPO_ROOT/share/filemanager/fm/index.php" hits
 	[ -f "$f" ] || return 0
@@ -421,7 +421,7 @@ check_fm_external_refs() {
 		| grep -vE '^[0-9]+:[[:space:]]*(//|#|\*)' \
 		| grep -vE 'w3\.org|schemas\.|tinyfilemanager\.github\.io|github\.com/prasathmani')
 	if [ -n "$hits" ]; then
-		printf '%-16s %-10s %-10s %s\n' "fm-ext-refs" "-" "-" "FAIL — external ref(s):"
+		printf '%-16s %-10s %-10s %s\n' "fm-ext-refs" "-" "-" "FAIL - external ref(s):"
 		echo "$hits" | sed 's/^/    /'
 		echo "  (diet = vendor everything; if this is a NEW allowed link, extend the allowlist in check_fm_external_refs)"
 		return 1

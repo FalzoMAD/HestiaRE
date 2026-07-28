@@ -342,7 +342,7 @@ function authenticate_user($user, $password, $twofa = "") {
 				$_SESSION["LAST_ACTIVITY"] = time();
 
 				// Define user role / context. adminContext is the DURABLE real role
-				// (#438) — the source of truth for "is this operator an admin". It is
+				// (#438) - the source of truth for "is this operator an admin". It is
 				// never lowered by impersonation; userContext becomes the *effective*
 				// role (see the look set/unset points and inc/main.php).
 				$_SESSION["userContext"] = $data[$user]["ROLE"];

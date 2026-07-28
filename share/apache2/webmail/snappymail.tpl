@@ -21,7 +21,7 @@
 
     # SnappyMail is rendered by the Panel-Caddy listener on 127.0.0.1:8091
     # (share/panel-caddy/webmail-snappymail.conf). This vhost only reverse-proxies
-    # to it — no local docroot, so the caddy-owned /var/lib/snappymail (and its
+    # to it - no local docroot, so the caddy-owned /var/lib/snappymail (and its
     # /data) is never served by apache/www-data (#205). Needs mod_proxy_http
     # (enabled at install). With nginx in front this vhost is inert; it is the
     # public entrypoint only in the apache-only profile.

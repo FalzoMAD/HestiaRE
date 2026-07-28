@@ -173,10 +173,10 @@ if (is_readable($config_file)) {
 define('ACE_FONTSIZE', isset($ace_fontsize) ? $ace_fontsize : 12);
 define('ACE_THEME', isset($ace_theme) ? $ace_theme : 'textmate');
 
-// Front-end assets. HestiaRE serves everything same-origin (no external CDN — GDPR,
+// Front-end assets. HestiaRE serves everything same-origin (no external CDN - GDPR,
 // offline installs, panel CSP): local files come from the private FM listener under
 // /fm/assets, and shared libraries (Bootstrap-CSS excepted) are referenced by their
-// ABSOLUTE panel path since the FM is same-origin with the panel (:8083/fm/) — so
+// ABSOLUTE panel path since the FM is same-origin with the panel (:8083/fm/) - so
 // FontAwesome and AlpineJS are the very files the panel already ships, and a panel
 // update carries straight through with no copy here (#218 P1, §10.4).
 $external = array(
@@ -217,7 +217,7 @@ $report_errors = isset($cfg->data['error_reporting']) ? $cfg->data['error_report
 // Hide Permissions and Owner cols in file-listing
 $hide_Cols = isset($cfg->data['hide_Cols']) ? $cfg->data['hide_Cols'] : true;
 
-// Theme — driven by the customer's panel setting (#218 S2). fm-auth.php reads the
+// Theme - driven by the customer's panel setting (#218 S2). fm-auth.php reads the
 // panel session theme and returns it as X-Hestia-Theme, which Caddy copies onto the
 // proxied request. Panel theme names are light*/dark* families; Bootstrap's
 // data-bs-theme only knows light|dark, so anything starting "dark" maps to dark.
@@ -974,8 +974,8 @@ if (isset($_GET['dl'], $_POST['token'])) {
     }
 }
 
-// Inline media stream (#218). The customer home is NOT under the web root — the
-// private FM listener serves the code dir — so <img>/<audio>/<video> in the view
+// Inline media stream (#218). The customer home is NOT under the web root - the
+// private FM listener serves the code dir - so <img>/<audio>/<video> in the view
 // page cannot point at a raw file URL. They point here instead and we stream the
 // file through PHP. No token: this is a GET reached through Caddy's forward_auth,
 // so the session is already proven (same gate as rendering the view page itself).
@@ -990,11 +990,11 @@ if (isset($_GET['media'])) {
         }
         // The FM is same-origin with the panel (:8083), so this streams
         // customer-controlled bytes on the panel origin. The Content-Type is
-        // therefore decided ONLY by a server-side extension allowlist — never
+        // therefore decided ONLY by a server-side extension allowlist - never
         // from the file content (finfo) or the client. A content-sniffed
         // image/svg+xml or text/html would execute script under the panel
         // session (and in an admin's own context when viewing via "login as").
-        // Anything not on the allowlist — SVG included — is forced to download.
+        // Anything not on the allowlist - SVG included - is forced to download.
         $inline_types = array(
             'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
             'gif' => 'image/gif', 'webp' => 'image/webp', 'bmp' => 'image/bmp',
@@ -1014,11 +1014,11 @@ if (isset($_GET['media'])) {
         header("Content-Security-Policy: default-src 'none'; sandbox");
         header('Content-Length: ' . filesize($full));
         // INVARIANT (#432): $inline_types must map ONLY to inert types (raster
-        // image / audio / video). Never add svg/html/xhtml/xml/js — those execute
+        // image / audio / video). Never add svg/html/xhtml/xml/js - those execute
         // in the panel origin (the FM is same-origin with :8083). This guard makes
         // the invariant self-enforcing: even if an active type slips into the map,
         // the file is downloaded, never rendered. (Serving media from a separate
-        // origin was considered and rejected — it would force a DNS record on every
+        // origin was considered and rejected - it would force a DNS record on every
         // install; with the allowlist + nosniff + CSP sandbox it is not needed.)
         if (isset($inline_types[$ext_l]) && !preg_match('~(svg|html|xml|script)~i', $inline_types[$ext_l])) {
             header('Content-Type: ' . $inline_types[$ext_l]);
@@ -1553,7 +1553,7 @@ if (isset($_GET['upload']) && !FM_READONLY) {
             function setError(row, msg) {
                 var bar = row.querySelector('.progress-bar');
                 if (bar) bar.classList.add('bg-danger');
-                row.querySelector('.small').innerHTML += ' — <span class="text-danger">' + msg + '</span>';
+                row.querySelector('.small').innerHTML += ' - <span class="text-danger">' + msg + '</span>';
             }
             function setDone(row) {
                 var bar = row.querySelector('.progress-bar');
@@ -1561,7 +1561,7 @@ if (isset($_GET['upload']) && !FM_READONLY) {
             }
             function upload(file, rel) {
                 rel = rel || file.webkitRelativePath || file.name;
-                if (!accepted(file.name)) { addRow(rel + ' — <span class="text-danger">not allowed</span>'); return; }
+                if (!accepted(file.name)) { addRow(rel + ' - <span class="text-danger">not allowed</span>'); return; }
                 var total = Math.max(1, Math.ceil(file.size / CHUNK));
                 var row = addRow(rel);
                 var idx = 0;
@@ -1887,7 +1887,7 @@ if (isset($_GET['view'])) {
     fm_show_nav_path(FM_PATH); // current path
 
     $file_url = FM_ROOT_URL . fm_convert_win((FM_PATH != '' ? '/' . FM_PATH : '') . '/' . $file);
-    // Media (img/audio/video/open) streams through PHP — the home isn't web-served (#218).
+    // Media (img/audio/video/open) streams through PHP - the home isn't web-served (#218).
     $media_url = FM_SELF_URL . '?p=' . urlencode(FM_PATH) . '&media=' . urlencode($file);
     $file_path = $path . '/' . $file;
 
@@ -2016,7 +2016,7 @@ if (isset($_GET['view'])) {
             </div>
             <div class="row mt-3">
                 <?php
-                // (Online third-party doc viewer removed in #218 hardening — see
+                // (Online third-party doc viewer removed in #218 hardening - see
                 // $online_viewer above. Unpreviewable docs just offer Download.)
                 if ($is_zip) {
                     // ZIP content
@@ -2036,7 +2036,7 @@ if (isset($_GET['view'])) {
                 } elseif ($is_image) {
                     // Image content. SVG is intentionally absent: the media handler
                     // streams it as a download (never image/svg+xml inline), so an
-                    // <img> would only show broken — offer Download instead (#218).
+                    // <img> would only show broken - offer Download instead (#218).
                     if (in_array($ext, array('gif', 'jpg', 'jpeg', 'png', 'bmp', 'ico', 'webp', 'avif'))) {
                         echo '<p><input type="checkbox" id="preview-img-zoomCheck"><label for="preview-img-zoomCheck"><img src="' . fm_enc($media_url) . '" alt="image" class="preview-img"></label></p>';
                     }
@@ -2350,7 +2350,7 @@ $all_files_size = 0;
                             <a title="<?php echo lng('Rename') ?>" href="#" onclick="rename('<?php echo fm_enc(addslashes(FM_PATH)) ?>', '<?php echo fm_enc(addslashes($f)) ?>');return false;"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i></a>
                             <a title="<?php echo lng('CopyTo') ?>..." href="?p=&amp;copy=<?php echo urlencode(trim(FM_PATH . '/' . $f, '/')) ?>"><i class="fa-solid fa-copy" aria-hidden="true"></i></a>
                         <?php endif; ?>
-                        <?php /* DirectLink removed (#218 P11): file sharing disabled — a direct file URL breaks forward_auth and must not expose files above public_html */ ?>
+                        <?php /* DirectLink removed (#218 P11): file sharing disabled - a direct file URL breaks forward_auth and must not expose files above public_html */ ?>
                     </td>
                 </tr>
             <?php
@@ -5122,7 +5122,7 @@ function fm_show_header_login()
                 setTimeout(function() { x.className = x.className.replace("show", ""); }, 3000);
             }
 
-            // Save file — reads the Prism overlay (advanced) or the plain textarea.
+            // Save file - reads the Prism overlay (advanced) or the plain textarea.
             function edit_save(e, t) {
                 var host = document.querySelector('.fm-editor');
                 var n = (t === 'ace' && host && host.fmValue) ? host.fmValue()

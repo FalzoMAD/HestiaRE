@@ -49,7 +49,7 @@ hestia_apt() {
 }
 
 # ── Sury PHP repository (shared by wizard + installer) ──────────────────────
-# Idempotent, single canonical definition (keyring + signed-by + source file) —
+# Idempotent, single canonical definition (keyring + signed-by + source file) -
 # two diverging ones trip apt's "Conflicting values set for option Signed-By".
 # Usage: add_sury_repo <codename>
 add_sury_repo() {
@@ -128,7 +128,7 @@ seed_hestia_etc() {
 	# if-form for the local.conf include so the file's last statement returns 0
 	# (a trailing `&& source` returns 1 when absent and aborts callers under set -e)
 	printf '%s\n' \
-		"# Do not edit — use /etc/hestia/local.conf instead" \
+		"# Do not edit - use /etc/hestia/local.conf instead" \
 		"export HESTIA='$hestia_root'" \
 		"export CONF_DIR='/etc/hestia'" \
 		"if [ -f /etc/hestia/local.conf ]; then . /etc/hestia/local.conf; fi" \
@@ -169,7 +169,7 @@ seed_hestia_etc() {
 	_wcv "UPGRADE_SEND_EMAIL"       "true"
 	_wcv "UPGRADE_SEND_EMAIL_LOG"   "false"
 	_wcv "ROOT_USER"                "$admin"
-	# seed DB_SYSTEM empty — it is composed from registered hosts by h-add-database-host
+	# seed DB_SYSTEM empty - it is composed from registered hosts by h-add-database-host
 	_wcv "DB_SYSTEM"                ""
 	unset -f _wcv
 }
@@ -188,7 +188,7 @@ migrate_data_layout() {
 		fi
 	done
 
-	# data/ is fully dissolved — drop the empty husk if nothing else remains.
+	# data/ is fully dissolved - drop the empty husk if nothing else remains.
 	rmdir "$hestia_root/data" 2> /dev/null || true
 
 	# extensions/ dissolved: PSL cache -> file, mail-domain hooks -> $CONF_DIR/hooks
@@ -212,7 +212,7 @@ migrate_data_layout() {
 		chmod 770 "$hestia_root/.sessions" 2> /dev/null || true
 	fi
 
-	# Queue holds runtime pipes — recreate fresh at the new location, never copy.
+	# Queue holds runtime pipes - recreate fresh at the new location, never copy.
 	if [ -d "$hestia_root/data/queue" ] && [ ! -d "$CONF_DIR/queue" ]; then
 		mkdir -p $CONF_DIR/queue
 		chmod 750 $CONF_DIR/queue
@@ -245,7 +245,7 @@ migrate_data_layout() {
 		"$hestia_root/web/css/src/themes/default.css" \
 		"$hestia_root/web/css/src/themes/flat.css"
 
-	# build the isolated panel conf.d — activates the isolation on existing installs
+	# build the isolated panel conf.d - activates the isolation on existing installs
 	if [ -x "$hestia_root/bin/hestia-php-confd" ] && [ -f /etc/php/hestia/php-version ]; then
 		"$hestia_root/bin/hestia-php-confd" > /dev/null 2>&1 || true
 	fi

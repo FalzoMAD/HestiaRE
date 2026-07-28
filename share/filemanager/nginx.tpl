@@ -1,4 +1,4 @@
-# File manager private listener — nginx variant (#419). Rendered to
+# File manager private listener - nginx variant (#419). Rendered to
 # /etc/nginx/conf.d/fm-%user%.conf by h-add-user-filemanager when nginx is the
 # front (nginx-only, or nginx+apache where apache is skipped for the FM path).
 # Loopback-only; only Panel-Caddy talks to it, proven by the shared secret header.

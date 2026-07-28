@@ -92,7 +92,7 @@ rebuild_user_conf() {
 	# Update user shell
 	/usr/bin/chsh -s "$shell" "$user" &> /dev/null
 
-	# Keep the user on the SSH AllowUsers allowlist — restore/rebuild bypasses
+	# Keep the user on the SSH AllowUsers allowlist - restore/rebuild bypasses
 	# h-add-user, so without this a restored user is missing from an active AllowUsers
 	# line and silently locked out of SSH/SFTP after the restore (#412)
 	manage_sshd_allowusers add "$user"
@@ -136,7 +136,7 @@ rebuild_user_conf() {
 
 	# Rebuild the file manager pool + vhost if the user had it enabled (#419). Restore
 	# bypasses h-add-user-filemanager, so without this a restored user keeps the flag +
-	# panel menu but has no working FM — the same lockout class as AllowUsers above.
+	# panel menu but has no working FM - the same lockout class as AllowUsers above.
 	# Guarded on the secret so it is a no-op when the module is not installed here (a
 	# later h-add-sys-filemanager reactivates the saved flag).
 	if [ "$FILE_MANAGER" = "yes" ] && [ -s /etc/hestia/conf/.filemanager.key ]; then
@@ -562,7 +562,7 @@ rebuild_mail_domain_conf() {
 		fi
 
 		# Rebuild SMTP relay exclude list (recipient domains delivered
-		# directly via DNS/MX — exim router bypass_smtp_relay)
+		# directly via DNS/MX - exim router bypass_smtp_relay)
 		if [ -n "$U_SMTP_RELAY_EXCLUDE" ]; then
 			echo "$U_SMTP_RELAY_EXCLUDE" | tr ',' '\n' \
 				> $HOMEDIR/$user/conf/mail/$domain/smtp_relay_exclude

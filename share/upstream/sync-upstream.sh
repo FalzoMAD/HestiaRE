@@ -1,5 +1,5 @@
 #!/bin/bash
-# sync-upstream.sh – update upstream/* snapshots and show changes
+# sync-upstream.sh - update upstream/* snapshots and show changes
 # Run as: falzo user on hestiare host
 set -euo pipefail
 
@@ -8,7 +8,7 @@ HESTIARE_DIR="$HOME/hestiare"
 PHPQUOTESHELLARG_DIR="$HOME/phpquoteshellarg"
 
 # ════════════════════════════════════════════════════════════════════════════
-# PART 1 — HestiaCP (full mirror, branch-based, frequent changes expected)
+# PART 1 - HestiaCP (full mirror, branch-based, frequent changes expected)
 # ════════════════════════════════════════════════════════════════════════════
 
 # ── 1.1 Pull hestiacp mirror ─────────────────────────────────────────────────
@@ -44,7 +44,7 @@ fi
 
 # ── 1.4 near-verbatim drift check (CODEMAP drift_watch) ──────────────────────
 # Deterministically catch upstream movement on files CODEMAP marks near-verbatim
-# with a checked-against ref. The jailbash 5-bind drift (#412) was a chance find —
+# with a checked-against ref. The jailbash 5-bind drift (#412) was a chance find -
 # this turns it into a signal. Each file's checked_ref is bumped by hand only after
 # re-verifying it against the newer upstream (the marker records "verified at X",
 # not just "ignore"). Runs after 1.2, so upstream/hestiacp is already current.
@@ -59,7 +59,7 @@ else
   while IFS=$'\t' read -r file upath ref; do
     [ -n "$file" ] || continue
     if ! git -C "$HESTIARE_DIR" cat-file -e "$ref^{commit}" 2> /dev/null; then
-      echo "    WARN: $file — checked_ref ${ref:0:12} not found (stale marker?)"
+      echo "    WARN: $file - checked_ref ${ref:0:12} not found (stale marker?)"
       drift=1
       continue
     fi
@@ -71,15 +71,15 @@ else
   done < <(jq -r '.upstream_provenance.drift_watch.files
                   | to_entries[]
                   | [.key, .value.upstream_path, .value.checked_ref] | @tsv' "$CODEMAP")
-  [ "$drift" = 0 ] && echo "    No drift — all watched files current with upstream."
+  [ "$drift" = 0 ] && echo "    No drift - all watched files current with upstream."
 fi
 
 # ════════════════════════════════════════════════════════════════════════════
-# PART 2 — phpquoteshellarg (single vendored file, tag-based, rare changes)
+# PART 2 - phpquoteshellarg (single vendored file, tag-based, rare changes)
 # ════════════════════════════════════════════════════════════════════════════
 #
 # Unlike HestiaCP, phpquoteshellarg is a tiny, near-frozen upstream project.
-# We don't pull every commit on its default branch — we track tagged
+# We don't pull every commit on its default branch - we track tagged
 # releases only, since that's what's actually vendored into
 # web/inc/lib/quoteshellarg.php. A "no new tag" result is the expected,
 # healthy outcome most of the time.
@@ -89,7 +89,7 @@ echo "==> Checking phpquoteshellarg upstream for new tags..."
 cd "$PHPQUOTESHELLARG_DIR"
 git fetch --tags --quiet
 
-# Tag currently vendored in HestiaRE — read directly from the file header
+# Tag currently vendored in HestiaRE - read directly from the file header
 # of web/inc/lib/quoteshellarg.php, so there's a single source of truth
 # instead of maintaining the version number in two places. The header in
 # that file must contain a line like:
@@ -98,7 +98,7 @@ git fetch --tags --quiet
 VENDORED_FILE="$HESTIARE_DIR/web/inc/lib/quoteshellarg.php"
 
 if [ ! -f "$VENDORED_FILE" ]; then
-  echo "    ERROR: $VENDORED_FILE not found — check HESTIARE_DIR or file path."
+  echo "    ERROR: $VENDORED_FILE not found - check HESTIARE_DIR or file path."
   exit 1
 fi
 
@@ -129,13 +129,13 @@ else
   echo "    ACTION NEEDED: review the diff above, then if it's safe to take:"
   echo "    1. Update web/inc/lib/quoteshellarg.php with the new version"
   echo "    2. Update the 'Upstream version:' line in that file's header to $LATEST_UPSTREAM_TAG"
-  echo "       (this script reads the version from there — no separate value to maintain)"
+  echo "       (this script reads the version from there - no separate value to maintain)"
   echo "    3. Update upstream/phpquoteshellarg snapshot branch (see below)"
 fi
 
 # ── 2.1 Update upstream/phpquoteshellarg snapshot branch ────────────────────
 # Mirrors the exact tagged tree into HestiaRE for reference/diffing, same
-# pattern as upstream/hestiacp — but only re-synced when a new tag exists,
+# pattern as upstream/hestiacp - but only re-synced when a new tag exists,
 # not on every run, to avoid noisy empty commits for a project that barely
 # changes.
 
@@ -155,7 +155,7 @@ if [ "$LATEST_UPSTREAM_TAG" != "$CURRENT_VENDORED_TAG" ]; then
 fi
 
 # ════════════════════════════════════════════════════════════════════════════
-# PART 3 — keep local dev checkout current (nine is a sync-only host, but
+# PART 3 - keep local dev checkout current (nine is a sync-only host, but
 # pulling here is free and avoids working against a stale dev by accident)
 # ════════════════════════════════════════════════════════════════════════════
 
@@ -166,19 +166,19 @@ git checkout dev
 git pull origin dev
 
 # ════════════════════════════════════════════════════════════════════════════
-# PART 4 — vendored web assets (alpinejs, fontawesome, normalize.css)
+# PART 4 - vendored web assets (alpinejs, fontawesome, normalize.css)
 # ════════════════════════════════════════════════════════════════════════════
 #
 # Version check via update-web-vendor.sh --check: compares the pins in
 # VENDORED.json against npm registry / GitHub API. Runs after the dev pull
 # on purpose, so the pins and the script itself are always current.
-# Strictly read-only — on a new release, rebuild the snapshot branch with:
+# Strictly read-only - on a new release, rebuild the snapshot branch with:
 #   share/upstream/update-web-vendor.sh --fetch <asset>[@version] --push
 # Adoption into dev happens separately via merge/cherry-pick + PR.
 
 echo ""
 echo "==> Checking vendored web assets (VENDORED.json vs upstream)..."
 if ! "$HESTIARE_DIR/share/upstream/update-web-vendor.sh" --check; then
-  echo "    WARNING: web-vendor check failed (network/API?) — re-run manually:"
+  echo "    WARNING: web-vendor check failed (network/API?) - re-run manually:"
   echo "    $HESTIARE_DIR/share/upstream/update-web-vendor.sh --check"
 fi
