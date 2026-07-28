@@ -13,9 +13,8 @@ It is deliberately scoped for a small, professional fleet — on the order of a 
 
 HestiaRE is in active, early-stage development. Releases exist (latest tag **v0.11.x**) for development and testing purposes only — **the project is not yet usable for any real hosting environment.** Core components are still being migrated, replaced, or audited, and no install on a production system should be attempted at this stage.
 
-**Target systems:**
-- Primary: Debian 12 (Bookworm), Ubuntu 24.04 LTS (Noble)
-- Next tier (already handled by the installer): Debian 13 (Trixie), Ubuntu 26.04 LTS
+**Target systems** — all first-class, equal priority (every feature must work on all four):
+- Debian 12 (Bookworm), Debian 13 (Trixie), Ubuntu 24.04 LTS (Noble), Ubuntu 26.04 LTS
 
 ## What makes it different
 
@@ -26,7 +25,7 @@ HestiaCP bundles and compiles a lot of its own stack. HestiaRE inverts that: **O
 - The panel runs on **Caddy** (OS repo) instead of a bundled nginx build.
 - PHP comes from **Sury** as isolated FPM pools instead of a custom compiled PHP.
 - Web, mail, database and firewall tooling (nginx, Apache, exim/dovecot/rspamd, phpMyAdmin, fail2ban, ipset, Composer, WP-CLI, …) is installed straight from distro packages.
-- Optional components (ProFTPD, ClamAV, PostgreSQL, Redis, OpenSearch, file manager, …) are **individually installable and removable**, so a given host only carries what it uses.
+- Optional components (ProFTPD, ClamAV, PostgreSQL, Redis, OpenSearch, Docker proxy, file manager, …) are **individually installable and removable**, so a given host only carries what it uses.
 
 The result is a smaller, more auditable surface that tracks the distributions' own security updates instead of a private package pipeline.
 
@@ -45,7 +44,7 @@ There is no compiled artifact, no private package repo, and no build toolchain r
 Because there are no packages doing the setup work, the installer had to be rebuilt around that source-tarball model. It is now a clean two-stage flow:
 
 - **`install.sh` (bootstrap):** installs prerequisites, detects the OS, fetches and extracts the release, runs the interactive **manifest-driven wizard** (`func/wizard.sh`) which writes `/etc/hestia/install.conf`, and seeds `/etc/hestia` so the `h-*` commands can run.
-- **`h-install-hestia` (installer):** non-interactive, reads `install.conf`, and is **component-gated and idempotent** — every subsystem is guarded by a flag, so profiles (minimal / standard) and optional add-ons (via `h-add-*` / `h-remove-*`) compose cleanly and re-runs don't fight themselves.
+- **`h-install-hestia` (installer):** non-interactive, reads `install.conf`, and is **component-gated and idempotent** — every subsystem is guarded by a flag, so profiles (minimal / standard) and optional add-ons (via `h-add-*` / `h-delete-*`) compose cleanly and re-runs don't fight themselves.
 
 A post-install smoke test then verifies that the services implied by the chosen configuration actually came up.
 
