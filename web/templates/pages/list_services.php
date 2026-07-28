@@ -124,7 +124,7 @@
 				} else {
 					$edit_url=$key;
 				}
-				// rspamd has no service-config page — its "edit" target is the
+				// rspamd has no service-config page - its "edit" target is the
 				// embedded web UI page, so the name and pencil links point there.
 				$edit_href = ($key === "rspamd") ? "/list/rspamd/" : "/edit/server/" . $edit_url . "/";
 

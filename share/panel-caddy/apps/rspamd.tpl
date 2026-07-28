@@ -1,4 +1,4 @@
-# rspamd controller web UI — gated behind the panel admin session, then
+# rspamd controller web UI - gated behind the panel admin session, then
 # reverse-proxied to the controller's unix socket (/run/rspamd/controller.sock,
 # see share/rspamd/local.d/worker-controller.inc). Reached via the panel page
 # /list/rspamd/ (iframe, same-origin).
@@ -6,10 +6,10 @@
 #
 # Access control has two independent layers:
 #  1. forward_auth calls the panel (rspamd-auth.php), which returns 2xx only
-#     for an authenticated admin session — anything else is blocked. This is
+#     for an authenticated admin session - anything else is blocked. This is
 #     what keeps non-admins out.
 #  2. The controller listens on a unix socket (mode 0660, group _rspamd), not
-#     a TCP port, so it is NOT reachable by arbitrary local users — only the
+#     a TCP port, so it is NOT reachable by arbitrary local users - only the
 #     _rspamd group (which the installer adds `caddy` to). This is what keeps
 #     a customer with shell/SSH access from reading the controller directly.
 #

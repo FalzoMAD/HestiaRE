@@ -101,11 +101,11 @@ $favicon_path = '';
 $exclude_items = array();
 
 // Online office Docs Viewer
-// Available rules are 'google', 'microsoft' or false
-// Google => View documents using Google Docs Viewer
-// Microsoft => View documents using Microsoft Web Apps Viewer
-// false => disable online doc viewer
-$online_viewer = 'google';
+// Online doc viewer disabled (#218 hardening): the Google/Microsoft embeds
+// leak the file URL to a third party AND cannot work in the private per-customer
+// FM (the file is not reachable off-box). The rendering branch was removed too;
+// keep this 'false' so nothing re-enables it via FM_DOC_VIEWER.
+$online_viewer = 'false';
 
 // Sticky Nav bar
 // true => enable sticky header
@@ -173,10 +173,10 @@ if (is_readable($config_file)) {
 define('ACE_FONTSIZE', isset($ace_fontsize) ? $ace_fontsize : 12);
 define('ACE_THEME', isset($ace_theme) ? $ace_theme : 'textmate');
 
-// Front-end assets. HestiaRE serves everything same-origin (no external CDN — GDPR,
+// Front-end assets. HestiaRE serves everything same-origin (no external CDN - GDPR,
 // offline installs, panel CSP): local files come from the private FM listener under
 // /fm/assets, and shared libraries (Bootstrap-CSS excepted) are referenced by their
-// ABSOLUTE panel path since the FM is same-origin with the panel (:8083/fm/) — so
+// ABSOLUTE panel path since the FM is same-origin with the panel (:8083/fm/) - so
 // FontAwesome and AlpineJS are the very files the panel already ships, and a panel
 // update carries straight through with no copy here (#218 P1, §10.4).
 $external = array(
@@ -217,7 +217,7 @@ $report_errors = isset($cfg->data['error_reporting']) ? $cfg->data['error_report
 // Hide Permissions and Owner cols in file-listing
 $hide_Cols = isset($cfg->data['hide_Cols']) ? $cfg->data['hide_Cols'] : true;
 
-// Theme — driven by the customer's panel setting (#218 S2). fm-auth.php reads the
+// Theme - driven by the customer's panel setting (#218 S2). fm-auth.php reads the
 // panel session theme and returns it as X-Hestia-Theme, which Caddy copies onto the
 // proxied request. Panel theme names are light*/dark* families; Bootstrap's
 // data-bs-theme only knows light|dark, so anything starting "dark" maps to dark.
@@ -974,8 +974,8 @@ if (isset($_GET['dl'], $_POST['token'])) {
     }
 }
 
-// Inline media stream (#218). The customer home is NOT under the web root — the
-// private FM listener serves the code dir — so <img>/<audio>/<video> in the view
+// Inline media stream (#218). The customer home is NOT under the web root - the
+// private FM listener serves the code dir - so <img>/<audio>/<video> in the view
 // page cannot point at a raw file URL. They point here instead and we stream the
 // file through PHP. No token: this is a GET reached through Caddy's forward_auth,
 // so the session is already proven (same gate as rendering the view page itself).
@@ -988,11 +988,45 @@ if (isset($_GET['media'])) {
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_write_close();
         }
-        $mime = fm_get_mime_type($full);
-        header('Content-Type: ' . ($mime ?: 'application/octet-stream'));
-        header('Content-Length: ' . filesize($full));
-        header('Content-Disposition: inline; filename="' . basename($full) . '"');
+        // The FM is same-origin with the panel (:8083), so this streams
+        // customer-controlled bytes on the panel origin. The Content-Type is
+        // therefore decided ONLY by a server-side extension allowlist - never
+        // from the file content (finfo) or the client. A content-sniffed
+        // image/svg+xml or text/html would execute script under the panel
+        // session (and in an admin's own context when viewing via "login as").
+        // Anything not on the allowlist - SVG included - is forced to download.
+        $inline_types = array(
+            'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
+            'gif' => 'image/gif', 'webp' => 'image/webp', 'bmp' => 'image/bmp',
+            'ico' => 'image/x-icon', 'avif' => 'image/avif',
+            'mp3' => 'audio/mpeg', 'm4a' => 'audio/mp4', 'aac' => 'audio/aac',
+            'oga' => 'audio/ogg', 'ogg' => 'audio/ogg', 'opus' => 'audio/ogg',
+            'wav' => 'audio/wav', 'flac' => 'audio/flac',
+            'mp4' => 'video/mp4', 'm4v' => 'video/mp4', 'webm' => 'video/webm',
+            'ogv' => 'video/ogg', 'mov' => 'video/quicktime',
+        );
+        $ext_l = strtolower(pathinfo($full, PATHINFO_EXTENSION));
+        // Quotes/CRLF stripped so a crafted filename cannot break out of the header.
+        $fn = str_replace(array('"', "\r", "\n"), '', basename($full));
+        // Never sniffed; the locked-down CSP + sandbox neutralises anything that
+        // still reaches a top-level navigation (belt to the allowlist's braces).
         header('X-Content-Type-Options: nosniff');
+        header("Content-Security-Policy: default-src 'none'; sandbox");
+        header('Content-Length: ' . filesize($full));
+        // INVARIANT (#432): $inline_types must map ONLY to inert types (raster
+        // image / audio / video). Never add svg/html/xhtml/xml/js - those execute
+        // in the panel origin (the FM is same-origin with :8083). This guard makes
+        // the invariant self-enforcing: even if an active type slips into the map,
+        // the file is downloaded, never rendered. (Serving media from a separate
+        // origin was considered and rejected - it would force a DNS record on every
+        // install; with the allowlist + nosniff + CSP sandbox it is not needed.)
+        if (isset($inline_types[$ext_l]) && !preg_match('~(svg|html|xml|script)~i', $inline_types[$ext_l])) {
+            header('Content-Type: ' . $inline_types[$ext_l]);
+            header('Content-Disposition: inline; filename="' . $fn . '"');
+        } else {
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename="' . $fn . '"');
+        }
         readfile($full);
     } else {
         http_response_code(404);
@@ -1519,7 +1553,7 @@ if (isset($_GET['upload']) && !FM_READONLY) {
             function setError(row, msg) {
                 var bar = row.querySelector('.progress-bar');
                 if (bar) bar.classList.add('bg-danger');
-                row.querySelector('.small').innerHTML += ' — <span class="text-danger">' + msg + '</span>';
+                row.querySelector('.small').innerHTML += ' - <span class="text-danger">' + msg + '</span>';
             }
             function setDone(row) {
                 var bar = row.querySelector('.progress-bar');
@@ -1527,7 +1561,7 @@ if (isset($_GET['upload']) && !FM_READONLY) {
             }
             function upload(file, rel) {
                 rel = rel || file.webkitRelativePath || file.name;
-                if (!accepted(file.name)) { addRow(rel + ' — <span class="text-danger">not allowed</span>'); return; }
+                if (!accepted(file.name)) { addRow(rel + ' - <span class="text-danger">not allowed</span>'); return; }
                 var total = Math.max(1, Math.ceil(file.size / CHUNK));
                 var row = addRow(rel);
                 var idx = 0;
@@ -1853,7 +1887,7 @@ if (isset($_GET['view'])) {
     fm_show_nav_path(FM_PATH); // current path
 
     $file_url = FM_ROOT_URL . fm_convert_win((FM_PATH != '' ? '/' . FM_PATH : '') . '/' . $file);
-    // Media (img/audio/video/open) streams through PHP — the home isn't web-served (#218).
+    // Media (img/audio/video/open) streams through PHP - the home isn't web-served (#218).
     $media_url = FM_SELF_URL . '?p=' . urlencode(FM_PATH) . '&media=' . urlencode($file);
     $file_path = $path . '/' . $file;
 
@@ -1982,13 +2016,9 @@ if (isset($_GET['view'])) {
             </div>
             <div class="row mt-3">
                 <?php
-                if ($is_onlineViewer) {
-                    if ($online_viewer == 'google') {
-                        echo '<iframe src="https://docs.google.com/viewer?embedded=true&hl=en&url=' . fm_enc($file_url) . '" frameborder="no" style="width:100%;min-height:460px"></iframe>';
-                    } else if ($online_viewer == 'microsoft') {
-                        echo '<iframe src="https://view.officeapps.live.com/op/embed.aspx?src=' . fm_enc($file_url) . '" frameborder="no" style="width:100%;min-height:460px"></iframe>';
-                    }
-                } elseif ($is_zip) {
+                // (Online third-party doc viewer removed in #218 hardening - see
+                // $online_viewer above. Unpreviewable docs just offer Download.)
+                if ($is_zip) {
                     // ZIP content
                     if ($filenames !== false) {
                         echo '<code class="maxheight">';
@@ -2004,8 +2034,10 @@ if (isset($_GET['view'])) {
                         echo '<p>' . lng('Error while fetching archive info') . '</p>';
                     }
                 } elseif ($is_image) {
-                    // Image content
-                    if (in_array($ext, array('gif', 'jpg', 'jpeg', 'png', 'bmp', 'ico', 'svg', 'webp', 'avif'))) {
+                    // Image content. SVG is intentionally absent: the media handler
+                    // streams it as a download (never image/svg+xml inline), so an
+                    // <img> would only show broken - offer Download instead (#218).
+                    if (in_array($ext, array('gif', 'jpg', 'jpeg', 'png', 'bmp', 'ico', 'webp', 'avif'))) {
                         echo '<p><input type="checkbox" id="preview-img-zoomCheck"><label for="preview-img-zoomCheck"><img src="' . fm_enc($media_url) . '" alt="image" class="preview-img"></label></p>';
                     }
                 } elseif ($is_audio) {
@@ -2318,7 +2350,7 @@ $all_files_size = 0;
                             <a title="<?php echo lng('Rename') ?>" href="#" onclick="rename('<?php echo fm_enc(addslashes(FM_PATH)) ?>', '<?php echo fm_enc(addslashes($f)) ?>');return false;"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i></a>
                             <a title="<?php echo lng('CopyTo') ?>..." href="?p=&amp;copy=<?php echo urlencode(trim(FM_PATH . '/' . $f, '/')) ?>"><i class="fa-solid fa-copy" aria-hidden="true"></i></a>
                         <?php endif; ?>
-                        <?php /* DirectLink removed (#218 P11): file sharing disabled — a direct file URL breaks forward_auth and must not expose files above public_html */ ?>
+                        <?php /* DirectLink removed (#218 P11): file sharing disabled - a direct file URL breaks forward_auth and must not expose files above public_html */ ?>
                     </td>
                 </tr>
             <?php
@@ -4978,16 +5010,45 @@ function fm_show_header_login()
 
             // Bootstrap-compatible modal controller (show/hide + backdrop).
             var fmModal = (function() {
-                var backdrop;
+                // Native shim for the accessibility behaviour Bootstrap-JS used to
+                // provide (#434): focus-trap while open, ESC to close, and focus
+                // returned to the opener on close. One modal is open at a time.
+                var backdrop, lastFocus = null, keyHandler = null;
+                function focusables(m) {
+                    var q = 'a[href],button:not([disabled]),textarea:not([disabled]),' +
+                        'input:not([disabled]):not([type=hidden]),select:not([disabled]),' +
+                        '[tabindex]:not([tabindex="-1"])';
+                    return Array.prototype.slice.call(m.querySelectorAll(q)).filter(function(el) {
+                        return el.offsetParent !== null; // visible only
+                    });
+                }
                 function show(sel) {
                     var m = typeof sel === 'string' ? document.querySelector(sel) : sel;
                     if (!m) return;
+                    lastFocus = document.activeElement; // restored on close
                     if (!backdrop) { backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop fade show'; }
                     document.body.appendChild(backdrop);
                     m.classList.add('show');
                     m.style.display = 'block';
                     m.removeAttribute('aria-hidden');
+                    m.setAttribute('aria-modal', 'true');
                     document.body.classList.add('modal-open');
+                    // Move focus into the dialog: an [autofocus] field, else the first
+                    // focusable, else the dialog itself.
+                    var f = m.querySelector('[autofocus]') || focusables(m)[0] || m;
+                    setTimeout(function() { try { f.focus(); } catch (e) {} }, 0);
+                    keyHandler = function(e) {
+                        // Honour data-bs-keyboard="false" (static dialogs opt out of ESC).
+                        if (e.key === 'Escape' && m.getAttribute('data-bs-keyboard') !== 'false') { hide(m); return; }
+                        if (e.key !== 'Tab') return;
+                        var els = focusables(m);
+                        if (!els.length) { e.preventDefault(); return; }
+                        var first = els[0], last = els[els.length - 1];
+                        if (!m.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+                        else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+                    };
+                    document.addEventListener('keydown', keyHandler, true);
                 }
                 function hide(sel) {
                     var m = typeof sel === 'string' ? document.querySelector(sel) : sel;
@@ -4995,18 +5056,31 @@ function fm_show_header_login()
                     m.classList.remove('show');
                     m.style.display = 'none';
                     m.setAttribute('aria-hidden', 'true');
+                    m.removeAttribute('aria-modal');
                     if (backdrop && backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
                     document.body.classList.remove('modal-open');
+                    if (keyHandler) { document.removeEventListener('keydown', keyHandler, true); keyHandler = null; }
+                    if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} } // return focus to opener
+                    lastFocus = null;
                 }
                 return { show: show, hide: hide };
             })();
+
+            function fmCloseDropdowns() {
+                // Close every open menu and reset its toggle's aria-expanded (#434).
+                document.querySelectorAll('.dropdown-menu.show').forEach(function(m) {
+                    m.classList.remove('show');
+                    var t = m.parentNode.querySelector('[data-bs-toggle="dropdown"]');
+                    if (t) t.setAttribute('aria-expanded', 'false');
+                });
+            }
 
             function fmToggleDropdown(btn) {
                 var menu = btn.parentNode.querySelector('.dropdown-menu');
                 if (!menu) return;
                 var open = menu.classList.contains('show');
-                document.querySelectorAll('.dropdown-menu.show').forEach(function(m) { m.classList.remove('show'); });
-                if (!open) menu.classList.add('show');
+                fmCloseDropdowns();
+                if (!open) { menu.classList.add('show'); btn.setAttribute('aria-expanded', 'true'); }
             }
 
             function rename(e, t) {
@@ -5048,7 +5122,7 @@ function fm_show_header_login()
                 setTimeout(function() { x.className = x.className.replace("show", ""); }, 3000);
             }
 
-            // Save file — reads the Prism overlay (advanced) or the plain textarea.
+            // Save file - reads the Prism overlay (advanced) or the plain textarea.
             function edit_save(e, t) {
                 var host = document.querySelector('.fm-editor');
                 var n = (t === 'ace' && host && host.fmValue) ? host.fmValue()
@@ -5282,9 +5356,19 @@ function fm_show_header_login()
                     if (dismiss) { e.preventDefault(); var m = dismiss.closest('.modal'); if (m) fmModal.hide(m); return; }
                     var dd = e.target.closest('[data-bs-toggle="dropdown"]');
                     if (dd) { e.preventDefault(); fmToggleDropdown(dd); return; }
-                    if (!e.target.closest('.dropdown-menu')) {
-                        document.querySelectorAll('.dropdown-menu.show').forEach(function(m) { m.classList.remove('show'); });
-                    }
+                    if (!e.target.closest('.dropdown-menu')) { fmCloseDropdowns(); }
+                });
+
+                // ESC closes an open dropdown and returns focus to its toggle (#434).
+                // (Modals handle their own ESC in fmModal; when one is open there is
+                // no open dropdown, so this is a no-op then.)
+                document.addEventListener('keydown', function(e) {
+                    if (e.key !== 'Escape') return;
+                    var openMenu = document.querySelector('.dropdown-menu.show');
+                    if (!openMenu) return;
+                    var t = openMenu.parentNode.querySelector('[data-bs-toggle="dropdown"]');
+                    fmCloseDropdowns();
+                    if (t) { try { t.focus(); } catch (e2) {} }
                 });
             });
         </script>

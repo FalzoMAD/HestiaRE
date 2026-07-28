@@ -37,7 +37,7 @@ if (!file_exists($sFile)) {
 					"driver_hestia_enabled" => true,
 					"driver_hestia_allowed_emails" => "*",
 					"hestia_host" => gethostname(),
-					// $argv[5] = $BACKEND_PORT — NOT $argv[4], which is the DB
+					// $argv[5] = $BACKEND_PORT - NOT $argv[4], which is the DB
 					// password (that off-by-one shipped the DB password as the
 					// panel port and broke password changes from SnappyMail, #234)
 					"hestia_port" => $argv[5],

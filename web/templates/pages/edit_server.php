@@ -572,7 +572,7 @@
 								</p>
 							</div>
 							<?php /* PostgreSQL's web UI is Adminer (fixed /adminer/ route,
-							         no configurable alias — see h-add-sys-adminer). */ ?>
+							         no configurable alias - see h-add-sys-adminer). */ ?>
 						<?php } ?>
 						<?php if ($v_pgsql == "yes") {
 							$i = 0;

@@ -19,7 +19,7 @@ if (isset($_GET["logout"])) {
 if (isset($_SESSION["user"])) {
 	// User impersonation
 	// Allow administrators to view and manipulate contents of other user accounts
-	if ($_SESSION["userContext"] === "admin" && !empty($_GET["loginas"])) {
+	if ($_SESSION["adminContext"] === "admin" && !empty($_GET["loginas"])) {
 		// Ensure token is passed and matches before granting user impersonation access
 		if (verify_csrf($_GET)) {
 			$v_user = quoteshellarg($_GET["loginas"]);
@@ -29,6 +29,13 @@ if (isset($_SESSION["user"])) {
 				$data = json_decode(implode("", $output), true);
 				reset($data);
 				$_SESSION["look"] = key($data);
+				// Drop to the impersonated user's effective role so admin-only gates
+				// refuse while acting as the customer (#438); adminContext keeps the
+				// real role for the impersonation controls.
+				$_SESSION["userContext"] = $data[$_SESSION["look"]]["ROLE"];
+				// Rotate the session id at the privilege transition: an id captured
+				// mid-impersonation must not survive to be reused after return (#438).
+				session_regenerate_id(true);
 				// Log impersonation events
 				exec(
 					HESTIA_CMD .
@@ -73,7 +80,7 @@ if (isset($_SESSION["user"])) {
 		// Obtain account properties
 		$v_user = quoteshellarg(
 			$_SESSION[
-				$_SESSION["userContext"] === "admin" && $_SESSION["look"] !== "" ? "look" : "user"
+				$_SESSION["adminContext"] === "admin" && $_SESSION["look"] !== "" ? "look" : "user"
 			],
 		);
 
@@ -99,7 +106,7 @@ if (isset($_SESSION["user"])) {
 	}
 
 	// Do not allow non-administrators to access account impersonation
-	if ($_SESSION["userContext"] !== "admin" && !empty($_GET["loginas"])) {
+	if ($_SESSION["adminContext"] !== "admin" && !empty($_GET["loginas"])) {
 		header("Location: /login/");
 		exit();
 	}
@@ -334,8 +341,12 @@ function authenticate_user($user, $password, $twofa = "") {
 
 				$_SESSION["LAST_ACTIVITY"] = time();
 
-				// Define user role / context
+				// Define user role / context. adminContext is the DURABLE real role
+				// (#438) - the source of truth for "is this operator an admin". It is
+				// never lowered by impersonation; userContext becomes the *effective*
+				// role (see the look set/unset points and inc/main.php).
 				$_SESSION["userContext"] = $data[$user]["ROLE"];
+				$_SESSION["adminContext"] = $data[$user]["ROLE"];
 
 				// Set active user theme on login
 				$_SESSION["userTheme"] = $data[$user]["THEME"];

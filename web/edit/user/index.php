@@ -62,6 +62,7 @@ $v_role = $data[$v_username]["ROLE"];
 $v_login_disabled = $data[$v_username]["LOGIN_DISABLED"];
 $v_login_use_iplist = $data[$v_username]["LOGIN_USE_IPLIST"];
 $v_login_allowed_ips = $data[$v_username]["LOGIN_ALLOW_IPS"];
+$v_file_manager = $data[$v_username]["FILE_MANAGER"] ?? "";
 $v_suspended = $data[$v_username]["SUSPENDED"];
 if ($v_suspended == "yes") {
 	$v_status = "suspended";
@@ -208,6 +209,28 @@ if (!empty($_POST["save"])) {
 			);
 			check_return_code($return_var, $output);
 			$data[$user]["LOGIN_DISABLED"] = $_POST["v_login_disabled"];
+			unset($output);
+		}
+	}
+
+	// Update File Manager access (admin only, and only while the system module is
+	// installed - FILE_MANAGER_PORT is set by h-add-sys-filemanager, cleared by
+	// h-delete-sys-filemanager). The dedicated commands build/tear down the
+	// per-customer FPM pool + private-listener vhost + socket AND set the flag, so
+	// this is NOT a plain h-change-user-config-value.
+	if (
+		empty($_SESSION["error_msg"]) &&
+		$_SESSION["userContext"] === "admin" &&
+		!empty($_SESSION["FILE_MANAGER_PORT"])
+	) {
+		$v_fm_new = empty($_POST["v_file_manager"]) ? "no" : "yes";
+		if ($v_fm_new !== ($v_file_manager === "yes" ? "yes" : "no")) {
+			$fm_cmd = $v_fm_new === "yes" ? "h-add-user-filemanager " : "h-delete-user-filemanager ";
+			exec(HESTIA_CMD . $fm_cmd . quoteshellarg($v_username), $output, $return_var);
+			check_return_code($return_var, $output);
+			if (empty($_SESSION["error_msg"])) {
+				$v_file_manager = $v_fm_new;
+			}
 			unset($output);
 		}
 	}

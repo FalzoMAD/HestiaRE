@@ -63,7 +63,7 @@
 
 				<!-- Notifications -->
 				<?php
-    $impersonatingAdmin = $_SESSION["userContext"] === "admin" && ($_SESSION["look"] !== "" && $user == "admin");
+    $impersonatingAdmin = $_SESSION["adminContext"] === "admin" && ($_SESSION["look"] !== "" && $user == "admin");
     // Do not show notifications panel when impersonating 'admin' user
     if (!$impersonatingAdmin) { ?>
 					<div x-data="notifications" class="top-bar-notifications">
@@ -168,9 +168,12 @@
 					<div x-cloak x-show="open" x-on:click.outside="open = false" class="top-bar-menu-panel">
 						<ul class="top-bar-menu-list">
 
-							<!-- File Manager -->
-							<?php if (($_SESSION["USER_FILE_MANAGER"] ?? "") === "yes") { ?>
-								<?php if ($_SESSION["userContext"] === "admin" && $_SESSION["look"] === "admin" && $_SESSION["POLICY_SYSTEM_PROTECTED_ADMIN"] == "yes") { ?>
+							<!-- File Manager (per-user flag AND the system module still installed:
+							     h-delete-sys-filemanager clears FILE_MANAGER_PORT but keeps the
+							     saved per-user flags, so gate on the port too or the menu would
+							     point at a torn-down listener). -->
+							<?php if ((($_SESSION["USER_FILE_MANAGER"] ?? "") === "yes") && !empty($_SESSION["FILE_MANAGER_PORT"])) { ?>
+								<?php if ($_SESSION["adminContext"] === "admin" && $_SESSION["look"] === "admin" && $_SESSION["POLICY_SYSTEM_PROTECTED_ADMIN"] == "yes") { ?>
 									<!-- Hide file manager when impersonating admin-->
 								<?php } else { ?>
 									<li class="top-bar-menu-item">
@@ -187,7 +190,7 @@
 
 							<!-- Server Settings -->
 							<?php if (($_SESSION["userContext"] === "admin" && $_SESSION["POLICY_SYSTEM_HIDE_SERVICES"] !== "yes") || $_SESSION["user"] === "admin") { ?>
-								<?php if ($_SESSION["userContext"] === "admin" && $_SESSION["look"] !== "") { ?>
+								<?php if ($_SESSION["adminContext"] === "admin" && $_SESSION["look"] !== "") { ?>
 									<!-- Hide 'Server Settings' button when impersonating 'admin' or other users -->
 								<?php } else { ?>
 									<li class="top-bar-menu-item">
@@ -202,7 +205,7 @@
 							<?php } ?>
 
 							<!-- Edit User -->
-							<?php if ($_SESSION["userContext"] === "admin" && ($_SESSION["look"] !== "" && $user == "admin")) { ?>
+							<?php if ($_SESSION["adminContext"] === "admin" && ($_SESSION["look"] !== "" && $user == "admin")) { ?>
 								<!-- Hide 'edit user' entry point from other administrators for default 'admin' account-->
 								<li class="top-bar-menu-item">
 									<a title="<?= _("Logs") ?>" class="top-bar-menu-link <?php if ($TAB == "LOG") {

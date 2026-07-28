@@ -7,7 +7,7 @@
  * creates a temporary database user and a one-time handoff file under
  * /run/hestia-sso/<token> (h-add-database-sso-token, via the panel's sudo),
  * then redirects the browser here. This script consumes the handoff file and
- * opens the signon session — no API, no sudo, no secrets in this pool. */
+ * opens the signon session - no API, no sudo, no secrets in this pool. */
 
 define("HANDOFF_DIR", "/run/hestia-sso");
 /* Seconds a handoff token stays valid (must match TOKEN_TTL in h-add-database-sso-token) */
@@ -32,7 +32,7 @@ function session_invalid() {
 
 if (isset($_GET["logout"])) {
 	/* The temporary database user expires on its own (TTL scheduled by
-	 * h-add-database-temp-user) — nothing privileged to do here. */
+	 * h-add-database-temp-user) - nothing privileged to do here. */
 	session_invalid();
 }
 

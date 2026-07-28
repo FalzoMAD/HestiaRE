@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /**
- * HestiaQRCode — single-file pure-PHP SVG QR code generator.
+ * HestiaQRCode - single-file pure-PHP SVG QR code generator.
  * Byte mode, ECC Level M, Versions 1-10 (max 216 bytes input).
  * Returns data:image/svg+xml;base64 URI.
  * No dependencies. No PHP extensions required.

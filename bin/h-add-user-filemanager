@@ -73,6 +73,12 @@ systemctl reload "php$ver-fpm" 2> /dev/null || systemctl restart "php$ver-fpm" 2
 # immediately follows enabling would otherwise race a 403 ("not enabled yet").
 sock="/run/hestia/fm/$user.sock"
 for _ in $(seq 1 50); do [ -S "$sock" ] && break; sleep 0.1; done
+# Fail loudly if it never showed (php$ver-fpm reload failed / bad pool): returning
+# OK here would leave FILE_MANAGER='yes' with a dead listener that always 403s. Bail
+# BEFORE the vhost + flag are written, so a failed enable is a clean no-op.
+if [ ! -S "$sock" ]; then
+	check_result "$E_NOTEXIST" "file manager pool socket did not appear ($sock) — php$ver-fpm reload may have failed"
+fi
 
 # Private-listener vhost (secret-gated)
 sed -e "s|%user%|$user|g" \

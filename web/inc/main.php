@@ -77,8 +77,29 @@ if (isset($_SESSION["user"])) {
 	exec(HESTIA_CMD . "h-list-user " . quoteshellarg($username) . " json", $output, $return_var);
 	$data = json_decode(implode("", $output), true);
 	unset($output, $return_var);
+	// The effective user can vanish mid-session - e.g. an admin deletes the
+	// impersonated customer from another session (#438 blocks delete/user from
+	// within an impersonation session, so it happens elsewhere). Log out cleanly
+	// instead of limping on with undefined role/shell values.
+	if (empty($data[$username])) {
+		destroy_sessions();
+		header("Location: /login/");
+		exit();
+	}
 	$_SESSION["login_shell"] = $data[$username]["SHELL"];
 	$_SESSION["role"] = $data[$username]["ROLE"];
+	// Effective vs real role (#438). Admin-only gates read userContext, so during
+	// impersonation it must be the IMPERSONATED user's role ($_SESSION["role"], which
+	// $username already resolved to the look account) - otherwise a script running in
+	// the impersonation session (same panel origin) reaches admin routes. adminContext
+	// holds the real logged-in role for the impersonation controls and off-chain
+	// routes. userContext is also written at the look set/unset points (login/logout);
+	// this is the belt that keeps it correct on any request that runs main.php.
+	if (!empty($_SESSION["look"])) {
+		$_SESSION["userContext"] = $_SESSION["role"];
+	} elseif (!empty($_SESSION["adminContext"])) {
+		$_SESSION["userContext"] = $_SESSION["adminContext"];
+	}
 	unset($data, $username);
 }
 
@@ -122,7 +143,7 @@ if (isset($_SESSION["user"])) {
 	$user_plain = htmlentities($_SESSION["user"]);
 }
 
-if (isset($_SESSION["look"]) && $_SESSION["look"] != "" && $_SESSION["userContext"] === "admin") {
+if (isset($_SESSION["look"]) && $_SESSION["look"] != "" && $_SESSION["adminContext"] === "admin") {
 	$user = quoteshellarg($_SESSION["look"]);
 	$user_plain = htmlentities($_SESSION["look"]);
 }

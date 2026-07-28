@@ -50,6 +50,15 @@ if [ -z "$POLICY_USER_VIEW_SUSPENDED" ] || [ "$POLICY_USER_VIEW_SUSPENDED" = 'no
 	for ftp in $(grep "^${user}_" /etc/passwd | cut -f 1 -d :); do
 		/usr/sbin/usermod --lock "$ftp" 2> /dev/null
 	done
+
+	# The file manager runs as the customer via an FPM pool, so it does NOT hang on
+	# the Unix password — usermod --lock above stops SFTP/FTP/SSH but not the FM.
+	# Tear the listener down too so a suspended customer loses FM access, keeping the
+	# saved FILE_MANAGER flag so unsuspend restores it. Gated by the SAME
+	# POLICY_USER_VIEW_SUSPENDED check, so 'view suspended' keeps FM open like SFTP.
+	if [ -n "$FILE_MANAGER_PORT" ] && grep -q "^FILE_MANAGER='yes'" "$CONF_DIR/users/$user/user.conf" 2> /dev/null; then
+		$BIN/h-delete-user-filemanager "$user" no keep > /dev/null 2>&1 || true
+	fi
 fi
 
 # Suspending web domains

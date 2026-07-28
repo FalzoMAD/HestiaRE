@@ -76,6 +76,20 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- `share/upstream/update-web-vendor.sh --check` now also gates the File Manager fork
+  against external `http(s)` resource references (#434). The diet's "vendor
+  everything" rule (GDPR/offline/CSP) is enforced mechanically — a stray ref (like
+  the Google/MS doc-viewer iframes removed in #435) fails the check instead of
+  surviving on review. Comment lines, SVG `xmlns` namespaces and the app's own
+  project/help nav links are allowlisted.
+- File manager can now be enabled/disabled **per user from the Edit User page** (#218)
+  — an admin-only "Enable File Manager" checkbox under Advanced Options that calls
+  `h-add-user-filemanager` / `h-delete-user-filemanager` on save (so it builds/tears down
+  the customer's FPM pool + private-listener vhost, not just a flag). The checkbox and the
+  panel's File-Manager menu entry only appear while the system module is installed:
+  `h-list-sys-config` now exports `FILE_MANAGER_PORT` (set by `h-add-sys-filemanager`,
+  cleared by `h-delete-sys-filemanager`), and both gates check it — so uninstalling the
+  module hides the menu even for users whose saved `FILE_MANAGER='yes'` flag is retained.
 - The SFTP jail is rebuilt on `pam_namespace` (#413), replacing the `/srv/jail`
   systemd bind-mount machinery. Per session, `pam_namespace` mounts a private tmpfs on
   `/run/hestia/jail` (via `share/tmpfiles.d/hestia-jail.conf`) and runs
@@ -167,6 +181,15 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Changed
 
+- Ground rule: no em-dashes (or en-dashes) in code or comments (#445). Existing
+  occurrences were swept to plain ASCII hyphens across 70 code/config files (comment-
+  and string-only, no logic touched); `web/locale/` translations are exempt. A smoke
+  guard (`check_no_emdash`) fails the run if one reappears in the installed panel or CLI.
+- Starting or ending user impersonation ("login as" / return) now rotates the panel
+  session id (#438, session-fixation defense). **Behaviour side effect:** any other
+  tab sharing that session — a second admin tab, or an open File Manager tab — is
+  logged out at the switch. This is intentional (you cannot be admin and a customer
+  at the same time), but is a visible change someone may report as a bug.
 - Moved the bubblewrap assets `jailbash` (the sandboxed login-shell wrapper) and
   `bwrap-userns-restrict` (the AppArmor profile for the Ubuntu 24.04+ unprivileged-
   userns restriction) from `install/common/bubblewrap/` to `share/bubblewrap/`,
@@ -246,6 +269,68 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- Panel file downloads — **user backups, database dumps and site archives** were broken
+  on the Caddy-fronted panel (#441). They emitted `X-Accel-Redirect` (an nginx idiom);
+  the panel's Caddy config *does* intercept it, but serves via `file_server` as the
+  `caddy` user, which cannot read the customer-owned files (`hestia:<user>` `0640`) — so
+  an admin downloading a backup got a **404**, not the archive. They now stream via PHP
+  `readfile()` from the panel pool (which runs as `hestia`, the owner of those files),
+  with the download path `basename()`-guarded against traversal. RRD stats images stay on
+  X-Accel (a caddy-readable panel file under the web root). Note: `readfile()` binds a
+  panel FPM worker for the download's duration — fine at this scale; revisit
+  the pool's `pm` limits if large parallel downloads ever pressure the panel
+  (these are manual, logged-in, click-driven downloads — concurrency is minimal
+  even at hundreds of users, so no dedicated download pool is warranted).
+- Panel downloads — hardened the #441 stream for GB-scale files (#443). The `readfile()`
+  in the three handlers is consolidated into `web/inc/download.php` and now: drains every
+  output buffer and sets `ignore_user_abort(false)` so a multi-GB backup streams straight
+  to the socket (not into `memory_limit`) and a client disconnect frees the FPM worker at
+  the next chunk instead of hanging it; writes in flushed 8 KB chunks; and — for the
+  **stored backup only** — honours a `Range:` request (206/416 + `Accept-Ranges`) so an
+  aborted large download resumes instead of restarting from zero. The db/site archives are
+  regenerated per request, so they deliberately do **not** advertise ranges (a resume would
+  stream a differently-generated file). Range parsing is capped at a **single** range — a
+  comma-separated multi-range list (the `bytes=0-0,0-0,…` amplification vector) or any
+  malformed/descending spec falls back to the whole file rather than building a multipart
+  response. The panel php.ini pins `output_buffering = Off` / `zlib.output_compression = Off`,
+  and Caddy's `encode gzip` now skips `/download/*` (re-gzipping an already-compressed archive
+  burns CPU for no win and can interfere with ranges). A cross-customer backup request is
+  refused with an explicit redirect to `/list/backup/` instead of a blank page. `pm.max_children`
+  on the panel pool is raised 4 → 8: a download now binds a worker for the whole transfer, so
+  the short-request sizing no longer held — the cheap hedge that keeps a couple of concurrent
+  downloads from blocking the UI without opening a second, dedicated download pool. A smoke
+  guard allowlists X-Accel-Redirect *emitters* to `list/rrd/image.php`, so a future download
+  copying that idiom fails the smoke rather than silently hitting the caddy-can't-read wall.
+- File manager — the native modal/dropdown shim (which replaced Bootstrap-JS in the
+  diet) regained the keyboard accessibility Bootstrap-JS used to provide (#434):
+  modals now trap focus, close on Escape (honoring `data-bs-keyboard="false"` on
+  static dialogs), and return focus to the element that opened them; they carry
+  `aria-modal="true"` while open. Dropdowns track `aria-expanded` and close on
+  Escape (returning focus to their toggle) as well as on outside click.
+- Suspending a user now also cuts their **File Manager** access (#434). The FM pool
+  runs as the customer over an FPM socket, so `usermod --lock` (which stops
+  SFTP/FTP/SSH) never touched it — a suspended customer kept full FM access,
+  including an already-open panel session. `h-suspend-user` now tears the FM
+  listener down (keeping the saved `FILE_MANAGER='yes'`) and `h-unsuspend-user`
+  restores it, both gated by the same `POLICY_USER_VIEW_SUSPENDED` policy as
+  SFTP/FTP/SSH — so "view suspended" deliberately keeps the FM reachable for data
+  cleanup.
+- `update_user_value()` silently dropped a key that sat on the **last line** of
+  `user.conf` (#433). It deleted the line then inserted the new value *before* the
+  same line number — but after the delete that address is past EOF, so `sed`
+  wrote nothing and the value vanished (no error). It now rewrites the line in
+  place with `sed` `c`, which works on any line including the last (and, unlike
+  `s`, has no delimiter a value could contain). The FM `FILE_MANAGER` case had a
+  call-site workaround (insert before `TIME=`); this fixes the shared helper for
+  all ~20 callers. A regression test lives on the `docs` branch.
+- File manager gave a 403 for every request on **apache-only** installs (#218): the
+  private-listener template gated the secret only in the `<Directory>` block, which
+  authorizes static assets but not a `.php` handled by `SetHandler proxy`. That request
+  is authorized in the `<FilesMatch \.php$>` context, where the server-wide
+  `Require all denied` fallback (`conf.d/hestia-event.conf`, #397) otherwise wins — so
+  `index.php` was denied before it ran. Re-assert the secret gate inside `<FilesMatch>`
+  (same pattern the customer web templates already use). nginx-fronted profiles were
+  unaffected. Found on a fresh apache-only build in fleet verification.
 - AllowUsers co-maintenance (#412) edited the wrong line: the seeded guidance
   comment began with "# AllowUsers …", and `manage_sshd_allowusers`' detection regex
   (`#?[[:space:]]*AllowUsers`) matched that prose line, so `h-add-user` tokenised the
@@ -328,6 +413,47 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Security
 
+- Impersonation ("login as") now **drops admin privilege** while acting as a
+  customer (#438). Previously `$_SESSION["userContext"]` stayed `"admin"` for the
+  whole impersonation, so every admin-only route (161 gates) remained reachable —
+  a same-origin script running in an impersonation session (the FM media handler
+  was one such path, #435) could drive admin endpoints. `userContext` is now the
+  **effective** (impersonated) role, so those gates refuse automatically; a new
+  durable `adminContext` holds the real logged-in role for the impersonation
+  controls and off-chain routes (`fm-auth.php`, download handlers). The session id
+  is **regenerated at both transitions** (enter and return), so an id captured
+  during impersonation cannot regain admin after return. `web/download/backup`
+  scoping was corrected to the effective user (it read the raw session user =
+  admin), and `h-check-sys-smoke` gains an **allowlist** guard so only vetted files
+  may read the real `$_SESSION["user"]` at all (plus a guard that the old
+  effective-mirror `$_SESSION["role"]` is never gated on again — it was unified onto
+  `userContext`). Scope note: this shrinks the reachable surface; it does **not**
+  draw a privilege boundary — the panel process still runs as `hestia` and may call
+  any `h-*`, so a panel-PHP RCE is game-over regardless — and impersonating another
+  **admin** keeps admin (no boundary between admins). The impersonation session can
+  do only what the **customer** could, which *includes what the customer can do*: a
+  same-origin script in it still writes the customer's own web root (e.g. via the
+  file manager). That is the accepted residual risk.
+- File manager media handler — the inline-media allowlist gained a runtime guard
+  that refuses any active `Content-Type` (svg/html/xml/script) even if one were
+  ever added to the map (#432). Serving media from a separate origin was considered
+  and **rejected**: it would force a DNS record on every install, and the allowlist
+  + `nosniff` + CSP `sandbox` already make it unnecessary.
+- **File manager media handler — panel-origin XSS hardened** (#218). The FM is
+  same-origin with the panel (`:8083/fm/`), so the `?media=` stream serves
+  customer-controlled bytes on the panel origin. It now derives `Content-Type`
+  **only** from a server-side extension allowlist (never from file content or the
+  client), forces everything outside it — **SVG included** — to
+  `application/octet-stream` + `Content-Disposition: attachment`, and always sends
+  `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`.
+  Previously the type came from `finfo` (content-sniffed), so a customer's
+  `evil.svg` / `x.html` opened via the handler executed script under the panel
+  session — including an admin's own context when viewing via "login as". The
+  third-party Google/Microsoft document-viewer iframes were removed as well (they
+  leaked the file URL off-box and could not work in the private per-customer FM).
+  Caddy now also strips **all** inbound `X-Hestia-*` headers before re-setting the
+  trusted ones (`request_header -X-Hestia-*`), making the §7.2 header invariant
+  structural instead of an overwrite-list that must stay complete.
 - **GHSA-fcq6 — authenticated admin takeover fixed** (#386). The admin-only gate
   in `web/edit/server/hestia/index.php` had a second clause comparing to a bare,
   undefined `$ROOT_USER` — always false, so any authenticated user reached the

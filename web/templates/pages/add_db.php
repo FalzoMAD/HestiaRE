@@ -7,7 +7,7 @@
 			</a>
 		</div>
 		<div class="toolbar-buttons">
-			<?php if (($_SESSION["role"] == "admin" && $accept === "true") || $_SESSION["role"] !== "admin") { ?>
+			<?php if (($_SESSION["userContext"] == "admin" && $accept === "true") || $_SESSION["userContext"] !== "admin") { ?>
 				<button type="submit" class="button" form="main-form">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml( _("Save")) ?>
 				</button>
@@ -33,19 +33,19 @@
 		<div class="form-container">
 			<h1 class="u-mb20"><?= tohtml( _("Add Database")) ?></h1>
 			<?php show_alert_message($_SESSION); ?>
-			<?php if ($_SESSION["role"] == "admin" && $accept !== "true") { ?>
+			<?php if ($_SESSION["userContext"] == "admin" && $accept !== "true") { ?>
 				<div class="alert alert-danger" role="alert">
 					<i class="fas fa-exclamation"></i>
 					<p><?= htmlify_trans(sprintf(_("It is strongly advised to {create a standard user account} before adding %s to the server due to the increased privileges the admin account possesses and potential security risks."), _('a database')), '</a>', '<a href="/add/user/">') ?></p>
 				</div>
 			<?php } ?>
-			<?php if ($_SESSION["role"] == "admin" && empty($accept)) { ?>
+			<?php if ($_SESSION["userContext"] == "admin" && empty($accept)) { ?>
 				<div class="u-side-by-side u-mt20">
 					<a href="/add/user/" class="button u-width-full u-mr10"><?= tohtml( _("Add User")) ?></a>
 					<a href="/add/db/?<?= tohtml(http_build_query(["accept" => 'true'])) ?>" class="button button-danger u-width-full u-ml10"><?= tohtml( _("Continue")) ?></a>
 				</div>
 			<?php } ?>
-			<?php if (($_SESSION["role"] == "admin" && $accept === "true") || $_SESSION["role"] !== "admin") { ?>
+			<?php if (($_SESSION["userContext"] == "admin" && $accept === "true") || $_SESSION["userContext"] !== "admin") { ?>
 					<p class="hint u-mb20">
 						<?php
 							$prefix_hint = tohtml(_("Prefix %s will be automatically added to database name and database user"));

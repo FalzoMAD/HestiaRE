@@ -1,7 +1,7 @@
-# Adminer — served by Panel-Caddy via the dedicated caddy FPM pool.
+# Adminer - served by Panel-Caddy via the dedicated caddy FPM pool.
 # Deployed to /etc/caddy/apps/adminer.conf by h-add-sys-adminer (imported
 # inside the :8083 site block). Fixed alias /adminer/. Same exposure model as
-# phpMyAdmin: served on the panel port, NOT behind forward_auth — the gate is
+# phpMyAdmin: served on the panel port, NOT behind forward_auth - the gate is
 # Adminer's own login (DB credentials required) plus firewall on :8083. The
 # unauthenticated login form can reach arbitrary DB hosts (SSRF); restricting
 # that is the #350 follow-up. Removed by h-delete-sys-adminer.

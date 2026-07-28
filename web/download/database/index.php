@@ -3,6 +3,7 @@ use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
+include $_SERVER["DOCUMENT_ROOT"] . "/inc/download.php";
 
 // Check token
 verify_csrf($_GET);
@@ -16,7 +17,6 @@ exec(
 );
 
 if ($return_var == 0) {
-	header("Content-type: application/sql");
-	header("Content-Disposition: attachment; filename=" . $output[0]);
-	header("X-Accel-Redirect: " . $output[0]);
+	// No Range: h-dump-database regenerates the dump per request, so a resume would stream a different file.
+	serve_download($output[0], "application/sql");
 }

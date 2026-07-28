@@ -6,7 +6,7 @@ $TAB = "SERVER";
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
-// Check user — admin only. The second clause (`&& $user_plain === "$ROOT_USER"`)
+// Check user - admin only. The second clause (`&& $user_plain === "$ROOT_USER"`)
 // was an auth-bypass (GHSA-fcq6): $ROOT_USER is undefined here, so it always
 // evaluated false and let any authenticated user reach this page (which rewrites
 // the hestia panel service config + the privileged panel crontab). Gate on the

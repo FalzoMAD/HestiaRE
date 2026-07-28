@@ -43,8 +43,15 @@ These are absolute. Never deviate, never re-suggest rejected items.
 
 ## COMMENT STYLE
 
-Comments are terse. Nobody reads a wall of them. But some comments carry
-hard-won knowledge — condense what the code *does*, keep why it *must*.
+Comments are terse. Nobody reads a wall of them. A comment earns its place by
+explaining **why** the code must be this way; the **how** is the code's job, so
+don't narrate it. Condense what the code *does*, keep why it *must*.
+
+**No em-dashes (ground rule).** Never use an em-dash (`—`) or en-dash (`–`) in code
+or comments; use a plain ASCII hyphen (`-`) or restructure. A hyphen reads the same
+in every editor and terminal and avoids the 3-byte-per-character width surprise.
+Prose docs and the translations under `web/locale/` are exempt; a smoke guard
+enforces it for the panel and CLI (`bin/`, `web/` minus `web/locale/`).
 
 **Keep verbatim (do NOT condense):**
 - A comment explaining a **non-obvious edge/precondition**, or referencing an
@@ -61,15 +68,25 @@ hard-won knowledge — condense what the code *does*, keep why it *must*.
 
 **Condense:**
 - **Inline** comments that merely restate *what* the code does → one line, or drop.
+- **Never restate the code.** A comment above `pm.max_children = 8` that says "set
+  max children to 8" is noise — the only thing worth writing is *why 8*. Same for a
+  value/var assignment: the value is visible, the reason is not.
+- **Line width: up to 120 columns** (not 80 — nothing here is bound to an 80-col
+  terminal). Prefer one wide line over three narrow ones; wrap only past 120. Fewer
+  lines beats a tall stack of short ones.
+- **conf/ini keys:** a one- or two-line option change rarely needs more than a
+  one-line *why*. Don't top it with a four-line banner; if the rationale genuinely
+  needs a paragraph, it belongs in the file **header**, not inline above the key.
 - Keep short (≤5-word) upstream scaffolding as-is (`# Includes`, section banners);
   don't churn near-verbatim upstream files.
 - Drop `#NNN` refs in prose (keep a bare number only as a rare useful anchor).
 
 **Verification (mechanical — the invariant is comment-only):** every added/removed
-diff line must match `^\s*#`; any line that doesn't is a hit to inspect. Never
-regex-strip trailing `#` (it is not a comment in `$#`, `${v#p}`, heredocs, awk).
-So make every change a **full-line** comment change, not a trailing one. Plus
-`bash -n` on touched scripts, `json.tool` on JSON, and a smoke run.
+diff line must match `^\s*(#|;|//)` (shell/JSON `#`, ini/fpm `;`, PHP/Caddy `//`
+and `#`); any line that doesn't is a hit to inspect. Never regex-strip a trailing
+`#` (it is not a comment in `$#`, `${v#p}`, heredocs, awk). So make every change a
+**full-line** comment change, not a trailing one. Plus `bash -n` on touched scripts,
+`json.tool` on JSON, and a smoke run.
 
 ---
 

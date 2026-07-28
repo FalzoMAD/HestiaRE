@@ -4,7 +4,7 @@ $TAB = "SERVER";
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
-// Admin only — the rspamd controller UI is a server-wide tool
+// Admin only - the rspamd controller UI is a server-wide tool
 if ($_SESSION["userContext"] !== "admin") {
 	header("Location: /list/user");
 	exit();
