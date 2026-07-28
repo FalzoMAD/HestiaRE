@@ -9,484 +9,244 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+_Nothing yet._
+
+## v0.11.0 (2026-07-28)
+
+Covers everything since v0.10.0. The headline: the **file manager** is rebuilt
+per-customer (the kernel UID is the isolation boundary), ClamAV and ProFTPD join
+the modular addons, and a round of security hardening lands — impersonation drops
+admin privilege, and the GHSA-* advisories against the 1.9.6 fork point are fixed.
+
 ### Breaking / Upgrade notes
 
-- The `install/` tree is dissolved and `HESTIA_INSTALL_DIR` retired (#119). fail2ban's
-  config (`jail.local`, `filter.d/`, `action.d/`) moved `install/deb/fail2ban/` →
-  `share/fail2ban/` (the installer copies from there now); it was the last holdout.
-  The stale iptables/ipset copy-blocks in `h-install-hestia` (which sourced from the
-  now-vacated `install/` tree) were removed — those rules are set up in the configure
-  stage from `/etc/hestia`. No live installs pre-v1, so no migration path.
-- Removed the leftover **FileGator** plumbing after the FM rebuild (#218): the
-  `install/deb/filemanager/` composer overlay, the `filegator` manifest pin, the
-  system-wide File-Manager server toggle (edit/server), the FileGator `configuration.php`
-  hook in `h-change-sys-config-value`, the vestigial system `FILE_MANAGER` /
-  `PLUGIN_FILE_MANAGER` keys in `h-list-sys-config`, and the `syshealth` block that
-  auto-installed the module. The FM is per-customer now (`FILE_MANAGER` in user.conf).
-
-- File manager rebuilt (#419, replaces FileGator + the SFTP-loopback connector). The
-  `h-add-sys-filemanager`/`h-delete-sys-filemanager` commands no longer download FileGator
-  or run composer; the app now runs in a per-customer php-fpm pool **as the customer** (the
-  kernel UID is the isolation boundary), reached via Panel-Caddy `/fm/` → `forward_auth`
-  (`web/fm-auth.php`) → a private loopback listener. New per-user commands
-  `h-add-user-filemanager`/`h-delete-user-filemanager`, saved-state on module delete, and a
-  `rebuild_user` restore hook. Phase 1 (integration skeleton) only — the vendored app follows
-  in Phase 2 (#218). No live installs pre-v1, so no migration path; the old
-  `/usr/local/hestia/web/fm` tree is unused.
-
-- File manager — bumped vendored Bootstrap-CSS 5.2.3 → 5.3.8 and PrismJS 1.29.0 → 1.30.0
-  (#218). Bootstrap 5.3 adds native `data-bs-theme` colour modes, which the FM's theme
-  passthrough (S2) relies on — 5.2.3 ignored `data-bs-theme` entirely. upstream/* snapshot
-  branches + VENDORED.json pins updated accordingly.
-
-- File manager Phase 4 — panel menu + robustness (#218). The panel's "File manager"
-  menu entry now follows the customer's own `FILE_MANAGER` flag (exposed via
-  `h-list-user`, surfaced as `USER_FILE_MANAGER` for the effective/impersonated user)
-  instead of the legacy system-wide FileGator toggle. `h-add-user-filemanager` waits
-  for the pool socket before returning, so clicking the menu right after enabling never
-  races a not-yet-ready socket.
-
-- File manager Phase 2 — vendored TinyFileManager put on a diet (#218). All external
-  CDN assets are dropped (GDPR/offline/CSP): Bootstrap-CSS + a combined Prism build are
-  vendored under `share/filemanager/fm/assets/`, FontAwesome is referenced from the panel's
-  own FA7 copy (same-origin). jQuery, Bootstrap-JS, DataTables, Dropzone and Ace are removed
-  — replaced by vanilla JS + a tiny Bootstrap-compatible modal/dropdown shim, a native
-  chunked uploader, native table filter/sort, and a Prism-overlay code editor (highlighting +
-  line numbers, no preview). FA4 icons remapped to FA7. File sharing/direct-links removed
-  (P11). The panel light/dark theme now drives the FM (`fm-auth` passes `X-Hestia-Theme`), and
-  in-page media (img/audio/video) streams through PHP since the customer home is not web-served.
-
-- The SFTP jail no longer uses `/srv/jail` (#413) — it is now built per session under
-  `/run/hestia/jail` by `pam_namespace`. Fresh installs get this automatically; there
-  are no live installs pre-v1, so no migration/cleanup path is carried.
-- The system removal commands are unified under a single verb: `h-remove-sys-*` →
-  `h-delete-sys-*` (#123). Affected: `adminer, mariadb, postgresql, redis,
-  roundcube, rspamd, sieve, snappymail`. HestiaCP uses `v-delete-*` universally,
-  so this restores cherry-pick parity and matches every object command
-  (`h-delete-web-domain`, …); it reverses the interim `h-remove-sys-*` naming
-  introduced for redis in #121. No code path invoked the old names, and the
-  install-time dangling-symlink prune (below) clears the now-broken
-  `v-remove-sys-*` aliases on existing installs — but any personal scripts calling
-  `h-remove-sys-*`/`v-remove-sys-*` must be updated.
-- ProFTPD installs now set `FTP_SYSTEM=proftpd` (it was never recorded before,
-  #123). New installs get it automatically; **pre-existing installs keep
-  `FTP_SYSTEM` empty** (no migration before v1) — until re-run through
-  `h-add-sys-proftpd`, the FTP machinery (`h-restart-ftp`, RRD FTP graph, smoke
-  FTP check, NAT MasqueradeAddress) stays inert on them, as it already was.
+- The `install/` tree is dissolved and `HESTIA_INSTALL_DIR` retired (#119).
+  fail2ban's config moved `install/deb/fail2ban/` → `share/fail2ban/` (the last
+  holdout); the stale iptables/ipset copy-blocks in `h-install-hestia` were removed
+  (those rules are set up in the configure stage). No live installs pre-v1, so no
+  migration path.
+- File manager rebuilt (#218/#419), replacing FileGator + the SFTP-loopback
+  connector. It runs in a per-customer php-fpm pool **as the customer**, reached via
+  Panel-Caddy `/fm/` → `forward_auth` (`web/fm-auth.php`) → a private loopback
+  listener; enablement is the per-user `FILE_MANAGER` flag in `user.conf`. All the
+  old FileGator plumbing is gone — the composer overlay, the system-wide toggle, the
+  `configuration.php` hook, the vestigial system `FILE_MANAGER`/`PLUGIN_FILE_MANAGER`
+  keys, and the auto-install block; the old `/usr/local/hestia/web/fm` tree is unused.
+  No migration path.
+- The SFTP jail no longer uses `/srv/jail` (#413) — it is built per session under
+  `/run/hestia/jail` by `pam_namespace`. Fresh installs get this automatically; no
+  migration/cleanup path is carried.
+- The system removal verb is unified: `h-remove-sys-*` → `h-delete-sys-*` (#123;
+  `adminer, mariadb, postgresql, redis, roundcube, rspamd, sieve, snappymail`). This
+  restores `v-delete-*` cherry-pick parity and reverses the interim `h-remove-sys-*`
+  naming from #121. The install-time prune clears the now-broken `v-remove-sys-*`
+  aliases, but any personal scripts calling the old names must be updated.
+- ProFTPD installs now record `FTP_SYSTEM=proftpd` (#123) — it was never set before.
+  New installs get it automatically; **pre-existing installs keep it empty** (no
+  migration) until re-run through `h-add-sys-proftpd`, so the FTP machinery
+  (`h-restart-ftp`, RRD FTP graph, smoke FTP check, NAT MasqueradeAddress) stays
+  inert on them, as it already was.
 
 ### Added
 
-- `share/upstream/update-web-vendor.sh --check` now also gates the File Manager fork
-  against external `http(s)` resource references (#434). The diet's "vendor
-  everything" rule (GDPR/offline/CSP) is enforced mechanically — a stray ref (like
-  the Google/MS doc-viewer iframes removed in #435) fails the check instead of
-  surviving on review. Comment lines, SVG `xmlns` namespaces and the app's own
-  project/help nav links are allowlisted.
-- File manager can now be enabled/disabled **per user from the Edit User page** (#218)
-  — an admin-only "Enable File Manager" checkbox under Advanced Options that calls
-  `h-add-user-filemanager` / `h-delete-user-filemanager` on save (so it builds/tears down
-  the customer's FPM pool + private-listener vhost, not just a flag). The checkbox and the
-  panel's File-Manager menu entry only appear while the system module is installed:
-  `h-list-sys-config` now exports `FILE_MANAGER_PORT` (set by `h-add-sys-filemanager`,
-  cleared by `h-delete-sys-filemanager`), and both gates check it — so uninstalling the
-  module hides the menu even for users whose saved `FILE_MANAGER='yes'` flag is retained.
+- File manager — vendored TinyFileManager, put on a diet (#218). No external CDN
+  (GDPR/offline/CSP): Bootstrap-CSS + a combined Prism build are vendored under
+  `share/filemanager/fm/assets/`, FontAwesome is referenced from the panel's own FA7
+  (same-origin). jQuery, Bootstrap-JS, DataTables, Dropzone and Ace are replaced by
+  vanilla JS + a tiny Bootstrap-compatible shim, a native chunked uploader, native
+  table filter/sort, and a Prism-overlay code editor. The panel light/dark theme
+  drives the FM (`data-bs-theme`; Bootstrap-CSS 5.2.3 → 5.3.8, PrismJS 1.29.0 →
+  1.30.0), and in-page media streams through PHP (the customer home is not
+  web-served). Enable/disable **per user from the Edit User page** — an admin-only
+  checkbox calls `h-add-user-filemanager`/`h-delete-user-filemanager` on save. The
+  checkbox and the panel's File-Manager menu entry appear only while the system
+  module is installed (`h-list-sys-config` exports `FILE_MANAGER_PORT`). The vendor
+  `--check` gate rejects any external `http(s)` resource reference, so the "vendor
+  everything" rule holds mechanically (#434).
+- `h-add-sys-clamav` / `h-delete-sys-clamav` — ClamAV mail antivirus as a modular
+  addon (#123). The exim antivirus machinery (`.ifdef CLAMD` block) already shipped
+  inert. The add command installs the daemon + freshclam, wires **bidirectional**
+  exim↔clamav group access (clamav must also read the exim spool it scans), waits for
+  the virus DB, and **arms the exim `CLAMD` macro only once clamd answers on the
+  socket** — because `defer_ok` is fail-open (a dead clamd accepts mail *unscanned*),
+  so an armed-but-blind macro would silently pass mail. Never preselected (clamd holds
+  the ~1-2 GB signature DB). Delete is saved-state (per-domain flags kept; the DB
+  survives the purge unless `PURGE_DATA=yes`). Verified live on all four distros.
+- `h-add-sys-proftpd` / `h-delete-sys-proftpd` — ProFTPD is now a fully modular,
+  individually-removable addon (#123). The curated config moved `install/deb/proftpd/`
+  → `share/proftpd/` (it was orphaned, so the distro default was live). Cross-distro
+  package set (`proftpd-basic` is bookworm-only; modern proftpd split TLS into
+  `proftpd-mod-crypto`), an explicit `mod_tls` presence gate (its absence silently
+  disables FTPS), and an AppArmor override for Ubuntu 26's enforced profile. Verified
+  on all four distros.
+- SSH `AllowUsers` allowlist co-maintenance (#412/#413), defense-in-depth. The
+  installer seeds a **commented (inert)** `#AllowUsers` line; `h-add-user`,
+  `h-delete-user`, `rebuild_user`, and the domain-FTP hooks
+  (`h-add-web-domain-ftp`/`h-delete-web-domain-ftp`) keep it in sync via the shared
+  `manage_sshd_allowusers`. It edits **only** the account's own token (operator
+  entries like `root@10.0.0.5` are preserved), validates with `sshd -t`, reloads sshd
+  only when the line is active, and re-comments rather than leaving an active line
+  empty (lockout guard). Nothing changes until the operator removes the leading `#`.
 - The SFTP jail is rebuilt on `pam_namespace` (#413), replacing the `/srv/jail`
   systemd bind-mount machinery. Per session, `pam_namespace` mounts a private tmpfs on
-  `/run/hestia/jail` (via `share/tmpfiles.d/hestia-jail.conf`) and runs
-  `share/security/hestia-jail.init` inside the new mount namespace — as root, before
-  sshd chroots — building the jail at the **fidelity path**
-  (`/run/hestia/jail/<user>/<real-home>`, from `getent passwd`) and bind-mounting the
-  real home there. One generic rule now serves **both** panel users and domain-FTP
-  sub-accounts (whose home is user-owned deep under `web/<domain>` — a case native
-  chroot cannot handle); the SFTP client sees its true path (e.g.
-  `/home/alice/web/site.tld/public_html`). Fail-closed rides on sshd's own
-  `safely_chroot()`: the fresh tmpfs root is `1777`, the init builds everything while
-  it is still `1777`, and `chmod 755` on the root is the **last** action — so any
-  failure leaves the root world-writable and sshd refuses the session (pam_namespace
-  ignores the init exit code, so this is the real gate). Scope is the `sftp-jailed`
-  group, used both as the sshd chroot selector (a single static `Match Group` block,
-  no more growing `Match User` list) and the PAM scope (a `pam_succeed_if` gate, so
-  non-members log in completely unchanged). No `/home` ownership flip any more (the
-  chroot root is root-owned in the tmpfs; homes keep normal user ownership). No
-  persistent state — no `/srv/jail`, no per-user `.mount` units, no `@reboot` cron;
-  `/run/hestia/jail` is tmpfs and self-heals on reboot. Verified live on OpenSSH
-  9.2/9.6/10.0/10.2 (deb12/ub24/deb13/ub26), including ub26 with the unprivileged-
-  userns restriction active and **no** bwrap/userns involved.
-- SSH `AllowUsers` co-maintenance now also covers domain-FTP sub-accounts (#413,
-  deferred from #412): `h-add-web-domain-ftp` adds the FTP account and
-  `h-delete-web-domain-ftp` removes it via `manage_sshd_allowusers`, so an active
-  allowlist no longer silently locks out FTP sub-accounts (rebuild goes through
-  `h-add-web-domain-ftp`, so it is covered too).
-- SSH `AllowUsers` allowlist co-maintenance (#412). HestiaRE now keeps the hestia
-  panel accounts in sync on an `AllowUsers` line in `/etc/ssh/sshd_config` — a
-  defense-in-depth SSH login allowlist. The installer seeds a **commented** (inert)
-  `#AllowUsers` line with guidance unless one already exists; `h-add-user` adds the
-  new account, `h-delete-user` removes it, and `rebuild_user` (`func/rebuild.sh`)
-  re-adds it — so restore/rebuild, which bypass `h-add-user`, can't leave a restored
-  user off an active line and silently locked out (shared helper
-  `manage_sshd_allowusers` in `func/main.sh`). It edits **only** the token matching the account, so operator
-  entries (`root@10.0.0.5`, maintenance, emergency accounts) and the commented-vs-
-  active state of the line are preserved; the change is validated with `sshd -t`
-  (left unchanged on rejection) and sshd is reloaded only when the line is active. A
-  delete that would leave an *active* line empty re-comments it instead of locking
-  everyone out (including root). Membership tracks account existence (no suspend
-  hook). Domain-FTP sub-accounts are out of scope here (they follow in the SFTP
-  transport rebuild). Nothing changes until the operator removes the leading `#`.
-- `h-add-sys-clamav` / `h-delete-sys-clamav` — ClamAV mail antivirus is now a
-  modular addon (#123). It was missing from the manifest and installer entirely,
-  even though the exim antivirus machinery (`.ifdef CLAMD` block: `av_scanner`,
-  per-domain antivirus ACL, `deny malware = */defer_ok`) already shipped inert.
-  Anchored in `share/manifest.json` as `ADDON_CLAMAV` (mail-block only, **never
-  preselected** — clamd holds the whole signature DB, ~1-2 GB RAM); the orphaned
-  `install/deb/clamav/clamd.conf` moved to `share/clamav/` and hardened
-  (`LocalSocketMode 666`→`660`, `LogVerbose` off). `h-add-sys-clamav` installs the
-  daemon + freshclam, deploys the config, wires **bidirectional group access**
-  (`Debian-exim`→`clamav` to write the clamd socket, **and `clamav`→`Debian-exim`
-  to read the exim spool it scans** — the latter is load-bearing: without it clamd
-  hits "Permission denied" on the spool and the fail-open scanner passes mail
-  unscanned), waits for the virus DB (via the freshclam service — no manual
-  `freshclam` that would collide with its lock), and **arms the exim `CLAMD` macro
-  + `ANTIVIRUS_SYSTEM=clamav` only once clamd answers on the socket** (`clamdscan
-  --ping`). If the DB is still downloading it leaves the macro OFF with a WARN to
-  re-run — because `defer_ok` is **fail-open** (a dead clamd accepts mail
-  *unscanned*, not deferred), so an armed-but-blind macro would silently pass
-  mail. Two hardening details found in live testing: the socket mode is enforced
-  by a systemd drop-in (`share/clamav/socket-hardening.conf`, `SocketMode=0660`)
-  because clamd is socket-activated so the `.socket` unit — not `clamd.conf`'s
-  `LocalSocketMode` — owns the live socket; and a local AppArmor override
-  (`share/clamav/apparmor-local`) guarantees the spool read even under a stricter
-  base profile than the stock one (which already allows it). Delete is saved-state
-  (per-domain flags preserved, restored on reinstall; the DB is moved aside across
-  the purge and restored, since `apt purge clamav-freshclam` wipes `/var/lib/clamav`
-  — kept unless `PURGE_DATA=yes`). Verified live on all four distros: EICAR over
-  SMTP rejected from an untrusted host, clean mail delivered, socket `660 clamav`,
-  fail-open window, delete-disarm + reinstall-restore, and correct behaviour with
-  AppArmor absent entirely.
-- `h-add-sys-proftpd` / `h-delete-sys-proftpd` — ProFTPD is now a fully modular,
-  individually-removable addon (#123). The curated config moved
-  `install/deb/proftpd/` → `share/proftpd/` (it was orphaned — never deployed, so
-  the distro default was live) and gained `Include modules.conf` (DSO loading)
-  and `Include conf.d/` (NAT MasqueradeAddress). The add command deploys the
-  config, records `FTP_SYSTEM=proftpd`, and opens the FTP firewall rule with the
-  passive range read from `PassivePorts` in the deployed config (single source);
-  the delete command purges and reverts all of it. `install_addons` delegates to
-  the add command instead of an inline `apt install`. Cross-distro handling
-  (verified on Debian 12/13 + Ubuntu 24/26): a uniform package set
-  (`proftpd-core proftpd-mod-vroot proftpd-mod-crypto` — `proftpd-basic` is
-  bookworm-only and modern proftpd split TLS into `proftpd-mod-crypto`), an
-  explicit `mod_tls` presence gate (its absence silently disables FTPS — the TLS
-  block is `<IfModule mod_tls.c>`-guarded), and an AppArmor local override
-  (`share/proftpd/apparmor-local`) so Ubuntu 26's enforced proftpd profile can
-  read the panel cert.
+  `/run/hestia/jail` and runs an init inside the new mount namespace (as root, before
+  sshd chroots) that builds the jail at the **fidelity path**
+  (`/run/hestia/jail/<user>/<real-home>`) and bind-mounts the real home there — one
+  generic rule serving **both** panel users and domain-FTP sub-accounts (whose home is
+  user-owned deep under `web/<domain>`, a case native chroot cannot handle).
+  Fail-closed rides on sshd's own `safely_chroot()`: the fresh tmpfs root is `1777`
+  and `chmod 755` on it is the **last** action, so any failure leaves it world-writable
+  and sshd refuses the session. Scope is the `sftp-jailed` group (one static
+  `Match Group` block + a `pam_succeed_if` gate, so non-members log in unchanged). No
+  persistent state — no `/srv/jail`, no per-user `.mount` units, no `@reboot` cron.
+  Verified live on OpenSSH 9.2/9.6/10.0/10.2 across all four distros, including ub26
+  with the unprivileged-userns restriction active and no bwrap involved.
 
 ### Changed
 
 - Ground rule: no em-dashes (or en-dashes) in code or comments (#445). Existing
-  occurrences were swept to plain ASCII hyphens across 70 code/config files (comment-
-  and string-only, no logic touched); `web/locale/` translations are exempt. A smoke
-  guard (`check_no_emdash`) fails the run if one reappears in the installed panel or CLI.
-- Starting or ending user impersonation ("login as" / return) now rotates the panel
-  session id (#438, session-fixation defense). **Behaviour side effect:** any other
-  tab sharing that session — a second admin tab, or an open File Manager tab — is
-  logged out at the switch. This is intentional (you cannot be admin and a customer
-  at the same time), but is a visible change someone may report as a bug.
-- Moved the bubblewrap assets `jailbash` (the sandboxed login-shell wrapper) and
-  `bwrap-userns-restrict` (the AppArmor profile for the Ubuntu 24.04+ unprivileged-
-  userns restriction) from `install/common/bubblewrap/` to `share/bubblewrap/`,
-  matching the curated-asset convention (`share/proftpd`, `share/clamav`, …).
-  `h-add-sys-ssh-jail` deploys them from the new path. Since bubblewrap was the only
-  thing under `install/common/`, the now-unused `HESTIA_COMMON_DIR` variable and the
-  empty `install/common/` directory were removed.
-- SSH-access shells are now a curated allowlist (#412). `is_format_valid_shell`
-  (`func/main.sh`) and `h-list-sys-shells` (the panel's single shell source, used by
-  the user and package editors) share one list — `HESTIA_SHELL_ALLOWLIST` = `nologin`
-  (SFTP-only, default) · `jailbash` (bwrap sandbox) · `bash` (unconfined) · `sh` (POSIX
-  `/bin/sh`), intersected with `/etc/shells` (so a shell absent on the node, e.g.
-  `jailbash` without the SSH jail, isn't offered) with `nologin` guaranteed. The
-  upstream `dash`/`rbash`/`rssh`/`screen`/`tmux` options are dropped (`rssh` no longer
-  exists on Debian and silently degrades to `nologin`; `screen`/`tmux` are meaningless
-  as a login shell). Also fixes
-  an unquoted, word-based `grep -w $1 /etc/shells` in the old validator that let a bare
-  `bash` validate against the `/bin/bash` line. The validator is genuinely hard (not a
-  UI-only filter): `h-change-user-shell` gates every real change through it, but allows
-  re-asserting the user's *current* shell (in-allowlist **or** identical to the shell
-  already set) so a legacy off-allowlist shell a restore left in place can be re-set
-  without a new off-allowlist shell slipping in. Existing users/packages keep any
-  off-allowlist shell: `rebuild.sh` restores it straight from `/etc/shells`, and the
-  user/package editors now render it as the selected "(current)" option so saving the
-  form unchanged never silently resets it — only the curated shells are newly assignable.
-- Moved the webmail vhost templates from `templates/mail/` into service-scoped
-  `share/nginx/webmail/` and `share/apache2/webmail/` (#119) — they are system
-  webmail-delivery assets (docroot-free proxies to the Panel-Caddy listeners,
-  #205), not a user-pickable template library like `templates/web/`. The
-  `nginx/apache2` split is structural (`add_webmail_config` keys on
-  `$WEB_SYSTEM`), so `MAILTPL` is retired and the resolver is now
-  `$HESTIA/share/$WEB_SYSTEM/webmail/$tpl`. Also removed the dead RainLoop
-  templates + refs (superseded by SnappyMail; never installed by HestiaRE):
-  `share/apache2/webmail/rainloop.{tpl,stpl}`, the rainloop branch in
-  `h-add-mail-domain-ssl`, and the guarded `/etc/rainloop/` block in
-  `h-change-sys-hostname`.
-- Dissolved `install/deb/ssl/` and `install/deb/logrotate/` into service-scoped
-  `share/` homes (#119). `dhparam.pem` → `share/ssl/` (it is consumed
-  cross-service — nginx `nginx.conf` and dovecot 2.3/2.4 `10-ssl.conf` both read
-  `/etc/ssl/dhparam.pem`, so not an nginx-only asset); the base-stage
-  "ship curated, regenerate as fallback" deploy is unchanged. The logrotate
-  fragments are distributed to their owning service:
-  `share/apache2/logrotate` (+ `share/apache2/httpd-prerotate/`),
-  `share/nginx/logrotate`, `share/dovecot/logrotate`, `share/hestia/logrotate`
-  — mirroring the existing `share/roundcube/logrotate` (#234). `h-install-hestia`
-  repointed; pure moves, no behaviour change.
-- Removed the shared `www.conf` PHP-FPM pool and dissolved `install/deb/php-fpm/`
-  (#397, #119). Every web domain already runs in its own per-domain FPM pool, so
-  the server-wide `www.sock` pool had no serving role left — in upstream it ran
-  as `hestiamail` to back the panel-adjacent web apps, but HestiaRE isolated
-  those into dedicated per-app Caddy pools (#205/#341), leaving only an apache
-  catch-all fallback that *executed* unclaimed `.php` as the `caddy` service user
-  unconfined. That is now hardened: `share/apache2/hestia-event.conf` denies
-  unclaimed `.php` (`Require all denied`, mirroring Debian's own php-fpm apache
-  snippet) and each per-domain vhost re-grants with `Require all granted`
-  (`templates/web/apache2/php-fpm/default.{tpl,stpl}`) — so a `.php` no domain
-  claims is refused (403) instead of run in a shared context or served as source.
-  The three curated assets (`dummy.conf`, `multiphp.tpl`, `php-fpm.conf`) moved
-  to `share/php-fpm/`; `h-list-default-php` now reports the default web version
-  via `multiphp_default_version()` (update-alternatives) instead of the removed
-  `www.conf` marker. Verified on Debian 13 (nginx+apache): claimed domain `.php`
-  executes end-to-end, unclaimed `.php` returns 403; nginx-only domains never
-  used `www.sock` and are unaffected.
-- Dropped the unused `dom` extension from the panel FPM's curated optional set
-  (`hestia-php-confd`). Audit A8: no panel (`web/`), phpMyAdmin, or Adminer code
-  uses `DOMDocument`/`DOMXPath` (grep-verified in-tree + on the installed
-  phpMyAdmin), so it was whitelisted for nothing. The XML family the DB tools do
-  need (`simplexml`/`xmlwriter`/`xmlreader`) is unaffected.
-- Vendored **Adminer bumped 5.4.4 → 5.5.0** (`share/adminer/adminer.php`,
-  VENDORED.json). Adminer is vendored (not the OS package) specifically because
-  every target distro ships a CVE-affected version (#350); keeping the vendored
-  build current is part of that rationale. Fetched via
-  `share/upstream/update-web-vendor.sh --fetch adminer@5.5.0` (GitHub release
-  digest verified, `php -l` clean); `upstream/adminer` snapshot branch updated.
-  The `login-servers` SSRF-hardening plugin (#356) is re-pinned to the same
-  v5.5.0 tag — its file is byte-identical across the two releases (pin only).
+  occurrences were swept to plain ASCII hyphens across 70 code/config files
+  (comment/string only, no logic touched); `web/locale/` translations are exempt. A
+  smoke guard (`check_no_emdash`) fails the run if one reappears in the installed
+  panel or CLI.
+- SSH-access shells are now a curated allowlist (#412): `nologin` (default) ·
+  `jailbash` (bwrap sandbox) · `bash` · `sh`, intersected with `/etc/shells`, shared
+  by the hard validator and the panel's single shell source. The upstream
+  `dash`/`rbash`/`rssh`/`screen`/`tmux` options are dropped (meaningless or gone), and
+  an unquoted `grep -w` that let a bare `bash` validate against `/bin/bash` is fixed.
+  Existing off-allowlist shells are preserved (rendered as a selected "(current)"
+  option; `rebuild.sh` restores them straight from `/etc/shells`), so saving a form
+  unchanged never resets them — only the curated shells are newly assignable.
+- Vendored Adminer bumped 5.4.4 → 5.5.0 (`share/adminer/`, VENDORED.json) — Adminer is
+  vendored precisely because every target distro ships a CVE-affected version (#350).
+  Fetched via `update-web-vendor.sh --fetch adminer@5.5.0` (release digest verified);
+  the SSRF-hardening `login-servers` plugin (#356) is re-pinned to the same tag.
+- Curated-asset moves out of the legacy `install/` tree (#119, no behaviour change):
+  the webmail vhost templates → `share/{nginx,apache2}/webmail/` (`MAILTPL` retired;
+  the resolver keys on `$WEB_SYSTEM`; dead RainLoop templates + refs removed);
+  `dhparam.pem` → `share/ssl/` (consumed cross-service by nginx and dovecot) and the
+  logrotate fragments distributed to their owning service; and the bubblewrap assets
+  (`jailbash`, `bwrap-userns-restrict`) → `share/bubblewrap/` (the last thing under
+  `install/common/`, so `HESTIA_COMMON_DIR` was removed).
+- Removed the shared `www.conf` PHP-FPM pool (#397, #119). Every web domain already
+  runs in its own per-domain pool, so the server-wide pool had no serving role left.
+  The apache catch-all that *executed* unclaimed `.php` as the `caddy` user unconfined
+  is now hardened: `hestia-event.conf` denies unclaimed `.php` (`Require all denied`)
+  and each per-domain vhost re-grants — so a `.php` no domain claims returns 403
+  instead of running in a shared context or being served as source. Verified on
+  Debian 13 (nginx+apache).
 
 ### Fixed
 
-- Panel file downloads — **user backups, database dumps and site archives** were broken
-  on the Caddy-fronted panel (#441). They emitted `X-Accel-Redirect` (an nginx idiom);
-  the panel's Caddy config *does* intercept it, but serves via `file_server` as the
-  `caddy` user, which cannot read the customer-owned files (`hestia:<user>` `0640`) — so
-  an admin downloading a backup got a **404**, not the archive. They now stream via PHP
-  `readfile()` from the panel pool (which runs as `hestia`, the owner of those files),
-  with the download path `basename()`-guarded against traversal. RRD stats images stay on
-  X-Accel (a caddy-readable panel file under the web root). Note: `readfile()` binds a
-  panel FPM worker for the download's duration — fine at this scale; revisit
-  the pool's `pm` limits if large parallel downloads ever pressure the panel
-  (these are manual, logged-in, click-driven downloads — concurrency is minimal
-  even at hundreds of users, so no dedicated download pool is warranted).
-- Panel downloads — hardened the #441 stream for GB-scale files (#443). The `readfile()`
-  in the three handlers is consolidated into `web/inc/download.php` and now: drains every
-  output buffer and sets `ignore_user_abort(false)` so a multi-GB backup streams straight
-  to the socket (not into `memory_limit`) and a client disconnect frees the FPM worker at
-  the next chunk instead of hanging it; writes in flushed 8 KB chunks; and — for the
-  **stored backup only** — honours a `Range:` request (206/416 + `Accept-Ranges`) so an
-  aborted large download resumes instead of restarting from zero. The db/site archives are
-  regenerated per request, so they deliberately do **not** advertise ranges (a resume would
-  stream a differently-generated file). Range parsing is capped at a **single** range — a
-  comma-separated multi-range list (the `bytes=0-0,0-0,…` amplification vector) or any
-  malformed/descending spec falls back to the whole file rather than building a multipart
-  response. The panel php.ini pins `output_buffering = Off` / `zlib.output_compression = Off`,
-  and Caddy's `encode gzip` now skips `/download/*` (re-gzipping an already-compressed archive
-  burns CPU for no win and can interfere with ranges). A cross-customer backup request is
-  refused with an explicit redirect to `/list/backup/` instead of a blank page. `pm.max_children`
-  on the panel pool is raised 4 → 8: a download now binds a worker for the whole transfer, so
-  the short-request sizing no longer held — the cheap hedge that keeps a couple of concurrent
-  downloads from blocking the UI without opening a second, dedicated download pool. A smoke
-  guard allowlists X-Accel-Redirect *emitters* to `list/rrd/image.php`, so a future download
-  copying that idiom fails the smoke rather than silently hitting the caddy-can't-read wall.
-- File manager — the native modal/dropdown shim (which replaced Bootstrap-JS in the
-  diet) regained the keyboard accessibility Bootstrap-JS used to provide (#434):
-  modals now trap focus, close on Escape (honoring `data-bs-keyboard="false"` on
-  static dialogs), and return focus to the element that opened them; they carry
-  `aria-modal="true"` while open. Dropdowns track `aria-expanded` and close on
-  Escape (returning focus to their toggle) as well as on outside click.
-- Suspending a user now also cuts their **File Manager** access (#434). The FM pool
-  runs as the customer over an FPM socket, so `usermod --lock` (which stops
-  SFTP/FTP/SSH) never touched it — a suspended customer kept full FM access,
-  including an already-open panel session. `h-suspend-user` now tears the FM
-  listener down (keeping the saved `FILE_MANAGER='yes'`) and `h-unsuspend-user`
-  restores it, both gated by the same `POLICY_USER_VIEW_SUSPENDED` policy as
-  SFTP/FTP/SSH — so "view suspended" deliberately keeps the FM reachable for data
-  cleanup.
-- `update_user_value()` silently dropped a key that sat on the **last line** of
-  `user.conf` (#433). It deleted the line then inserted the new value *before* the
-  same line number — but after the delete that address is past EOF, so `sed`
-  wrote nothing and the value vanished (no error). It now rewrites the line in
-  place with `sed` `c`, which works on any line including the last (and, unlike
-  `s`, has no delimiter a value could contain). The FM `FILE_MANAGER` case had a
-  call-site workaround (insert before `TIME=`); this fixes the shared helper for
-  all ~20 callers. A regression test lives on the `docs` branch.
-- File manager gave a 403 for every request on **apache-only** installs (#218): the
-  private-listener template gated the secret only in the `<Directory>` block, which
-  authorizes static assets but not a `.php` handled by `SetHandler proxy`. That request
-  is authorized in the `<FilesMatch \.php$>` context, where the server-wide
-  `Require all denied` fallback (`conf.d/hestia-event.conf`, #397) otherwise wins — so
-  `index.php` was denied before it ran. Re-assert the secret gate inside `<FilesMatch>`
-  (same pattern the customer web templates already use). nginx-fronted profiles were
-  unaffected. Found on a fresh apache-only build in fleet verification.
-- AllowUsers co-maintenance (#412) edited the wrong line: the seeded guidance
-  comment began with "# AllowUsers …", and `manage_sshd_allowusers`' detection regex
-  (`#?[[:space:]]*AllowUsers`) matched that prose line, so `h-add-user` tokenised the
-  sentence and appended the username to it — mangling the comment and leaving the real
-  `#AllowUsers` directive empty. Tightened the regex to the directive form
-  (`#?AllowUsers`, no space between `#` and the keyword — sshd's own commented-directive
-  style) and reworded the seed so its guidance no longer starts with "AllowUsers".
-  Existing installs carry a mangled seed comment; re-seed `/etc/ssh/sshd_config` (the
-  line is commented/inert, so there is no access impact). Found in fleet verification.
-- Panel Caddy failed to come up on fresh installs — the panel `Caddyfile` was
-  never deployed, so Caddy kept serving the distro-default site on `:80` and the
-  panel on `:8083` was unreachable. A stray `||` line-continuation
-  (`chown … || ` + newline before the `cp`) had turned the unconditional
-  `cp share/panel-caddy/Caddyfile /etc/caddy/Caddyfile` into the failure branch of
-  the preceding `chown`, so it only ran when the chown failed (it never does).
-  Restored `chown … || true` so the `cp` runs unconditionally. (`hestia.conf` on
-  the next line still copied, which is why only the listener was wrong.)
-- `h-restart-service hestia` no longer fails with "Restart of hestia failed" —
-  `hestia` is the legacy single-service name from the hestia-nginx era and has no
-  `hestia.service` unit; it now maps to the real panel pair `caddy hestia-php`
-  (matching the existing `php-fpm` multi-service handling). Callers
-  `h-change-sys-port` and `h-update-host-certificate` restart the panel cleanly.
-  Enabled" icon for domains when the addon isn't installed (#123). Those two
-  columns in `list_mail.php` rendered straight from each domain's stored
-  `ANTIVIRUS`/`ANTISPAM` value with no gate; they now gate on
-  `ANTIVIRUS_SYSTEM`/`ANTISPAM_SYSTEM` (neutral dash when the system is absent),
-  matching the add/edit forms — so deleting clamav or rspamd leaves no misleading
-  green check while the saved per-domain preference waits for a reinstall.
-- Roundcube webmail returned HTTP 500 on every page — `Class "DOMDocument" not
-  found` (#402). The `dom` extension had been dropped from the panel PHP's
-  curated conf.d by an earlier audit (`hestia-php-confd`) that only checked the
-  panel/phpMyAdmin/Adminer consumers and missed the Roundcube/SnappyMail pools
-  that #205 had moved onto the same FPM master. Roundcube's template engine
-  builds every page via `DOMDocument`, so it hard-fatalled. `dom` is restored as
-  a webmail-critical extension (it ships in `php-xml`, already installed for the
-  DB tools' simplexml/xmlwriter/xmlreader, so only the symlink was missing), and
-  `hestia-php-confd` now documents the full app inventory on the master plus an
-  audit rule to grep all three app groups. SnappyMail was unaffected (no
-  DOMDocument). Verified: `:8090` 500→200, smoke 33/0 on deb12 + ub24.
-- The installer no longer blanket-creates a `v-*` compat alias for every `h-*`
-  command (#123). Committed `v-*` symlinks already ship in the tarball, so the
-  loop only minted orphan aliases for HestiaRE-native commands. `configure_hestia`
-  now just prunes dangling `v-*` (e.g. one left by a renamed/removed `h-*`), and
-  `h-check-sys-smoke` guards that none dangle.
-- Webmail now degrades safely when the selected client isn't installed (#119).
-  Previously `h-add-mail-domain-webmail` hard-exited `E_INVALID` if the client
-  wasn't in `WEBMAIL_SYSTEM`, `func/rebuild.sh` hardcoded `roundcube` (failing
-  when Roundcube was absent), and selection keyed off the template file existing
-  rather than the package — so a domain kept proxying to a dead `:8090/:8091`
-  after its webmailer was removed, and removing a webmailer never rebuilt mail
-  domains (stale 502 proxies). A shared `select_webmail_template()` helper
-  (`func/domain.sh`, used by both the webmail and SSL paths, killing the
-  divergent duplicate) now degrades an uninstalled/empty client to the
-  backend-safe `disabled` vhost, and `h-add/delete-sys-{roundcube,snappymail}`
-  re-render all mail domains so a webmailer install/removal takes effect
-  immediately. Verified on Debian 13 (nginx+apache): snappymail domain →
-  `:8091`; after `WEBMAIL_SYSTEM=''` → `disabled` vhost (local web stack, no 502,
-  no hard-fail); restore → `:8091`.
-- PHP-version validation regex now survives a two-digit major in
-  `h-change-sys-php` and `h-delete-web-php` (`^[0-9]\.` → `^[0-9]+\.`). Audit A6:
-  the same hardening had already landed in `h-change-sys-panel-php` /
-  `h-add-web-php`, but these two siblings were missed — they would reject e.g.
-  PHP `10.0`.
-- MariaDB install aborted on Ubuntu 26.04 when the OS-repo version was chosen
-  (#387): `mariadb.service` failed to start with "Table 'mysql.db' doesn't
-  exist" — the system schema was never created. Ubuntu 26.04 is the only target
-  that ships an *enforced* `mariadbd` AppArmor profile (`/etc/apparmor.d/mariadbd`),
-  and it comments out `capability dac_override` — which the bootstrap `mariadbd`
-  that `mariadb-install-db` runs needs to create the initial datadir (it dies
-  with "Can't create test file … Permission denied"). Normal runtime does not
-  need the capability, so only first-init tripped it, and the failure was
-  swallowed (`> /dev/null`). `h-add-sys-mariadb` now normalises the datadir to
-  `mysql:mysql` and, only when that profile is loaded, unloads it for the
-  `mariadb-install-db` step and reloads it (back to enforce) immediately after;
-  the init is also guarded to run only when the schema is absent and now fails
-  loud (logging to `/var/log/hestia/mariadb-install-db.log`) instead of letting
-  the service start error later. No-op on deb12/deb13/ub24 (no loaded mariadbd
-  profile). Verified live on ub26: the OS-repo 11.8.6 install completes, the
-  profile ends up back in enforce, and runtime works under it.
+- Panel file downloads — user backups, database dumps and site archives were broken on
+  the Caddy-fronted panel (#441/#443). They emitted `X-Accel-Redirect`, which Caddy
+  served via `file_server` as the `caddy` user — which cannot read the customer-owned
+  files, so a download got a **404**. They now stream via PHP `readfile()` from the
+  panel pool (owner `hestia`), traversal-guarded and hardened for GB scale: every
+  output buffer is drained and `ignore_user_abort(false)` set, so a multi-GB file
+  streams to the socket (not into `memory_limit`) and a client disconnect frees the
+  worker at the next chunk; writes are flushed 8 KB chunks; and — for the **stored
+  backup only** — a single `Range:` request is honoured (206/416, resume). A
+  comma-separated multi-range list (the amplification vector) or any malformed spec
+  falls back to the whole file; per-request dumps deliberately advertise no ranges (a
+  resume would stream a differently-generated file). `encode gzip` now skips
+  `/download/*`, `pm.max_children` is raised 4 → 8 (a download binds a worker for the
+  whole transfer), a cross-customer request is refused with a redirect, and a smoke
+  guard allowlists the X-Accel emitters.
+- File manager fixes: a 403 for every request on **apache-only** installs (#218) — the
+  secret gate had to move into `<FilesMatch \.php$>`, where the #397 `Require all
+  denied` fallback otherwise wins, not just `<Directory>`; the native modal/dropdown
+  shim regained the keyboard accessibility Bootstrap-JS provided (focus trap, Escape,
+  `aria-*`) (#434); and suspending a user now also cuts **FM** access (#434) — the FM
+  runs over an FPM socket, so `usermod --lock` never touched it (`h-suspend-user` tears
+  the listener down, `h-unsuspend-user` restores it, same policy gate as SFTP/FTP/SSH).
+- `update_user_value()` silently dropped a key on the **last line** of `user.conf`
+  (#433): it deleted the line then inserted before the same line number, which is past
+  EOF after the delete, so `sed` wrote nothing. It now rewrites in place with `sed c`
+  (works on any line, no delimiter a value could contain); fixes the shared helper for
+  all ~20 callers.
+- Roundcube webmail returned HTTP 500 — `Class "DOMDocument" not found` (#402). The
+  `dom` extension had been dropped from the panel FPM's curated conf.d by an audit that
+  only checked the panel/phpMyAdmin/Adminer consumers and missed the Roundcube/SnappyMail
+  pools moved onto the same FPM master (#205). `dom` is restored (webmail-critical; it
+  ships in the already-installed `php-xml`, so only the symlink was missing), and
+  `hestia-php-confd` now documents the full app inventory plus an audit rule to grep all
+  three app groups. Verified `:8090` 500→200.
+- MariaDB install aborted on Ubuntu 26.04 with the OS-repo version (#387):
+  `mariadb.service` failed with "Table 'mysql.db' doesn't exist" — the schema was never
+  created. Ubuntu 26.04's enforced `mariadbd` AppArmor profile comments out `capability
+  dac_override`, which the bootstrap `mariadbd` that `mariadb-install-db` runs needs for
+  first-init. `h-add-sys-mariadb` now unloads that profile for the init step only and
+  reloads it (enforce) immediately after; the init fails loud instead of letting the
+  service error later. No-op on the other three targets. Verified live on ub26.
+- The AV/spam columns in `list_mail.php` now gate on `ANTIVIRUS_SYSTEM`/`ANTISPAM_SYSTEM`
+  (#123) — a neutral dash when the addon is absent, instead of a misleading green check
+  from the stored per-domain value.
+- AllowUsers co-maintenance edited the wrong line (#412): the detection regex matched
+  the seeded guidance comment, so the username was appended to the prose. Tightened to
+  the directive form (`#?AllowUsers`, sshd's own commented-directive style) and reworded
+  the seed. Existing installs carry a mangled seed comment; re-seed `/etc/ssh/sshd_config`
+  (the line is inert, no access impact).
+- Panel Caddy failed to come up on fresh installs — a stray `||` line-continuation had
+  turned the unconditional `Caddyfile` copy into the failure branch of the preceding
+  `chown` (which never fails), so Caddy kept serving the distro-default site on `:80` and
+  the panel on `:8083` was unreachable. Restored `chown … || true`. Separately,
+  `h-restart-service hestia` no longer fails — the legacy single-service name now maps to
+  the real `caddy hestia-php` pair.
+- Webmail degrades safely when the selected client isn't installed (#119): a shared
+  `select_webmail_template()` degrades an uninstalled/empty client to the backend-safe
+  `disabled` vhost, and `h-add/delete-sys-{roundcube,snappymail}` re-render mail domains
+  so an install/removal takes effect immediately (no stale 502). Also: the PHP-version
+  regex now survives a two-digit major in `h-change-sys-php`/`h-delete-web-php`
+  (`^[0-9]\.` → `^[0-9]+\.`), and the installer no longer blanket-creates a `v-*` alias
+  for every `h-*` command (#123; it only minted orphans for HestiaRE-native commands).
 
 ### Security
 
-- Impersonation ("login as") now **drops admin privilege** while acting as a
-  customer (#438). Previously `$_SESSION["userContext"]` stayed `"admin"` for the
-  whole impersonation, so every admin-only route (161 gates) remained reachable —
-  a same-origin script running in an impersonation session (the FM media handler
-  was one such path, #435) could drive admin endpoints. `userContext` is now the
-  **effective** (impersonated) role, so those gates refuse automatically; a new
-  durable `adminContext` holds the real logged-in role for the impersonation
-  controls and off-chain routes (`fm-auth.php`, download handlers). The session id
-  is **regenerated at both transitions** (enter and return), so an id captured
-  during impersonation cannot regain admin after return. `web/download/backup`
-  scoping was corrected to the effective user (it read the raw session user =
-  admin), and `h-check-sys-smoke` gains an **allowlist** guard so only vetted files
-  may read the real `$_SESSION["user"]` at all (plus a guard that the old
-  effective-mirror `$_SESSION["role"]` is never gated on again — it was unified onto
-  `userContext`). Scope note: this shrinks the reachable surface; it does **not**
-  draw a privilege boundary — the panel process still runs as `hestia` and may call
-  any `h-*`, so a panel-PHP RCE is game-over regardless — and impersonating another
-  **admin** keeps admin (no boundary between admins). The impersonation session can
-  do only what the **customer** could, which *includes what the customer can do*: a
-  same-origin script in it still writes the customer's own web root (e.g. via the
-  file manager). That is the accepted residual risk.
-- File manager media handler — the inline-media allowlist gained a runtime guard
-  that refuses any active `Content-Type` (svg/html/xml/script) even if one were
-  ever added to the map (#432). Serving media from a separate origin was considered
-  and **rejected**: it would force a DNS record on every install, and the allowlist
-  + `nosniff` + CSP `sandbox` already make it unnecessary.
-- **File manager media handler — panel-origin XSS hardened** (#218). The FM is
-  same-origin with the panel (`:8083/fm/`), so the `?media=` stream serves
-  customer-controlled bytes on the panel origin. It now derives `Content-Type`
-  **only** from a server-side extension allowlist (never from file content or the
-  client), forces everything outside it — **SVG included** — to
-  `application/octet-stream` + `Content-Disposition: attachment`, and always sends
-  `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`.
-  Previously the type came from `finfo` (content-sniffed), so a customer's
-  `evil.svg` / `x.html` opened via the handler executed script under the panel
-  session — including an admin's own context when viewing via "login as". The
-  third-party Google/Microsoft document-viewer iframes were removed as well (they
-  leaked the file URL off-box and could not work in the private per-customer FM).
-  Caddy now also strips **all** inbound `X-Hestia-*` headers before re-setting the
-  trusted ones (`request_header -X-Hestia-*`), making the §7.2 header invariant
-  structural instead of an overwrite-list that must stay complete.
-- **GHSA-fcq6 — authenticated admin takeover fixed** (#386). The admin-only gate
-  in `web/edit/server/hestia/index.php` had a second clause comparing to a bare,
-  undefined `$ROOT_USER` — always false, so any authenticated user reached the
-  page and could rewrite the hestia panel service config and the privileged panel
-  crontab (→ root). It now gates on the role alone. Affects ≤ our 1.9.6 fork
-  point; verified against code.
-- **GHSA-8w7m — SQL injection via database password fixed** (#386). The password
-  was interpolated raw into `IDENTIFIED BY '…'` / `PASSWORD '…'` while the panel
-  permits `'` `` ` `` `\` `;`. New `mysql_sql_escape()` / `sql_escape()` helpers
-  (cherry-picked from upstream 1.9.7) are now applied at every password site in
-  `func/db.sh` (MySQL/MariaDB + PostgreSQL, create + change). db.conf stores only
-  the password hash and `func/db.sh` has no `eval`, so there is no second-order
-  path.
-- **GHSA-cr7q — root RCE via eval in search-object commands fixed** (#386).
-  `h-search-user-object` / `h-search-object` ran `eval` on the raw `KEY='value'`
-  fields grep'd from a user's own web/mail/db/cron.conf. Every eval site now uses
-  the no-eval parser (`parse_object_kv_list_non_eval`, `declare -g`) and bash
-  indirect expansion, so a quote-breaking conf value can no longer execute as
-  root.
-- **GHSA-5fpv — cron parsing hardened** (#386, defense-in-depth). The RCE sink is
-  already closed (the rebuilt quote-safe `parse_object_kv_list`), but
-  `sync_cron_jobs` now reads with `read -r` and `is_cron_command_valid_format`
-  rejects embedded newlines. **Behaviour note:** `read -r` preserves backslashes
-  the old `read` stripped one level of, so a cron `CMD` written under the old
-  behaviour may be interpreted differently — pre-1.0, no live systems.
-- Not affected, verified against code — and **GHSA-w3mx double-eval RCE
-  empirically refuted** by running the original attack against our
-  `parse_object_kv_list` (payloads stay literal, breakout rejected): GHSA-w3mx
-  (parser rebuilt), GHSA-gh6f (web terminal removed, #59), GHSA-73p3
-  (`CF-Connecting-IP` trusted only behind Cloudflare ranges), GHSA-fg7j
-  (usernames cannot carry HTML — validator charset), GHSA-47mf (queue lines carry
-  only validated identifiers). `h-check-sys-smoke` gained static invariant gates
-  for the fcq6 and cr7q fixes so they cannot silently regress.
+- Impersonation ("login as") now **drops admin privilege** while acting as a customer
+  (#438). Previously `userContext` stayed `"admin"` for the whole impersonation, so all
+  161 admin-only gates remained reachable — a same-origin script in an impersonation
+  session (the FM media handler was one such path, #435) could drive admin endpoints.
+  `userContext` is now the **effective** (impersonated) role, so those gates refuse
+  automatically; a durable `adminContext` holds the real role for the impersonation
+  controls and off-chain routes. The session id is **regenerated at both transitions**,
+  so an id captured during impersonation cannot regain admin — **side effect:** any
+  other tab sharing the session (a second admin tab, an open File Manager tab) is logged
+  out at the switch. `web/download/backup` scoping was corrected to the effective user,
+  and a smoke allowlist limits which files may read the raw `$_SESSION["user"]`. Scope
+  note: this shrinks the reachable surface; it does **not** draw a privilege boundary
+  (the panel process runs as `hestia` and may call any `h-*`, so a panel-PHP RCE is
+  game-over regardless), and impersonating another admin keeps admin.
+- File manager media handler — panel-origin XSS hardened (#218/#432). The FM is
+  same-origin with the panel, so the `?media=` stream now derives `Content-Type` **only**
+  from a server-side extension allowlist (never from file content or the client), forces
+  everything outside it — **SVG included** — to `application/octet-stream` + attachment,
+  and always sends `X-Content-Type-Options: nosniff` and CSP `default-src 'none';
+  sandbox`; a runtime guard refuses any active type even if one were ever added to the
+  map. Previously `finfo` content-sniffing let a customer's `evil.svg`/`x.html` run
+  script under the panel session — including an admin's own via "login as". The
+  Google/Microsoft doc-viewer iframes were removed, and Caddy now strips **all** inbound
+  `X-Hestia-*` before re-setting the trusted ones (making the header invariant structural).
+- GHSA advisories fixed (#386, all ≤ our 1.9.6 fork point, verified against code):
+  - **GHSA-fcq6** — authenticated admin takeover: the admin gate in
+    `web/edit/server/hestia/` had a second clause comparing to an undefined `$ROOT_USER`
+    (always false), so any authenticated user reached the page and could rewrite the panel
+    service config + privileged crontab (→ root). Now gates on the role alone.
+  - **GHSA-8w7m** — SQL injection via the database password: it was interpolated raw into
+    `IDENTIFIED BY`/`PASSWORD`. New `mysql_sql_escape()`/`sql_escape()` (cherry-picked from
+    1.9.7) are applied at every password site in `func/db.sh`.
+  - **GHSA-cr7q** — root RCE via `eval` in `h-search-user-object`/`h-search-object`: every
+    eval site now uses the no-eval parser + indirect expansion, so a quote-breaking conf
+    value can no longer execute as root.
+  - **GHSA-5fpv** — cron parsing hardened (defense-in-depth; the RCE sink was already
+    closed): `sync_cron_jobs` reads with `read -r` and rejects embedded newlines.
+    Behaviour note: `read -r` preserves backslashes the old `read` stripped, so a cron
+    `CMD` written under the old behaviour may be read differently (pre-1.0, no live systems).
+  - **Not affected, verified against code**: GHSA-w3mx (double-eval RCE, empirically
+    refuted against the rebuilt parser), GHSA-gh6f (web terminal removed, #59), GHSA-73p3
+    (`CF-Connecting-IP` trusted only behind Cloudflare ranges), GHSA-fg7j (username
+    charset), GHSA-47mf (queue lines carry only validated identifiers). `h-check-sys-smoke`
+    gained static invariant gates for the fcq6 and cr7q fixes.
 
 ## v0.10.0 (2026-07-19)
 
@@ -495,220 +255,124 @@ and 26.04 join Debian 12 and 13 as first-class targets.
 
 ### Breaking / Upgrade notes
 
-- **Command renames** (hard cut, pre-1.0, no deprecation shims, no live
-  systems): `h-delete-sys-redis` → `h-remove-sys-redis`,
-  `h-delete-sys-roundcube` → `h-remove-sys-roundcube`,
-  `h-delete-sys-snappymail` → `h-remove-sys-snappymail`. The orphaned
-  `v-delete-sys-snappymail` symlink is gone with the old name; no new `v-*`
-  symlinks (#121, #234).
-- **`DB_SYSTEM` is now seeded empty** and composed from actually-registered
-  database hosts instead of hard-seeded to `mysql`. Registering the first host
-  of a type enables it; removing the last host drops the token. This is a
-  behaviour change on a contract parsed by ~466 consumers — audit anything that
-  reads `DB_SYSTEM` (mechanics under Changed) (#121).
-- **Webmail delivery re-architected** (#205): Roundcube/SnappyMail render
-  through the Panel-Caddy, and per-domain `webmail.<domain>` vhosts
-  reverse-proxy to it instead of serving a docroot. Fresh-install only, no
-  migration path — no live systems (details under Added).
+- Command renames (hard cut, pre-1.0, no live systems):
+  `h-delete-sys-{redis,roundcube,snappymail}` → `h-remove-sys-*`; the orphaned
+  `v-delete-sys-snappymail` symlink is gone, no new `v-*` symlinks (#121, #234).
+- `DB_SYSTEM` is now seeded empty and composed from actually-registered database hosts
+  instead of hard-seeded to `mysql` — a behaviour change on a contract ~466 consumers
+  read (#121).
+- Webmail delivery re-architected (#205): Roundcube/SnappyMail render through the
+  Panel-Caddy, and per-domain `webmail.<domain>` vhosts reverse-proxy to it instead of
+  serving a docroot. Fresh-install only, no migration path.
 
 ### Added
 
-- **Ubuntu 24.04 and 26.04 are now first-class targets, on par with Debian 12
-  and 13.** Every change is verified on all four from here on. Reaching parity
-  drove a round of installer/mail/sudo hardening specific to the Ubuntu 24/26 +
-  deb13 baseline — several release-blocking bugs surfaced only there (see the
-  `libzip` naming, dhparam ordering, sudo-rs, and dovecot 2.4 entries below).
-- Webmail is delivered through the **Panel-Caddy** instead of the customer web
-  stack (#205). Roundcube and SnappyMail each get a dedicated `caddy` FPM pool
-  (`share/panel-php/pool.d/`) behind an internal loopback listener
-  (`127.0.0.1:8090` / `:8091`) — the phpMyAdmin/Adminer model. Per-domain
-  `webmail.<domain>` vhosts **reverse-proxy** to those listeners (nginx, and the
-  apache-only case via `mod_proxy_http`), so the `caddy`-owned data dirs are
-  never touched by `www-data` — the root cause of the old SnappyMail "Permission
-  denied!" — and there is one renderer instead of one per domain. Roundcube is
-  additionally reachable on the panel URL at `:8083/webmail` (admin access
-  without a customer domain; Roundcube-only, since SnappyMail is a root-mounted
-  app that cannot live under a sub-path). Let's Encrypt is unchanged: the
-  `webmail.`/`mail.` SANs stay on the customer vhost and the http-01 challenge is
-  served locally (nginx inline `return 200`; apache-only `.well-known` alias +
-  `ProxyPass !` exclusion with `AllowOverride None` on the docroot). Verified
-  live on deb13 (Roundcube) and ub24 (SnappyMail): render, real IMAP login, and
-  the apache well-known split.
-- Adminer as the PostgreSQL web UI, an optional addon (#350):
-  `h-add-sys-adminer` / `h-remove-sys-adminer` serve a single sha256-pinned
-  vendored PHP file (`share/adminer/`) at `/adminer/` via a dedicated caddy FPM
-  pool — repo-vendored because every OS `adminer` package ships a CVE-affected
-  version. The wizard pre-selects it when PostgreSQL is chosen. phpMyAdmin/MySQL
-  is untouched.
+- **Ubuntu 24.04 and 26.04 are now first-class targets, on par with Debian 12 and 13.**
+  Every change is verified on all four from here on; reaching parity drove a round of
+  installer/mail/sudo hardening specific to that baseline (see the `libzip`, dhparam,
+  sudo-rs and dovecot 2.4 entries below).
+- Webmail is delivered through the Panel-Caddy instead of the customer web stack (#205).
+  Roundcube and SnappyMail each get a dedicated `caddy` FPM pool behind an internal
+  loopback listener (`127.0.0.1:8090`/`:8091`); per-domain `webmail.<domain>` vhosts
+  reverse-proxy to those, so the `caddy`-owned data dirs are never touched by `www-data`
+  (the root cause of the old SnappyMail "Permission denied!"). Roundcube is additionally
+  reachable at `:8083/webmail`. Let's Encrypt is unchanged. Verified on deb13 + ub24.
+- Adminer as the PostgreSQL web UI, an optional addon (#350): `h-add-sys-adminer` /
+  `h-remove-sys-adminer` serve a single sha256-pinned vendored PHP file at `/adminer/`
+  (repo-vendored because every OS `adminer` ships a CVE-affected version).
 - PostgreSQL is a fully panel-integrated, removable component (#121):
-  `h-add-sys-postgresql` / `h-remove-sys-postgresql`. The add command installs
-  PostgreSQL (`postgresql-common` first, #353), sets a password on the
-  `postgres` superuser for loopback TCP login, and registers the local host so
-  the panel can create/manage PostgreSQL databases and users. Readiness via
-  `pg_isready` (not the oneshot `systemctl` umbrella, which reports active even
-  when the cluster is down). Remove refuses while customer databases exist and
-  keeps the datadir by default (`PURGE_DATA=yes` to drop); credentials live in
-  `conf/pgsql.conf`, never install.conf.
-- MariaDB is a standalone, removable component (#121):
-  `h-add-sys-mariadb [VERSION]` / `h-remove-sys-mariadb`, owning the full
-  lifecycle (repo/keyring dispatch — `12.3|11.8|11.4` = MariaDB.org, else the OS
-  package; RAM-tiered my.cnf; root unix_socket hardening; host registration;
-  implicit phpMyAdmin). `install_db` is now a thin orchestrator that checks exit
-  codes instead of inlining the logic, so a failed DB install no longer reports
-  "installed" (the #272 class).
-- In-place MariaDB version switching: `h-upgrade-sys-mariadb [TARGET]` (#207).
-  Forced full logical dump as a hard precondition (kept in `/root`, 0600), repo
-  switch, package upgrade, `mariadb-upgrade`, post-check, version recorded.
-  **Downgrades are refused** (MariaDB cannot open a newer-format datadir). With
-  no argument it lists the curated targets with the version each would actually
-  deliver on this system and its reachability, so a specific version can be
-  targeted deliberately.
-- Fully unattended install via `-a`/`--auto` (#198):
-  `bash install.sh <preset> -a` runs with no prompts (FQDN hostname, port 8083,
-  admin `admin`, generated + printed password), enabling scripted test-VM
-  (re)provisioning. Preset-only stays interactive for the four identity
-  questions.
+  `h-add-sys-postgresql` / `h-remove-sys-postgresql` — installs PostgreSQL, sets a
+  loopback password, registers the host; readiness via `pg_isready`; removal refuses
+  while customer databases exist and keeps the datadir unless `PURGE_DATA=yes`.
+- MariaDB is a standalone, removable component (#121): `h-add-sys-mariadb [VERSION]` /
+  `h-remove-sys-mariadb`, owning the full lifecycle (repo/OS dispatch, RAM-tiered
+  my.cnf, root unix_socket hardening, host registration). In-place version switching
+  `h-upgrade-sys-mariadb [TARGET]` (#207) — forced logical dump as a hard precondition,
+  downgrades refused (a newer-format datadir can't be reopened).
+- Fully unattended install via `-a`/`--auto` (#198): `bash install.sh <preset> -a`
+  runs with no prompts (generated + printed admin password), for scripted test-VM
+  (re)provisioning.
 
 ### Changed
 
 - `h-add-database-host` validates the engine against the supported types
-  (`mysql|pgsql`) instead of `DB_SYSTEM` membership, and no longer requires
-  `DB_SYSTEM` to be pre-enabled (#121): adding the first host of a type is what
-  *enables* it, so the old guards were circular — they made the first MySQL host
-  depend on a pre-seeded `DB_SYSTEM='mysql'` and made a PostgreSQL host
-  impossible to register at all. `h-delete-database-host` now decomposes
-  `DB_SYSTEM` (drops the type token when its last host is gone). `DB_SYSTEM` is
-  therefore seeded empty; the panel's add-database page filters empty tokens so
-  an empty `DB_SYSTEM` renders no ghost type. Idempotency guards on the new
-  engine commands are artefact-based (package + host registration), since
-  `COMPONENT_*` is the wizard *selection*, not install state.
-- The panel wires **Adminer** as the PostgreSQL admin tool (#365, #229): the DB
-  list shows an "Adminer" button for PostgreSQL databases (the panel's fixed
-  `/adminer/` route) when the Adminer addon is installed, replacing the dead
-  phpPgAdmin link; `h-add`/`h-remove-sys-adminer` set/clear a `DB_ADMINER_ALIAS`
-  marker the panel reads. phpMyAdmin/MySQL is untouched.
-- The panel PHP's curated extension set (`hestia-php-confd`) gained a webmail
-  group — `intl` + `phar` (critical) and `exif` (optional) — so the panel FPM
-  can serve the webmail clients: without `intl` Roundcube fatals on login
-  (`INTL_IDNA_VARIANT_UTS46`), without `phar` SnappyMail's change-password
-  plugin blanks the page. `php${VER}-intl` + `php${VER}-exif` are installed
-  unconditionally in the panel stage (#205).
-- The SnappyMail data dir (`/etc/snappymail/data`) is set to an explicit
-  `caddy:caddy 0750` instead of leaving the mode to the release tarball/umask —
-  only the caddy FPM pool enters it now (#205).
-- Curated config assets continue moving out of the legacy `install/` tree into
-  `share/` (#119, no behaviour change): the webmailer assets
-  (`share/{roundcube,snappymail}/`), the web-server + phpMyAdmin-SSO assets
-  (`share/{apache2,nginx,phpmyadmin}/`), and the MariaDB `my-{small,medium,large}.cnf`
-  (`share/mysql/`). Five dead Roundcube files are dropped (recoverable from
-  `upstream/hestiacp`); `install/common/` now holds only `bubblewrap/`.
+  (`mysql|pgsql`) instead of `DB_SYSTEM` membership (#121): adding the first host of a
+  type is what *enables* it, so the old guards were circular. `h-delete-database-host`
+  drops the type token when its last host is gone; `DB_SYSTEM` is therefore seeded
+  empty and the panel filters empty tokens.
+- The panel wires Adminer as the PostgreSQL admin tool (#365, #229): the DB list shows
+  an Adminer button for PostgreSQL databases (via a `DB_ADMINER_ALIAS` marker),
+  replacing the dead phpPgAdmin link. phpMyAdmin/MySQL is untouched.
+- The panel FPM's curated extension set gained a webmail group — `intl` + `phar`
+  (critical) and `exif` (optional) — so the panel FPM can serve the webmail clients
+  (without `intl` Roundcube fatals on login, without `phar` SnappyMail's
+  change-password plugin blanks); installed unconditionally in the panel stage (#205).
+- The SnappyMail data dir is set to an explicit `caddy:caddy 0750` (#205).
+- More curated config assets moved `install/` → `share/` (#119, no behaviour change):
+  the webmailer, web-server + phpMyAdmin-SSO, and MariaDB `my-*.cnf` assets. Five dead
+  Roundcube files dropped (recoverable from `upstream/hestiacp`).
 
 ### Removed
 
-- Dead phpPgAdmin plumbing (#365) — superseded by Adminer in #350 but never
-  cleaned up: `install/deb/pga/`, the `phppgadmin.*` app templates, an unused
-  FPM pool, the `pga` branch of `h-change-sys-db-alias`, the `DB_PGA_*` seeding
-  and config fields, and the panel's broken phpPgAdmin links/alias field. Also
-  the unused `install/deb/postgresql/pg_hba.conf` and the `phppgadmin` pin in
-  `manifest.json`. Recoverable from `upstream/hestiacp`.
+- Dead phpPgAdmin plumbing (#365) — superseded by Adminer but never cleaned up:
+  `install/deb/pga/`, the `phppgadmin.*` app templates, an unused FPM pool, the `pga`
+  branch of `h-change-sys-db-alias`, the `DB_PGA_*` fields, and the panel's broken
+  links/alias field. Recoverable from `upstream/hestiacp`.
 
 ### Fixed
 
-- **dovecot 2.4 (Debian 13 / Ubuntu 26): every IMAP/POP3 login was dead on a
-  fresh install** (#376) — a textbook "service active, port listening, every
-  login hangs" fault, invisible to a plain up/port check. The 2.4 config carried
-  `default_login_user = dovecot` (upstream heritage, harmless on 2.3), but the
-  login chroot `/run/dovecot/login` ends up `root:dovenull 0750`, so login
-  processes running as `dovecot` could not reach the auth socket
-  (`auth_process_not_ready`). Now `default_login_user = dovenull`. The smoke
-  test additionally gained a protocol **banner** check for IMAP (143) and SMTP
-  (25) — exactly the class `check_service`/`check_port` cannot see. Verified live
+- **dovecot 2.4 (Debian 13 / Ubuntu 26): every IMAP/POP3 login was dead on a fresh
+  install** (#376). `default_login_user = dovecot` (upstream heritage, harmless on 2.3)
+  could not reach the auth socket in the `root:dovenull 0750` login chroot; now
+  `dovenull`. The smoke test gained IMAP/SMTP protocol **banner** checks. Verified live
   on deb13 + ub26.
-- Choosing the OS-repo MariaDB silently installed the *external* MariaDB.org
-  build on Debian 13 / Ubuntu 26 (#226): the wizard resolved the `__os__`
-  sentinel to a bare version number before storing it, and the installer picks
-  the repo by matching that number — so when the OS version equalled an offered
-  external version (both 11.8) the external repo was added. The version picker
-  now maps any non-external pick back to the `__os__` sentinel. Verified live on
-  deb12 and deb13 (the collision case).
-- phpMyAdmin and Adminer were broken under the isolated panel PHP (#227, #229):
-  both run under the shared hestia FPM master, whose curated conf.d only carried
-  the panel-UI extensions — so phpMyAdmin died with `undefined function
-  ctype_alpha()` (HTTP 500) and Adminer could never reach PostgreSQL (no
-  `pgsql`/`pdo_pgsql`). The curated FPM set now also includes the DB-UI
-  extensions (ctype, iconv, fileinfo, the xml family; gd/bz2 for phpMyAdmin,
-  pgsql/pdo_pgsql for Adminer), installed for the panel version unconditionally.
-- `h-add-sys-adminer` no longer silently ships an Adminer without SSRF hardening
-  (#229): the "already installed" guard also checks the login-servers plugin, so
-  re-running on a pre-#356 install redeploys it; a missing vendored source is now
-  a hard error, not a failed `cp` that still reports success.
-- Installer prerequisites curated to silence two harmless-but-noisy warnings
-  (#356): `apt-utils` is now a prerequisite (debconf "delaying package
-  configuration"), and `h-install-hestia` exports `DEBIAN_FRONTEND=noninteractive`
-  for the whole run (debconf "unable to initialize frontend: Dialog … Readline").
-- Install no longer aborts when rspamd's scan-worker socket is slow to appear on
-  a cold first start (#353): the wait is now 60s and — the unit already confirmed
-  active — a still-missing socket only warns instead of aborting; the smoke test
-  verifies the socket independently.
-- PostgreSQL install no longer prints `pg_lsclusters: not found` (#353):
-  `postgresql-common` is installed in a separate, earlier transaction so the
-  command is on PATH when the metapackage's debconf script runs. Cosmetic — the
-  cluster was always created correctly.
-- Installer robustness across all four targets, from the Ubuntu 24/26 + deb13
-  baseline (#347): `/etc/ssl/dhparam.pem` is laid down in the base stage (nginx
-  and dovecot both fatal at start without it — most visibly the sieve-addon
-  restart on 24.04); the `libzip` package name is fixed per release
-  (`libzip4t64` on 24.04, `libzip5` on 26.04, where plain `libzip4` aborted the
-  base stage); the non-existent `pgadmin4-web` is no longer installed, leaving
-  PostgreSQL CLI-only at that point — superseded within this release by Adminer
-  (#350) and full panel integration (#121); and the smoke test checks PostgreSQL
-  via `COMPONENT_DB_POSTGRESQL`.
-- Sieve addon is over-quota-delivery-neutral (#343): with sieve on, clean mail
-  goes through dovecot-lda, which by default *bounced* an over-quota mailbox
-  while exim's appendfile *defers*. dovecot-lda now runs with
-  `quota_full_tempfail = yes` and `return_fail_output`, so both paths defer.
-  (Also documented that sieve scripts run only on non-spam mail — spam bypasses
-  lda straight to `.Spam`.)
-- SnappyMail integration had three latent defects, found in the #234 webmailer
-  baseline: the installer passed the DB password as the panel port (`$argv[4]`
-  vs `$argv[5]`), `domains/hestia.json` was built from `json_decode(<path>)` (the
-  path string, not the file), and `h-change-sys-port` wrote a second
-  `hestia_host` line for the port (key typo) — together breaking password changes
-  from SnappyMail. All three fixed.
-- Webmailer removal state is consistent now (#234): `h-remove-sys-snappymail`'s
-  `WEBMAIL_SYSTEM` cleanup condition was inverted (only cleared when snappymail
-  was *absent*); both webmailer removers now strip their token robustly (no stray
-  commas) and reset `COMPONENT_MAIL_WEBMAILER` to `NONE` when the removed client
-  was the recorded selection.
-- The Roundcube logrotate fragment is actually deployed now (#234): it existed in
-  the install tree but nothing ever copied it, while the fail2ban `roundcube-auth`
-  jail tails the (unrotated) `/var/log/roundcube/errors.log`.
+- Choosing the OS-repo MariaDB silently installed the *external* MariaDB.org build on
+  deb13/ub26 (#226): the `__os__` sentinel resolved to a bare version the installer then
+  matched to the external repo. The picker now maps any non-external pick back to the
+  sentinel. Verified on the collision case (both 11.8).
+- phpMyAdmin and Adminer were broken under the isolated panel PHP (#227, #229): the
+  curated conf.d carried only the panel-UI extensions, so phpMyAdmin died on
+  `ctype_alpha()` and Adminer could not reach PostgreSQL. The DB-UI extensions (ctype,
+  iconv, fileinfo, the xml family; gd/bz2; pgsql/pdo_pgsql) are now included.
+- `h-add-sys-adminer` re-runs now redeploy the SSRF-hardening plugin, and a missing
+  vendored source is a hard error rather than a failed `cp` that still reports success
+  (#229).
+- Installer prerequisites curated to silence two noisy debconf warnings (#356);
+  install no longer aborts when rspamd's scan-worker socket is slow on a cold start
+  (#353); the cosmetic `pg_lsclusters: not found` on PostgreSQL install is gone (#353).
+- Installer robustness across all four targets (#347): `/etc/ssl/dhparam.pem` is laid
+  down in the base stage (nginx and dovecot both fatal without it), the `libzip`
+  package name is fixed per release (`libzip4t64` on 24.04, `libzip5` on 26.04), the
+  non-existent `pgadmin4-web` is no longer installed, and the smoke test checks
+  PostgreSQL.
+- Sieve addon is over-quota-delivery-neutral (#343): dovecot-lda now defers (not
+  bounces) an over-quota mailbox, matching exim's appendfile.
+- SnappyMail integration had three latent defects, found in the #234 webmailer baseline
+  — the DB password was passed as the panel port, `domains/hestia.json` was built from
+  the path string not the file, and `h-change-sys-port` wrote a duplicate `hestia_host`
+  line — together breaking password changes from SnappyMail. All three fixed.
+- Webmailer removal state is consistent now (#234): the inverted `WEBMAIL_SYSTEM`
+  cleanup condition is fixed, both removers strip their token cleanly, and
+  `COMPONENT_MAIL_WEBMAILER` resets to `NONE` when the removed client was the selection.
+- The Roundcube logrotate fragment is actually deployed now (#234) — it existed in the
+  install tree but nothing copied it, while the fail2ban jail tailed the unrotated log.
 
 ### Security
 
-- rspamd controller socket is no longer reachable by the panel's app pools
-  (#341): the controller-UI proxy needs `/run/rspamd/controller.sock`, but the
-  grant was `usermod -aG _rspamd caddy` — and since the phpMyAdmin/Adminer/
-  Roundcube FPM pools also run as `caddy` (#214), they inherited it via
-  `initgroups()` and could hit the controller API (mail metadata across all
-  domains, Bayes writes) past `forward_auth`. A dedicated `_rspamd-ctrl` group
-  now owns only the socket and is granted to the Caddy *process* via a systemd
-  drop-in (`SupplementaryGroups=`), which FPM workers do not inherit — so the
-  proxy reaches the socket and the app pools do not. `h-add-sys-rspamd` strips
-  the stale `caddy`→`_rspamd` membership from pre-fix installs; smoke checks
-  assert the invariant against process credentials, not config.
-- Adminer logins are restricted to the local server (#356): the vendored
-  login-servers plugin replaces the login form's free-text "Server" field with a
-  fixed localhost dropdown (PostgreSQL / MySQL-MariaDB), so the panel's Adminer
-  cannot be pointed at an arbitrary remote host — the SSRF follow-up from #350.
-- All hestia sudo grants were dead on Ubuntu 26 (#363): `/etc/sudoers.d/hestia`
-  opened with `Defaults:root !requiretty`, but Ubuntu 26 ships **sudo-rs** (the
-  Rust reimplementation), which does not implement the obsolete `requiretty` and
-  rejects the *entire* file when it appears — silently dropping the `hestia`
-  grant every privileged panel action relies on. `requiretty` (always a no-op on
-  Debian/Ubuntu) is removed everywhere; the smoke test now runs
-  `visudo -cf /etc/sudoers.d/hestia` so a file the local sudo cannot parse fails
-  the baseline.
+- rspamd controller socket is no longer reachable by the panel's app pools (#341): the
+  grant was `usermod -aG _rspamd caddy`, and since the phpMyAdmin/Adminer/Roundcube FPM
+  pools also run as `caddy`, they inherited it and could hit the controller API past
+  `forward_auth`. A dedicated `_rspamd-ctrl` group owns the socket and is granted to the
+  Caddy *process* via a systemd `SupplementaryGroups=` drop-in, which FPM workers do not
+  inherit. `h-add-sys-rspamd` strips the stale membership from pre-fix installs.
+- Adminer logins are restricted to the local server (#356): the vendored login-servers
+  plugin replaces the free-text "Server" field with a fixed localhost dropdown — the
+  SSRF follow-up to #350.
+- All hestia sudo grants were dead on Ubuntu 26 (#363): `/etc/sudoers.d/hestia` opened
+  with `Defaults:root !requiretty`, but Ubuntu 26 ships **sudo-rs**, which rejects the
+  entire file over the obsolete `requiretty` — silently dropping the grant every
+  privileged panel action relies on. `requiretty` (always a no-op here) is removed
+  everywhere; the smoke test now runs `visudo -cf /etc/sudoers.d/hestia`.
 
 ## v0.9.0 (2026-07-13)
 
