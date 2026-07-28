@@ -34,8 +34,11 @@ if (!file_exists("/backup/" . $backup)) {
 		header("X-Accel-Redirect: /backup/" . $backup);
 	}
 
-	if (!empty($_SESSION["user"]) && $_SESSION["userContext"] != "admin") {
-		if (strpos($backup, $_SESSION["user"] . ".") === 0) {
+	// Scope to the EFFECTIVE user ($user_plain is look-aware, set in inc/main.php),
+	// not the raw session user — otherwise an admin impersonating a customer scopes
+	// to the admin's own name and mis-targets the download (#438).
+	if (!empty($user_plain) && $_SESSION["userContext"] != "admin") {
+		if (strpos($backup, $user_plain . ".") === 0) {
 			header("Content-type: application/gzip");
 			header("Content-Disposition: attachment; filename=\"" . $backup . "\";");
 			header("X-Accel-Redirect: /backup/" . $backup);

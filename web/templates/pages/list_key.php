@@ -2,7 +2,7 @@
 <div class="toolbar">
 	<div class="toolbar-inner">
 		<div class="toolbar-buttons">
-			<?php if ($_SESSION["userContext"] === "admin" && $_SESSION['look'] !== '' && $_GET["user"] !== $_SESSION['ROOT_USER']) { ?>
+			<?php if ($_SESSION["adminContext"] === "admin" && $_SESSION['look'] !== '' && $_GET["user"] !== $_SESSION['ROOT_USER']) { ?>
 				<a href="/edit/user/?<?= tohtml(http_build_query(["user" => $_SESSION["look"], "token" => $_SESSION["token"]])) ?>" class="button button-secondary button-back js-button-back">
 					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
 				</a>

@@ -51,6 +51,33 @@ check_source_absent() {
 	fi
 }
 
+# check_session_user_allowlist <webdir> — $_SESSION["user"] is the REAL logged-in
+# user; during impersonation it is the ADMIN, not the customer (who is in "look").
+# Scoping customer data by it mis-targets (#438). Rather than chase every spelling
+# of the bug, allowlist the files that may touch the real user at all (auth /
+# dispatch / reset / real-identity display); ANY other file is red — it must use the
+# look-aware $user/$user_plain from inc/main.php. Turns "did we catch every spelling"
+# into "may this file see the real user".
+check_session_user_allowlist() {
+	local webdir="$1" bad="" f rel
+	local allow="inc/main.php login/index.php logout/index.php index.php list/index.php \
+fm-auth.php rspamd-auth.php reset/index.php reset2fa/index.php edit/user/index.php \
+list/log/index.php templates/includes/panel.php templates/pages/edit_server.php \
+templates/pages/edit_user.php templates/pages/list_key.php templates/pages/list_log.php \
+templates/pages/list_search.php templates/pages/list_user.php"
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		rel=${f#"$webdir"/}
+		case " $allow " in *" $rel "*) continue ;; esac
+		bad="$bad $rel"
+	done <<< "$(grep -rlE '\$_SESSION\["user"\]' "$webdir" 2> /dev/null)"
+	if [ -z "$bad" ]; then
+		ok "invariant: \$_SESSION[user] only in allowlisted files (#438)"
+	else
+		no "invariant: \$_SESSION[user] in non-allowlisted file (#438 mis-target risk)" "${bad# }"
+	fi
+}
+
 # check_service <systemd-unit> <label>
 check_service() {
 	if systemctl is-active --quiet "$1"; then
@@ -288,6 +315,15 @@ check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$
 # GHSA-cr7q: search-object commands must not eval raw conf-field payloads
 check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
 	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
+# #438: the real session user may only be touched by allowlisted files (auth /
+# dispatch / reset / real-identity display) — everything else must use the
+# look-aware $user/$user_plain, or an admin impersonating a customer mis-targets.
+check_session_user_allowlist "$HESTIA/web"
+# #438: userContext is the effective role and is what admin-gates read. The old
+# effective-mirror $_SESSION["role"] must NOT be compared against (it was unified
+# onto userContext) — a divergent mirror would silently split the gate surface.
+check_source_absent "no gating on the effective-mirror \$_SESSION[role] (#438 — use userContext)" \
+	'\$_SESSION\["role"\][[:space:]]*(==|!=)' "$HESTIA/web"
 # v-* compat symlinks must all resolve (no dangling alias left by a rename).
 check_v_symlinks_resolve
 # every h-* keeps its parsed # info: line (a comment sweep must not eat it).
