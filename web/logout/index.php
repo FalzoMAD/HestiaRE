@@ -15,6 +15,12 @@ if (!empty($_SESSION["look"])) {
 		$return_var,
 	);
 	unset($_SESSION["look"]);
+	// Restore the real admin role and rotate the session id on return, so an id
+	// captured during the impersonation window cannot regain admin afterwards (#438).
+	if (!empty($_SESSION["adminContext"])) {
+		$_SESSION["userContext"] = $_SESSION["adminContext"];
+	}
+	session_regenerate_id(true);
 	# Remove current path for filemanager
 	unset($_SESSION["_sf2_attributes"]);
 	unset($_SESSION["_sf2_meta"]);
