@@ -1774,6 +1774,58 @@ change_sys_value() {
 	fi
 }
 
+# Delete a hestia.conf key line entirely (vs change_sys_value which sets it empty).
+# Used by the web-model switch (#120) so a target model that never sets a key ends up
+# byte-identical to a fresh install of that model, not carrying a present-but-empty line.
+clear_sys_value() {
+	sed -i "/^$1=/d" "$HESTIA/conf/hestia.conf"
+}
+
+# ── Web-model maintenance freeze (#120) ──────────────────────────────────────
+# A live web-model switch (h-add-sys-nginx/-apache2, h-delete-sys-nginx/-apache2)
+# holds an exclusive lock for the whole operation. Domain-config mutators acquire it
+# (bounded wait) so nothing changes web/mail state mid-flip; reload chokepoints
+# (h-restart-web/-proxy/-service, apache logrotate, LE renewal) defer while it is held.
+WEB_MODEL_LOCK="/run/hestia/web-model.lock"
+
+# True (0) if a switch currently holds the freeze - for reload chokepoints to defer.
+# The switch owner and any subprocess it spawns carry HESTIA_WEB_LOCK_HELD and are
+# never frozen by their own lock (the switch does its own controlled restarts).
+web_freeze_held() {
+	[ "${HESTIA_WEB_LOCK_HELD:-}" = "1" ] && return 1
+	[ -e "$WEB_MODEL_LOCK" ] || return 1
+	if flock -n -x "$WEB_MODEL_LOCK" -c true > /dev/null 2>&1; then
+		return 1 # acquired freely -> nobody holds it
+	fi
+	return 0 # busy -> a switch holds it
+}
+
+# Acquire the freeze (reentrant + bounded). Reentrant: the owner and its children
+# skip re-acquiring. Bounded: never an unbounded block - a hung switch must not
+# freeze every domain op + cron forever. Holds the lock via WEB_LOCK_FD until the
+# process exits or web_lock_release is called. Returns non-zero on timeout.
+web_lock_acquire() {
+	[ "${HESTIA_WEB_LOCK_HELD:-}" = "1" ] && return 0
+	local timeout="${1:-300}"
+	mkdir -p /run/hestia
+	exec {WEB_LOCK_FD}>> "$WEB_MODEL_LOCK"
+	if ! flock -x -w "$timeout" "$WEB_LOCK_FD"; then
+		exec {WEB_LOCK_FD}>&-
+		echo "Error: a web-model switch is in progress; timed out after ${timeout}s waiting for the lock." >&2
+		return 1
+	fi
+	export HESTIA_WEB_LOCK_HELD=1
+	return 0
+}
+
+# Release the freeze early (otherwise it drops on process exit).
+web_lock_release() {
+	[ -n "${WEB_LOCK_FD:-}" ] || return 0
+	flock -u "$WEB_LOCK_FD" 2> /dev/null
+	exec {WEB_LOCK_FD}>&- 2> /dev/null
+	unset WEB_LOCK_FD HESTIA_WEB_LOCK_HELD
+}
+
 
 # SFTP jail membership (#413): the sftp-jailed group is the sshd chroot selector and
 # the pam_namespace scope; the jail is built per session (h-add-sys-sftp-jail).

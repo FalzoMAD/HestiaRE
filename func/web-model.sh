@@ -132,3 +132,52 @@ apache_remoteip_disable() {
 	# Revert the client-IP log format back to the peer address
 	sed -i 's/LogFormat "%a/LogFormat "%h/g' /etc/apache2/apache2.conf
 }
+
+# rebuild_ip_web_config IP
+# (Re)generate the per-IP unassigned web + proxy configs for the current model, read
+# from the model globals. Extracted verbatim from h-add-sys-ip (144-181) so the IP add
+# and the model switch share one copy (#120). The MEF/rpaf/remoteip proxy-registration
+# appends stay in h-add-sys-ip (dormant unless those confs exist); the switch handles
+# remoteip via apache_remoteip_enable. Needs process_http2_directive (func/domain.sh)
+# and WEBTPL (func/main.sh) in the caller's scope.
+rebuild_ip_web_config() {
+	local ip="$1"
+	if [ -n "$WEB_SYSTEM" ]; then
+		local web_conf="/etc/$WEB_SYSTEM/conf.d/$ip.conf"
+		rm -f "$web_conf"
+
+		if [ "$WEB_SYSTEM" = 'httpd' ] || [ "$WEB_SYSTEM" = 'apache2' ]; then
+			if [ -z "$(/usr/sbin/apachectl -v | grep Apache/2.4)" ]; then
+				echo "NameVirtualHost $ip:$WEB_PORT" > "$web_conf"
+			fi
+			echo "Listen $ip:$WEB_PORT" >> "$web_conf"
+			cat $HESTIA/share/apache2/unassigned.conf >> "$web_conf"
+			sed -i 's/directIP/'$ip'/g' "$web_conf"
+			sed -i 's/directPORT/'$WEB_PORT'/g' "$web_conf"
+
+		elif [ "$WEB_SYSTEM" = 'nginx' ]; then
+			cp -f $HESTIA/share/nginx/unassigned.inc "$web_conf"
+			sed -i 's/directIP/'$ip'/g' "$web_conf"
+			process_http2_directive "$web_conf"
+		fi
+
+		if [ "$WEB_SSL" = 'mod_ssl' ]; then
+			if [ -z "$(/usr/sbin/apachectl -v | grep Apache/2.4)" ]; then
+				sed -i "1s/^/NameVirtualHost $ip:$WEB_SSL_PORT\n/" "$web_conf"
+			fi
+			sed -i "1s/^/Listen $ip:$WEB_SSL_PORT\n/" "$web_conf"
+			sed -i 's/directSSLPORT/'$WEB_SSL_PORT'/g' "$web_conf"
+		fi
+	fi
+
+	if [ -n "$PROXY_SYSTEM" ]; then
+		cat $WEBTPL/$PROXY_SYSTEM/proxy_ip.tpl \
+			| sed -e "s/%ip%/$ip/g" \
+				-e "s/%web_port%/$WEB_PORT/g" \
+				-e "s/%proxy_port%/$PROXY_PORT/g" \
+				-e "s/%proxy_ssl_port%/$PROXY_SSL_PORT/g" \
+				> /etc/$PROXY_SYSTEM/conf.d/$ip.conf
+
+		process_http2_directive "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
+	fi
+}
