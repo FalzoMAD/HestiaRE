@@ -55,6 +55,8 @@ source /etc/hestia/hestia.env                 # sets HESTIA
 source "$HESTIA/func/main.sh"                  # source_conf hestia.conf, BIN, dirs, error codes, user
 # shellcheck source=/usr/local/hestia/func/helper.sh
 source "$HESTIA/func/helper.sh"                # hestia_apt, load_os_profile, seed_hestia_etc
+# shellcheck source=/usr/local/hestia/func/web-model.sh
+source "$HESTIA/func/web-model.sh"             # configure_apache2, web_model_keyset, apache_remoteip_* (#120)
 # shellcheck source=/etc/hestia/install.conf
 source "$INSTALL_CONF"                          # HESTIA_*, INSTALL_OS/PROFILE, COMPONENT_*, TOOLS_SELECTION
 set -e
@@ -238,50 +240,7 @@ install_panel() {
 # Stage: web — nginx (+ optional apache2), PHP multi-version, web pool
 # ════════════════════════════════════════════════════════════════════════════
 
-# apache2 = customer web server. ports.conf emptied on purpose: Listen comes per
-# IP from h-add-sys-ip; the hestia-status 127.0.0.1:8081 listener keeps it startable
-# until the first IP registers.
-configure_apache2() {
-	echo "[ * ] Installing apache2..."
-	hestia_apt -y install apache2 apache2-suexec-custom libapache2-mod-fcgid
-
-	echo "[ * ] Configuring apache2..."
-	mkdir -p /etc/apache2/conf.d/domains
-	cp -f "$HESTIA/share/apache2/apache2.conf" /etc/apache2/
-	cp -f "$HESTIA/share/apache2/status.conf" /etc/apache2/mods-available/hestia-status.conf
-	cp -f /etc/apache2/mods-available/status.load /etc/apache2/mods-available/hestia-status.load
-	cp -f "$HESTIA/share/apache2/logrotate" /etc/logrotate.d/apache2
-
-	local m
-	for m in rewrite suexec ssl actions headers; do
-		a2enmod -q "$m" > /dev/null 2>&1 || true
-	done
-	a2dismod -q status > /dev/null 2>&1 || true
-	a2enmod -q hestia-status > /dev/null 2>&1 || true
-
-	# php-fpm backend: event MPM + proxy_fcgi for the FastCGI SetHandler directives
-	a2dismod -q mpm_prefork > /dev/null 2>&1 || true
-	a2enmod -q mpm_event > /dev/null 2>&1 || true
-	a2enmod -q proxy_fcgi setenvif > /dev/null 2>&1 || true
-	# proxy_http: apache webmail vhosts reverse-proxy to the Caddy webmail listeners
-	a2enmod -q proxy_http > /dev/null 2>&1 || true
-	cp -f "$HESTIA/share/apache2/hestia-event.conf" /etc/apache2/conf.d/
-
-	# no distro default site, no global Listen ports
-	a2dissite -q 000-default > /dev/null 2>&1 || true
-	echo "# Powered by hestia" > /etc/apache2/ports.conf
-
-	echo -e "/home\npublic_html/cgi-bin" > /etc/apache2/suexec/www-data
-	touch /var/log/apache2/access.log /var/log/apache2/error.log
-	mkdir -p /var/log/apache2/domains
-	chmod a+x /var/log/apache2
-	chmod 640 /var/log/apache2/access.log /var/log/apache2/error.log
-	chmod 751 /var/log/apache2/domains
-
-	update-rc.d apache2 defaults > /dev/null 2>&1
-	# restart, not start: replace the distro config the package start brought up
-	systemctl restart apache2
-}
+# configure_apache2 now lives in func/web-model.sh (shared with the model switch, #120)
 
 install_web() {
 	[ -f "$CONF_DIR/.done.web" ] && { echo "[ skip ] web already configured"; return 0; }
@@ -333,36 +292,19 @@ install_web() {
 	# web-server choice → port model: BOTH = nginx proxy 80/443 -> apache2 8080/8443;
 	# APACHE/NGINX = that server on 80/443, no proxy. Must land in hestia.conf before
 	# the IP is registered and before the multi-PHP loop (h-add-web-php reads WEB_SYSTEM).
-	local web_server="${COMPONENT_WEB_SERVER:-NGINX}"
-	case "$web_server" in
-		APACHE)
-			configure_apache2
-			wcv "WEB_SYSTEM"       "apache2"
-			wcv "WEB_RGROUPS"      "www-data"
-			wcv "WEB_PORT"         "80"
-			wcv "WEB_SSL_PORT"     "443"
-			wcv "WEB_SSL"          "mod_ssl"
-			wcv "PROXY_SYSTEM"     ""
-			;;
-		BOTH)
-			configure_apache2
-			wcv "WEB_SYSTEM"       "apache2"
-			wcv "WEB_RGROUPS"      "www-data"
-			wcv "WEB_PORT"         "8080"
-			wcv "WEB_SSL_PORT"     "8443"
-			wcv "WEB_SSL"          "mod_ssl"
-			wcv "PROXY_SYSTEM"     "nginx"
-			wcv "PROXY_PORT"       "80"
-			wcv "PROXY_SSL_PORT"   "443"
-			;;
-		*)
-			wcv "WEB_SYSTEM"       "nginx"
-			wcv "WEB_PORT"         "80"
-			wcv "WEB_SSL_PORT"     "443"
-			wcv "WEB_SSL"          "openssl"
-			wcv "PROXY_SYSTEM"     ""
-			;;
+	local web_model
+	case "${COMPONENT_WEB_SERVER:-NGINX}" in
+		APACHE) web_model="apache" ;;
+		BOTH) web_model="both" ;;
+		*) web_model="nginx" ;;
 	esac
+	# apache backend needs its packages+mods in place before the keyset lands
+	case "$web_model" in apache | both) configure_apache2 ;; esac
+	# One keyset table (func/web-model.sh), shared with the live model switch
+	local kv
+	while IFS= read -r kv; do
+		wcv "${kv%%=*}" "${kv#*=}"
+	done < <(web_model_keyset "$web_model")
 	wcv "STATS_SYSTEM"             "awstats"
 	wcv "WEB_BACKEND"              "php-fpm"
 
@@ -744,24 +686,11 @@ configure_hestia() {
 	fi
 	"$BIN/h-update-firewall" || true
 
-	# BOTH: apache2 behind nginx must see the real client IP via mod_remoteip (X-Real-IP)
+	# BOTH: apache2 behind nginx must see the real client IP via mod_remoteip (X-Real-IP).
+	# Same toggle the model switch uses (func/web-model.sh); it does not reload, so we do.
 	if [ "${COMPONENT_WEB_SERVER:-NGINX}" = "BOTH" ]; then
 		echo "[ * ] Configuring apache2 remoteip (client IP behind nginx)..."
-		{
-			echo "<IfModule mod_remoteip.c>"
-			echo "  RemoteIPHeader X-Real-IP"
-			echo "  RemoteIPInternalProxy 127.0.0.1"
-			if [ -n "$IP" ]; then
-				echo "  RemoteIPInternalProxy $IP"
-			fi
-			if [ -n "$PUB_IP" ] && [ "$PUB_IP" != "$IP" ]; then
-				echo "  RemoteIPInternalProxy $PUB_IP"
-			fi
-			echo "</IfModule>"
-		} > /etc/apache2/mods-available/remoteip.conf
-		# Log the translated client address (%a) instead of the peer (%h)
-		sed -i 's/LogFormat "%h/LogFormat "%a/g' /etc/apache2/apache2.conf
-		a2enmod -q remoteip > /dev/null 2>&1 || true
+		apache_remoteip_enable "$IP" "$PUB_IP"
 		systemctl restart apache2
 	fi
 
