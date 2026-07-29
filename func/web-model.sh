@@ -406,10 +406,8 @@ web_model_run() {
 	web_model_inventory_assert "$target" || { _wm_fail "inventory assertion failed (mixed tree)"; return 1; }
 
 	echo "[ * ] Restarting web services..."
-	"$BIN/h-restart-web" > /dev/null 2>&1
-	"$BIN/h-restart-proxy" > /dev/null 2>&1
-	"$BIN/h-restart-web-backend" > /dev/null 2>&1
-
+	# Stop the DEPARTING server FIRST so it frees any port the target server reclaims
+	# (both -> apache-only: apache takes :80 back from nginx - nginx must stop first).
 	if ! web_model_uses_apache "$target"; then
 		if [ "$purge" = "yes" ]; then
 			systemctl stop apache2 > /dev/null 2>&1 || true
@@ -422,6 +420,14 @@ web_model_run() {
 	if ! web_model_uses_nginx "$target"; then
 		systemctl disable --now nginx > /dev/null 2>&1 || true
 	fi
+
+	# Now enable + (re)start the servers the target uses; ports are free. An arriving
+	# server may have been disabled by a prior switch, so enable it explicitly.
+	if web_model_uses_apache "$target"; then systemctl enable apache2 > /dev/null 2>&1 || true; fi
+	if web_model_uses_nginx "$target"; then systemctl enable nginx > /dev/null 2>&1 || true; fi
+	"$BIN/h-restart-web" > /dev/null 2>&1
+	"$BIN/h-restart-proxy" > /dev/null 2>&1
+	"$BIN/h-restart-web-backend" > /dev/null 2>&1
 
 	rm -f "$(web_model_sentinel)"
 	web_lock_release
