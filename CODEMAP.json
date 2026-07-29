@@ -9,7 +9,6 @@
     "distro_quirks": "Cross-cutting gotchas that bite more than one service (grep these before assuming a service failure is your bug): (1) Ubuntu 26.04 ships ENFORCED AppArmor profiles that deny access other distros allow — proftpd can't read the panel cert under /usr/local/hestia/ssl (h-add-sys-proftpd drops share/proftpd/apparmor-local into the profile's local/ hook), and mariadbd's profile denies the dac_override the mariadb-install-db bootstrap needs (h-add-sys-mariadb unloads it for the init, reloads after). Suspect AppArmor on any 'Permission denied as root' on ub26. (2) Package names/splits differ by distro+version: proftpd-basic is bookworm-only (else proftpd-core), and modern proftpd (1.3.9 / 1.3.8 on trixie+ubuntu) moved mod_tls into proftpd-mod-crypto — omitting it silently disables FTPS. libzip is libzip4t64 on ub24 (t64 transition) but libzip5 on ub26. (3) apt-cache/apt-get output is localized — always LC_ALL=C before grepping for 'Candidate:' etc. (4) dovecot 2.3 (deb12) vs 2.4 (deb13/ub26) need version-split configs (share/dovecot/{2.3,2.4}/).",
     "reference_docs": "CLAUDE.md (rules), this map (component->files), PATHS.md (filesystem layout), and STRUCTURE.md (why the structure diverges from HestiaCP and what each divergence forces - read it before assuming why a subsystem was rebuilt: panel Caddy/Sury, the system-user split, protected downloads, webmail loopback, the FileManager/SFTP-jail rebuilds, /etc/hestia, and the permanent removals). Keep STRUCTURE.md current in the same PR as any structural change. Per-folder PROVENANCE.json (bin/, web/, share/) tracks per-file upstream heritage + RAW churn divergence (triage only); complements VENDORED.json (third-party) and STRUCTURE.md; recompute is a manual, occasional job."
   },
-
   "install_paths": {
     "install_root": "/usr/local/hestia",
     "instance_config": "/etc/hestia",
@@ -19,7 +18,6 @@
     "log_dir": "/var/log/hestia",
     "note": "install_root is intentionally identical to HestiaCP — only instance_config changed (/etc/hestiacp → /etc/hestia). See PATHS.md for full reference."
   },
-
   "upstream_provenance": {
     "purpose": "Maps HestiaRE files back to their HestiaCP origin so an upstream advisory or bugfix can be diffed/cherry-picked against the right file. Fork point: HestiaCP 1.9.6, kept read-only in the upstream/hestiacp branch. Each component carries an `upstream_ref` using these tags.",
     "tags": {
@@ -44,9 +42,7 @@
       }
     }
   },
-
   "components": {
-
     "cli_commands": {
       "description": "All CLI commands. h-* prefix is HestiaRE-native (renamed from v-* in Issue #22). v-* symlinks for HestiaCP compatibility added in Issue #23. No hl-* commands.",
       "symlink_policy": {
@@ -55,8 +51,12 @@
         "deletion": "When removing an h-* command: remove its v-* symlink too — no orphans.",
         "creation": "Committed v-* symlinks ship in the tarball, so the installer does NOT blanket-create them (a `for h-* ; ln -s v-*` loop minted an orphan alias for every HestiaRE-native command, #123). configure_hestia only prunes dangling v-* (a `find -xtype l` — e.g. an alias left pointing at a renamed/removed h-*); h-check-sys-smoke check_v_symlinks_resolve guards against a dangling alias at runtime. No allowlist: an extra working alias for a native command is harmless and not worth maintaining a list for a compat layer meant to fade out."
       },
-      "entry_points": ["bin/h-*"],
-      "directories": ["bin/"],
+      "entry_points": [
+        "bin/h-*"
+      ],
+      "directories": [
+        "bin/"
+      ],
       "key_files": [
         "bin/h-add-user",
         "bin/h-delete-user",
@@ -75,17 +75,51 @@
         "v-*": "symlinks only — see Issue #23"
       },
       "domains": {
-        "user": { "count": 98, "pattern": "bin/h-*-user*" },
-        "sys": { "count": 104, "pattern": "bin/h-*-sys*" },
-        "web": { "count": 80, "pattern": "bin/h-*-web*" },
-        "mail": { "count": 81, "pattern": "bin/h-*-mail*" },
-        "dns": { "count": 1, "pattern": "bin/h-*-dns*", "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58" },
-        "database": { "count": 31, "pattern": "bin/h-*-database*" },
-        "firewall": { "count": 21, "pattern": "bin/h-*-firewall*" },
-        "cron": { "count": 20, "pattern": "bin/h-*-cron*" },
-        "backup": { "count": 19, "pattern": "bin/h-*-backup*" },
-        "letsencrypt": { "count": 8, "pattern": "bin/h-*-letsencrypt*" },
-        "other": { "count": 17, "pattern": "bin/h-{acknowledge,add-domain,add-fastcgi-cache,...}" }
+        "user": {
+          "count": 98,
+          "pattern": "bin/h-*-user*"
+        },
+        "sys": {
+          "count": 104,
+          "pattern": "bin/h-*-sys*"
+        },
+        "web": {
+          "count": 80,
+          "pattern": "bin/h-*-web*"
+        },
+        "mail": {
+          "count": 81,
+          "pattern": "bin/h-*-mail*"
+        },
+        "dns": {
+          "count": 1,
+          "pattern": "bin/h-*-dns*",
+          "note": "Only h-list-mail-domain-dkim-dns retained — DNS zone management removed in Issue #58"
+        },
+        "database": {
+          "count": 31,
+          "pattern": "bin/h-*-database*"
+        },
+        "firewall": {
+          "count": 21,
+          "pattern": "bin/h-*-firewall*"
+        },
+        "cron": {
+          "count": 20,
+          "pattern": "bin/h-*-cron*"
+        },
+        "backup": {
+          "count": 19,
+          "pattern": "bin/h-*-backup*"
+        },
+        "letsencrypt": {
+          "count": 8,
+          "pattern": "bin/h-*-letsencrypt*"
+        },
+        "other": {
+          "count": 17,
+          "pattern": "bin/h-{acknowledge,add-domain,add-fastcgi-cache,...}"
+        }
       },
       "upstream_ref": {
         "rule": "bin/h-* ← bin/v-* (rename #22/#23; v-* kept as compat symlinks). Default provenance near-verbatim (renamed + /etc/hestiacp→/etc/hestia). Listed key_files:",
@@ -102,7 +136,10 @@
         "hestiare-native (no upstream, no symlink)": "h-install-hestia, h-check-sys-smoke, h-add/delete-sys-adminer, h-add/delete-sys-{rspamd,sieve,redis,proftpd,clamav}, hestia-php*, h-change-sys-panel-php",
         "removal_verb": "Single removal verb h-delete-* across all commands (#123, upstream v-delete-* parity). The interim h-remove-sys-* names (redis in #121, etc.) were renamed to h-delete-sys-*."
       },
-      "dependencies": ["func_libraries", "instance_config"],
+      "dependencies": [
+        "func_libraries",
+        "instance_config"
+      ],
       "upstream_debt": {
         "file_count": 512,
         "issues": [
@@ -111,11 +148,14 @@
         ]
       }
     },
-
     "func_libraries": {
       "description": "Shared bash function libraries sourced by all CLI commands and the installer. Core runtime dependency.",
-      "entry_points": ["func/main.sh"],
-      "directories": ["func/"],
+      "entry_points": [
+        "func/main.sh"
+      ],
+      "directories": [
+        "func/"
+      ],
       "key_files": [
         "func/main.sh",
         "func/domain.sh",
@@ -148,7 +188,9 @@
         "func/firewall.sh": "func/firewall.sh (near-verbatim)",
         "func/wizard.sh + func/helper.sh": "hestiare-native (bash installer, no upstream — see make_release)"
       },
-      "dependencies": ["instance_config"],
+      "dependencies": [
+        "instance_config"
+      ],
       "upstream_debt": {
         "file_count": 2,
         "issues": [
@@ -156,7 +198,6 @@
         ]
       }
     },
-
     "ssh_shell_jail": {
       "description": "SSH/SFTP access control: the 3-tier access ladder — nologin (SFTP-only chroot, the default) · jailbash (bubblewrap-sandboxed interactive shell, opt-in) · bash (unconfined). #223 was the baseline check; the non-SFTP hardening landed in #412 (Story 1); the SFTP transport/chroot was rebuilt on pam_namespace in #413 (Story 2). See docs branch jail-chroot-story{1,2}-plan.md.",
       "key_files": [
@@ -182,9 +223,12 @@
       "allowusers": "func/main.sh manage_sshd_allowusers add|del <user> — co-maintains an AllowUsers login allowlist in /etc/ssh/sshd_config; installer seeds it commented/inert. Panel users hooked in #412 (h-add-user/h-delete-user/rebuild_user); domain-FTP sub-accounts hooked in #413 (h-add-web-domain-ftp/h-delete-web-domain-ftp). See func_libraries.file_roles.main.sh for the full contract.",
       "sftp_jail": "pam_namespace SFTP jail (#413), replacing the old /srv/jail systemd bind-mount machinery. Per session, pam_namespace mounts a private tmpfs on /run/hestia/jail (from share/tmpfiles.d/hestia-jail.conf) and runs share/security/hestia-jail.init INSIDE the new mount namespace, as root, BEFORE sshd chroots: it builds the jail at the FIDELITY path (/run/hestia/jail/$user/<real-home>, from getent passwd) and bind-mounts the real home there — so ONE generic rule serves both panel users (home /home/$user) and domain-FTP sub-accounts (user-owned home deep under web/$domain, which native chroot cannot handle). fail-closed rides on sshd's own safely_chroot() (aborts if any chroot component is not root-owned or is group/other-writable): the fresh tmpfs root is 1777, the init builds everything while it is still 1777 and `chmod 755` on the root is the LAST action, so any failure leaves it 1777 → session refused (pam_namespace IGNORES the init exit code, so this is the real gate). Scope: the sftp-jailed group is BOTH the sshd chroot selector (one static `Match Group sftp-jailed` block) AND the PAM scope (`session [success=1 default=ignore] pam_succeed_if.so user notingroup sftp-jailed` before pam_namespace, so only members build a jail — non-members log in unchanged). Per user this is just group membership (add_chroot_jail=usermod -aG, delete_chroot_jail=gpasswd -d). No /home ownership flip (chroot root is root-owned in the tmpfs; the home keeps user ownership). No persistent state: no /srv/jail, no .mount units, no @reboot cron, no growing Match User list; /run/hestia/jail is tmpfs → self-heals on reboot via tmpfiles.d. Verified live on OpenSSH 9.2/9.6/10.0/10.2 (deb12/ub24/deb13/ub26), userns restriction active on ub26 with NO unprivileged userns/bwrap involved.",
       "sftp_jail_quirks": "Hard-won, non-obvious, expensive to rediscover — keep verbatim (same category as apparmor_userns_quirk): (1) pam_namespace IGNORES the iscript's exit code — fail-closed cannot ride on `exit 1`; it rides on sshd's safely_chroot() via the chmod-755-as-LAST-action on the still-1777 tmpfs root (any earlier failure leaves it world-writable → refused). (2) hestia-jail.init is a pam_namespace CALLBACK, never a standalone script: run by hand (even under `unshare -m`) it lacks slave-propagation, so `mount --bind` LEAKS the bind onto the host. Guarded by `mountpoint -q $polydir` (pam_namespace mounts the per-session tmpfs on the polydir before calling the iscript, so it is a mountpoint only in the real path; PAM_USER is NOT exported to the iscript, so it is not a usable discriminator — the mountpoint is). (3) A SKIPPED build (pam_namespace not firing at all) is still fail-closed: ChrootDirectory is always /run/hestia/jail/%u (never /home/%u), and that per-user dir exists only inside the per-session tmpfs → no build → missing dir → sshd refuses; it cannot resolve to the real home. (4) ForceCommand internal-sftp in the Match Group block forces SFTP even for a jailed user who has a real login shell (ssh-not-sftp → 'sftp connections only', no shell).",
-      "dependencies": ["func_libraries", "cli_commands", "installer"]
+      "dependencies": [
+        "func_libraries",
+        "cli_commands",
+        "installer"
+      ]
     },
-
     "file_manager": {
       "description": "Web file manager (#419 rebuild — replaces the old FileGator + SFTP-loopback connector). A per-customer php-fpm pool runs the app AS the customer, so the kernel UID is the file-access boundary (no connector, no keys, no crypto). Reached only via Panel-Caddy /fm/ → forward_auth → a private loopback listener → the customer pool. Baseline #218, integration concept #419. The app is a maintained fork of TinyFileManager 2.6 (single-file PHP), put on a diet: no external CDN — Bootstrap-CSS + a combined PrismJS build are vendored under share/filemanager/fm/assets/, FontAwesome (FA7) + (where needed) the panel's own assets are referenced same-origin; jQuery/Bootstrap-JS/DataTables/Dropzone/Ace/highlight.js are replaced by vanilla JS + a tiny Bootstrap-compatible modal/dropdown/tab shim, a native chunked uploader, native table filter/sort, and a Prism-overlay code editor (highlighting + line numbers, no preview). Vendoring is tracked in VENDORED.json (tinyfilemanager/prismjs/bootstrap-css) with upstream/* snapshot branches. Security note: the FM is SAME-ORIGIN with the panel (:8083/fm/), so any path that emits customer bytes is a panel-origin XSS surface — the ?media= handler therefore sets Content-Type ONLY from a server-side extension allowlist (never finfo/client), forces everything else (incl. SVG) to application/octet-stream + attachment, and always sends X-Content-Type-Options: nosniff + CSP default-src 'none'; sandbox; the third-party Google/MS doc-viewer iframes were removed (URL leak + broken off-box). Caddy drops all inbound X-Hestia-* (request_header -X-Hestia-*) before re-setting the trusted ones — the §7.2 invariant made structural. The FA4→FA7 icon remap covers the icons TFM actually references (fewer than a raw 1:1 of every upstream FA4 name; duplicates/unused dropped).",
       "key_files": [
@@ -217,12 +261,17 @@
       "lifecycle": "h-add-sys-filemanager deploys shared read-only code to /usr/share/filemanager/fm, generates the secret + tmpfiles socket dir + Caddy route, and reactivates saved per-user flags; h-delete-sys-filemanager reverses it but KEEPS per-user FILE_MANAGER flags (saved state, re-add reactivates). Per customer, h-add/delete-user-filemanager add/remove the pool (runs as the customer, pm=ondemand) + private vhost + FILE_MANAGER flag. rebuild_user (func/rebuild.sh) re-creates the pool+vhost for FILE_MANAGER=yes users — restore bypasses h-add-user-filemanager, so without it a restored user keeps the flag+menu but has no working FM (same lockout class as the AllowUsers fix 62eb1ca). h-add-user-filemanager waits for the pool socket before returning (no enable-time 403 race). Panel menu: h-list-user exposes the per-user FILE_MANAGER flag; top_panel() surfaces the EFFECTIVE (impersonation-aware) user's flag as $_SESSION['USER_FILE_MANAGER'] and web/templates/includes/panel.php gates the 'File manager' entry on it === 'yes' (its own key — never mixes with the legacy system-wide FileGator FILE_MANAGER).",
       "quirks": "Hard-won, keep verbatim: (1) FILE_MANAGER must NOT be the last user.conf line — update_user_value deletes+reinserts by line number and a last-line key fails to reinsert (the address lands past EOF) and vanishes on the first toggle; it is inserted before TIME + seeded in rebuild's default block + registered in syshealth known_keys (where LOGIN_*/RATE_LIMIT are also still missing — pre-existing). (2) Stock TinyFileManager is NOT integration-ready — Phase-2 patches: P2 ($use_auth=false → trust forward_auth, else it shows its own login), P3 (root from getenv('FM_ROOT'), NOT $_SERVER['DOCUMENT_ROOT'] which is /usr/share/filemanager, outside open_basedir → TFM echoes 'Root path not found'), P-selfurl (FM_SELF_URL/FM_ROOT_URL prepend HTTP_HOST = the internal routing host fm-<user>.local which the browser cannot resolve → make them relative). (3) FM app errors: the pool sets catch_workers_output=yes + log_errors=on, so they land in the php-fpm log tagged [pool fm-<user>]; TFM's own 'Root path' error is echoed to the page, not logged.",
       "status": "Phases 1-4 done. Phase 1 (skeleton) + Phase 2 (vendored TFM diet) + Phase 4 (panel menu on the per-user flag + socket-wait) merged to dev; Phase 3 fleet-verified GREEN on deb12/deb13/ub24/ub26 (nginx path — all installs are PROXY_SYSTEM=nginx): secret gate 403/302, full panel session chain /fm/ 200 with the listing + 0 PHP fatals, pool runs as the customer, assets serve, edit/view/upload/media OK, theme passthrough (data-bs-theme) end-to-end. PENDING: the apache-only install profile (apache.tpl — needs a fresh apache-only build to exercise) + feinschliff (styling; FileGator-plumbing cleanup: legacy system FILE_MANAGER key, edit_server v_filemanager toggle, old /usr/local/hestia/web/fm tree, a module-installed menu gate).",
-      "dependencies": ["func_libraries", "cli_commands", "web_panel"]
+      "dependencies": [
+        "func_libraries",
+        "cli_commands",
+        "web_panel"
+      ]
     },
-
     "web_panel": {
       "description": "Plain-PHP control panel UI. No framework. Action-based routing via directory structure. Served by Caddy + PHP 8.3 FPM (hestia-php.service) on port 8083.",
-      "entry_points": ["web/index.php"],
+      "entry_points": [
+        "web/index.php"
+      ],
       "directories": [
         "web/",
         "web/inc/",
@@ -282,7 +331,28 @@
         ]
       },
       "locales": 42,
-      "action_dirs": ["add", "edit", "delete", "list", "bulk", "copy", "move", "suspend", "unsuspend", "restart", "stop", "start", "schedule", "update", "generate", "download", "search", "reset", "reset2fa", "sso"],
+      "action_dirs": [
+        "add",
+        "edit",
+        "delete",
+        "list",
+        "bulk",
+        "copy",
+        "move",
+        "suspend",
+        "unsuspend",
+        "restart",
+        "stop",
+        "start",
+        "schedule",
+        "update",
+        "generate",
+        "download",
+        "search",
+        "reset",
+        "reset2fa",
+        "sso"
+      ],
       "pma_sso": {
         "description": "phpMyAdmin SSO without REST API (#145): web/sso/phpmyadmin/ runs h-add-database-sso-token via panel sudo (temp DB user + one-time handoff file /run/hestia-sso/<token>, root:caddy 0730/640); share/phpmyadmin/hestia-sso.php (PMA pool, unprivileged) consumes the token and opens the signon session. Enable/disable: h-add-sys-pma-sso / h-delete-sys-pma-sso; PHPMYADMIN_KEY is only the enabled flag."
       },
@@ -298,7 +368,10 @@
         "web/edit/server/hestia/index.php": "web/edit/server/hestiaweb/index.php (near-verbatim; hestiaweb→hestia #214; GHSA-fcq6 admin gate fixed #386)",
         "removed": "web terminal (list_terminal, #59), DNS pages (edit_dns, #58/#283), webapp/quick-install (list_webapps/setup_webapp, #56)"
       },
-      "dependencies": ["cli_commands", "func_libraries"],
+      "dependencies": [
+        "cli_commands",
+        "func_libraries"
+      ],
       "upstream_debt": {
         "file_count": 9,
         "issues": [
@@ -308,18 +381,34 @@
         ]
       }
     },
-
     "panel_assets": {
       "description": "Panel frontend assets, served as-is by Panel-Caddy — no build step, no Node/npm (#248). JS: native ES modules from web/js/src/ (explicit .js import extensions). CSS: native nesting, plain min-width media queries, browser resolves @import chains. Browser baseline: adr-browser-baseline.md (Chrome/Edge 120, Firefox 117, Safari 17.2) with CSS-only warning banner in web/templates/header.php.",
-      "entry_points": ["web/templates/includes/js.php", "web/templates/includes/css.php", "web/js/src/index.js", "web/css/src/themes/light.css"],
-      "directories": ["web/js/src/", "web/js/vendor/", "web/css/src/", "web/css/vendor/", "web/webfonts/"],
+      "entry_points": [
+        "web/templates/includes/js.php",
+        "web/templates/includes/css.php",
+        "web/js/src/index.js",
+        "web/css/src/themes/light.css"
+      ],
+      "directories": [
+        "web/js/src/",
+        "web/js/vendor/",
+        "web/css/src/",
+        "web/css/vendor/",
+        "web/webfonts/"
+      ],
       "themes": "Shipped: web/css/src/themes/*.css — light is the base stylesheet (css.php always loads it), overlays: dark, dark-tonal (@import dark.css + tonal green icon ladder, #260/#269), light-flat, light-green (dark green primary via brand-token redefinition, #269). Renames #269: default→light, flat→light-flat; vestia removed #259 — THEME migration + stale-file cleanup in func/helper.sh migrate_data_layout. Brand tokens --brand-* (green/anthracite, #259) in light.css :root, dark.css overrides greens brighter. Custom: web/css/src/themes/custom/*.css (instance data, gitignored). Listed by bin/h-list-sys-themes via HESTIA_THEMES/HESTIA_THEMES_CUSTOM (func/main.sh).",
       "vendored": "web/js/vendor/ (Alpine.js + collapse), web/css/vendor/ (normalize.css, Font Awesome Free solid-only). Manifest: VENDORED.json; snapshot branches: upstream/alpinejs, upstream/normalize-css, upstream/fontawesome. Updater: share/upstream/update-web-vendor.sh (--check read-only version report vs VENDORED.json; --fetch <asset>[@version] rebuilds one snapshot branch, publisher-hash-verified); hooked into share/upstream/sync-upstream.sh (author's sync instance).",
-      "eigenbau": ["web/js/src/lib/randomString.js", "web/js/src/lib/passwordStrength.js", ".u-swing in web/css/src/utilities.css"],
+      "eigenbau": [
+        "web/js/src/lib/randomString.js",
+        "web/js/src/lib/passwordStrength.js",
+        ".u-swing in web/css/src/utilities.css"
+      ],
       "upstream_ref": "reimplemented/native: the Node/npm build step was removed (#248), so web/js/src + web/css/src are HestiaRE-native (native ES modules / native CSS, not upstream's built assets). web/{js,css}/vendor/ are upstream third-party (Alpine.js, normalize.css, Font Awesome Free) tracked in VENDORED.json + upstream/{alpinejs,normalize-css,fontawesome} snapshot branches — NOT from hestiacp; refresh via share/upstream/update-web-vendor.sh.",
-      "dependencies": ["web_panel", "panel_caddy_service"]
+      "dependencies": [
+        "web_panel",
+        "panel_caddy_service"
+      ]
     },
-
     "installer": {
       "description": "Service config templates and data distributed during install. Consumed by Makefile install-* targets. hst-install-debian.sh and hst-install-ubuntu.sh removed in Issue #26b — replaced by Makefile targets.",
       "entry_points": [
@@ -352,7 +441,11 @@
         "share/panel-php/php-fpm.conf"
       ],
       "language": "bash / config templates",
-      "supported_distros": ["Debian 12 (bookworm)", "Ubuntu 24.04 LTS (noble)", "Debian 13 (trixie, priority 2, planned June 2026+)"],
+      "supported_distros": [
+        "Debian 12 (bookworm)",
+        "Ubuntu 24.04 LTS (noble)",
+        "Debian 13 (trixie, priority 2, planned June 2026+)"
+      ],
       "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. Install logic: Makefile (removed) → Justfile #102 → pure-bash bin/h-install-hestia + func/wizard.sh + func/helper.sh in Issue #112 (just removed). See make_release component.",
       "web_templates": {
         "nginx": "templates/web/nginx/",
@@ -382,17 +475,23 @@
         "packages/*.pkg": "install/deb/packages/ (moved, near-verbatim)",
         "share/panel-caddy/, share/panel-php/, share/dovecot/": "hestiare-native (see panel_caddy_service / panel_php_service)"
       },
-      "dependencies": ["func_libraries", "make_release"],
+      "dependencies": [
+        "func_libraries",
+        "make_release"
+      ],
       "upstream_debt": {
         "file_count": 0,
         "issues": []
       }
     },
-
     "panel_caddy_service": {
       "description": "Caddy config for the HestiaRE admin panel on port 8083. Replaces the compiled hestia-nginx package. Handles PHP via FastCGI and X-Accel-Redirect for file downloads.",
-      "entry_points": ["share/panel-caddy/Caddyfile"],
-      "directories": ["share/panel-caddy/"],
+      "entry_points": [
+        "share/panel-caddy/Caddyfile"
+      ],
+      "directories": [
+        "share/panel-caddy/"
+      ],
       "key_files": [
         "share/panel-caddy/Caddyfile",
         "share/panel-caddy/hestia.conf",
@@ -417,20 +516,27 @@
         "Web terminal removed in Issue #59 — /_shell/ location absent by design",
         "Panel apps under /etc/caddy/apps/*.conf: phpMyAdmin/phpPgAdmin (h-change-sys-db-alias) and rspamd controller UI (installer mail stage, Issue #301). rspamd: /rspamd/* is forward_auth-gated against the admin panel session (web/rspamd-auth.php) then proxied to the controller's unix socket /run/rspamd/controller.sock (X-Forwarded-* stripped). The controller binds that socket (mode 0660, group _rspamd) instead of TCP localhost so no local shell user can read it; installer adds caddy to the _rspamd group. Shown in-panel via the iframe page web/list/rspamd/. Installer also sets password+enable_password overriding the stock q1 default (defense in depth)"
       ],
-      "required_packages": ["caddy"],
+      "required_packages": [
+        "caddy"
+      ],
       "note": "Installer integration completed in Issue #26a.",
       "upstream_ref": "hestiare-native — replaces the compiled hestia-nginx package; no upstream equivalent (#24). Roundcube panel route + internal webmail listeners are HestiaRE-only (#205).",
-      "dependencies": ["panel_php_service"],
+      "dependencies": [
+        "panel_php_service"
+      ],
       "upstream_debt": {
         "file_count": 0,
         "issues": []
       }
     },
-
     "panel_php_service": {
       "description": "Dedicated PHP-FPM service for the HestiaRE panel. Runs as hestia-php.service using Sury php8.3-fpm binary with an isolated pool. Replaces compiled hestia-php package.",
-      "entry_points": ["share/panel-php/hestia-php.service"],
-      "directories": ["share/panel-php/"],
+      "entry_points": [
+        "share/panel-php/hestia-php.service"
+      ],
+      "directories": [
+        "share/panel-php/"
+      ],
       "key_files": [
         "share/panel-php/hestia-php.service",
         "share/panel-php/php-fpm.conf",
@@ -473,11 +579,17 @@
         "issues": []
       }
     },
-
     "make_release": {
       "description": "Pure-bash installer. install.sh (bootstrap) → func/wizard.sh (manifest-driven Q&A → /etc/hestia/install.conf) → bin/h-install-hestia (non-interactive, COMPONENT_*-gated). Migrated from Justfile/just/* to bash h-* commands in Issue #112 (epic); just removed (was Makefile→Justfile in #102, Justfile→bash in #112).",
-      "entry_points": ["install.sh", "func/wizard.sh", "bin/h-install-hestia"],
-      "directories": ["bin/", "func/"],
+      "entry_points": [
+        "install.sh",
+        "func/wizard.sh",
+        "bin/h-install-hestia"
+      ],
+      "directories": [
+        "bin/",
+        "func/"
+      ],
       "key_files": [
         "install.sh",
         "func/wizard.sh",
@@ -521,18 +633,21 @@
       },
       "install_conf": "/etc/hestia/install.conf — written by func/wizard.sh; HESTIA_* params + COMPONENT_* selections; sourced by h-install-hestia; COMPONENT_* kept current by h-add-*/h-delete-* via set_install_component",
       "upstream_ref": "hestiare-native — the whole installer (install.sh, func/wizard.sh, bin/h-install-hestia, func/helper.sh) was rebuilt from scratch (Makefile→just→bash, #106/#112/#114); upstream's install/hst-install-*.sh were removed (#26). No cherry-pick path.",
-      "dependencies": ["installer"],
+      "dependencies": [
+        "installer"
+      ],
       "upstream_debt": {
         "file_count": 0,
         "issues": []
       }
     },
-
     "pr_api": {
       "description": "Repo API integration for PR creation. The remote host, API call and use of TOKEN live in CLAUDE.local.md (untracked — kept off the public GitHub mirror), NOT here.",
       "entry_points": [],
       "directories": [],
-      "key_files": ["CLAUDE.local.md"],
+      "key_files": [
+        "CLAUDE.local.md"
+      ],
       "language": "curl/bash",
       "pr_target_branch": "dev",
       "upstream_ref": "hestiare-native (Repo workflow tooling; no upstream).",
@@ -541,19 +656,83 @@
         "file_count": 0,
         "issues": []
       }
+    },
+    "web_model_switch": {
+      "description": "Live web-serving model switch (#120): change a running server between nginx-only / both / apache-only (previously install-only). Four thin commands - h-add-sys-nginx, h-add-sys-apache2, h-delete-sys-nginx, h-delete-sys-apache2 - over one shared core in func/web-model.sh; the model is DERIVED from the configured component set (WEB_SYSTEM/PROXY_SYSTEM in hestia.conf, never dpkg). Apply order: acquire the exclusive freeze lock -> durable snapshot + crash sentinel -> configure_apache2 (if target uses apache) -> flip keyset (change + clear) -> mod_remoteip toggle (enable for both incl. NAT IPs, disable otherwise) -> rebuild per-IP + web + webmail -> clean old-model artifacts -> validate (nginx -t / apache2ctl configtest + inventory assertion) -> stop the departing server, then enable+restart the target's servers (port handover). Explicit rollback (restore snapshot + re-start/enable) on any failure; --recover restores from an interrupted run's sentinel snapshot. The freeze: h-restart-web/-proxy/-service defer, 47 web/mail-vhost mutators + the LE renewal acquire the lock (bounded + reentrant via HESTIA_WEB_LOCK_HELD), apache logrotate skips its reload while held. Backups carry a WEB_SYSTEM/PROXY_SYSTEM marker (backup.conf + hestia/web-system in the archive); restore prints visible template-downgrade + cross-model warnings. Enforced by three h-check-sys-smoke guards (lock coverage, pre-check coverage, stale-sentinel).",
+      "commands": [
+        "bin/h-add-sys-nginx",
+        "bin/h-add-sys-apache2",
+        "bin/h-delete-sys-nginx",
+        "bin/h-delete-sys-apache2"
+      ],
+      "core": "func/web-model.sh (configure_apache2, web_model_keyset, apache_remoteip_enable/disable, rebuild_ip_web_config, web_model_run + snapshot/rollback/sentinel/recover/prechecks)",
+      "primitives": "func/main.sh (clear_sys_value, WEB_MODEL_LOCK, web_freeze_held, web_lock_acquire/release)",
+      "freeze_touchpoints": "bin/h-restart-web|-proxy|-service, share/apache2/logrotate, bin/h-update-letsencrypt-ssl, 47 web/mail-domain mutators",
+      "backup_restore": "bin/h-backup-user (model marker), bin/h-restore-user (visible warnings + cross-model banner)",
+      "smoke_guards": "bin/h-check-sys-smoke (check_web_lock_coverage, check_web_switch_prechecks, check_web_model_sentinel)",
+      "no_symlink": "new h-* commands, no v-* symlink",
+      "upstream_ref": "hestiare-native"
     }
   },
-
   "service_matrix": {
-    "always_installed": ["nginx", "php-multi-sury", "mariadb", "phpmyadmin", "caddy", "iptables", "fail2ban", "ipset", "composer", "wp-cli"],
-    "standard_profile": ["apache2-os-only", "exim4", "dovecot", "rspamd", "roundcube"],
-    "minimal_profile": ["standard minus apache2 and mail stack"],
-    "optional_h_add_delete": ["proftpd", "clamav", "postgresql", "redis", "opensearch", "docker-proxy", "filemanager"],
-    "never_install": ["bind9", "vsftpd", "web-terminal", "spamassassin", "software-installer"],
-    "panel_webserver": { "service": "caddy", "port": 8083, "replaces": "hestia-nginx", "caddyfile": "/etc/caddy/Caddyfile", "site_config": "/etc/caddy/hestia.conf", "install_source": "share/panel-caddy/" },
-    "panel_php": { "service": "hestia-php.service", "binary": "/usr/sbin/php-fpm8.3", "source": "sury", "pool": "isolated", "replaces": "hestia-php", "config_dir": "/etc/php/hestia/fpm/", "pool_config": "share/panel-php/pool.d/panel.conf", "socket": "/run/hestia-php.sock", "reference_version_source": "share/manifest.json -> components.PANEL_PHP.reference_version (#272): single source for installer PHP_VER + wizard checklist lock; always routed through h-add-web-php for the full extension set" }
+    "always_installed": [
+      "nginx",
+      "php-multi-sury",
+      "mariadb",
+      "phpmyadmin",
+      "caddy",
+      "iptables",
+      "fail2ban",
+      "ipset",
+      "composer",
+      "wp-cli"
+    ],
+    "standard_profile": [
+      "apache2-os-only",
+      "exim4",
+      "dovecot",
+      "rspamd",
+      "roundcube"
+    ],
+    "minimal_profile": [
+      "standard minus apache2 and mail stack"
+    ],
+    "optional_h_add_delete": [
+      "proftpd",
+      "clamav",
+      "postgresql",
+      "redis",
+      "opensearch",
+      "docker-proxy",
+      "filemanager"
+    ],
+    "never_install": [
+      "bind9",
+      "vsftpd",
+      "web-terminal",
+      "spamassassin",
+      "software-installer"
+    ],
+    "panel_webserver": {
+      "service": "caddy",
+      "port": 8083,
+      "replaces": "hestia-nginx",
+      "caddyfile": "/etc/caddy/Caddyfile",
+      "site_config": "/etc/caddy/hestia.conf",
+      "install_source": "share/panel-caddy/"
+    },
+    "panel_php": {
+      "service": "hestia-php.service",
+      "binary": "/usr/sbin/php-fpm8.3",
+      "source": "sury",
+      "pool": "isolated",
+      "replaces": "hestia-php",
+      "config_dir": "/etc/php/hestia/fpm/",
+      "pool_config": "share/panel-php/pool.d/panel.conf",
+      "socket": "/run/hestia-php.sock",
+      "reference_version_source": "share/manifest.json -> components.PANEL_PHP.reference_version (#272): single source for installer PHP_VER + wizard checklist lock; always routed through h-add-web-php for the full extension set"
+    }
   },
-
   "upstream_debt_summary": {
     "total_affected_files": 571,
     "resolved_in_issue_30": 563,

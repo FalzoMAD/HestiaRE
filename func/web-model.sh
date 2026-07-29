@@ -600,7 +600,7 @@ web_precheck_delete_apache2() {
 		local x; for x in $findings; do echo "        $x" >&2; done
 		if [ "$force" = "yes" ]; then
 			echo "  --force: proceeding anyway (recorded in the action log)." >&2
-			"$BIN/h-log-action" "$($BIN/h-list-sys-config json > /dev/null 2>&1; echo admin)" "Warning" "Web" "h-delete-sys-apache2 --force overrode:$findings" > /dev/null 2>&1 || true
+			"$BIN/h-log-action" "${ROOT_USER:-admin}" "Warning" "Web" "h-delete-sys-apache2 --force overrode:$findings" > /dev/null 2>&1 || true
 			return 0
 		fi
 		echo "  Refused. Re-run with --force to override (its findings will be logged)." >&2
