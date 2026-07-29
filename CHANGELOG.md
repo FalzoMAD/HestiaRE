@@ -9,6 +9,14 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Fixed
+
+- Directory listing (`h-change-web-domain-dirlist`) survived no vhost rebuild (#456).
+  It flipped apache `Options -Indexes`/`+Indexes` straight in the generated vhost with
+  no `web.conf` key, so any `h-rebuild-web-domain(s)` reset it to the template default
+  and lost the setting silently. Now persisted as a `DIR_LIST` key and re-applied by the
+  rebuild self-heal (mirroring `SSL_FORCE`). Verified on apache-only and both models.
+
 ### Added
 
 - `STRUCTURE.md` (repo root): a structural-divergence reference mapping each

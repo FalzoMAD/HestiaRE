@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: enable/disable directory listing
-# options: USER DOMAIN MODE
+# options: USER DOMAIN MODE [RESTART] [QUIET]
 #
 # example: h-change-web-domain-dirlist user demo.com on
 #
@@ -14,6 +14,8 @@
 user=$1
 domain=$2
 mode=$3
+restart="$4"
+quiet="$5"
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -34,7 +36,7 @@ format_domain_idn
 #----------------------------------------------------------#
 
 check_args '3' "$#" 'USER DOMAIN MODE'
-is_format_valid 'user' 'domain'
+is_format_valid 'user' 'domain' 'restart'
 is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
@@ -59,7 +61,7 @@ if [ "$mode" = "on" ]; then
 		# Enable directory listing for SSL-enforced domains
 		sed -i "s/-Index/+Index/g" $HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.ssl.conf
 	fi
-	echo "Enabled directory browsing for $domain."
+	[ "$quiet" != "yes" ] && echo "Enabled directory browsing for $domain."
 else
 	# Disable directory listing
 	sed -i "s/+Index/-Index/g" $HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.conf
@@ -67,21 +69,34 @@ else
 		# Enable directory listing for SSL-enforced domains
 		sed -i "s/+Index/-Index/g" $HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.ssl.conf
 	fi
-	echo "Disabled directory browsing for $domain."
+	[ "$quiet" != "yes" ] && echo "Disabled directory browsing for $domain."
 fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Rebuilding vhosts
-$BIN/h-restart-web
+# Persist the state so a vhost rebuild can self-heal it. Without a web.conf key
+# the setting lives only in the generated vhost and every rebuild silently drops it.
+if [ -z "$DIR_LIST" ]; then
+	add_object_key "web" 'DOMAIN' "$domain" 'DIR_LIST' 'SUSPENDED'
+fi
+if [ "$mode" = "on" ]; then
+	update_object_value 'web' 'DOMAIN' "$domain" '$DIR_LIST' 'yes'
+else
+	update_object_value 'web' 'DOMAIN' "$domain" '$DIR_LIST' 'no'
+fi
+
+# Restart web server
+$BIN/h-restart-web "$restart"
 
 # Logging
-if [ "$mode" = "on" ]; then
-	$BIN/h-log-action "$user" "Warning" "Web" "Directory browsing enabled (Domain: $domain)."
-else
-	$BIN/h-log-action "$user" "Info" "Web" "Directory browsing disabled (Domain: $domain)."
+if [ "$quiet" != "yes" ]; then
+	if [ "$mode" = "on" ]; then
+		$BIN/h-log-action "$user" "Warning" "Web" "Directory browsing enabled (Domain: $domain)."
+	else
+		$BIN/h-log-action "$user" "Info" "Web" "Directory browsing disabled (Domain: $domain)."
+	fi
 fi
 log_event "$OK" "$EVENT"
 
