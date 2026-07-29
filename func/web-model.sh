@@ -306,6 +306,11 @@ web_model_rollback() {
 # List helpers
 web_sys_ips() { "$BIN/h-list-sys-ips" plain 2> /dev/null | cut -f1; }
 web_users() { "$BIN/h-list-users" list 2> /dev/null; }
+# Each sys IP followed by its NAT/public IP (field 9), matching the installer's remoteip
+# trusted-proxy set of IP + PUB_IP so a switched box is byte-identical to a fresh one.
+web_sys_proxy_ips() {
+	"$BIN/h-list-sys-ips" plain 2> /dev/null | awk -F'\t' '{print $1; if ($9 != "" && $9 != $1) print $9}'
+}
 
 # web_model_run CURRENT TARGET MODE OPLABEL PURGE
 # The shared apply/preview path. MODE=yes applies; anything else previews.
@@ -368,7 +373,7 @@ web_model_run() {
 	source_conf "$HESTIA/conf/hestia.conf" # reload globals to the target model
 
 	if [ "$target" = "both" ]; then
-		local ips; ips=$(web_sys_ips | tr '\n' ' ')
+		local ips; ips=$(web_sys_proxy_ips | tr '\n' ' ')
 		# shellcheck disable=SC2086
 		apache_remoteip_enable $ips
 	elif [ -d /etc/apache2/mods-available ]; then
