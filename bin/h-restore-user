@@ -202,6 +202,18 @@ new_uid=$(grep "^$user:" /etc/passwd | cut -f 3 -d :)
 if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 	echo -e "\n-- WEB --" | tee -a $tmpdir/restore.log
 
+	# Cross-model restore banner (#120): the web configs are regenerated for THIS host's
+	# model; if the archive was made under a different model, custom includes may not apply.
+	if [ -f "$tmpdir/$backup_system/web-system" ]; then
+		bk_web=$(sed -n "s/.*WEB_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$backup_system/web-system")
+		bk_proxy=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$backup_system/web-system")
+		if [ "$bk_web" != "$WEB_SYSTEM" ] || [ "$bk_proxy" != "$PROXY_SYSTEM" ]; then
+			echo "Warning!: backup web model (WEB_SYSTEM='$bk_web' PROXY_SYSTEM='$bk_proxy') differs from this host (WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'); web configs are regenerated for this host - review any custom nginx/apache includes." | tee -a $tmpdir/restore.log
+		fi
+	else
+		echo "Warning!: backup web model unknown (pre-#120 archive); review the restored web configs manually." | tee -a $tmpdir/restore.log
+	fi
+
 	# Creating web domain restore list
 	backup_domains=$(tar -tf $BACKUP/$backup | grep "^./web")
 	if [ "$backup_mode" = "zstd" ]; then
@@ -272,21 +284,25 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				IP=$ip
 			fi
 
-			# Checking web template
+			# Checking web template (warn visibly - a silent reset hides a real config
+			# change, e.g. a template missing under the target web model, #120)
 			check_tpl=$(is_web_template_valid $TPL)
 			if [ -n "$check_tpl" ]; then
+				echo "Warning!: web template '$TPL' is not available; $domain reset to 'default'."
 				TPL='default'
 			fi
 
 			# Checking proxy template
 			check_proxy_tpl=$(is_proxy_template_valid $PROXY)
 			if [ -n "$check_proxy_tpl" ]; then
+				echo "Warning!: proxy template '$PROXY' is not available; $domain reset to 'default'."
 				PROXY='default'
 			fi
 
 			# Checking backend template
 			check_backend_tpl=$(is_backend_template_valid $BACKEND)
 			if [ -n "$check_backend_tpl" ]; then
+				echo "Warning!: backend template '$BACKEND' is not available; $domain reset to 'default'."
 				BACKEND='default'
 			fi
 

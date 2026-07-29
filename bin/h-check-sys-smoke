@@ -251,6 +251,56 @@ check_sudoers() {
 	fi
 }
 
+# check_web_lock_coverage - every web/mail-vhost mutator must take the model-switch
+# freeze lock (#120), else a domain change could land on a half-flipped tree. Same
+# allowlist-by-derivation idea as the $_SESSION[user] guard: it goes red when a new
+# mutating command forgets the lock, so the set cannot rot. FTP sub-account commands
+# are excluded (they do not write the web vhost tree the switch rebuilds).
+check_web_lock_coverage() {
+	local f b bad=""
+	for f in "$HESTIA"/bin/h-*; do
+		b=$(basename "$f")
+		case "$b" in
+			h-add-web-domain-ftp | h-delete-web-domain-ftp | h-change-web-domain-ftp-password | h-change-web-domain-ftp-path) continue ;;
+			h-add-web-domain | h-delete-web-domain | h-add-web-domain-* | h-delete-web-domain-* | h-change-web-domain-* | h-suspend-web-domain | h-unsuspend-web-domain | h-add-fastcgi-cache | h-delete-fastcgi-cache | h-rebuild-web-domain | h-rebuild-web-domains | h-rebuild-mail-domain | h-rebuild-mail-domains | h-add-mail-domain-webmail | h-delete-mail-domain-webmail | h-add-mail-domain-ssl) ;;
+			*) continue ;;
+		esac
+		grep -q "web_lock_acquire" "$f" || bad="$bad $b"
+	done
+	if [ -z "$bad" ]; then
+		ok "invariant: web/mail mutators take the model-switch lock (#120)"
+	else
+		no "invariant: web/mail mutator missing web_lock_acquire (#120)" "${bad# }"
+	fi
+}
+
+# check_web_switch_prechecks - the four component switch commands must each run their
+# named pre-check function (so a new command cannot jump straight into the core).
+check_web_switch_prechecks() {
+	local lib="$HESTIA/func/web-model.sh" miss="" fn
+	for fn in web_precheck_add_nginx web_precheck_add_apache2 web_precheck_delete_nginx web_precheck_delete_apache2; do
+		grep -q "^$fn()" "$lib" || miss="$miss $fn"
+	done
+	grep -qF 'web_precheck_${action}_${comp}' "$lib" || miss="$miss dispatch-call"
+	if [ -z "$miss" ]; then
+		ok "invariant: web-model switch pre-checks present + dispatched (#120)"
+	else
+		no "invariant: web-model switch pre-check missing (#120)" "${miss# }"
+	fi
+}
+
+# check_web_model_sentinel - flag an interrupted model switch so the box reports it
+# rather than the operator discovering it at the next reboot.
+check_web_model_sentinel() {
+	local s="/var/lib/hestia/web-model-switch/IN_PROGRESS" op
+	if [ -f "$s" ]; then
+		op=$(sed -n 's/^op=//p' "$s")
+		no "interrupted web-model switch pending (#120)" "recover: ${op:-h-<add|delete>-sys-<nginx|apache2>} --recover"
+	else
+		ok "no interrupted web-model switch"
+	fi
+}
+
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -351,6 +401,10 @@ check_xaccel_allowlist "$HESTIA/web"
 check_v_symlinks_resolve
 # every h-* keeps its parsed # info: line (a comment sweep must not eat it).
 check_info_headers
+# #120: the model-switch freeze + pre-check coverage cannot rot; a crash is surfaced.
+check_web_lock_coverage
+check_web_switch_prechecks
+check_web_model_sentinel
 
 #----------------------------------------------------------#
 #                       Result                             #

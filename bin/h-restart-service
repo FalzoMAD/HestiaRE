@@ -28,6 +28,13 @@ source_conf "$HESTIA/conf/hestia.conf"
 check_args '1' "$#" 'SERVICE [RESTART]'
 is_format_valid 'service' 'restart'
 
+# Defer ONLY web/proxy restarts while a web-model switch holds the freeze (#120) -
+# FM and others reload through here, bypassing h-restart-web; non-web services (mail,
+# firewall, db) must not be affected by a web-model switch.
+if web_freeze_held && { [ "$service" = "nginx" ] || [ "$service" = "apache2" ]; }; then
+	exit 0
+fi
+
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
