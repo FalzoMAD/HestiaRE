@@ -509,10 +509,11 @@ web_model_run() {
 	# Stop the DEPARTING server FIRST so it frees any port the target server reclaims
 	# (both -> apache-only: apache takes :80 back from nginx - nginx must stop first).
 	if ! web_model_uses_apache "$target"; then
+		# STOP (reversible) now for the port handover; the PURGE (irreversible) is deferred
+		# until AFTER verify_up. A stopped apache can be brought back by the rollback; a
+		# purged one cannot - so never purge before the target is proven serving.
 		if [ "$purge" = "yes" ]; then
 			systemctl stop apache2 > /dev/null 2>&1 || true
-			_web_apt_purge apache2 apache2-suexec-custom libapache2-mod-fcgid > /dev/null 2>&1 || true
-			rm -f /etc/logrotate.d/apache2
 		else
 			systemctl disable --now apache2 > /dev/null 2>&1 || true
 		fi
@@ -533,6 +534,13 @@ web_model_run() {
 	# only at start, a masked unit). Prove the target servers are actually up and holding
 	# the front ports BEFORE removing the rollback path - else a dark box "succeeds".
 	web_model_verify_up "$target" || { _wm_fail "target server(s) did not come up after restart"; return 1; }
+
+	# Deferred PURGE (irreversible): only now that the target is proven serving. Until here
+	# apache was merely stopped, so a verify_up failure above could still roll back to it.
+	if [ "$purge" = "yes" ] && ! web_model_uses_apache "$target"; then
+		_web_apt_purge apache2 apache2-suexec-custom libapache2-mod-fcgid > /dev/null 2>&1 || true
+		rm -f /etc/logrotate.d/apache2
+	fi
 
 	# Clean only now - after the target model is proven and serving. Never delete the
 	# old artifacts before the new ones work (a validate/restart failure rolls back onto
@@ -576,6 +584,15 @@ web_model_verify_up() {
 					grep -qE "[:.]$p\$" <<< "$held" || bad="$bad backend-$p:down"
 				done
 			fi
+		fi
+		# php-fpm pools: deterministic (exactly what h-restart-web-backend just restarted),
+		# so no false-negative surface - the unfragile version of a chain probe.
+		if [ -n "$WEB_BACKEND" ] && [ "$WEB_BACKEND" != "remote" ]; then
+			local v
+			while IFS= read -r v; do
+				[ -n "$v" ] || continue
+				systemctl is-active --quiet "php$v-fpm" || bad="$bad php$v-fpm:inactive"
+			done < <("$BIN/h-list-sys-php" plain 2> /dev/null)
 		fi
 		[ -z "$bad" ] && return 0
 		[ "$waited" -ge "$deadline" ] && break
@@ -697,6 +714,9 @@ web_component_op() {
 # web/<domain>/public_html (the only served root) - a .htaccess in private/stats/logs is
 # never read for a serving decision, so scanning them would only add noise and runtime. No
 # -maxdepth INSIDE public_html: deep rules (wp-admin/, uploads/, any subdir) must be seen.
+# DELIBERATE scope, do NOT widen back to the whole web tree: public_shtml is retired, and a
+# CUSTOM_DOCROOT (h-change-web-domain-docroot) practically always points into public_html; a
+# docroot fully outside it is rare and this scan is only advisory (--force-able), not a gate.
 _web_htaccess_files() {
 	local u
 	echo "  scanning customer .htaccess under public_html..." >&2
