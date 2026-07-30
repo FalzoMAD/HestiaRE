@@ -26,6 +26,12 @@ section as part of its PR. On release, the section gets the version number.
   source (`$OLD.conf`/`.ssl.conf`) under `/home/*/conf/mail/*/` (#466). It only cleaned the
   web conf dirs, so a switch left a stale old-model webmail conf behind (inert, but it broke
   the byte-identical-to-fresh oracle and the rollback's mixed-tree cleanup).
+- Directory listing (`h-change-web-domain-dirlist`) now works under nginx-only (#468). The
+  command only ever flipped apache's `Options Indexes` (upstream never handled nginx), so on
+  an nginx-only box `DIR_LIST='yes'` was a silent no-op. It now dispatches on the model:
+  apache keeps the `Options` sed; nginx gets `autoindex on;` at server level via a
+  `nginx.conf_dirlist` include fragment (no token in the templates to flip). Verified on
+  deb13 (403 -> 200 listing, survives rebuild via the #456 self-heal).
 
 ## v0.12.0 (2026-07-30)
 
