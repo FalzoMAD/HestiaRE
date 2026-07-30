@@ -308,6 +308,17 @@ web_model_rollback() {
 	tar xzf "$snap/state.tar.gz" -C / 2> /dev/null || true
 	source_conf "$HESTIA/conf/hestia.conf"
 	restored="$(web_current_model)"
+	# Re-ASSERT (not restore) the remoteip toggle: tar does not delete, so a failed
+	# apache-only->both leaves remoteip.conf + its mods-enabled symlink behind, and
+	# restoring the old tree on top keeps apache trusting X-Real-IP with no nginx in front
+	# - the Decision #4 client-IP spoofing regression, now via the failure path. Idempotent.
+	if [ "$restored" = "both" ]; then
+		local rips; rips=$(web_sys_proxy_ips | tr '\n' ' ')
+		# shellcheck disable=SC2086
+		apache_remoteip_enable $rips
+	elif [ -d /etc/apache2/mods-available ]; then
+		apache_remoteip_disable
+	fi
 	# tar extract restores the old files but does NOT delete the target-model files a
 	# failed apply already created (e.g. apache2.* after rolling back to nginx-only) -
 	# without this the rollback itself leaves the mixed tree the inventory guards against.
@@ -393,6 +404,17 @@ web_model_run() {
 
 	# ── apply (explicit error handling; no ERR trap - it does not abort without set -e) ─
 	web_lock_acquire 300 || return 1
+
+	# Refresh under the lock: current/target were derived from globals read BEFORE the lock,
+	# so a switch we serialized behind may already have moved the model. Re-derive; if it
+	# now equals the target, the whole rebuild would be wasted work - stop cleanly.
+	source_conf "$HESTIA/conf/hestia.conf"
+	current=$(web_current_model)
+	if [ "$current" = "$target" ]; then
+		echo "Already $(web_model_label "$current") (a concurrent switch reached it); nothing to do."
+		web_lock_release
+		return 0
+	fi
 
 	local snap OLD_WEB OLD_PROXY
 	snap="$WEB_MODEL_SNAP_DIR/$(date +%Y%m%d-%H%M%S)-$$"
@@ -504,6 +526,11 @@ web_model_run() {
 	"$BIN/h-restart-proxy" > /dev/null 2>&1
 	"$BIN/h-restart-web-backend" > /dev/null 2>&1
 
+	# configtest green != started (port still held by a hung process, a vhost cert read
+	# only at start, a masked unit). Prove the target servers are actually up and holding
+	# the front ports BEFORE removing the rollback path - else a dark box "succeeds".
+	web_model_verify_up "$target" || { _wm_fail "target server(s) did not come up after restart"; return 1; }
+
 	# Clean only now - after the target model is proven and serving. Never delete the
 	# old artifacts before the new ones work (a validate/restart failure rolls back onto
 	# the still-present old tree).
@@ -515,6 +542,28 @@ web_model_run() {
 	echo "[ ok ] Web model is now $(web_model_label "$target"). Snapshot kept at: $snap"
 	return 0
 }
+# Prove the target model is actually serving after the restart: the model's daemons are
+# active AND the front ports :80/:443 are held (front = nginx in both/nginx-only, apache
+# in apache-only; the backend 8080/8443 is internal, not checked). ss is gated so a box
+# without iproute2 degrades to the is-active check instead of a false rollback.
+web_model_verify_up() {
+	local target="$1" p bad=""
+	if web_model_uses_apache "$target"; then
+		systemctl is-active --quiet apache2 || bad="$bad apache2:inactive"
+	fi
+	if web_model_uses_nginx "$target"; then
+		systemctl is-active --quiet nginx || bad="$bad nginx:inactive"
+	fi
+	if command -v ss > /dev/null 2>&1; then
+		for p in 80 443; do
+			ss -H -tln 2> /dev/null | awk '{print $4}' | grep -qE "[:.]$p\$" || bad="$bad port-$p:down"
+		done
+	fi
+	[ -z "$bad" ] && return 0
+	echo "  target not serving:$bad" >&2
+	return 1
+}
+
 # Assert every domain carries only the target model's per-domain files (catches a
 # mixed tree that syntax tests pass).
 web_model_inventory_assert() {
@@ -622,19 +671,24 @@ web_component_op() {
 	web_model_run "$current" "$target" "$mode" "h-$action-sys-$comp" "$purge"
 }
 
-# helper: list every customer .htaccess under the web roots. NO -maxdepth: the ones that
-# matter most (wp-admin/, uploads/, any subdir rule) live deep, and a check that only sees
-# the docroot .htaccess falsely reassures - worse than no check.
+# helper: list every customer .htaccess that apache/nginx could actually serve. Scoped to
+# web/<domain>/public_html (the only served root) - a .htaccess in private/stats/logs is
+# never read for a serving decision, so scanning them would only add noise and runtime. No
+# -maxdepth INSIDE public_html: deep rules (wp-admin/, uploads/, any subdir) must be seen.
 _web_htaccess_files() {
 	local u
+	echo "  scanning customer .htaccess under public_html..." >&2
 	while IFS= read -r u; do
 		[ -n "$u" ] || continue
-		find "$HOMEDIR/$u/web" -name .htaccess 2> /dev/null
+		find "$HOMEDIR/$u/web/"*/public_html -name .htaccess 2> /dev/null
 	done < <(web_users)
 }
 
 # add-apache2 (nginx-only -> both): ports must be free. Hard blocker (not force-able).
 web_precheck_add_apache2() {
+	# a non-overridable port check that silently no-ops without its tool is worse than none
+	command -v ss > /dev/null 2>&1 \
+		|| { echo "Refused: 'ss' (iproute2) unavailable - cannot verify the apache backend ports are free (not --force-able)." >&2; return 1; }
 	local p occupied=""
 	for p in 8080 8443; do
 		ss -H -tln 2> /dev/null | awk '{print $4}' | grep -qE "[:.]$p\$" && occupied="$occupied $p"
@@ -649,14 +703,14 @@ web_precheck_add_apache2() {
 # add-nginx (apache-only -> both): nginx serves static assets directly, so .htaccess
 # directives on assets go inert. Warn (routing change, not a loss); never blocks.
 web_precheck_add_nginx() {
-	local f hits=""
+	local f; local -a hits=()
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
-		grep -qiE 'Header|ExpiresBy|deny from|Rewrite' "$f" 2> /dev/null && hits="$hits ${f#"$HOMEDIR/"}"
+		grep -qiE 'Header|ExpiresBy|deny from|Rewrite' "$f" 2> /dev/null && hits+=("${f#"$HOMEDIR/"}")
 	done < <(_web_htaccess_files)
-	if [ -n "$hits" ]; then
+	if [ ${#hits[@]} -gt 0 ]; then
 		echo "Note: in 'both', nginx serves static assets directly - .htaccess asset rules go inert in:" >&2
-		local h; for h in $hits; do echo "        $h" >&2; done
+		local h; for h in "${hits[@]}"; do echo "        $h" >&2; done
 		echo "      (routing change, not a capability loss)" >&2
 	fi
 	return 0
@@ -665,22 +719,22 @@ web_precheck_add_nginx() {
 # delete-apache2 (both -> nginx-only): highest risk. Refuse on any apache-only feature
 # unless --force (which still prints + logs the overridden findings).
 web_precheck_delete_apache2() {
-	local force="$3" f u d dir findings=""
+	local force="$3" f u d dir; local -a findings=()
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
 		grep -qiE 'RewriteRule|php_value|php_flag|AuthType|Require |Options |ErrorDocument|Header ' "$f" 2> /dev/null \
-			&& findings="$findings htaccess:${f#"$HOMEDIR/"}"
+			&& findings+=("htaccess:${f#"$HOMEDIR/"}")
 	done < <(_web_htaccess_files)
 	while IFS=$'\t' read -r u dir; do
 		d=$(basename "$dir")
-		ls "$dir"/apache2.conf_* > /dev/null 2>&1 && findings="$findings apache-include:$u/$d"
+		ls "$dir"/apache2.conf_* > /dev/null 2>&1 && findings+=("apache-include:$u/$d")
 	done < <(web_domain_dirs)
-	if [ -n "$findings" ]; then
+	if [ ${#findings[@]} -gt 0 ]; then
 		echo "Removing apache2 would drop apache-only config for:" >&2
-		local x; for x in $findings; do echo "        $x" >&2; done
+		local x; for x in "${findings[@]}"; do echo "        $x" >&2; done
 		if [ "$force" = "yes" ]; then
 			echo "  --force: proceeding anyway (recorded in the action log)." >&2
-			"$BIN/h-log-action" "${ROOT_USER:-admin}" "Warning" "Web" "h-delete-sys-apache2 --force overrode:$findings" > /dev/null 2>&1 || true
+			"$BIN/h-log-action" "${ROOT_USER:-admin}" "Warning" "Web" "h-delete-sys-apache2 --force overrode: ${findings[*]}" > /dev/null 2>&1 || true
 			return 0
 		fi
 		echo "  Refused. Re-run with --force to override (its findings will be logged)." >&2
@@ -691,20 +745,22 @@ web_precheck_delete_apache2() {
 
 # delete-nginx (both -> apache-only): custom nginx includes + fastcgi-cache go away.
 web_precheck_delete_nginx() {
-	local force="$3" u d dir findings=""
+	local force="$3" u d dir; local -a findings=()
 	while IFS=$'\t' read -r u dir; do
 		d=$(basename "$dir")
-		ls "$dir"/nginx.conf_* > /dev/null 2>&1 && findings="$findings nginx-include:$u/$d"
-		grep -q "^FASTCGI_CACHE='yes'" "$CONF_DIR/users/$u/web.conf" 2> /dev/null \
-			&& findings="$findings fastcgi-cache(inert)"
+		ls "$dir"/nginx.conf_* > /dev/null 2>&1 && findings+=("nginx-include:$u/$d")
+		# web.conf is ONE inline record per domain (DOMAIN='..' .. FASTCGI_CACHE='yes' ..),
+		# so a ^-anchored grep never matches - scope to this domain's line, then test the key.
+		grep "DOMAIN='$d'" "$CONF_DIR/users/$u/web.conf" 2> /dev/null | grep -q "FASTCGI_CACHE='yes'" \
+			&& findings+=("fastcgi-cache-inert:$u/$d")
 	done < <(web_domain_dirs)
 	echo "Note: removing nginx also disables mod_remoteip (apache serves :80 directly)." >&2
-	if [ -n "$findings" ]; then
+	if [ ${#findings[@]} -gt 0 ]; then
 		echo "Removing nginx would drop nginx-only config for:" >&2
-		local x; for x in $findings; do echo "        $x" >&2; done
+		local x; for x in "${findings[@]}"; do echo "        $x" >&2; done
 		if [ "$force" = "yes" ]; then
 			echo "  --force: proceeding anyway (recorded in the action log)." >&2
-			"$BIN/h-log-action" "${ROOT_USER:-admin}" "Warning" "Web" "h-delete-sys-nginx --force overrode:$findings" > /dev/null 2>&1 || true
+			"$BIN/h-log-action" "${ROOT_USER:-admin}" "Warning" "Web" "h-delete-sys-nginx --force overrode: ${findings[*]}" > /dev/null 2>&1 || true
 			return 0
 		fi
 		echo "  Refused. Re-run with --force to override." >&2
