@@ -9,6 +9,14 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Fixed
+
+- `h-list-sys-php` no longer lists the isolated panel FPM pool (`/etc/php/hestia`,
+  unit `hestia-php`) as a pseudo-version `hestia` (#464). Consumers turn the list into
+  `php<v>-fpm`, so the stray entry produced the non-existent `phphestia-fpm` and broke
+  `h-restart-web-backend` on every box and rolled back every live web-model switch (#120)
+  at its health gate. Found in the #120 post-merge live re-verify.
+
 ## v0.12.0 (2026-07-30)
 
 Covers everything since v0.11.0. The headline: the web-serving model is no longer
