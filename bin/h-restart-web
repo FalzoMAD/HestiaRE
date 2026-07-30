@@ -51,6 +51,10 @@ is_format_valid 'restart'
 #                       Action                             #
 #----------------------------------------------------------#
 
+# Defer while a web-model switch holds the freeze (#120): it does its own controlled
+# restart as the lock owner; an outside reload here would load a half-flipped config.
+if web_freeze_held; then exit 0; fi
+
 # Exit
 if [ -z "$WEB_SYSTEM" ] || [ "$WEB_SYSTEM" = 'remote' ]; then
 	exit

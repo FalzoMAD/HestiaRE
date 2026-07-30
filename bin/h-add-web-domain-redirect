@@ -29,6 +29,7 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
 
 #----------------------------------------------------------#
 #                    Verifications                         #

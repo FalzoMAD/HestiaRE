@@ -1,0 +1,24 @@
+#!/bin/bash
+# info: add the apache2 web server (move the web model toward apache2)
+# options: [MODE] [--purge] [--force] [--recover]
+#
+# example: h-add-sys-apache2 yes
+#
+# Thin entry point over the shared web-model switch core (func/web-model.sh, #120).
+# The model is derived from the resulting component set; MODE omitted/not 'yes'
+# previews, 'yes' applies. New h-* command: no v-* symlink.
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# shellcheck source=/usr/local/hestia/func/web-model.sh
+source $HESTIA/func/web-model.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+web_component_main add apache2 "$@"
+exit

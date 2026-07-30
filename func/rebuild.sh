@@ -330,6 +330,12 @@ rebuild_web_domain_conf() {
 		$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
 	fi
 
+	# Re-apply directory listing (apache Options -Indexes flip lives only in the
+	# regenerated vhost, so without this the rebuild resets it to the template default)
+	if [ "$DIR_LIST" = 'yes' ]; then
+		$BIN/h-change-web-domain-dirlist $user $domain on no yes
+	fi
+
 	# Adding proxy configuration
 	if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
 		conf="$HOMEDIR/$user/conf/web/$domain/$PROXY_SYSTEM.conf"

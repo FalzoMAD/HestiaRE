@@ -42,6 +42,8 @@ source $HESTIA/func/main.sh
 source $HESTIA/func/ip.sh
 # shellcheck source=/usr/local/hestia/func/domain.sh
 source $HESTIA/func/domain.sh
+# shellcheck source=/usr/local/hestia/func/web-model.sh
+source $HESTIA/func/web-model.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -141,45 +143,11 @@ DATE='$date'" > $CONF_DIR/ips/$ip
 chmod 660 $CONF_DIR/ips/$ip
 
 # WEB support
-if [ -n "$WEB_SYSTEM" ]; then
-	web_conf="/etc/$WEB_SYSTEM/conf.d/$ip.conf"
-	rm -f "$web_conf"
+rebuild_ip_web_config "$ip"
 
-	if [ "$WEB_SYSTEM" = 'httpd' ] || [ "$WEB_SYSTEM" = 'apache2' ]; then
-		if [ -z "$(/usr/sbin/apachectl -v | grep Apache/2.4)" ]; then
-			echo "NameVirtualHost $ip:$WEB_PORT" > "$web_conf"
-		fi
-		echo "Listen $ip:$WEB_PORT" >> "$web_conf"
-		cat $HESTIA/share/apache2/unassigned.conf >> "$web_conf"
-		sed -i 's/directIP/'$ip'/g' "$web_conf"
-		sed -i 's/directPORT/'$WEB_PORT'/g' "$web_conf"
-
-	elif [ "$WEB_SYSTEM" = 'nginx' ]; then
-		cp -f $HESTIA/share/nginx/unassigned.inc "$web_conf"
-		sed -i 's/directIP/'$ip'/g' "$web_conf"
-		process_http2_directive "$web_conf"
-	fi
-
-	if [ "$WEB_SSL" = 'mod_ssl' ]; then
-		if [ -z "$(/usr/sbin/apachectl -v | grep Apache/2.4)" ]; then
-			sed -i "1s/^/NameVirtualHost $ip:$WEB_SSL_PORT\n/" "$web_conf"
-		fi
-		sed -i "1s/^/Listen $ip:$WEB_SSL_PORT\n/" "$web_conf"
-		sed -i 's/directSSLPORT/'$WEB_SSL_PORT'/g' "$web_conf"
-	fi
-fi
-
-# Proxy support
+# Proxy real-IP module registration (dormant unless the conf exists). The per-IP
+# web/proxy config generation moved into rebuild_ip_web_config (func/web-model.sh, #120).
 if [ -n "$PROXY_SYSTEM" ]; then
-	cat $WEBTPL/$PROXY_SYSTEM/proxy_ip.tpl \
-		| sed -e "s/%ip%/$ip/g" \
-			-e "s/%web_port%/$WEB_PORT/g" \
-			-e "s/%proxy_port%/$PROXY_PORT/g" \
-			-e "s/%proxy_ssl_port%/$PROXY_SSL_PORT/g" \
-			> /etc/$PROXY_SYSTEM/conf.d/$ip.conf
-
-	process_http2_directive "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
-
 	# mod_extract_forwarded
 	fw_conf="/etc/$WEB_SYSTEM/conf.d/mod_extract_forwarded.conf"
 	if [ -e "$fw_conf" ]; then

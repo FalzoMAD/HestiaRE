@@ -209,6 +209,8 @@ mkdir $tmpdir/hestia
 
 echo -e "$(date "+%F %T") $user.conf" | tee -a $BACKUP/$user.log
 cp -r $USER_DATA/user.conf $tmpdir/hestia/
+# Record the web model in the archive so a cross-model restore can warn (#120)
+echo "WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'" > $tmpdir/hestia/web-system
 cp -r $USER_DATA/ssl $tmpdir/hestia/
 
 if [ -e "$USER_DATA/stats.log" ]; then
@@ -715,6 +717,7 @@ backup_str="$backup_str MAIL='${mail_list// /,}'"
 backup_str="$backup_str DB='${db_list// /,}'"
 backup_str="$backup_str CRON='$cron_list'"
 backup_str="$backup_str UDIR='${udir_list// /,}'"
+backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 
