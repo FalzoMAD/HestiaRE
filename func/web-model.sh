@@ -167,36 +167,35 @@ rebuild_ip_web_config() {
 		rm -f "$web_conf"
 
 		if [ "$WEB_SYSTEM" = 'httpd' ] || [ "$WEB_SYSTEM" = 'apache2' ]; then
-			if [ -z "$(/usr/sbin/apachectl -v | grep Apache/2.4)" ]; then
+			if ! /usr/sbin/apachectl -v 2> /dev/null | grep -q "Apache/2.4"; then
 				echo "NameVirtualHost $ip:$WEB_PORT" > "$web_conf"
 			fi
 			echo "Listen $ip:$WEB_PORT" >> "$web_conf"
-			cat $HESTIA/share/apache2/unassigned.conf >> "$web_conf"
-			sed -i 's/directIP/'$ip'/g' "$web_conf"
-			sed -i 's/directPORT/'$WEB_PORT'/g' "$web_conf"
+			cat "$HESTIA/share/apache2/unassigned.conf" >> "$web_conf"
+			sed -i "s/directIP/$ip/g" "$web_conf"
+			sed -i "s/directPORT/$WEB_PORT/g" "$web_conf"
 
 		elif [ "$WEB_SYSTEM" = 'nginx' ]; then
-			cp -f $HESTIA/share/nginx/unassigned.inc "$web_conf"
-			sed -i 's/directIP/'$ip'/g' "$web_conf"
+			cp -f "$HESTIA/share/nginx/unassigned.inc" "$web_conf"
+			sed -i "s/directIP/$ip/g" "$web_conf"
 			process_http2_directive "$web_conf"
 		fi
 
 		if [ "$WEB_SSL" = 'mod_ssl' ]; then
-			if [ -z "$(/usr/sbin/apachectl -v | grep Apache/2.4)" ]; then
+			if ! /usr/sbin/apachectl -v 2> /dev/null | grep -q "Apache/2.4"; then
 				sed -i "1s/^/NameVirtualHost $ip:$WEB_SSL_PORT\n/" "$web_conf"
 			fi
 			sed -i "1s/^/Listen $ip:$WEB_SSL_PORT\n/" "$web_conf"
-			sed -i 's/directSSLPORT/'$WEB_SSL_PORT'/g' "$web_conf"
+			sed -i "s/directSSLPORT/$WEB_SSL_PORT/g" "$web_conf"
 		fi
 	fi
 
 	if [ -n "$PROXY_SYSTEM" ]; then
-		cat $WEBTPL/$PROXY_SYSTEM/proxy_ip.tpl \
-			| sed -e "s/%ip%/$ip/g" \
-				-e "s/%web_port%/$WEB_PORT/g" \
-				-e "s/%proxy_port%/$PROXY_PORT/g" \
-				-e "s/%proxy_ssl_port%/$PROXY_SSL_PORT/g" \
-				> /etc/$PROXY_SYSTEM/conf.d/$ip.conf
+		sed -e "s/%ip%/$ip/g" \
+			-e "s/%web_port%/$WEB_PORT/g" \
+			-e "s/%proxy_port%/$PROXY_PORT/g" \
+			-e "s/%proxy_ssl_port%/$PROXY_SSL_PORT/g" \
+			"$WEBTPL/$PROXY_SYSTEM/proxy_ip.tpl" > "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 
 		process_http2_directive "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 	fi
@@ -409,8 +408,9 @@ web_model_run() {
 	if [ -s /etc/hestia/conf/.filemanager.key ]; then
 		while IFS= read -r u; do
 			[ -n "$u" ] || continue
-			grep -q "^FILE_MANAGER='yes'" "$CONF_DIR/users/$u/user.conf" 2> /dev/null \
-				&& "$BIN/h-add-user-filemanager" "$u" > /dev/null 2>&1 || true
+			if grep -q "^FILE_MANAGER='yes'" "$CONF_DIR/users/$u/user.conf" 2> /dev/null; then
+				"$BIN/h-add-user-filemanager" "$u" > /dev/null 2>&1 || true
+			fi
 		done < <(web_users)
 	fi
 
