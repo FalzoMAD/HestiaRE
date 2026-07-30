@@ -28,6 +28,7 @@ source $HESTIA/func/main.sh
 source $HESTIA/func/domain.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
 
 # Additional argument formatting
 format_domain

@@ -9,16 +9,22 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
-### Fixed
-
-- Directory listing (`h-change-web-domain-dirlist`) survived no vhost rebuild (#456).
-  It flipped apache `Options -Indexes`/`+Indexes` straight in the generated vhost with
-  no `web.conf` key, so any `h-rebuild-web-domain(s)` reset it to the template default
-  and lost the setting silently. Now persisted as a `DIR_LIST` key and re-applied by the
-  rebuild self-heal (mirroring `SSL_FORCE`). Verified on apache-only and both models.
-
 ### Added
 
+- Live web-serving model switch (#120): `h-add-sys-nginx`, `h-add-sys-apache2`,
+  `h-delete-sys-nginx`, `h-delete-sys-apache2` change a running server between
+  nginx-only / both / apache-only (previously fixed at install). Four thin commands over
+  one shared core (`func/web-model.sh`); the model is derived from the configured
+  component set. Runs as a maintenance operation: an exclusive freeze serializes domain
+  ops and defers reloads (h-restart-web/-proxy/-service, apache logrotate, LE renewal)
+  for the flip; snapshot + rollback (with a crash sentinel + `--recover`) means no
+  total-loss window; the departing webserver is stopped+disabled (or `--purge`d), and
+  `mod_remoteip` is toggled with the model. Backups gain a web-model marker and a
+  cross-model restore prints visible warnings. Delete commands refuse on a dirty config
+  unless `--force` (which still logs the overridden checks); a full nginx<->apache swap
+  is a deliberate two-step through a serving `both`. Fleet-verified: all four transition
+  directions serve HTTP/HTTPS + PHP, a switched box is byte-identical to a fresh install
+  of the target model, and crash recovery restores cleanly.
 - `STRUCTURE.md` (repo root): a structural-divergence reference mapping each
   major difference from HestiaCP to its follow-on implications (panel Caddy/Sury,
   the system-user split, protected downloads, webmail loopback, FileManager and
@@ -34,6 +40,18 @@ section as part of its PR. On release, the section gets the version number.
   cherry-pick/reintegration - no smoke guard. share/ is best-effort: the #119
   install->share reorg breaks 1:1 paths, so 81 files are flagged for manual origin
   confirmation. (#459)
+
+### Fixed
+
+- Directory listing (`h-change-web-domain-dirlist`) survived no vhost rebuild (#456).
+  It flipped apache `Options -Indexes`/`+Indexes` straight in the generated vhost with
+  no `web.conf` key, so any `h-rebuild-web-domain(s)` reset it to the template default
+  and lost the setting silently. Now persisted as a `DIR_LIST` key and re-applied by the
+  rebuild self-heal (mirroring `SSL_FORCE`). Verified on apache-only and both models.
+- nginx `suspended.{tpl,stpl}` and `php-fpm/*` templates logged to a hardcoded
+  `/var/log/nginx/domains` while the managed dir is `/var/log/$WEB_SYSTEM`; in the
+  `both` model that was the wrong directory. Now use `%web_system%` like `default.tpl`
+  (#120).
 
 ## v0.11.0 (2026-07-28)
 

@@ -27,6 +27,7 @@ source $HESTIA/func/domain.sh
 source $HESTIA/conf/hestia.conf
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
 
 #----------------------------------------------------------#
 #                    Verifications                         #
