@@ -25,6 +25,15 @@ section as part of its PR. On release, the section gets the version number.
   SFTP-jail rebuilds, `/etc/hestia`, permanent removals). Registered in
   `CODEMAP.json` `_meta.reference_docs`. Living doc: keep current with each
   structural change. (#451)
+- Per-folder `PROVENANCE.json` (`bin/`, `web/`, `share/`): per-file heritage vs
+  HestiaCP - `source_type` (verbatim/derived/cherry-pick/eigenbau), `upstream_path`,
+  `upstream_ref` last reconciled, and a RAW churn divergence percentage (triage, not
+  truth: it overstates because the `v-*`->`h-*` rename and `install/`->`share/` reorg
+  count as churn). Complements `VENDORED.json` (third-party, excluded here) and
+  `STRUCTURE.md` (subsystem narrative). Recompute is a manual, occasional job on
+  cherry-pick/reintegration - no smoke guard. share/ is best-effort: the #119
+  install->share reorg breaks 1:1 paths, so 81 files are flagged for manual origin
+  confirmation. (#459)
 
 ## v0.11.0 (2026-07-28)
 
