@@ -328,24 +328,33 @@ web_model_rollback() {
 		while IFS=$'\t' read -r u dir; do
 			rm -f "$dir/$pfx.conf" "$dir/$pfx.ssl.conf"
 		done < <(web_domain_dirs)
+		# webmail vhosts live in the mail conf dir, not the web one - tar restores the old
+		# mail tree but does not delete a target-prefix webmail conf the failed apply added.
+		while IFS=$'\t' read -r u dir; do
+			rm -f "$dir/$pfx.conf" "$dir/$pfx.ssl.conf"
+		done < <(web_mail_dirs)
 		rm -f "/etc/$pfx/conf.d/domains/"*.conf 2> /dev/null
 		while IFS= read -r ip; do
 			[ -n "$ip" ] || continue
 			rm -f "/etc/$pfx/conf.d/$ip.conf"
 		done < <(web_sys_ips)
 	done
-	# Bring the restored model's servers up+enabled (a bare reload of a stopped unit is
-	# not enough); stop+disable the one it does NOT use so no stray server survives a
-	# reboot or grabs :80 at the next package update.
+	# Bring the restored model's servers back with reload-or-restart, NOT a hard restart:
+	# on a failure before the restart stage (validate/inventory) the live server was never
+	# stopped and is still serving its loaded config, so a hard stop+start whose start then
+	# fails on an unloadable on-disk config (a pre-existing bad include, an unreadable cert,
+	# disk-full) would leave it DOWN. A graceful reload keeps the running master up if the
+	# config will not load, and reload-or-restart still starts one the apply had stopped.
+	# `enable` (not --now) persists the boot state without hard-starting a healthy unit.
 	if web_model_uses_apache "$restored"; then
-		systemctl enable --now apache2 > /dev/null 2>&1
-		systemctl restart apache2 > /dev/null 2>&1
+		systemctl enable apache2 > /dev/null 2>&1
+		systemctl reload-or-restart apache2 > /dev/null 2>&1
 	else
 		systemctl disable --now apache2 > /dev/null 2>&1 || true
 	fi
 	if web_model_uses_nginx "$restored"; then
-		systemctl enable --now nginx > /dev/null 2>&1
-		systemctl restart nginx > /dev/null 2>&1
+		systemctl enable nginx > /dev/null 2>&1
+		systemctl reload-or-restart nginx > /dev/null 2>&1
 	else
 		systemctl disable --now nginx > /dev/null 2>&1 || true
 	fi
@@ -367,6 +376,21 @@ web_domain_dirs() {
 	while IFS= read -r u; do
 		[ -n "$u" ] || continue
 		for dir in "$HOMEDIR/$u/conf/web/"*/; do
+			[ -d "$dir" ] || continue
+			printf '%s\t%s\n' "$u" "${dir%/}"
+		done
+	done < <(web_users)
+}
+
+# Same, for the mail conf dirs - where the webmail reverse-proxy vhosts live
+# ($WEB_SYSTEM.conf / $PROXY_SYSTEM.conf, rendered by the separate mail path). The
+# web rebuild never touches them, so the departing model's webmail conf must be
+# cleaned from here explicitly (else it lingers and breaks the fresh-install oracle).
+web_mail_dirs() {
+	local u dir
+	while IFS= read -r u; do
+		[ -n "$u" ] || continue
+		for dir in "$HOMEDIR/$u/conf/mail/"*/; do
 			[ -d "$dir" ] || continue
 			printf '%s\t%s\n' "$u" "${dir%/}"
 		done
@@ -639,6 +663,11 @@ web_model_cleanup() {
 		while IFS=$'\t' read -r u dir; do
 			rm -f "$dir/$pfx.conf" "$dir/$pfx.ssl.conf"
 		done < <(web_domain_dirs)
+		# same for the webmail vhost source in the mail conf dir (the dir-wide symlink
+		# rm below covers /etc, but the /home/*/conf/mail/*/$pfx.conf source lingers).
+		while IFS=$'\t' read -r u dir; do
+			rm -f "$dir/$pfx.conf" "$dir/$pfx.ssl.conf"
+		done < <(web_mail_dirs)
 		rm -f "/etc/$pfx/conf.d/domains/"*.conf 2> /dev/null
 		while IFS= read -r ip; do
 			[ -n "$ip" ] || continue

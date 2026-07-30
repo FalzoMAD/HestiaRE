@@ -16,6 +16,16 @@ section as part of its PR. On release, the section gets the version number.
   `php<v>-fpm`, so the stray entry produced the non-existent `phphestia-fpm` and broke
   `h-restart-web-backend` on every box and rolled back every live web-model switch (#120)
   at its health gate. Found in the #120 post-merge live re-verify.
+- Web-model switch (#120) rollback no longer risks taking a live server down (#466). On a
+  failure before the restart stage (validate / inventory), the running webserver was never
+  stopped and is still serving its loaded config, but the rollback did a hard `systemctl
+  restart` - a failed start on an unloadable on-disk config (a pre-existing broken include,
+  an unreadable cert, disk-full) left it dead. Now `reload-or-restart`: a graceful reload
+  keeps the running master up if the config will not load, and still starts a stopped one.
+- Web-model switch (#120) cleanup now also removes the departing model's webmail vhost
+  source (`$OLD.conf`/`.ssl.conf`) under `/home/*/conf/mail/*/` (#466). It only cleaned the
+  web conf dirs, so a switch left a stale old-model webmail conf behind (inert, but it broke
+  the byte-identical-to-fresh oracle and the rollback's mixed-tree cleanup).
 
 ## v0.12.0 (2026-07-30)
 
