@@ -256,11 +256,12 @@ web_model_flip_keyset() {
 web_model_sentinel() { echo "$WEB_MODEL_SNAP_DIR/IN_PROGRESS"; }
 
 web_model_sentinel_check() {
-	local s; s="$(web_model_sentinel)"
+	local s op; s="$(web_model_sentinel)"
 	[ -f "$s" ] || return 0
+	op=$(sed -n 's/^op=//p' "$s")
 	echo "Error: a previous web-model switch did not finish:" >&2
 	sed 's/^/       /' "$s" >&2
-	echo "       Recover from its snapshot with:  h-<that-command> --recover" >&2
+	echo "       Recover from its snapshot with:  ${op:-h-<that-command>} --recover" >&2
 	return 1
 }
 
@@ -272,33 +273,70 @@ web_model_snapshot() {
 	local -a paths=()
 	[ -d /etc/nginx/conf.d ] && paths+=("etc/nginx/conf.d")
 	[ -d /etc/apache2/conf.d ] && paths+=("etc/apache2/conf.d")
-	[ -f /etc/apache2/mods-available/remoteip.conf ] && paths+=("etc/apache2/mods-available/remoteip.conf")
+	# configure_apache2 rewrites these from share/, and a2enmod/a2dismod flips the
+	# mods-enabled symlinks - snapshot them so a rollback restores apache faithfully,
+	# not just its per-domain vhosts.
 	[ -f /etc/apache2/apache2.conf ] && paths+=("etc/apache2/apache2.conf")
+	[ -d /etc/apache2/mods-available ] && paths+=("etc/apache2/mods-available")
+	[ -d /etc/apache2/mods-enabled ] && paths+=("etc/apache2/mods-enabled")
+	[ -f /etc/apache2/ports.conf ] && paths+=("etc/apache2/ports.conf")
+	[ -d /etc/apache2/suexec ] && paths+=("etc/apache2/suexec")
+	[ -f /etc/logrotate.d/apache2 ] && paths+=("etc/logrotate.d/apache2")
+	[ -f /etc/logrotate.d/nginx ] && paths+=("etc/logrotate.d/nginx")
 	while IFS= read -r u; do
 		[ -n "$u" ] || continue
 		[ -d "$HOMEDIR/$u/conf/web" ] && paths+=("home/$u/conf/web")
 		[ -d "$HOMEDIR/$u/conf/mail" ] && paths+=("home/$u/conf/mail")
 	done < <(web_users)
-	tar czf "$snap/state.tar.gz" -C / "${paths[@]}" 2> /dev/null || true
+	# The snapshot IS the rollback - a swallowed tar failure leaves an empty archive that
+	# only surfaces when a rollback is needed. Hard-fail, then verify the archive is real.
+	if ! tar czf "$snap/state.tar.gz" -C / "${paths[@]}" 2> /dev/null; then
+		echo "Error: snapshot tar failed (disk full? permissions? a path vanished mid-run?)." >&2
+		return 1
+	fi
+	if [ ! -s "$snap/state.tar.gz" ] || ! tar tzf "$snap/state.tar.gz" > /dev/null 2>&1; then
+		echo "Error: snapshot archive is empty or unreadable; refusing to switch." >&2
+		return 1
+	fi
 	printf '%s\n' "${paths[@]}" > "$snap/paths.list"
 }
 
 web_model_rollback() {
-	local snap="$1"
+	local snap="$1" restored pfx u dir ip
 	[ -d "$snap" ] || return 1
 	cp -a "$snap/hestia.conf" "$HESTIA/conf/hestia.conf"
-	# Remove target-model per-domain/per-IP files that the failed apply may have
-	# created, then restore the snapshot on top (tar extract does not delete).
 	tar xzf "$snap/state.tar.gz" -C / 2> /dev/null || true
 	source_conf "$HESTIA/conf/hestia.conf"
-	# Bring the restored model's servers back (a bare reload of a stopped unit is not enough)
-	if web_model_uses_apache "$(web_current_model)"; then
-		systemctl enable apache2 > /dev/null 2>&1
+	restored="$(web_current_model)"
+	# tar extract restores the old files but does NOT delete the target-model files a
+	# failed apply already created (e.g. apache2.* after rolling back to nginx-only) -
+	# without this the rollback itself leaves the mixed tree the inventory guards against.
+	local keep=" $WEB_SYSTEM $PROXY_SYSTEM "
+	for pfx in nginx apache2; do
+		case "$keep" in *" $pfx "*) continue ;; esac
+		while IFS=$'\t' read -r u dir; do
+			rm -f "$dir/$pfx.conf" "$dir/$pfx.ssl.conf"
+		done < <(web_domain_dirs)
+		rm -f "/etc/$pfx/conf.d/domains/"*.conf 2> /dev/null
+		while IFS= read -r ip; do
+			[ -n "$ip" ] || continue
+			rm -f "/etc/$pfx/conf.d/$ip.conf"
+		done < <(web_sys_ips)
+	done
+	# Bring the restored model's servers up+enabled (a bare reload of a stopped unit is
+	# not enough); stop+disable the one it does NOT use so no stray server survives a
+	# reboot or grabs :80 at the next package update.
+	if web_model_uses_apache "$restored"; then
+		systemctl enable --now apache2 > /dev/null 2>&1
 		systemctl restart apache2 > /dev/null 2>&1
+	else
+		systemctl disable --now apache2 > /dev/null 2>&1 || true
 	fi
-	if web_model_uses_nginx "$(web_current_model)"; then
-		systemctl enable nginx > /dev/null 2>&1
+	if web_model_uses_nginx "$restored"; then
+		systemctl enable --now nginx > /dev/null 2>&1
 		systemctl restart nginx > /dev/null 2>&1
+	else
+		systemctl disable --now nginx > /dev/null 2>&1 || true
 	fi
 }
 
@@ -339,6 +377,8 @@ web_model_run() {
 		&& echo "  - apache2 will be installed/configured"
 	web_model_uses_apache "$current" && ! web_model_uses_apache "$target" \
 		&& { [ "$purge" = "yes" ] && echo "  - apache2 will be PURGED (/etc/apache2 incl. custom includes + fm-listen.conf)" || echo "  - apache2 will be stopped+disabled (package kept)"; }
+	web_model_uses_apache "$current" && web_model_uses_apache "$target" \
+		&& echo "  - apache2.conf + module config are rewritten from share/ (existing customizations are snapshotted, not merged)"
 	web_model_uses_nginx "$current" && ! web_model_uses_nginx "$target" \
 		&& echo "  - nginx will be stopped+disabled"
 	[ "$target" = "both" ] && echo "  - mod_remoteip enabled (apache trusts nginx X-Real-IP)"
@@ -369,7 +409,7 @@ web_model_run() {
 	}
 
 	echo "[ * ] Snapshotting current state..."
-	web_model_snapshot "$snap"
+	web_model_snapshot "$snap" || { web_lock_release; return 1; }
 	mkdir -p "$(dirname "$(web_model_sentinel)")"
 	printf 'op=%s\nfrom=%s\nto=%s\nsnapshot=%s\nstarted=%s\n' \
 		"$oplabel" "$current" "$target" "$snap" "$(date '+%F %T')" > "$(web_model_sentinel)"
@@ -378,6 +418,13 @@ web_model_run() {
 		echo "[ * ] Setting up apache2..."
 		configure_apache2
 		command -v apache2ctl > /dev/null 2>&1 || { _wm_fail "apache2 install failed"; return 1; }
+	fi
+
+	# rotate-before-switch (plan step 4): seal the current domain logs so the target
+	# $WEB_SYSTEM log dir starts clean with the old logs kept beside as history. Only bites
+	# when the dir moves (nginx-only <-> apache); harmless otherwise.
+	if [ -f "/etc/logrotate.d/$OLD_WEB" ]; then
+		logrotate -f "/etc/logrotate.d/$OLD_WEB" > /dev/null 2>&1 || true
 	fi
 
 	echo "[ * ] Flipping web model keyset..."
@@ -400,10 +447,17 @@ web_model_run() {
 		[ -n "$ip" ] || continue
 		rebuild_ip_web_config "$ip"
 	done < <(web_sys_ips)
+	# Rebuild exit codes matter: a failed web rebuild would only be caught downstream by
+	# the inventory assert, and a failed mail/webmail rebuild has NO assert at all - so
+	# check both here. Mail rebuild only when a mail stack is configured (web-only boxes).
 	while IFS= read -r u; do
 		[ -n "$u" ] || continue
-		"$BIN/h-rebuild-web-domains" "$u" no > /dev/null 2>&1
-		"$BIN/h-rebuild-mail-domains" "$u" > /dev/null 2>&1
+		"$BIN/h-rebuild-web-domains" "$u" no > /dev/null 2>&1 \
+			|| { _wm_fail "web rebuild failed for $u"; return 1; }
+		if [ -n "$MAIL_SYSTEM" ]; then
+			"$BIN/h-rebuild-mail-domains" "$u" > /dev/null 2>&1 \
+				|| { _wm_fail "mail/webmail rebuild failed for $u"; return 1; }
+		fi
 	done < <(web_users)
 	if [ -s /etc/hestia/conf/.filemanager.key ]; then
 		while IFS= read -r u; do
@@ -414,9 +468,6 @@ web_model_run() {
 		done < <(web_users)
 	fi
 
-	echo "[ * ] Cleaning old-model artifacts..."
-	web_model_cleanup "$OLD_WEB" "$OLD_PROXY" "$target"
-
 	echo "[ * ] Validating..."
 	if web_model_uses_nginx "$target"; then
 		nginx -t > /dev/null 2>&1 || { _wm_fail "nginx configtest failed"; return 1; }
@@ -424,7 +475,10 @@ web_model_run() {
 	if web_model_uses_apache "$target"; then
 		apache2ctl configtest > /dev/null 2>&1 || { _wm_fail "apache2 configtest failed"; return 1; }
 	fi
-	web_model_inventory_assert "$target" || { _wm_fail "inventory assertion failed (mixed tree)"; return 1; }
+	# Old-model files are still present here (cleanup runs only after a proven restart,
+	# below) so the assert tolerates the departing OLD_WEB/OLD_PROXY prefixes and flags
+	# only a genuinely foreign one - the strict half (target vhost must exist) still bites.
+	web_model_inventory_assert "$target" "$OLD_WEB" "$OLD_PROXY" || { _wm_fail "inventory assertion failed (mixed tree)"; return 1; }
 
 	echo "[ * ] Restarting web services..."
 	# Stop the DEPARTING server FIRST so it frees any port the target server reclaims
@@ -450,6 +504,12 @@ web_model_run() {
 	"$BIN/h-restart-proxy" > /dev/null 2>&1
 	"$BIN/h-restart-web-backend" > /dev/null 2>&1
 
+	# Clean only now - after the target model is proven and serving. Never delete the
+	# old artifacts before the new ones work (a validate/restart failure rolls back onto
+	# the still-present old tree).
+	echo "[ * ] Cleaning old-model artifacts..."
+	web_model_cleanup "$OLD_WEB" "$OLD_PROXY" "$target"
+
 	rm -f "$(web_model_sentinel)"
 	web_lock_release
 	echo "[ ok ] Web model is now $(web_model_label "$target"). Snapshot kept at: $snap"
@@ -458,18 +518,21 @@ web_model_run() {
 # Assert every domain carries only the target model's per-domain files (catches a
 # mixed tree that syntax tests pass).
 web_model_inventory_assert() {
-	local target="$1" u d dir bad="" want_web other
-	want_web="$WEB_SYSTEM" # already the target after source_conf
-	[ "$want_web" = "nginx" ] && other="apache2" || other="nginx"
+	local target="$1" old_web="$2" old_proxy="$3" u d dir pfx bad=""
+	local keep=" $WEB_SYSTEM $PROXY_SYSTEM "     # prefixes the target legitimately uses
+	local tolerate=" $old_web $old_proxy "       # departing prefixes, cleaned right after
 	while IFS=$'\t' read -r u dir; do
 		d=$(basename "$dir")
-		# the main vhost for the target web system must exist
-		[ -f "$dir/$want_web.conf" ] || bad="$bad $u/$d:missing-$want_web.conf"
-		# the other web system's main vhost must NOT linger. In 'both' nginx is the proxy
-		# and apache2 the backend (both legit); only flag the truly-foreign prefix.
-		if [ "$other" != "$PROXY_SYSTEM" ] && [ -f "$dir/$other.conf" ]; then
-			bad="$bad $u/$d:stale-$other.conf"
-		fi
+		# strict: the target web system's main vhost MUST exist (catches a broken rebuild)
+		[ -f "$dir/$WEB_SYSTEM.conf" ] || bad="$bad $u/$d:missing-$WEB_SYSTEM.conf"
+		# any .conf/.ssl.conf of a prefix that is neither kept nor the departing one =
+		# a genuine mixed tree from an unexpected source (the departing files are removed
+		# by the cleanup step immediately after this passes)
+		for pfx in nginx apache2; do
+			case "$keep" in *" $pfx "*) continue ;; esac
+			case "$tolerate" in *" $pfx "*) continue ;; esac
+			{ [ -f "$dir/$pfx.conf" ] || [ -f "$dir/$pfx.ssl.conf" ]; } && bad="$bad $u/$d:foreign-$pfx"
+		done
 	done < <(web_domain_dirs)
 	[ -z "$bad" ] && return 0
 	echo "  mixed-tree files:$bad" >&2
@@ -545,20 +608,28 @@ web_component_op() {
 		target="apache"
 	fi
 
-	# pre-checks only when this actually changes the model, on apply
-	if [ "$mode" = "yes" ] && [ "$current" != "$target" ]; then
-		"web_precheck_${action}_${comp}" "$current" "$target" "$force" || return 1
+	# Pre-checks run in BOTH modes - their findings (.htaccess, custom includes, affected
+	# domains) are the point of a preview. Only apply aborts on them; preview shows them
+	# and forces force=no so it never logs a phantom override.
+	if [ "$current" != "$target" ]; then
+		if [ "$mode" = "yes" ]; then
+			"web_precheck_${action}_${comp}" "$current" "$target" "$force" || return 1
+		else
+			"web_precheck_${action}_${comp}" "$current" "$target" "no" || true
+		fi
 	fi
 
 	web_model_run "$current" "$target" "$mode" "h-$action-sys-$comp" "$purge"
 }
 
-# helper: list every customer .htaccess (skip admin's own)
+# helper: list every customer .htaccess under the web roots. NO -maxdepth: the ones that
+# matter most (wp-admin/, uploads/, any subdir rule) live deep, and a check that only sees
+# the docroot .htaccess falsely reassures - worse than no check.
 _web_htaccess_files() {
 	local u
 	while IFS= read -r u; do
 		[ -n "$u" ] || continue
-		find "$HOMEDIR/$u/web" -maxdepth 3 -name .htaccess 2> /dev/null
+		find "$HOMEDIR/$u/web" -name .htaccess 2> /dev/null
 	done < <(web_users)
 }
 
@@ -633,6 +704,7 @@ web_precheck_delete_nginx() {
 		local x; for x in $findings; do echo "        $x" >&2; done
 		if [ "$force" = "yes" ]; then
 			echo "  --force: proceeding anyway (recorded in the action log)." >&2
+			"$BIN/h-log-action" "${ROOT_USER:-admin}" "Warning" "Web" "h-delete-sys-nginx --force overrode:$findings" > /dev/null 2>&1 || true
 			return 0
 		fi
 		echo "  Refused. Re-run with --force to override." >&2
@@ -651,7 +723,9 @@ web_component_main() {
 			--force) force="yes" ;;
 			--recover) recover="yes" ;;
 			yes) mode="yes" ;;
-			*) ;;
+			# reject unknown args: a typo'd --forse / --yes must not silently become a
+			# preview someone reads as an apply (this is a destructive command)
+			*) echo "Error: unknown argument '$a'. Use: [yes] [--force] [--purge] [--recover]." >&2; return 1 ;;
 		esac
 	done
 	check_hestia_demo_mode
