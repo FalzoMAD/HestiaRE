@@ -9,6 +9,14 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+## v0.12.0 (2026-07-30)
+
+Covers everything since v0.11.0. The headline: the web-serving model is no longer
+fixed at install — a **live switch** moves a running server between nginx-only, both,
+and apache-only, as a first-class maintenance operation (freeze, snapshot, rollback,
+crash recovery). Alongside it, two reference layers land: `STRUCTURE.md` for structural
+divergence and per-folder `PROVENANCE.json` for per-file upstream heritage.
+
 ### Added
 
 - Live web-serving model switch (#120): `h-add-sys-nginx`, `h-add-sys-apache2`,
