@@ -406,12 +406,15 @@ web_model_run() {
 	web_lock_acquire 300 || return 1
 
 	# Refresh under the lock: current/target were derived from globals read BEFORE the lock,
-	# so a switch we serialized behind may already have moved the model. Re-derive; if it
-	# now equals the target, the whole rebuild would be wasted work - stop cleanly.
+	# so a switch we serialized behind may have moved the model. target was computed from the
+	# pre-lock state and could now be invalid (or its refusals bypassed - e.g. both->apache
+	# ran while we waited, making our derived target a full unrequested swap). If the state
+	# changed at all, do NOT act on the stale target; re-run to recompute against reality.
+	local now
 	source_conf "$HESTIA/conf/hestia.conf"
-	current=$(web_current_model)
-	if [ "$current" = "$target" ]; then
-		echo "Already $(web_model_label "$current") (a concurrent switch reached it); nothing to do."
+	now=$(web_current_model)
+	if [ "$now" != "$current" ]; then
+		echo "State changed while waiting for the lock (now $(web_model_label "$now")). Re-run the command." >&2
 		web_lock_release
 		return 0
 	fi
@@ -547,20 +550,39 @@ web_model_run() {
 # in apache-only; the backend 8080/8443 is internal, not checked). ss is gated so a box
 # without iproute2 degrades to the is-active check instead of a false rollback.
 web_model_verify_up() {
-	local target="$1" p bad=""
-	if web_model_uses_apache "$target"; then
-		systemctl is-active --quiet apache2 || bad="$bad apache2:inactive"
-	fi
-	if web_model_uses_nginx "$target"; then
-		systemctl is-active --quiet nginx || bad="$bad nginx:inactive"
-	fi
-	if command -v ss > /dev/null 2>&1; then
-		for p in 80 443; do
-			ss -H -tln 2> /dev/null | awk '{print $4}' | grep -qE "[:.]$p\$" || bad="$bad port-$p:down"
-		done
-	fi
-	[ -z "$bad" ] && return 0
-	echo "  target not serving:$bad" >&2
+	local target="$1" waited=0 deadline=10 p held bad
+	# Retry, don't single-shot: systemctl restart returns once the unit is "started" but the
+	# socket bind can lag a few hundred ms (and h-restart-web may reload-or-restart) - a
+	# one-shot check would false-negative and roll back a GOOD switch. Poll up to ~10s.
+	while :; do
+		bad=""
+		if web_model_uses_apache "$target"; then
+			systemctl is-active --quiet apache2 || bad="$bad apache2:inactive"
+		fi
+		if web_model_uses_nginx "$target"; then
+			systemctl is-active --quiet nginx || bad="$bad nginx:inactive"
+		fi
+		if command -v ss > /dev/null 2>&1; then
+			held=$(ss -H -tln 2> /dev/null | awk '{print $4}')
+			# front ports (nginx in both/nginx-only, apache in apache-only)
+			for p in 80 443; do
+				grep -qE "[:.]$p\$" <<< "$held" || bad="$bad port-$p:down"
+			done
+			# in 'both' apache serves the backend on 8080/8443 from the per-IP configs
+			# (ports.conf is emptied) - :80/:443 held by nginx does NOT prove apache listens.
+			# Without this a missing per-IP config passes the gate and every dynamic request 502s.
+			if [ "$target" = "both" ]; then
+				for p in 8080 8443; do
+					grep -qE "[:.]$p\$" <<< "$held" || bad="$bad backend-$p:down"
+				done
+			fi
+		fi
+		[ -z "$bad" ] && return 0
+		[ "$waited" -ge "$deadline" ] && break
+		sleep 1
+		waited=$((waited + 1))
+	done
+	echo "  target not serving after ${deadline}s:$bad" >&2
 	return 1
 }
 
@@ -751,7 +773,7 @@ web_precheck_delete_nginx() {
 		ls "$dir"/nginx.conf_* > /dev/null 2>&1 && findings+=("nginx-include:$u/$d")
 		# web.conf is ONE inline record per domain (DOMAIN='..' .. FASTCGI_CACHE='yes' ..),
 		# so a ^-anchored grep never matches - scope to this domain's line, then test the key.
-		grep "DOMAIN='$d'" "$CONF_DIR/users/$u/web.conf" 2> /dev/null | grep -q "FASTCGI_CACHE='yes'" \
+		grep -F "DOMAIN='$d'" "$CONF_DIR/users/$u/web.conf" 2> /dev/null | grep -q "FASTCGI_CACHE='yes'" \
 			&& findings+=("fastcgi-cache-inert:$u/$d")
 	done < <(web_domain_dirs)
 	echo "Note: removing nginx also disables mod_remoteip (apache serves :80 directly)." >&2
