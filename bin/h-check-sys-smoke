@@ -281,6 +281,7 @@ check_web_switch_prechecks() {
 	for fn in web_precheck_add_nginx web_precheck_add_apache2 web_precheck_delete_nginx web_precheck_delete_apache2; do
 		grep -q "^$fn()" "$lib" || miss="$miss $fn"
 	done
+	# shellcheck disable=SC2016 # literal on purpose: the dispatch line contains ${action}/${comp}
 	grep -qF 'web_precheck_${action}_${comp}' "$lib" || miss="$miss dispatch-call"
 	if [ -z "$miss" ]; then
 		ok "invariant: web-model switch pre-checks present + dispatched (#120)"

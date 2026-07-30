@@ -208,10 +208,10 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		bk_web=$(sed -n "s/.*WEB_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$backup_system/web-system")
 		bk_proxy=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$backup_system/web-system")
 		if [ "$bk_web" != "$WEB_SYSTEM" ] || [ "$bk_proxy" != "$PROXY_SYSTEM" ]; then
-			echo "Warning!: backup web model (WEB_SYSTEM='$bk_web' PROXY_SYSTEM='$bk_proxy') differs from this host (WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'); web configs are regenerated for this host - review any custom nginx/apache includes." | tee -a $tmpdir/restore.log
+			echo "Warning!: backup web model (WEB_SYSTEM='$bk_web' PROXY_SYSTEM='$bk_proxy') differs from this host (WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'); web configs are regenerated for this host - review any custom nginx/apache includes." | tee -a "$tmpdir/restore.log"
 		fi
 	else
-		echo "Warning!: backup web model unknown (pre-#120 archive); review the restored web configs manually." | tee -a $tmpdir/restore.log
+		echo "Warning!: backup web model unknown (pre-#120 archive); review the restored web configs manually." | tee -a "$tmpdir/restore.log"
 	fi
 
 	# Creating web domain restore list
