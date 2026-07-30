@@ -503,6 +503,23 @@ function check_ip_not_banned(){
   assert_success
   refute_output
 }
+
+@test "User: Add user notification with XSS payload is sanitized" {
+  run v-add-user-notification $user "XSS test" "<p>safe</p><script>alert(document.cookie)</script><img src=x onerror=alert(1)>"
+  assert_success
+  refute_output
+
+  run v-list-user-notifications $user csv
+  assert_success
+  assert_output --partial '<p>safe</p>'
+  refute_output --partial '<script>'
+  refute_output --partial 'onerror'
+
+  run v-delete-user-notification $user 2
+  assert_success
+  refute_output
+}
+
 @test "User: Acknowledge user notification" {
   run v-acknowledge-user-notification $user 1
   assert_success
@@ -1508,6 +1525,28 @@ function check_ip_not_banned(){
     run v-delete-dns-record $user $domain 50
     assert_success
     refute_output
+}
+
+@test "DNS: Check serial rollover from max 32-bit value to 1 (RFC 1982)" {
+	[ -z "$DNS_SYSTEM" ] && skip
+
+	USER_DATA=$HESTIA/data/users/$user
+	local zn_conf="$HOMEDIR/$user/conf/dns/${domain}.db"
+
+	# Seed the zone's current serial to the max unsigned 32-bit value so the
+	# next update has to wrap around per RFC 1982 (serial 0 is skipped, so it
+	# wraps to 1, not 0).
+	sed -i -E "0,/^[[:space:]]*[0-9]+[[:space:]]*\$/s//                                            4294967295/" "$zn_conf"
+	assert_file_contains "$zn_conf" "4294967295"
+
+	# Any DNS-mutating command runs update_domain_serial() as a side effect.
+	run v-change-dns-domain-ttl $user $domain 3600
+	assert_success
+	refute_output
+
+	run get_object_value 'dns' 'DOMAIN' "$domain" '$SERIAL'
+	assert_success
+	assert_output "0000000001"
 }
 
 @test "DNS: Change domain ip" {
