@@ -37,8 +37,6 @@ source $HESTIA/func/main.sh
 source $HESTIA/func/domain.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-
-# Serialize behind a live web-model switch (#120): bounded, reentrant wait.
 web_lock_acquire || exit 1
 
 # Additional argument formatting

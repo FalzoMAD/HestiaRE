@@ -30,9 +30,6 @@ source $HESTIA/func/rebuild.sh
 source $HESTIA/func/syshealth.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-
-# Serialize behind a live web-model switch (#120): a bounded, reentrant wait so a
-# domain change cannot land on a half-flipped tree (the switch owner is exempt).
 web_lock_acquire || exit 1
 
 #----------------------------------------------------------#

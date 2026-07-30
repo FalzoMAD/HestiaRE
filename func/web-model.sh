@@ -270,18 +270,18 @@ web_model_snapshot() {
 	local snap="$1" u
 	mkdir -p "$snap"
 	cp -a "$HESTIA/conf/hestia.conf" "$snap/hestia.conf"
-	local paths=""
-	[ -d /etc/nginx/conf.d ] && paths="$paths etc/nginx/conf.d"
-	[ -d /etc/apache2/conf.d ] && paths="$paths etc/apache2/conf.d"
-	[ -f /etc/apache2/mods-available/remoteip.conf ] && paths="$paths etc/apache2/mods-available/remoteip.conf"
-	[ -f /etc/apache2/apache2.conf ] && paths="$paths etc/apache2/apache2.conf"
-	for u in $("$BIN/h-list-users" list 2> /dev/null); do
-		[ -d "$HOMEDIR/$u/conf/web" ] && paths="$paths home/$u/conf/web"
-		[ -d "$HOMEDIR/$u/conf/mail" ] && paths="$paths home/$u/conf/mail"
-	done
-	# shellcheck disable=SC2086
-	tar czf "$snap/state.tar.gz" -C / $paths 2> /dev/null || true
-	echo "$paths" > "$snap/paths.list"
+	local -a paths=()
+	[ -d /etc/nginx/conf.d ] && paths+=("etc/nginx/conf.d")
+	[ -d /etc/apache2/conf.d ] && paths+=("etc/apache2/conf.d")
+	[ -f /etc/apache2/mods-available/remoteip.conf ] && paths+=("etc/apache2/mods-available/remoteip.conf")
+	[ -f /etc/apache2/apache2.conf ] && paths+=("etc/apache2/apache2.conf")
+	while IFS= read -r u; do
+		[ -n "$u" ] || continue
+		[ -d "$HOMEDIR/$u/conf/web" ] && paths+=("home/$u/conf/web")
+		[ -d "$HOMEDIR/$u/conf/mail" ] && paths+=("home/$u/conf/mail")
+	done < <(web_users)
+	tar czf "$snap/state.tar.gz" -C / "${paths[@]}" 2> /dev/null || true
+	printf '%s\n' "${paths[@]}" > "$snap/paths.list"
 }
 
 web_model_rollback() {
@@ -310,6 +310,19 @@ web_users() { "$BIN/h-list-users" list 2> /dev/null; }
 # trusted-proxy set of IP + PUB_IP so a switched box is byte-identical to a fresh one.
 web_sys_proxy_ips() {
 	"$BIN/h-list-sys-ips" plain 2> /dev/null | awk -F'\t' '{print $1; if ($9 != "" && $9 != $1) print $9}'
+}
+# Emit "USER<TAB>DOMAINDIR" for every web-domain conf dir. Consume with
+# `while IFS=$'\t' read -r u dir`. The quoted-prefix glob is space-safe and a no-match
+# glob is skipped, so odd characters in a home path do not break iteration.
+web_domain_dirs() {
+	local u dir
+	while IFS= read -r u; do
+		[ -n "$u" ] || continue
+		for dir in "$HOMEDIR/$u/conf/web/"*/; do
+			[ -d "$dir" ] || continue
+			printf '%s\t%s\n' "$u" "${dir%/}"
+		done
+	done < <(web_users)
 }
 
 # web_model_run CURRENT TARGET MODE OPLABEL PURGE
@@ -384,18 +397,21 @@ web_model_run() {
 
 	echo "[ * ] Rebuilding per-IP + per-domain + webmail configs for $target..."
 	local ip u
-	for ip in $(web_sys_ips); do
+	while IFS= read -r ip; do
+		[ -n "$ip" ] || continue
 		rebuild_ip_web_config "$ip"
-	done
-	for u in $(web_users); do
+	done < <(web_sys_ips)
+	while IFS= read -r u; do
+		[ -n "$u" ] || continue
 		"$BIN/h-rebuild-web-domains" "$u" no > /dev/null 2>&1
 		"$BIN/h-rebuild-mail-domains" "$u" > /dev/null 2>&1
-	done
+	done < <(web_users)
 	if [ -s /etc/hestia/conf/.filemanager.key ]; then
-		for u in $(web_users); do
+		while IFS= read -r u; do
+			[ -n "$u" ] || continue
 			grep -q "^FILE_MANAGER='yes'" "$CONF_DIR/users/$u/user.conf" 2> /dev/null \
 				&& "$BIN/h-add-user-filemanager" "$u" > /dev/null 2>&1 || true
-		done
+		done < <(web_users)
 	fi
 
 	echo "[ * ] Cleaning old-model artifacts..."
@@ -442,23 +458,19 @@ web_model_run() {
 # Assert every domain carries only the target model's per-domain files (catches a
 # mixed tree that syntax tests pass).
 web_model_inventory_assert() {
-	local target="$1" u d dir bad="" want_web
+	local target="$1" u d dir bad="" want_web other
 	want_web="$WEB_SYSTEM" # already the target after source_conf
-	for u in $(web_users); do
-		for dir in "$HOMEDIR/$u/conf/web/"*/; do
-			[ -d "$dir" ] || continue
-			d=$(basename "$dir")
-			# the main vhost for the target web system must exist
-			[ -f "$dir/$want_web.conf" ] || bad="$bad $u/$d:missing-$want_web.conf"
-			# the other web system's main vhost must NOT linger
-			local other; [ "$want_web" = "nginx" ] && other="apache2" || other="nginx"
-			# in 'both' nginx is the proxy and apache2 the backend - both legit; only flag
-			# the truly-foreign one (neither the web system nor the proxy system)
-			if [ "$other" != "$PROXY_SYSTEM" ] && [ -f "$dir/$other.conf" ]; then
-				bad="$bad $u/$d:stale-$other.conf"
-			fi
-		done
-	done
+	[ "$want_web" = "nginx" ] && other="apache2" || other="nginx"
+	while IFS=$'\t' read -r u dir; do
+		d=$(basename "$dir")
+		# the main vhost for the target web system must exist
+		[ -f "$dir/$want_web.conf" ] || bad="$bad $u/$d:missing-$want_web.conf"
+		# the other web system's main vhost must NOT linger. In 'both' nginx is the proxy
+		# and apache2 the backend (both legit); only flag the truly-foreign prefix.
+		if [ "$other" != "$PROXY_SYSTEM" ] && [ -f "$dir/$other.conf" ]; then
+			bad="$bad $u/$d:stale-$other.conf"
+		fi
+	done < <(web_domain_dirs)
 	[ -z "$bad" ] && return 0
 	echo "  mixed-tree files:$bad" >&2
 	return 1
@@ -466,21 +478,21 @@ web_model_inventory_assert() {
 
 # Remove the departing model's per-domain + per-IP artifacts (only after success).
 web_model_cleanup() {
-	local old_web="$1" old_proxy="$2" target="$3" u d dir ip
+	local old_web="$1" old_proxy="$2" target="$3" u dir ip pfx
 	# which prefixes does the target legitimately keep?
 	local keep=" $WEB_SYSTEM $PROXY_SYSTEM "
 	for pfx in "$old_web" "$old_proxy"; do
 		[ -n "$pfx" ] || continue
 		case "$keep" in *" $pfx "*) continue ;; esac
 		# departing prefix: drop its per-domain files + symlinks + per-IP configs
-		for u in $(web_users); do
-			for dir in "$HOMEDIR/$u/conf/web/"*/; do
-				[ -d "$dir" ] || continue
-				rm -f "$dir/$pfx.conf" "$dir/$pfx.ssl.conf"
-			done
-		done
-		rm -f /etc/$pfx/conf.d/domains/*.conf 2> /dev/null
-		for ip in $(web_sys_ips); do rm -f /etc/$pfx/conf.d/$ip.conf; done
+		while IFS=$'\t' read -r u dir; do
+			rm -f "$dir/$pfx.conf" "$dir/$pfx.ssl.conf"
+		done < <(web_domain_dirs)
+		rm -f "/etc/$pfx/conf.d/domains/"*.conf 2> /dev/null
+		while IFS= read -r ip; do
+			[ -n "$ip" ] || continue
+			rm -f "/etc/$pfx/conf.d/$ip.conf"
+		done < <(web_sys_ips)
 	done
 }
 
@@ -544,9 +556,10 @@ web_component_op() {
 # helper: list every customer .htaccess (skip admin's own)
 _web_htaccess_files() {
 	local u
-	for u in $(web_users); do
+	while IFS= read -r u; do
+		[ -n "$u" ] || continue
 		find "$HOMEDIR/$u/web" -maxdepth 3 -name .htaccess 2> /dev/null
-	done
+	done < <(web_users)
 }
 
 # add-apache2 (nginx-only -> both): ports must be free. Hard blocker (not force-able).
@@ -582,19 +595,15 @@ web_precheck_add_nginx() {
 # unless --force (which still prints + logs the overridden findings).
 web_precheck_delete_apache2() {
 	local force="$3" f u d dir findings=""
-	local n; n=$(_web_htaccess_files | grep -c . 2> /dev/null || echo 0)
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
 		grep -qiE 'RewriteRule|php_value|php_flag|AuthType|Require |Options |ErrorDocument|Header ' "$f" 2> /dev/null \
 			&& findings="$findings htaccess:${f#"$HOMEDIR/"}"
 	done < <(_web_htaccess_files)
-	for u in $(web_users); do
-		for dir in "$HOMEDIR/$u/conf/web/"*/; do
-			[ -d "$dir" ] || continue
-			d=$(basename "$dir")
-			ls "$dir"/apache2.conf_* > /dev/null 2>&1 && findings="$findings apache-include:$u/$d"
-		done
-	done
+	while IFS=$'\t' read -r u dir; do
+		d=$(basename "$dir")
+		ls "$dir"/apache2.conf_* > /dev/null 2>&1 && findings="$findings apache-include:$u/$d"
+	done < <(web_domain_dirs)
 	if [ -n "$findings" ]; then
 		echo "Removing apache2 would drop apache-only config for:" >&2
 		local x; for x in $findings; do echo "        $x" >&2; done
@@ -612,15 +621,12 @@ web_precheck_delete_apache2() {
 # delete-nginx (both -> apache-only): custom nginx includes + fastcgi-cache go away.
 web_precheck_delete_nginx() {
 	local force="$3" u d dir findings=""
-	for u in $(web_users); do
-		for dir in "$HOMEDIR/$u/conf/web/"*/; do
-			[ -d "$dir" ] || continue
-			d=$(basename "$dir")
-			ls "$dir"/nginx.conf_* > /dev/null 2>&1 && findings="$findings nginx-include:$u/$d"
-			grep -q "^FASTCGI_CACHE='yes'" "$CONF_DIR/users/$u/web.conf" 2> /dev/null \
-				&& findings="$findings fastcgi-cache(inert)"
-		done
-	done
+	while IFS=$'\t' read -r u dir; do
+		d=$(basename "$dir")
+		ls "$dir"/nginx.conf_* > /dev/null 2>&1 && findings="$findings nginx-include:$u/$d"
+		grep -q "^FASTCGI_CACHE='yes'" "$CONF_DIR/users/$u/web.conf" 2> /dev/null \
+			&& findings="$findings fastcgi-cache(inert)"
+	done < <(web_domain_dirs)
 	echo "Note: removing nginx also disables mod_remoteip (apache serves :80 directly)." >&2
 	if [ -n "$findings" ]; then
 		echo "Removing nginx would drop nginx-only config for:" >&2
