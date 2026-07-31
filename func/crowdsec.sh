@@ -68,6 +68,8 @@ crowdsec_apply() {
 	mkdir -p /usr/local/hestia/lua
 	cp -f "$share/lua/hestia_bouncer.lua" /usr/local/hestia/lua/hestia_bouncer.lua
 	cp -f "$share/nginx/crowdsec_init.conf" /etc/nginx/conf.d/crowdsec_init.conf
+	# Layer-B rate-limit zones + bot map (http context, referenced by per-domain fragments).
+	cp -f "$share/nginx/ratelimit.conf" /etc/nginx/conf.d/crowdsec_ratelimit.conf
 
 	systemctl restart crowdsec > /dev/null 2>&1 || true
 	if nginx -t > /dev/null 2>&1; then
@@ -91,16 +93,30 @@ crowdsec_render_domain_fragment() {
 	local rec
 	rec=$(grep -m1 "DOMAIN='$domain'" "$CONF_DIR/users/$user/web.conf" 2> /dev/null)
 	[ -n "$rec" ] || return 0
-	local cs
+	local cs rl bp z
 	cs=$(sed -n "s/.*CROWDSEC='\([^']*\)'.*/\1/p" <<< "$rec")
+	rl=$(sed -n "s/.*RATE_LIMIT='\([^']*\)'.*/\1/p" <<< "$rec")
+	bp=$(sed -n "s/.*BOT_POLICY='\([^']*\)'.*/\1/p" <<< "$rec")
+	[ -n "$bp" ] || bp="pass"
 
 	local frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf" tmp
 	tmp=$(mktemp)
+
+	# Layer A: CrowdSec ban check. rewrite phase (not access): runs before auth_basic
+	# (401), the forcessl `return 301`, and limit_req - a banned IP is refused first.
 	if [ "$cs" = "yes" ]; then
-		# rewrite phase (not access): runs before auth_basic (401), the forcessl
-		# `return 301`, and limit_req - so a banned IP is refused first, everywhere.
 		echo 'rewrite_by_lua_block { require("hestia_bouncer").allow() }' >> "$tmp"
 	fi
+
+	# Layer B: bot policy + rate-limit (429). The zone encodes throttle-vs-pass, chosen
+	# here; $cs_good_bot (a global map) is the only part evaluated at request time.
+	[ "$bp" = "block" ] && echo 'if ($cs_good_bot) { return 403; }' >> "$tmp"
+	case "$rl" in
+		lenient) [ "$bp" = "pass" ] && z="cs_lenient_pass" || z="cs_lenient"
+			echo "limit_req zone=$z burst=60 nodelay;" >> "$tmp" ;;
+		strict) [ "$bp" = "pass" ] && z="cs_strict_pass" || z="cs_strict"
+			echo "limit_req zone=$z burst=20 nodelay;" >> "$tmp" ;;
+	esac
 
 	if [ -s "$tmp" ]; then
 		mv -f "$tmp" "$frag"
