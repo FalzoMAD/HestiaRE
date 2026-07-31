@@ -735,6 +735,13 @@ send_notice() {
 	notice=$2
 
 	if [ "$notify" = 'yes' ]; then
+		# NOTICE renders as raw HTML in the panel (Alpine x-html). send_notice is the SECOND
+		# writer of notifications.conf besides h-add-user-notification, so it must sanitize
+		# too or it is an unsanitized XSS bypass (#471). %quote%-encode like the h-* path so
+		# the single-quoted conf record stays intact.
+		topic=$(echo "$topic" | sed "s/'/%quote%/g")
+		notice=$("$HESTIA_PHP" "$HESTIA/func/internal/sanitize_html.php" "$notice" | sed "s/'/%quote%/g")
+
 		touch $USER_DATA/notifications.conf
 		chmod 660 $USER_DATA/notifications.conf
 

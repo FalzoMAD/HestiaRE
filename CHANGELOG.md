@@ -16,15 +16,19 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
 - The user editor blocks a non-ROOT_USER admin from modifying the ROOT_USER account on the
   POST/save path, not only the page render, and keys the guard on `$_SESSION["ROOT_USER"]`
   instead of a hardcoded `admin` (HestiaCP #5547 / GHSA-c69h-jgpw-h9cj). A crafted POST could
-  otherwise change the root account's password or role.
+  otherwise change the root account's password or role. The guard also fails closed when
+  `ROOT_USER` is unset (an admin editing anyone but themselves is refused, not silently
+  allowed). Delete stays protected at the command level (`h-delete-user` refuses `ROOT_USER`).
 - Panel notifications are HTML-sanitized before storage (HestiaCP #5548 / GHSA-3g4r-pfpf-8697).
   `NOTICE` renders as raw HTML in the top bar (Alpine `x-html`) and callers interpolate values
   like a domain or backup filename into it, so `h-add-user-notification` now runs the body
   through an allow-list sanitizer (`func/internal/sanitize_html.php`: DOMDocument, default-deny,
   keeps `p/span/code/a/strong/br` + safe `href`, drops script/`on*`/`javascript:`). `TOPIC` and
   `NOTICE` also gain CR/LF and length validators so a value cannot corrupt the single-line
-  `notifications.conf`. Own dependency-free sanitizer rather than upstream's Composer
-  `symfony/html-sanitizer` (HestiaRE ships no Composer; the panel PHP is Sury 8.3).
+  `notifications.conf`. The shared `send_notice()` shell helper (the second writer of
+  `notifications.conf`) sanitizes through the same path, so it is not an unguarded bypass.
+  Own dependency-free sanitizer rather than upstream's Composer `symfony/html-sanitizer`
+  (HestiaRE ships no Composer; the panel PHP is Sury 8.3).
 - Restore scheduling no longer lets an argument inject into the executed restore queue
   (HestiaCP GHSA-2xw3-7h62-v4gf). `h-schedule-user-restore-restic` validated only `user` and
   then wrote `$snapshot`/`$value` single-quoted into `queue/backup.pipe` (run on drain), so a

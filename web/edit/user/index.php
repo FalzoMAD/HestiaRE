@@ -22,6 +22,19 @@ if ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) {
 	$v_username = $_SESSION["user"];
 }
 
+// Fail closed: without a known ROOT_USER the guard below cannot identify the account it
+// protects, so an admin editing anyone but themselves is refused rather than silently
+// allowed. ROOT_USER comes from h-list-sys-config via load_hestia_config(), so this only
+// trips on a broken session/config - never in normal operation. Runs before POST handling.
+if (
+	$_SESSION["userContext"] === "admin" &&
+	empty($_SESSION["ROOT_USER"]) &&
+	$v_username !== $_SESSION["user"]
+) {
+	header("Location: /list/user/");
+	exit();
+}
+
 // Only a session whose REAL logged-in user IS the ROOT_USER may edit the ROOT_USER
 // account. #438: the admin gate is the effective userContext, but the identity anchor is
 // the durable $_SESSION["user"] (impersonation lives in $_SESSION["look"], never in
