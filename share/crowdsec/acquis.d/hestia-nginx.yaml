@@ -1,0 +1,10 @@
+# HestiaRE nginx web-log acquisition for CrowdSec (#186).
+# Installed to /etc/crowdsec/acquis.d/hestia-nginx.yaml by the apply helper, only when
+# nginx is the public front (nginx-only / both). Per-domain vhosts log 'combined' to
+# /var/log/nginx/domains/<domain>.log (templates/web/nginx/*.tpl). The per-IP catch-all
+# (unassigned) vhosts log nowhere today (access_log off) - once that is enabled to
+# /var/log/nginx/unassigned.log, add it as a second source here.
+filenames:
+  - /var/log/nginx/domains/*.log
+labels:
+  type: nginx
