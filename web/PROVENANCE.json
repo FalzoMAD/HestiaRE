@@ -1388,22 +1388,6 @@
       "note": ""
     },
     {
-      "path": "edit/server/vsftpd/index.php",
-      "source_type": "derived",
-      "upstream_path": "web/edit/server/vsftpd/index.php",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
-      "divergence": {
-        "upstream_lines": 59,
-        "our_lines": 59,
-        "added": 3,
-        "removed": 3,
-        "pct": 5,
-        "measured_at": "2026-07-30"
-      },
-      "note": ""
-    },
-    {
       "path": "edit/server/whitelabel/index.php",
       "source_type": "derived",
       "upstream_path": "web/edit/server/whitelabel/index.php",
@@ -1423,17 +1407,17 @@
       "path": "edit/user/index.php",
       "source_type": "derived",
       "upstream_path": "web/edit/user/index.php",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": "2026-07-31",
       "divergence": {
-        "upstream_lines": 570,
-        "our_lines": 460,
-        "added": 46,
-        "removed": 156,
-        "pct": 20,
-        "measured_at": "2026-07-30"
+        "upstream_lines": 580,
+        "our_lines": 480,
+        "added": 60,
+        "removed": 160,
+        "pct": 20.8,
+        "measured_at": "2026-07-31"
       },
-      "note": ""
+      "note": "1.9.8 (#5547): ROOT_USER POST-guard + fail-closed, keyed on session ROOT_USER."
     },
     {
       "path": "edit/web/index.php",
@@ -4212,19 +4196,19 @@
     },
     {
       "path": "templates/pages/debug_panel.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/templates/pages/debug_panel.php",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": "2026-07-31",
       "divergence": {
         "upstream_lines": 63,
         "our_lines": 63,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-07-30"
+        "added": 7,
+        "removed": 7,
+        "pct": 11.1,
+        "measured_at": "2026-07-31"
       },
-      "note": ""
+      "note": "1.9.8 (#5550): tohtml()-escape echoed request/session vars."
     },
     {
       "path": "templates/pages/edit_backup_exclusions.php",
@@ -4502,17 +4486,17 @@
       "path": "templates/pages/edit_web.php",
       "source_type": "derived",
       "upstream_path": "web/templates/pages/edit_web.php",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": "2026-07-31",
       "divergence": {
         "upstream_lines": 490,
         "our_lines": 485,
-        "added": 19,
-        "removed": 24,
-        "pct": 4,
-        "measured_at": "2026-07-30"
+        "added": 20,
+        "removed": 25,
+        "pct": 4.6,
+        "measured_at": "2026-07-31"
       },
-      "note": ""
+      "note": "Dropped dead vsftpd branch (FTP_SYSTEM only proftpd)."
     },
     {
       "path": "templates/pages/edit_whitelabel.php",

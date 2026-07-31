@@ -415,7 +415,7 @@
 						<small class="js-custom-docroot-hint"></small>
 					</div>
 				</div>
-				<?php if (in_array($_SESSION["FTP_SYSTEM"], ["vsftpd", "proftpd"])) { ?>
+				<?php if ($_SESSION["FTP_SYSTEM"] == "proftpd") { ?>
 					<div class="form-check u-mb10">
 						<input class="form-check-input js-toggle-ftp-accounts" type="checkbox" name="v_ftp" id="v_ftp" <?php if (!empty($v_ftp_user)) echo 'checked' ?>>
 						<label for="v_ftp">

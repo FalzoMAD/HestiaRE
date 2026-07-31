@@ -983,19 +983,19 @@
     },
     {
       "path": "h-add-user-notification",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-add-user-notification",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": "2026-07-31",
       "divergence": {
-        "upstream_lines": 81,
-        "our_lines": 81,
-        "added": 2,
-        "removed": 2,
-        "pct": 2,
-        "measured_at": "2026-07-30"
+        "upstream_lines": 84,
+        "our_lines": 83,
+        "added": 3,
+        "removed": 4,
+        "pct": 4.2,
+        "measured_at": "2026-07-31"
       },
-      "note": ""
+      "note": "1.9.8 XSS fix (#5548) reimplemented: NOTICE sanitized via func/internal/sanitize_html.php before store."
     },
     {
       "path": "h-add-user-package",
@@ -4453,17 +4453,17 @@
       "path": "h-list-mail-domain-ssl",
       "source_type": "verbatim",
       "upstream_path": "bin/v-list-mail-domain-ssl",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": "2026-07-31",
       "divergence": {
         "upstream_lines": 155,
-        "our_lines": 154,
-        "added": 3,
+        "our_lines": 156,
+        "added": 5,
         "removed": 4,
-        "pct": 2,
-        "measured_at": "2026-07-30"
+        "pct": 2.9,
+        "measured_at": "2026-07-31"
       },
-      "note": ""
+      "note": "1.9.8 (#5524): escape cert issuer for valid JSON."
     },
     {
       "path": "h-list-mail-domains",
@@ -6142,33 +6142,33 @@
       "path": "h-schedule-user-restore",
       "source_type": "derived",
       "upstream_path": "bin/v-schedule-user-restore",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": "2026-07-31",
       "divergence": {
         "upstream_lines": 73,
-        "our_lines": 62,
-        "added": 8,
+        "our_lines": 71,
+        "added": 17,
         "removed": 19,
-        "pct": 20,
-        "measured_at": "2026-07-30"
+        "pct": 25.0,
+        "measured_at": "2026-07-31"
       },
-      "note": ""
+      "note": "GHSA-2xw3 hardening: is_no_quote_format on selectors before backup.pipe write."
     },
     {
       "path": "h-schedule-user-restore-restic",
       "source_type": "derived",
       "upstream_path": "bin/v-schedule-user-restore-restic",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": "2026-07-31",
       "divergence": {
         "upstream_lines": 71,
-        "our_lines": 69,
-        "added": 9,
+        "our_lines": 75,
+        "added": 15,
         "removed": 11,
-        "pct": 14,
-        "measured_at": "2026-07-30"
+        "pct": 17.8,
+        "measured_at": "2026-07-31"
       },
-      "note": ""
+      "note": "GHSA-2xw3: validate snapshot + per-object value before backup.pipe write."
     },
     {
       "path": "h-search-command",

@@ -260,8 +260,12 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
 - Deleted the orphaned bind9/named server-config views (`web/edit/server/bind9/`,
   `web/edit/server/named/`, `templates/pages/edit_server_bind9.php`) and their PROVENANCE
   entries (#471). bind9 is a permanent ground-rule removal and the views were unreachable
-  dead code (the services list is data-driven and never links them). Other ex-service view
-  leftovers (e.g. `vsftpd/`) remain for a separate cleanup.
+  dead code (the services list is data-driven and never links them).
+- Deleted the orphaned `web/edit/server/vsftpd/` server-config view and its PROVENANCE entry
+  (#471). vsftpd is a permanent ground-rule removal (proftpd is the FTP system, with its own
+  live view); the view called `h-list-sys-vsftpd-config`, which does not exist, so it was dead.
+  Also dropped the stale `vsftpd` branch from the FTP-account toggle in `edit_web.php`
+  (`FTP_SYSTEM` is only ever `proftpd`).
 - Pruned 36 app-specific web templates (72 files) from `templates/web/nginx/php-fpm/` that
   the removed Software/App Installer had seeded (chevereto, cms_made_simple, codeigniter,
   contao, craftcms, datalife_engine, dokuwiki, dolibarr, drupal\*, flarum\*, forgejo, gitea,
