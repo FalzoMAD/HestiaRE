@@ -11,7 +11,6 @@
 # Argument definition
 user=$1
 topic=$(echo "$2" | sed "s/'/%quote%/g")
-notice=$(echo "$3" | sed "s/'/%quote%/g")
 type=$4
 priority=$5
 
@@ -22,6 +21,11 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
+
+# NOTICE renders as raw HTML in the panel (Alpine x-html), so pass it through the allow-list
+# sanitizer before storing - drops script/on*/javascript: while keeping the p/span/code/a
+# formatting the notifications use. $HESTIA_PHP is set by func/main.sh.
+notice=$("$HESTIA_PHP" "$HESTIA/func/internal/sanitize_html.php" "$3" | sed "s/'/%quote%/g")
 
 #----------------------------------------------------------#
 #                    Verifications                         #

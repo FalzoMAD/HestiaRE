@@ -9,8 +9,36 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Security
+
+Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
+
+- The user editor blocks a non-ROOT_USER admin from modifying the ROOT_USER account on the
+  POST/save path, not only the page render, and keys the guard on `$_SESSION["ROOT_USER"]`
+  instead of a hardcoded `admin` (HestiaCP #5547 / GHSA-c69h-jgpw-h9cj). A crafted POST could
+  otherwise change the root account's password or role.
+- Panel notifications are HTML-sanitized before storage (HestiaCP #5548 / GHSA-3g4r-pfpf-8697).
+  `NOTICE` renders as raw HTML in the top bar (Alpine `x-html`) and callers interpolate values
+  like a domain or backup filename into it, so `h-add-user-notification` now runs the body
+  through an allow-list sanitizer (`func/internal/sanitize_html.php`: DOMDocument, default-deny,
+  keeps `p/span/code/a/strong/br` + safe `href`, drops script/`on*`/`javascript:`). `TOPIC` and
+  `NOTICE` also gain CR/LF and length validators so a value cannot corrupt the single-line
+  `notifications.conf`. Own dependency-free sanitizer rather than upstream's Composer
+  `symfony/html-sanitizer` (HestiaRE ships no Composer; the panel PHP is Sury 8.3).
+- Restore scheduling no longer lets an argument inject into the executed restore queue
+  (HestiaCP GHSA-2xw3-7h62-v4gf). `h-schedule-user-restore-restic` validated only `user` and
+  then wrote `$snapshot`/`$value` single-quoted into `queue/backup.pipe` (run on drain), so a
+  `'` broke out for root RCE. `snapshot` and the per-object `value` (domain/database) are now
+  validated; the non-restic `h-schedule-user-restore` gets the same for `backup` and its
+  selector fields, and `user`/`backup` are quoted in the queued line.
+- The admin debug panel escapes its variable output (HestiaCP #5550). Server/Session/POST/GET
+  keys and string values were echoed raw (reflected XSS on a crafted request); they now go
+  through `tohtml()`.
+
 ### Fixed
 
+- `h-list-mail-domain-ssl` JSON now escapes the certificate issuer (#471, HestiaCP #5524). A
+  `"` or `\` in the issuer DN produced invalid JSON output.
 - `h-list-sys-php` no longer lists the isolated panel FPM pool (`/etc/php/hestia`,
   unit `hestia-php`) as a pseudo-version `hestia` (#464). Consumers turn the list into
   `php<v>-fpm`, so the stray entry produced the non-existent `phphestia-fpm` and broke
@@ -32,6 +60,14 @@ section as part of its PR. On release, the section gets the version number.
   apache keeps the `Options` sed; nginx gets `autoindex on;` at server level via a
   `nginx.conf_dirlist` include fragment (no token in the templates to flip). Verified on
   deb13 (403 -> 200 listing, survives rebuild via the #456 self-heal).
+
+### Removed
+
+- Deleted the orphaned bind9/named server-config views (`web/edit/server/bind9/`,
+  `web/edit/server/named/`, `templates/pages/edit_server_bind9.php`) and their PROVENANCE
+  entries (#471). bind9 is a permanent ground-rule removal and the views were unreachable
+  dead code (the services list is data-driven and never links them). Other ex-service view
+  leftovers (e.g. `vsftpd/`) remain for a separate cleanup.
 
 ## v0.12.0 (2026-07-30)
 

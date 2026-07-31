@@ -22,15 +22,15 @@ if ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) {
 	$v_username = $_SESSION["user"];
 }
 
-// Prevent other users with admin privileges from editing properties of default 'admin' user
+// Only a session whose REAL logged-in user IS the ROOT_USER may edit the ROOT_USER
+// account. #438: the admin gate is the effective userContext, but the identity anchor is
+// the durable $_SESSION["user"] (impersonation lives in $_SESSION["look"], never in
+// $_SESSION["user"]), so this also blocks an impersonating admin.
 if (
-	($_SESSION["userContext"] === "admin" &&
-		$_SESSION["look"] != "" &&
-		$user == $_SESSION["ROOT_USER"]) ||
-	($_SESSION["userContext"] === "admin" &&
-		!isset($_SESSION["look"]) &&
-		$user == "admin" &&
-		$_SESSION["user"] != $_SESSION["ROOT_USER"])
+	$_SESSION["userContext"] === "admin" &&
+	!empty($_SESSION["ROOT_USER"]) &&
+	$user === $_SESSION["ROOT_USER"] &&
+	$_SESSION["user"] !== $_SESSION["ROOT_USER"]
 ) {
 	header("Location: /list/user/");
 	exit();
@@ -110,6 +110,18 @@ unset($output);
 if (!empty($_POST["save"])) {
 	// Check token
 	verify_csrf($_POST);
+
+	// #5547: guard the POST/save path too, not just the page render above - a crafted
+	// POST would otherwise let a non-ROOT_USER admin modify the ROOT_USER account.
+	if (
+		$_SESSION["userContext"] === "admin" &&
+		!empty($_SESSION["ROOT_USER"]) &&
+		$v_username === $_SESSION["ROOT_USER"] &&
+		$_SESSION["user"] !== $_SESSION["ROOT_USER"]
+	) {
+		header("Location: /list/user/");
+		exit();
+	}
 
 	// Change password
 	if (!empty($_POST["v_password"]) && empty($_SESSION["error_msg"])) {
@@ -330,7 +342,7 @@ if (!empty($_POST["save"])) {
 		if (
 			$v_role != $_POST["v_role"] &&
 			$_SESSION["userContext"] === "admin" &&
-			$v_username != "admin" &&
+			$v_username != $_SESSION["ROOT_USER"] &&
 			empty($_SESSION["error_msg"])
 		) {
 			if (!empty($_POST["v_role"])) {

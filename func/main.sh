@@ -1165,12 +1165,46 @@ is_no_new_line_format() {
 	fi
 }
 
+# Reject only the characters that can escape a single-quoted field interpolated into an
+# executed queue command ($CONF_DIR/queue/backup.pipe): a single quote breaks out of the
+# quoting, a CR/LF injects an extra queue entry (GHSA-2xw3 class). Deliberately permissive
+# otherwise, so restore selectors that are comma-lists, '*', 'no', or paths still pass.
+is_no_quote_format() {
+	if [[ "$1" == *\'* ]] || [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
+		check_result "$E_INVALID" "invalid $2 format :: quotes and line breaks are not allowed"
+	fi
+}
+
 is_string_format_valid() {
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|<|>|?|/|\|\"|'|;|%|\`]"
 	if [[ "$1" =~ $exclude ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
 	fi
 	is_no_new_line_format "$1"
+}
+
+# Notification topic validator: plain text, single line, bounded. TOPIC renders with Alpine
+# x-text (escaped), but a line break would still corrupt the single-line notifications.conf
+# record, so reject CR/LF and an unreasonable length here.
+is_notification_topic_valid() {
+	if [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
+		check_result "$E_INVALID" "invalid topic format :: line breaks are not allowed"
+	fi
+	if [ ${#1} -gt 255 ]; then
+		check_result "$E_INVALID" "invalid topic format :: too long"
+	fi
+}
+
+# Notification body validator. NOTICE is HTML-sanitized (func/internal/sanitize_html.php)
+# before storage; this only guards the flat-file notifications.conf format, which breaks on
+# a multi-line or oversized value.
+is_notification_notice_valid() {
+	if [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
+		check_result "$E_INVALID" "invalid notice format :: line breaks are not allowed"
+	fi
+	if [ ${#1} -gt 4000 ]; then
+		check_result "$E_INVALID" "invalid notice format :: too long"
+	fi
 }
 is_cron_command_valid_format() {
 	if [[ ! "$1" =~ ^[^\`]*?$ ]]; then
@@ -1508,6 +1542,7 @@ is_format_valid() {
 				nat_ip) is_ip_format_valid "$arg" ;;
 				netmask) is_netmask_format_valid "$arg" 'netmask' ;;
 				newid) is_int_format_valid "$arg" 'id' ;;
+				notice) is_notification_notice_valid "$arg" ;;
 				ns1) is_domain_format_valid "$arg" 'ns1' ;;
 				ns2) is_domain_format_valid "$arg" 'ns2' ;;
 				ns3) is_domain_format_valid "$arg" 'ns3' ;;
@@ -1541,6 +1576,7 @@ is_format_valid() {
 				stats_user) is_user_format_valid "$arg" "$arg_name" ;;
 				template) is_object_format_valid "$arg" "$arg_name" ;;
 				theme) is_common_format_valid "$arg" "$arg_name" ;;
+				topic) is_notification_topic_valid "$arg" ;;
 				ttl) is_int_format_valid "$arg" 'ttl' ;;
 				user) is_user_format_valid "$arg" $arg_name ;;
 				wday) is_cron_format_valid "$arg" $arg_name ;;
