@@ -12,10 +12,15 @@
 error_reporting(0);
 ini_set("display_errors", "0");
 
-// Tags whose content is dropped entirely (never rendered, not even as text).
+// Tags whose content is dropped entirely (never rendered, not even as text). Includes the
+// raw-text / escapable-raw-text legacy tags (xmp, plaintext, listing, noembed, noframes,
+// textarea): some HTML parsers treat their content as literal text up to the close tag, so
+// a nested payload could survive an unwrap - none are ever legitimate in a notification, so
+// dropping them outright removes the ambiguity instead of relying on the parser's behavior.
 const DROP_WITH_CONTENT = [
 	"script", "style", "iframe", "object", "embed", "svg", "math",
 	"template", "noscript", "head", "title", "link", "meta", "base", "form",
+	"xmp", "plaintext", "listing", "noembed", "noframes", "textarea",
 ];
 
 // href/src values: allow only http(s), root-relative, or fragment/anchor. Anything with a
@@ -31,13 +36,27 @@ function url_is_safe($url)
 		$scheme = strtolower(rtrim($m[0], ":"));
 		return $scheme === "http" || $scheme === "https";
 	}
-	// No scheme -> relative path or #fragment, safe.
+	// No ASCII scheme -> relative path, #fragment, or protocol-relative //host. All are
+	// allowed as LINK targets by design: notifications legitimately link out (e.g. release
+	// notes), and an external destination is a link, not a code-execution vector. Scheme
+	// detection is ASCII-only on purpose - a confusable/non-ASCII colon (e.g. fullwidth
+	// U+FF1A) is not a scheme separator to any browser, so such a value stays an inert
+	// relative link. mailto:/tel: are intentionally NOT allowed (not used by notifications).
 	return true;
 }
 
+// Hard recursion-depth cap. Legit notifications are shallow; this delivers the "reusable for
+// any user-HTML surface" promise so a future caller without NOTICE's length limit cannot
+// drive deeply nested markup into a PHP stack/nesting limit. Past the cap the subtree is
+// dropped (fail closed, "strips too much").
+const MAX_DEPTH = 100;
+
 // Recursively copy only allow-listed nodes from $src into $dstParent (owned by $dst).
-function copy_allowed(DOMNode $src, DOMDocument $dst, DOMNode $dstParent, array $tags, array $attrs)
+function copy_allowed(DOMNode $src, DOMDocument $dst, DOMNode $dstParent, array $tags, array $attrs, int $depth = 0)
 {
+	if ($depth > MAX_DEPTH) {
+		return;
+	}
 	foreach ($src->childNodes as $node) {
 		if ($node->nodeType === XML_TEXT_NODE) {
 			$dstParent->appendChild($dst->createTextNode($node->nodeValue));
@@ -66,13 +85,13 @@ function copy_allowed(DOMNode $src, DOMDocument $dst, DOMNode $dstParent, array 
 					$el->setAttribute($attr, $val);
 				}
 			}
-			copy_allowed($node, $dst, $el, $tags, $attrs);
+			copy_allowed($node, $dst, $el, $tags, $attrs, $depth + 1);
 			$dstParent->appendChild($el);
 		} elseif (in_array($tag, DROP_WITH_CONTENT, true)) {
 			continue; // drop tag AND its content
 		} else {
 			// Unknown formatting tag: drop the tag, keep sanitized children (its text).
-			copy_allowed($node, $dst, $dstParent, $tags, $attrs);
+			copy_allowed($node, $dst, $dstParent, $tags, $attrs, $depth + 1);
 		}
 	}
 }
