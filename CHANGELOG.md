@@ -73,6 +73,16 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
   entries (#471). bind9 is a permanent ground-rule removal and the views were unreachable
   dead code (the services list is data-driven and never links them). Other ex-service view
   leftovers (e.g. `vsftpd/`) remain for a separate cleanup.
+- Pruned 36 app-specific web templates (72 files) from `templates/web/nginx/php-fpm/` that
+  the removed Software/App Installer had seeded (chevereto, cms_made_simple, codeigniter,
+  contao, craftcms, datalife_engine, dokuwiki, dolibarr, drupal\*, flarum\*, forgejo, gitea,
+  grav, joomla, mautic, modx, moodle, odoo, opencart, opengist, openproject, osticket, phpbb,
+  piwik, projectsend, pyrocms, sendy, symfony2-3, thunder, vvveb, webasyst, yourls). With no
+  installer to place these apps, the templates were dead weight. Kept the standard set we ship:
+  `wordpress*`, `laravel`, `magento`, `owncloud`, `prestashop`, `symfony4-5`, plus the base
+  `default`/`no-php`/`suspended`. The template list is directory-driven (`h-list-web-templates`),
+  so the panel selector and CLI update automatically; any pruned template can be re-imported from
+  `upstream/hestiacp` and re-adapted if ever needed.
 
 ## v0.12.0 (2026-07-30)
 

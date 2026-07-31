@@ -2,7 +2,7 @@
 # info: change web domain template
 # options: USER DOMAIN TEMPLATE [RESTART]
 #
-# example: h-change-web-domain-tpl admin acme.com opencart
+# example: h-change-web-domain-tpl admin acme.com wordpress
 #
 # This function changes template of the web configuration file. The content
 # of webdomain directories remains untouched.
