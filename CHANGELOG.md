@@ -23,7 +23,8 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
   `NOTICE` renders as raw HTML in the top bar (Alpine `x-html`) and callers interpolate values
   like a domain or backup filename into it, so `h-add-user-notification` now runs the body
   through an allow-list sanitizer (`func/internal/sanitize_html.php`: DOMDocument, default-deny,
-  keeps `p/span/code/a/strong/br` + safe `href`, drops script/`on*`/`javascript:`). `TOPIC` and
+  keeps `p/span/code/a/strong/br` + safe `href`, drops script/`on*`/`javascript:`); the panel
+  CLI PHP pool now enables `dom` for it (`hestia-php-confd`), else it degraded to escape-all. `TOPIC` and
   `NOTICE` also gain CR/LF and length validators so a value cannot corrupt the single-line
   `notifications.conf`. The shared `send_notice()` shell helper (the second writer of
   `notifications.conf`) sanitizes through the same path, so it is not an unguarded bypass.
