@@ -34,9 +34,8 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 check_args '2' "$#" 'USER BACKUP [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR]'
 is_format_valid 'user'
-# backup + the restore selectors are interpolated into the executed restore queue
-# (backup.pipe), so nothing may break out of the queued command (GHSA-2xw3 class). backup is
-# a plain archive name; the selectors may be comma-lists/'*'/'no', so only block escapes.
+# backup + selectors go into the executed backup.pipe (GHSA-2xw3 class). backup is a plain
+# archive name; selectors may be comma-lists/'*'/'no', so only block escapes.
 is_format_valid 'backup'
 is_no_quote_format "$web" 'web'
 is_no_quote_format "$dns" 'dns'

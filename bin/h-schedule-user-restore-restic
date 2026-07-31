@@ -30,9 +30,8 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 check_args '2' "$#" 'USER SNAPSHOT OBJECT VALUE'
 is_format_valid 'user'
-# snapshot + value are interpolated into the executed restore queue (backup.pipe), so a
-# quote/metachar must not break out of the queued command (GHSA-2xw3, root RCE). value is
-# validated per object type in the branch below.
+# snapshot/value go into the executed backup.pipe, so validate them or a quote breaks out
+# (GHSA-2xw3, root RCE). value is validated per object type below.
 is_object_format_valid "$snapshot" 'snapshot'
 is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"

@@ -22,9 +22,7 @@ source $HESTIA/func/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
-# NOTICE renders as raw HTML in the panel (Alpine x-html), so pass it through the allow-list
-# sanitizer before storing - drops script/on*/javascript: while keeping the p/span/code/a
-# formatting the notifications use. $HESTIA_PHP is set by func/main.sh.
+# NOTICE renders via x-html, so sanitize before storing (allow-list; drops script/on*/js:).
 notice=$("$HESTIA_PHP" "$HESTIA/func/internal/sanitize_html.php" "$3" | sed "s/'/%quote%/g")
 
 #----------------------------------------------------------#

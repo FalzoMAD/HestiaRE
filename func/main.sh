@@ -735,10 +735,8 @@ send_notice() {
 	notice=$2
 
 	if [ "$notify" = 'yes' ]; then
-		# NOTICE renders as raw HTML in the panel (Alpine x-html). send_notice is the SECOND
-		# writer of notifications.conf besides h-add-user-notification, so it must sanitize
-		# too or it is an unsanitized XSS bypass (#471). %quote%-encode like the h-* path so
-		# the single-quoted conf record stays intact.
+		# Second writer of notifications.conf besides h-add-user-notification: sanitize NOTICE
+		# (rendered via x-html) here too or it's an XSS bypass. %quote% keeps the record intact.
 		topic=$(echo "$topic" | sed "s/'/%quote%/g")
 		notice=$("$HESTIA_PHP" "$HESTIA/func/internal/sanitize_html.php" "$notice" | sed "s/'/%quote%/g")
 
@@ -1172,10 +1170,8 @@ is_no_new_line_format() {
 	fi
 }
 
-# Reject only the characters that can escape a single-quoted field interpolated into an
-# executed queue command ($CONF_DIR/queue/backup.pipe): a single quote breaks out of the
-# quoting, a CR/LF injects an extra queue entry (GHSA-2xw3 class). Deliberately permissive
-# otherwise, so restore selectors that are comma-lists, '*', 'no', or paths still pass.
+# Restore-queue selector guard: block only ' and CR/LF (they escape a single-quoted field in
+# the executed backup.pipe, GHSA-2xw3); comma-lists/'*'/'no'/paths must still pass.
 is_no_quote_format() {
 	if [[ "$1" == *\'* ]] || [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: quotes and line breaks are not allowed"
@@ -1190,9 +1186,7 @@ is_string_format_valid() {
 	is_no_new_line_format "$1"
 }
 
-# Notification topic validator: plain text, single line, bounded. TOPIC renders with Alpine
-# x-text (escaped), but a line break would still corrupt the single-line notifications.conf
-# record, so reject CR/LF and an unreasonable length here.
+# TOPIC is one field in the single-line notifications.conf record: reject CR/LF, cap length.
 is_notification_topic_valid() {
 	if [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
 		check_result "$E_INVALID" "invalid topic format :: line breaks are not allowed"
@@ -1202,9 +1196,7 @@ is_notification_topic_valid() {
 	fi
 }
 
-# Notification body validator. NOTICE is HTML-sanitized (func/internal/sanitize_html.php)
-# before storage; this only guards the flat-file notifications.conf format, which breaks on
-# a multi-line or oversized value.
+# NOTICE is HTML-sanitized elsewhere; here just guard the single-line conf format (CR/LF, length).
 is_notification_notice_valid() {
 	if [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
 		check_result "$E_INVALID" "invalid notice format :: line breaks are not allowed"

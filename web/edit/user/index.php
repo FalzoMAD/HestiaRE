@@ -22,10 +22,8 @@ if ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) {
 	$v_username = $_SESSION["user"];
 }
 
-// Fail closed: without a known ROOT_USER the guard below cannot identify the account it
-// protects, so an admin editing anyone but themselves is refused rather than silently
-// allowed. ROOT_USER comes from h-list-sys-config via load_hestia_config(), so this only
-// trips on a broken session/config - never in normal operation. Runs before POST handling.
+// Fail closed: if ROOT_USER is unknown the guard below can't identify what it protects, so
+// refuse an admin editing anyone but themselves. Only trips on a broken session/config.
 if (
 	$_SESSION["userContext"] === "admin" &&
 	empty($_SESSION["ROOT_USER"]) &&
@@ -35,10 +33,8 @@ if (
 	exit();
 }
 
-// Only a session whose REAL logged-in user IS the ROOT_USER may edit the ROOT_USER
-// account. #438: the admin gate is the effective userContext, but the identity anchor is
-// the durable $_SESSION["user"] (impersonation lives in $_SESSION["look"], never in
-// $_SESSION["user"]), so this also blocks an impersonating admin.
+// Only the real ROOT_USER may edit the ROOT_USER account. #438: gate on effective
+// userContext but anchor identity on the durable $_SESSION["user"] (impersonation is in "look").
 if (
 	$_SESSION["userContext"] === "admin" &&
 	!empty($_SESSION["ROOT_USER"]) &&
@@ -124,8 +120,7 @@ if (!empty($_POST["save"])) {
 	// Check token
 	verify_csrf($_POST);
 
-	// #5547: guard the POST/save path too, not just the page render above - a crafted
-	// POST would otherwise let a non-ROOT_USER admin modify the ROOT_USER account.
+	// #5547: same guard on the POST path - the page-render guard alone leaves a crafted POST open.
 	if (
 		$_SESSION["userContext"] === "admin" &&
 		!empty($_SESSION["ROOT_USER"]) &&
