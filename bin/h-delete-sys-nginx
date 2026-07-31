@@ -20,5 +20,14 @@ source $HESTIA/func/web-model.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
+# CrowdSec is nginx-only with no apache path, so moving the model off nginx would
+# strand it. Refuse until the addon is torn down first (h-delete-sys-crowdsec, #123) -
+# a deliberate two-step teardown (#186). Artefact- and flag-based, so a half-install trips.
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+if [ -f /etc/nginx/conf.d/crowdsec_init.conf ] \
+	|| [ "${COMPONENT_ADDON_CROWDSEC:-}" = "true" ] || [ "${COMPONENT_ADDON_CROWDSEC:-}" = "yes" ]; then
+	check_result "$E_INUSE" "CrowdSec is active and depends on nginx; remove it first (h-delete-sys-crowdsec), then retry"
+fi
+
 web_component_main delete nginx "$@"
 exit

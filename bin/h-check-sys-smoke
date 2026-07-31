@@ -334,6 +334,7 @@ if echo "$DB_SYSTEM" | grep -qw 'pgsql' || is_on "${COMPONENT_DB_POSTGRESQL:-}";
 fi
 is_on "${COMPONENT_ADDON_FAIL2BAN:-}" && check_service fail2ban "fail2ban"
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
+is_on "${COMPONENT_ADDON_CROWDSEC:-}" && check_service crowdsec "crowdsec"
 # adminer/webmail: no own daemon — served by a caddy FPM pool, so check the socket
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
