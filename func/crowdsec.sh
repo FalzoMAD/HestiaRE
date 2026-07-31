@@ -79,6 +79,38 @@ crowdsec_apply() {
 	echo "CrowdSec: applied (nginx front, bouncer hestia-nginx)."
 }
 
+# Render the per-domain fragment (Layer-A access_by_lua + Layer-B rate-limit/bot policy)
+# into the public nginx vhost dir, at server scope. Reads the domain's own flags; called
+# by the h-*-web-domain-crowdsec commands and by the web rebuild. Removed when empty, so
+# the `include ...*;` glob is simply a no-op for unprotected domains.
+crowdsec_render_domain_fragment() {
+	local user="$1" domain="$2" sys
+	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
+	[ "$sys" = "nginx" ] || return 0
+
+	local rec
+	rec=$(grep -m1 "DOMAIN='$domain'" "$CONF_DIR/users/$user/web.conf" 2> /dev/null)
+	[ -n "$rec" ] || return 0
+	local cs
+	cs=$(sed -n "s/.*CROWDSEC='\([^']*\)'.*/\1/p" <<< "$rec")
+
+	local frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf" tmp
+	tmp=$(mktemp)
+	if [ "$cs" = "yes" ]; then
+		# rewrite phase (not access): runs before auth_basic (401), the forcessl
+		# `return 301`, and limit_req - so a banned IP is refused first, everywhere.
+		echo 'rewrite_by_lua_block { require("hestia_bouncer").allow() }' >> "$tmp"
+	fi
+
+	if [ -s "$tmp" ]; then
+		mv -f "$tmp" "$frag"
+		chown root:"$user" "$frag"
+		chmod 640 "$frag"
+	else
+		rm -f "$tmp" "$frag"
+	fi
+}
+
 # Remove the nginx-side wiring (the #120 switch away from nginx, later h-delete-sys-crowdsec).
 # Leaves the engine + /etc/crowdsec state in place (saved state).
 crowdsec_remove_nginx() {

@@ -1,0 +1,62 @@
+#!/bin/bash
+# info: disable CrowdSec protection for a web domain
+# options: USER DOMAIN [RESTART] [QUIET]
+#
+# example: h-delete-web-domain-crowdsec admin acme.com
+#
+# Disables the CrowdSec ban check on the domain's public nginx vhost.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+restart="$3"
+quiet="$4"
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/crowdsec.sh
+source $HESTIA/func/crowdsec.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_object_valid 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+
+update_object_value 'web' 'DOMAIN' "$domain" '$CROWDSEC' 'no'
+
+crowdsec_render_domain_fragment "$user" "$domain"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-restart-proxy "$restart"
+check_result $? "Proxy restart failed" > /dev/null
+
+if [ "$quiet" != "yes" ]; then
+	$BIN/h-log-action "$user" "Info" "Web" "CrowdSec protection disabled (Domain: $domain)."
+fi
+log_event "$OK" "$ARGUMENTS"
+
+exit
