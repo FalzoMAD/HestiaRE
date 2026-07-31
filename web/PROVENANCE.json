@@ -1059,22 +1059,6 @@
       "note": ""
     },
     {
-      "path": "edit/server/bind9/index.php",
-      "source_type": "derived",
-      "upstream_path": "web/edit/server/bind9/index.php",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
-      "divergence": {
-        "upstream_lines": 78,
-        "our_lines": 78,
-        "added": 4,
-        "removed": 4,
-        "pct": 5,
-        "measured_at": "2026-07-30"
-      },
-      "note": ""
-    },
-    {
       "path": "edit/server/clamav-daemon/index.php",
       "source_type": "derived",
       "upstream_path": "web/edit/server/clamav-daemon/index.php",
@@ -1287,22 +1271,6 @@
         "added": 3,
         "removed": 3,
         "pct": 4,
-        "measured_at": "2026-07-30"
-      },
-      "note": ""
-    },
-    {
-      "path": "edit/server/named/index.php",
-      "source_type": "verbatim",
-      "upstream_path": "web/edit/server/named/index.php",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
-      "divergence": {
-        "upstream_lines": 59,
-        "our_lines": 59,
-        "added": 2,
-        "removed": 2,
-        "pct": 3,
         "measured_at": "2026-07-30"
       },
       "note": ""
@@ -4398,22 +4366,6 @@
         "added": 3,
         "removed": 176,
         "pct": 6,
-        "measured_at": "2026-07-30"
-      },
-      "note": ""
-    },
-    {
-      "path": "templates/pages/edit_server_bind9.php",
-      "source_type": "verbatim",
-      "upstream_path": "web/templates/pages/edit_server_bind9.php",
-      "upstream_ref": "e2d0767",
-      "last_reconciled": "2026-07-30",
-      "divergence": {
-        "upstream_lines": 45,
-        "our_lines": 45,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
         "measured_at": "2026-07-30"
       },
       "note": ""

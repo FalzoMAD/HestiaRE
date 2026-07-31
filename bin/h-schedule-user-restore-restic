@@ -30,6 +30,9 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 check_args '2' "$#" 'USER SNAPSHOT OBJECT VALUE'
 is_format_valid 'user'
+# snapshot/value go into the executed backup.pipe, so validate them or a quote breaks out
+# (GHSA-2xw3, root RCE). value is validated per object type below.
+is_object_format_valid "$snapshot" 'snapshot'
 is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 is_backup_scheduled 'restore'
@@ -47,10 +50,13 @@ if [ -z "$object" ]; then
 	echo "$BIN/h-restore-user-restic '$user' '$snapshot' '' '' '' '' '' '' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe
 else
 	if [ "$object" = "web" ]; then
+		is_domain_format_valid "$value" 'value'
 		echo "$BIN/h-restore-web-domain-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe
 	elif [ "$object" = "mail" ]; then
+		is_domain_format_valid "$value" 'value'
 		echo "$BIN/h-restore-mail-domain-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe
 	elif [ "$object" = "db" ]; then
+		is_database_format_valid "$value" 'value'
 		echo "$BIN/h-restore-database-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe
 	elif [ "$object" = "cron" ]; then
 		echo "$BIN/h-restore-cron-restic '$user' '$snapshot' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe
