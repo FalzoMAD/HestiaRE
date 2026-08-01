@@ -300,6 +300,14 @@ install_web() {
 	esac
 	# apache backend needs its packages+mods in place before the keyset lands
 	case "$web_model" in apache | both) configure_apache2 ;; esac
+	# apache-only web Layer-B: native mod_qos rate-limit (429), driven per-domain by the
+	# RATE_LIMIT/BOT_POLICY flags. Only apache-only (in 'both' nginx fronts and does Layer B).
+	if [ "$web_model" = "apache" ]; then
+		hestia_apt -y install libapache2-mod-qos || true
+		a2enmod qos > /dev/null 2>&1
+		mkdir -p /etc/apache2/conf.d
+		cp -f "$HESTIA/share/crowdsec/apache/ratelimit.conf" /etc/apache2/conf.d/crowdsec_ratelimit.conf
+	fi
 	# One keyset table (func/web-model.sh), shared with the live model switch
 	local kv
 	while IFS= read -r kv; do
@@ -525,16 +533,23 @@ install_security() {
 		systemctl start fail2ban
 	fi
 
-	# crowdsec — minimal install; full integration tracked in #123.
+	# crowdsec — nginx-only web protection (#186); skipped on an apache-only model.
 	if is_on "${COMPONENT_ADDON_CROWDSEC:-}"; then
-		echo "[ * ] Installing CrowdSec (minimal — see #123)..."
-		hestia_apt -y install crowdsec || true
-		# move the local API off :8080 (collides with apache2) to :8054
-		if [ -f /etc/crowdsec/config.yaml ]; then
-			sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/config.yaml
-			[ -f /etc/crowdsec/local_api_credentials.yaml ] \
-				&& sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/local_api_credentials.yaml
-			systemctl restart crowdsec 2> /dev/null || true
+		cs_pub="$PROXY_SYSTEM"
+		[ -z "$cs_pub" ] && cs_pub="$WEB_SYSTEM"
+		if [ "$cs_pub" = "nginx" ]; then
+			echo "[ * ] Installing CrowdSec..."
+			hestia_apt -y install crowdsec || true
+			# move the local API off :8080 (collides with apache2) to :8054
+			if [ -f /etc/crowdsec/config.yaml ]; then
+				sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/config.yaml
+				[ -f /etc/crowdsec/local_api_credentials.yaml ] \
+					&& sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/local_api_credentials.yaml
+				systemctl restart crowdsec 2> /dev/null || true
+			fi
+			# detection + nginx Layer-A/B wiring (collections, bouncer, http glue)
+			source "$HESTIA/func/crowdsec.sh"
+			crowdsec_apply || echo "[ ! ] CrowdSec wiring reported an issue (non-fatal)"
 		fi
 	fi
 

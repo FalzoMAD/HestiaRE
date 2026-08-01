@@ -9,6 +9,33 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Added
+
+- CrowdSec web protection, Phase 1 (#186). CrowdSec becomes a real, nginx-gated addon (offered
+  only when nginx is in the model; apache-only never runs it). It has two per-domain layers,
+  driven by three `web.conf` flags (`CROWDSEC`, `RATE_LIMIT`, `BOT_POLICY`) set via
+  `h-add/delete-web-domain-crowdsec`, `h-change-web-domain-ratelimit` and
+  `h-change-web-domain-botpolicy`:
+  - **Layer A (nginx-only/both)** enforces CrowdSec ban decisions as an HTTP 403 at the nginx
+    front. Rather than vendor the ~14-file upstream `lua-cs-bouncer` (captcha/appsec/stream we
+    never use), it ships an own ~70-line dependency-free LuaJIT bouncer
+    (`share/crowdsec/lua/hestia_bouncer.lua`): a raw-cosocket query to the local LAPI
+    (`127.0.0.1:8054`), a shared-dict cache and fail-open behaviour so LAPI trouble never takes
+    sites down. It runs in the rewrite phase (before `auth_basic`, the forcessl redirect and the
+    rate-limit). Needs only the OS `libnginx-mod-http-lua`.
+  - **Layer B (all models)** is native rate-limiting that returns **429** plus a per-domain bot
+    policy (`pass`/`throttle`/`block`) for recognised search/AI crawlers - so one domain can
+    welcome Googlebot for indexing while another throttles or blocks it. nginx uses `limit_req`
+    zones; apache-only uses `mod_qos` (installed by the web setup) with `QS_ErrorResponseCode 429`.
+  - Detection: the engine gets curated collections + acquisition on the public web logs
+    (`share/crowdsec/`); an apply helper (`func/crowdsec.sh`) wires it all up idempotently and is
+    shared by the installer, the #120 model switch and the future #123 packaging. The wizard adds
+    a CAPI (community blocklist) opt-in; a smoke check and a guard that blocks removing nginx while
+    CrowdSec is active (`h-delete-sys-nginx`, with a two-step teardown path) round it out.
+  Rate/burst thresholds and the good-bot list ship as placeholders to be curated before release.
+  fail2ban is untouched and runs in parallel; the L3 firewall-bouncer and the fail2ban symbiosis
+  are planned follow-up phases.
+
 ### Security
 
 Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).

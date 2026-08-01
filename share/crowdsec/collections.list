@@ -1,0 +1,9 @@
+# CrowdSec collections for HestiaRE web protection (#186, Phase 1).
+# Applied by the CrowdSec apply helper (cscli collections install), one per line,
+# blank lines and # comments ignored. Scope is the nginx web tier only; ssh/ftp/mail
+# stay with fail2ban (parallel). crowdsecurity/nginx already pulls base-http-scenarios
+# as a dependency; it is listed explicitly so the curated set is self-documenting.
+crowdsecurity/nginx
+crowdsecurity/base-http-scenarios
+crowdsecurity/http-cve
+crowdsecurity/whitelist-good-actors
