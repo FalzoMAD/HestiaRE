@@ -54,7 +54,7 @@ fi
 parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
 
 if [ -z "$CROWDSEC" ]; then
-	add_object_key "web" 'DOMAIN' "$domain" 'CROWDSEC' 'DIR_LIST'
+	add_object_key "web" 'DOMAIN' "$domain" 'CROWDSEC' 'SUSPENDED'
 fi
 update_object_value 'web' 'DOMAIN' "$domain" '$CROWDSEC' 'yes'
 
@@ -64,6 +64,8 @@ crowdsec_render_domain_fragment "$user" "$domain"
 #                       Hestia                             #
 #----------------------------------------------------------#
 
+$BIN/h-restart-web "$restart"
+check_result $? "Web restart failed" > /dev/null
 $BIN/h-restart-proxy "$restart"
 check_result $? "Proxy restart failed" > /dev/null
 

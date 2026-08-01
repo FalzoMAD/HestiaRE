@@ -8,6 +8,7 @@
 <VirtualHost %ip%:%web_port%>
 
     ServerName %domain_idn%
+    IncludeOptional %home%/%user%/conf/web/%domain%/crowdsec.apache2.conf*
     %alias_string%
     ServerAdmin %email%
     DocumentRoot %docroot%

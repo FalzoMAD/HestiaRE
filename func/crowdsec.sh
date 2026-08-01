@@ -104,35 +104,57 @@ crowdsec_apply() {
 crowdsec_render_domain_fragment() {
 	local user="$1" domain="$2" sys
 	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
-	[ "$sys" = "nginx" ] || return 0
 
 	local rec
 	rec=$(grep -m1 "DOMAIN='$domain'" "$CONF_DIR/users/$user/web.conf" 2> /dev/null)
 	[ -n "$rec" ] || return 0
-	local cs rl bp z
+	local cs rl bp z ev
 	cs=$(sed -n "s/.*CROWDSEC='\([^']*\)'.*/\1/p" <<< "$rec")
 	rl=$(sed -n "s/.*RATE_LIMIT='\([^']*\)'.*/\1/p" <<< "$rec")
 	bp=$(sed -n "s/.*BOT_POLICY='\([^']*\)'.*/\1/p" <<< "$rec")
 	[ -n "$bp" ] || bp="pass"
 
-	local frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf" tmp
+	# Known legitimate crawlers - kept in sync with share/crowdsec/nginx/ratelimit.conf.
+	local goodbot='(googlebot|google-inspectiontool|google-extended|bingbot|duckduckbot|yandex(bot|images)|baiduspider|applebot|slurp|claudebot|claude-web|gptbot|oai-searchbot|chatgpt-user|perplexitybot)'
+	local frag tmp
 	tmp=$(mktemp)
 
-	# Layer A: CrowdSec ban check. rewrite phase (not access): runs before auth_basic
-	# (401), the forcessl `return 301`, and limit_req - a banned IP is refused first.
-	if [ "$cs" = "yes" ]; then
-		echo 'rewrite_by_lua_block { require("hestia_bouncer").allow() }' >> "$tmp"
+	if [ "$sys" = "nginx" ]; then
+		frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf"
+		# Layer A: ban check in the rewrite phase (before auth_basic 401, the forcessl
+		# 301 and limit_req) - a banned IP is refused first, everywhere.
+		[ "$cs" = "yes" ] && echo 'rewrite_by_lua_block { require("hestia_bouncer").allow() }' >> "$tmp"
+		# Layer B: bot policy + rate-limit (429). The zone encodes throttle-vs-pass;
+		# $cs_good_bot (a global map) is the only part evaluated per request.
+		[ "$bp" = "block" ] && echo 'if ($cs_good_bot) { return 403; }' >> "$tmp"
+		case "$rl" in
+			lenient) [ "$bp" = "pass" ] && z="cs_lenient_pass" || z="cs_lenient"
+				echo "limit_req zone=$z burst=60 nodelay;" >> "$tmp" ;;
+			strict) [ "$bp" = "pass" ] && z="cs_strict_pass" || z="cs_strict"
+				echo "limit_req zone=$z burst=20 nodelay;" >> "$tmp" ;;
+		esac
+	elif [ "$sys" = "apache2" ]; then
+		# apache-only: Layer B only (no CrowdSec/Layer A on apache). mod_qos returns 429
+		# via a server-level counter keyed on the QS_Event_* var this vhost sets.
+		frag="$HOMEDIR/$user/conf/web/$domain/crowdsec.apache2.conf"
+		case "$rl" in lenient) ev="QS_Event_lenient" ;; strict) ev="QS_Event_strict" ;; esac
+		if [ "$bp" = "block" ] || [ -n "$ev" ]; then
+			echo "BrowserMatchNoCase \"$goodbot\" cs_goodbot" >> "$tmp"
+		fi
+		if [ "$bp" = "block" ]; then
+			echo "<If \"reqenv('cs_goodbot') == '1'\">" >> "$tmp"
+			printf '\tRequire all denied\n' >> "$tmp"
+			echo "</If>" >> "$tmp"
+		fi
+		if [ -n "$ev" ]; then
+			echo "SetEnvIf Request_URI \".\" $ev" >> "$tmp"
+			# pass: exempt recognised good bots from the rate-limit (drop the event var).
+			[ "$bp" = "pass" ] && echo "SetEnvIf cs_goodbot 1 !$ev" >> "$tmp"
+		fi
+	else
+		rm -f "$tmp"
+		return 0
 	fi
-
-	# Layer B: bot policy + rate-limit (429). The zone encodes throttle-vs-pass, chosen
-	# here; $cs_good_bot (a global map) is the only part evaluated at request time.
-	[ "$bp" = "block" ] && echo 'if ($cs_good_bot) { return 403; }' >> "$tmp"
-	case "$rl" in
-		lenient) [ "$bp" = "pass" ] && z="cs_lenient_pass" || z="cs_lenient"
-			echo "limit_req zone=$z burst=60 nodelay;" >> "$tmp" ;;
-		strict) [ "$bp" = "pass" ] && z="cs_strict_pass" || z="cs_strict"
-			echo "limit_req zone=$z burst=20 nodelay;" >> "$tmp" ;;
-	esac
 
 	if [ -s "$tmp" ]; then
 		mv -f "$tmp" "$frag"

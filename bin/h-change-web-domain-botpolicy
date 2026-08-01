@@ -52,7 +52,7 @@ esac
 parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
 
 if [ -z "$BOT_POLICY" ]; then
-	add_object_key "web" 'DOMAIN' "$domain" 'BOT_POLICY' 'DIR_LIST'
+	add_object_key "web" 'DOMAIN' "$domain" 'BOT_POLICY' 'SUSPENDED'
 fi
 update_object_value 'web' 'DOMAIN' "$domain" '$BOT_POLICY' "$value"
 
@@ -62,6 +62,8 @@ crowdsec_render_domain_fragment "$user" "$domain"
 #                       Hestia                             #
 #----------------------------------------------------------#
 
+$BIN/h-restart-web "$restart"
+check_result $? "Web restart failed" > /dev/null
 $BIN/h-restart-proxy "$restart"
 check_result $? "Proxy restart failed" > /dev/null
 

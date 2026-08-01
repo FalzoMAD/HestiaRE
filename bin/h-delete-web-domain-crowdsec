@@ -51,6 +51,8 @@ crowdsec_render_domain_fragment "$user" "$domain"
 #                       Hestia                             #
 #----------------------------------------------------------#
 
+$BIN/h-restart-web "$restart"
+check_result $? "Web restart failed" > /dev/null
 $BIN/h-restart-proxy "$restart"
 check_result $? "Proxy restart failed" > /dev/null
 
