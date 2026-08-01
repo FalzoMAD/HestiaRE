@@ -13,6 +13,18 @@ crowdsec_public_web() {
 	fi
 }
 
+# Run the engine fully local: comment out the CAPI online_client so there is no
+# central-blocklist pull or signal sharing (the wizard's local-only choice). Idempotent.
+crowdsec_disable_capi() {
+	local cfg="/etc/crowdsec/config.yaml"
+	[ -f "$cfg" ] || return 0
+	grep -qE '^[[:space:]]*credentials_path:.*online_api_credentials' "$cfg" || return 0
+	sed -i -E \
+		-e 's|^([[:space:]]*)(online_client:.*)|\1# \2 (local-only, #186)|' \
+		-e 's|^([[:space:]]*)(credentials_path:[[:space:]]*/etc/crowdsec/online_api_credentials.*)|\1# \2|' \
+		"$cfg"
+}
+
 # Install + wire CrowdSec detection and the nginx Layer-A bouncer. Safe to re-run.
 crowdsec_apply() {
 	local share="$HESTIA/share/crowdsec"
@@ -70,6 +82,10 @@ crowdsec_apply() {
 	cp -f "$share/nginx/crowdsec_init.conf" /etc/nginx/conf.d/crowdsec_init.conf
 	# Layer-B rate-limit zones + bot map (http context, referenced by per-domain fragments).
 	cp -f "$share/nginx/ratelimit.conf" /etc/nginx/conf.d/crowdsec_ratelimit.conf
+
+	# CAPI: 'local' runs the engine self-hosted (no central blocklist/telemetry); default enrolls.
+	[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf" 2> /dev/null
+	[ "${COMPONENT_CROWDSEC_CAPI:-enroll}" = "local" ] && crowdsec_disable_capi
 
 	systemctl restart crowdsec > /dev/null 2>&1 || true
 	if nginx -t > /dev/null 2>&1; then
