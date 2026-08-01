@@ -72,7 +72,10 @@ crowdsec_apply() {
 				dict = "crowdsec_cache",
 			}
 		EOF
-		chmod 640 "$keyfile"
+		# 600: the file holds the LAPI API key and is only ever read by nginx's master
+		# process (root) in init_by_lua_block at (re)load, before workers fork - so no
+		# group/other access is needed.
+		chmod 600 "$keyfile"
 	fi
 
 	# Bouncer runtime + http-block init glue (conf.d is included in http{} before the
@@ -124,14 +127,26 @@ crowdsec_render_domain_fragment() {
 		# Layer A: ban check in the rewrite phase (before auth_basic 401, the forcessl
 		# 301 and limit_req) - a banned IP is refused first, everywhere.
 		[ "$cs" = "yes" ] && echo 'rewrite_by_lua_block { require("hestia_bouncer").allow() }' >> "$tmp"
-		# Layer B: bot policy + rate-limit (429). The zone encodes throttle-vs-pass;
-		# $cs_good_bot (a global map) is the only part evaluated per request.
+		# Layer B: bot policy + rate-limit (429). block -> good bots 403. pass -> humans
+		# on the normal per-IP zone + good bots on a separate BOUNDED bot zone (never a full
+		# exemption). throttle -> one shared per-IP zone for everyone. $cs_good_bot is the
+		# only part evaluated per request.
 		[ "$bp" = "block" ] && echo 'if ($cs_good_bot) { return 403; }' >> "$tmp"
 		case "$rl" in
-			lenient) [ "$bp" = "pass" ] && z="cs_lenient_pass" || z="cs_lenient"
-				echo "limit_req zone=$z burst=60 nodelay;" >> "$tmp" ;;
-			strict) [ "$bp" = "pass" ] && z="cs_strict_pass" || z="cs_strict"
-				echo "limit_req zone=$z burst=20 nodelay;" >> "$tmp" ;;
+			lenient)
+				if [ "$bp" = "pass" ]; then
+					echo "limit_req zone=cs_lenient_h burst=60 nodelay;" >> "$tmp"
+					echo "limit_req zone=cs_bot burst=200 nodelay;" >> "$tmp"
+				else
+					echo "limit_req zone=cs_lenient burst=60 nodelay;" >> "$tmp"
+				fi ;;
+			strict)
+				if [ "$bp" = "pass" ]; then
+					echo "limit_req zone=cs_strict_h burst=20 nodelay;" >> "$tmp"
+					echo "limit_req zone=cs_bot burst=200 nodelay;" >> "$tmp"
+				else
+					echo "limit_req zone=cs_strict burst=20 nodelay;" >> "$tmp"
+				fi ;;
 		esac
 	elif [ "$sys" = "apache2" ]; then
 		# apache-only: Layer B only (no CrowdSec/Layer A on apache). mod_qos returns 429
@@ -148,8 +163,12 @@ crowdsec_render_domain_fragment() {
 		fi
 		if [ -n "$ev" ]; then
 			echo "SetEnvIf Request_URI \".\" $ev" >> "$tmp"
-			# pass: exempt recognised good bots from the rate-limit (drop the event var).
-			[ "$bp" = "pass" ] && echo "SetEnvIf cs_goodbot 1 !$ev" >> "$tmp"
+			# pass: good bots leave the human counter and enter the bounded bot counter -
+			# never a full exemption, so a spoofed UA is still capped.
+			if [ "$bp" = "pass" ]; then
+				echo "SetEnvIf cs_goodbot 1 !$ev" >> "$tmp"
+				echo "SetEnvIf cs_goodbot 1 QS_Event_bot" >> "$tmp"
+			fi
 		fi
 	else
 		rm -f "$tmp"
