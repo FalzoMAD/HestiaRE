@@ -22,15 +22,24 @@ if ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) {
 	$v_username = $_SESSION["user"];
 }
 
-// Prevent other users with admin privileges from editing properties of default 'admin' user
+// Fail closed: if ROOT_USER is unknown the guard below can't identify what it protects, so
+// refuse an admin editing anyone but themselves. Only trips on a broken session/config.
 if (
-	($_SESSION["userContext"] === "admin" &&
-		$_SESSION["look"] != "" &&
-		$user == $_SESSION["ROOT_USER"]) ||
-	($_SESSION["userContext"] === "admin" &&
-		!isset($_SESSION["look"]) &&
-		$user == "admin" &&
-		$_SESSION["user"] != $_SESSION["ROOT_USER"])
+	$_SESSION["userContext"] === "admin" &&
+	empty($_SESSION["ROOT_USER"]) &&
+	$v_username !== $_SESSION["user"]
+) {
+	header("Location: /list/user/");
+	exit();
+}
+
+// Only the real ROOT_USER may edit the ROOT_USER account. #438: gate on effective
+// userContext but anchor identity on the durable $_SESSION["user"] (impersonation is in "look").
+if (
+	$_SESSION["userContext"] === "admin" &&
+	!empty($_SESSION["ROOT_USER"]) &&
+	$user === $_SESSION["ROOT_USER"] &&
+	$_SESSION["user"] !== $_SESSION["ROOT_USER"]
 ) {
 	header("Location: /list/user/");
 	exit();
@@ -110,6 +119,17 @@ unset($output);
 if (!empty($_POST["save"])) {
 	// Check token
 	verify_csrf($_POST);
+
+	// #5547: same guard on the POST path - the page-render guard alone leaves a crafted POST open.
+	if (
+		$_SESSION["userContext"] === "admin" &&
+		!empty($_SESSION["ROOT_USER"]) &&
+		$v_username === $_SESSION["ROOT_USER"] &&
+		$_SESSION["user"] !== $_SESSION["ROOT_USER"]
+	) {
+		header("Location: /list/user/");
+		exit();
+	}
 
 	// Change password
 	if (!empty($_POST["v_password"]) && empty($_SESSION["error_msg"])) {
@@ -330,7 +350,7 @@ if (!empty($_POST["save"])) {
 		if (
 			$v_role != $_POST["v_role"] &&
 			$_SESSION["userContext"] === "admin" &&
-			$v_username != "admin" &&
+			$v_username != $_SESSION["ROOT_USER"] &&
 			empty($_SESSION["error_msg"])
 		) {
 			if (!empty($_POST["v_role"])) {

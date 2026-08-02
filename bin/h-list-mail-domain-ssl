@@ -29,6 +29,8 @@ format_domain_idn
 
 # JSON list function
 json_list() {
+	# Cert issuer is free text and may contain " or \, which would break the JSON (#5524).
+	issuer=$(echo "$issuer" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
 	echo '{'
 	echo -e "\t\"$domain\": {"
 	echo "        \"CRT\": \"$crt\","

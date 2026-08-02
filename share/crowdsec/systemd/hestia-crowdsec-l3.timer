@@ -1,0 +1,14 @@
+# HestiaRE CrowdSec L3 refresh cadence. ~45s is cheap (the filtered set is small) and
+# well within tolerance: L7 (Layer A) already blocks banned IPs on the HTTP request live, so L3
+# is the SYN-level backstop, not the fast path.
+[Unit]
+Description=HestiaRE CrowdSec L3 ipset refresh timer
+
+[Timer]
+OnBootSec=45
+OnUnitActiveSec=45
+AccuracySec=10
+Unit=hestia-crowdsec-l3.service
+
+[Install]
+WantedBy=timers.target

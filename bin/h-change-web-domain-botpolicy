@@ -1,0 +1,73 @@
+#!/bin/bash
+# info: set the CrowdSec bot policy for a web domain
+# options: USER DOMAIN POLICY [RESTART]
+#
+# example: h-change-web-domain-botpolicy admin acme.com throttle
+#
+# Sets how recognised good bots (search/AI crawlers) are handled on the domain:
+# pass (welcome, rate-limit exempt) | throttle (rate-limited like anyone) | block (403).
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+value=$3
+restart="$4"
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/crowdsec.sh
+source $HESTIA/func/crowdsec.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '3' "$#" 'USER DOMAIN POLICY [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+check_hestia_demo_mode
+
+case "$value" in
+	pass | throttle | block) ;;
+	*) check_result "$E_INVALID" "Invalid policy '$value' (use pass, throttle or block)" ;;
+esac
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+
+if [ -z "$BOT_POLICY" ]; then
+	add_object_key "web" 'DOMAIN' "$domain" 'BOT_POLICY' 'SUSPENDED'
+fi
+update_object_value 'web' 'DOMAIN' "$domain" '$BOT_POLICY' "$value"
+
+crowdsec_render_domain_fragment "$user" "$domain"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-restart-web "$restart"
+check_result $? "Web restart failed" > /dev/null
+$BIN/h-restart-proxy "$restart"
+check_result $? "Proxy restart failed" > /dev/null
+
+$BIN/h-log-action "$user" "Info" "Web" "CrowdSec bot policy set to $value (Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

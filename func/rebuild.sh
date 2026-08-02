@@ -330,6 +330,11 @@ rebuild_web_domain_conf() {
 		$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
 	fi
 
+	# Re-render the CrowdSec per-domain fragment from the domain flags (self-guards on
+	# nginx front + writes nothing when unprotected).
+	type crowdsec_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/func/crowdsec.sh
+	crowdsec_render_domain_fragment "$user" "$domain"
+
 	# Re-apply directory listing (apache Options -Indexes flip lives only in the
 	# regenerated vhost, so without this the rebuild resets it to the template default)
 	if [ "$DIR_LIST" = 'yes' ]; then

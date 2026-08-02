@@ -735,6 +735,11 @@ send_notice() {
 	notice=$2
 
 	if [ "$notify" = 'yes' ]; then
+		# Second writer of notifications.conf besides h-add-user-notification: sanitize NOTICE
+		# (rendered via x-html) here too or it's an XSS bypass. %quote% keeps the record intact.
+		topic=$(echo "$topic" | sed "s/'/%quote%/g")
+		notice=$("$HESTIA_PHP" "$HESTIA/func/internal/sanitize_html.php" "$notice" | sed "s/'/%quote%/g")
+
 		touch $USER_DATA/notifications.conf
 		chmod 660 $USER_DATA/notifications.conf
 
@@ -1165,12 +1170,40 @@ is_no_new_line_format() {
 	fi
 }
 
+# Restore-queue selector guard: block only ' and CR/LF (they escape a single-quoted field in
+# the executed backup.pipe, GHSA-2xw3); comma-lists/'*'/'no'/paths must still pass.
+is_no_quote_format() {
+	if [[ "$1" == *\'* ]] || [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
+		check_result "$E_INVALID" "invalid $2 format :: quotes and line breaks are not allowed"
+	fi
+}
+
 is_string_format_valid() {
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|<|>|?|/|\|\"|'|;|%|\`]"
 	if [[ "$1" =~ $exclude ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
 	fi
 	is_no_new_line_format "$1"
+}
+
+# TOPIC is one field in the single-line notifications.conf record: reject CR/LF, cap length.
+is_notification_topic_valid() {
+	if [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
+		check_result "$E_INVALID" "invalid topic format :: line breaks are not allowed"
+	fi
+	if [ ${#1} -gt 255 ]; then
+		check_result "$E_INVALID" "invalid topic format :: too long"
+	fi
+}
+
+# NOTICE is HTML-sanitized elsewhere; here just guard the single-line conf format (CR/LF, length).
+is_notification_notice_valid() {
+	if [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
+		check_result "$E_INVALID" "invalid notice format :: line breaks are not allowed"
+	fi
+	if [ ${#1} -gt 4000 ]; then
+		check_result "$E_INVALID" "invalid notice format :: too long"
+	fi
 }
 is_cron_command_valid_format() {
 	if [[ ! "$1" =~ ^[^\`]*?$ ]]; then
@@ -1508,6 +1541,7 @@ is_format_valid() {
 				nat_ip) is_ip_format_valid "$arg" ;;
 				netmask) is_netmask_format_valid "$arg" 'netmask' ;;
 				newid) is_int_format_valid "$arg" 'id' ;;
+				notice) is_notification_notice_valid "$arg" ;;
 				ns1) is_domain_format_valid "$arg" 'ns1' ;;
 				ns2) is_domain_format_valid "$arg" 'ns2' ;;
 				ns3) is_domain_format_valid "$arg" 'ns3' ;;
@@ -1541,6 +1575,7 @@ is_format_valid() {
 				stats_user) is_user_format_valid "$arg" "$arg_name" ;;
 				template) is_object_format_valid "$arg" "$arg_name" ;;
 				theme) is_common_format_valid "$arg" "$arg_name" ;;
+				topic) is_notification_topic_valid "$arg" ;;
 				ttl) is_int_format_valid "$arg" 'ttl' ;;
 				user) is_user_format_valid "$arg" $arg_name ;;
 				wday) is_cron_format_valid "$arg" $arg_name ;;

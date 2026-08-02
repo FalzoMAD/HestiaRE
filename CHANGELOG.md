@@ -9,8 +9,86 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Added
+
+- CrowdSec L3 firewall enforcement, Phase 2 (#186). The same ban decisions Layer A blocks per
+  HTTP request are now also dropped at the firewall (SYN stage). An own feeder
+  (`h-update-firewall-crowdsec`, on a ~45s systemd timer) fills the `crowdsec-blacklists` ipset
+  from CrowdSec's local web-tier ban decisions via `cscli` with an atomic swap; `h-update-firewall`
+  owns the DROP, emitted as an own `hestia-crowdsec` chain that `RETURN`s loopback + RFC1918
+  before the drop - a firewall-layer backstop, independent of the CrowdSec engine whitelist, so a
+  false-positive ban on an internal address is never enforced box-wide. This keeps
+  `h-update-firewall` the sole iptables writer (no 3rd writer). The feeder's filter (origin
+  `crowdsec` + web-tier scenario) keeps fail2ban's auth lanes and CAPI/community IPs out of the L3
+  set (they stay L7-blocked by Layer A). We deliberately do **not** use the OS
+  `crowdsec-firewall-bouncer`: its 0.0.25 config loader (the version on all four targets)
+  nil-panics non-deterministically in the ipset path - fleet-verified unusable. IPv4 only (the
+  firewall marshaller has no ip6tables path). Wired into the nginx-gated CrowdSec addon; no new
+  wizard toggle.
+- CrowdSec is now a removable module (#123): `h-add-sys-crowdsec` / `h-delete-sys-crowdsec`
+  (on the clamav-addon skeleton) install/uninstall the whole addon around the shared
+  `crowdsec_apply`/teardown helpers, fulfilling the Phase-1 `h-delete-sys-nginx` guard's
+  two-step-teardown promise (remove CrowdSec, then nginx). `/etc/crowdsec` is kept as saved state.
+- CrowdSec web protection, Phase 1 (#186). CrowdSec becomes a real, nginx-gated addon (offered
+  only when nginx is in the model; apache-only never runs it). It has two per-domain layers,
+  driven by three `web.conf` flags (`CROWDSEC`, `RATE_LIMIT`, `BOT_POLICY`) set via
+  `h-add/delete-web-domain-crowdsec`, `h-change-web-domain-ratelimit` and
+  `h-change-web-domain-botpolicy`:
+  - **Layer A (nginx-only/both)** enforces CrowdSec ban decisions as an HTTP 403 at the nginx
+    front. Rather than vendor the ~14-file upstream `lua-cs-bouncer` (captcha/appsec/stream we
+    never use), it ships an own ~70-line dependency-free LuaJIT bouncer
+    (`share/crowdsec/lua/hestia_bouncer.lua`): a raw-cosocket query to the local LAPI
+    (`127.0.0.1:8054`), a shared-dict cache and fail-open behaviour so LAPI trouble never takes
+    sites down. It runs in the rewrite phase (before `auth_basic`, the forcessl redirect and the
+    rate-limit). Needs only the OS `libnginx-mod-http-lua`.
+  - **Layer B (all models)** is native rate-limiting that returns **429** plus a per-domain bot
+    policy (`pass`/`throttle`/`block`) for recognised search/AI crawlers - so one domain can
+    welcome Googlebot for indexing while another throttles or blocks it. nginx uses `limit_req`
+    zones; apache-only uses `mod_qos` (installed by the web setup) with `QS_ErrorResponseCode 429`.
+  - Detection: the engine gets curated collections + acquisition on the public web logs
+    (`share/crowdsec/`); an apply helper (`func/crowdsec.sh`) wires it all up idempotently and is
+    shared by the installer, the #120 model switch and the future #123 packaging. The wizard adds
+    a CAPI (community blocklist) opt-in; a smoke check and a guard that blocks removing nginx while
+    CrowdSec is active (`h-delete-sys-nginx`, with a two-step teardown path) round it out.
+  Rate/burst thresholds and the good-bot list ship as placeholders to be curated before release.
+  fail2ban is untouched and runs in parallel; the L3 firewall-bouncer and the fail2ban symbiosis
+  are planned follow-up phases.
+
+### Security
+
+Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
+
+- The user editor blocks a non-ROOT_USER admin from modifying the ROOT_USER account on the
+  POST/save path, not only the page render, and keys the guard on `$_SESSION["ROOT_USER"]`
+  instead of a hardcoded `admin` (HestiaCP #5547 / GHSA-c69h-jgpw-h9cj). A crafted POST could
+  otherwise change the root account's password or role. The guard also fails closed when
+  `ROOT_USER` is unset (an admin editing anyone but themselves is refused, not silently
+  allowed). Delete stays protected at the command level (`h-delete-user` refuses `ROOT_USER`).
+- Panel notifications are HTML-sanitized before storage (HestiaCP #5548 / GHSA-3g4r-pfpf-8697).
+  `NOTICE` renders as raw HTML in the top bar (Alpine `x-html`) and callers interpolate values
+  like a domain or backup filename into it, so `h-add-user-notification` now runs the body
+  through an allow-list sanitizer (`func/internal/sanitize_html.php`: DOMDocument, default-deny,
+  keeps `p/span/code/a/strong/br` + safe `href`, drops script/`on*`/`javascript:`); the panel
+  CLI PHP pool now enables `dom` for it (`hestia-php-confd`), else it degraded to escape-all. `TOPIC` and
+  `NOTICE` also gain CR/LF and length validators so a value cannot corrupt the single-line
+  `notifications.conf`. The shared `send_notice()` shell helper (the second writer of
+  `notifications.conf`) sanitizes through the same path, so it is not an unguarded bypass.
+  Own dependency-free sanitizer rather than upstream's Composer `symfony/html-sanitizer`
+  (HestiaRE ships no Composer; the panel PHP is Sury 8.3).
+- Restore scheduling no longer lets an argument inject into the executed restore queue
+  (HestiaCP GHSA-2xw3-7h62-v4gf). `h-schedule-user-restore-restic` validated only `user` and
+  then wrote `$snapshot`/`$value` single-quoted into `queue/backup.pipe` (run on drain), so a
+  `'` broke out for root RCE. `snapshot` and the per-object `value` (domain/database) are now
+  validated; the non-restic `h-schedule-user-restore` gets the same for `backup` and its
+  selector fields, and `user`/`backup` are quoted in the queued line.
+- The admin debug panel escapes its variable output (HestiaCP #5550). Server/Session/POST/GET
+  keys and string values were echoed raw (reflected XSS on a crafted request); they now go
+  through `tohtml()`.
+
 ### Fixed
 
+- `h-list-mail-domain-ssl` JSON now escapes the certificate issuer (#471, HestiaCP #5524). A
+  `"` or `\` in the issuer DN produced invalid JSON output.
 - `h-list-sys-php` no longer lists the isolated panel FPM pool (`/etc/php/hestia`,
   unit `hestia-php`) as a pseudo-version `hestia` (#464). Consumers turn the list into
   `php<v>-fpm`, so the stray entry produced the non-existent `phphestia-fpm` and broke
@@ -32,6 +110,24 @@ section as part of its PR. On release, the section gets the version number.
   apache keeps the `Options` sed; nginx gets `autoindex on;` at server level via a
   `nginx.conf_dirlist` include fragment (no token in the templates to flip). Verified on
   deb13 (403 -> 200 listing, survives rebuild via the #456 self-heal).
+
+### Removed
+
+- Deleted the orphaned bind9/named server-config views (`web/edit/server/bind9/`,
+  `web/edit/server/named/`, `templates/pages/edit_server_bind9.php`) and their PROVENANCE
+  entries (#471). bind9 is a permanent ground-rule removal and the views were unreachable
+  dead code (the services list is data-driven and never links them). Other ex-service view
+  leftovers (e.g. `vsftpd/`) remain for a separate cleanup.
+- Pruned 36 app-specific web templates (72 files) from `templates/web/nginx/php-fpm/` that
+  the removed Software/App Installer had seeded (chevereto, cms_made_simple, codeigniter,
+  contao, craftcms, datalife_engine, dokuwiki, dolibarr, drupal\*, flarum\*, forgejo, gitea,
+  grav, joomla, mautic, modx, moodle, odoo, opencart, opengist, openproject, osticket, phpbb,
+  piwik, projectsend, pyrocms, sendy, symfony2-3, thunder, vvveb, webasyst, yourls). With no
+  installer to place these apps, the templates were dead weight. Kept the standard set we ship:
+  `wordpress*`, `laravel`, `magento`, `owncloud`, `prestashop`, `symfony4-5`, plus the base
+  `default`/`no-php`/`suspended`. The template list is directory-driven (`h-list-web-templates`),
+  so the panel selector and CLI update automatically; any pruned template can be re-imported from
+  `upstream/hestiacp` and re-adapted if ever needed.
 
 ## v0.12.0 (2026-07-30)
 

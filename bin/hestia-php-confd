@@ -40,8 +40,8 @@ fpm_apps_optional="gd bz2 pgsql pdo_pgsql"
 # webmail: intl(IDN), phar(SnappyMail plugins), dom(Roundcube renders every page) critical
 fpm_webmail_critical="intl phar dom"
 fpm_webmail_optional="exif"
-# CLI (bin/hestia-php): only composer needs these; no DB chain, no gettext
-cli_critical="mbstring ctype iconv phar"
+# CLI (bin/hestia-php): composer + the notification HTML sanitizer (dom). No DB chain, no gettext
+cli_critical="mbstring ctype iconv phar dom"
 cli_optional="curl zip"
 
 missing_critical=""
