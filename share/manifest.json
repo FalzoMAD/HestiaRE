@@ -323,8 +323,8 @@
       "question": "CrowdSec community blocklist (CAPI)?",
       "visible_if": "ADDON_CROWDSEC == true",
       "options": [
-        { "value": "enroll", "label": "Enroll (recommended)", "description": "Pull the crowd-sourced blocklist and share attack signals with CrowdSec's central API" },
-        { "value": "local", "label": "Local-only", "description": "Fully self-hosted, no outbound telemetry; only your own detections create bans" }
+        { "value": "enroll", "label": "Enroll (recommended)", "description": "Community blocklist + telemetry" },
+        { "value": "local", "label": "Local-only", "description": "Self-hosted, no telemetry" }
       ],
       "default": { "standard": "enroll", "compact": "enroll", "latest": "enroll", "singlephp": "enroll", "nomail": "enroll", "mailonly": "enroll", "custom": null }
     },
