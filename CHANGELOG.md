@@ -11,6 +11,24 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- CrowdSec L3 firewall enforcement, Phase 2 (#186). The same ban decisions Layer A blocks per
+  HTTP request are now also dropped at the firewall (SYN stage). An own feeder
+  (`h-update-firewall-crowdsec`, on a ~45s systemd timer) fills the `crowdsec-blacklists` ipset
+  from CrowdSec's local web-tier ban decisions via `cscli` with an atomic swap; `h-update-firewall`
+  owns the DROP, emitted as an own `hestia-crowdsec` chain that `RETURN`s loopback + RFC1918
+  before the drop - a firewall-layer backstop, independent of the CrowdSec engine whitelist, so a
+  false-positive ban on an internal address is never enforced box-wide. This keeps
+  `h-update-firewall` the sole iptables writer (no 3rd writer). The feeder's filter (origin
+  `crowdsec` + web-tier scenario) keeps fail2ban's auth lanes and CAPI/community IPs out of the L3
+  set (they stay L7-blocked by Layer A). We deliberately do **not** use the OS
+  `crowdsec-firewall-bouncer`: its 0.0.25 config loader (the version on all four targets)
+  nil-panics non-deterministically in the ipset path - fleet-verified unusable. IPv4 only (the
+  firewall marshaller has no ip6tables path). Wired into the nginx-gated CrowdSec addon; no new
+  wizard toggle.
+- CrowdSec is now a removable module (#123): `h-add-sys-crowdsec` / `h-delete-sys-crowdsec`
+  (on the clamav-addon skeleton) install/uninstall the whole addon around the shared
+  `crowdsec_apply`/teardown helpers, fulfilling the Phase-1 `h-delete-sys-nginx` guard's
+  two-step-teardown promise (remove CrowdSec, then nginx). `/etc/crowdsec` is kept as saved state.
 - CrowdSec web protection, Phase 1 (#186). CrowdSec becomes a real, nginx-gated addon (offered
   only when nginx is in the model; apache-only never runs it). It has two per-domain layers,
   driven by three `web.conf` flags (`CROWDSEC`, `RATE_LIMIT`, `BOT_POLICY`) set via

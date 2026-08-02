@@ -97,7 +97,69 @@ crowdsec_apply() {
 		echo "CrowdSec: nginx config test failed after wiring - not reloading" >&2
 		return 1
 	fi
-	echo "CrowdSec: applied (nginx front, bouncer hestia-nginx)."
+
+	# L3: SYN-level ban of the same web-tier decisions (own feeder -> ipset; the DROP is owned
+	# by h-update-firewall). Shares the engine; non-fatal so L7 stays up if L3 wiring hiccups.
+	crowdsec_l3_setup || echo "CrowdSec: L3 feeder setup reported an issue" >&2
+
+	echo "CrowdSec: applied (nginx front, L7 bouncer hestia-nginx + L3 ipset feeder)."
+}
+
+# L3 enforcement (#186): our OWN feeder fills the crowdsec-blacklists ipset from CrowdSec's
+# local web-tier ban decisions (a systemd timer runs h-update-firewall-crowdsec: cscli -> atomic
+# ipset swap). HestiaRE owns the set AND the DROP (the hestia-crowdsec chain in h-update-firewall),
+# so h-update-firewall stays the sole iptables writer. We do NOT use crowdsec-firewall-bouncer:
+# its 0.0.25 (OS-repo on all four targets) config loader nil-panics non-deterministically in the
+# ipset path (nftablesConfig) - fleet-verified unusable; the own feeder is deterministic and, being
+# small + filtered, cheap. Set membership is refreshed on a timer; the L7 bouncer blocks HTTP live.
+crowdsec_l3_setup() {
+	local share="$HESTIA/share/crowdsec"
+	local marker="$CONF_DIR/firewall/crowdsec.conf"
+
+	command -v cscli > /dev/null 2>&1 || { echo "CrowdSec: cscli missing, L3 skipped" >&2; return 1; }
+	# jq drives the feeder's decision filter.
+	command -v jq > /dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get -y -qq install jq > /dev/null 2>&1
+
+	# Marker: its presence tells h-update-firewall(-ipset) to provision the set + build the
+	# hestia-crowdsec DROP chain, and h-update-firewall-crowdsec to actually feed the set.
+	mkdir -p "$CONF_DIR/firewall"
+	if [ ! -f "$marker" ]; then
+		cat > "$marker" <<-EOF
+			# HestiaRE CrowdSec L3 marker (#186). Presence enables the crowdsec-blacklists
+			# ipset + the hestia-crowdsec DROP chain in h-update-firewall, and the feeder
+			# timer. Managed by func/crowdsec.sh; do not edit.
+			SET='crowdsec-blacklists'
+		EOF
+		chmod 640 "$marker"
+	fi
+
+	ipset create -exist crowdsec-blacklists hash:net timeout 0 maxelem 131072 2> /dev/null
+
+	# Refresh timer (feeds the set) + an initial fill, then build the DROP chain + jump. The
+	# h-update-firewall call self-guards (exits early if rules.conf is absent mid-install; the
+	# configure stage rebuilds afterwards).
+	cp -f "$share/systemd/hestia-crowdsec-l3.service" /etc/systemd/system/hestia-crowdsec-l3.service
+	cp -f "$share/systemd/hestia-crowdsec-l3.timer" /etc/systemd/system/hestia-crowdsec-l3.timer
+	systemctl daemon-reload
+	systemctl enable --now hestia-crowdsec-l3.timer > /dev/null 2>&1 || true
+	"$BIN/h-update-firewall-crowdsec" > /dev/null 2>&1 || true
+	"$BIN/h-update-firewall" > /dev/null 2>&1 || true
+}
+
+# Remove the L3 wiring: stop the feeder timer, drop the marker + DROP chain + jump + set. Leaves
+# the engine + /etc/crowdsec (saved state). Called by h-delete-sys-crowdsec.
+crowdsec_l3_teardown() {
+	systemctl disable --now hestia-crowdsec-l3.timer > /dev/null 2>&1 || true
+	systemctl stop hestia-crowdsec-l3.service > /dev/null 2>&1 || true
+	rm -f /etc/systemd/system/hestia-crowdsec-l3.service /etc/systemd/system/hestia-crowdsec-l3.timer
+	systemctl daemon-reload
+	rm -f "$CONF_DIR/firewall/crowdsec.conf"
+	# Tear the iptables side down directly (h-update-firewall now skips it - marker gone).
+	iptables -D INPUT -m set --match-set crowdsec-blacklists src -j hestia-crowdsec 2> /dev/null || true
+	iptables -F hestia-crowdsec 2> /dev/null || true
+	iptables -X hestia-crowdsec 2> /dev/null || true
+	ipset destroy crowdsec-blacklists 2> /dev/null || true
+	"$BIN/h-update-firewall" > /dev/null 2>&1 || true
 }
 
 # Render the per-domain fragment (Layer-A access_by_lua + Layer-B rate-limit/bot policy)
