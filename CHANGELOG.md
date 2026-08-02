@@ -87,6 +87,12 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
 
 ### Fixed
 
+- CrowdSec L3 feeder now enrolls every web-tier ban, not just `http`/`CVE`-named ones (#186). The
+  placeholder scenario allowlist silently dropped advisory-named web exploits (e.g.
+  `vmware-vcenter-vmsa-*`) from the L3 set. Since acquisition is nginx-only every local
+  (`origin == crowdsec`) decision is already web-tier, so the filter is now a belt-and-suspenders
+  DENYlist of fail2ban's auth families (ssh/ftp/mail/db) instead - curated against the fleet's
+  `cscli scenarios list`. fail2ban's lanes stay out of L3; CAPI stays L7-only.
 - CrowdSec re-add no longer fails on the saved-state config (#186). `h-delete-sys-crowdsec` keeps
   `/etc/crowdsec` (incl. our `:8054`-patched `config.yaml`) as saved state; on a re-add
   `apt-get install crowdsec` hit a dpkg conffile prompt on `config.yaml` and, under

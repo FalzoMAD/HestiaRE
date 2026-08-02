@@ -43,15 +43,17 @@ TMP="${SET}-tmp"
 "$IPSET_BIN" create -exist "$TMP" hash:net timeout 0 maxelem 131072 2> /dev/null
 "$IPSET_BIN" flush "$TMP" 2> /dev/null
 
-# Only local, web-tier bans enter L3: origin == crowdsec (own detections, not manual/CAPI) + a
-# web-tier scenario (http/CVE). No `-a`, so the CAPI blocklist is never pulled (L7-only via
-# Layer A); fail2ban's auth lanes stay out of L3. Tokens are PLACEHOLDERS - curate against
-# `cscli scenarios list` before release.
+# Only local, web-tier bans enter L3: origin == crowdsec (own detections, not manual/CAPI; no `-a`,
+# so the CAPI blocklist is never pulled - it stays L7-only via Layer A). Acquisition is nginx-only,
+# so every local decision is already web-tier; the scenario filter is a belt-and-suspenders DENYlist
+# of fail2ban's auth families (ssh/ftp/mail/db) rather than a leaky web-token allowlist that missed
+# advisory-named exploits (e.g. vmware vmsa). Curated against `cscli scenarios list` on the fleet.
 cscli decisions list -o json 2> /dev/null \
 	| jq -r '(if type=="array" then .[] else . end)
 		| (.decisions // [])[]
 		| select(.type == "ban" and .origin == "crowdsec"
-			and ((.scenario // "") | test("http|CVE"; "i")))
+			and ((.scenario // "") | ascii_downcase
+				| test("ssh|ftp|smtp|imap|pop3|dovecot|postfix|exim|mysql|mariadb|postgres") | not))
 		| .value' 2> /dev/null \
 	| while IFS= read -r ip; do
 		[ -n "$ip" ] && "$IPSET_BIN" add -exist "$TMP" "$ip" 2> /dev/null
