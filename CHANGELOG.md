@@ -87,6 +87,14 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
 
 ### Fixed
 
+- CrowdSec re-add no longer fails on the saved-state config (#186). `h-delete-sys-crowdsec` keeps
+  `/etc/crowdsec` (incl. our `:8054`-patched `config.yaml`) as saved state; on a re-add
+  `apt-get install crowdsec` hit a dpkg conffile prompt on `config.yaml` and, under
+  `DEBIAN_FRONTEND=noninteractive`, EOF'd it - leaving the package half-configured (`iU`) so the
+  install reported failure. Both CrowdSec installs (`h-add-sys-crowdsec` + the installer) now pass
+  `--force-confdef --force-confold`. Fresh installs are unaffected (no pre-existing config to prompt on).
+- CrowdSec CAPI wizard descriptions shortened to a couple of words each (#186); the old sentence-long
+  option blurbs overflowed the wizard layout.
 - `h-list-mail-domain-ssl` JSON now escapes the certificate issuer (#471, HestiaCP #5524). A
   `"` or `\` in the issuer DN produced invalid JSON output.
 - `h-list-sys-php` no longer lists the isolated panel FPM pool (`/etc/php/hestia`,

@@ -539,7 +539,8 @@ install_security() {
 		[ -z "$cs_pub" ] && cs_pub="$WEB_SYSTEM"
 		if [ "$cs_pub" = "nginx" ]; then
 			echo "[ * ] Installing CrowdSec..."
-			hestia_apt -y install crowdsec || true
+			# conffile policy: keep an existing /etc/crowdsec/config.yaml non-interactively (see h-add-sys-crowdsec)
+			hestia_apt -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install crowdsec || true
 			# move the local API off :8080 (collides with apache2) to :8054
 			if [ -f /etc/crowdsec/config.yaml ]; then
 				sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/config.yaml
