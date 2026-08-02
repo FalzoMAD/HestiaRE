@@ -97,6 +97,22 @@ for ip in $ips; do
 done
 echo "$iptables -A INPUT -s 127.0.0.1 -j ACCEPT" >> "$tmp"
 
+# CrowdSec L3: drop source IPs the feeder put in crowdsec-blacklists, via an owned chain that
+# RETURNs loopback + RFC1918 FIRST. That exemption is defense-in-depth: a false-positive ban on
+# 127.0.0.1 or an internal address would otherwise be enforced box-wide, and CrowdSec's own
+# whitelist has demonstrably failed for loopback/internal before. Emitted below the loopback/
+# own-IP ACCEPTs, above the service ACCEPTs; the set is provisioned by h-update-firewall-ipset.
+if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
+	echo "$iptables -N hestia-crowdsec" >> "$tmp"
+	echo "$iptables -F hestia-crowdsec" >> "$tmp"
+	echo "$iptables -A hestia-crowdsec -s 127.0.0.0/8 -j RETURN" >> "$tmp"
+	echo "$iptables -A hestia-crowdsec -s 10.0.0.0/8 -j RETURN" >> "$tmp"
+	echo "$iptables -A hestia-crowdsec -s 172.16.0.0/12 -j RETURN" >> "$tmp"
+	echo "$iptables -A hestia-crowdsec -s 192.168.0.0/16 -j RETURN" >> "$tmp"
+	echo "$iptables -A hestia-crowdsec -j DROP" >> "$tmp"
+	echo "$iptables -A INPUT -m set --match-set crowdsec-blacklists src -j hestia-crowdsec" >> "$tmp"
+fi
+
 # Pasring iptables rules
 IFS=$'\n'
 for line in $(sort -r -n -k 2 -t \' $rules); do

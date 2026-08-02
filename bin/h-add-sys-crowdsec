@@ -1,0 +1,86 @@
+#!/bin/bash
+# info: install the CrowdSec security addon
+# options: NONE
+#
+# example: h-add-sys-crowdsec
+#
+# Installs CrowdSec as the nginx-gated web-protection addon: engine + LAPI on 127.0.0.1:8054,
+# the L7 nginx bouncer and the L3 ipset feeder. nginx-only - refuses on an apache-only front.
+# The heavy lifting is the shared crowdsec_apply helper (also used by the installer). Idempotent.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+# public-facing web server ('both' fronts with nginx); CrowdSec is offered only for nginx.
+cs_pub="$PROXY_SYSTEM"
+[ -z "$cs_pub" ] && cs_pub="$WEB_SYSTEM"
+
+# COMPONENT_* is 'true'/'yes' - is_on is smoke-local, so test inline here.
+cs_armed='no'
+case "${COMPONENT_ADDON_CROWDSEC:-}" in true | yes) cs_armed='yes' ;; esac
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+if [ "$cs_pub" != 'nginx' ]; then
+	echo "ERROR: CrowdSec is an nginx-only addon; the public web front is '${cs_pub:-none}'."
+	echo "       Nothing to install on an apache-only model."
+	exit "$E_INVALID"
+fi
+
+# already fully active? idempotent early-exit (engine + L3 feeder timer)
+if [ "$cs_armed" = 'yes' ] \
+	&& systemctl is-active --quiet crowdsec 2> /dev/null \
+	&& systemctl is-active --quiet hestia-crowdsec-l3.timer 2> /dev/null; then
+	echo "INFO: CrowdSec is already installed and active."
+	exit 0
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+echo "[ * ] Installing CrowdSec engine..."
+DEBIAN_FRONTEND=noninteractive apt-get -y -qq install crowdsec > /dev/null 2>&1 || true
+
+# Move the local API off :8080 (collides with apache2) to :8054, matching the installer.
+if [ -f /etc/crowdsec/config.yaml ]; then
+	sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/config.yaml
+	[ -f /etc/crowdsec/local_api_credentials.yaml ] \
+		&& sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/local_api_credentials.yaml
+	systemctl restart crowdsec 2> /dev/null || true
+fi
+
+# detection + L7 nginx wiring + L3 feeder (the one shared path)
+source "$HESTIA/func/crowdsec.sh"
+crowdsec_apply || { echo "ERROR: CrowdSec wiring failed."; exit "$E_INVALID"; }
+
+set_install_component ADDON_CROWDSEC true
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Installed CrowdSec addon."
+log_event "$OK" "$ARGUMENTS"
+
+exit

@@ -1,0 +1,63 @@
+#!/bin/bash
+# info: refresh the CrowdSec L3 ipset from local ban decisions
+# options: NONE
+#
+# example: h-update-firewall-crowdsec
+#
+# Feeds the crowdsec-blacklists ipset from CrowdSec's own local web-tier ban decisions (cscli)
+# with an atomic swap; h-update-firewall's hestia-crowdsec chain drops them at L3. Run by the
+# hestia-crowdsec-l3 timer. Own feeder, not the OS crowdsec-firewall-bouncer (its 0.0.25 config
+# loader nil-panics non-deterministically in the ipset path - fleet-verified). No-op without the marker.
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+# L3 only when wired (marker) and the tools exist; otherwise a silent no-op (timer fires anyway).
+[ -f "$CONF_DIR/firewall/crowdsec.conf" ] || exit 0
+IPSET_BIN="$(command -v ipset)"
+[ -n "$IPSET_BIN" ] || exit 0
+command -v cscli > /dev/null 2>&1 || exit 0
+command -v jq > /dev/null 2>&1 || exit 0
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+SET="crowdsec-blacklists"
+TMP="${SET}-tmp"
+
+# Ensure the live set exists (also provisioned by h-update-firewall-ipset at boot/rebuild).
+"$IPSET_BIN" create -exist "$SET" hash:net timeout 0 maxelem 131072 2> /dev/null
+
+# Build a fresh set and swap it in atomically (same idiom as h-add-firewall-ipset), so the DROP
+# never sees a half-built set and expired decisions drop out for free (cscli lists only active).
+"$IPSET_BIN" create -exist "$TMP" hash:net timeout 0 maxelem 131072 2> /dev/null
+"$IPSET_BIN" flush "$TMP" 2> /dev/null
+
+# Only local, web-tier bans enter L3: origin == crowdsec (own detections, not manual/CAPI) + a
+# web-tier scenario (http/CVE). No `-a`, so the CAPI blocklist is never pulled (L7-only via
+# Layer A); fail2ban's auth lanes stay out of L3. Tokens are PLACEHOLDERS - curate against
+# `cscli scenarios list` before release.
+cscli decisions list -o json 2> /dev/null \
+	| jq -r '(if type=="array" then .[] else . end)
+		| (.decisions // [])[]
+		| select(.type == "ban" and .origin == "crowdsec"
+			and ((.scenario // "") | test("http|CVE"; "i")))
+		| .value' 2> /dev/null \
+	| while IFS= read -r ip; do
+		[ -n "$ip" ] && "$IPSET_BIN" add -exist "$TMP" "$ip" 2> /dev/null
+	done
+
+"$IPSET_BIN" swap "$TMP" "$SET" 2> /dev/null
+"$IPSET_BIN" destroy "$TMP" 2> /dev/null
+
+exit 0
