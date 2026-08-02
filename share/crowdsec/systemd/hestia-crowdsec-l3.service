@@ -1,4 +1,4 @@
-# HestiaRE CrowdSec L3 ipset refresh (#186). Oneshot, driven by hestia-crowdsec-l3.timer:
+# HestiaRE CrowdSec L3 ipset refresh. Oneshot, driven by hestia-crowdsec-l3.timer:
 # fills crowdsec-blacklists from local web-tier ban decisions. The DROP is owned by
 # h-update-firewall (the hestia-crowdsec chain); this only maintains set membership.
 [Unit]

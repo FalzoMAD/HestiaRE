@@ -4,11 +4,10 @@
 #
 # example: h-update-firewall-crowdsec
 #
-# Feeds the crowdsec-blacklists ipset from CrowdSec's own local, web-tier ban decisions (via
-# cscli) with an atomic swap, so h-update-firewall's hestia-crowdsec chain drops them at L3.
-# Run by the hestia-crowdsec-l3 systemd timer (#186). Own feeder instead of the OS
-# crowdsec-firewall-bouncer, whose 0.0.25 config loader nil-panics non-deterministically in the
-# ipset path (fleet-verified). No-op unless the CrowdSec L3 marker is present.
+# Feeds the crowdsec-blacklists ipset from CrowdSec's own local web-tier ban decisions (cscli)
+# with an atomic swap; h-update-firewall's hestia-crowdsec chain drops them at L3. Run by the
+# hestia-crowdsec-l3 timer. Own feeder, not the OS crowdsec-firewall-bouncer (its 0.0.25 config
+# loader nil-panics non-deterministically in the ipset path - fleet-verified). No-op without the marker.
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -44,11 +43,10 @@ TMP="${SET}-tmp"
 "$IPSET_BIN" create -exist "$TMP" hash:net timeout 0 maxelem 131072 2> /dev/null
 "$IPSET_BIN" flush "$TMP" 2> /dev/null
 
-# Only local, web-tier bans enter the L3 set: origin == crowdsec (the engine's own detections -
-# excludes admin cscli-manual bans) and the scenario names a web tier (http / CVE). No `-a`, so the
-# CAPI/community blocklist is never even pulled (it stays an L7-only concern via Layer A). This keeps
-# fail2ban's auth lanes (ssh/mail/panel) out of L3 even once an sshd collection lands. The
-# origin/scenario tokens are PLACEHOLDERS, curate against `cscli scenarios list` before release.
+# Only local, web-tier bans enter L3: origin == crowdsec (own detections, not manual/CAPI) + a
+# web-tier scenario (http/CVE). No `-a`, so the CAPI blocklist is never pulled (L7-only via
+# Layer A); fail2ban's auth lanes stay out of L3. Tokens are PLACEHOLDERS - curate against
+# `cscli scenarios list` before release.
 cscli decisions list -o json 2> /dev/null \
 	| jq -r '(if type=="array" then .[] else . end)
 		| (.decisions // [])[]

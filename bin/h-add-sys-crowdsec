@@ -4,11 +4,9 @@
 #
 # example: h-add-sys-crowdsec
 #
-# Installs CrowdSec as the nginx-gated web-protection addon: the engine + LAPI on
-# 127.0.0.1:8054, the L7 nginx bouncer (Layer A/B) and the L3 firewall-bouncer (set-only
-# ipset). CrowdSec is nginx-only - on an apache-only front there is no CrowdSec, so this
-# refuses. The heavy lifting is the shared crowdsec_apply helper (also used by the installer
-# and the #120 web-model switch). Idempotent.
+# Installs CrowdSec as the nginx-gated web-protection addon: engine + LAPI on 127.0.0.1:8054,
+# the L7 nginx bouncer and the L3 ipset feeder. nginx-only - refuses on an apache-only front.
+# The heavy lifting is the shared crowdsec_apply helper (also used by the installer). Idempotent.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -49,10 +47,10 @@ if [ "$cs_pub" != 'nginx' ]; then
 	exit "$E_INVALID"
 fi
 
-# already fully active? idempotent early-exit
+# already fully active? idempotent early-exit (engine + L3 feeder timer)
 if [ "$cs_armed" = 'yes' ] \
 	&& systemctl is-active --quiet crowdsec 2> /dev/null \
-	&& systemctl is-active --quiet crowdsec-firewall-bouncer 2> /dev/null; then
+	&& systemctl is-active --quiet hestia-crowdsec-l3.timer 2> /dev/null; then
 	echo "INFO: CrowdSec is already installed and active."
 	exit 0
 fi
@@ -72,7 +70,7 @@ if [ -f /etc/crowdsec/config.yaml ]; then
 	systemctl restart crowdsec 2> /dev/null || true
 fi
 
-# detection + L7 nginx wiring + L3 firewall-bouncer (the one shared path)
+# detection + L7 nginx wiring + L3 feeder (the one shared path)
 source "$HESTIA/func/crowdsec.sh"
 crowdsec_apply || { echo "ERROR: CrowdSec wiring failed."; exit "$E_INVALID"; }
 
