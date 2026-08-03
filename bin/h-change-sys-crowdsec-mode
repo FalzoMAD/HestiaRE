@@ -100,9 +100,10 @@ if [ "$now" != "$mode" ]; then
 	exit "$E_INVALID"
 fi
 
-# cscli 1.4.x cannot delete by origin, and deleting by scenario would take own bans with it, so
-# blocklist entries already in the local DB are left to expire (nothing new arrives once CAPI is off).
-if [ "$from" != 'local' ] && [ "$mode" != 'capi' ]; then
+# Only when CAPI was actually active before: cscli 1.4.x cannot delete by origin, and deleting by
+# scenario would take own bans with it, so entries already in the local DB are left to expire (nothing
+# new arrives once CAPI is off).
+if [ "$mode" != 'capi' ] && [[ "$from" == *capi* ]]; then
 	echo "[ i ] Community-blocklist decisions already pulled stay until they expire."
 	echo "      Inspect: cscli decisions list -a   |   clear everything (incl. own bans): cscli decisions delete --all"
 fi
