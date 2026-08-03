@@ -9,6 +9,24 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Added
+
+- **`h-change-sys-crowdsec-mode capi|local|mesh`** (#494) - switches the CrowdSec model at runtime, for
+  the case where the fleet grew and a box should start meshing after the fact. Previously only the mesh
+  half was switchable (`h-add/delete-sys-crowdsec-mesh`); there was no way back to the community
+  blocklist at all, because only `crowdsec_disable_capi` existed. Its inverse `crowdsec_enable_capi` now
+  does, including enrolment, and it rolls the config back to local if that fails rather than leaving
+  `online_client` pointing at credentials that are not there. The live model is derived from the
+  artefacts on disk, not from `install.conf` (that is the install recipe, not live state), and the
+  target is always enforced in full - which also normalises the inconsistent `capi`+`mesh` combination
+  the previous two-question wizard allowed.
+
+### Security
+
+- CrowdSec's `local_api_credentials.yaml` and `online_api_credentials.yaml` are chmod 0600 now (#494).
+  The packages generate them 0644 although both carry a machine password, and customers have shell
+  access on these boxes. The engine and `cscli` run as root, so nothing needs the world bit.
+
 ### Changed
 
 - **CrowdSec is one three-way model question now instead of two** (#186). The wizard asked "community
