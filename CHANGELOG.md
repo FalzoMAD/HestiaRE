@@ -11,6 +11,33 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- CrowdSec mesh transport: panel pairing + authenticated pull (#186, phase 6b). The mesh no longer
+  needs a hand-wired transport. Two boxes pair over the panel port and then pull each other's
+  published ban list on a timer; the CrowdSec LAPI stays loopback-only, what crosses the wire is a
+  file of IPv4 values. **A pairing needs an admin on BOTH boxes and cannot happen otherwise**: the
+  joining side runs `h-add-sys-crowdsec-peer` (root or admin panel session), the accepting side must
+  first mint a one-time code with `h-generate-sys-crowdsec-pairing` (likewise root or admin session) -
+  and `/mesh-pair.php` is a plain **404** while no code is live, so an idle box exposes nothing there
+  at all. Neither side ever handles the other's credentials; the code is single-use, 100 bits, valid
+  15 minutes, and dies after 5 wrong guesses. The long-lived artefact is a per-peer bearer token, and
+  `/mesh-decisions.php` (GET) serves the published list to that token alone. TLS is verified by
+  **SPKI pin** recorded at pairing (TOFU), not by CA - panel certs are usually self-signed, and a
+  swapped cert fails the pull closed. Each side installs an **IP-scoped ACCEPT rule** for the other on
+  the panel port; :8083 is never narrowed to peers-only, so admin access cannot be locked out.
+  Secrets never ride in argv (a local user can read `/proc/*/cmdline`): the panel hands payloads to
+  the CLI in 0600 files under `/run/hestia/mesh/in`, curl reads tokens from a 0600 config, and only
+  token **hashes** are staged for the panel to compare against (it runs as `hestia` and cannot read
+  `/etc/hestia`). New commands `h-generate-sys-crowdsec-pairing`, `h-add-sys-crowdsec-peer`,
+  `h-add-sys-crowdsec-peer-request` (endpoint-side, not for hand use), `h-delete-sys-crowdsec-peer`,
+  `h-list-sys-crowdsec-peers` (never prints tokens), plus an admin-only **Firewall > Fleet Mesh**
+  panel page (peers, per-peer shared-ban counts, generate/enter a code, unpair). Two new panel routes
+  (`/mesh-pair.php`, `/mesh-decisions.php`) are a deliberate, narrowly-scoped exception to the
+  no-REST-API rule: single purpose, no object CRUD, no general dispatch. Also in this cycle:
+  `h-delete-sys-crowdsec-mesh` now unpairs peers (closing their firewall rules) and deletes mesh
+  decisions by enumerating the active `hestia-mesh:*` scenarios, since `cscli decisions delete
+  --scenario` matches exactly and no longer matched the per-peer names; the swap-import is skipped
+  while the peer union is byte-identical and the decisions' TTL is still fresh, which lets the timer
+  run every 2 minutes for fast propagation without hammering the LAPI.
 - CrowdSec fleet-mesh (#186, phase 6): a peer-mesh shared blocklist across the fleet, no central
   LAPI. Each box PUBLISHES its own local web-tier bans and IMPORTS the union of peers' published
   lists as **L7-only** mesh bans (`cscli import` -> origin `cscli-import`, scenario `hestia-mesh`).
@@ -18,14 +45,15 @@ section as part of its PR. On release, the section gets the version number.
   filters `origin==crowdsec`, so mesh bans never reach the firewall (L3 stays each box's own
   detections). Clean swap each cycle (delete by scenario + re-import), TTL-bounded so withdrawn peer
   bans fall out. `h-add-sys-crowdsec-mesh` / `h-delete-sys-crowdsec-mesh` + the
-  `hestia-crowdsec-mesh` timer running `h-update-crowdsec-mesh`. The transport (moving peer lists
-  into `MESH_PEERS_DIR`) is left to the fleet's own trust fabric; HestiaRE reads/writes the files.
+  `hestia-crowdsec-mesh` timer running `h-update-crowdsec-mesh`. Peer lists arrive in
+  `MESH_PEERS_DIR` via the paired transport above; anything dropped there by hand is imported just
+  the same, so a self-wired transport (rsync/ssh/shared FS) still works.
   Imports are hardened against a bad/compromised peer (the mesh's trust boundary): each entry is
   validated as a single well-formed IPv4 (CIDR/garbage dropped), capped per peer + in total
   (`MESH_MAX_PER_PEER`/`MESH_MAX_TOTAL`) so one runaway peer can't flood the fleet, and tagged
   `scenario=hestia-mesh:<peer>` so a bad IP stays attributable to its source for incident response.
   Offered as a wizard checkbox next to the CAPI question (default **off** - unlike CAPI it is a
-  fleet decision and inert until the transport is wired); the installer arms it when selected.
+  fleet decision and inert until peers are paired); the installer arms it when selected.
 - Server-native web bot rate-limiting (#482). A standalone Layer-B subsystem (`func/botpolicy.sh`)
   that throttles bot families with native nginx `limit_req` / apache `mod_qos` (429 on excess),
   **independent of CrowdSec** and available on any web install (nginx-only, apache-only, both).

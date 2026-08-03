@@ -16,6 +16,9 @@
 			<a class="button button-secondary" href="/list/firewall/ipset/">
 				<i class="fas fa-list icon-blue"></i><?= tohtml( _("IPset IP Lists")) ?>
 			</a>
+			<a class="button button-secondary" href="/list/firewall/mesh/">
+				<i class="fas fa-share-nodes icon-blue"></i><?= tohtml( _("Fleet Mesh")) ?>
+			</a>
 		</div>
 		<div class="toolbar-right">
 			<div class="toolbar-sorting">
