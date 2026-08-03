@@ -4,10 +4,9 @@
 #
 # example: h-update-firewall-crowdsec
 #
-# Feeds the crowdsec-blacklists ipset from CrowdSec's own local web-tier ban decisions (cscli)
-# with an atomic swap; h-update-firewall's hestia-crowdsec chain drops them at L3. Run by the
-# hestia-crowdsec-l3 timer. Own feeder, not the OS crowdsec-firewall-bouncer (its 0.0.25 config
-# loader nil-panics non-deterministically in the ipset path - fleet-verified). No-op without the marker.
+# Feeds the crowdsec-blacklists ipset from CrowdSec's own local web-tier bans (cscli, atomic swap);
+# h-update-firewall's hestia-crowdsec chain drops them at L3. Own feeder, not the OS
+# crowdsec-firewall-bouncer (its 0.0.25 nil-panics in the ipset path - fleet-verified). No-op sans marker.
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -38,20 +37,19 @@ TMP="${SET}-tmp"
 # Ensure the live set exists (also provisioned by h-update-firewall-ipset at boot/rebuild).
 "$IPSET_BIN" create -exist "$SET" hash:net timeout 0 maxelem 131072 2> /dev/null
 
-# Build a fresh set and swap it in atomically (same idiom as h-add-firewall-ipset), so the DROP
-# never sees a half-built set and expired decisions drop out for free (cscli lists only active).
+# Build a fresh set + atomic swap, so the DROP never sees a half-built set (cscli lists only active).
 "$IPSET_BIN" create -exist "$TMP" hash:net timeout 0 maxelem 131072 2> /dev/null
 "$IPSET_BIN" flush "$TMP" 2> /dev/null
 
-# Only local, web-tier bans enter L3: origin == crowdsec (own detections, not manual/CAPI) + a
-# web-tier scenario (http/CVE). No `-a`, so the CAPI blocklist is never pulled (L7-only via
-# Layer A); fail2ban's auth lanes stay out of L3. Tokens are PLACEHOLDERS - curate against
-# `cscli scenarios list` before release.
+# Only local web-tier bans enter L3: origin==crowdsec (manual/CAPI stay L7-only), minus a denylist of
+# fail2ban's auth families + req-limit (rate-limit breach, CGNAT collateral). Denylist so advisory-named
+# exploits (vmsa) aren't missed; the flip side is a web scenario named with a denied token would skip L3.
 cscli decisions list -o json 2> /dev/null \
 	| jq -r '(if type=="array" then .[] else . end)
 		| (.decisions // [])[]
 		| select(.type == "ban" and .origin == "crowdsec"
-			and ((.scenario // "") | test("http|CVE"; "i")))
+			and ((.scenario // "") | ascii_downcase
+				| test("ssh|ftp|smtp|imap|pop3|dovecot|postfix|exim|mysql|mariadb|postgres|req-limit") | not))
 		| .value' 2> /dev/null \
 	| while IFS= read -r ip; do
 		[ -n "$ip" ] && "$IPSET_BIN" add -exist "$TMP" "$ip" 2> /dev/null

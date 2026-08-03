@@ -87,6 +87,20 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
 
 ### Fixed
 
+- CrowdSec L3 feeder now enrolls every web-tier ban, not just `http`/`CVE`-named ones (#186). The
+  placeholder scenario allowlist silently dropped advisory-named web exploits (e.g.
+  `vmware-vcenter-vmsa-*`) from the L3 set. Since acquisition is nginx-only every local
+  (`origin == crowdsec`) decision is already web-tier, so the filter is now a belt-and-suspenders
+  DENYlist of fail2ban's auth families (ssh/ftp/mail/db) instead - curated against the fleet's
+  `cscli scenarios list`. fail2ban's lanes stay out of L3; CAPI stays L7-only. `nginx-req-limit-exceeded`
+  is also on the denylist (belt-and-suspenders, see below), so a reintroduced req-limit ban would
+  stay L7-only rather than SYN-drop.
+- CrowdSec no longer bans on `nginx-req-limit-exceeded` (#186). That scenario fires on our own
+  Layer-B rate-limit (429) and, after a leaky bucket (capacity 5), turned deliberate throttling into
+  a ban - escalating good bots / shared IPs (CGNAT/corporate NAT) we only meant to slow down. It is
+  removed from the collection set in `crowdsec_apply` (which taints the nginx collection, so cscli
+  keeps it removed on later runs). Layer B stays a 429; real abuse is still caught by the
+  behaviour-based scenarios (http-probing, sqli, crawl, CVE, ...).
 - CrowdSec re-add no longer fails on the saved-state config (#186). `h-delete-sys-crowdsec` keeps
   `/etc/crowdsec` (incl. our `:8054`-patched `config.yaml`) as saved state; on a re-add
   `apt-get install crowdsec` hit a dpkg conffile prompt on `config.yaml` and, under
