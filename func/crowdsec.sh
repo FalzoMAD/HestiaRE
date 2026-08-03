@@ -75,6 +75,9 @@ crowdsec_enable_capi() {
 # reports mesh+capi and the mode command re-normalises it.
 crowdsec_current_mode() {
 	local mesh=0 capi=0
+	# No engine at all (apache-only, or CrowdSec removed) is not "local" - say so, or a caller that
+	# only prints the answer would report a model for a box that has none.
+	[ -f /etc/crowdsec/config.yaml ] || { echo "none"; return 0; }
 	[ -f "$CONF_DIR/crowdsec/mesh.conf" ] && mesh=1
 	grep -qE '^[[:space:]]*credentials_path:.*online_api_credentials' /etc/crowdsec/config.yaml 2> /dev/null && capi=1
 	if [ "$mesh" = 1 ] && [ "$capi" = 1 ]; then
