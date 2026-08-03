@@ -1688,6 +1688,61 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
+	// Bot rate-limit family table (Layer B, #482). The whole table arrives in this one POST, so every
+	// row defers the re-render (APPLY=no) and a single h-update-sys-botfamilies applies at the end -
+	// otherwise the web server would reload once per row. An emptied name (or a rename) drops the old
+	// family, which also strips it from every domain that throttled it: a leftover reference would
+	// point at a rate zone that no longer exists and fail the config test for the whole box.
+	if (empty($_SESSION["error_msg"]) && isset($_POST["v_bl_fam"])) {
+		$bl_touched = false;
+		foreach (array_keys($_POST["v_bl_fam"]) as $bl_i) {
+			$bl_orig = trim($_POST["v_bl_orig"][$bl_i] ?? "");
+			$bl_name = strtolower(trim($_POST["v_bl_fam"][$bl_i] ?? ""));
+			$bl_match = trim($_POST["v_bl_match"][$bl_i] ?? "");
+			$bl_len = trim($_POST["v_bl_lenient"][$bl_i] ?? "");
+			$bl_str = trim($_POST["v_bl_strict"][$bl_i] ?? "");
+			$bl_en = ($_POST["v_bl_enabled"][$bl_i] ?? "no") === "yes" ? "yes" : "no";
+
+			if ($bl_orig !== "" && ($bl_name === "" || $bl_name !== $bl_orig)) {
+				exec(
+					HESTIA_CMD . "h-delete-sys-botfamily " . quoteshellarg($bl_orig) . " no",
+					$output,
+					$return_var,
+				);
+				check_return_code($return_var, $output);
+				unset($output);
+				$bl_touched = true;
+			}
+			if ($bl_name === "" || $bl_match === "") {
+				continue;
+			}
+			exec(
+				HESTIA_CMD .
+					"h-change-sys-botfamily " .
+					quoteshellarg($bl_name) .
+					" " .
+					quoteshellarg($bl_match) .
+					" " .
+					quoteshellarg($bl_len) .
+					" " .
+					quoteshellarg($bl_str) .
+					" " .
+					quoteshellarg($bl_en) .
+					" no",
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			$bl_touched = true;
+		}
+		if ($bl_touched && empty($_SESSION["error_msg"])) {
+			exec(HESTIA_CMD . "h-update-sys-botfamilies", $output, $return_var);
+			check_return_code($return_var, $output);
+			unset($output);
+		}
+	}
+
 	// Flush field values on success
 	if (empty($_SESSION["error_msg"])) {
 		$_SESSION["ok_msg"] = _("Changes have been saved.");
@@ -1708,6 +1763,38 @@ unset($output);
 $sys_arr = $data["config"];
 foreach ($sys_arr as $key => $value) {
 	$_SESSION[$key] = $value;
+}
+
+// Bot rate-limit family table, padded to the fixed number of slots so empty rows are offered for new
+// families. Read after the POST block so a just-saved table renders.
+$bl_slots = 10;
+exec(HESTIA_CMD . "h-list-sys-botfamily json", $output, $return_var);
+$bl_data = json_decode(implode("", $output), true);
+unset($output);
+$botfamily_rows = [];
+foreach (is_array($bl_data) ? $bl_data : [] as $bl_name => $bl_v) {
+	$botfamily_rows[] = [
+		"orig" => $bl_name,
+		"fam" => $bl_name,
+		"match" => $bl_v["MATCH"] ?? "",
+		"lenient" => $bl_v["LENIENT"] ?? "",
+		"strict" => $bl_v["STRICT"] ?? "",
+		"enabled" => ($bl_v["ENABLED"] ?? "no") === "yes",
+		"burst" => $bl_v["BURST"] ?? "",
+		"nodelay" => $bl_v["NODELAY"] ?? "",
+	];
+}
+while (count($botfamily_rows) < $bl_slots) {
+	$botfamily_rows[] = [
+		"orig" => "",
+		"fam" => "",
+		"match" => "",
+		"lenient" => "60r/m",
+		"strict" => "20r/m",
+		"enabled" => false,
+		"burst" => "",
+		"nodelay" => "",
+	];
 }
 
 // Render page

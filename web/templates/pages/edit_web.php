@@ -266,7 +266,7 @@
 						<p class="hint u-mb10">
 							<?= tohtml( _("Throttle crawlers by family (HTTP 429). Humans are never limited, and malicious traffic is CrowdSec's job. Rates come from the server-wide family table.")) ?>
 							<?php if ($_SESSION["userContext"] === "admin") { ?>
-								<a href="/edit/server/botlimit/" class="u-ml5"><?= tohtml( _("Configure")) ?></a>
+								<a href="/edit/server/" class="u-ml5"><?= tohtml( _("Configure")) ?></a>
 							<?php } ?>
 						</p>
 						<?php foreach ($botfamilies as $bl_fam => $bl_data) {

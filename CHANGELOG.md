@@ -11,10 +11,12 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
-- Panel UI for web bot rate-limiting (#482). **Server > Bot Rate Limiting** (admin-only) edits the
-  family table in place: 10 slots, each with name / User-Agent match / lenient + strict rate /
-  enabled, saved in one POST. `BURST` and `NODELAY` stay conf-only advanced tuning and are shown
-  read-only per row. Per domain, **Edit Web Domain** gained a *Bot Rate Limiting* section listing the
+- Panel UI for web bot rate-limiting (#482). The family table is edited inline on **Server Settings**
+  (admin-only), in a *Bot Rate Limiting* section under Web Server: 10 slots, each with name /
+  User-Agent match / lenient + strict rate / enabled, saved with the settings form in one POST -
+  every row defers the re-render and a single apply follows, so the web server reloads once. `BURST`
+  and `NODELAY` stay conf-only advanced tuning and are shown read-only per row. (Placement is
+  provisional and may move with the planned panel overhaul.) Per domain, **Edit Web Domain** gained a *Bot Rate Limiting* section listing the
   admin-enabled families with an off/lenient/strict select each - **customer-editable**, and an admin
   can set it for them while impersonating; only the family table itself stays admin-only. A customer
   can only ever reach their own domains (the panel passes the effective session user and the CLI
