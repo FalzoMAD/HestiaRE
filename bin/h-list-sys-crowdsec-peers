@@ -4,8 +4,8 @@
 #
 # example: h-list-sys-crowdsec-peers json
 #
-# Tokens are never printed - the panel and any operator only ever need identity, not credentials. PIN
-# is the peer's public-key hash, so it is safe to show and useful for eyeballing a cert change.
+# Tokens are never printed - identity is all a panel or an operator needs. PIN is a public-key hash,
+# safe to show and useful for eyeballing a cert change.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -39,7 +39,7 @@ fi
 
 [ -f "$MESH_PEERS_CONF" ] || touch "$MESH_PEERS_CONF"
 
-# Bans currently contributed by each peer, for the "is this link actually doing anything" question.
+# Bans contributed per peer - answers "is this link doing anything".
 declare -A MESH_SEEN
 if command -v cscli > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
 	while read -r cnt scen; do

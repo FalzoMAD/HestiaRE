@@ -1,8 +1,8 @@
 <?php
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
-// Join another box's CrowdSec mesh (#485) with the one-time code its admin minted there. Both halves
-// of the authorisation meet here: this admin session, and that box's code.
+// Join another box's CrowdSec mesh with the one-time code its admin minted there. Both halves of the
+// authorisation meet here: this admin session, and that box's code.
 ob_start();
 $TAB = "FIREWALL";
 
@@ -42,8 +42,7 @@ if (!empty($_POST["ok"])) {
 	$v_port = $_POST["v_port"] ?? "";
 
 	if (empty($_SESSION["error_msg"])) {
-		// The code goes to the CLI through a 0600 handoff file, not argv: any local user can read
-		// another process's command line via /proc.
+		// Through a 0600 handoff file, not argv: /proc/*/cmdline is readable by any local user.
 		$handoff = "/run/hestia/mesh/in/" . bin2hex(random_bytes(16));
 		if (@file_put_contents($handoff, $_POST["v_code"], LOCK_EX) === false) {
 			$_SESSION["error_msg"] = _("CrowdSec fleet-mesh is not enabled on this server.");

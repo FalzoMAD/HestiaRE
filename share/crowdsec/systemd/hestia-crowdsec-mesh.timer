@@ -1,7 +1,6 @@
 # HestiaRE CrowdSec fleet-mesh cadence. Peer bans converge within one interval; L7-only backstop,
 # so a modest cadence is fine (the local engine already blocks its own detections live). A cycle costs
-# one HTTPS pull per peer; the expensive swap-import is skipped while the union is unchanged, so a
-# tight interval buys fast propagation cheaply.
+# one HTTPS pull per peer, and the expensive swap-import is skipped while the union is unchanged.
 [Unit]
 Description=HestiaRE CrowdSec fleet-mesh refresh timer
 

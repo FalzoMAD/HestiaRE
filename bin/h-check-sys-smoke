@@ -293,9 +293,8 @@ check_web_switch_prechecks() {
 # check_web_model_sentinel - flag an interrupted model switch so the box reports it
 # rather than the operator discovering it at the next reboot.
 check_mesh_serve_staged() {
-	# With peers paired, /run/hestia/mesh must hold the panel-readable staging - without it
-	# /mesh-decisions.php 404s and every peer silently stops receiving this box's bans (/run is
-	# tmpfs, so a missed refresh after a boot looks exactly like a healthy mesh from here).
+	# Without the staging, /mesh-decisions.php 404s and every peer silently stops receiving this box's
+	# bans - and since /run is tmpfs, a missed refresh after a boot looks healthy from anywhere else.
 	if [ ! -s "$CONF_DIR/crowdsec/peers.conf" ]; then
 		ok "crowdsec mesh has no peers paired"
 	elif [ -f /run/hestia/mesh/tokens ] && [ -f /run/hestia/mesh/published.json ]; then

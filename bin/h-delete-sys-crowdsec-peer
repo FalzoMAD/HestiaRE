@@ -5,9 +5,9 @@
 # example: h-delete-sys-crowdsec-peer node2
 #
 # Drops the peer record (its tokens die with it), closes the IP-scoped panel-port rule, removes its
-# staged list and the mesh bans it contributed. Run it on BOTH boxes: unpairing is deliberately local
-# (no remote command), so the other side keeps a dead peer - and its firewall hole - until unpaired
-# there too. A one-sided unpair is harmless otherwise: the orphaned peer's pulls just get a 403.
+# staged list and the bans it contributed. Run it on BOTH boxes: unpairing is deliberately local (no
+# remote command), so the other side keeps a dead peer - and its firewall hole - until unpaired there
+# too. Otherwise harmless: the orphaned peer's pulls just get a 403.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

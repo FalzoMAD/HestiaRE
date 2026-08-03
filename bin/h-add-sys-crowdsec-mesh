@@ -47,7 +47,7 @@ fi
 mkdir -p "$CONF_DIR/crowdsec" /var/lib/crowdsec/mesh/peers
 [ -f "$MESH_CONF" ] || cp -f "$HESTIA/share/crowdsec/mesh.conf" "$MESH_CONF"
 
-# /run staging for the panel's mesh endpoints (tmpfs, so it needs the boot-time recipe too).
+# /run staging for the panel's mesh endpoints (tmpfs, hence the boot-time recipe too).
 cp -f "$HESTIA/share/tmpfiles.d/hestia-mesh.conf" /etc/tmpfiles.d/hestia-mesh.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/hestia-mesh.conf > /dev/null 2>&1
 

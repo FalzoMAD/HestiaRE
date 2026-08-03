@@ -35,7 +35,7 @@
 	<?php else: ?>
 
 		<?php if (!empty($pairing_code)): ?>
-			<!-- Shown once, straight from the session: the plaintext code exists nowhere else. -->
+			<!-- Shown once, from the session: the plaintext exists nowhere else. -->
 			<div class="form-container u-mb20">
 				<label class="form-label"><?= tohtml( _("Pairing Code")) ?></label>
 				<input type="text" class="form-control" value="<?= tohtml($pairing_code) ?>" readonly onclick="this.select()">

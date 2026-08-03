@@ -11,8 +11,8 @@
 # Imports are hardened against a bad peer: IPv4-validated, per-peer + total caps, peer-attributed.
 # Run by the hestia-crowdsec-mesh timer. No-op unless mesh is enabled (the marker conf).
 #
-# The pull is the paired transport (see func/crowdsec-mesh.sh); anything else dropped into
-# MESH_PEERS_DIR as <name>.json is imported just the same, so a hand-wired transport still works.
+# The pull is the paired transport (func/crowdsec-mesh.sh); anything else dropped into MESH_PEERS_DIR
+# as <name>.json is imported just the same, so a hand-wired transport still works.
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -51,8 +51,8 @@ cscli decisions list -o json 2> /dev/null \
 mv -f "$pub" "$MESH_PUBLISH"
 chmod 644 "$MESH_PUBLISH"
 
-# 2) Serve + pull: stage the payload/token hashes the panel endpoint answers from (/run is tmpfs, so
-# this also heals it after a reboot), then fetch each paired peer's list.
+# 2) Stage what the panel endpoint answers from (/run is tmpfs - this also heals it after a reboot),
+# then fetch each paired peer's list.
 mesh_stage_serve
 mesh_pull_peers
 
@@ -81,9 +81,8 @@ jq -s -c --argjson total "$MESH_MAX_TOTAL" 'add // [] | unique_by(.value) | .[0:
 rm -f "$parts"
 
 # The swap-import is the only expensive step (LAPI writes for the whole union) and most cycles change
-# nothing, so skip it while the union is byte-identical AND the last import is recent enough that the
-# decisions cannot lapse (re-importing is what renews their TTL). Keeps the cadence tight for
-# propagation without hammering the LAPI.
+# nothing - so skip it while the union is byte-identical AND the last import is recent enough that the
+# decisions cannot lapse (re-importing is what renews their TTL). Buys a tight cadence cheaply.
 stamp="$(dirname "$MESH_PUBLISH")/.union.sha256"
 union_hash=$(sha256sum < "$union" | cut -f1 -d ' ')
 if [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$union_hash" ] \

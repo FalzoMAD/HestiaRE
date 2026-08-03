@@ -4,12 +4,11 @@
 #
 # example: h-generate-sys-crowdsec-pairing
 #
-# Opens a short pairing window on THIS box and prints the code once - hand it to the admin of the box
-# that should join, who runs h-add-sys-crowdsec-peer (or the panel's mesh page) against this host.
-# The code is what proves an admin HERE authorised the pairing, so a pairing always needs an admin on
-# both boxes: /mesh-pair.php is a 404 while no window is open, and minting needs root or an admin
-# panel session. Single-use, MESH_PAIRING_TTL seconds, MESH_PAIRING_TRIES wrong guesses and the
-# window is destroyed. Only the hash is stored - a lost code cannot be recovered, only replaced.
+# Opens a short pairing window here and prints the code once - hand it to the admin of the joining box,
+# who runs h-add-sys-crowdsec-peer against this host. The code is what proves an admin HERE authorised
+# the pairing, so pairing always needs an admin on both boxes: minting is root-only and /mesh-pair.php
+# is a 404 while no window is open. Single-use, MESH_PAIRING_TTL seconds, dead after
+# MESH_PAIRING_TRIES wrong guesses. Only the hash is stored - a lost code is replaced, never recovered.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -45,8 +44,8 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# 20 chars from a 32-symbol alphabet = 100 bits. Crockford-ish set (no I/L/O/0/1) so a code read out
-# loud or copied by hand cannot be mistyped into a different valid code.
+# 20 chars from a 32-symbol alphabet = 100 bits. Crockford-ish set (no I/L/O/0/1): a code read out
+# loud cannot be mistyped into a different valid one.
 code=$(LC_ALL=C tr -dc 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' < /dev/urandom | head -c 20)
 if [ ${#code} -ne 20 ]; then
 	echo "ERROR: could not generate a pairing code."
@@ -60,7 +59,7 @@ printf "PAIRING_HASH='%s'\nPAIRING_EXPIRES='%s'\nPAIRING_TRIES='0'\n" \
 chmod 600 "$MESH_PAIRING_CONF"
 
 # The panel cannot read /etc/hestia, so a secret-free marker tells /mesh-pair.php whether the route
-# exists at all. Authority still rests with the hash above; this only closes the door while shut.
+# exists at all. Authority stays with the hash above; this only keeps the door shut while idle.
 mesh_stage_serve
 printf '%s\n' "$expires" > "$MESH_RUN_DIR/pairing"
 chmod 644 "$MESH_RUN_DIR/pairing"
@@ -75,7 +74,6 @@ echo "  h-add-sys-crowdsec-peer $(hostname -f 2> /dev/null || hostname) <CODE> $
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# The code itself is never logged.
 $BIN/h-log-action "system" "Info" "System" "CrowdSec mesh pairing window opened."
 log_event "$OK" "$ARGUMENTS"
 

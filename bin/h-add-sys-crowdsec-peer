@@ -4,13 +4,12 @@
 #
 # example: h-add-sys-crowdsec-peer node2.example.com AB3CD-EF4GH-JK5MN-PQ6RS
 #
-# Joins the mesh of the box at HOST using a one-time code that box's admin minted with
-# h-generate-sys-crowdsec-pairing - so pairing needs an admin on both sides and neither ever handles
-# the other's credentials. Both boxes end up with each other's pull token, TLS pin and an IP-scoped
-# ACCEPT rule for the panel port; from then on the mesh timer pulls each peer's published ban list.
+# Joins the mesh of the box at HOST with a one-time code its admin minted there, so pairing needs an
+# admin on both sides and neither handles the other's credentials. Both boxes end up with each other's
+# pull token, TLS pin and an IP-scoped ACCEPT rule for the panel port; the timer takes it from there.
 #
-# CODE may be given as @/path/to/file (read, then removed) so a caller need not expose the secret in
-# argv, where any local user could read it from /proc. The panel uses that form.
+# CODE may be @/path/to/file (read, then removed): argv is world-readable via /proc, so the panel
+# passes the secret that way.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -61,7 +60,7 @@ for b in curl jq openssl; do
 	}
 done
 
-# @file form: the secret arrives out of band. Consume it immediately either way.
+# @file form: the secret arrives out of band. Consumed immediately either way.
 if [[ "$code" == @* ]]; then
 	code_file="${code#@}"
 	[ -f "$code_file" ] || {
@@ -71,7 +70,7 @@ if [[ "$code" == @* ]]; then
 	code=$(head -c 128 "$code_file")
 	rm -f "$code_file"
 fi
-# Codes are printed grouped; accept any punctuation/case the admin pasted.
+# Codes are printed grouped; accept whatever punctuation/case got pasted.
 code=$(printf '%s' "$code" | tr '[:lower:]' '[:upper:]' | LC_ALL=C tr -dc 'A-Z0-9')
 [ ${#code} -ge 16 ] || {
 	echo "ERROR: pairing code looks malformed."
@@ -98,7 +97,7 @@ if [ -f "$MESH_PEERS_CONF" ] && grep -q "^PEER='$peer'" "$MESH_PEERS_CONF"; then
 	exit "$E_EXISTS"
 fi
 
-# The peer calls back during pairing (to record OUR pin), so it must be able to reach us by IP.
+# The peer calls back during pairing to record OUR pin, so it must reach us by IP.
 peer_ip=$(getent ahostsv4 "$host" 2> /dev/null | awk '{print $1; exit}')
 [ -n "$peer_ip" ] || {
 	echo "ERROR: cannot resolve $host to an IPv4 address."
@@ -109,16 +108,14 @@ peer_ip=$(getent ahostsv4 "$host" 2> /dev/null | awk '{print $1; exit}')
 #                       Action                             #
 #----------------------------------------------------------#
 
-# 1) Let the peer in first: its pairing handler connects back to read our TLS pin, and afterwards it
-# pulls our published list on this same port.
+# 1) Let the peer in first: it connects back for our TLS pin, and later pulls on the same port.
 mesh_fw_open "$peer_ip" "$peer" && fw_added=1
 
-# 2) Pin the peer's panel key now and pair against that pin, so even the handshake that carries the
-# code is bound to one specific key.
+# 2) Pin first, then pair against that pin - even the handshake carrying the code is key-bound.
 pin=$(mesh_spki_pin "$host" "$port") || fail "cannot read the TLS key of $host:$port (reachable? panel up?)" "$E_CONNECT"
 
-# 3) The token we mint here is what the peer will present to US later; the peer's own token comes back
-# in the reply. Both travel in files, never argv.
+# 3) The token minted here is what the peer presents to US later; its own comes back in the reply.
+# Both travel in files, never argv.
 serve_token=$(mesh_token_new)
 payload=$(mktemp)
 chmod 600 "$payload"
@@ -146,7 +143,7 @@ rm -f "$reply"
 [[ "$pull_token" =~ ^[a-f0-9]{32,128}$ ]] || fail "the peer returned no usable token." "$E_PARSING"
 [[ "$peer_port" =~ ^[0-9]{1,5}$ ]] || peer_port="$port"
 
-# 4) Record the peer. Root-only: PULL_TOKEN/SERVE_TOKEN are live credentials.
+# 4) Root-only file: PULL_TOKEN/SERVE_TOKEN are live credentials.
 time_n_date=$(date +'%T %F')
 str="PEER='$peer' HOST='$host' PORT='$peer_port' IP='$peer_ip' PIN='$pin'"
 str="$str PULL_TOKEN='$pull_token' SERVE_TOKEN='$serve_token' SUSPENDED='no'"
@@ -155,7 +152,7 @@ touch "$MESH_PEERS_CONF"
 chmod 600 "$MESH_PEERS_CONF"
 echo "$str" >> "$MESH_PEERS_CONF"
 
-# 5) Serve side live immediately, then converge (publish + pull + import) without waiting for the timer.
+# 5) Serve side live at once, then converge without waiting for the timer.
 mesh_stage_serve
 $BIN/h-update-crowdsec-mesh > /dev/null 2>&1 || true
 
@@ -165,7 +162,7 @@ echo "Paired with $peer ($host:$peer_port)."
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# $ARGUMENTS holds the code, so it is not logged - only the peer identity is.
+# $ARGUMENTS holds the code, so it is never logged - only the peer identity.
 $BIN/h-log-action "system" "Info" "System" "CrowdSec mesh peer added (Peer: $peer, IP: $peer_ip)."
 log_event "$OK" "PEER='$peer'"
 

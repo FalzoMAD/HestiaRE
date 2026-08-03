@@ -42,8 +42,7 @@ rm -f /etc/systemd/system/hestia-crowdsec-mesh.service /etc/systemd/system/hesti
 rm -f /etc/tmpfiles.d/hestia-mesh.conf
 systemctl daemon-reload
 
-# Unpair first: h-delete-sys-crowdsec-peer is what closes each peer's panel-port ACCEPT rule, which
-# must not outlive the mesh.
+# Unpair first: that is what closes each peer's panel-port ACCEPT rule, which must not outlive the mesh.
 if [ -f "$CONF_DIR/crowdsec/peers.conf" ]; then
 	# Snapshot the ids: each unpair rewrites the file we would otherwise be iterating.
 	for peer in $(sed -n "s/^PEER='\([^']*\)'.*/\1/p" "$CONF_DIR/crowdsec/peers.conf"); do
@@ -52,8 +51,8 @@ if [ -f "$CONF_DIR/crowdsec/peers.conf" ]; then
 	rm -f "$CONF_DIR/crowdsec/peers.conf"
 fi
 
-# Drop the imported mesh bans; local + CAPI decisions stay. Per-peer scenarios need an exact match -
-# `delete --scenario` is not a prefix - so enumerate what is actually active.
+# Drop imported mesh bans; local + CAPI decisions stay. `delete --scenario` is exact-match, not a
+# prefix, so enumerate the per-peer scenarios that are actually active.
 if command -v cscli > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
 	for s in $(cscli decisions list -a -o json 2> /dev/null \
 		| jq -r '(if type=="array" then .[] else . end) | (.decisions // [])[] | .scenario // empty
