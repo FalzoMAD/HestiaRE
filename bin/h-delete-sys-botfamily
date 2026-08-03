@@ -1,0 +1,75 @@
+#!/bin/bash
+# info: delete a web bot rate-limit family
+# options: FAMILY [APPLY]
+#
+# example: h-delete-sys-botfamily custom1
+#
+# Removes the family from the system table AND from every domain that throttled it - a leftover
+# reference would keep being rendered into that domain's fragment, pointing at a zone that no longer
+# exists (nginx -t then fails and blocks the next reload for the whole box). APPLY=no defers the
+# re-render to a later h-update-sys-botfamilies.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+family=$1
+apply=${2-yes}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/botpolicy.sh
+source $HESTIA/func/botpolicy.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+OBJ="$CONF_DIR/botfamilies"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_args '1' "$#" 'FAMILY [APPLY]'
+check_hestia_demo_mode
+
+if [[ ! "$family" =~ ^[a-z0-9_]{1,20}$ ]]; then
+	echo "Error: invalid FAMILY"
+	exit "$E_INVALID"
+fi
+if [ ! -f "$OBJ.conf" ] || [ -z "$(get_object_value "$OBJ" 'FAMILY' "$family" '$FAMILY' 2> /dev/null)" ]; then
+	echo "Error: unknown bot family '$family' (see h-list-sys-botfamily)"
+	exit "$E_NOTEXIST"
+fi
+case "$apply" in yes | no) ;; *)
+	echo "Error: APPLY must be yes or no"
+	exit "$E_INVALID"
+	;;
+esac
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+sed -i "/^FAMILY='$family' /d" "$OBJ.conf"
+botpolicy_purge_family "$family"
+
+[ "$apply" = 'yes' ] && "$BIN/h-update-sys-botfamilies"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Bot family deleted (Family: $family)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

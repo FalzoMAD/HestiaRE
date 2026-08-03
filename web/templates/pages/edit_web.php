@@ -250,6 +250,41 @@
 					</ul>
 				<?php } ?>
 			</div>
+			<?php if ($_SESSION["userContext"] === "admin" && !empty($botfamilies)) { ?>
+				<!-- Layer-B bot throttling: only enabled families are offered, since the server config
+				     defines rate zones for those alone. Humans are never limited here. -->
+				<details class="box-collapse u-mt15 u-mb10">
+					<summary class="box-collapse-header">
+						<i class="fas fa-robot u-mr10"></i><?= tohtml( _("Bot Rate Limiting")) ?>
+						<span class="optional u-ml5">
+							<?php $bl_on = count($v_botlimit); ?>
+							<?= $bl_on ? tohtml(sprintf(_("%d active"), $bl_on)) : tohtml( _("off")) ?>
+						</span>
+					</summary>
+					<div class="box-collapse-content">
+						<p class="hint u-mb10">
+							<?= tohtml( _("Throttle crawlers by family (HTTP 429). Humans are never limited, and malicious traffic is CrowdSec's job. Rates come from the server-wide family table.")) ?>
+							<a href="/edit/server/botlimit/" class="u-ml5"><?= tohtml( _("Configure")) ?></a>
+						</p>
+						<?php foreach ($botfamilies as $bl_fam => $bl_data) {
+							$bl_cur = $v_botlimit[$bl_fam] ?? "off"; ?>
+							<div class="u-mb10">
+								<label for="v_botlimit_<?= tohtml($bl_fam) ?>" class="form-label">
+									<?= tohtml($bl_fam) ?>
+									<span class="optional">
+										(<?= tohtml($bl_data["LENIENT"]) ?> / <?= tohtml($bl_data["STRICT"]) ?>)
+									</span>
+								</label>
+								<select class="form-select" name="v_botlimit[<?= tohtml($bl_fam) ?>]" id="v_botlimit_<?= tohtml($bl_fam) ?>">
+									<option value="off" <?php if ($bl_cur == "off") echo "selected"; ?>><?= tohtml( _("Off")) ?></option>
+									<option value="lenient" <?php if ($bl_cur == "lenient") echo "selected"; ?>><?= tohtml( _("Lenient")) ?></option>
+									<option value="strict" <?php if ($bl_cur == "strict") echo "selected"; ?>><?= tohtml( _("Strict")) ?></option>
+								</select>
+							</div>
+						<?php } ?>
+					</div>
+				</details>
+			<?php } ?>
 			<div class="u-mt15 u-mb20">
 				<button x-on:click="showAdvanced = !showAdvanced" type="button" class="button button-secondary">
 					<?= tohtml( _("Advanced Options")) ?>

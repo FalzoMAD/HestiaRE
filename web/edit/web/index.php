@@ -40,6 +40,30 @@ unset($output);
 // Parse domain
 $v_ip = $data[$v_domain]["IP"];
 $v_template = $data[$v_domain]["TPL"];
+
+// Bot rate limiting (Layer B, #482): the domain stores a compact "fam:level,fam:level" field, the
+// table of families is server-wide. Admin-only, because loosening a level is a server-resource
+// decision, not a per-customer one.
+$v_botlimit = [];
+foreach (explode(",", (string) ($data[$v_domain]["BOTLIMIT"] ?? "")) as $entry) {
+	if (strpos($entry, ":") === false) {
+		continue;
+	}
+	[$bl_fam, $bl_lvl] = explode(":", $entry, 2);
+	$v_botlimit[$bl_fam] = $bl_lvl;
+}
+$botfamilies = [];
+if ($_SESSION["userContext"] === "admin") {
+	exec(HESTIA_CMD . "h-list-sys-botfamily json", $output, $return_var);
+	$bf = json_decode(implode("", $output), true);
+	unset($output);
+	// Only enabled families can be offered: the server config defines zones for those alone.
+	foreach (is_array($bf) ? $bf : [] as $bf_name => $bf_data) {
+		if (($bf_data["ENABLED"] ?? "no") === "yes") {
+			$botfamilies[$bf_name] = $bf_data;
+		}
+	}
+}
 $v_aliases = str_replace(",", "\n", $data[$v_domain]["ALIAS"]);
 $valiases = explode(",", $data[$v_domain]["ALIAS"]);
 
@@ -902,6 +926,43 @@ if (!empty($_POST["save"])) {
 		$v_ssl_hsts = "no";
 		$restart_web = "yes";
 		$restart_proxy = "yes";
+	}
+
+	// Change bot rate-limit levels (one command per changed family; each defers the restart)
+	if ($_SESSION["userContext"] === "admin" && isset($_POST["v_botlimit"])) {
+		foreach ($botfamilies as $bl_fam => $bl_unused) {
+			$bl_new = $_POST["v_botlimit"][$bl_fam] ?? "off";
+			if (!in_array($bl_new, ["off", "lenient", "strict"], true)) {
+				continue;
+			}
+			$bl_old = $v_botlimit[$bl_fam] ?? "off";
+			if ($bl_new === $bl_old || !empty($_SESSION["error_msg"])) {
+				continue;
+			}
+			exec(
+				HESTIA_CMD .
+					"h-change-web-domain-botlimit " .
+					$user .
+					" " .
+					quoteshellarg($v_domain) .
+					" " .
+					quoteshellarg($bl_fam) .
+					" " .
+					quoteshellarg($bl_new) .
+					" 'no'",
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			if ($bl_new === "off") {
+				unset($v_botlimit[$bl_fam]);
+			} else {
+				$v_botlimit[$bl_fam] = $bl_new;
+			}
+			$restart_web = "yes";
+			$restart_proxy = "yes";
+		}
 	}
 
 	// Delete web stats

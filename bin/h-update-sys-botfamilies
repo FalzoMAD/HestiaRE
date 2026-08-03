@@ -7,6 +7,10 @@
 # Re-renders the web-server rate-limit config from the system bot-family conf
 # (/etc/hestia/botfamilies.conf) and reloads. Run after editing that conf. Renders the nginx zones
 # where nginx is the public front, else the apache mod_qos counters (apache-only).
+#
+# Also re-renders every throttled domain's fragment first: fragments reference zones by family name, so
+# a table edit that renamed or disabled a family would otherwise leave a dangling zone reference and
+# fail the nginx test below - blocking the next reload for the whole box.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -21,6 +25,7 @@ source $HESTIA/func/main.sh
 source $HESTIA/func/botpolicy.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -41,6 +46,8 @@ fi
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
+
+botpolicy_render_all_fragments
 
 # nginx fronts in nginx-only + both; apache-only is the only model where apache does Layer B.
 if [ -n "$PROXY_SYSTEM" ]; then pub="$PROXY_SYSTEM"; else pub="$WEB_SYSTEM"; fi

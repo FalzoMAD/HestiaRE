@@ -127,6 +127,10 @@ botpolicy_apply() {
 # Render the per-domain Layer-B fragment (nginx.botlimit.conf / botlimit.apache2.conf) from the
 # domain's BOTLIMIT field ("fam:level,fam:level"; level = lenient|strict, absent = off). Removed
 # when empty, so the vhost's IncludeOptional/include glob is a no-op for unthrottled domains.
+#
+# A family that is gone or disabled is SKIPPED: the server config only defines zones for enabled
+# families, so emitting `limit_req zone=hbot_x_strict` for a disabled one leaves a dangling zone
+# reference and `nginx -t` fails - which would block the next reload for every domain on the box.
 botpolicy_render_domain_fragment() {
 	local user="$1" domain="$2" sys
 	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
@@ -147,6 +151,7 @@ botpolicy_render_domain_fragment() {
 			fam=${entry%%:*}
 			lvl=${entry#*:}
 			case "$lvl" in lenient | strict) ;; *) continue ;; esac
+			[ "$(get_object_value "$obj" 'FAMILY' "$fam" '$ENABLED' 2> /dev/null)" = 'yes' ] || continue
 			burst=$(get_object_value "$obj" 'FAMILY' "$fam" '$BURST' 2> /dev/null)
 			nodelay=$(get_object_value "$obj" 'FAMILY' "$fam" '$NODELAY' 2> /dev/null)
 			[ -n "$burst" ] || burst=10
@@ -161,6 +166,7 @@ botpolicy_render_domain_fragment() {
 			fam=${entry%%:*}
 			lvl=${entry#*:}
 			case "$lvl" in lenient | strict) ;; *) continue ;; esac
+			[ "$(get_object_value "$obj" 'FAMILY' "$fam" '$ENABLED' 2> /dev/null)" = 'yes' ] || continue
 			match=$(get_object_value "$obj" 'FAMILY' "$fam" '$MATCH' 2> /dev/null)
 			[ -n "$match" ] || continue
 			echo "BrowserMatchNoCase \"$match\" hbot_$fam" >> "$tmp"
@@ -178,4 +184,44 @@ botpolicy_render_domain_fragment() {
 	else
 		rm -f "$tmp" "$frag"
 	fi
+}
+
+# Re-render every throttled domain's fragment. Needed whenever the FAMILY TABLE changes (rename,
+# delete, enable/disable): fragments reference zones by family name, so a table change that is not
+# followed by this leaves stale references behind until the next domain rebuild.
+botpolicy_render_all_fragments() {
+	local wc u d
+	for wc in "$CONF_DIR"/users/*/web.conf; do
+		[ -f "$wc" ] || continue
+		u=$(basename "$(dirname "$wc")")
+		# shellcheck disable=SC2013 # a Hestia domain cannot contain whitespace
+		for d in $(sed -n "s/^DOMAIN='\([^']*\)'.*BOTLIMIT='[^']\+.*/\1/p" "$wc"); do
+			botpolicy_render_domain_fragment "$u" "$d"
+		done
+	done
+}
+
+# Strip one family from every domain's BOTLIMIT - for a family that no longer exists, whose leftover
+# references would otherwise be rendered forever. Absolute object path: update_object_value resolves a
+# relative one against the caller's own $USER_DATA.
+botpolicy_purge_family() {
+	local fam="$1" wc u d obj bl new e
+	for wc in "$CONF_DIR"/users/*/web.conf; do
+		[ -f "$wc" ] || continue
+		u=$(basename "$(dirname "$wc")")
+		obj="$CONF_DIR/users/$u/web"
+		# shellcheck disable=SC2013 # a Hestia domain cannot contain whitespace
+		for d in $(sed -n "s/^DOMAIN='\([^']*\)'.*BOTLIMIT='[^']\+.*/\1/p" "$wc"); do
+			bl=$(get_object_value "$obj" 'DOMAIN' "$d" '$BOTLIMIT' 2> /dev/null)
+			new=''
+			# shellcheck disable=SC2086 # comma-split of the compact BOTLIMIT field is intentional
+			for e in ${bl//,/ }; do
+				[ "${e%%:*}" = "$fam" ] && continue
+				new="${new:+$new,}$e"
+			done
+			[ "$new" = "$bl" ] && continue
+			update_object_value "$obj" 'DOMAIN' "$d" '$BOTLIMIT' "$new"
+			botpolicy_render_domain_fragment "$u" "$d"
+		done
+	done
 }

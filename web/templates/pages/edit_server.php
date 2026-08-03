@@ -238,6 +238,15 @@
 							</a>
 						</p>
 					<?php } ?>
+					<p>
+						<?= tohtml( _("Bot Rate Limiting")) ?>:
+						<span class="u-ml5">
+							<?= tohtml(!empty($_SESSION["PROXY_SYSTEM"]) ? $_SESSION["PROXY_SYSTEM"] : $_SESSION["WEB_SYSTEM"]) ?>
+						</span>
+						<a href="/edit/server/botlimit/" class="u-ml5">
+							<i class="fas fa-pencil icon-orange"></i>
+						</a>
+					</p>
 					<?php if (!empty($_SESSION["WEB_BACKEND"])) { ?>
 						<p>
 							<?= tohtml( _("PHP Interpreter")) ?>:

@@ -657,6 +657,23 @@
         "issues": []
       }
     },
+    "web_botlimit": {
+      "description": "Server-native web bot rate-limiting, Layer B (#482) - a standalone subsystem, independent of CrowdSec and available on ANY web install (nginx-only, apache-only, both). Throttles bot families with native nginx limit_req / apache mod_qos and answers 429; humans are NEVER limited and malicious traffic stays CrowdSec's job (ban -> 403), so the two never overlap. Driven by an admin family table (share/botpolicy/botfamilies.conf seeded to /etc/hestia/botfamilies.conf, 8 curated families + 2 free slots, capped at 10 because each family costs two limit_req zones plus one more alternative in the per-request UA map). Per family: UA match + lenient/strict rate + enabled, plus conf-only advanced burst/nodelay. Per domain each family is off/lenient/strict via the web.conf BOTLIMIT field, rendered into a per-vhost fragment the templates include by glob (absent = no-op). nginx keys per family PER DOMAIN ($host:family, set inside the map VALUE so a non-bot UA still maps to \"\" and stays unlimited) - a busy customer's crawlers cannot 429 another customer out of a shared bucket; apache mod_qos counts per client IP. Default off/opt-in. KNOWN LIMITATION: families match on the spoofable User-Agent and Layer B does not verify it (no rDNS/IP check), so on a non-CrowdSec install a client faking a crawler UA can drain that family's bucket; on CrowdSec installs the good-actor whitelist verifies real crawlers by rDNS/IP. INVARIANT: the server config defines zones only for ENABLED families, so a fragment must never reference a gone/disabled one - nginx -t would fail and block the next reload for the whole box; the fragment renderer skips them, the apply command re-renders every throttled domain first, and deleting a family also strips it from every domain.",
+      "commands": [
+        "bin/h-list-sys-botfamily",
+        "bin/h-change-sys-botfamily",
+        "bin/h-delete-sys-botfamily",
+        "bin/h-update-sys-botfamilies",
+        "bin/h-change-web-domain-botlimit"
+      ],
+      "core": "func/botpolicy.sh (botpolicy_seed_families, botpolicy_render_nginx/_apache, botpolicy_apply, botpolicy_render_domain_fragment, botpolicy_render_all_fragments, botpolicy_purge_family, botpolicy_rate_to_qos)",
+      "config": "/etc/hestia/botfamilies.conf (instance copy, survives updates) -> /etc/nginx/conf.d/hestia_botlimit.conf or /etc/apache2/conf.d/hestia_botlimit.conf (both GENERATED); per-domain $HOMEDIR/$user/conf/web/$domain/nginx.botlimit.conf | botlimit.apache2.conf",
+      "panel": "web/edit/server/botlimit/ (admin-only family table, 10 slots saved in one POST with APPLY=no per row + a single apply at the end) + the Bot Rate Limiting section in web/edit/web/ (per-domain off/lenient/strict for the enabled families, admin-only: loosening a level is a server-resource decision). h-list-web-domain exposes BOTLIMIT so the panel can see a domain's own levels.",
+      "templates": "templates/web/nginx/* include nginx.botlimit.conf*; templates/web/apache2/* include botlimit.apache2.conf* (Layer A keeps its own nginx.crowdsec.conf*)",
+      "rebuild": "func/rebuild.sh calls botpolicy_render_domain_fragment beside the CrowdSec Layer-A fragment",
+      "no_symlink": "new h-* commands, no v-* symlink",
+      "upstream_ref": "hestiare-native"
+    },
     "crowdsec": {
       "description": "CrowdSec integration (#186), nginx-front only, in four layers. Layer A (L7): own dependency-free LuaJIT ban-bouncer that queries the local LAPI live and answers 403; rendered per web model + a per-domain fragment. L3: own cscli->ipset feeder (bin/h-update-firewall-crowdsec, timer-driven) fills a hestia-crowdsec DROP chain via h-update-firewall - the OS crowdsec-firewall-bouncer 0.0.25 is fleet-unusable (nil-panics in nftablesConfig). The feeder DENYLISTS non-web scenarios (ssh/ftp/mail/db/req-limit) so only web-tier bans reach the firewall. Fleet-mesh: peer-mesh shared blocklist, no central LAPI - each box publishes its own local bans and imports the union of its peers' as L7-only mesh bans (origin cscli-import, scenario hestia-mesh:<peer>); enforcement falls out for free (the L7 bouncer sees imported decisions, the L3 feeder filters origin==crowdsec). Packaged as a removable addon (#123). The LAPI is loopback-only (127.0.0.1:8054) throughout. Layer-B bot rate-limiting was decoupled into its own always-available subsystem (func/botpolicy.sh, #482) - CrowdSec bans, botpolicy throttles, and the two never overlap. crowdsec_apply removes crowdsecurity/nginx-req-limit-exceeded on purpose: it would escalate our own 429s into bans.",
       "commands": [

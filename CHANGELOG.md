@@ -11,6 +11,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- Panel UI for web bot rate-limiting (#482). **Server > Bot Rate Limiting** (admin-only) edits the
+  family table in place: 10 slots, each with name / User-Agent match / lenient + strict rate /
+  enabled, saved in one POST. `BURST` and `NODELAY` stay conf-only advanced tuning and are shown
+  read-only per row. Per domain, **Edit Web Domain** gained a *Bot Rate Limiting* section listing the
+  enabled families with an off/lenient/strict select each (admin-only: loosening a level is a
+  server-resource decision, not a per-customer one). New commands `h-change-sys-botfamily` (upsert)
+  and `h-delete-sys-botfamily`, both with an `APPLY=no` form so the panel can save the whole table
+  and re-render once; `h-list-sys-botfamily` gained `[FORMAT]` (json/plain/csv) and
+  `h-list-web-domain` now exposes `BOTLIMIT`, without which the panel cannot see the domain's own
+  levels. The family table is capped at 10: each family costs two `limit_req` zones plus one more
+  alternative in the per-request User-Agent map.
 - CrowdSec mesh transport: panel pairing + authenticated pull (#186, phase 6b). The mesh no longer
   needs a hand-wired transport. Two boxes pair over the panel port and then pull each other's
   published ban list on a timer; the CrowdSec LAPI stays loopback-only, what crosses the wire is a
@@ -141,6 +152,15 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
 
 ### Fixed
 
+- Bot rate-limiting: a **disabled or deleted family left dangling zone references** in the per-domain
+  fragments (#482). The server config only defines `limit_req` zones for *enabled* families, but a
+  domain fragment was rendered from its `BOTLIMIT` field regardless - so turning a family off (or
+  removing it) while a domain still used it produced `limit_req zone=hbot_x_strict` with no such zone,
+  `nginx -t` failed, and that blocked the next reload for **every** domain on the box. The fragment
+  renderer now skips families that are gone or disabled, `h-update-sys-botfamilies` re-renders every
+  throttled domain's fragment before testing the config, and `h-delete-sys-botfamily` also strips the
+  family from every domain that used it. `h-update-sys-botfamilies` additionally takes the web-model
+  freeze lock, which it needs since it reloads the web server (#120).
 - CrowdSec L3 feeder now enrolls every web-tier ban, not just `http`/`CVE`-named ones (#186). The
   placeholder scenario allowlist silently dropped advisory-named web exploits (e.g.
   `vmware-vcenter-vmsa-*`) from the L3 set. Since acquisition is nginx-only every local
