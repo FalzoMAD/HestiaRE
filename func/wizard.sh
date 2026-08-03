@@ -560,7 +560,7 @@ fn_ask_group_checklist() {
         if [ -n "$vis" ]; then
             # This screen sets every row's value at once, so a visible_if naming another row of the
             # SAME screen can never be true - the row would just silently vanish from the wizard and
-            # land empty in install.conf (that is how CROWDSEC_MESH went missing). An authoring error,
+            # land empty in install.conf (that is how the CrowdSec mesh question went missing). An authoring error,
             # not a user one: refuse before anything is installed instead of skipping quietly.
             local vis_key sib; read -r vis_key _ _ <<< "$vis"
             for sib in "${cb_ids[@]}"; do

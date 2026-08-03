@@ -1,0 +1,121 @@
+#!/bin/bash
+# info: switch the CrowdSec model between capi, local and mesh
+# options: MODE
+#
+# example: h-change-sys-crowdsec-mode mesh
+#
+# Runtime counterpart to the wizard's CROWDSEC_MODE question (#494), for the case where the fleet grew
+# and the box should start meshing after the fact. capi = central community blocklist + telemetry;
+# local = self-hosted engine only; mesh = local plus the peer exchange, so mesh always turns CAPI off.
+# The current model is derived from the artefacts on disk, not from install.conf (that is the install
+# recipe, not live state), and the target is always enforced in full - so running this on the
+# inconsistent capi+mesh combination the pre-v0.13.3 wizard allowed normalises it.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+mode=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/crowdsec.sh
+source $HESTIA/func/crowdsec.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_args '1' "$#" 'MODE'
+check_hestia_demo_mode
+
+case "$mode" in
+	capi | local | mesh) ;;
+	*)
+		echo "Error: MODE must be capi, local or mesh"
+		exit "$E_INVALID"
+		;;
+esac
+
+if ! dpkg -l crowdsec 2> /dev/null | grep -q '^ii'; then
+	echo "Error: CrowdSec is not installed. Run h-add-sys-crowdsec first."
+	exit "$E_NOTEXIST"
+fi
+
+# Only the nginx front runs CrowdSec at all, so an apache-only box has no model to switch.
+if [ "$(crowdsec_public_web)" != "nginx" ]; then
+	echo "Error: nginx is not the public front - CrowdSec is not in use on this box."
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+from=$(crowdsec_current_mode)
+echo "CrowdSec model: $from -> $mode"
+
+# Name the peers BEFORE the mesh goes away: unpairing closes their panel-port rule here, but the
+# other side keeps a dead record for this box until its admin unpairs too.
+if [ "$mode" != 'mesh' ] && [ -s "$CONF_DIR/crowdsec/peers.conf" ]; then
+	echo "[ ! ] Leaving the mesh unpairs these peers - unpair this box there as well:"
+	sed -n "s/^PEER='\([^']*\)'.*HOST='\([^']*\)'.*/      \1 (\2)/p" "$CONF_DIR/crowdsec/peers.conf"
+fi
+
+case "$mode" in
+	capi)
+		[ -f "$CONF_DIR/crowdsec/mesh.conf" ] && "$BIN/h-delete-sys-crowdsec-mesh" > /dev/null
+		crowdsec_enable_capi || exit "$E_INVALID"
+		;;
+	local)
+		[ -f "$CONF_DIR/crowdsec/mesh.conf" ] && "$BIN/h-delete-sys-crowdsec-mesh" > /dev/null
+		crowdsec_disable_capi
+		;;
+	mesh)
+		crowdsec_disable_capi
+		"$BIN/h-add-sys-crowdsec-mesh" > /dev/null || {
+			echo "Error: enabling the mesh failed"
+			exit "$E_INVALID"
+		}
+		;;
+esac
+
+crowdsec_secure_credentials
+systemctl restart crowdsec > /dev/null 2>&1 || true
+
+now=$(crowdsec_current_mode)
+if [ "$now" != "$mode" ]; then
+	echo "Error: model is '$now' after the switch, expected '$mode'"
+	exit "$E_INVALID"
+fi
+
+# Only when CAPI was actually active before: cscli 1.4.x cannot delete by origin, and deleting by
+# scenario would take own bans with it, so entries already in the local DB are left to expire (nothing
+# new arrives once CAPI is off).
+if [ "$mode" != 'capi' ] && [[ "$from" == *capi* ]]; then
+	echo "[ i ] Community-blocklist decisions already pulled stay until they expire."
+	echo "      Inspect: cscli decisions list -a   |   clear everything (incl. own bans): cscli decisions delete --all"
+fi
+
+echo "CrowdSec model is now: $mode"
+[ "$mode" = 'mesh' ] && echo "      Pair a peer: panel Firewall > Fleet Mesh, or h-generate-sys-crowdsec-pairing"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "CrowdSec model changed ($from -> $mode)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

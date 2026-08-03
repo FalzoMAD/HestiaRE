@@ -22,6 +22,75 @@ crowdsec_disable_capi() {
 		"$cfg"
 }
 
+# The packages generate both credential files 0644, but they hold the LAPI and CAPI machine passwords
+# and customers have shell access on these boxes. The engine and cscli run as root, so 0600 costs
+# nothing. Called from every entry point that touches the model, not just at install.
+crowdsec_secure_credentials() {
+	chmod 600 /etc/crowdsec/local_api_credentials.yaml /etc/crowdsec/online_api_credentials.yaml 2> /dev/null || true
+}
+
+# Inverse of crowdsec_disable_capi, for a runtime switch back to the community blocklist (#494).
+crowdsec_enable_capi() {
+	local cfg="/etc/crowdsec/config.yaml" creds="/etc/crowdsec/online_api_credentials.yaml"
+	[ -f "$cfg" ] || return 0
+	local uncommented=0
+	if ! grep -qE '^[[:space:]]*credentials_path:.*online_api_credentials' "$cfg"; then
+		# Anchored on the marker disable_capi leaves behind, so a config commented out by hand
+		# (or by a future CrowdSec default) is not silently rewritten.
+		sed -i -E \
+			-e 's|^([[:space:]]*)# (online_client:.*) \(local-only, #186\)$|\1\2|' \
+			-e 's|^([[:space:]]*)# (credentials_path:[[:space:]]*/etc/crowdsec/online_api_credentials.*)$|\1\2|' \
+			"$cfg"
+		grep -qE '^[[:space:]]*credentials_path:.*online_api_credentials' "$cfg" || {
+			echo "CrowdSec: could not re-enable the CAPI online_client in $cfg - edit it by hand." >&2
+			return 1
+		}
+		uncommented=1
+	fi
+	# `cscli capi register` (1.4.x) LOADS the credentials file before writing it, so it needs both an
+	# uncommented online_client AND the file to exist - an empty one is enough, an absent one is a hard
+	# failure either way round. The OS packages register at postinst, so this only covers a wiped file.
+	if [ ! -f "$creds" ]; then
+		: > "$creds"
+		chmod 600 "$creds"
+		if ! cscli capi register -f "$creds" > /dev/null 2>&1 || ! grep -q '^login:' "$creds" 2> /dev/null; then
+			# Never leave the config pointing at credentials that are not there - the engine would
+			# keep running but silently never reach the CAPI. Back to a consistent local box.
+			rm -f "$creds"
+			[ "$uncommented" = 1 ] && crowdsec_disable_capi
+			echo "CrowdSec: CAPI registration failed - left in local mode. Check egress and 'cscli capi status'." >&2
+			return 1
+		fi
+	elif ! grep -q '^login:' "$creds" 2> /dev/null; then
+		[ "$uncommented" = 1 ] && crowdsec_disable_capi
+		echo "CrowdSec: $creds carries no CAPI login - fix or delete it, then retry." >&2
+		return 1
+	fi
+	crowdsec_secure_credentials
+}
+
+# The live model, DERIVED from artefacts rather than stored: install.conf holds the install recipe,
+# not the current state (#494). mesh wins because it implies local; a box carrying both mesh and an
+# active CAPI is the inconsistent legacy combination the two-flag wizard (<= v0.13.2) allowed, so it
+# reports mesh+capi and the mode command re-normalises it.
+crowdsec_current_mode() {
+	local mesh=0 capi=0
+	# No engine at all (apache-only, or CrowdSec removed) is not "local" - say so, or a caller that
+	# only prints the answer would report a model for a box that has none.
+	[ -f /etc/crowdsec/config.yaml ] || { echo "none"; return 0; }
+	[ -f "$CONF_DIR/crowdsec/mesh.conf" ] && mesh=1
+	grep -qE '^[[:space:]]*credentials_path:.*online_api_credentials' /etc/crowdsec/config.yaml 2> /dev/null && capi=1
+	if [ "$mesh" = 1 ] && [ "$capi" = 1 ]; then
+		echo "mesh+capi"
+	elif [ "$mesh" = 1 ]; then
+		echo "mesh"
+	elif [ "$capi" = 1 ]; then
+		echo "capi"
+	else
+		echo "local"
+	fi
+}
+
 # Install + wire CrowdSec detection and the nginx Layer-A bouncer. Safe to re-run.
 crowdsec_apply() {
 	local share="$HESTIA/share/crowdsec"
@@ -78,9 +147,12 @@ crowdsec_apply() {
 	# NB: web bot rate-limiting (Layer B) is a separate, server-native subsystem (func/botpolicy.sh,
 	# wired at web install) - NOT rendered here; CrowdSec only owns Layer A (the ban -> 403 bouncer).
 
-	# CAPI: 'local' runs the engine self-hosted (no central blocklist/telemetry); default enrolls.
+	# Model: only 'capi' keeps the central blocklist/telemetry. 'local' and 'mesh' both run the engine
+	# self-hosted - mesh is local plus peer exchange, so it must not enrol either.
 	[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf" 2> /dev/null
-	[ "${COMPONENT_CROWDSEC_CAPI:-enroll}" = "local" ] && crowdsec_disable_capi
+	[ "${COMPONENT_CROWDSEC_MODE:-capi}" = "capi" ] || crowdsec_disable_capi
+
+	crowdsec_secure_credentials
 
 	systemctl restart crowdsec > /dev/null 2>&1 || true
 	if nginx -t > /dev/null 2>&1; then
