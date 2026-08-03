@@ -1,10 +1,7 @@
-# CrowdSec integration helpers (#186). Apply/refresh the detection + nginx Layer-A
-# wiring for the current web model. Sourced by the installer (install_security), the
-# #120 web-model switch, and (later, #123) h-add-sys-crowdsec - one shared path so every
-# caller stays consistent. Idempotent; a no-op unless nginx is the public front.
+# CrowdSec helpers: install + wire the engine + nginx Layer-A bouncer for the current web model.
+# Shared by the installer, the web-model switch and h-add-sys-crowdsec. Idempotent; no-op off-nginx.
 
-# Public-facing web system: PROXY_SYSTEM if set ('both' fronts with nginx), else
-# WEB_SYSTEM. Deliberately not "is nginx installed" - only the exposed server matters.
+# The EXPOSED web server (PROXY_SYSTEM fronts in 'both'), not "is nginx installed".
 crowdsec_public_web() {
 	if [ -n "$PROXY_SYSTEM" ]; then
 		echo "$PROXY_SYSTEM"
@@ -13,8 +10,7 @@ crowdsec_public_web() {
 	fi
 }
 
-# Run the engine fully local: comment out the CAPI online_client so there is no
-# central-blocklist pull or signal sharing (the wizard's local-only choice). Idempotent.
+# Local-only engine: comment out the CAPI online_client (no central pull / signal sharing). Idempotent.
 crowdsec_disable_capi() {
 	local cfg="/etc/crowdsec/config.yaml"
 	[ -f "$cfg" ] || return 0
@@ -34,34 +30,26 @@ crowdsec_apply() {
 		return 0
 	fi
 
-	# Engine + nginx lua module (both OS-repo). The module auto-loads via
-	# modules-enabled and pulls lua-resty-core itself; our bouncer needs no lua-resty-*.
+	# Engine + nginx lua module (OS-repo; the module auto-loads + pulls lua-resty-core itself).
 	DEBIAN_FRONTEND=noninteractive apt-get -y -qq install crowdsec libnginx-mod-http-lua > /dev/null 2>&1 \
 		|| { echo "CrowdSec: package install failed" >&2; return 1; }
 
-	# Curated web collections + acquisition on the nginx front logs. LAPI already on
-	# :8054 (h-install-hestia). Collection failures are non-fatal (hub/network hiccup).
+	# Curated web collections (LAPI already on :8054); failures non-fatal (hub/network hiccup).
 	cscli hub update > /dev/null 2>&1 || true
 	local col
 	while read -r col; do
 		case "$col" in '' | \#*) continue ;; esac
 		cscli collections install "$col" > /dev/null 2>&1 || true
 	done < "$share/collections.list"
-	# Drop nginx-req-limit-exceeded: it fires on OUR Layer-B limit_req (429) and, after a leaky
-	# bucket (capacity 5), turns that deliberate throttling into a ban - escalating good bots /
-	# shared IPs we only meant to slow down. Layer B stays a 429; real abuse is caught by the
-	# behaviour-based scenarios. Removing it taints the nginx collection, so cscli then refuses to
-	# re-enable it on later runs (without --force) - which is exactly what keeps this sticky.
+	# Drop nginx-req-limit-exceeded: it fires on OUR Layer-B 429 and (leaky bucket) turns throttling
+	# into a ban. Removing it taints the collection, so cscli keeps it removed on re-runs; Layer B stays 429.
 	cscli scenarios remove crowdsecurity/nginx-req-limit-exceeded > /dev/null 2>&1 || true
-	# The nginx front logs to /var/log/$WEB_SYSTEM/domains (the vhost template uses the
-	# web_system token, so 'both' resolves to /var/log/apache2/domains - still nginx's
-	# own front log with the real client IP).
+	# nginx front logs to /var/log/$WEB_SYSTEM/domains (real client IP; 'both' -> apache2 path, still nginx's).
 	mkdir -p /etc/crowdsec/acquis.d
 	sed "s|%WEB_SYSTEM%|$WEB_SYSTEM|g" "$share/acquis.d/hestia-nginx.yaml" \
 		> /etc/crowdsec/acquis.d/hestia-nginx.yaml
 
-	# Bouncer key is shown only at creation, so persist it in the lua config and only
-	# (re)create when the registration or that file is missing.
+	# Key is shown only at creation -> persist it in the lua config; (re)create only when missing.
 	mkdir -p /etc/crowdsec/bouncers
 	local keyfile="/etc/crowdsec/bouncers/hestia-nginx.lua"
 	if ! cscli bouncers list -o raw 2> /dev/null | grep -q '^hestia-nginx,' || [ ! -s "$keyfile" ]; then
@@ -78,14 +66,11 @@ crowdsec_apply() {
 				dict = "crowdsec_cache",
 			}
 		EOF
-		# 600: the file holds the LAPI API key and is only ever read by nginx's master
-		# process (root) in init_by_lua_block at (re)load, before workers fork - so no
-		# group/other access is needed.
+		# 600: holds the LAPI key, read only by nginx's master (root) at (re)load, before workers fork.
 		chmod 600 "$keyfile"
 	fi
 
-	# Bouncer runtime + http-block init glue (conf.d is included in http{} before the
-	# domain vhosts). Enforcement itself stays per-vhost (per-domain opt-out).
+	# Bouncer runtime + http-block init glue (conf.d loads in http{} before vhosts); enforcement per-vhost.
 	mkdir -p /usr/local/hestia/lua
 	cp -f "$share/lua/hestia_bouncer.lua" /usr/local/hestia/lua/hestia_bouncer.lua
 	cp -f "$share/nginx/crowdsec_init.conf" /etc/nginx/conf.d/crowdsec_init.conf
@@ -110,10 +95,8 @@ crowdsec_apply() {
 	echo "CrowdSec: applied (nginx front, L7 bouncer hestia-nginx + L3 ipset feeder)."
 }
 
-# L3 enforcement: an own feeder (h-update-firewall-crowdsec, on a systemd timer) fills the
-# crowdsec-blacklists ipset; HestiaRE owns the DROP too (hestia-crowdsec chain), so
-# h-update-firewall stays the sole iptables writer. NOT the OS crowdsec-firewall-bouncer: its
-# 0.0.25 config loader nil-panics non-deterministically in the ipset path - fleet-verified unusable.
+# L3: an own feeder (h-update-firewall-crowdsec, systemd timer) fills the crowdsec-blacklists ipset;
+# h-update-firewall owns the DROP. Not the OS firewall-bouncer (0.0.25 nil-panics in ipset - fleet).
 crowdsec_l3_setup() {
 	local share="$HESTIA/share/crowdsec"
 	local marker="$CONF_DIR/firewall/crowdsec.conf"
@@ -122,8 +105,7 @@ crowdsec_l3_setup() {
 	# jq drives the feeder's decision filter.
 	command -v jq > /dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get -y -qq install jq > /dev/null 2>&1
 
-	# Marker: presence gates the set + DROP chain (h-update-firewall[-ipset]) and the feed
-	# (h-update-firewall-crowdsec).
+	# Marker: presence gates the set + DROP chain and the feed.
 	mkdir -p "$CONF_DIR/firewall"
 	if [ ! -f "$marker" ]; then
 		cat > "$marker" <<-EOF
@@ -146,8 +128,7 @@ crowdsec_l3_setup() {
 	"$BIN/h-update-firewall" > /dev/null 2>&1 || true
 }
 
-# Remove the L3 wiring: stop the feeder timer, drop the marker + DROP chain + jump + set. Leaves
-# the engine + /etc/crowdsec (saved state). Called by h-delete-sys-crowdsec.
+# Remove the L3 wiring (timer + marker + chain/jump + set); leaves the engine + /etc/crowdsec.
 crowdsec_l3_teardown() {
 	systemctl disable --now hestia-crowdsec-l3.timer > /dev/null 2>&1 || true
 	systemctl stop hestia-crowdsec-l3.service > /dev/null 2>&1 || true
@@ -246,8 +227,7 @@ crowdsec_render_domain_fragment() {
 	fi
 }
 
-# Remove the nginx-side wiring (the #120 switch away from nginx, later h-delete-sys-crowdsec).
-# Leaves the engine + /etc/crowdsec state in place (saved state).
+# Remove the nginx-side wiring (leaves the engine + /etc/crowdsec saved state).
 crowdsec_remove_nginx() {
 	rm -f /etc/nginx/conf.d/crowdsec_init.conf /usr/local/hestia/lua/hestia_bouncer.lua
 	nginx -t > /dev/null 2>&1 && { systemctl reload nginx > /dev/null 2>&1 || true; }
