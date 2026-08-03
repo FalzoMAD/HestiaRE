@@ -156,6 +156,18 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
 
 ### Fixed
 
+- Smoke guard for a whole bug class: `check_policy_fragment_coverage` asserts that every per-domain
+  **policy** fragment (CrowdSec Layer A, bot rate limiting) is included by every customer-domain web
+  template. Unlike a feature fragment (ssl/hsts/forcessl/cache, which belongs only to the templates
+  implementing it), a policy fragment applies to all traffic - so one template missing the include is
+  a silent bypass rather than a visible failure: a customer switching to e.g. the `wordpress`
+  template would escape the throttle with nothing failing anywhere. 48 templates across nginx and
+  apache2 are currently complete; the per-IP catch-all has no domain and is out of scope.
+- Panel hardening in the bot-limit handlers (#482): both POST handlers assumed their field arrays are
+  arrays (a scalar `v_bl_fam`/`v_botlimit` reached `array_keys()` -> TypeError), every row field is
+  now read as a scalar with a default, the family-table loop is bounded by the slot count instead of
+  forking one command per posted row, and `/delete/firewall/mesh` no longer calls `check_return_code`
+  with undefined variables when no peer is given.
 - Bot rate-limiting: a **disabled or deleted family left dangling zone references** in the per-domain
   fragments (#482). The server config only defines `limit_req` zones for *enabled* families, but a
   domain fragment was rendered from its `BOTLIMIT` field regardless - so turning a family off (or
