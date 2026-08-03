@@ -1,0 +1,53 @@
+#!/bin/bash
+# info: list web bot rate-limit families
+# options: NONE
+#
+# example: h-list-sys-botfamily
+#
+# Lists the system bot-family table (name, enabled, lenient/strict rate, UA match). These are the
+# families a domain can throttle via h-change-web-domain-botlimit. Edit the conf
+# (/etc/hestia/botfamilies.conf) then run h-update-sys-botfamilies to apply.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# object base (get_object_value appends .conf); fall back to the shipped default
+OBJ="$CONF_DIR/botfamilies"
+[ -f "$OBJ.conf" ] || OBJ="$HESTIA/share/botpolicy/botfamilies"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+if [ ! -f "$OBJ.conf" ]; then
+	echo "No bot-family conf found."
+	exit 0
+fi
+
+printf '%-15s %-8s %-9s %-9s %s\n' 'FAMILY' 'ENABLED' 'LENIENT' 'STRICT' 'MATCH'
+printf '%-15s %-8s %-9s %-9s %s\n' '------' '-------' '-------' '------' '-----'
+for f in $(grep -oE "^FAMILY='[^']*'" "$OBJ.conf" | sed "s/^FAMILY='//; s/'\$//"); do
+	printf '%-15s %-8s %-9s %-9s %s\n' \
+		"$f" \
+		"$(get_object_value "$OBJ" 'FAMILY' "$f" '$ENABLED')" \
+		"$(get_object_value "$OBJ" 'FAMILY' "$f" '$LENIENT')" \
+		"$(get_object_value "$OBJ" 'FAMILY' "$f" '$STRICT')" \
+		"$(get_object_value "$OBJ" 'FAMILY' "$f" '$MATCH')"
+done
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+log_event "$OK" "$ARGUMENTS"
+
+exit

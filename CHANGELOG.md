@@ -11,6 +11,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- Server-native web bot rate-limiting (#482). A standalone Layer-B subsystem (`func/botpolicy.sh`)
+  that throttles bot families with native nginx `limit_req` / apache `mod_qos` (429 on excess),
+  **independent of CrowdSec** and available on any web install (nginx-only, apache-only, both).
+  Humans stay unlimited; malicious traffic remains CrowdSec's job (ban -> 403). An admin bot-family
+  table (`/etc/hestia/botfamilies.conf`, seeded at web install, 8 curated families + 2 empty slots)
+  drives it: each family has a UA match + `lenient`/`strict` rate + `enabled`, plus conf-only
+  advanced `burst`/`nodelay`. Per domain, each family is `off`/`lenient`/`strict`
+  (`h-change-web-domain-botlimit`); nginx keys per family per domain (so customers do not share a bucket), apache mod_qos per client IP.
+  New: `h-list-sys-botfamily`, `h-update-sys-botfamilies`. Default off/opt-in. This decouples the
+  rate-limit half of the old CrowdSec Layer B into its own subsystem; CrowdSec keeps only Layer A
+  (the ban -> 403 bouncer) and Layer B/L3 firewall enforcement.
 - CrowdSec L3 firewall enforcement, Phase 2 (#186). The same ban decisions Layer A blocks per
   HTTP request are now also dropped at the firewall (SYN stage). An own feeder
   (`h-update-firewall-crowdsec`, on a ~45s systemd timer) fills the `crowdsec-blacklists` ipset

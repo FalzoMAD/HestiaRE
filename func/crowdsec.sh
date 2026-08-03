@@ -74,8 +74,8 @@ crowdsec_apply() {
 	mkdir -p /usr/local/hestia/lua
 	cp -f "$share/lua/hestia_bouncer.lua" /usr/local/hestia/lua/hestia_bouncer.lua
 	cp -f "$share/nginx/crowdsec_init.conf" /etc/nginx/conf.d/crowdsec_init.conf
-	# Layer-B rate-limit zones + bot map (http context, referenced by per-domain fragments).
-	cp -f "$share/nginx/ratelimit.conf" /etc/nginx/conf.d/crowdsec_ratelimit.conf
+	# NB: web bot rate-limiting (Layer B) is a separate, server-native subsystem (func/botpolicy.sh,
+	# wired at web install) - NOT rendered here; CrowdSec only owns Layer A (the ban -> 403 bouncer).
 
 	# CAPI: 'local' runs the engine self-hosted (no central blocklist/telemetry); default enrolls.
 	[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf" 2> /dev/null
@@ -143,87 +143,34 @@ crowdsec_l3_teardown() {
 	"$BIN/h-update-firewall" > /dev/null 2>&1 || true
 }
 
-# Render the per-domain fragment (Layer-A access_by_lua + Layer-B rate-limit/bot policy)
-# into the public nginx vhost dir, at server scope. Reads the domain's own flags; called
-# by the h-*-web-domain-crowdsec commands and by the web rebuild. Removed when empty, so
-# the `include ...*;` glob is simply a no-op for unprotected domains.
+# Render the per-domain CrowdSec Layer-A fragment (the ban-check rewrite_by_lua) into the public
+# nginx vhost dir. Layer A is nginx-only; apache-only has no CrowdSec. Layer-B rate-limiting is a
+# separate subsystem (func/botpolicy.sh -> nginx.botlimit.conf). Removed when off, so the vhost's
+# `include ...nginx.crowdsec.conf*;` glob is a no-op for unprotected domains.
 crowdsec_render_domain_fragment() {
 	local user="$1" domain="$2" sys
 	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
 
-	local rec
-	rec=$(grep -m1 "DOMAIN='$domain'" "$CONF_DIR/users/$user/web.conf" 2> /dev/null)
-	[ -n "$rec" ] || return 0
-	local cs rl bp z ev
-	cs=$(sed -n "s/.*CROWDSEC='\([^']*\)'.*/\1/p" <<< "$rec")
-	rl=$(sed -n "s/.*RATE_LIMIT='\([^']*\)'.*/\1/p" <<< "$rec")
-	bp=$(sed -n "s/.*BOT_POLICY='\([^']*\)'.*/\1/p" <<< "$rec")
-	[ -n "$bp" ] || bp="pass"
-
-	# Known legitimate crawlers - kept in sync with share/crowdsec/nginx/ratelimit.conf.
-	local goodbot='(googlebot|google-inspectiontool|google-extended|bingbot|duckduckbot|yandex(bot|images)|baiduspider|applebot|slurp|claudebot|claude-web|gptbot|oai-searchbot|chatgpt-user|perplexitybot)'
-	local frag tmp
-	tmp=$(mktemp)
-
-	if [ "$sys" = "nginx" ]; then
-		frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf"
-		# Layer A: ban check in the rewrite phase (before auth_basic 401, the forcessl
-		# 301 and limit_req) - a banned IP is refused first, everywhere.
-		[ "$cs" = "yes" ] && echo 'rewrite_by_lua_block { require("hestia_bouncer").allow() }' >> "$tmp"
-		# Layer B: bot policy + rate-limit (429). block -> good bots 403. pass -> humans
-		# on the normal per-IP zone + good bots on a separate BOUNDED bot zone (never a full
-		# exemption). throttle -> one shared per-IP zone for everyone. $cs_good_bot is the
-		# only part evaluated per request.
-		[ "$bp" = "block" ] && echo 'if ($cs_good_bot) { return 403; }' >> "$tmp"
-		case "$rl" in
-			lenient)
-				if [ "$bp" = "pass" ]; then
-					echo "limit_req zone=cs_lenient_h burst=60 nodelay;" >> "$tmp"
-					echo "limit_req zone=cs_bot burst=200 nodelay;" >> "$tmp"
-				else
-					echo "limit_req zone=cs_lenient burst=60 nodelay;" >> "$tmp"
-				fi ;;
-			strict)
-				if [ "$bp" = "pass" ]; then
-					echo "limit_req zone=cs_strict_h burst=20 nodelay;" >> "$tmp"
-					echo "limit_req zone=cs_bot burst=200 nodelay;" >> "$tmp"
-				else
-					echo "limit_req zone=cs_strict burst=20 nodelay;" >> "$tmp"
-				fi ;;
-		esac
-	elif [ "$sys" = "apache2" ]; then
-		# apache-only: Layer B only (no CrowdSec/Layer A on apache). mod_qos returns 429
-		# via a server-level counter keyed on the QS_Event_* var this vhost sets.
-		frag="$HOMEDIR/$user/conf/web/$domain/crowdsec.apache2.conf"
-		case "$rl" in lenient) ev="QS_Event_lenient" ;; strict) ev="QS_Event_strict" ;; esac
-		if [ "$bp" = "block" ] || [ -n "$ev" ]; then
-			echo "BrowserMatchNoCase \"$goodbot\" cs_goodbot" >> "$tmp"
-		fi
-		if [ "$bp" = "block" ]; then
-			echo "<If \"reqenv('cs_goodbot') == '1'\">" >> "$tmp"
-			printf '\tRequire all denied\n' >> "$tmp"
-			echo "</If>" >> "$tmp"
-		fi
-		if [ -n "$ev" ]; then
-			echo "SetEnvIf Request_URI \".\" $ev" >> "$tmp"
-			# pass: good bots leave the human counter and enter the bounded bot counter -
-			# never a full exemption, so a spoofed UA is still capped.
-			if [ "$bp" = "pass" ]; then
-				echo "SetEnvIf cs_goodbot 1 !$ev" >> "$tmp"
-				echo "SetEnvIf cs_goodbot 1 QS_Event_bot" >> "$tmp"
-			fi
-		fi
-	else
-		rm -f "$tmp"
+	local frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf"
+	# apache-only never runs CrowdSec; make sure no stale Layer-A fragment lingers.
+	if [ "$sys" != "nginx" ]; then
+		rm -f "$frag"
 		return 0
 	fi
 
-	if [ -s "$tmp" ]; then
-		mv -f "$tmp" "$frag"
+	local rec cs
+	rec=$(grep -m1 "DOMAIN='$domain'" "$CONF_DIR/users/$user/web.conf" 2> /dev/null)
+	[ -n "$rec" ] || return 0
+	cs=$(sed -n "s/.*CROWDSEC='\([^']*\)'.*/\1/p" <<< "$rec")
+
+	# Ban check in the rewrite phase (before auth_basic 401, the forcessl 301 and limit_req) -
+	# a banned IP is refused first, everywhere.
+	if [ "$cs" = "yes" ]; then
+		echo 'rewrite_by_lua_block { require("hestia_bouncer").allow() }' > "$frag"
 		chown root:"$user" "$frag"
 		chmod 640 "$frag"
 	else
-		rm -f "$tmp" "$frag"
+		rm -f "$frag"
 	fi
 }
 

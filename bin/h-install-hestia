@@ -300,13 +300,19 @@ install_web() {
 	esac
 	# apache backend needs its packages+mods in place before the keyset lands
 	case "$web_model" in apache | both) configure_apache2 ;; esac
-	# apache-only web Layer-B: native mod_qos rate-limit (429), driven per-domain by the
-	# RATE_LIMIT/BOT_POLICY flags. Only apache-only (in 'both' nginx fronts and does Layer B).
+	# Web bot rate-limiting (Layer B): server-native, always available (independent of CrowdSec).
+	# Seed the bot-family conf + render the front's rate-limit config. nginx fronts in nginx-only +
+	# both; apache does Layer B only when it is the public front (apache-only, via mod_qos).
+	source "$HESTIA/func/botpolicy.sh"
+	botpolicy_seed_families
 	if [ "$web_model" = "apache" ]; then
 		hestia_apt -y install libapache2-mod-qos || true
 		a2enmod qos > /dev/null 2>&1
 		mkdir -p /etc/apache2/conf.d
-		cp -f "$HESTIA/share/crowdsec/apache/ratelimit.conf" /etc/apache2/conf.d/crowdsec_ratelimit.conf
+		botpolicy_render_apache
+	else
+		mkdir -p /etc/nginx/conf.d
+		botpolicy_render_nginx
 	fi
 	# One keyset table (func/web-model.sh), shared with the live model switch
 	local kv
