@@ -11,6 +11,24 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- Shell lint gate (#477), check-only, in two tiers because the tree carries ~240 inherited HestiaCP
+  warnings that are their own cleanup job: **tier 1** runs shellcheck at `severity=error` over the
+  whole shell surface (519 files, 0 findings as of this commit), **tier 2** runs it at
+  `>=warning` over the files a change touches. `.shellcheckrc` disables only verified house idioms
+  (unquoted `$HESTIA`/`$BIN`, single-quoted `'$FIELD'` selectors, `SC1091`, and the `SC2154`/`SC2034`
+  pair that is structural to `parse_object_kv_list` creating variables dynamically); anything that
+  could hide a real bug stays on and gets a per-line disable with its reason. `.editorconfig` carries
+  the shfmt contract (tabs, spaced redirections, leading `&&`, indented case arms - all three deviate
+  from shfmt's defaults, so without it a bare `shfmt -d` would want to rewrite the tree). Formatting
+  is judged as **do not make it worse**: a file clean in the base must stay clean and a new file must
+  start clean, while the 26 already-deviating files (among them `install.sh`, `h-install-hestia`,
+  `func/main.sh`) are reported and left alone rather than forcing a reformat onto whoever edits them
+  next. `tools/lint-shell.sh` holds the logic so the identical run is reproducible locally; a
+  deliberately over-curated Gitea workflow (`contents: read`, no secrets, no installs, no writes, no
+  third-party actions) runs it on PRs into `dev`. The three `func/*.sh` libraries that lacked a
+  shebang got one - they were the tree's only error-severity findings. `tools/` and the two dotfiles
+  are dev-only and excluded from the release tarball.
+
 - Panel UI for web bot rate-limiting (#482). The family table is edited inline on **Server Settings**
   (admin-only), in a *Bot Rate Limiting* section under Web Server: 10 slots, each with name /
   User-Agent match / lenient + strict rate / enabled, saved with the settings form in one POST -
@@ -155,6 +173,20 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
   through `tohtml()`.
 
 ### Fixed
+
+- Installer: an optional component could be flagged on with its package absent (#480). Component
+  installs ran `hestia_apt ... || true`, so when **unattended-upgrades / apt-daily held the apt lock**
+  - common in the first minutes after a first boot, and most aggressive on the Ubuntu images - the
+  install failed and the `|| true` swallowed it. Two fleet VMs came up with `COMPONENT_ADDON_CROWDSEC=true`
+  and no crowdsec package. Three changes, because no single one is sufficient: `hestia_apt` now passes
+  `-o DPkg::Lock::Timeout` so a held lock **waits** instead of failing fast; the installer **masks the
+  auto-apt units** for its duration and restores them from an `EXIT` trap, so an aborted install never
+  leaves a box with unattended-upgrades off (it only restores units it masked itself, so an
+  admin-masked unit is never silently re-enabled); and optional installs now go through
+  `apt_install_optional`, which **verifies against dpkg** that each package actually landed - apt's
+  exit code alone is not enough - and surfaces anything missing in the closing banner instead of only
+  in the log. Verified on all four targets: the apt option is accepted by apt 2.6 through 3.2, and a
+  full mask/restore round trip returns every unit to its exact prior state.
 
 - Smoke guard for a whole bug class: `check_policy_fragment_coverage` asserts that every per-domain
   **policy** fragment (CrowdSec Layer A, bot rate limiting) is included by every customer-domain web

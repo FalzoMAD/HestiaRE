@@ -41,11 +41,71 @@ _hestia_spin_stop() {
 hestia_apt() {
 	_hestia_spin_start
 	local _rc=0
-	DEBIAN_FRONTEND=noninteractive apt-get "$@" \
+	# Lock::Timeout: wait for a held dpkg/apt lock instead of failing fast. On a freshly booted box
+	# unattended-upgrades/apt-daily commonly hold it for the first minutes, and a fast failure on an
+	# optional component used to leave the component flagged on with the package absent (#480).
+	DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout="${HESTIA_APT_LOCK_WAIT:-300}" "$@" \
 		1>> "${LOG}" \
 		2> >(tee -a "${LOG}" >&2) || _rc=$?
 	_hestia_spin_stop
 	return $_rc
+}
+
+# Install packages that are OPTIONAL for the install to succeed - components, tools, addons.
+# A failure must not abort the installer, but it must not vanish either: #480 had two fleet VMs come
+# up with COMPONENT_ADDON_CROWDSEC=true and no crowdsec package, because the apt lock was held and the
+# call site's `|| true` swallowed it. apt's exit code alone is not enough (a partial install can still
+# report success), so the packages are verified against dpkg afterwards and anything missing is
+# collected for the closing summary.
+# Usage: apt_install_optional <label> <pkg>...   [APT_EXTRA_OPTS='-o ...' for per-call apt options]
+apt_install_optional() {
+	local label="$1"
+	shift
+	[ $# -gt 0 ] || return 0
+
+	# shellcheck disable=SC2086 # APT_EXTRA_OPTS is a deliberate multi-token option string
+	hestia_apt -y ${APT_EXTRA_OPTS:-} install "$@" || true
+
+	local pkg missing=''
+	for pkg in "$@"; do
+		dpkg-query -W -f='${db:Status-Status}' "$pkg" 2> /dev/null | grep -q '^installed$' \
+			|| missing="$missing $pkg"
+	done
+	[ -z "$missing" ] && return 0
+
+	echo "[ ! ] $label: package(s) not installed:$missing" >&2
+	echo "WARNING: $label: package(s) not installed:$missing" >> "${LOG}"
+	HESTIA_INSTALL_WARNINGS="${HESTIA_INSTALL_WARNINGS:-}${label}:${missing}"$'\n'
+	return 1
+}
+
+# Auto-apt units race the installer for the dpkg lock (#480). Masking them for the duration is the
+# reliable fix; Lock::Timeout above is the belt-and-suspenders for anything else holding it. Restore
+# is trap-driven so an aborted install does not leave a box with unattended-upgrades disabled - which
+# would be a silent security regression, far worse than the race it prevents.
+HESTIA_APT_AUTO_UNITS='unattended-upgrades.service apt-daily.service apt-daily.timer apt-daily-upgrade.service apt-daily-upgrade.timer'
+
+apt_auto_units_mask() {
+	local u
+	HESTIA_APT_UNMASK=''
+	for u in $HESTIA_APT_AUTO_UNITS; do
+		systemctl list-unit-files "$u" > /dev/null 2>&1 || continue
+		# Only record what WE masked, so the restore cannot enable a unit the admin had masked.
+		systemctl is-enabled "$u" 2> /dev/null | grep -q '^masked$' && continue
+		systemctl mask --now "$u" > /dev/null 2>&1 && HESTIA_APT_UNMASK="$HESTIA_APT_UNMASK $u"
+	done
+	[ -n "$HESTIA_APT_UNMASK" ] && echo "[ * ] Paused auto-apt units for the install:$HESTIA_APT_UNMASK"
+	return 0
+}
+
+apt_auto_units_restore() {
+	local u
+	for u in ${HESTIA_APT_UNMASK:-}; do
+		systemctl unmask "$u" > /dev/null 2>&1 || true
+		case "$u" in *.timer) systemctl start "$u" > /dev/null 2>&1 || true ;; esac
+	done
+	HESTIA_APT_UNMASK=''
+	return 0
 }
 
 # ── Sury PHP repository (shared by wizard + installer) ──────────────────────
