@@ -344,7 +344,7 @@ is_object_new() {
 			object="OK"
 		fi
 	else
-		object=$(grep "$2='$3'" $(_object_conf "$1"))
+		object=$(grep "$2='$3'" "$(_object_conf "$1")")
 	fi
 	if [ -n "$object" ]; then
 		check_result "$E_EXISTS" "$2=$3 already exists"
@@ -359,7 +359,7 @@ is_object_valid() {
 			check_result "$E_NOTEXIST" "$1 $3 doesn't exist"
 		fi
 	else
-		object=$(grep "$2='$3'" $(_object_conf "$1"))
+		object=$(grep "$2='$3'" "$(_object_conf "$1")")
 		if [ -z "$object" ]; then
 			arg1=$(basename $1)
 			arg2=$(echo $2 | tr '[:upper:]' '[:lower:]')
@@ -550,9 +550,9 @@ parse_object_kv_list() {
 # Check if object is supended
 is_object_suspended() {
 	if [ "$2" = 'USER' ]; then
-		spnd=$(grep "SUSPENDED='yes'" $(_object_conf "$1"))
+		spnd=$(grep "SUSPENDED='yes'" "$(_object_conf "$1")")
 	else
-		spnd=$(grep "$2='$3'" $(_object_conf "$1") | grep "SUSPENDED='yes'")
+		spnd=$(grep "$2='$3'" "$(_object_conf "$1")" | grep "SUSPENDED='yes'")
 	fi
 	if [ -z "$spnd" ]; then
 		check_result "$E_UNSUSPENDED" "$(basename $1) $3 is not suspended"
@@ -564,7 +564,7 @@ is_object_unsuspended() {
 	if [ $2 = 'USER' ]; then
 		spnd=$(grep "SUSPENDED='yes'" "$(_object_conf "$1")")
 	else
-		spnd=$(grep "$2='$3'" $(_object_conf "$1") | grep "SUSPENDED='yes'")
+		spnd=$(grep "$2='$3'" "$(_object_conf "$1")" | grep "SUSPENDED='yes'")
 	fi
 	if [ -n "$spnd" ]; then
 		check_result "$E_SUSPENDED" "$(basename $1) $3 is suspended"
@@ -573,7 +573,7 @@ is_object_unsuspended() {
 
 # Check if object value is empty
 is_object_value_empty() {
-	str=$(grep "$2='$3'" $(_object_conf "$1"))
+	str=$(grep "$2='$3'" "$(_object_conf "$1")")
 	parse_object_kv_list "$str"
 	local varname="${4#\$}"
 	value="${!varname}"
@@ -584,7 +584,7 @@ is_object_value_empty() {
 
 # Check if object value is empty
 is_object_value_exist() {
-	str=$(grep "$2='$3'" $(_object_conf "$1"))
+	str=$(grep "$2='$3'" "$(_object_conf "$1")")
 	parse_object_kv_list "$str"
 	local varname="${4#\$}"
 	value="${!varname}"
@@ -624,7 +624,7 @@ is_dir_symlink() {
 
 # Get object value
 get_object_value() {
-	object=$(grep "$2='$3'" $(_object_conf "$1"))
+	object=$(grep "$2='$3'" "$(_object_conf "$1")")
 	parse_object_kv_list "$object"
 	local varname="${4#\$}"
 	value="${!varname}"
@@ -632,12 +632,12 @@ get_object_value() {
 }
 
 get_object_values() {
-	parse_object_kv_list $(grep "$2='$3'" $(_object_conf "$1"))
+	parse_object_kv_list $(grep "$2='$3'" "$(_object_conf "$1")")
 }
 
 # Update object value
 update_object_value() {
-	row=$(grep -nF "$2='$3'" $(_object_conf "$1"))
+	row=$(grep -nF "$2='$3'" "$(_object_conf "$1")")
 	lnr=$(echo $row | cut -f 1 -d ':')
 	object=$(echo $row | sed "s/^$lnr://")
 	parse_object_kv_list "$object"
@@ -649,18 +649,18 @@ update_object_value() {
 		-e 's/\[/\\[/g' -e 's/\]/\\]/g' -e 's/\./\\./g' -e 's/\^/\\^/g' -e 's/\$/\\$/g')
 	new=$(echo "$5" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/\//\\\//g')
 	sed -i "$lnr s/${4//$/}='${old//\*/\\*}'/${4//$/}='${new//\*/\\*}'/g" \
-		$(_object_conf "$1")
+		"$(_object_conf "$1")"
 }
 
 # Add object key
 add_object_key() {
-	row=$(grep -n "$2='$3'" $(_object_conf "$1"))
+	row=$(grep -n "$2='$3'" "$(_object_conf "$1")")
 	lnr=$(echo $row | cut -f 1 -d ':')
 	object=$(echo $row | sed "s/^$lnr://")
 	if [ -z "$(echo $object | grep $4=)" ]; then
 		local varname="${4#\$}"
 		old="${!varname}"
-		sed -i "$lnr s/$5='/$4='' $5='/" $(_object_conf "$1")
+		sed -i "$lnr s/$5='/$4='' $5='/" "$(_object_conf "$1")"
 	fi
 }
 
@@ -668,8 +668,8 @@ add_object_key() {
 search_objects() {
 	OLD_IFS="$IFS"
 	IFS=$'\n'
-	if [ -f $(_object_conf "$1") ]; then
-		for line in $(grep $2=\'$3\' $(_object_conf "$1")); do
+	if [ -f "$(_object_conf "$1")" ]; then
+		for line in $(grep "$2='$3'" "$(_object_conf "$1")"); do
 			parse_object_kv_list "$line"
 			echo "${!4}"
 		done
