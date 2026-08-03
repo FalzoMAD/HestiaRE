@@ -331,12 +331,15 @@
 
     "CROWDSEC_MESH": {
       "group": "addons",
-      "type": "checkbox",
-      "label": "CrowdSec fleet-mesh",
-      "description": "Share ban decisions across your HestiaRE fleet (L7-only peer-mesh)",
+      "type": "radio",
+      "question": "CrowdSec fleet-mesh (share bans across your servers)?",
       "visible_if": "ADDON_CROWDSEC == true",
-      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Off by default - a fleet decision. Arms the mechanism (publish own bans + import peers'); you wire the transport that moves peer lists between boxes, so it is inert until peers are configured. Toggle later with h-add/delete-sys-crowdsec-mesh."
+      "options": [
+        { "value": "false", "label": "Off (recommended)", "description": "Single server, or no fleet sharing" },
+        { "value": "true", "label": "On", "description": "Share web-tier bans with paired peers" }
+      ],
+      "default": { "standard": "false", "compact": "false", "latest": "false", "singlephp": "false", "nomail": "false", "mailonly": "false", "custom": null },
+      "note": "A radio, not a group checkbox: its visible_if names ADDON_CROWDSEC, which the combined addons screen only sets on submit, so as a checkbox the row could never become visible (see fn_ask_group_checklist). Enabling only arms the mechanism - peers are paired afterwards in the panel (Firewall > Fleet Mesh) or with h-generate-sys-crowdsec-pairing / h-add-sys-crowdsec-peer. Toggle later with h-add/delete-sys-crowdsec-mesh."
     },
 
     "ADDON_FAIL2BAN": {
