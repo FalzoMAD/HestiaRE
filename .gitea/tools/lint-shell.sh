@@ -11,12 +11,12 @@
 # checked with shfmt against .editorconfig (tabs, spaced redirections, leading `&&`, indented case)
 # - the same settings HestiaCP's prettier-plugin-sh uses, so the tree already conforms.
 #
-# Usage:  tools/lint-shell.sh            # tier 1 + tier 2 vs origin/dev (what CI runs)
-#         tools/lint-shell.sh --all      # tier 2 over the whole tree as well (the cleanup view)
-#         tools/lint-shell.sh --base X   # diff against X instead of origin/dev
+# Usage:  .gitea/tools/lint-shell.sh           # tier 1 + tier 2 vs origin/dev (what CI runs)
+#         .gitea/tools/lint-shell.sh --all     # tier 2 over the whole tree as well
+#         .gitea/tools/lint-shell.sh --base X  # diff against X instead of origin/dev
 
 set -uo pipefail
-cd "$(dirname "$0")/.." || exit 2
+cd "$(dirname "$0")/../.." || exit 2
 
 BASE='origin/dev'
 ALL=''
@@ -47,7 +47,7 @@ for t in shellcheck shfmt; do
 done
 
 # The shell surface: the CLI, the sourced libraries, the bootstrap. v-* are symlinks (skipped by -f).
-is_shell() { [[ "$1" =~ ^(bin/h-|func/.*\.sh$|install\.sh$|tools/.*\.sh$) ]]; }
+is_shell() { [[ "$1" =~ ^(bin/h-|func/.*\.sh$|install\.sh$|\.gitea/tools/.*\.sh$) ]]; }
 
 mapfile -t ALL_FILES < <(git ls-files | while read -r f; do
 	is_shell "$f" && [ -f "$f" ] && echo "$f"

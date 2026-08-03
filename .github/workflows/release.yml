@@ -28,7 +28,6 @@ jobs:
           rsync -a \
             --exclude='.git*' \
             --exclude='dist' \
-            --exclude='tools' \
             --exclude='.editorconfig' \
             --exclude='.shellcheckrc' \
             . dist/hestiare-${VERSION}/

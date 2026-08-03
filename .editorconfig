@@ -22,7 +22,7 @@ indent_size = 2
 # Shell: the house style deviates from shfmt's defaults on all three counts, so a bare `shfmt -d`
 # would want to rewrite the whole tree. Spaced redirections (`2> /dev/null`), a leading `&&` on
 # continuation lines, and indented case arms.
-[{bin/h-*,func/*.sh,install.sh,tools/*.sh}]
+[{bin/h-*,func/*.sh,install.sh,.gitea/tools/*.sh}]
 switch_case_indent = true
 space_redirects = true
 binary_next_line = true

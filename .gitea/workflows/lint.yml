@@ -1,58 +1,48 @@
-# Shell lint gate (#477) - deliberately over-curated.
+# .gitea/workflows/lint.yml
+# Shell lint gate (#477). Modelled on mirror-on-release: no actions at all, a temporary clone, and
+# a trap that removes it. Gitea only - the public mirror carries released code, never pipelines.
 #
-# This runs on the private Gitea host's own runner, so what it is ALLOWED to do matters more than
-# what it does. Constraints, each one intentional:
+# HOST DEPENDENCY, complete list: git, shellcheck, shfmt. Nothing else - no node (which is why there
+# is no actions/checkout here: it is a node20 action), no package manager, no language runtime. The
+# job installs nothing; if a tool is missing it says which and stops.
 #
-#   * READ-ONLY. It runs two static analysers over a checkout and reports. It writes nothing, pushes
-#     nothing, publishes nothing, and touches no path outside the workspace.
-#   * NO SECRETS. Not a single `secrets.*` reference - so a malicious PR cannot exfiltrate anything
-#     by editing this file, because there is nothing here to steal.
-#   * NO NETWORK. No downloads, no package installs, no external actions beyond the checkout. If the
-#     tools are missing it FAILS with an instruction instead of installing them itself: a CI job that
-#     may apt-install on the host is a much bigger capability than a lint gate needs.
-#   * NO third-party actions. Only actions/checkout, already used by the release workflow.
-#   * Gitea only. The public GitHub mirror carries released code, never pipelines.
-#
-# The gate is check-only by construction: tools/lint-shell.sh never rewrites a file, so this job
-# cannot produce a commit even by accident. Run the identical command locally with
-# `tools/lint-shell.sh`.
+# What it is allowed to do: read a temporary clone and run two static analysers over it. It writes
+# only inside that clone, pushes nothing, publishes nothing, and holds no credential - the single
+# secret is the same local repo path mirror-on-release already uses. The runner it calls never
+# rewrites a file, so this job cannot produce a commit even by accident.
 name: Shell lint
-
 on:
   pull_request:
     branches: [dev]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  shell:
+  lint:
     runs-on: hestiare
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4.2.2
-        with:
-          # Tier 2 diffs against the PR base, so that branch's history has to be present.
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Require tooling
+      - name: Lint changed shell
+        env:
+          SRC_REPO_PATH: ${{ secrets.SRC_REPO_PATH }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          set -eu
+          set -euo pipefail
           missing=""
-          for t in shellcheck shfmt; do command -v "$t" > /dev/null 2>&1 || missing="$missing $t"; done
+          for t in git shellcheck shfmt; do command -v "$t" > /dev/null 2>&1 || missing="$missing $t"; done
           if [ -n "$missing" ]; then
             echo "Missing on the runner host:$missing"
             echo "Install once, from the OS repos:  apt install$missing"
-            echo "(This job deliberately does not install anything itself.)"
+            echo "(This job deliberately installs nothing itself.)"
             exit 1
           fi
 
-      - name: Lint changed shell
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          set -eu
-          git fetch --no-tags origin "$BASE_REF"
-          ./tools/lint-shell.sh --base "origin/$BASE_REF"
+          workdir="$(mktemp -d -p /tmp lint.XXXXXX)"
+          trap 'rm -rf "$workdir"' EXIT
+          # Local clone, no network and no credentials - same mechanism mirror-on-release uses.
+          # Not --shared: that makes the clone borrow the source's object store, which is a needless
+          # hazard for a throwaway checkout.
+          git clone --quiet "file://${SRC_REPO_PATH}" "$workdir/repo"
+          cd "$workdir/repo"
+          git checkout --quiet --detach "${HEAD_SHA:-HEAD}"
+          .gitea/tools/lint-shell.sh --base "origin/${BASE_REF:-dev}"

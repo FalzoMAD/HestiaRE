@@ -25,3 +25,9 @@ disable=SC1091
 # to the object format, not per-script mistakes.
 disable=SC2154
 disable=SC2034
+
+# NOT disabled, on purpose - documented here because it looks like a candidate and is not:
+#   SC2046 fires on the tree-wide `parse_object_kv_list $(grep ...)` idiom (34 files), where the
+#   word splitting IS the interface: the callee rejoins its arguments. Disabling it project-wide
+#   would also silence every genuinely unquoted command substitution, of which the tree has ~65.
+#   A new script using that idiom takes a per-line `# shellcheck disable=SC2046` with the reason.
