@@ -47,6 +47,12 @@ crowdsec_apply() {
 		case "$col" in '' | \#*) continue ;; esac
 		cscli collections install "$col" > /dev/null 2>&1 || true
 	done < "$share/collections.list"
+	# Drop nginx-req-limit-exceeded: it fires on OUR Layer-B limit_req (429) and, after a leaky
+	# bucket (capacity 5), turns that deliberate throttling into a ban - escalating good bots /
+	# shared IPs we only meant to slow down. Layer B stays a 429; real abuse is caught by the
+	# behaviour-based scenarios. Removing it taints the nginx collection, so cscli then refuses to
+	# re-enable it on later runs (without --force) - which is exactly what keeps this sticky.
+	cscli scenarios remove crowdsecurity/nginx-req-limit-exceeded > /dev/null 2>&1 || true
 	# The nginx front logs to /var/log/$WEB_SYSTEM/domains (the vhost template uses the
 	# web_system token, so 'both' resolves to /var/log/apache2/domains - still nginx's
 	# own front log with the real client IP).
