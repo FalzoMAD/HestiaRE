@@ -7,6 +7,24 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
+## Unreleased
+
+### Fixed
+
+- **CrowdSec was never installed by a fresh install** (#186). The installer's nginx-front gate read
+  `PROXY_SYSTEM`/`WEB_SYSTEM`, but `main.sh` sources `hestia.conf` at startup - before the web stage
+  writes those keys - so both were empty in that shell and the gate silently skipped the whole block
+  (`crowdsec_apply` reads the same two keys for the public front and the acquisition log path). The
+  security stage now re-reads `hestia.conf` first. Caught by `h-check-sys-smoke` on the v0.13.0 fleet
+  installs; unnoticed until now because every earlier CrowdSec round was verified on a hotpatched box
+  rather than a fresh install.
+- **The wizard never asked the fleet-mesh question** (#186, #485). `CROWDSEC_MESH` was a checkbox in
+  the `addons` group, and that group renders as one combined screen whose values are all set on
+  submit - so its `visible_if: ADDON_CROWDSEC == true` could never be true and the row vanished,
+  leaving `COMPONENT_CROWDSEC_MESH` empty with no way to enable the mesh at install time. It is a radio
+  now, asked right after the addons screen like the CAPI question. The wizard refuses a manifest that
+  repeats the construction instead of dropping the row quietly.
+
 ## v0.13.0 (2026-08-03)
 
 ### Added
