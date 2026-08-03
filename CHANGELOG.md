@@ -20,6 +20,8 @@ section as part of its PR. On release, the section gets the version number.
   bans fall out. `h-add-sys-crowdsec-mesh` / `h-delete-sys-crowdsec-mesh` + the
   `hestia-crowdsec-mesh` timer running `h-update-crowdsec-mesh`. The transport (moving peer lists
   into `MESH_PEERS_DIR`) is left to the fleet's own trust fabric; HestiaRE reads/writes the files.
+  Offered as a wizard checkbox next to the CAPI question (default **off** - unlike CAPI it is a
+  fleet decision and inert until the transport is wired); the installer arms it when selected.
 - Server-native web bot rate-limiting (#482). A standalone Layer-B subsystem (`func/botpolicy.sh`)
   that throttles bot families with native nginx `limit_req` / apache `mod_qos` (429 on excess),
   **independent of CrowdSec** and available on any web install (nginx-only, apache-only, both).
