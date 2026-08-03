@@ -18,7 +18,7 @@ section as part of its PR. On release, the section gets the version number.
   table (`/etc/hestia/botfamilies.conf`, seeded at web install, 8 curated families + 2 empty slots)
   drives it: each family has a UA match + `lenient`/`strict` rate + `enabled`, plus conf-only
   advanced `burst`/`nodelay`. Per domain, each family is `off`/`lenient`/`strict`
-  (`h-change-web-domain-botlimit`); nginx keys per-family aggregate, apache mod_qos per client IP.
+  (`h-change-web-domain-botlimit`); nginx keys per family per domain (so customers do not share a bucket), apache mod_qos per client IP.
   New: `h-list-sys-botfamily`, `h-update-sys-botfamilies`. Default off/opt-in. This decouples the
   rate-limit half of the old CrowdSec Layer B into its own subsystem; CrowdSec keeps only Layer A
   (the ban -> 403 bouncer) and Layer B/L3 firewall enforcement.

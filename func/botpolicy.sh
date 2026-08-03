@@ -6,8 +6,16 @@
 # Model: an admin bot-family table (share/botpolicy/botfamilies.conf, seeded to
 # /etc/hestia/botfamilies.conf). Each family = name / UA match / lenient+strict rate / enabled,
 # plus conf-only advanced burst + nodelay. Per domain each family is off/lenient/strict (the
-# web.conf BOTLIMIT field). nginx keys per-family aggregate (one bucket per family); apache mod_qos
-# counts per client IP. get_object_value/search_objects take the object base and append .conf.
+# web.conf BOTLIMIT field). nginx keys per family PER DOMAIN ($host:family, so customers don't share
+# a bucket); apache mod_qos counts per client IP. get_object_value/search_objects take the object
+# base and append .conf.
+#
+# KNOWN LIMITATION (matching by UA): families are matched on the User-Agent string, which is
+# spoofable, and Layer B does NOT verify it (no IP-range / reverse-DNS check). On a non-CrowdSec
+# install a client faking e.g. a googlebot UA can therefore drain that family's per-domain bucket and
+# get the real Googlebot 429'd (SEO harm) - active abuse, not just evasion. On CrowdSec installs the
+# good-actor whitelist verifies real crawlers by rDNS/IP, so a spoofer isn't shielded from bans.
+# Accepted for now (verification would need per-request rDNS); revisit if it bites.
 
 # Seed the instance family conf (survives updates) from the shipped default if absent.
 botpolicy_seed_families() {
@@ -54,14 +62,18 @@ botpolicy_render_nginx() {
 		fi
 		echo "}"
 		echo
-		# Per family: an aggregate key (constant per family, empty otherwise) + the two rate zones.
-		# 1m holds the single aggregate key with room to spare; a vhost selects a zone via limit_req.
+		# Per family: an aggregate key + the two rate zones. The key is "$host:<family>" so the bucket
+		# is per-domain (each vhost gets its own family counter) - a busy customer's crawler traffic
+		# can't 429 another customer out of the shared server-wide bucket. Crucially $host lives INSIDE
+		# the map value (not concatenated onto the zone key), so a non-family UA still maps to "" and is
+		# skipped -> humans stay unlimited. Zone count is fixed (families x2), independent of domain
+		# count; 2m gives ~32k host:family slots per zone, ample for a many-domain box.
 		for f in $enabled; do
 			len=$(get_object_value "$obj" 'FAMILY' "$f" '$LENIENT')
 			strict=$(get_object_value "$obj" 'FAMILY' "$f" '$STRICT')
-			echo "map \$hbot_fam \$hbot_k_$f { default \"\"; \"$f\" \"$f\"; }"
-			[ -n "$len" ] && echo "limit_req_zone \$hbot_k_$f zone=hbot_${f}_lenient:1m rate=$len;"
-			[ -n "$strict" ] && echo "limit_req_zone \$hbot_k_$f zone=hbot_${f}_strict:1m rate=$strict;"
+			echo "map \$hbot_fam \$hbot_k_$f { default \"\"; \"$f\" \"\$host:$f\"; }"
+			[ -n "$len" ] && echo "limit_req_zone \$hbot_k_$f zone=hbot_${f}_lenient:2m rate=$len;"
+			[ -n "$strict" ] && echo "limit_req_zone \$hbot_k_$f zone=hbot_${f}_strict:2m rate=$strict;"
 		done
 	} > "$tmp"
 	mv -f "$tmp" "$out"
