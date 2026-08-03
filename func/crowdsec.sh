@@ -78,9 +78,10 @@ crowdsec_apply() {
 	# NB: web bot rate-limiting (Layer B) is a separate, server-native subsystem (func/botpolicy.sh,
 	# wired at web install) - NOT rendered here; CrowdSec only owns Layer A (the ban -> 403 bouncer).
 
-	# CAPI: 'local' runs the engine self-hosted (no central blocklist/telemetry); default enrolls.
+	# Model: only 'capi' keeps the central blocklist/telemetry. 'local' and 'mesh' both run the engine
+	# self-hosted - mesh is local plus peer exchange, so it must not enrol either.
 	[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf" 2> /dev/null
-	[ "${COMPONENT_CROWDSEC_CAPI:-enroll}" = "local" ] && crowdsec_disable_capi
+	[ "${COMPONENT_CROWDSEC_MODE:-capi}" = "capi" ] || crowdsec_disable_capi
 
 	systemctl restart crowdsec > /dev/null 2>&1 || true
 	if nginx -t > /dev/null 2>&1; then

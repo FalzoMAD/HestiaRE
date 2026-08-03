@@ -568,9 +568,9 @@ install_security() {
 			# detection + nginx Layer-A/B wiring (collections, bouncer, http glue)
 			source "$HESTIA/func/crowdsec.sh"
 			crowdsec_apply || echo "[ ! ] CrowdSec wiring reported an issue (non-fatal)"
-			# optional fleet-mesh (opt-in): arms the mechanism (publish + import timer). Inert until
-			# the transport that moves peer lists into MESH_PEERS_DIR is wired (a fleet-level step).
-			if is_on "${COMPONENT_CROWDSEC_MESH:-}"; then
+			# 'mesh' model: arm the mechanism (publish + import timer). Inert until peers are paired,
+			# which is a two-admin step done afterwards in the panel or via the pairing commands.
+			if [ "${COMPONENT_CROWDSEC_MODE:-}" = "mesh" ]; then
 				echo "[ * ] Enabling CrowdSec fleet-mesh..."
 				"$BIN/h-add-sys-crowdsec-mesh" > /dev/null 2>&1 || echo "[ ! ] fleet-mesh enable reported an issue (non-fatal)"
 			fi
