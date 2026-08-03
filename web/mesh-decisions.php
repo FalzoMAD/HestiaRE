@@ -12,6 +12,10 @@
 // What crosses the wire is a list of banned IPv4 values, never the CrowdSec LAPI (loopback-only) and
 // never any panel object. Access is additionally narrowed by the IP-scoped firewall rule that pairing
 // installs for each peer on the panel port.
+//
+// No rate limit on purpose: the token is 256 bits (openssl rand -hex 32), so guessing is not a threat
+// model a lockout would improve - and a lockout on an unauthenticated route would itself be a way to
+// cut a peer off. Rejected guesses are logged instead (see below).
 
 $tokens = "/run/hestia/mesh/tokens";
 $payload = "/run/hestia/mesh/published.json";
@@ -45,6 +49,11 @@ foreach (file($tokens, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) 
 	}
 }
 if (!$ok) {
+	// A well-formed but unknown token is the only interesting failure: someone guessing at a live
+	// credential. Tokens are 256-bit, so a lockout would be theatre - visibility is the point. Caddy's
+	// access log holds every 403 (and rotates itself); this line makes the suspicious subset greppable
+	// without logging the scanner noise that never gets past the 401 above.
+	error_log("hestia-mesh: rejected pull with unknown token from " . ($_SERVER["REMOTE_ADDR"] ?? "?"));
 	http_response_code(403);
 	exit();
 }

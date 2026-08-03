@@ -1,3 +1,17 @@
+# The panel FPM log was unrotated. It now also receives rejected mesh-pull attempts (#485), i.e.
+# lines an unauthenticated caller can provoke, so it must be bounded.
+/var/log/hestia-php-fpm.log {
+    rotate 8
+    weekly
+    size 32M
+    missingok
+    notifempty
+    create 0640 root root
+    postrotate
+        systemctl reload hestia-php >/dev/null 2>&1 || true
+    endscript
+}
+
 /var/log/hestia/*.log {
     rotate 12
     monthly
