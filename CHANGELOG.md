@@ -92,7 +92,9 @@ Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
   `vmware-vcenter-vmsa-*`) from the L3 set. Since acquisition is nginx-only every local
   (`origin == crowdsec`) decision is already web-tier, so the filter is now a belt-and-suspenders
   DENYlist of fail2ban's auth families (ssh/ftp/mail/db) instead - curated against the fleet's
-  `cscli scenarios list`. fail2ban's lanes stay out of L3; CAPI stays L7-only.
+  `cscli scenarios list`. fail2ban's lanes stay out of L3; CAPI stays L7-only. `nginx-req-limit-exceeded`
+  is also denied: a rate-limit breach is not an exploit and correlates with shared IPs (CGNAT/NAT), so
+  a box-wide SYN-drop would be disproportionate - it stays L7-only (403).
 - CrowdSec re-add no longer fails on the saved-state config (#186). `h-delete-sys-crowdsec` keeps
   `/etc/crowdsec` (incl. our `:8054`-patched `config.yaml`) as saved state; on a re-add
   `apt-get install crowdsec` hit a dpkg conffile prompt on `config.yaml` and, under
