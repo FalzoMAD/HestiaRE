@@ -20,8 +20,6 @@ section as part of its PR. On release, the section gets the version number.
   CAPI-plus-mesh is a deliberate product simplification, not a constraint. Both flags had exactly one
   consumer each, so this is a rename plus a mapping, no behavioural change to the three kept models.
 
-## v0.13.2 (2026-08-03)
-
 ### Fixed
 
 - **CrowdSec was never installed by a fresh install** (#186). The installer's nginx-front gate read
@@ -37,10 +35,6 @@ section as part of its PR. On release, the section gets the version number.
   leaving `COMPONENT_CROWDSEC_MESH` empty with no way to enable the mesh at install time. It is a radio
   now, asked right after the addons screen like the CAPI question. The wizard refuses a manifest that
   repeats the construction instead of dropping the row quietly.
-
-## v0.13.1 (2026-08-03)
-
-Re-tag of v0.13.0, no content change - cut before the two fixes above were merged.
 
 ## v0.13.0 (2026-08-03)
 
