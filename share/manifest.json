@@ -329,6 +329,16 @@
       "default": { "standard": "enroll", "compact": "enroll", "latest": "enroll", "singlephp": "enroll", "nomail": "enroll", "mailonly": "enroll", "custom": null }
     },
 
+    "CROWDSEC_MESH": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "CrowdSec fleet-mesh",
+      "description": "Share ban decisions across your HestiaRE fleet (L7-only peer-mesh)",
+      "visible_if": "ADDON_CROWDSEC == true",
+      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
+      "note": "Off by default - a fleet decision. Arms the mechanism (publish own bans + import peers'); you wire the transport that moves peer lists between boxes, so it is inert until peers are configured. Toggle later with h-add/delete-sys-crowdsec-mesh."
+    },
+
     "ADDON_FAIL2BAN": {
       "group": "addons",
       "type": "checkbox",

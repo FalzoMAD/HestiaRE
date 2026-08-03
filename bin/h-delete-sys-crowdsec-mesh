@@ -1,0 +1,63 @@
+#!/bin/bash
+# info: disable CrowdSec fleet-mesh
+# options: [PURGE_DATA]
+#
+# example: h-delete-sys-crowdsec-mesh
+#
+# Turns off the mesh: stops the timer, drops the imported mesh bans (scenario hestia-mesh) and the
+# mesh config. CrowdSec itself + its own local/CAPI decisions are untouched. PURGE_DATA=yes also
+# wipes the published/peer lists under /var/lib/crowdsec/mesh.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+systemctl disable --now hestia-crowdsec-mesh.timer > /dev/null 2>&1 || true
+systemctl stop hestia-crowdsec-mesh.service > /dev/null 2>&1 || true
+rm -f /etc/systemd/system/hestia-crowdsec-mesh.service /etc/systemd/system/hestia-crowdsec-mesh.timer
+systemctl daemon-reload
+
+# drop the imported mesh bans (they carry scenario hestia-mesh); local + CAPI decisions stay.
+if command -v cscli > /dev/null 2>&1; then
+	cscli decisions delete --scenario hestia-mesh > /dev/null 2>&1 || true
+fi
+
+rm -f "$CONF_DIR/crowdsec/mesh.conf"
+if [ "${PURGE_DATA:-}" = "yes" ]; then
+	rm -rf /var/lib/crowdsec/mesh
+	echo "[ * ] PURGE_DATA=yes - published/peer lists removed."
+fi
+
+echo "CrowdSec fleet-mesh disabled."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Disabled CrowdSec fleet-mesh."
+log_event "$OK" "$ARGUMENTS"
+
+exit
