@@ -20,6 +20,10 @@ section as part of its PR. On release, the section gets the version number.
   bans fall out. `h-add-sys-crowdsec-mesh` / `h-delete-sys-crowdsec-mesh` + the
   `hestia-crowdsec-mesh` timer running `h-update-crowdsec-mesh`. The transport (moving peer lists
   into `MESH_PEERS_DIR`) is left to the fleet's own trust fabric; HestiaRE reads/writes the files.
+  Imports are hardened against a bad/compromised peer (the mesh's trust boundary): each entry is
+  validated as a single well-formed IPv4 (CIDR/garbage dropped), capped per peer + in total
+  (`MESH_MAX_PER_PEER`/`MESH_MAX_TOTAL`) so one runaway peer can't flood the fleet, and tagged
+  `scenario=hestia-mesh:<peer>` so a bad IP stays attributable to its source for incident response.
   Offered as a wizard checkbox next to the CAPI question (default **off** - unlike CAPI it is a
   fleet decision and inert until the transport is wired); the installer arms it when selected.
 - Server-native web bot rate-limiting (#482). A standalone Layer-B subsystem (`func/botpolicy.sh`)
