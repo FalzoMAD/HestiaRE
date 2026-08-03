@@ -1,0 +1,9 @@
+# HestiaRE CrowdSec fleet-mesh refresh. Oneshot, driven by hestia-crowdsec-mesh.timer: publishes
+# this box's local bans + imports the peer union as L7-only mesh bans. No-op unless mesh is enabled.
+[Unit]
+Description=HestiaRE CrowdSec fleet-mesh refresh
+After=crowdsec.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/hestia/bin/h-update-crowdsec-mesh

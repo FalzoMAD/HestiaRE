@@ -1,0 +1,69 @@
+#!/bin/bash
+# info: refresh the CrowdSec fleet-mesh shared blocklist
+# options: NONE
+#
+# example: h-update-crowdsec-mesh
+#
+# Peer-mesh (no central LAPI): PUBLISH this box's own local web-tier bans for peers to pull, and
+# IMPORT the union of peers' published lists as L7-only mesh bans (via cscli import: origin
+# cscli-import, scenario hestia-mesh). Enforcement is automatic - the L7 bouncer sees imported
+# decisions (403); the L3 feeder filters origin==crowdsec, so mesh bans NEVER reach the firewall.
+# Run by the hestia-crowdsec-mesh timer. No-op unless mesh is enabled (the marker conf).
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+CONF="$CONF_DIR/crowdsec/mesh.conf"
+[ -f "$CONF" ] || exit 0
+# shellcheck source=/etc/hestia/crowdsec/mesh.conf
+source "$CONF"
+command -v cscli > /dev/null 2>&1 || exit 0
+command -v jq > /dev/null 2>&1 || exit 0
+
+MESH_TTL="${MESH_TTL:-30m}"
+MESH_PUBLISH="${MESH_PUBLISH:-/var/lib/crowdsec/mesh/published.json}"
+MESH_PEERS_DIR="${MESH_PEERS_DIR:-/var/lib/crowdsec/mesh/peers}"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+mkdir -p "$(dirname "$MESH_PUBLISH")" "$MESH_PEERS_DIR"
+
+# 1) PUBLISH: this box's own local web-tier bans (origin crowdsec), for peers to pull.
+pub=$(mktemp)
+cscli decisions list -o json 2> /dev/null \
+	| jq -c '[ (if type=="array" then .[] else . end) | (.decisions // [])[]
+		| select(.type == "ban" and .origin == "crowdsec")
+		| {value, duration, scope} ]' > "$pub" 2> /dev/null
+[ -s "$pub" ] || echo '[]' > "$pub"
+mv -f "$pub" "$MESH_PUBLISH"
+chmod 644 "$MESH_PUBLISH"
+
+# 2) IMPORT: the union of the peer lists (dropped into MESH_PEERS_DIR by the fleet transport) as
+# mesh bans, TTL-bounded. Clean swap: drop the previous mesh set (by scenario) then import fresh,
+# so expired/withdrawn peer bans fall out and nothing piles up.
+# cscli decisions import picks the format from the file EXTENSION, so the temp file needs .json.
+union=$(mktemp --suffix=.json)
+cat "$MESH_PEERS_DIR"/*.json 2> /dev/null \
+	| jq -s -c --arg ttl "$MESH_TTL" 'add // [] | map(select(.value != null)) | unique_by(.value)
+		| map({duration: $ttl, scope: (.scope // "ip"), type: "ban", value: .value, reason: "hestia-mesh"})' \
+		> "$union" 2> /dev/null
+[ -s "$union" ] || echo '[]' > "$union"
+
+cscli decisions delete --scenario hestia-mesh > /dev/null 2>&1 || true
+if [ "$(jq 'length' "$union" 2> /dev/null || echo 0)" -gt 0 ]; then
+	cscli decisions import -i "$union" > /dev/null 2>&1 || true
+fi
+rm -f "$union"
+
+exit 0
