@@ -21,6 +21,12 @@
 # Composer
 composer.phar
 
+# Ad-hoc lint tooling: run against a checkout, never part of the build. Caches carry absolute paths
+# and tool versions, and a tracked one would also land in the release tarball.
+.php-cs-fixer.cache
+.phpstan.cache
+.phpunit.result.cache
+
 # Instance data: custom panel themes (never shipped)
 web/css/src/themes/custom/
 

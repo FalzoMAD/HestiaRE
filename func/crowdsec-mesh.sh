@@ -50,7 +50,10 @@ mesh_ttl_seconds() {
 	local t="${MESH_TTL:-30m}" n u
 	n=${t%[smhd]}
 	u=${t: -1}
-	[[ "$n" =~ ^[0-9]+$ ]] || { echo 1800; return; }
+	[[ "$n" =~ ^[0-9]+$ ]] || {
+		echo 1800
+		return
+	}
 	case "$u" in
 		s) echo "$n" ;;
 		m) echo $((n * 60)) ;;

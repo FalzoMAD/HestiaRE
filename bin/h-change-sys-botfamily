@@ -1,0 +1,118 @@
+#!/bin/bash
+# info: add or change a web bot rate-limit family
+# options: FAMILY MATCH LENIENT STRICT ENABLED [APPLY]
+#
+# example: h-change-sys-botfamily ai 'gptbot|claudebot|ccbot' 60r/m 20r/m yes
+#
+# Upserts one family in the system table (/etc/hestia/botfamilies.conf). BURST and NODELAY stay
+# conf-only advanced tuning and are preserved on an update, defaulted on a create. APPLY=no skips the
+# re-render so a caller changing several families (the panel saves the whole table) can apply once at
+# the end with h-update-sys-botfamilies.
+#
+# MATCH is interpolated into an nginx `map` regex and an apache BrowserMatchNoCase argument, so its
+# charset is restricted: a quote or brace would end the surrounding directive and inject config.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+family=$1
+match=$2
+lenient=$3
+strict=$4
+enabled=$5
+apply=${6-yes}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/botpolicy.sh
+source $HESTIA/func/botpolicy.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+OBJ="$CONF_DIR/botfamilies"
+# Each family costs two limit_req zones plus one more alternative in the per-request UA map, so the
+# table is capped rather than open-ended (8 curated + 2 free slots is the shipped layout).
+MAX_FAMILIES=10
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_args '5' "$#" 'FAMILY MATCH LENIENT STRICT ENABLED [APPLY]'
+check_hestia_demo_mode
+
+botpolicy_seed_families
+[ -f "$OBJ.conf" ] || {
+	echo "Error: no bot-family conf ($OBJ.conf)."
+	exit "$E_NOTEXIST"
+}
+
+if [[ ! "$family" =~ ^[a-z0-9_]{1,20}$ ]]; then
+	echo "Error: FAMILY must be 1-20 chars of a-z, 0-9 or _"
+	exit "$E_INVALID"
+fi
+if [ ${#match} -gt 512 ] || [[ ! "$match" =~ ^[A-Za-z0-9|._/+-]+$ ]]; then
+	echo "Error: MATCH must be UA tokens separated by | (letters, digits and . _ / + -), max 512 chars"
+	exit "$E_INVALID"
+fi
+for r in "$lenient" "$strict"; do
+	if [[ ! "$r" =~ ^[0-9]{1,6}r/[sm]$ ]]; then
+		echo "Error: rates must look like 120r/m or 2r/s"
+		exit "$E_INVALID"
+	fi
+done
+case "$enabled" in yes | no) ;; *)
+	echo "Error: ENABLED must be yes or no"
+	exit "$E_INVALID"
+	;;
+esac
+case "$apply" in yes | no) ;; *)
+	echo "Error: APPLY must be yes or no"
+	exit "$E_INVALID"
+	;;
+esac
+
+exists=$(get_object_value "$OBJ" 'FAMILY' "$family" '$FAMILY' 2> /dev/null)
+if [ -z "$exists" ] && [ "$(grep -c "^FAMILY=" "$OBJ.conf")" -ge "$MAX_FAMILIES" ]; then
+	echo "Error: the family table is full ($MAX_FAMILIES). Delete or reuse a slot."
+	exit "$E_LIMIT"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+if [ -n "$exists" ]; then
+	log_type='changed'
+	update_object_value "$OBJ" 'FAMILY' "$family" '$MATCH' "$match"
+	update_object_value "$OBJ" 'FAMILY' "$family" '$LENIENT' "$lenient"
+	update_object_value "$OBJ" 'FAMILY' "$family" '$STRICT' "$strict"
+	update_object_value "$OBJ" 'FAMILY' "$family" '$ENABLED' "$enabled"
+else
+	log_type='added'
+	str="FAMILY='$family' MATCH='$match' LENIENT='$lenient' STRICT='$strict'"
+	str="$str BURST='10' NODELAY='yes' ENABLED='$enabled'"
+	echo "$str" >> "$OBJ.conf"
+fi
+
+[ "$apply" = 'yes' ] && "$BIN/h-update-sys-botfamilies"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Bot family $log_type (Family: $family, Enabled: $enabled)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

@@ -52,6 +52,7 @@ json_list() {
         "REDIRECT": "'$REDIRECT'",
         "REDIRECT_CODE": "'$REDIRECT_CODE'",
         "CUSTOM_DOCROOT": "'$CUSTOM_DOCROOT'",
+        "BOTLIMIT": "'$BOTLIMIT'",
         "SUSPENDED": "'$SUSPENDED'",
         "TIME": "'$TIME'",
         "DATE": "'$DATE'"
@@ -116,6 +117,9 @@ shell_list() {
 	fi
 	echo "DISK:             $U_DISK"
 	echo "BW:               $U_BANDWIDTH"
+	if [ -n "$BOTLIMIT" ]; then
+		echo "BOTLIMIT:         $BOTLIMIT"
+	fi
 	echo "SUSPENDED:        $SUSPENDED"
 	echo "TIME:             $TIME"
 	echo "DATE:             $DATE"

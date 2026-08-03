@@ -238,6 +238,79 @@
 							</a>
 						</p>
 					<?php } ?>
+					<!-- Bot rate-limit family table (Layer B, #482). Lives inline here for now; placement
+					     may move with the panel overhaul. Saved with the main settings form: every row
+					     runs APPLY=no and one apply follows, so the web server reloads once. -->
+					<details class="box-collapse u-mb10">
+						<summary class="box-collapse-header">
+							<i class="fas fa-robot u-mr10"></i><?= tohtml( _("Bot Rate Limiting")) ?>
+							<span class="optional u-ml5">
+								<?php $bl_enabled_count = 0; foreach ($botfamily_rows as $r) { if ($r["enabled"]) { ++$bl_enabled_count; } } ?>
+								<?= tohtml(sprintf(_("%d active"), $bl_enabled_count)) ?>,
+								<?= tohtml(!empty($_SESSION["PROXY_SYSTEM"]) ? $_SESSION["PROXY_SYSTEM"] : $_SESSION["WEB_SYSTEM"]) ?>
+							</span>
+						</summary>
+						<div class="box-collapse-content">
+							<p class="hint u-mb20">
+								<?= tohtml( _("Bot families are matched on the User-Agent and throttled to the rate below (HTTP 429). Humans are never limited; malicious traffic is handled by CrowdSec, not here. Each domain then picks off, lenient or strict per family in its own settings - nothing is throttled until someone does.")) ?>
+							</p>
+							<?php foreach ($botfamily_rows as $i => $r) { ?>
+								<details class="box-collapse u-mb10">
+									<summary class="box-collapse-header">
+										<?php if ($r["fam"] === "") { ?>
+											<span class="optional"><?= tohtml( _("unused slot")) ?></span>
+										<?php } else { ?>
+											<?= tohtml($r["fam"]) ?>
+											<span class="optional u-ml5">
+												<?= tohtml($r["lenient"]) ?> / <?= tohtml($r["strict"]) ?>
+												<?php if (!$r["enabled"]) { ?>- <?= tohtml( _("Disabled")) ?><?php } ?>
+											</span>
+										<?php } ?>
+									</summary>
+									<div class="box-collapse-content">
+										<input type="hidden" name="v_bl_orig[<?= tohtml($i) ?>]" value="<?= tohtml($r["orig"]) ?>">
+										<div class="u-mb10">
+											<label for="v_bl_fam<?= tohtml($i) ?>" class="form-label">
+												<?= tohtml( _("Family")) ?>
+												<span class="optional">(<?= tohtml( _("empty to remove")) ?>)</span>
+											</label>
+											<input type="text" class="form-control" name="v_bl_fam[<?= tohtml($i) ?>]" id="v_bl_fam<?= tohtml($i) ?>" value="<?= tohtml($r["fam"]) ?>" placeholder="<?= tohtml( _("unused slot")) ?>">
+										</div>
+										<div class="u-mb10">
+											<label for="v_bl_match<?= tohtml($i) ?>" class="form-label">
+												<?= tohtml( _("User-Agent Match")) ?> <span class="optional">(<?= tohtml( _("tokens separated by |")) ?>)</span>
+											</label>
+											<input type="text" class="form-control" name="v_bl_match[<?= tohtml($i) ?>]" id="v_bl_match<?= tohtml($i) ?>" value="<?= tohtml($r["match"]) ?>" placeholder="examplebot|example-crawler">
+										</div>
+										<div class="u-mb10">
+											<label for="v_bl_lenient<?= tohtml($i) ?>" class="form-label"><?= tohtml( _("Lenient")) ?></label>
+											<input type="text" class="form-control" name="v_bl_lenient[<?= tohtml($i) ?>]" id="v_bl_lenient<?= tohtml($i) ?>" value="<?= tohtml($r["lenient"]) ?>" placeholder="60r/m">
+										</div>
+										<div class="u-mb10">
+											<label for="v_bl_strict<?= tohtml($i) ?>" class="form-label"><?= tohtml( _("Strict")) ?></label>
+											<input type="text" class="form-control" name="v_bl_strict[<?= tohtml($i) ?>]" id="v_bl_strict<?= tohtml($i) ?>" value="<?= tohtml($r["strict"]) ?>" placeholder="20r/m">
+										</div>
+										<div class="u-mb10">
+											<label for="v_bl_enabled<?= tohtml($i) ?>" class="form-label"><?= tohtml( _("Enabled")) ?></label>
+											<select class="form-select" name="v_bl_enabled[<?= tohtml($i) ?>]" id="v_bl_enabled<?= tohtml($i) ?>">
+												<option value="yes" <?php if ($r["enabled"]) echo "selected"; ?>><?= tohtml( _("yes")) ?></option>
+												<option value="no" <?php if (!$r["enabled"]) echo "selected"; ?>><?= tohtml( _("no")) ?></option>
+											</select>
+										</div>
+										<?php if ($r["burst"] !== "") { ?>
+											<p class="hint">
+												<?= tohtml( _("Advanced (config file only)")) ?>:
+												burst=<?= tohtml($r["burst"]) ?><?php if ($r["nodelay"] == "yes") { ?>, nodelay<?php } ?>
+											</p>
+										<?php } ?>
+									</div>
+								</details>
+							<?php } ?>
+							<p class="hint">
+								<?= tohtml( _("Disabling or removing a family also stops it being applied to any domain that used it.")) ?>
+							</p>
+						</div>
+					</details>
 					<?php if (!empty($_SESSION["WEB_BACKEND"])) { ?>
 						<p>
 							<?= tohtml( _("PHP Interpreter")) ?>:
