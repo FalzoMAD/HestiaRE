@@ -78,13 +78,33 @@ fi
 if [ ${#changed[@]} -eq 0 ]; then
 	echo "== tier 2: no changed shell files vs $BASE =="
 else
+	# Same "do not make it worse" rule as the formatter below: a legacy file carries findings that are
+	# not this change's business, and demanding them would bury the actual change (touch h-install-hestia
+	# for one line, inherit its SC2044). Findings are compared against the base version of the same file
+	# by SIGNATURE - code plus message, without the line number, which shifts on every edit.
 	echo "== tier 2: shellcheck (severity>=warning), ${#changed[@]} changed files =="
-	if out=$(shellcheck -S warning -f gcc "${changed[@]}" 2> /dev/null) && [ -z "$out" ]; then
-		echo "   OK"
-	else
-		echo "$out"
-		echo "   FAILED - silence a deliberate one per line with '# shellcheck disable=SCxxxx  # why'."
+	sc_sig() { sed 's/^[^:]*:[0-9]*:[0-9]*: //' | sort -u; }
+	sc_new=0
+	sc_debt=0
+	for f in "${changed[@]}"; do
+		now=$(shellcheck -S warning -f gcc "$f" 2> /dev/null | sc_sig)
+		[ -z "$now" ] && continue
+		base=$(git show "$BASE:$f" 2> /dev/null | shellcheck -S warning -f gcc - 2> /dev/null | sc_sig)
+		added=$(comm -23 <(echo "$now") <(echo "$base"))
+		if [ -n "$added" ]; then
+			echo "--- $f"
+			echo "$added" | sed 's/^/   /'
+			sc_new=$((sc_new + 1))
+		else
+			sc_debt=$((sc_debt + $(echo "$now" | grep -c .)))
+		fi
+	done
+	if [ "$sc_new" -gt 0 ]; then
+		echo "   FAILED - new finding(s) in $sc_new file(s)."
+		echo "   Silence a deliberate one per line: '# shellcheck disable=SCxxxx  # why'."
 		rc=1
+	else
+		echo "   OK${sc_debt:+ ($sc_debt pre-existing, not blocking)}"
 	fi
 
 	# Formatting is judged as "do not make it worse", not "clean up on sight". 26 inherited files
