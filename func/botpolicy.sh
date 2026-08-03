@@ -1,3 +1,4 @@
+#!/bin/bash
 # HestiaRE web bot rate-limiting (Layer B) - server-native, CrowdSec-independent.
 # Native nginx limit_req / apache mod_qos throttling of bot families (429 on excess). Humans are
 # UNLIMITED; malicious traffic is CrowdSec's job (ban -> 403), never here. Available on ANY web

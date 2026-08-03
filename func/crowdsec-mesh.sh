@@ -1,3 +1,4 @@
+#!/bin/bash
 # HestiaRE CrowdSec fleet-mesh: peering + transport helpers.
 #
 # Transport = an authenticated pull over the panel port: each box serves its own published ban list at

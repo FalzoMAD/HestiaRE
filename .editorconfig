@@ -1,0 +1,28 @@
+# editorconfig.org - HestiaRE. Also read by shfmt, which is why the shell block below is not merely
+# cosmetic: it IS the format contract the lint gate enforces (#477). The settings match the
+# prettier-plugin-sh config HestiaCP uses, so the existing tree already conforms.
+root = true
+
+[*]
+charset = utf-8
+indent_style = tab
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Trailing whitespace is meaningful in Markdown (two spaces = line break).
+[*.md]
+trim_trailing_whitespace = false
+
+# YAML forbids tabs.
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# Shell: the house style deviates from shfmt's defaults on all three counts, so a bare `shfmt -d`
+# would want to rewrite the whole tree. Spaced redirections (`2> /dev/null`), a leading `&&` on
+# continuation lines, and indented case arms.
+[{bin/h-*,func/*.sh,install.sh,.gitea/tools/*.sh}]
+switch_case_indent = true
+space_redirects = true
+binary_next_line = true

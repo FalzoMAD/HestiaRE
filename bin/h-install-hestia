@@ -66,6 +66,11 @@ set -e
 	exit 1
 }
 
+# Auto-apt units race us for the dpkg lock on a freshly booted box (#480). Masked for the duration,
+# restored on ANY exit path so an aborted install never leaves unattended-upgrades off.
+apt_auto_units_mask
+trap 'apt_auto_units_restore' EXIT
+
 load_os_profile "$INSTALL_OS"
 
 # ── Install-time variables ──────────────────────────────────────────────────
@@ -306,7 +311,7 @@ install_web() {
 	source "$HESTIA/func/botpolicy.sh"
 	botpolicy_seed_families
 	if [ "$web_model" = "apache" ]; then
-		hestia_apt -y install libapache2-mod-qos || true
+		apt_install_optional "apache mod_qos (bot rate limiting)" libapache2-mod-qos || true
 		a2enmod qos > /dev/null 2>&1
 		mkdir -p /etc/apache2/conf.d
 		botpolicy_render_apache
@@ -546,7 +551,8 @@ install_security() {
 		if [ "$cs_pub" = "nginx" ]; then
 			echo "[ * ] Installing CrowdSec..."
 			# conffile policy: keep an existing /etc/crowdsec/config.yaml non-interactively (see h-add-sys-crowdsec)
-			hestia_apt -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install crowdsec || true
+			APT_EXTRA_OPTS='-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold' \
+				apt_install_optional "CrowdSec" crowdsec || true
 			# move the local API off :8080 (collides with apache2) to :8054
 			if [ -f /etc/crowdsec/config.yaml ]; then
 				sed -i 's|127.0.0.1:8080|127.0.0.1:8054|g' /etc/crowdsec/config.yaml
@@ -584,7 +590,7 @@ install_addons() {
 	fi
 	if is_on "${COMPONENT_ADDON_DOCKER:-}"; then
 		echo "[ * ] Installing docker.io (minimal — see #123)..."
-		hestia_apt -y install docker.io || true
+		apt_install_optional "Docker" docker.io || true
 	fi
 	if is_on "${COMPONENT_ADDON_FILEMANAGER:-}"; then
 		echo "[ * ] Installing File Manager..."
@@ -761,11 +767,12 @@ configure_hestia() {
 # ════════════════════════════════════════════════════════════════════════════
 install_tools() {
 	echo "[ * ] Installing always-installed utilities..."
-	hestia_apt -y install htop iftop sysstat iotop mc mtr-tiny screen || true
+	apt_install_optional "admin tools" htop iftop sysstat iotop mc mtr-tiny screen || true
 	if is_on "${COMPONENT_ADDON_UTILITIES:-}" && [ -n "${TOOLS_SELECTION:-}" ]; then
 		echo "[ * ] Installing selected utilities: ${TOOLS_SELECTION}"
 		# shellcheck disable=SC2086
-		hestia_apt -y install $TOOLS_SELECTION || true
+		# shellcheck disable=SC2086 # TOOLS_SELECTION is a deliberate space-separated package list
+		apt_install_optional "selected tools" $TOOLS_SELECTION || true
 	fi
 	if is_on "${COMPONENT_ADDON_COMPOSER:-true}"; then
 		echo "[ * ] Installing composer (system-wide)..."
@@ -850,6 +857,15 @@ finalize_install() {
 	echo "  Install log: $LOG"
 	echo "  IMPORTANT: Reboot the server to complete the installation."
 	echo ""
+	# An optional component that did not install must be visible HERE, not only in the log: the whole
+	# point of #480 is that install.conf claimed a component was on while the package was absent.
+	if [ -n "${HESTIA_INSTALL_WARNINGS:-}" ]; then
+		echo "  [ ! ] Some optional packages did not install:"
+		printf '%s' "$HESTIA_INSTALL_WARNINGS" | sed '/^$/d; s/^/        /'
+		echo "        The matching feature is NOT active. Re-run its h-add-sys-* command once the"
+		echo "        system is idle, or install the package and re-run the installer."
+		echo ""
+	fi
 }
 
 # ════════════════════════════════════════════════════════════════════════════
