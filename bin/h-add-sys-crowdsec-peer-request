@@ -1,0 +1,149 @@
+#!/bin/bash
+# info: accept an inbound CrowdSec mesh pairing request
+# options: IP HANDOFF_FILE
+#
+# example: h-add-sys-crowdsec-peer-request 10.5.5.13 /run/hestia/mesh/in/abc123
+#
+# The accepting half of the pairing handshake, called by /mesh-pair.php - not meant to be run by hand.
+# HANDOFF_FILE is the peer's JSON payload {code, token, port, host}, staged 0600 by the panel so no
+# secret rides in argv; it is consumed (removed) on sight. IP is the OBSERVED source address of the
+# request, not what the peer claims to be - a self-reported address could be anyone's.
+#
+# The one-time code minted by h-generate-sys-crowdsec-pairing is the whole authorisation, so it is
+# checked before ANY side effect (no firewall rule, no outbound connection, no record for a caller who
+# cannot present it), and consumed on success. Prints only the JSON reply the peer needs.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+ip=$1
+handoff=$2
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/crowdsec-mesh.sh
+source $HESTIA/func/crowdsec-mesh.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Errors go to stderr: stdout carries the JSON reply and nothing else.
+fail() {
+	echo "ERROR: $1" >&2
+	rm -f "$handoff"
+	exit "${2:-$E_INVALID}"
+}
+
+# Shut the window: on success (single use), and on too many wrong guesses (online brute force gets one
+# short window and a handful of tries, never a standing oracle).
+pairing_close() {
+	rm -f "$MESH_PAIRING_CONF" "$MESH_RUN_DIR/pairing"
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root" >&2
+	exit 10
+fi
+
+check_args '2' "$#" 'IP HANDOFF_FILE'
+check_hestia_demo_mode
+
+mesh_load || fail "fleet-mesh is not enabled" "$E_DISABLED"
+[ -f "$MESH_PAIRING_CONF" ] || fail "no pairing window is open" "$E_NOTEXIST"
+[ -f "$handoff" ] || fail "handoff file not found" "$E_NOTEXIST"
+
+# The handoff path is panel-supplied; confine it to the staging dir so it can never name an arbitrary
+# file (the panel is trusted, its input is not).
+case "$handoff" in
+	"$MESH_RUN_DIR/in/"*) [[ "${handoff##*/}" =~ ^[A-Za-z0-9]{8,64}$ ]] || fail "invalid handoff name" ;;
+	*) fail "handoff file outside $MESH_RUN_DIR/in" ;;
+esac
+
+[[ "$ip" =~ ^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])$ ]] \
+	|| fail "invalid source address"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# shellcheck source=/etc/hestia/crowdsec/pairing.conf
+source "$MESH_PAIRING_CONF"
+code=$(jq -r '.code // empty' "$handoff" 2> /dev/null | tr '[:lower:]' '[:upper:]' | LC_ALL=C tr -dc 'A-Z0-9')
+token=$(jq -r '.token // empty' "$handoff" 2> /dev/null)
+peer_port=$(jq -r '.port // empty' "$handoff" 2> /dev/null)
+peer_host=$(jq -r '.host // empty' "$handoff" 2> /dev/null)
+rm -f "$handoff"
+
+[ "$(date +%s)" -le "${PAIRING_EXPIRES:-0}" ] || {
+	pairing_close
+	fail "pairing window expired" "$E_NOTEXIST"
+}
+
+tries=$((${PAIRING_TRIES:-0} + 1))
+if [ "$tries" -gt "$MESH_PAIRING_TRIES" ]; then
+	pairing_close
+	fail "too many failed pairing attempts - window closed" "$E_PASSWORD"
+fi
+if [ "$(mesh_hash "$code")" != "${PAIRING_HASH:-x}" ]; then
+	sed -i "s/^PAIRING_TRIES=.*/PAIRING_TRIES='$tries'/" "$MESH_PAIRING_CONF"
+	$BIN/h-log-action "system" "Warning" "System" "CrowdSec mesh pairing rejected (bad code from $ip)." > /dev/null 2>&1
+	fail "invalid pairing code" "$E_PASSWORD"
+fi
+
+# Authorised from here on. Consume the window before doing the work: a replay of the same code must
+# not get a second peer, even if the steps below fail.
+pairing_close
+
+[[ "$token" =~ ^[a-f0-9]{32,128}$ ]] || fail "peer sent no usable token" "$E_PARSING"
+[[ "$peer_port" =~ ^[0-9]{1,5}$ ]] || peer_port="${BACKEND_PORT:-8083}"
+
+# The peer's own name is only ever a label; we connect to the observed IP.
+peer=$(mesh_peer_id "$peer_host")
+[ -n "$peer" ] || peer=$(mesh_peer_id "$ip")
+[ -n "$peer" ] || fail "could not derive a peer id" "$E_INVALID"
+if [ -f "$MESH_PEERS_CONF" ] && grep -q "^PEER='$peer'" "$MESH_PEERS_CONF"; then
+	peer="$peer-$(mesh_peer_id "$ip")"
+	grep -q "^PEER='$peer'" "$MESH_PEERS_CONF" && fail "peer $peer already paired" "$E_EXISTS"
+fi
+
+mesh_fw_open "$ip" "$peer"
+pin=$(mesh_spki_pin "$ip" "$peer_port") || {
+	mesh_fw_close "$peer"
+	fail "cannot read the TLS key of $ip:$peer_port (is its panel reachable from here?)" "$E_CONNECT"
+}
+
+serve_token=$(mesh_token_new)
+time_n_date=$(date +'%T %F')
+str="PEER='$peer' HOST='$ip' PORT='$peer_port' IP='$ip' PIN='$pin'"
+str="$str PULL_TOKEN='$token' SERVE_TOKEN='$serve_token' SUSPENDED='no'"
+str="$str TIME='$(echo "$time_n_date" | cut -f1 -d ' ')' DATE='$(echo "$time_n_date" | cut -f2 -d ' ')'"
+touch "$MESH_PEERS_CONF"
+chmod 600 "$MESH_PEERS_CONF"
+echo "$str" >> "$MESH_PEERS_CONF"
+
+# Staging alone makes our serve side live, which is what the peer needs right now. A full refresh
+# (publish + pull + import) is deliberately left to the timer: it would run inside the peer's HTTP
+# request, and its own pull back to a peer that has not finished recording us yet could outlast the
+# caller's timeout - leaving one side paired and the other not.
+mesh_stage_serve
+
+jq -n --arg token "$serve_token" --arg port "${BACKEND_PORT:-8083}" \
+	--arg host "$(hostname -f 2> /dev/null || hostname)" \
+	'{token: $token, port: $port, host: $host}'
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "CrowdSec mesh peer accepted (Peer: $peer, IP: $ip)." > /dev/null 2>&1
+log_event "$OK" "PEER='$peer'"
+
+exit

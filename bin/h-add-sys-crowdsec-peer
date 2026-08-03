@@ -1,0 +1,172 @@
+#!/bin/bash
+# info: pair this box with a CrowdSec fleet-mesh peer
+# options: HOST CODE [PORT]
+#
+# example: h-add-sys-crowdsec-peer node2.example.com AB3CD-EF4GH-JK5MN-PQ6RS
+#
+# Joins the mesh of the box at HOST using a one-time code that box's admin minted with
+# h-generate-sys-crowdsec-pairing - so pairing needs an admin on both sides and neither ever handles
+# the other's credentials. Both boxes end up with each other's pull token, TLS pin and an IP-scoped
+# ACCEPT rule for the panel port; from then on the mesh timer pulls each peer's published ban list.
+#
+# CODE may be given as @/path/to/file (read, then removed) so a caller need not expose the secret in
+# argv, where any local user could read it from /proc. The panel uses that form.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+host=$1
+code=$2
+port=$3
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/crowdsec-mesh.sh
+source $HESTIA/func/crowdsec-mesh.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+fail() {
+	echo "ERROR: $1"
+	[ -n "$fw_added" ] && mesh_fw_close "$peer"
+	rm -f "$payload" "$reply"
+	exit "${2:-$E_INVALID}"
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_args '2' "$#" 'HOST CODE [PORT]'
+check_hestia_demo_mode
+
+if ! mesh_load; then
+	echo "ERROR: CrowdSec fleet-mesh is not enabled. Run h-add-sys-crowdsec-mesh first."
+	exit "$E_DISABLED"
+fi
+for b in curl jq openssl; do
+	command -v $b > /dev/null 2>&1 || {
+		echo "ERROR: $b is required."
+		exit "$E_NOTEXIST"
+	}
+done
+
+# @file form: the secret arrives out of band. Consume it immediately either way.
+if [[ "$code" == @* ]]; then
+	code_file="${code#@}"
+	[ -f "$code_file" ] || {
+		echo "ERROR: code file not found."
+		exit "$E_NOTEXIST"
+	}
+	code=$(head -c 128 "$code_file")
+	rm -f "$code_file"
+fi
+# Codes are printed grouped; accept any punctuation/case the admin pasted.
+code=$(printf '%s' "$code" | tr '[:lower:]' '[:upper:]' | LC_ALL=C tr -dc 'A-Z0-9')
+[ ${#code} -ge 16 ] || {
+	echo "ERROR: pairing code looks malformed."
+	exit "$E_INVALID"
+}
+
+port="${port:-${BACKEND_PORT:-8083}}"
+[[ "$port" =~ ^[0-9]{1,5}$ ]] || {
+	echo "ERROR: invalid port."
+	exit "$E_INVALID"
+}
+[[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,253}$ ]] || {
+	echo "ERROR: invalid host."
+	exit "$E_INVALID"
+}
+
+peer=$(mesh_peer_id "$host")
+[ -n "$peer" ] || {
+	echo "ERROR: could not derive a peer id from '$host'."
+	exit "$E_INVALID"
+}
+if [ -f "$MESH_PEERS_CONF" ] && grep -q "^PEER='$peer'" "$MESH_PEERS_CONF"; then
+	echo "ERROR: peer $peer already paired. Unpair it first (h-delete-sys-crowdsec-peer $peer)."
+	exit "$E_EXISTS"
+fi
+
+# The peer calls back during pairing (to record OUR pin), so it must be able to reach us by IP.
+peer_ip=$(getent ahostsv4 "$host" 2> /dev/null | awk '{print $1; exit}')
+[ -n "$peer_ip" ] || {
+	echo "ERROR: cannot resolve $host to an IPv4 address."
+	exit "$E_CONNECT"
+}
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# 1) Let the peer in first: its pairing handler connects back to read our TLS pin, and afterwards it
+# pulls our published list on this same port.
+mesh_fw_open "$peer_ip" "$peer" && fw_added=1
+
+# 2) Pin the peer's panel key now and pair against that pin, so even the handshake that carries the
+# code is bound to one specific key.
+pin=$(mesh_spki_pin "$host" "$port") || fail "cannot read the TLS key of $host:$port (reachable? panel up?)" "$E_CONNECT"
+
+# 3) The token we mint here is what the peer will present to US later; the peer's own token comes back
+# in the reply. Both travel in files, never argv.
+serve_token=$(mesh_token_new)
+payload=$(mktemp)
+chmod 600 "$payload"
+jq -n --arg code "$code" --arg token "$serve_token" --arg port "${BACKEND_PORT:-8083}" \
+	--arg host "$(hostname -f 2> /dev/null || hostname)" \
+	'{code: $code, token: $token, port: $port, host: $host}' > "$payload"
+
+reply=$(mktemp)
+chmod 600 "$reply"
+http=$(curl -sS -k --pinnedpubkey "sha256//$pin" --max-time 30 --max-filesize 65536 \
+	-o "$reply" -w '%{http_code}' -H 'Content-Type: application/json' \
+	--data "@$payload" "https://$host:$port/mesh-pair.php" 2> /dev/null)
+rm -f "$payload"
+
+case "$http" in
+	200) ;;
+	404) fail "$host:$port has no open pairing window. Run h-generate-sys-crowdsec-pairing there." "$E_NOTEXIST" ;;
+	403) fail "$host:$port rejected the pairing code (wrong, used or expired)." "$E_PASSWORD" ;;
+	*) fail "pairing call to $host:$port failed (HTTP ${http:-none})." "$E_CONNECT" ;;
+esac
+
+pull_token=$(jq -r '.token // empty' "$reply" 2> /dev/null)
+peer_port=$(jq -r '.port // empty' "$reply" 2> /dev/null)
+rm -f "$reply"
+[[ "$pull_token" =~ ^[a-f0-9]{32,128}$ ]] || fail "the peer returned no usable token." "$E_PARSING"
+[[ "$peer_port" =~ ^[0-9]{1,5}$ ]] || peer_port="$port"
+
+# 4) Record the peer. Root-only: PULL_TOKEN/SERVE_TOKEN are live credentials.
+time_n_date=$(date +'%T %F')
+str="PEER='$peer' HOST='$host' PORT='$peer_port' IP='$peer_ip' PIN='$pin'"
+str="$str PULL_TOKEN='$pull_token' SERVE_TOKEN='$serve_token' SUSPENDED='no'"
+str="$str TIME='$(echo "$time_n_date" | cut -f1 -d ' ')' DATE='$(echo "$time_n_date" | cut -f2 -d ' ')'"
+touch "$MESH_PEERS_CONF"
+chmod 600 "$MESH_PEERS_CONF"
+echo "$str" >> "$MESH_PEERS_CONF"
+
+# 5) Serve side live immediately, then converge (publish + pull + import) without waiting for the timer.
+mesh_stage_serve
+$BIN/h-update-crowdsec-mesh > /dev/null 2>&1 || true
+
+echo "Paired with $peer ($host:$peer_port)."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# $ARGUMENTS holds the code, so it is not logged - only the peer identity is.
+$BIN/h-log-action "system" "Info" "System" "CrowdSec mesh peer added (Peer: $peer, IP: $peer_ip)."
+log_event "$OK" "PEER='$peer'"
+
+exit

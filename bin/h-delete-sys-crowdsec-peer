@@ -1,0 +1,74 @@
+#!/bin/bash
+# info: unpair a CrowdSec fleet-mesh peer
+# options: PEER
+#
+# example: h-delete-sys-crowdsec-peer node2
+#
+# Drops the peer record (its tokens die with it), closes the IP-scoped panel-port rule, removes its
+# staged list and the mesh bans it contributed. Run it on BOTH boxes: unpairing is deliberately local
+# (no remote command), so the other side keeps a dead peer - and its firewall hole - until unpaired
+# there too. A one-sided unpair is harmless otherwise: the orphaned peer's pulls just get a 403.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+peer=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/crowdsec-mesh.sh
+source $HESTIA/func/crowdsec-mesh.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_args '1' "$#" 'PEER'
+check_hestia_demo_mode
+
+if ! mesh_load; then
+	echo "ERROR: CrowdSec fleet-mesh is not enabled."
+	exit "$E_DISABLED"
+fi
+
+peer=$(mesh_peer_id "$peer")
+if [ ! -f "$MESH_PEERS_CONF" ] || ! grep -q "^PEER='$peer'" "$MESH_PEERS_CONF"; then
+	echo "ERROR: peer $peer does not exist."
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+mesh_fw_close "$peer"
+sed -i "/^PEER='$peer' /d" "$MESH_PEERS_CONF"
+rm -f "$MESH_PEERS_DIR/$peer.json"
+
+if command -v cscli > /dev/null 2>&1; then
+	cscli decisions delete --scenario "hestia-mesh:$peer" > /dev/null 2>&1 || true
+fi
+
+mesh_stage_serve
+echo "Peer $peer unpaired. Run h-delete-sys-crowdsec-peer on that box too."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "CrowdSec mesh peer removed (Peer: $peer)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

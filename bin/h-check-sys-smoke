@@ -292,6 +292,19 @@ check_web_switch_prechecks() {
 
 # check_web_model_sentinel - flag an interrupted model switch so the box reports it
 # rather than the operator discovering it at the next reboot.
+check_mesh_serve_staged() {
+	# With peers paired, /run/hestia/mesh must hold the panel-readable staging - without it
+	# /mesh-decisions.php 404s and every peer silently stops receiving this box's bans (/run is
+	# tmpfs, so a missed refresh after a boot looks exactly like a healthy mesh from here).
+	if [ ! -s "$CONF_DIR/crowdsec/peers.conf" ]; then
+		ok "crowdsec mesh has no peers paired"
+	elif [ -f /run/hestia/mesh/tokens ] && [ -f /run/hestia/mesh/published.json ]; then
+		ok "crowdsec mesh serve side staged"
+	else
+		no "crowdsec mesh peers paired but /run/hestia/mesh not staged" "run: h-update-crowdsec-mesh"
+	fi
+}
+
 check_web_model_sentinel() {
 	local s="/var/lib/hestia/web-model-switch/IN_PROGRESS" op
 	if [ -f "$s" ]; then
@@ -339,7 +352,10 @@ is_on "${COMPONENT_ADDON_CROWDSEC:-}" && check_service crowdsec "crowdsec"
 # not just the component flag, so a crowdsec-without-L3 state doesn't false-fail.
 [ -f "$CONF_DIR/firewall/crowdsec.conf" ] && check_service hestia-crowdsec-l3.timer "crowdsec L3 feeder timer"
 # fleet-mesh timer only where mesh is enabled (its marker conf), same artefact-gated reasoning.
-[ -f "$CONF_DIR/crowdsec/mesh.conf" ] && check_service hestia-crowdsec-mesh.timer "crowdsec fleet-mesh timer"
+if [ -f "$CONF_DIR/crowdsec/mesh.conf" ]; then
+	check_service hestia-crowdsec-mesh.timer "crowdsec fleet-mesh timer"
+	check_mesh_serve_staged
+fi
 # adminer/webmail: no own daemon — served by a caddy FPM pool, so check the socket
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then

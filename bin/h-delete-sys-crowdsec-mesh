@@ -4,9 +4,10 @@
 #
 # example: h-delete-sys-crowdsec-mesh
 #
-# Turns off the mesh: stops the timer, drops the imported mesh bans (scenario hestia-mesh) and the
-# mesh config. CrowdSec itself + its own local/CAPI decisions are untouched. PURGE_DATA=yes also
-# wipes the published/peer lists under /var/lib/crowdsec/mesh.
+# Turns off the mesh: stops the timer, unpairs every peer (tokens and their panel-port rules go with
+# them), drops the imported mesh bans and the mesh config. CrowdSec itself + its own local/CAPI
+# decisions are untouched. PURGE_DATA=yes also wipes the published/peer lists under
+# /var/lib/crowdsec/mesh. Peers keep a dead record for this box until unpaired there too.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -38,14 +39,31 @@ check_hestia_demo_mode
 systemctl disable --now hestia-crowdsec-mesh.timer > /dev/null 2>&1 || true
 systemctl stop hestia-crowdsec-mesh.service > /dev/null 2>&1 || true
 rm -f /etc/systemd/system/hestia-crowdsec-mesh.service /etc/systemd/system/hestia-crowdsec-mesh.timer
+rm -f /etc/tmpfiles.d/hestia-mesh.conf
 systemctl daemon-reload
 
-# drop the imported mesh bans (they carry scenario hestia-mesh); local + CAPI decisions stay.
-if command -v cscli > /dev/null 2>&1; then
-	cscli decisions delete --scenario hestia-mesh > /dev/null 2>&1 || true
+# Unpair first: h-delete-sys-crowdsec-peer is what closes each peer's panel-port ACCEPT rule, which
+# must not outlive the mesh.
+if [ -f "$CONF_DIR/crowdsec/peers.conf" ]; then
+	# Snapshot the ids: each unpair rewrites the file we would otherwise be iterating.
+	for peer in $(sed -n "s/^PEER='\([^']*\)'.*/\1/p" "$CONF_DIR/crowdsec/peers.conf"); do
+		$BIN/h-delete-sys-crowdsec-peer "$peer" > /dev/null 2>&1
+	done
+	rm -f "$CONF_DIR/crowdsec/peers.conf"
 fi
 
-rm -f "$CONF_DIR/crowdsec/mesh.conf"
+# Drop the imported mesh bans; local + CAPI decisions stay. Per-peer scenarios need an exact match -
+# `delete --scenario` is not a prefix - so enumerate what is actually active.
+if command -v cscli > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
+	for s in $(cscli decisions list -a -o json 2> /dev/null \
+		| jq -r '(if type=="array" then .[] else . end) | (.decisions // [])[] | .scenario // empty
+			| select(startswith("hestia-mesh"))' 2> /dev/null | sort -u); do
+		cscli decisions delete --scenario "$s" > /dev/null 2>&1 || true
+	done
+fi
+
+rm -f "$CONF_DIR/crowdsec/mesh.conf" "$CONF_DIR/crowdsec/pairing.conf"
+rm -rf /run/hestia/mesh
 if [ "${PURGE_DATA:-}" = "yes" ]; then
 	rm -rf /var/lib/crowdsec/mesh
 	echo "[ * ] PURGE_DATA=yes - published/peer lists removed."
