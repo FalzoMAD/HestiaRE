@@ -546,6 +546,11 @@ install_security() {
 
 	# crowdsec — nginx-only web protection (#186); skipped on an apache-only model.
 	if is_on "${COMPONENT_ADDON_CROWDSEC:-}"; then
+		# Re-read hestia.conf first: main.sh sourced it at startup, BEFORE the web stage wrote the
+		# model keys, so this shell still holds WEB_SYSTEM/PROXY_SYSTEM empty - which silently made
+		# the nginx-front gate below false and skipped CrowdSec on every fresh install. crowdsec_apply
+		# reads the same two keys for the public front and the acquisition log path.
+		source_conf "$CONF_DIR/conf/hestia.conf"
 		cs_pub="$PROXY_SYSTEM"
 		[ -z "$cs_pub" ] && cs_pub="$WEB_SYSTEM"
 		if [ "$cs_pub" = "nginx" ]; then

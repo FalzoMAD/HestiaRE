@@ -557,7 +557,21 @@ fn_ask_group_checklist() {
         local fnp; fnp=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].fixed_no_prompt[$p] // empty')
         if [ -n "$fnp" ]; then COMP_VALUES["$id"]="$fnp"; continue; fi
         local vis; vis=$(mq --arg id "$id" '.components[$id].visible_if // empty')
-        if [ -n "$vis" ] && [ "$(fn_eval_condition "$vis" COMP_VALUES)" = "false" ]; then COMP_VALUES["$id"]=""; continue; fi
+        if [ -n "$vis" ]; then
+            # This screen sets every row's value at once, so a visible_if naming another row of the
+            # SAME screen can never be true - the row would just silently vanish from the wizard and
+            # land empty in install.conf (that is how CROWDSEC_MESH went missing). An authoring error,
+            # not a user one: refuse before anything is installed instead of skipping quietly.
+            local vis_key sib; read -r vis_key _ _ <<< "$vis"
+            for sib in "${cb_ids[@]}"; do
+                if [ "$sib" != "$id" ] && [ "$sib" = "$vis_key" ]; then
+                    echo "manifest error: $id.visible_if references $sib, a checkbox of its own combined '$group' screen." >&2
+                    echo "                Make $id a radio (or move it out of the group) so it is asked after that screen." >&2
+                    exit 1
+                fi
+            done
+            [ "$(fn_eval_condition "$vis" COMP_VALUES)" = "false" ] && { COMP_VALUES["$id"]=""; continue; }
+        fi
         local dv label desc state="OFF"
         dv=$(fn_component_default "$id" "$INSTALL_PROFILE")
         [ "$dv" = "true" ] && state="ON"
