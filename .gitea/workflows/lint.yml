@@ -1,0 +1,58 @@
+# Shell lint gate (#477) - deliberately over-curated.
+#
+# This runs on the private Gitea host's own runner, so what it is ALLOWED to do matters more than
+# what it does. Constraints, each one intentional:
+#
+#   * READ-ONLY. It runs two static analysers over a checkout and reports. It writes nothing, pushes
+#     nothing, publishes nothing, and touches no path outside the workspace.
+#   * NO SECRETS. Not a single `secrets.*` reference - so a malicious PR cannot exfiltrate anything
+#     by editing this file, because there is nothing here to steal.
+#   * NO NETWORK. No downloads, no package installs, no external actions beyond the checkout. If the
+#     tools are missing it FAILS with an instruction instead of installing them itself: a CI job that
+#     may apt-install on the host is a much bigger capability than a lint gate needs.
+#   * NO third-party actions. Only actions/checkout, already used by the release workflow.
+#   * Gitea only. The public GitHub mirror carries released code, never pipelines.
+#
+# The gate is check-only by construction: tools/lint-shell.sh never rewrites a file, so this job
+# cannot produce a commit even by accident. Run the identical command locally with
+# `tools/lint-shell.sh`.
+name: Shell lint
+
+on:
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    runs-on: hestiare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          # Tier 2 diffs against the PR base, so that branch's history has to be present.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require tooling
+        run: |
+          set -eu
+          missing=""
+          for t in shellcheck shfmt; do command -v "$t" > /dev/null 2>&1 || missing="$missing $t"; done
+          if [ -n "$missing" ]; then
+            echo "Missing on the runner host:$missing"
+            echo "Install once, from the OS repos:  apt install$missing"
+            echo "(This job deliberately does not install anything itself.)"
+            exit 1
+          fi
+
+      - name: Lint changed shell
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -eu
+          git fetch --no-tags origin "$BASE_REF"
+          ./tools/lint-shell.sh --base "origin/$BASE_REF"

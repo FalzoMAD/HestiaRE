@@ -6,3 +6,6 @@ paths.md export-ignore
 .gitea export-ignore
 .github export-ignore
 dist export-ignore
+tools export-ignore
+.editorconfig export-ignore
+.shellcheckrc export-ignore

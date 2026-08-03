@@ -1,3 +1,4 @@
+#!/bin/bash
 # CrowdSec helpers: install + wire the engine + nginx Layer-A bouncer for the current web model.
 # Shared by the installer, the web-model switch and h-add-sys-crowdsec. Idempotent; no-op off-nginx.
 
