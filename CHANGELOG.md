@@ -7,275 +7,126 @@ branch (upstream's own history was dropped from this file with #307).
 Maintenance rule: every larger change adds an entry to the Unreleased
 section as part of its PR. On release, the section gets the version number.
 
-## Unreleased
+## v0.13.0 (2026-08-03)
 
 ### Added
 
-- Shell lint gate (#477), check-only, in two tiers because the tree carries ~240 inherited HestiaCP
-  warnings that are their own cleanup job: **tier 1** runs shellcheck at `severity=error` over the
-  whole shell surface (519 files, 0 findings as of this commit), **tier 2** runs it at
-  `>=warning` over the files a change touches. `.shellcheckrc` disables only verified house idioms
-  (unquoted `$HESTIA`/`$BIN`, single-quoted `'$FIELD'` selectors, `SC1091`, and the `SC2154`/`SC2034`
-  pair that is structural to `parse_object_kv_list` creating variables dynamically); anything that
-  could hide a real bug stays on and gets a per-line disable with its reason. `.editorconfig` carries
-  the shfmt contract (tabs, spaced redirections, leading `&&`, indented case arms - all three deviate
-  from shfmt's defaults, so without it a bare `shfmt -d` would want to rewrite the tree). Formatting
-  is judged as **do not make it worse**: a file clean in the base must stay clean and a new file must
-  start clean, while the 26 already-deviating files (among them `install.sh`, `h-install-hestia`,
-  `func/main.sh`) are reported and left alone rather than forcing a reformat onto whoever edits them
-  next. `tools/lint-shell.sh` holds the logic so the identical run is reproducible locally; a
-  deliberately over-curated Gitea workflow (`contents: read`, no secrets, no installs, no writes, no
-  third-party actions) runs it on PRs into `dev`. The three `func/*.sh` libraries that lacked a
-  shebang got one - they were the tree's only error-severity findings. `tools/` and the two dotfiles
-  are dev-only and excluded from the release tarball.
-
-- Panel UI for web bot rate-limiting (#482). The family table is edited inline on **Server Settings**
-  (admin-only), in a *Bot Rate Limiting* section under Web Server: 10 slots, each with name /
-  User-Agent match / lenient + strict rate / enabled, saved with the settings form in one POST -
-  every row defers the re-render and a single apply follows, so the web server reloads once. `BURST`
-  and `NODELAY` stay conf-only advanced tuning and are shown read-only per row. (Placement is
-  provisional and may move with the planned panel overhaul.) Per domain, **Edit Web Domain** gained a *Bot Rate Limiting* section listing the
-  admin-enabled families with an off/lenient/strict select each - **customer-editable**, and an admin
-  can set it for them while impersonating; only the family table itself stays admin-only. A customer
-  can only ever reach their own domains (the panel passes the effective session user and the CLI
-  validates the domain against that user's own object file). New commands `h-change-sys-botfamily` (upsert)
-  and `h-delete-sys-botfamily`, both with an `APPLY=no` form so the panel can save the whole table
-  and re-render once; `h-list-sys-botfamily` gained `[FORMAT]` (json/plain/csv) and
-  `h-list-web-domain` now exposes `BOTLIMIT`, without which the panel cannot see the domain's own
-  levels. The family table is capped at 10: each family costs two `limit_req` zones plus one more
-  alternative in the per-request User-Agent map.
-- CrowdSec mesh transport: panel pairing + authenticated pull (#186, phase 6b). The mesh no longer
-  needs a hand-wired transport. Two boxes pair over the panel port and then pull each other's
-  published ban list on a timer; the CrowdSec LAPI stays loopback-only, what crosses the wire is a
-  file of IPv4 values. **A pairing needs an admin on BOTH boxes and cannot happen otherwise**: the
-  joining side runs `h-add-sys-crowdsec-peer` (root or admin panel session), the accepting side must
-  first mint a one-time code with `h-generate-sys-crowdsec-pairing` (likewise root or admin session) -
-  and `/mesh-pair.php` is a plain **404** while no code is live, so an idle box exposes nothing there
-  at all. Neither side ever handles the other's credentials; the code is single-use, 100 bits, valid
-  15 minutes, and dies after 5 wrong guesses. The long-lived artefact is a per-peer bearer token, and
-  `/mesh-decisions.php` (GET) serves the published list to that token alone. TLS is verified by
-  **SPKI pin** recorded at pairing (TOFU), not by CA - panel certs are usually self-signed, and a
-  swapped cert fails the pull closed. Each side installs an **IP-scoped ACCEPT rule** for the other on
-  the panel port; :8083 is never narrowed to peers-only, so admin access cannot be locked out.
-  Secrets never ride in argv (a local user can read `/proc/*/cmdline`): the panel hands payloads to
-  the CLI in 0600 files under `/run/hestia/mesh/in`, curl reads tokens from a 0600 config, and only
-  token **hashes** are staged for the panel to compare against (it runs as `hestia` and cannot read
-  `/etc/hestia`). New commands `h-generate-sys-crowdsec-pairing`, `h-add-sys-crowdsec-peer`,
-  `h-add-sys-crowdsec-peer-request` (endpoint-side, not for hand use), `h-delete-sys-crowdsec-peer`,
-  `h-list-sys-crowdsec-peers` (never prints tokens), plus an admin-only **Firewall > Fleet Mesh**
-  panel page (peers, per-peer shared-ban counts, generate/enter a code, unpair). Two new panel routes
-  (`/mesh-pair.php`, `/mesh-decisions.php`) are a deliberate, narrowly-scoped exception to the
-  no-REST-API rule: single purpose, no object CRUD, no general dispatch. Also in this cycle:
-  `h-delete-sys-crowdsec-mesh` now unpairs peers (closing their firewall rules) and deletes mesh
-  decisions by enumerating the active `hestia-mesh:*` scenarios, since `cscli decisions delete
-  --scenario` matches exactly and no longer matched the per-peer names; the swap-import is skipped
-  while the peer union is byte-identical and the decisions' TTL is still fresh, which lets the timer
-  run every 2 minutes for fast propagation without hammering the LAPI.
-- CrowdSec fleet-mesh (#186, phase 6): a peer-mesh shared blocklist across the fleet, no central
-  LAPI. Each box PUBLISHES its own local web-tier bans and IMPORTS the union of peers' published
-  lists as **L7-only** mesh bans (`cscli import` -> origin `cscli-import`, scenario `hestia-mesh`).
-  Enforcement is automatic: the L7 bouncer blocks imported decisions (403), while the L3 feeder
-  filters `origin==crowdsec`, so mesh bans never reach the firewall (L3 stays each box's own
-  detections). Clean swap each cycle (delete by scenario + re-import), TTL-bounded so withdrawn peer
-  bans fall out. `h-add-sys-crowdsec-mesh` / `h-delete-sys-crowdsec-mesh` + the
-  `hestia-crowdsec-mesh` timer running `h-update-crowdsec-mesh`. Peer lists arrive in
-  `MESH_PEERS_DIR` via the paired transport above; anything dropped there by hand is imported just
-  the same, so a self-wired transport (rsync/ssh/shared FS) still works.
-  Imports are hardened against a bad/compromised peer (the mesh's trust boundary): each entry is
-  validated as a single well-formed IPv4 (CIDR/garbage dropped), capped per peer + in total
-  (`MESH_MAX_PER_PEER`/`MESH_MAX_TOTAL`) so one runaway peer can't flood the fleet, and tagged
-  `scenario=hestia-mesh:<peer>` so a bad IP stays attributable to its source for incident response.
-  Offered as a wizard checkbox next to the CAPI question (default **off** - unlike CAPI it is a
-  fleet decision and inert until peers are paired); the installer arms it when selected.
-- Server-native web bot rate-limiting (#482). A standalone Layer-B subsystem (`func/botpolicy.sh`)
-  that throttles bot families with native nginx `limit_req` / apache `mod_qos` (429 on excess),
-  **independent of CrowdSec** and available on any web install (nginx-only, apache-only, both).
-  Humans stay unlimited; malicious traffic remains CrowdSec's job (ban -> 403). An admin bot-family
-  table (`/etc/hestia/botfamilies.conf`, seeded at web install, 8 curated families + 2 empty slots)
-  drives it: each family has a UA match + `lenient`/`strict` rate + `enabled`, plus conf-only
-  advanced `burst`/`nodelay`. Per domain, each family is `off`/`lenient`/`strict`
-  (`h-change-web-domain-botlimit`); nginx keys per family per domain (so customers do not share a bucket), apache mod_qos per client IP.
-  New: `h-list-sys-botfamily`, `h-update-sys-botfamilies`. Default off/opt-in. This decouples the
-  rate-limit half of the old CrowdSec Layer B into its own subsystem; CrowdSec keeps only Layer A
-  (the ban -> 403 bouncer) and Layer B/L3 firewall enforcement.
-- CrowdSec L3 firewall enforcement, Phase 2 (#186). The same ban decisions Layer A blocks per
-  HTTP request are now also dropped at the firewall (SYN stage). An own feeder
-  (`h-update-firewall-crowdsec`, on a ~45s systemd timer) fills the `crowdsec-blacklists` ipset
-  from CrowdSec's local web-tier ban decisions via `cscli` with an atomic swap; `h-update-firewall`
-  owns the DROP, emitted as an own `hestia-crowdsec` chain that `RETURN`s loopback + RFC1918
-  before the drop - a firewall-layer backstop, independent of the CrowdSec engine whitelist, so a
-  false-positive ban on an internal address is never enforced box-wide. This keeps
-  `h-update-firewall` the sole iptables writer (no 3rd writer). The feeder's filter (origin
-  `crowdsec` + web-tier scenario) keeps fail2ban's auth lanes and CAPI/community IPs out of the L3
-  set (they stay L7-blocked by Layer A). We deliberately do **not** use the OS
-  `crowdsec-firewall-bouncer`: its 0.0.25 config loader (the version on all four targets)
-  nil-panics non-deterministically in the ipset path - fleet-verified unusable. IPv4 only (the
-  firewall marshaller has no ip6tables path). Wired into the nginx-gated CrowdSec addon; no new
-  wizard toggle.
-- CrowdSec is now a removable module (#123): `h-add-sys-crowdsec` / `h-delete-sys-crowdsec`
-  (on the clamav-addon skeleton) install/uninstall the whole addon around the shared
-  `crowdsec_apply`/teardown helpers, fulfilling the Phase-1 `h-delete-sys-nginx` guard's
-  two-step-teardown promise (remove CrowdSec, then nginx). `/etc/crowdsec` is kept as saved state.
-- CrowdSec web protection, Phase 1 (#186). CrowdSec becomes a real, nginx-gated addon (offered
-  only when nginx is in the model; apache-only never runs it). It has two per-domain layers,
-  driven by three `web.conf` flags (`CROWDSEC`, `RATE_LIMIT`, `BOT_POLICY`) set via
-  `h-add/delete-web-domain-crowdsec`, `h-change-web-domain-ratelimit` and
-  `h-change-web-domain-botpolicy`:
-  - **Layer A (nginx-only/both)** enforces CrowdSec ban decisions as an HTTP 403 at the nginx
-    front. Rather than vendor the ~14-file upstream `lua-cs-bouncer` (captcha/appsec/stream we
-    never use), it ships an own ~70-line dependency-free LuaJIT bouncer
-    (`share/crowdsec/lua/hestia_bouncer.lua`): a raw-cosocket query to the local LAPI
-    (`127.0.0.1:8054`), a shared-dict cache and fail-open behaviour so LAPI trouble never takes
-    sites down. It runs in the rewrite phase (before `auth_basic`, the forcessl redirect and the
-    rate-limit). Needs only the OS `libnginx-mod-http-lua`.
-  - **Layer B (all models)** is native rate-limiting that returns **429** plus a per-domain bot
-    policy (`pass`/`throttle`/`block`) for recognised search/AI crawlers - so one domain can
-    welcome Googlebot for indexing while another throttles or blocks it. nginx uses `limit_req`
-    zones; apache-only uses `mod_qos` (installed by the web setup) with `QS_ErrorResponseCode 429`.
-  - Detection: the engine gets curated collections + acquisition on the public web logs
-    (`share/crowdsec/`); an apply helper (`func/crowdsec.sh`) wires it all up idempotently and is
-    shared by the installer, the #120 model switch and the future #123 packaging. The wizard adds
-    a CAPI (community blocklist) opt-in; a smoke check and a guard that blocks removing nginx while
-    CrowdSec is active (`h-delete-sys-nginx`, with a two-step teardown path) round it out.
-  Rate/burst thresholds and the good-bot list ship as placeholders to be curated before release.
-  fail2ban is untouched and runs in parallel; the L3 firewall-bouncer and the fail2ban symbiosis
-  are planned follow-up phases.
+- **CrowdSec** (#186, #123) - an nginx-gated, removable addon in four layers, offered in the wizard
+  only where nginx is the public front. **Layer A**: an own dependency-free LuaJIT bouncer queries the
+  local LAPI per request and answers 403; rendered per web model plus a per-domain fragment
+  (`h-add/delete-web-domain-crowdsec`). **L3**: an own `cscli` -> ipset feeder on a timer fills a
+  `hestia-crowdsec` DROP chain, so the same decisions are dropped at SYN; `h-update-firewall` stays the
+  sole iptables writer and the chain `RETURN`s loopback + RFC1918 before dropping. The OS
+  `crowdsec-firewall-bouncer` is deliberately unused - 0.0.25 nil-panics in its ipset path, verified
+  unusable on all four targets. The feeder filters by DENYlist (fail2ban's ssh/ftp/mail/db lanes stay
+  out of L3, CAPI stays L7-only) after an allowlist was found to silently drop advisory-named web
+  exploits. **Fleet-mesh**: a peer mesh with no central LAPI - each box publishes its own local
+  web-tier bans and imports the union of its peers' as L7-only mesh bans; enforcement falls out of the
+  existing layers rather than being rebuilt. Imports are hardened against a bad peer (single-IPv4
+  validation, per-peer and total caps, `hestia-mesh:<peer>` attribution). **Transport**: two boxes pair
+  over the panel port and then pull each other's list on a timer. **A pairing needs an admin on both
+  boxes** - one runs `h-add-sys-crowdsec-peer`, the other must first mint a one-time code, and
+  `/mesh-pair.php` is a plain 404 while none is live. The code is 100 bits, single-use, 15 min, dead
+  after 5 wrong guesses; the long-lived artefact is a per-peer token, TLS is pinned by SPKI recorded at
+  pairing, and each side installs an IP-scoped ACCEPT rule (`:8083` is never narrowed to peers-only).
+  Secrets never ride in argv. Admin-only **Firewall > Fleet Mesh** panel page. The LAPI stays
+  loopback-only throughout. `crowdsec_apply` removes `nginx-req-limit-exceeded` on purpose: it fires on
+  our own Layer-B 429 and turned deliberate throttling into bans for good bots and shared IPs.
+- **Server-native web bot rate-limiting** (#482) - a standalone Layer-B subsystem
+  (`func/botpolicy.sh`), independent of CrowdSec and available on any web install. Bot families are
+  throttled with native nginx `limit_req` / apache `mod_qos` (429); **humans are never limited** and
+  malicious traffic stays CrowdSec's job (ban -> 403). An admin family table (10 slots, 8 curated)
+  carries a UA match, `lenient`/`strict` rates and an enabled flag, plus conf-only `burst`/`nodelay`;
+  per domain each family is `off`/`lenient`/`strict`. nginx keys per family **per domain** so customers
+  do not share a bucket; apache mod_qos counts per client IP. Edited inline on **Server Settings**
+  (admin-only) and per domain in **Edit Web Domain**, where it is **customer-editable** - an admin can
+  also set it while impersonating. Default off/opt-in. Known limitation: matching is on the spoofable
+  User-Agent, unverified.
+- **Shell lint gate** (#477), check-only, in two tiers because the tree carries ~240 inherited
+  HestiaCP warnings that are their own cleanup job: tier 1 is shellcheck at `severity=error` over the
+  whole shell surface (0 findings), tier 2 at `>=warning` over the files a change touches. Both judge
+  **regressions, not inheritance** - each changed file is compared against its base version so touching
+  a legacy file does not inherit its warnings; formatting follows the same rule. `.shellcheckrc`
+  disables only verified house idioms, `.editorconfig` carries the shfmt contract, and
+  `.gitea/tools/lint-shell.sh` holds the logic so CI and a developer run the identical checks. The
+  Gitea workflow is deliberately minimal: no actions (the runner host has no node by design), a
+  temporary clone, `contents: read`, no secrets of its own, no installs, no writes.
 
 ### Security
 
 Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
 
-- The user editor blocks a non-ROOT_USER admin from modifying the ROOT_USER account on the
-  POST/save path, not only the page render, and keys the guard on `$_SESSION["ROOT_USER"]`
-  instead of a hardcoded `admin` (HestiaCP #5547 / GHSA-c69h-jgpw-h9cj). A crafted POST could
-  otherwise change the root account's password or role. The guard also fails closed when
-  `ROOT_USER` is unset (an admin editing anyone but themselves is refused, not silently
-  allowed). Delete stays protected at the command level (`h-delete-user` refuses `ROOT_USER`).
+- The user editor blocks a non-`ROOT_USER` admin from modifying the `ROOT_USER` account on the
+  POST/save path, not only the page render, and keys the guard on `$_SESSION["ROOT_USER"]` instead of a
+  hardcoded `admin` (HestiaCP #5547 / GHSA-c69h-jgpw-h9cj). A crafted POST could otherwise change the
+  root account's password or role. The guard fails closed when `ROOT_USER` is unset.
 - Panel notifications are HTML-sanitized before storage (HestiaCP #5548 / GHSA-3g4r-pfpf-8697).
-  `NOTICE` renders as raw HTML in the top bar (Alpine `x-html`) and callers interpolate values
-  like a domain or backup filename into it, so `h-add-user-notification` now runs the body
-  through an allow-list sanitizer (`func/internal/sanitize_html.php`: DOMDocument, default-deny,
-  keeps `p/span/code/a/strong/br` + safe `href`, drops script/`on*`/`javascript:`); the panel
-  CLI PHP pool now enables `dom` for it (`hestia-php-confd`), else it degraded to escape-all. `TOPIC` and
-  `NOTICE` also gain CR/LF and length validators so a value cannot corrupt the single-line
-  `notifications.conf`. The shared `send_notice()` shell helper (the second writer of
-  `notifications.conf`) sanitizes through the same path, so it is not an unguarded bypass.
-  Own dependency-free sanitizer rather than upstream's Composer `symfony/html-sanitizer`
-  (HestiaRE ships no Composer; the panel PHP is Sury 8.3).
+  `NOTICE` renders as raw HTML via Alpine `x-html` and callers interpolate values into it, so the body
+  now passes an allow-list sanitizer (`func/internal/sanitize_html.php`: DOMDocument, default-deny,
+  keeps `p/span/code/a/strong/br` + safe `href`). Own dependency-free sanitizer, since HestiaRE ships
+  no Composer. `TOPIC`/`NOTICE` also gained CR/LF and length validators, and the shell `send_notice()`
+  helper - the second writer - goes through the same path.
 - Restore scheduling no longer lets an argument inject into the executed restore queue
-  (HestiaCP GHSA-2xw3-7h62-v4gf). `h-schedule-user-restore-restic` validated only `user` and
-  then wrote `$snapshot`/`$value` single-quoted into `queue/backup.pipe` (run on drain), so a
-  `'` broke out for root RCE. `snapshot` and the per-object `value` (domain/database) are now
-  validated; the non-restic `h-schedule-user-restore` gets the same for `backup` and its
-  selector fields, and `user`/`backup` are quoted in the queued line.
-- The admin debug panel escapes its variable output (HestiaCP #5550). Server/Session/POST/GET
-  keys and string values were echoed raw (reflected XSS on a crafted request); they now go
-  through `tohtml()`.
+  (GHSA-2xw3-7h62-v4gf). `h-schedule-user-restore-restic` wrote `$snapshot`/`$value` single-quoted into
+  `queue/backup.pipe`, so a `'` broke out for root RCE. Both restore schedulers now validate and quote.
+- The admin debug panel escapes its variable output (HestiaCP #5550) - keys and string values were
+  echoed raw (reflected XSS).
 
 ### Fixed
 
-- Installer: an optional component could be flagged on with its package absent (#480). Component
-  installs ran `hestia_apt ... || true`, so when **unattended-upgrades / apt-daily held the apt lock**
-  - common in the first minutes after a first boot, and most aggressive on the Ubuntu images - the
-  install failed and the `|| true` swallowed it. Two fleet VMs came up with `COMPONENT_ADDON_CROWDSEC=true`
-  and no crowdsec package. Three changes, because no single one is sufficient: `hestia_apt` now passes
-  `-o DPkg::Lock::Timeout` so a held lock **waits** instead of failing fast; the installer **masks the
-  auto-apt units** for its duration and restores them from an `EXIT` trap, so an aborted install never
-  leaves a box with unattended-upgrades off (it only restores units it masked itself, so an
-  admin-masked unit is never silently re-enabled); and optional installs now go through
-  `apt_install_optional`, which **verifies against dpkg** that each package actually landed - apt's
-  exit code alone is not enough - and surfaces anything missing in the closing banner instead of only
-  in the log. Verified on all four targets: the apt option is accepted by apt 2.6 through 3.2, and a
-  full mask/restore round trip returns every unit to its exact prior state.
+- Installer: an optional component could end up flagged on with its package absent (#480). Component
+  installs ran `hestia_apt ... || true`, so a held apt lock (unattended-upgrades / apt-daily, common
+  right after first boot) failed the install and the `|| true` swallowed it. Three changes, since none
+  alone suffices: `hestia_apt` passes `-o DPkg::Lock::Timeout` so a held lock waits; the installer masks
+  the auto-apt units for its duration and restores them from an `EXIT` trap (only units it masked
+  itself, so an admin-masked one is never re-enabled); and optional installs verify against dpkg that
+  the package actually landed, surfacing anything missing in the closing banner.
+- `h-list-sys-php` no longer lists the isolated panel FPM pool as a pseudo-version `hestia` (#464).
+  Consumers build `php<v>-fpm` from the list, so the stray entry produced `phphestia-fpm`, broke
+  `h-restart-web-backend` on every box and rolled back every live web-model switch at its health gate.
+- Web-model switch (#120, #466): rollback now uses `reload-or-restart` instead of a hard restart, so a
+  failure before the restart stage cannot kill a server that is still serving its loaded config; and
+  cleanup also removes the departing model's webmail vhost source under `/home/*/conf/mail/*/`, which
+  previously left a stale conf behind.
+- Directory listing (`h-change-web-domain-dirlist`) now works under nginx-only (#468) - it only ever
+  flipped apache's `Options Indexes`, so `DIR_LIST='yes'` was a silent no-op. nginx gets `autoindex on;`
+  via an include fragment.
+- `h-list-mail-domain-ssl` JSON now escapes the certificate issuer (#471, HestiaCP #5524); a `"` or `\`
+  in the issuer DN produced invalid JSON.
+- Bot rate-limiting (#482): a disabled or deleted family left **dangling zone references** in the
+  per-domain fragments - `nginx -t` then failed and blocked the next reload for every domain on the
+  box. Fragments now skip families that are gone or disabled, the apply command re-renders every
+  throttled domain before testing the config and takes the web-model freeze lock, and deleting a family
+  strips it from every domain. A new smoke guard asserts that every per-domain **policy** fragment
+  (CrowdSec Layer A, bot limiting) is included by every customer-domain template - one missing include
+  is a silent bypass, not a visible failure. The panel handlers were hardened against non-array POST
+  fields and an unbounded per-row command loop.
+- CrowdSec (#186): re-adding no longer fails on the saved-state config - `/etc/crowdsec` is kept on
+  delete, and a dpkg conffile prompt on `config.yaml` used to EOF under `noninteractive` and leave the
+  package half-configured; both install sites now pass `--force-confdef --force-confold`. The CAPI
+  wizard blurbs were shortened to a couple of words each, which the layout needed.
 
-- Smoke guard for a whole bug class: `check_policy_fragment_coverage` asserts that every per-domain
-  **policy** fragment (CrowdSec Layer A, bot rate limiting) is included by every customer-domain web
-  template. Unlike a feature fragment (ssl/hsts/forcessl/cache, which belongs only to the templates
-  implementing it), a policy fragment applies to all traffic - so one template missing the include is
-  a silent bypass rather than a visible failure: a customer switching to e.g. the `wordpress`
-  template would escape the throttle with nothing failing anywhere. 48 templates across nginx and
-  apache2 are currently complete; the per-IP catch-all has no domain and is out of scope.
-- Panel hardening in the bot-limit handlers (#482): both POST handlers assumed their field arrays are
-  arrays (a scalar `v_bl_fam`/`v_botlimit` reached `array_keys()` -> TypeError), every row field is
-  now read as a scalar with a default, the family-table loop is bounded by the slot count instead of
-  forking one command per posted row, and `/delete/firewall/mesh` no longer calls `check_return_code`
-  with undefined variables when no peer is given.
-- Bot rate-limiting: a **disabled or deleted family left dangling zone references** in the per-domain
-  fragments (#482). The server config only defines `limit_req` zones for *enabled* families, but a
-  domain fragment was rendered from its `BOTLIMIT` field regardless - so turning a family off (or
-  removing it) while a domain still used it produced `limit_req zone=hbot_x_strict` with no such zone,
-  `nginx -t` failed, and that blocked the next reload for **every** domain on the box. The fragment
-  renderer now skips families that are gone or disabled, `h-update-sys-botfamilies` re-renders every
-  throttled domain's fragment before testing the config, and `h-delete-sys-botfamily` also strips the
-  family from every domain that used it. `h-update-sys-botfamilies` additionally takes the web-model
-  freeze lock, which it needs since it reloads the web server (#120).
-- CrowdSec L3 feeder now enrolls every web-tier ban, not just `http`/`CVE`-named ones (#186). The
-  placeholder scenario allowlist silently dropped advisory-named web exploits (e.g.
-  `vmware-vcenter-vmsa-*`) from the L3 set. Since acquisition is nginx-only every local
-  (`origin == crowdsec`) decision is already web-tier, so the filter is now a belt-and-suspenders
-  DENYlist of fail2ban's auth families (ssh/ftp/mail/db) instead - curated against the fleet's
-  `cscli scenarios list`. fail2ban's lanes stay out of L3; CAPI stays L7-only. `nginx-req-limit-exceeded`
-  is also on the denylist (belt-and-suspenders, see below), so a reintroduced req-limit ban would
-  stay L7-only rather than SYN-drop.
-- CrowdSec no longer bans on `nginx-req-limit-exceeded` (#186). That scenario fires on our own
-  Layer-B rate-limit (429) and, after a leaky bucket (capacity 5), turned deliberate throttling into
-  a ban - escalating good bots / shared IPs (CGNAT/corporate NAT) we only meant to slow down. It is
-  removed from the collection set in `crowdsec_apply` (which taints the nginx collection, so cscli
-  keeps it removed on later runs). Layer B stays a 429; real abuse is still caught by the
-  behaviour-based scenarios (http-probing, sqli, crawl, CVE, ...).
-- CrowdSec re-add no longer fails on the saved-state config (#186). `h-delete-sys-crowdsec` keeps
-  `/etc/crowdsec` (incl. our `:8054`-patched `config.yaml`) as saved state; on a re-add
-  `apt-get install crowdsec` hit a dpkg conffile prompt on `config.yaml` and, under
-  `DEBIAN_FRONTEND=noninteractive`, EOF'd it - leaving the package half-configured (`iU`) so the
-  install reported failure. Both CrowdSec installs (`h-add-sys-crowdsec` + the installer) now pass
-  `--force-confdef --force-confold`. Fresh installs are unaffected (no pre-existing config to prompt on).
-- CrowdSec CAPI wizard descriptions shortened to a couple of words each (#186); the old sentence-long
-  option blurbs overflowed the wizard layout.
-- `h-list-mail-domain-ssl` JSON now escapes the certificate issuer (#471, HestiaCP #5524). A
-  `"` or `\` in the issuer DN produced invalid JSON output.
-- `h-list-sys-php` no longer lists the isolated panel FPM pool (`/etc/php/hestia`,
-  unit `hestia-php`) as a pseudo-version `hestia` (#464). Consumers turn the list into
-  `php<v>-fpm`, so the stray entry produced the non-existent `phphestia-fpm` and broke
-  `h-restart-web-backend` on every box and rolled back every live web-model switch (#120)
-  at its health gate. Found in the #120 post-merge live re-verify.
-- Web-model switch (#120) rollback no longer risks taking a live server down (#466). On a
-  failure before the restart stage (validate / inventory), the running webserver was never
-  stopped and is still serving its loaded config, but the rollback did a hard `systemctl
-  restart` - a failed start on an unloadable on-disk config (a pre-existing broken include,
-  an unreadable cert, disk-full) left it dead. Now `reload-or-restart`: a graceful reload
-  keeps the running master up if the config will not load, and still starts a stopped one.
-- Web-model switch (#120) cleanup now also removes the departing model's webmail vhost
-  source (`$OLD.conf`/`.ssl.conf`) under `/home/*/conf/mail/*/` (#466). It only cleaned the
-  web conf dirs, so a switch left a stale old-model webmail conf behind (inert, but it broke
-  the byte-identical-to-fresh oracle and the rollback's mixed-tree cleanup).
-- Directory listing (`h-change-web-domain-dirlist`) now works under nginx-only (#468). The
-  command only ever flipped apache's `Options Indexes` (upstream never handled nginx), so on
-  an nginx-only box `DIR_LIST='yes'` was a silent no-op. It now dispatches on the model:
-  apache keeps the `Options` sed; nginx gets `autoindex on;` at server level via a
-  `nginx.conf_dirlist` include fragment (no token in the templates to flip). Verified on
-  deb13 (403 -> 200 listing, survives rebuild via the #456 self-heal).
+### Changed
+
+- PROVENANCE recomputed for all three folders against the current `upstream/hestiacp` snapshot
+  (`ca19b9f`, 2026-07-30). 74 files that had accumulated since the last run are now listed - the
+  CrowdSec, bot-limiting and mesh commands, their `share/` assets and the new panel routes, all
+  `eigenbau`. Divergence, `upstream_ref` and `last_reconciled` refreshed throughout; percentages are
+  integers again (six entries had picked up a decimal), files identical to upstream are recorded as
+  0% rather than left unmeasured, and the two genuinely binary blobs are flagged instead of carrying
+  a meaningless churn number. Vendored paths stay out - they belong to `VENDORED.json`.
 
 ### Removed
 
-- Deleted the orphaned bind9/named server-config views (`web/edit/server/bind9/`,
-  `web/edit/server/named/`, `templates/pages/edit_server_bind9.php`) and their PROVENANCE
-  entries (#471). bind9 is a permanent ground-rule removal and the views were unreachable
-  dead code (the services list is data-driven and never links them).
-- Deleted the orphaned `web/edit/server/vsftpd/` server-config view and its PROVENANCE entry
-  (#471). vsftpd is a permanent ground-rule removal (proftpd is the FTP system, with its own
-  live view); the view called `h-list-sys-vsftpd-config`, which does not exist, so it was dead.
-  Also dropped the stale `vsftpd` branch from the FTP-account toggle in `edit_web.php`
-  (`FTP_SYSTEM` is only ever `proftpd`).
-- Pruned 36 app-specific web templates (72 files) from `templates/web/nginx/php-fpm/` that
-  the removed Software/App Installer had seeded (chevereto, cms_made_simple, codeigniter,
-  contao, craftcms, datalife_engine, dokuwiki, dolibarr, drupal\*, flarum\*, forgejo, gitea,
-  grav, joomla, mautic, modx, moodle, odoo, opencart, opengist, openproject, osticket, phpbb,
-  piwik, projectsend, pyrocms, sendy, symfony2-3, thunder, vvveb, webasyst, yourls). With no
-  installer to place these apps, the templates were dead weight. Kept the standard set we ship:
-  `wordpress*`, `laravel`, `magento`, `owncloud`, `prestashop`, `symfony4-5`, plus the base
-  `default`/`no-php`/`suspended`. The template list is directory-driven (`h-list-web-templates`),
-  so the panel selector and CLI update automatically; any pruned template can be re-imported from
-  `upstream/hestiacp` and re-adapted if ever needed.
+- Deleted the orphaned bind9/named and vsftpd server-config views and their PROVENANCE entries (#471).
+  Both are permanent ground-rule removals, the views were unreachable (the services list is
+  data-driven), and the vsftpd one called a command that does not exist. The stale `vsftpd` branch in
+  `edit_web.php`'s FTP-account toggle went with it (`FTP_SYSTEM` is only ever `proftpd`).
+- Pruned 36 app-specific web templates (72 files) from `templates/web/nginx/php-fpm/` that the removed
+  Software/App Installer had seeded. With no installer to place these apps they were dead weight; the
+  standard set stays (`wordpress*`, `laravel`, `magento`, `owncloud`, `prestashop`, `symfony4-5` plus
+  `default`/`no-php`/`suspended`). The list is directory-driven, so panel and CLI follow automatically,
+  and any pruned template can be re-imported from `upstream/hestiacp`.
 
 ## v0.12.0 (2026-07-30)
 
@@ -331,235 +182,125 @@ divergence and per-folder `PROVENANCE.json` for per-file upstream heritage.
 
 ## v0.11.0 (2026-07-28)
 
-Covers everything since v0.10.0. The headline: the **file manager** is rebuilt
-per-customer (the kernel UID is the isolation boundary), ClamAV and ProFTPD join
-the modular addons, and a round of security hardening lands — impersonation drops
-admin privilege, and the GHSA-* advisories against the 1.9.6 fork point are fixed.
+The headline: the **file manager** is rebuilt per-customer (the kernel UID is the isolation boundary),
+ClamAV and ProFTPD join the modular addons, and a round of security hardening lands - impersonation
+drops admin privilege, and the GHSA-* advisories against the 1.9.6 fork point are fixed.
 
 ### Breaking / Upgrade notes
 
-- The `install/` tree is dissolved and `HESTIA_INSTALL_DIR` retired (#119).
-  fail2ban's config moved `install/deb/fail2ban/` → `share/fail2ban/` (the last
-  holdout); the stale iptables/ipset copy-blocks in `h-install-hestia` were removed
-  (those rules are set up in the configure stage). No live installs pre-v1, so no
-  migration path.
-- File manager rebuilt (#218/#419), replacing FileGator + the SFTP-loopback
-  connector. It runs in a per-customer php-fpm pool **as the customer**, reached via
-  Panel-Caddy `/fm/` → `forward_auth` (`web/fm-auth.php`) → a private loopback
-  listener; enablement is the per-user `FILE_MANAGER` flag in `user.conf`. All the
-  old FileGator plumbing is gone — the composer overlay, the system-wide toggle, the
-  `configuration.php` hook, the vestigial system `FILE_MANAGER`/`PLUGIN_FILE_MANAGER`
-  keys, and the auto-install block; the old `/usr/local/hestia/web/fm` tree is unused.
-  No migration path.
-- The SFTP jail no longer uses `/srv/jail` (#413) — it is built per session under
-  `/run/hestia/jail` by `pam_namespace`. Fresh installs get this automatically; no
-  migration/cleanup path is carried.
-- The system removal verb is unified: `h-remove-sys-*` → `h-delete-sys-*` (#123;
-  `adminer, mariadb, postgresql, redis, roundcube, rspamd, sieve, snappymail`). This
-  restores `v-delete-*` cherry-pick parity and reverses the interim `h-remove-sys-*`
-  naming from #121. The install-time prune clears the now-broken `v-remove-sys-*`
-  aliases, but any personal scripts calling the old names must be updated.
-- ProFTPD installs now record `FTP_SYSTEM=proftpd` (#123) — it was never set before.
-  New installs get it automatically; **pre-existing installs keep it empty** (no
-  migration) until re-run through `h-add-sys-proftpd`, so the FTP machinery
-  (`h-restart-ftp`, RRD FTP graph, smoke FTP check, NAT MasqueradeAddress) stays
-  inert on them, as it already was.
+- The `install/` tree is dissolved and `HESTIA_INSTALL_DIR` retired (#119). No live installs pre-v1,
+  so no migration path.
+- File manager rebuilt (#218/#419), replacing FileGator + the SFTP-loopback connector. It runs in a
+  per-customer php-fpm pool **as the customer**, reached via Panel-Caddy `/fm/` -> `forward_auth` -> a
+  private loopback listener; enablement is the per-user `FILE_MANAGER` flag. All FileGator plumbing is
+  gone. No migration path.
+- The SFTP jail no longer uses `/srv/jail` (#413) - it is built per session under `/run/hestia/jail`
+  by `pam_namespace`. Fresh installs get this automatically.
+- The system removal verb is unified: `h-remove-sys-*` -> `h-delete-sys-*` (#123), restoring
+  `v-delete-*` cherry-pick parity. Personal scripts calling the old names must be updated.
+- ProFTPD installs now record `FTP_SYSTEM=proftpd` (#123) - it was never set before. Pre-existing
+  installs keep it empty until re-run through `h-add-sys-proftpd`.
 
 ### Added
 
-- File manager — vendored TinyFileManager, put on a diet (#218). No external CDN
-  (GDPR/offline/CSP): Bootstrap-CSS + a combined Prism build are vendored under
-  `share/filemanager/fm/assets/`, FontAwesome is referenced from the panel's own FA7
-  (same-origin). jQuery, Bootstrap-JS, DataTables, Dropzone and Ace are replaced by
-  vanilla JS + a tiny Bootstrap-compatible shim, a native chunked uploader, native
-  table filter/sort, and a Prism-overlay code editor. The panel light/dark theme
-  drives the FM (`data-bs-theme`; Bootstrap-CSS 5.2.3 → 5.3.8, PrismJS 1.29.0 →
-  1.30.0), and in-page media streams through PHP (the customer home is not
-  web-served). Enable/disable **per user from the Edit User page** — an admin-only
-  checkbox calls `h-add-user-filemanager`/`h-delete-user-filemanager` on save. The
-  checkbox and the panel's File-Manager menu entry appear only while the system
-  module is installed (`h-list-sys-config` exports `FILE_MANAGER_PORT`). The vendor
-  `--check` gate rejects any external `http(s)` resource reference, so the "vendor
-  everything" rule holds mechanically (#434).
-- `h-add-sys-clamav` / `h-delete-sys-clamav` — ClamAV mail antivirus as a modular
-  addon (#123). The exim antivirus machinery (`.ifdef CLAMD` block) already shipped
-  inert. The add command installs the daemon + freshclam, wires **bidirectional**
-  exim↔clamav group access (clamav must also read the exim spool it scans), waits for
-  the virus DB, and **arms the exim `CLAMD` macro only once clamd answers on the
-  socket** — because `defer_ok` is fail-open (a dead clamd accepts mail *unscanned*),
-  so an armed-but-blind macro would silently pass mail. Never preselected (clamd holds
-  the ~1-2 GB signature DB). Delete is saved-state (per-domain flags kept; the DB
-  survives the purge unless `PURGE_DATA=yes`). Verified live on all four distros.
-- `h-add-sys-proftpd` / `h-delete-sys-proftpd` — ProFTPD is now a fully modular,
-  individually-removable addon (#123). The curated config moved `install/deb/proftpd/`
-  → `share/proftpd/` (it was orphaned, so the distro default was live). Cross-distro
-  package set (`proftpd-basic` is bookworm-only; modern proftpd split TLS into
-  `proftpd-mod-crypto`), an explicit `mod_tls` presence gate (its absence silently
-  disables FTPS), and an AppArmor override for Ubuntu 26's enforced profile. Verified
-  on all four distros.
-- SSH `AllowUsers` allowlist co-maintenance (#412/#413), defense-in-depth. The
-  installer seeds a **commented (inert)** `#AllowUsers` line; `h-add-user`,
-  `h-delete-user`, `rebuild_user`, and the domain-FTP hooks
-  (`h-add-web-domain-ftp`/`h-delete-web-domain-ftp`) keep it in sync via the shared
-  `manage_sshd_allowusers`. It edits **only** the account's own token (operator
-  entries like `root@10.0.0.5` are preserved), validates with `sshd -t`, reloads sshd
-  only when the line is active, and re-comments rather than leaving an active line
-  empty (lockout guard). Nothing changes until the operator removes the leading `#`.
-- The SFTP jail is rebuilt on `pam_namespace` (#413), replacing the `/srv/jail`
-  systemd bind-mount machinery. Per session, `pam_namespace` mounts a private tmpfs on
-  `/run/hestia/jail` and runs an init inside the new mount namespace (as root, before
-  sshd chroots) that builds the jail at the **fidelity path**
-  (`/run/hestia/jail/<user>/<real-home>`) and bind-mounts the real home there — one
-  generic rule serving **both** panel users and domain-FTP sub-accounts (whose home is
-  user-owned deep under `web/<domain>`, a case native chroot cannot handle).
-  Fail-closed rides on sshd's own `safely_chroot()`: the fresh tmpfs root is `1777`
-  and `chmod 755` on it is the **last** action, so any failure leaves it world-writable
-  and sshd refuses the session. Scope is the `sftp-jailed` group (one static
-  `Match Group` block + a `pam_succeed_if` gate, so non-members log in unchanged). No
-  persistent state — no `/srv/jail`, no per-user `.mount` units, no `@reboot` cron.
-  Verified live on OpenSSH 9.2/9.6/10.0/10.2 across all four distros, including ub26
-  with the unprivileged-userns restriction active and no bwrap involved.
+- File manager - vendored TinyFileManager, put on a diet (#218). No external CDN (GDPR/offline/CSP):
+  jQuery, Bootstrap-JS, DataTables, Dropzone and Ace are replaced by vanilla JS plus a small
+  Bootstrap-compatible shim, a native chunked uploader, native table filter/sort and a Prism-overlay
+  editor; Bootstrap-CSS and Prism are vendored, FontAwesome comes from the panel's own copy. The panel
+  light/dark theme drives the FM, and in-page media streams through PHP (the customer home is not
+  web-served). Enabled **per user from Edit User** (admin-only checkbox). The vendor `--check` gate
+  mechanically rejects any external `http(s)` reference (#434).
+- `h-add-sys-clamav` / `h-delete-sys-clamav` - ClamAV mail antivirus as a modular addon (#123). Wires
+  bidirectional exim<->clamav group access and **arms the exim `CLAMD` macro only once clamd answers on
+  the socket**: `defer_ok` is fail-open, so an armed-but-blind macro would pass mail *unscanned*. Never
+  preselected (the signature DB is 1-2 GB). Delete keeps saved state. Verified on all four distros.
+- `h-add-sys-proftpd` / `h-delete-sys-proftpd` - ProFTPD becomes a fully removable addon (#123), with
+  the curated config finally live (it was orphaned under `install/`, so the distro default was in
+  effect). Cross-distro package set (`proftpd-basic` is bookworm-only, TLS split into
+  `proftpd-mod-crypto`), an explicit `mod_tls` gate (its absence silently disables FTPS) and an
+  AppArmor override for Ubuntu 26.
+- SSH `AllowUsers` allowlist co-maintenance (#412/#413), defense-in-depth. The installer seeds a
+  **commented (inert)** line; user and domain-FTP hooks keep it in sync via `manage_sshd_allowusers`,
+  which edits only the account's own token (operator entries survive), validates with `sshd -t` and
+  re-comments rather than leaving an active line empty (lockout guard).
+- The SFTP jail is rebuilt on `pam_namespace` (#413). Per session a private tmpfs is mounted on
+  `/run/hestia/jail` and an init builds the jail at the **fidelity path**, bind-mounting the real home
+  - one generic rule serving both panel users and domain-FTP sub-accounts, whose home sits deep under
+  `web/<domain>` where native chroot cannot follow. Fail-closed rides on sshd's own `safely_chroot()`:
+  `chmod 755` is the last action, so any failure leaves the root world-writable and sshd refuses the
+  session. No persistent state. Verified on OpenSSH 9.2-10.2 across all four distros.
 
 ### Changed
 
-- SSH-access shells are now a curated allowlist (#412): `nologin` (default) ·
-  `jailbash` (bwrap sandbox) · `bash` · `sh`, intersected with `/etc/shells`, shared
-  by the hard validator and the panel's single shell source. The upstream
-  `dash`/`rbash`/`rssh`/`screen`/`tmux` options are dropped (meaningless or gone), and
-  an unquoted `grep -w` that let a bare `bash` validate against `/bin/bash` is fixed.
-  Existing off-allowlist shells are preserved (rendered as a selected "(current)"
-  option; `rebuild.sh` restores them straight from `/etc/shells`), so saving a form
-  unchanged never resets them — only the curated shells are newly assignable.
-- Vendored Adminer bumped 5.4.4 → 5.5.0 (`share/adminer/`, VENDORED.json) — Adminer is
-  vendored precisely because every target distro ships a CVE-affected version (#350).
-  Fetched via `update-web-vendor.sh --fetch adminer@5.5.0` (release digest verified);
-  the SSRF-hardening `login-servers` plugin (#356) is re-pinned to the same tag.
-- Curated-asset moves out of the legacy `install/` tree (#119, no behaviour change):
-  the webmail vhost templates → `share/{nginx,apache2}/webmail/` (`MAILTPL` retired;
-  the resolver keys on `$WEB_SYSTEM`; dead RainLoop templates + refs removed);
-  `dhparam.pem` → `share/ssl/` (consumed cross-service by nginx and dovecot) and the
-  logrotate fragments distributed to their owning service; and the bubblewrap assets
-  (`jailbash`, `bwrap-userns-restrict`) → `share/bubblewrap/` (the last thing under
-  `install/common/`, so `HESTIA_COMMON_DIR` was removed).
-- Removed the shared `www.conf` PHP-FPM pool (#397, #119). Every web domain already
-  runs in its own per-domain pool, so the server-wide pool had no serving role left.
-  The apache catch-all that *executed* unclaimed `.php` as the `caddy` user unconfined
-  is now hardened: `hestia-event.conf` denies unclaimed `.php` (`Require all denied`)
-  and each per-domain vhost re-grants — so a `.php` no domain claims returns 403
-  instead of running in a shared context or being served as source. Verified on
-  Debian 13 (nginx+apache).
+- SSH-access shells are now a curated allowlist (#412): `nologin` (default), `jailbash` (bwrap
+  sandbox), `bash`, `sh`, intersected with `/etc/shells`. Existing off-allowlist shells are preserved,
+  so saving a form unchanged never resets them. Fixes an unquoted `grep -w` that let a bare `bash`
+  validate against `/bin/bash`.
+- Vendored Adminer 5.4.4 -> 5.5.0 - it is vendored precisely because every target distro ships a
+  CVE-affected version (#350). The SSRF-hardening `login-servers` plugin is re-pinned (#356).
+- Curated assets moved out of the legacy `install/` tree (#119, no behaviour change): webmail vhost
+  templates, `dhparam.pem`, the logrotate fragments and the bubblewrap assets.
+- Removed the shared `www.conf` PHP-FPM pool (#397, #119). Every domain already runs its own pool, so
+  the server-wide one had no serving role - but its apache catch-all *executed* unclaimed `.php` as the
+  `caddy` user unconfined. Unclaimed `.php` is now denied and re-granted per vhost, so it returns 403
+  instead of running in a shared context or being served as source.
 
 ### Fixed
 
-- Panel file downloads — user backups, database dumps and site archives were broken on
-  the Caddy-fronted panel (#441/#443). They emitted `X-Accel-Redirect`, which Caddy
-  served via `file_server` as the `caddy` user — which cannot read the customer-owned
-  files, so a download got a **404**. They now stream via PHP `readfile()` from the
-  panel pool (owner `hestia`), traversal-guarded and hardened for GB scale: every
-  output buffer is drained and `ignore_user_abort(false)` set, so a multi-GB file
-  streams to the socket (not into `memory_limit`) and a client disconnect frees the
-  worker at the next chunk; writes are flushed 8 KB chunks; and — for the **stored
-  backup only** — a single `Range:` request is honoured (206/416, resume). A
-  comma-separated multi-range list (the amplification vector) or any malformed spec
-  falls back to the whole file; per-request dumps deliberately advertise no ranges (a
-  resume would stream a differently-generated file). `encode gzip` now skips
-  `/download/*`, `pm.max_children` is raised 4 → 8 (a download binds a worker for the
-  whole transfer), a cross-customer request is refused with a redirect, and a smoke
-  guard allowlists the X-Accel emitters.
-- File manager fixes: a 403 for every request on **apache-only** installs (#218) — the
-  secret gate had to move into `<FilesMatch \.php$>`, where the #397 `Require all
-  denied` fallback otherwise wins, not just `<Directory>`; the native modal/dropdown
-  shim regained the keyboard accessibility Bootstrap-JS provided (focus trap, Escape,
-  `aria-*`) (#434); and suspending a user now also cuts **FM** access (#434) — the FM
-  runs over an FPM socket, so `usermod --lock` never touched it (`h-suspend-user` tears
-  the listener down, `h-unsuspend-user` restores it, same policy gate as SFTP/FTP/SSH).
-- `update_user_value()` silently dropped a key on the **last line** of `user.conf`
-  (#433): it deleted the line then inserted before the same line number, which is past
-  EOF after the delete, so `sed` wrote nothing. It now rewrites in place with `sed c`
-  (works on any line, no delimiter a value could contain); fixes the shared helper for
-  all ~20 callers.
-- Roundcube webmail returned HTTP 500 — `Class "DOMDocument" not found` (#402). The
-  `dom` extension had been dropped from the panel FPM's curated conf.d by an audit that
-  only checked the panel/phpMyAdmin/Adminer consumers and missed the Roundcube/SnappyMail
-  pools moved onto the same FPM master (#205). `dom` is restored (webmail-critical; it
-  ships in the already-installed `php-xml`, so only the symlink was missing), and
-  `hestia-php-confd` now documents the full app inventory plus an audit rule to grep all
-  three app groups. Verified `:8090` 500→200.
-- MariaDB install aborted on Ubuntu 26.04 with the OS-repo version (#387):
-  `mariadb.service` failed with "Table 'mysql.db' doesn't exist" — the schema was never
-  created. Ubuntu 26.04's enforced `mariadbd` AppArmor profile comments out `capability
-  dac_override`, which the bootstrap `mariadbd` that `mariadb-install-db` runs needs for
-  first-init. `h-add-sys-mariadb` now unloads that profile for the init step only and
-  reloads it (enforce) immediately after; the init fails loud instead of letting the
-  service error later. No-op on the other three targets. Verified live on ub26.
-- The AV/spam columns in `list_mail.php` now gate on `ANTIVIRUS_SYSTEM`/`ANTISPAM_SYSTEM`
-  (#123) — a neutral dash when the addon is absent, instead of a misleading green check
-  from the stored per-domain value.
-- AllowUsers co-maintenance edited the wrong line (#412): the detection regex matched
-  the seeded guidance comment, so the username was appended to the prose. Tightened to
-  the directive form (`#?AllowUsers`, sshd's own commented-directive style) and reworded
-  the seed. Existing installs carry a mangled seed comment; re-seed `/etc/ssh/sshd_config`
-  (the line is inert, no access impact).
-- Panel Caddy failed to come up on fresh installs — a stray `||` line-continuation had
-  turned the unconditional `Caddyfile` copy into the failure branch of the preceding
-  `chown` (which never fails), so Caddy kept serving the distro-default site on `:80` and
-  the panel on `:8083` was unreachable. Restored `chown … || true`. Separately,
-  `h-restart-service hestia` no longer fails — the legacy single-service name now maps to
-  the real `caddy hestia-php` pair.
-- Webmail degrades safely when the selected client isn't installed (#119): a shared
-  `select_webmail_template()` degrades an uninstalled/empty client to the backend-safe
-  `disabled` vhost, and `h-add/delete-sys-{roundcube,snappymail}` re-render mail domains
-  so an install/removal takes effect immediately (no stale 502). Also: the PHP-version
-  regex now survives a two-digit major in `h-change-sys-php`/`h-delete-web-php`
-  (`^[0-9]\.` → `^[0-9]+\.`), and the installer no longer blanket-creates a `v-*` alias
-  for every `h-*` command (#123; it only minted orphans for HestiaRE-native commands).
+- Panel file downloads - backups, database dumps and site archives were broken on the Caddy-fronted
+  panel (#441/#443). They emitted `X-Accel-Redirect`, which Caddy served as the `caddy` user, which
+  cannot read customer-owned files -> 404. They now stream via PHP `readfile()` from the panel pool,
+  traversal-guarded and hardened for GB scale (buffers drained, 8 KB chunks, client disconnect frees
+  the worker). A single `Range:` request is honoured for the stored backup only; a multi-range list
+  (the amplification vector) falls back to the whole file.
+- File manager (#218/#434): a 403 for every request on **apache-only** installs - the secret gate had
+  to move into `<FilesMatch \.php$>`, where the #397 deny fallback otherwise wins; the native shim
+  regained the keyboard accessibility Bootstrap-JS provided; and suspending a user now also cuts FM
+  access, which `usermod --lock` never touched because the FM runs over an FPM socket.
+- `update_user_value()` silently dropped a key on the **last line** of `user.conf` (#433): it deleted
+  the line then inserted before the same number, which is past EOF after the delete. Fixes the shared
+  helper for all ~20 callers.
+- Roundcube webmail returned HTTP 500, `Class "DOMDocument" not found` (#402). The `dom` extension had
+  been dropped by an audit that missed the webmail pools moved onto the same FPM master (#205).
+- MariaDB install aborted on Ubuntu 26.04 (#387): its enforced `mariadbd` AppArmor profile comments out
+  `capability dac_override`, which the bootstrap `mariadbd` needs for first-init, so the schema was
+  never created. The profile is now unloaded for the init step only and re-enforced immediately after.
+- The AV/spam columns in `list_mail.php` gate on `ANTIVIRUS_SYSTEM`/`ANTISPAM_SYSTEM` (#123) instead of
+  showing a misleading green check from the stored per-domain value.
+- AllowUsers co-maintenance edited the wrong line (#412) - the regex matched the seeded guidance
+  comment, appending the username to the prose.
+- Panel Caddy failed to come up on fresh installs: a stray `||` continuation had turned the
+  unconditional `Caddyfile` copy into the failure branch of a `chown` that never fails, so Caddy kept
+  serving the distro default. Also `h-restart-service hestia` now maps to the real `caddy hestia-php`
+  pair.
+- Webmail degrades safely when the selected client is not installed (#119). Also: the PHP-version regex
+  now survives a two-digit major, and the installer no longer blanket-creates a `v-*` alias for every
+  `h-*` (#123), which only minted orphans for HestiaRE-native commands.
 
 ### Security
 
-- Impersonation ("login as") now **drops admin privilege** while acting as a customer
-  (#438). Previously `userContext` stayed `"admin"` for the whole impersonation, so all
-  161 admin-only gates remained reachable — a same-origin script in an impersonation
-  session (the FM media handler was one such path, #435) could drive admin endpoints.
-  `userContext` is now the **effective** (impersonated) role, so those gates refuse
-  automatically; a durable `adminContext` holds the real role for the impersonation
-  controls and off-chain routes. The session id is **regenerated at both transitions**,
-  so an id captured during impersonation cannot regain admin — **side effect:** any
-  other tab sharing the session (a second admin tab, an open File Manager tab) is logged
-  out at the switch. `web/download/backup` scoping was corrected to the effective user,
-  and a smoke allowlist limits which files may read the raw `$_SESSION["user"]`. Scope
-  note: this shrinks the reachable surface; it does **not** draw a privilege boundary
-  (the panel process runs as `hestia` and may call any `h-*`, so a panel-PHP RCE is
-  game-over regardless), and impersonating another admin keeps admin.
-- File manager media handler — panel-origin XSS hardened (#218/#432). The FM is
-  same-origin with the panel, so the `?media=` stream now derives `Content-Type` **only**
-  from a server-side extension allowlist (never from file content or the client), forces
-  everything outside it — **SVG included** — to `application/octet-stream` + attachment,
-  and always sends `X-Content-Type-Options: nosniff` and CSP `default-src 'none';
-  sandbox`; a runtime guard refuses any active type even if one were ever added to the
-  map. Previously `finfo` content-sniffing let a customer's `evil.svg`/`x.html` run
-  script under the panel session — including an admin's own via "login as". The
-  Google/Microsoft doc-viewer iframes were removed, and Caddy now strips **all** inbound
-  `X-Hestia-*` before re-setting the trusted ones (making the header invariant structural).
-- GHSA advisories fixed (#386, all ≤ our 1.9.6 fork point, verified against code):
-  - **GHSA-fcq6** — authenticated admin takeover: the admin gate in
-    `web/edit/server/hestia/` had a second clause comparing to an undefined `$ROOT_USER`
-    (always false), so any authenticated user reached the page and could rewrite the panel
-    service config + privileged crontab (→ root). Now gates on the role alone.
-  - **GHSA-8w7m** — SQL injection via the database password: it was interpolated raw into
-    `IDENTIFIED BY`/`PASSWORD`. New `mysql_sql_escape()`/`sql_escape()` (cherry-picked from
-    1.9.7) are applied at every password site in `func/db.sh`.
-  - **GHSA-cr7q** — root RCE via `eval` in `h-search-user-object`/`h-search-object`: every
-    eval site now uses the no-eval parser + indirect expansion, so a quote-breaking conf
-    value can no longer execute as root.
-  - **GHSA-5fpv** — cron parsing hardened (defense-in-depth; the RCE sink was already
-    closed): `sync_cron_jobs` reads with `read -r` and rejects embedded newlines.
-    Behaviour note: `read -r` preserves backslashes the old `read` stripped, so a cron
-    `CMD` written under the old behaviour may be read differently (pre-1.0, no live systems).
-  - **Not affected, verified against code**: GHSA-w3mx (double-eval RCE, empirically
-    refuted against the rebuilt parser), GHSA-gh6f (web terminal removed, #59), GHSA-73p3
-    (`CF-Connecting-IP` trusted only behind Cloudflare ranges), GHSA-fg7j (username
-    charset), GHSA-47mf (queue lines carry only validated identifiers). `h-check-sys-smoke`
-    gained static invariant gates for the fcq6 and cr7q fixes.
+- Impersonation ("login as") now **drops admin privilege** while acting as a customer (#438).
+  Previously `userContext` stayed `"admin"` throughout, so all 161 admin-only gates remained reachable
+  - a same-origin script in an impersonation session could drive admin endpoints. `userContext` is now
+  the **effective** role and a durable `adminContext` holds the real one; the session id is regenerated
+  at both transitions, so a captured id cannot regain admin. **Side effect:** another tab sharing the
+  session is logged out at the switch. Scope note: this shrinks the reachable surface, it does not draw
+  a privilege boundary - the panel process runs as `hestia` and may call any `h-*`.
+- File manager media handler - panel-origin XSS hardened (#218/#432). `?media=` now derives
+  `Content-Type` **only** from a server-side extension allowlist, forces everything outside it -
+  **SVG included** - to `application/octet-stream` + attachment, and always sends `nosniff` plus CSP
+  `default-src 'none'; sandbox`. Previously `finfo` sniffing let a customer's `evil.svg` run script
+  under the panel session, including an admin's via "login as". Caddy now strips all inbound
+  `X-Hestia-*` before setting the trusted ones.
+- GHSA advisories fixed (#386, all at or below our 1.9.6 fork point, verified against code):
+  **GHSA-fcq6** authenticated admin takeover - a gate compared against an undefined `$ROOT_USER`
+  (always false), so any authenticated user could rewrite the panel service config + privileged
+  crontab. **GHSA-8w7m** SQL injection via the database password, interpolated raw into `IDENTIFIED
+  BY`. **GHSA-cr7q** root RCE via `eval` in the object search commands. **GHSA-5fpv** cron parsing
+  hardened (defense-in-depth; the RCE sink was already closed) - note `read -r` preserves backslashes
+  the old `read` stripped. **Not affected, verified against code:** GHSA-w3mx (double-eval, empirically
+  refuted against the rebuilt parser), GHSA-gh6f (web terminal removed), GHSA-73p3, GHSA-fg7j,
+  GHSA-47mf. `h-check-sys-smoke` gained static invariant gates for the fcq6 and cr7q fixes.
 
 ## v0.10.0 (2026-07-19)
 
