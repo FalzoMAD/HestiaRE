@@ -3,6 +3,10 @@ use function Hestiacp\quoteshellarg\quoteshellarg;
 
 $TAB = "SERVER";
 
+// Mirrors the cap h-change-sys-botfamily enforces: each family costs two limit_req zones plus one more
+// alternative in the per-request UA map.
+$bl_slots_max = 10;
+
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
@@ -1688,19 +1692,22 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Bot rate-limit family table (Layer B, #482). The whole table arrives in this one POST, so every
-	// row defers the re-render (APPLY=no) and a single h-update-sys-botfamilies applies at the end -
-	// otherwise the web server would reload once per row. An emptied name (or a rename) drops the old
-	// family, which also strips it from every domain that throttled it: a leftover reference would
-	// point at a rate zone that no longer exists and fail the config test for the whole box.
-	if (empty($_SESSION["error_msg"]) && isset($_POST["v_bl_fam"])) {
+	// Bot rate-limit family table (Layer B). The whole table arrives in one POST, so every row defers
+	// the re-render (APPLY=no) and a single apply follows - otherwise the web server reloads per row.
+	// An emptied name (or a rename) drops the old family, which also strips it from every domain that
+	// used it: a leftover reference points at a rate zone that no longer exists and fails the config
+	// test for the whole box.
+	if (empty($_SESSION["error_msg"]) && is_array($_POST["v_bl_fam"] ?? null)) {
 		$bl_touched = false;
-		foreach (array_keys($_POST["v_bl_fam"]) as $bl_i) {
-			$bl_orig = trim($_POST["v_bl_orig"][$bl_i] ?? "");
-			$bl_name = strtolower(trim($_POST["v_bl_fam"][$bl_i] ?? ""));
-			$bl_match = trim($_POST["v_bl_match"][$bl_i] ?? "");
-			$bl_len = trim($_POST["v_bl_lenient"][$bl_i] ?? "");
-			$bl_str = trim($_POST["v_bl_strict"][$bl_i] ?? "");
+		// Bounded by the slot count: the CLI rejects the surplus anyway, but only after this loop had
+		// forked a command per row.
+		foreach (array_slice(array_keys($_POST["v_bl_fam"]), 0, $bl_slots_max, true) as $bl_i) {
+			// Scalar with a default: any of these arrays may arrive as a string or with holes.
+			$bl_orig = trim((string) ($_POST["v_bl_orig"][$bl_i] ?? ""));
+			$bl_name = strtolower(trim((string) ($_POST["v_bl_fam"][$bl_i] ?? "")));
+			$bl_match = trim((string) ($_POST["v_bl_match"][$bl_i] ?? ""));
+			$bl_len = trim((string) ($_POST["v_bl_lenient"][$bl_i] ?? ""));
+			$bl_str = trim((string) ($_POST["v_bl_strict"][$bl_i] ?? ""));
 			$bl_en = ($_POST["v_bl_enabled"][$bl_i] ?? "no") === "yes" ? "yes" : "no";
 
 			if ($bl_orig !== "" && ($bl_name === "" || $bl_name !== $bl_orig)) {
@@ -1765,9 +1772,8 @@ foreach ($sys_arr as $key => $value) {
 	$_SESSION[$key] = $value;
 }
 
-// Bot rate-limit family table, padded to the fixed number of slots so empty rows are offered for new
-// families. Read after the POST block so a just-saved table renders.
-$bl_slots = 10;
+// Padded to the slot count so empty rows are offered. Read after the POST block so a save renders.
+$bl_slots = $bl_slots_max;
 exec(HESTIA_CMD . "h-list-sys-botfamily json", $output, $return_var);
 $bl_data = json_decode(implode("", $output), true);
 unset($output);

@@ -20,29 +20,22 @@ if (!empty($_POST["ok"])) {
 	// Check token
 	verify_csrf($_POST);
 
+	$errors = [];
 	if (empty($_POST["v_host"])) {
 		$errors[] = _("Hostname");
 	}
 	if (empty($_POST["v_code"])) {
 		$errors[] = _("Pairing Code");
 	}
-
-	if (!empty($errors[0])) {
-		foreach ($errors as $i => $error) {
-			if ($i == 0) {
-				$error_msg = $error;
-			} else {
-				$error_msg = $error_msg . ", " . $error;
-			}
-		}
-		$_SESSION["error_msg"] = sprintf(_('Field "%s" can not be blank.'), $error_msg);
+	if (!empty($errors)) {
+		$_SESSION["error_msg"] = sprintf(_('Field "%s" can not be blank.'), implode(", ", $errors));
 	}
 
 	$v_host = $_POST["v_host"];
 	$v_port = $_POST["v_port"] ?? "";
 
 	if (empty($_SESSION["error_msg"])) {
-		// Through a 0600 handoff file, not argv: /proc/*/cmdline is readable by any local user.
+		// Through a 0600 handoff file, not argv: /proc/*/cmdline is world-readable.
 		$handoff = "/run/hestia/mesh/in/" . bin2hex(random_bytes(16));
 		if (@file_put_contents($handoff, $_POST["v_code"], LOCK_EX) === false) {
 			$_SESSION["error_msg"] = _("CrowdSec fleet-mesh is not enabled on this server.");

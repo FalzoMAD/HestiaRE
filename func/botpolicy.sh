@@ -52,7 +52,10 @@ botpolicy_render_nginx() {
 		echo "map \$http_user_agent \$hbot_fam {"
 		echo "	default \"\";"
 		for f in $enabled; do
-			[ "$f" = 'generic' ] && { has_generic=1; continue; }
+			[ "$f" = 'generic' ] && {
+				has_generic=1
+				continue
+			}
 			match=$(get_object_value "$obj" 'FAMILY' "$f" '$MATCH')
 			[ -n "$match" ] && echo "	\"~*($match)\" \"$f\";"
 		done

@@ -41,9 +41,9 @@ unset($output);
 $v_ip = $data[$v_domain]["IP"];
 $v_template = $data[$v_domain]["TPL"];
 
-// Bot rate limiting (Layer B, #482): the domain stores a compact "fam:level,fam:level" field, the
-// table of families is server-wide. Customers pick their own levels (and an admin can do it for them
-// while impersonating); only the FAMILY TABLE itself stays admin-only.
+// Bot rate limiting (Layer B): the domain stores a compact "fam:level,fam:level" field; the family
+// table is server-wide. Customers pick their own levels (an admin can do it for them while
+// impersonating); only the table itself stays admin-only.
 $v_botlimit = [];
 foreach (explode(",", (string) ($data[$v_domain]["BOTLIMIT"] ?? "")) as $entry) {
 	if (strpos($entry, ":") === false) {
@@ -56,8 +56,8 @@ $botfamilies = [];
 exec(HESTIA_CMD . "h-list-sys-botfamily json", $output, $return_var);
 $bf = json_decode(implode("", $output), true);
 unset($output);
-// Only enabled families are offered: the server config defines rate zones for those alone, so a
-// disabled one could not be applied anyway (and referencing it would break the nginx config test).
+// Only enabled families: the server config defines rate zones for those alone, so referencing a
+// disabled one would break the nginx config test.
 foreach (is_array($bf) ? $bf : [] as $bf_name => $bf_data) {
 	if (($bf_data["ENABLED"] ?? "no") === "yes") {
 		$botfamilies[$bf_name] = $bf_data;
@@ -927,11 +927,11 @@ if (!empty($_POST["save"])) {
 		$restart_proxy = "yes";
 	}
 
-	// Change bot rate-limit levels (one command per changed family; each defers the restart). Open to
-	// the customer: $user is the effective session user, so a level can only ever be set on one of
-	// their own domains, and the CLI validates the domain against that user's own object file.
-	if (isset($_POST["v_botlimit"])) {
+	// One command per changed family, each deferring the restart. Safe for customers: $user is the
+	// effective session user, and the CLI validates the domain against that user's own object file.
+	if (is_array($_POST["v_botlimit"] ?? null)) {
 		foreach ($botfamilies as $bl_fam => $bl_unused) {
+			// The family name is a key from the server-side table, never from the request.
 			$bl_new = $_POST["v_botlimit"][$bl_fam] ?? "off";
 			if (!in_array($bl_new, ["off", "lenient", "strict"], true)) {
 				continue;
