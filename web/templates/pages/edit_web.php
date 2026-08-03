@@ -250,9 +250,10 @@
 					</ul>
 				<?php } ?>
 			</div>
-			<?php if ($_SESSION["userContext"] === "admin" && !empty($botfamilies)) { ?>
-				<!-- Layer-B bot throttling: only enabled families are offered, since the server config
-				     defines rate zones for those alone. Humans are never limited here. -->
+			<?php if (!empty($botfamilies)) { ?>
+				<!-- Layer-B bot throttling, customer-editable: only the families the admin ENABLED are
+				     offered, since the server config defines rate zones for those alone. Humans are
+				     never limited here. The family table itself stays admin-only. -->
 				<details class="box-collapse u-mt15 u-mb10">
 					<summary class="box-collapse-header">
 						<i class="fas fa-robot u-mr10"></i><?= tohtml( _("Bot Rate Limiting")) ?>
@@ -264,7 +265,9 @@
 					<div class="box-collapse-content">
 						<p class="hint u-mb10">
 							<?= tohtml( _("Throttle crawlers by family (HTTP 429). Humans are never limited, and malicious traffic is CrowdSec's job. Rates come from the server-wide family table.")) ?>
-							<a href="/edit/server/botlimit/" class="u-ml5"><?= tohtml( _("Configure")) ?></a>
+							<?php if ($_SESSION["userContext"] === "admin") { ?>
+								<a href="/edit/server/botlimit/" class="u-ml5"><?= tohtml( _("Configure")) ?></a>
+							<?php } ?>
 						</p>
 						<?php foreach ($botfamilies as $bl_fam => $bl_data) {
 							$bl_cur = $v_botlimit[$bl_fam] ?? "off"; ?>

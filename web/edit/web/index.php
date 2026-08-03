@@ -42,8 +42,8 @@ $v_ip = $data[$v_domain]["IP"];
 $v_template = $data[$v_domain]["TPL"];
 
 // Bot rate limiting (Layer B, #482): the domain stores a compact "fam:level,fam:level" field, the
-// table of families is server-wide. Admin-only, because loosening a level is a server-resource
-// decision, not a per-customer one.
+// table of families is server-wide. Customers pick their own levels (and an admin can do it for them
+// while impersonating); only the FAMILY TABLE itself stays admin-only.
 $v_botlimit = [];
 foreach (explode(",", (string) ($data[$v_domain]["BOTLIMIT"] ?? "")) as $entry) {
 	if (strpos($entry, ":") === false) {
@@ -53,15 +53,14 @@ foreach (explode(",", (string) ($data[$v_domain]["BOTLIMIT"] ?? "")) as $entry) 
 	$v_botlimit[$bl_fam] = $bl_lvl;
 }
 $botfamilies = [];
-if ($_SESSION["userContext"] === "admin") {
-	exec(HESTIA_CMD . "h-list-sys-botfamily json", $output, $return_var);
-	$bf = json_decode(implode("", $output), true);
-	unset($output);
-	// Only enabled families can be offered: the server config defines zones for those alone.
-	foreach (is_array($bf) ? $bf : [] as $bf_name => $bf_data) {
-		if (($bf_data["ENABLED"] ?? "no") === "yes") {
-			$botfamilies[$bf_name] = $bf_data;
-		}
+exec(HESTIA_CMD . "h-list-sys-botfamily json", $output, $return_var);
+$bf = json_decode(implode("", $output), true);
+unset($output);
+// Only enabled families are offered: the server config defines rate zones for those alone, so a
+// disabled one could not be applied anyway (and referencing it would break the nginx config test).
+foreach (is_array($bf) ? $bf : [] as $bf_name => $bf_data) {
+	if (($bf_data["ENABLED"] ?? "no") === "yes") {
+		$botfamilies[$bf_name] = $bf_data;
 	}
 }
 $v_aliases = str_replace(",", "\n", $data[$v_domain]["ALIAS"]);
@@ -928,8 +927,10 @@ if (!empty($_POST["save"])) {
 		$restart_proxy = "yes";
 	}
 
-	// Change bot rate-limit levels (one command per changed family; each defers the restart)
-	if ($_SESSION["userContext"] === "admin" && isset($_POST["v_botlimit"])) {
+	// Change bot rate-limit levels (one command per changed family; each defers the restart). Open to
+	// the customer: $user is the effective session user, so a level can only ever be set on one of
+	// their own domains, and the CLI validates the domain against that user's own object file.
+	if (isset($_POST["v_botlimit"])) {
 		foreach ($botfamilies as $bl_fam => $bl_unused) {
 			$bl_new = $_POST["v_botlimit"][$bl_fam] ?? "off";
 			if (!in_array($bl_new, ["off", "lenient", "strict"], true)) {

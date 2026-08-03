@@ -15,8 +15,10 @@ section as part of its PR. On release, the section gets the version number.
   family table in place: 10 slots, each with name / User-Agent match / lenient + strict rate /
   enabled, saved in one POST. `BURST` and `NODELAY` stay conf-only advanced tuning and are shown
   read-only per row. Per domain, **Edit Web Domain** gained a *Bot Rate Limiting* section listing the
-  enabled families with an off/lenient/strict select each (admin-only: loosening a level is a
-  server-resource decision, not a per-customer one). New commands `h-change-sys-botfamily` (upsert)
+  admin-enabled families with an off/lenient/strict select each - **customer-editable**, and an admin
+  can set it for them while impersonating; only the family table itself stays admin-only. A customer
+  can only ever reach their own domains (the panel passes the effective session user and the CLI
+  validates the domain against that user's own object file). New commands `h-change-sys-botfamily` (upsert)
   and `h-delete-sys-botfamily`, both with an `APPLY=no` form so the panel can save the whole table
   and re-render once; `h-list-sys-botfamily` gained `[FORMAT]` (json/plain/csv) and
   `h-list-web-domain` now exposes `BOTLIMIT`, without which the panel cannot see the domain's own
