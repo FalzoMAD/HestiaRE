@@ -330,10 +330,13 @@ rebuild_web_domain_conf() {
 		$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
 	fi
 
-	# Re-render the CrowdSec per-domain fragment from the domain flags (self-guards on
-	# nginx front + writes nothing when unprotected).
+	# Re-render the per-domain fragments from the domain flags (both self-guard + write nothing
+	# when unset): CrowdSec Layer A (ban -> 403, nginx-only) + the server-native Layer-B bot
+	# rate-limit (nginx.botlimit.conf / botlimit.apache2.conf).
 	type crowdsec_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/func/crowdsec.sh
 	crowdsec_render_domain_fragment "$user" "$domain"
+	type botpolicy_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/func/botpolicy.sh
+	botpolicy_render_domain_fragment "$user" "$domain"
 
 	# Re-apply directory listing (apache Options -Indexes flip lives only in the
 	# regenerated vhost, so without this the rebuild resets it to the template default)

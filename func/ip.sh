@@ -46,8 +46,10 @@ is_ip_rdns_valid() {
 		local rdns=$(dig +short -x "$ip" | head -n 1 | sed 's/.$//') || unset rdns
 	fi
 
-	if [ -n "$rdns" ] && [ ! $(echo $rdns | awk "/$awk_ip/ || /$rev_awk_ip/") ]; then
-		echo $rdns
+	# $rdns is a PTR record, i.e. remote-controlled: unquoted it would word-split and glob. The
+	# unquoted test also degenerated to `[ ! ]` (which is true) whenever awk printed nothing.
+	if [ -n "$rdns" ] && [ -z "$(echo "$rdns" | awk "/$awk_ip/ || /$rev_awk_ip/")" ]; then
+		echo "$rdns"
 		return 0 # True
 	fi
 

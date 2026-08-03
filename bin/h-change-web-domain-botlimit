@@ -1,0 +1,94 @@
+#!/bin/bash
+# info: set the bot rate-limit level for a web domain
+# options: USER DOMAIN FAMILY LEVEL [RESTART] [QUIET]
+#
+# example: h-change-web-domain-botlimit admin acme.com ai strict
+#
+# Sets one bot family's rate-limit level (off|lenient|strict) for the domain. Families + their
+# lenient/strict rates live in the system bot-family conf (h-list-sys-botfamily). Server-native
+# (nginx limit_req / apache mod_qos, 429), independent of CrowdSec. 'off' removes the family.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user=$1
+domain=$2
+family=$3
+level=$4
+restart="$5"
+quiet="$6"
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/botpolicy.sh
+source $HESTIA/func/botpolicy.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+FAMOBJ="$CONF_DIR/botfamilies"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '4' "$#" 'USER DOMAIN FAMILY LEVEL [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+check_hestia_demo_mode
+
+case "$level" in
+	off | lenient | strict) ;;
+	*) echo "Error: LEVEL must be off, lenient or strict"; exit "$E_INVALID" ;;
+esac
+
+# family must exist in the system conf (get_object_value takes the object base, appends .conf)
+if [ ! -f "$FAMOBJ.conf" ] || [ -z "$(get_object_value "$FAMOBJ" 'FAMILY' "$family" '$FAMILY' 2> /dev/null)" ]; then
+	echo "Error: unknown bot family '$family' (see h-list-sys-botfamily)"
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+
+# rebuild the compact "fam:level,fam:level" field without this family, then append unless 'off'
+new=''
+# shellcheck disable=SC2086 # comma-split of the compact BOTLIMIT field is intentional
+for e in ${BOTLIMIT//,/ }; do
+	[ "${e%%:*}" = "$family" ] && continue
+	new="${new:+$new,}$e"
+done
+[ "$level" != "off" ] && new="${new:+$new,}$family:$level"
+
+if [ -z "$(get_object_value 'web' 'DOMAIN' "$domain" '$BOTLIMIT' 2> /dev/null)" ]; then
+	add_object_key "web" 'DOMAIN' "$domain" 'BOTLIMIT' 'SUSPENDED'
+fi
+update_object_value 'web' 'DOMAIN' "$domain" '$BOTLIMIT' "$new"
+
+botpolicy_render_domain_fragment "$user" "$domain"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-restart-web "$restart"
+check_result $? "Web restart failed" > /dev/null
+$BIN/h-restart-proxy "$restart"
+check_result $? "Proxy restart failed" > /dev/null
+
+if [ "$quiet" != "yes" ]; then
+	$BIN/h-log-action "$user" "Info" "Web" "Bot limit $family=$level (Domain: $domain)."
+fi
+log_event "$OK" "$ARGUMENTS"
+
+exit

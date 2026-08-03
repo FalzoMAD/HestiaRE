@@ -1,0 +1,107 @@
+#!/bin/bash
+# info: refresh the CrowdSec fleet-mesh shared blocklist
+# options: NONE
+#
+# example: h-update-crowdsec-mesh
+#
+# Peer-mesh (no central LAPI): PUBLISH this box's own local web-tier bans, PULL each paired peer's
+# published list over the panel port, and IMPORT the union as L7-only mesh bans (cscli import, origin
+# cscli-import, scenario hestia-mesh:<peer>). Enforcement is automatic - the L7 bouncer sees imported
+# decisions (403); the L3 feeder filters origin==crowdsec, so mesh bans NEVER reach the firewall.
+# Imports are hardened against a bad peer: IPv4-validated, per-peer + total caps, peer-attributed.
+# Run by the hestia-crowdsec-mesh timer. No-op unless mesh is enabled (the marker conf).
+#
+# The pull is the paired transport (func/crowdsec-mesh.sh); anything else dropped into MESH_PEERS_DIR
+# as <name>.json is imported just the same, so a hand-wired transport still works.
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/crowdsec-mesh.sh
+source $HESTIA/func/crowdsec-mesh.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+mesh_load || exit 0
+command -v cscli > /dev/null 2>&1 || exit 0
+command -v jq > /dev/null 2>&1 || exit 0
+
+# single well-formed IPv4 only (no CIDR/wildcard/garbage from a corrupt peer file)
+IPV4_RE='^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])$'
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+mkdir -p "$(dirname "$MESH_PUBLISH")" "$MESH_PEERS_DIR"
+
+# 1) PUBLISH: this box's own local web-tier bans (origin crowdsec), for peers to pull.
+pub=$(mktemp)
+cscli decisions list -o json 2> /dev/null \
+	| jq -c '[ (if type=="array" then .[] else . end) | (.decisions // [])[]
+		| select(.type == "ban" and .origin == "crowdsec")
+		| {value, duration, scope} ]' > "$pub" 2> /dev/null
+[ -s "$pub" ] || echo '[]' > "$pub"
+mv -f "$pub" "$MESH_PUBLISH"
+chmod 644 "$MESH_PUBLISH"
+
+# 2) Stage what the panel endpoint answers from (/run is tmpfs - this also heals it after a reboot),
+# then fetch each paired peer's list.
+mesh_stage_serve
+mesh_pull_peers
+
+# 3) IMPORT the union of the peer lists as TTL-bounded mesh bans. Per peer (one file each, filename =
+# peer id): keep only well-formed single IPv4 values (drop CIDR/garbage from a corrupt file), cap at
+# MESH_MAX_PER_PEER so one runaway peer can't flood the fleet, and tag reason=hestia-mesh:<peer> so a
+# bad IP stays attributable to its source for incident response. Own scope/type/ttl (peer-supplied
+# fields are not trusted).
+parts=$(mktemp)
+for pf in "$MESH_PEERS_DIR"/*.json; do
+	[ -e "$pf" ] || continue
+	peer=$(basename "$pf" .json | tr -cd 'a-zA-Z0-9_.-')
+	[ -n "$peer" ] || peer="unknown"
+	jq -c --arg ttl "$MESH_TTL" --arg peer "$peer" --arg re "$IPV4_RE" --argjson max "$MESH_MAX_PER_PEER" '
+		[ (if type=="array" then .[] else . end) | (.value // empty)
+			| select(type == "string" and test($re)) ]
+		| .[0:$max]
+		| map({duration: $ttl, scope: "ip", type: "ban", value: ., reason: ("hestia-mesh:" + $peer)})' \
+		"$pf" 2> /dev/null >> "$parts" || true
+done
+# Merge peers, dedupe by IP (first peer wins the attribution), cap the total union.
+# cscli import picks format by EXTENSION, so the file needs .json.
+union=$(mktemp --suffix=.json)
+jq -s -c --argjson total "$MESH_MAX_TOTAL" 'add // [] | unique_by(.value) | .[0:$total]' "$parts" 2> /dev/null > "$union"
+[ -s "$union" ] || echo '[]' > "$union"
+rm -f "$parts"
+
+# The swap-import is the only expensive step (LAPI writes for the whole union) and most cycles change
+# nothing - so skip it while the union is byte-identical AND the last import is recent enough that the
+# decisions cannot lapse (re-importing is what renews their TTL). Buys a tight cadence cheaply.
+stamp="$(dirname "$MESH_PUBLISH")/.union.sha256"
+union_hash=$(sha256sum < "$union" | cut -f1 -d ' ')
+if [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$union_hash" ] \
+	&& [ "$(($(date +%s) - $(stat -c %Y "$stamp" 2> /dev/null || echo 0)))" -lt "$(($(mesh_ttl_seconds) / 2))" ]; then
+	rm -f "$union"
+	exit 0
+fi
+
+# Clean swap: delete every currently-active hestia-mesh:* decision (per-peer scenarios need exact
+# match - `delete --scenario` is not a prefix), then import fresh. Drops withdrawn peers + stale IPs.
+for s in $(cscli decisions list -a -o json 2> /dev/null \
+	| jq -r '(if type=="array" then .[] else . end) | (.decisions // [])[] | .scenario // empty
+		| select(startswith("hestia-mesh"))' 2> /dev/null | sort -u); do
+	cscli decisions delete --scenario "$s" > /dev/null 2>&1 || true
+done
+if [ "$(jq 'length' "$union" 2> /dev/null || echo 0)" -gt 0 ]; then
+	cscli decisions import -i "$union" > /dev/null 2>&1 || true
+fi
+printf '%s' "$union_hash" > "$stamp"
+rm -f "$union"
+
+exit 0

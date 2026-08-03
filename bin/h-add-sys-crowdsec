@@ -60,7 +60,11 @@ fi
 #----------------------------------------------------------#
 
 echo "[ * ] Installing CrowdSec engine..."
-DEBIAN_FRONTEND=noninteractive apt-get -y -qq install crowdsec > /dev/null 2>&1 || true
+# force-conf*: a re-add keeps our :8054-patched /etc/crowdsec/config.yaml as saved state; with no
+# conffile policy dpkg prompts on it and hits EOF under noninteractive, leaving the pkg half-configured.
+DEBIAN_FRONTEND=noninteractive apt-get -y -qq \
+	-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+	install crowdsec > /dev/null 2>&1 || true
 
 # Move the local API off :8080 (collides with apache2) to :8054, matching the installer.
 if [ -f /etc/crowdsec/config.yaml ]; then

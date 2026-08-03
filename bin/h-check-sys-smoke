@@ -218,6 +218,36 @@ check_v_symlinks_resolve() {
 	fi
 }
 
+# check_policy_fragment_coverage — a per-domain POLICY fragment (CrowdSec Layer A, bot rate limiting)
+# must be in EVERY customer-domain template of its web system: it applies to all traffic, so a template
+# missing one is a silent bypass (switch to the wordpress template, escape the throttle, nothing fails).
+# Feature fragments (ssl/hsts/forcessl/fastcgi_cache) are NOT checked - they belong only to the
+# templates implementing them. Scope = templates carrying %domain%, so the per-IP catch-all is skipped.
+check_policy_fragment_coverage() {
+	local tpl_root="$HESTIA/templates/web" sys frag f miss=0 first="" checked=0
+	for sys in nginx apache2; do
+		[ -d "$tpl_root/$sys" ] || continue
+		case "$sys" in
+			nginx) set -- nginx.crowdsec.conf nginx.botlimit.conf ;;
+			apache2) set -- botlimit.apache2.conf ;;
+		esac
+		while read -r f; do
+			[ -n "$f" ] || continue
+			checked=$((checked + 1))
+			for frag in "$@"; do
+				grep -q "$frag" "$f" && continue
+				miss=$((miss + 1))
+				[ -z "$first" ] && first="${f#"$tpl_root/"} lacks $frag"
+			done
+		done < <(grep -rl '%domain%' "$tpl_root/$sys" 2> /dev/null)
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "policy fragment includes complete ($checked domain templates)"
+	else
+		no "$miss policy fragment include(s) missing from web templates" "$first"
+	fi
+}
+
 # check_info_headers — every h-* command must keep a non-empty `# info:` line
 # (Hestia parses it for --help/usage; a comment sweep must not eat it).
 check_info_headers() {
@@ -292,6 +322,18 @@ check_web_switch_prechecks() {
 
 # check_web_model_sentinel - flag an interrupted model switch so the box reports it
 # rather than the operator discovering it at the next reboot.
+check_mesh_serve_staged() {
+	# Without the staging, /mesh-decisions.php 404s and every peer silently stops receiving this box's
+	# bans - and since /run is tmpfs, a missed refresh after a boot looks healthy from anywhere else.
+	if [ ! -s "$CONF_DIR/crowdsec/peers.conf" ]; then
+		ok "crowdsec mesh has no peers paired"
+	elif [ -f /run/hestia/mesh/tokens ] && [ -f /run/hestia/mesh/published.json ]; then
+		ok "crowdsec mesh serve side staged"
+	else
+		no "crowdsec mesh peers paired but /run/hestia/mesh not staged" "run: h-update-crowdsec-mesh"
+	fi
+}
+
 check_web_model_sentinel() {
 	local s="/var/lib/hestia/web-model-switch/IN_PROGRESS" op
 	if [ -f "$s" ]; then
@@ -338,6 +380,11 @@ is_on "${COMPONENT_ADDON_CROWDSEC:-}" && check_service crowdsec "crowdsec"
 # L3 feeder timer only where CrowdSec L3 is wired (the marker) - keyed off the artefact,
 # not just the component flag, so a crowdsec-without-L3 state doesn't false-fail.
 [ -f "$CONF_DIR/firewall/crowdsec.conf" ] && check_service hestia-crowdsec-l3.timer "crowdsec L3 feeder timer"
+# fleet-mesh timer only where mesh is enabled (its marker conf), same artefact-gated reasoning.
+if [ -f "$CONF_DIR/crowdsec/mesh.conf" ]; then
+	check_service hestia-crowdsec-mesh.timer "crowdsec fleet-mesh timer"
+	check_mesh_serve_staged
+fi
 # adminer/webmail: no own daemon — served by a caddy FPM pool, so check the socket
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
@@ -406,6 +453,8 @@ check_xaccel_allowlist "$HESTIA/web"
 check_v_symlinks_resolve
 # every h-* keeps its parsed # info: line (a comment sweep must not eat it).
 check_info_headers
+# a policy fragment (crowdsec Layer A, bot rate limiting) missing from one template is a silent bypass.
+check_policy_fragment_coverage
 # #120: the model-switch freeze + pre-check coverage cannot rot; a crash is surfaced.
 check_web_lock_coverage
 check_web_switch_prechecks

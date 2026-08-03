@@ -1,0 +1,84 @@
+#!/bin/bash
+# info: re-render the web bot rate-limit config
+# options: NONE
+#
+# example: h-update-sys-botfamilies
+#
+# Re-renders the web-server rate-limit config from the system bot-family conf
+# (/etc/hestia/botfamilies.conf) and reloads. Run after editing that conf. Renders the nginx zones
+# where nginx is the public front, else the apache mod_qos counters (apache-only).
+#
+# Also re-renders every throttled domain's fragment first: fragments reference zones by family name, so
+# a table edit that renamed or disabled a family would otherwise leave a dangling zone reference and
+# fail the nginx test below - blocking the next reload for the whole box.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/botpolicy.sh
+source $HESTIA/func/botpolicy.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+if [ ! -f "$CONF_DIR/botfamilies.conf" ]; then
+	echo "Error: no bot-family conf (/etc/hestia/botfamilies.conf)."
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+botpolicy_render_all_fragments
+
+# nginx fronts in nginx-only + both; apache-only is the only model where apache does Layer B.
+if [ -n "$PROXY_SYSTEM" ]; then pub="$PROXY_SYSTEM"; else pub="$WEB_SYSTEM"; fi
+
+if [ "$pub" = "nginx" ]; then
+	botpolicy_render_nginx
+	if nginx -t > /dev/null 2>&1; then
+		systemctl reload nginx > /dev/null 2>&1 || systemctl restart nginx > /dev/null 2>&1
+		echo "Bot rate-limit config re-rendered (nginx)."
+	else
+		echo "Error: nginx config test failed after render - not reloading."
+		exit "$E_RESTART"
+	fi
+elif [ "$WEB_SYSTEM" = "apache2" ]; then
+	botpolicy_render_apache
+	if apache2ctl configtest > /dev/null 2>&1; then
+		systemctl reload apache2 > /dev/null 2>&1 || systemctl restart apache2 > /dev/null 2>&1
+		echo "Bot rate-limit config re-rendered (apache mod_qos)."
+	else
+		echo "Error: apache config test failed after render - not reloading."
+		exit "$E_RESTART"
+	fi
+else
+	echo "No web front for bot rate-limiting on this model."
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Re-rendered web bot rate-limit config."
+log_event "$OK" "$ARGUMENTS"
+
+exit

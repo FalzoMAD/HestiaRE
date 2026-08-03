@@ -1,0 +1,80 @@
+#!/bin/bash
+# info: mint a one-time CrowdSec mesh pairing code
+# options: NONE
+#
+# example: h-generate-sys-crowdsec-pairing
+#
+# Opens a short pairing window here and prints the code once - hand it to the admin of the joining box,
+# who runs h-add-sys-crowdsec-peer against this host. The code is what proves an admin HERE authorised
+# the pairing, so pairing always needs an admin on both boxes: minting is root-only and /mesh-pair.php
+# is a 404 while no window is open. Single-use, MESH_PAIRING_TTL seconds, dead after
+# MESH_PAIRING_TRIES wrong guesses. Only the hash is stored - a lost code is replaced, never recovered.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/crowdsec-mesh.sh
+source $HESTIA/func/crowdsec-mesh.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+if ! mesh_load; then
+	echo "ERROR: CrowdSec fleet-mesh is not enabled. Run h-add-sys-crowdsec-mesh first."
+	exit "$E_DISABLED"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# 20 chars from a 32-symbol alphabet = 100 bits. Crockford-ish set (no I/L/O/0/1): a code read out
+# loud cannot be mistyped into a different valid one.
+code=$(LC_ALL=C tr -dc 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' < /dev/urandom | head -c 20)
+if [ ${#code} -ne 20 ]; then
+	echo "ERROR: could not generate a pairing code."
+	exit "$E_PARSING"
+fi
+expires=$(($(date +%s) + MESH_PAIRING_TTL))
+
+mkdir -p "$CONF_DIR/crowdsec"
+printf "PAIRING_HASH='%s'\nPAIRING_EXPIRES='%s'\nPAIRING_TRIES='0'\n" \
+	"$(mesh_hash "$code")" "$expires" > "$MESH_PAIRING_CONF"
+chmod 600 "$MESH_PAIRING_CONF"
+
+# The panel cannot read /etc/hestia, so a secret-free marker tells /mesh-pair.php whether the route
+# exists at all. Authority stays with the hash above; this only keeps the door shut while idle.
+mesh_stage_serve
+printf '%s\n' "$expires" > "$MESH_RUN_DIR/pairing"
+chmod 644 "$MESH_RUN_DIR/pairing"
+
+code_fmt=$(printf '%s' "$code" | sed 's/.\{5\}/&-/g;s/-$//')
+echo "$code_fmt"
+echo ""
+echo "Valid for $((MESH_PAIRING_TTL / 60)) minutes, one pairing only. On the joining box run:"
+echo "  h-add-sys-crowdsec-peer $(hostname -f 2> /dev/null || hostname) <CODE> ${BACKEND_PORT:-8083}"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "CrowdSec mesh pairing window opened."
+log_event "$OK" "$ARGUMENTS"
+
+exit

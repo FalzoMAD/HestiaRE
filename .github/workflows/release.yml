@@ -24,9 +24,12 @@ jobs:
           echo "${VERSION}" > VERSION
           
           mkdir -p dist/hestiare-${VERSION}
+          # Dev-only trees never ship: the tarball is what lands on a customer box.
           rsync -a \
             --exclude='.git*' \
             --exclude='dist' \
+            --exclude='.editorconfig' \
+            --exclude='.shellcheckrc' \
             . dist/hestiare-${VERSION}/
           tar -czf dist/hestiare-${VERSION}.tar.gz -C dist hestiare-${VERSION}
 

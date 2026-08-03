@@ -1,0 +1,117 @@
+#!/bin/bash
+# info: list CrowdSec fleet-mesh peers
+# options: [FORMAT]
+#
+# example: h-list-sys-crowdsec-peers json
+#
+# Tokens are never printed - identity is all a panel or an operator needs. PIN is a public-key hash,
+# safe to show and useful for eyeballing a cert change.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+format=${1-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/crowdsec-mesh.sh
+source $HESTIA/func/crowdsec-mesh.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if ! mesh_load; then
+	echo "ERROR: CrowdSec fleet-mesh is not enabled."
+	exit "$E_DISABLED"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+[ -f "$MESH_PEERS_CONF" ] || touch "$MESH_PEERS_CONF"
+
+# Bans contributed per peer - answers "is this link doing anything".
+declare -A MESH_SEEN
+if command -v cscli > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
+	while read -r cnt scen; do
+		[ -n "$scen" ] && MESH_SEEN[${scen#hestia-mesh:}]="$cnt"
+	done < <(cscli decisions list -a -o json 2> /dev/null \
+		| jq -r '(if type=="array" then .[] else . end) | (.decisions // [])[] | .scenario // empty
+			| select(startswith("hestia-mesh:"))' 2> /dev/null | sort | uniq -c)
+fi
+
+json_list() {
+	IFS=$'\n'
+	i=1
+	objects=$(grep -c "PEER=" "$MESH_PEERS_CONF")
+	echo "{"
+	while read -r str; do
+		[ -z "$str" ] && continue
+		parse_object_kv_list "$str"
+		echo -n '    "'"$PEER"'": {
+        "HOST": "'"$HOST"'",
+        "PORT": "'"$PORT"'",
+        "IP": "'"$IP"'",
+        "PIN": "'"$PIN"'",
+        "BANS": "'"${MESH_SEEN[$PEER]:-0}"'",
+        "SUSPENDED": "'"$SUSPENDED"'",
+        "TIME": "'"$TIME"'",
+        "DATE": "'"$DATE"'"
+    }'
+		[[ "$i" -lt "$objects" ]] && echo ',' || echo
+		((i++))
+	done < "$MESH_PEERS_CONF"
+	echo '}'
+}
+
+shell_list() {
+	IFS=$'\n'
+	echo "PEER^HOST^PORT^IP^BANS^SUSPENDED^TIME^DATE"
+	echo "----^----^----^--^----^---------^----^----"
+	while read -r str; do
+		[ -z "$str" ] && continue
+		parse_object_kv_list "$str"
+		echo "$PEER^$HOST^$PORT^$IP^${MESH_SEEN[$PEER]:-0}^$SUSPENDED^$TIME^$DATE"
+	done < "$MESH_PEERS_CONF"
+}
+
+plain_list() {
+	IFS=$'\n'
+	while read -r str; do
+		[ -z "$str" ] && continue
+		parse_object_kv_list "$str"
+		echo -e "$PEER\t$HOST\t$PORT\t$IP\t${MESH_SEEN[$PEER]:-0}\t$SUSPENDED\t$TIME\t$DATE"
+	done < "$MESH_PEERS_CONF"
+}
+
+csv_list() {
+	IFS=$'\n'
+	echo "PEER,HOST,PORT,IP,BANS,SUSPENDED,TIME,DATE"
+	while read -r str; do
+		[ -z "$str" ] && continue
+		parse_object_kv_list "$str"
+		echo "$PEER,$HOST,$PORT,$IP,${MESH_SEEN[$PEER]:-0},$SUSPENDED,$TIME,$DATE"
+	done < "$MESH_PEERS_CONF"
+}
+
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list | column -t -s '^' ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

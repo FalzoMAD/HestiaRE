@@ -58,7 +58,7 @@ if [ -n "$web_data" ]; then
 	parse_object_kv_list "$web_data"
 
 	if [ -n "$CUSTOM_DOCROOT" ]; then
-		if [ -z $(echo $CUSTOM_DOCROOT | grep -i "/home/$owner/web/$domain") ]; then
+		if [ -z "$(echo "$CUSTOM_DOCROOT" | grep -i "/home/$owner/web/$domain")" ]; then
 			docdomain=$(echo "$CUSTOM_DOCROOT" | cut -d'/' -f5)
 			$BIN/h-list-web-domain $user $docdomain > /dev/null
 			if [ "$?" != 0 ]; then
@@ -74,7 +74,9 @@ if [ -n "$web_data" ]; then
 		fi
 	fi
 
-	if [ -z "$(echo $(get_user_ips) | grep $IP)" ]; then
+	# get_user_ips prints one IP per line; the inner split joins them for a single grep.
+	# shellcheck disable=SC2046 # intentional: fold the IP list onto one line
+	if [ -z "$(echo $(get_user_ips) | grep "$IP")" ]; then
 		echo "[*] IP dedicated to $owner select new ip address..."
 		get_user_ip
 	fi

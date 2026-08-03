@@ -1,0 +1,99 @@
+#!/bin/bash
+# info: list web bot rate-limit families
+# options: [FORMAT]
+#
+# example: h-list-sys-botfamily json
+#
+# Lists the system bot-family table (name, enabled, lenient/strict rate, UA match, and the conf-only
+# BURST/NODELAY tuning). These are the families a domain can throttle via
+# h-change-web-domain-botlimit. Edit with h-change-sys-botfamily, or the conf
+# (/etc/hestia/botfamilies.conf) followed by h-update-sys-botfamilies.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+format=${1-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# object base (get_object_value appends .conf); fall back to the shipped default
+OBJ="$CONF_DIR/botfamilies"
+[ -f "$OBJ.conf" ] || OBJ="$HESTIA/share/botpolicy/botfamilies"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+if [ ! -f "$OBJ.conf" ]; then
+	[ "$format" = 'json' ] && echo '{}' || echo "No bot-family conf found."
+	exit 0
+fi
+
+families=$(grep -oE "^FAMILY='[^']*'" "$OBJ.conf" | sed "s/^FAMILY='//; s/'\$//")
+
+fam_field() { get_object_value "$OBJ" 'FAMILY' "$1" "\$$2"; }
+
+json_list() {
+	local i=1 total
+	total=$(echo "$families" | grep -c .)
+	echo "{"
+	for f in $families; do
+		echo -n '    "'"$f"'": {
+        "ENABLED": "'"$(fam_field "$f" ENABLED)"'",
+        "LENIENT": "'"$(fam_field "$f" LENIENT)"'",
+        "STRICT": "'"$(fam_field "$f" STRICT)"'",
+        "MATCH": "'"$(fam_field "$f" MATCH)"'",
+        "BURST": "'"$(fam_field "$f" BURST)"'",
+        "NODELAY": "'"$(fam_field "$f" NODELAY)"'"
+    }'
+		[ "$i" -lt "$total" ] && echo ',' || echo
+		((i++))
+	done
+	echo '}'
+}
+
+shell_list() {
+	printf '%-15s %-8s %-9s %-9s %s\n' 'FAMILY' 'ENABLED' 'LENIENT' 'STRICT' 'MATCH'
+	printf '%-15s %-8s %-9s %-9s %s\n' '------' '-------' '-------' '------' '-----'
+	for f in $families; do
+		printf '%-15s %-8s %-9s %-9s %s\n' "$f" \
+			"$(fam_field "$f" ENABLED)" "$(fam_field "$f" LENIENT)" \
+			"$(fam_field "$f" STRICT)" "$(fam_field "$f" MATCH)"
+	done
+}
+
+plain_list() {
+	for f in $families; do
+		echo -e "$f\t$(fam_field "$f" ENABLED)\t$(fam_field "$f" LENIENT)\t$(fam_field "$f" STRICT)\t$(fam_field "$f" MATCH)\t$(fam_field "$f" BURST)\t$(fam_field "$f" NODELAY)"
+	done
+}
+
+csv_list() {
+	echo "FAMILY,ENABLED,LENIENT,STRICT,MATCH,BURST,NODELAY"
+	for f in $families; do
+		echo "$f,$(fam_field "$f" ENABLED),$(fam_field "$f" LENIENT),$(fam_field "$f" STRICT),\"$(fam_field "$f" MATCH)\",$(fam_field "$f" BURST),$(fam_field "$f" NODELAY)"
+	done
+}
+
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+log_event "$OK" "$ARGUMENTS"
+
+exit

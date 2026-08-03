@@ -1,0 +1,33 @@
+# HestiaRE shellcheck configuration (#477).
+#
+# Only project-wide HOUSE IDIOMS are disabled here - patterns that are deliberate, pervasive and
+# verified, so leaving them on would bury real findings under thousands of expected hits. Anything
+# that could hide a genuine bug stays on and is silenced per line with `# shellcheck disable=`,
+# where the reason is visible next to the code.
+
+# `source $HESTIA/func/main.sh` and `$BIN/h-*` dispatch are unquoted on purpose: both are internal
+# install-root paths from hestia.env, never user input, and quoting them would diverge from ~500
+# scripts. A real unquoted USER value shows up as SC2086 elsewhere in the same file, so the signal
+# is not lost - it is the tree-wide noise floor that is.
+disable=SC2086
+
+# Hestia object queries take the field name as a literal: get_object_value ... '$MATCH'. The single
+# quotes are the point (the callee expands it), so "expressions don't expand in single quotes" is
+# the expected reading, not a bug.
+disable=SC2016
+
+# Sources resolve at runtime from the install root (/etc/hestia/hestia.env, $HESTIA/func/...), which
+# does not exist in a checkout. The `# shellcheck source=` directives already document the targets.
+disable=SC1091
+
+# parse_object_kv_list creates variables dynamically (PHP tokenizer -> declare), so every field a
+# script reads looks unassigned, and every field it does not read looks unused. Both are structural
+# to the object format, not per-script mistakes.
+disable=SC2154
+disable=SC2034
+
+# NOT disabled, on purpose - documented here because it looks like a candidate and is not:
+#   SC2046 fires on the tree-wide `parse_object_kv_list $(grep ...)` idiom (34 files), where the
+#   word splitting IS the interface: the callee rejoins its arguments. Disabling it project-wide
+#   would also silence every genuinely unquoted command substitution, of which the tree has ~65.
+#   A new script using that idiom takes a per-line `# shellcheck disable=SC2046` with the reason.

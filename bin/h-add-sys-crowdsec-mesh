@@ -1,0 +1,75 @@
+#!/bin/bash
+# info: enable CrowdSec fleet-mesh (shared blocklist across the fleet)
+# options: NONE
+#
+# example: h-add-sys-crowdsec-mesh
+#
+# Turns on the peer-mesh: this box publishes its own local bans and imports the union of peers'
+# published lists as L7-only mesh bans (see h-update-crowdsec-mesh). Requires CrowdSec (nginx front).
+# Peers are then paired from the panel's Fleet Mesh page (or h-generate-sys-crowdsec-pairing +
+# h-add-sys-crowdsec-peer); a hand-wired transport into MESH_PEERS_DIR still works (see mesh.conf).
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+MESH_CONF="$CONF_DIR/crowdsec/mesh.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+# mesh rides on CrowdSec (L7); the engine must be installed.
+if ! dpkg -l crowdsec 2> /dev/null | grep -q '^ii'; then
+	echo "ERROR: CrowdSec is not installed. Run h-add-sys-crowdsec first."
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+mkdir -p "$CONF_DIR/crowdsec" /var/lib/crowdsec/mesh/peers
+[ -f "$MESH_CONF" ] || cp -f "$HESTIA/share/crowdsec/mesh.conf" "$MESH_CONF"
+
+# /run staging for the panel's mesh endpoints (tmpfs, hence the boot-time recipe too).
+cp -f "$HESTIA/share/tmpfiles.d/hestia-mesh.conf" /etc/tmpfiles.d/hestia-mesh.conf
+systemd-tmpfiles --create /etc/tmpfiles.d/hestia-mesh.conf > /dev/null 2>&1
+
+cp -f "$HESTIA/share/crowdsec/systemd/hestia-crowdsec-mesh.service" /etc/systemd/system/hestia-crowdsec-mesh.service
+cp -f "$HESTIA/share/crowdsec/systemd/hestia-crowdsec-mesh.timer" /etc/systemd/system/hestia-crowdsec-mesh.timer
+systemctl daemon-reload
+systemctl enable --now hestia-crowdsec-mesh.timer > /dev/null 2>&1 || true
+"$BIN/h-update-crowdsec-mesh" > /dev/null 2>&1 || true
+
+# shellcheck source=/etc/hestia/crowdsec/mesh.conf
+source "$MESH_CONF"
+echo "CrowdSec fleet-mesh enabled. Pair a peer from the panel (Firewall > Fleet Mesh), or:"
+echo "  h-generate-sys-crowdsec-pairing        (here, then use the code on the other box)"
+echo "  h-add-sys-crowdsec-peer HOST CODE      (to join a box that gave you a code)"
+echo "This box publishes to ${MESH_PUBLISH:-/var/lib/crowdsec/mesh/published.json}; peer lists live in"
+echo "  ${MESH_PEERS_DIR:-/var/lib/crowdsec/mesh/peers} (see $MESH_CONF)."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Enabled CrowdSec fleet-mesh."
+log_event "$OK" "$ARGUMENTS"
+
+exit
