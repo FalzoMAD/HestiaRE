@@ -10,6 +10,26 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **Firewall renderer seam** (#495) - every backend call in `bin/` and `func/` now goes through
+  `func/firewall.sh`; a repo-wide sweep for direct `iptables` invocation outside that file returns nothing.
+  Callers state what they want in object-model terms (`fw_rule`, `fw_jail_rebuild`, `fw_ban_add`,
+  `fw_set_jump`, `fw_policy`, `fw_persist_enable`) and the library renders it, so the nftables swap becomes
+  a change to one file instead of eight commands. **Deliberately zero behaviour change**: verified by
+  re-capturing the effective firewall state on all four targets after running the new renderer and diffing
+  it **byte-for-byte** against the pre-seam reference captures - identical on all four. Two known defects
+  are preserved verbatim rather than quietly fixed, because a behaviour change here would rob that gate of
+  its meaning: the swallowed apply errors (D2, fixed by the atomic nft apply) and `h-delete-firewall-chain`
+  using a bare `--dport` where multi-port jails need `-m multiport` (D4, fixed in #496). Both are now
+  commented at the single place they live instead of being buried in a caller. `h-update-firewall` drops
+  from 243 to 176 lines, `h-stop-firewall` from 113 to 67, and the duplicated persistence block collapses
+  into one helper.
+- **`h-check-firewall-chain CHAIN`** (#495) - fail2ban's `actioncheck`, replacing an
+  `iptables -n -L INPUT | grep` in `share/fail2ban/action.d/hestia.conf` that would silently go stale the
+  moment the renderer changes. It asserts both halves of "wired": the jail chain exists *and* the base
+  chain still jumps to it - a chain can survive while a flush has dropped the jump, and in that state bans
+  are recorded but never enforced. This matters more than a normal check because fail2ban answers a failed
+  `actioncheck` by running actionstop + actionstart, and actionstop deletes every `banlist.conf` row for
+  the chain. No `v-*` symlink.
 
 - **Two firewall smoke guards** (#481) - `h-check-sys-smoke` now checks the firewall *datapath*, not just
   that a daemon is up. `check_firewall_closed` asserts INPUT still defaults to DROP while

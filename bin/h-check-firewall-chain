@@ -1,0 +1,47 @@
+#!/bin/bash
+# info: check that a firewall jail chain is wired
+# options: CHAIN
+#
+# example: h-check-firewall-chain SSH
+#
+# fail2ban's actioncheck (#495). Exits 0 while the jail's chain is present and reachable from the base
+# chain, non-zero otherwise. It exists so the check stops being a backend-specific grep in
+# share/fail2ban/action.d/hestia.conf: that file used `iptables -n -L INPUT | grep fail2ban-<name>`,
+# which silently goes stale the moment the renderer changes.
+#
+# Getting this wrong is not cosmetic. fail2ban answers a failed actioncheck by running
+# actionstop + actionstart to "restore a sane environment", and actionstop deletes every banlist.conf
+# row for the chain - so a check that wrongly reports missing wipes the persistent ban list.
+# No v-* symlink (HestiaRE-native).
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+chain=$(echo "$1" | tr '[:lower:]' '[:upper:]')
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+source $HESTIA/func/firewall.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'CHAIN'
+is_format_valid 'chain'
+is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+fw_jail_wired "$chain"
+exit $?

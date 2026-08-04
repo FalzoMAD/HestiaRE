@@ -15,6 +15,8 @@
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+source $HESTIA/func/firewall.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_* flags), if present
@@ -131,10 +133,10 @@ check_socket() {
 # rules at all. Nothing else in the system notices that.
 check_firewall_closed() {
 	local pol
-	pol=$(iptables -S INPUT 2> /dev/null | grep -m1 '^-P INPUT ')
+	pol=$(fw_policy_get INPUT)
 	if [ -z "$pol" ]; then
-		skip "firewall INPUT policy (iptables not readable - root?)"
-	elif [ "$pol" = '-P INPUT DROP' ]; then
+		skip "firewall INPUT policy (backend not readable - root?)"
+	elif [ "$pol" = 'DROP' ]; then
 		ok "firewall INPUT policy closed (DROP)"
 	else
 		no "firewall INPUT policy is not DROP" "$pol"
