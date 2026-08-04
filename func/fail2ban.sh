@@ -59,16 +59,26 @@ fail2ban_disable_distro_jails() {
 	} >> "$F2B_OURS"
 }
 
+# install.conf writes its booleans as "true", while the installer's own locals read "yes". Accept both
+# rather than depending on which caller passed which: comparing against a single spelling is what silently
+# disabled the proftpd jail on every box that actually had proftpd.
+fail2ban_flag_on() {
+	case "${1:-}" in
+		true | yes | 1) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
 # A jail whose logpath does not exist never matches anything and says so only in fail2ban's own log, so
 # the jails are gated on the services actually present rather than shipped on and left to fail quietly.
 fail2ban_gate_jails() {
 	local mail="${1:-no}" ftp="${2:-no}"
 	[ -f "$F2B_OURS" ] || return 0
-	if [ "$mail" != 'yes' ]; then
+	if ! fail2ban_flag_on "$mail"; then
 		fail2ban_set_enabled 'exim-iptables' 'false'
 		fail2ban_set_enabled 'dovecot-iptables' 'false'
 	fi
-	[ "$ftp" = 'yes' ] || fail2ban_set_enabled 'proftpd-iptables' 'false'
+	fail2ban_flag_on "$ftp" || fail2ban_set_enabled 'proftpd-iptables' 'false'
 }
 
 # Flip one jail's `enabled` without disturbing the rest of its block.
