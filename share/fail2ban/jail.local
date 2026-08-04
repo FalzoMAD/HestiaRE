@@ -1,3 +1,7 @@
+# No mysqld jail: 3306 is not in the shipped ruleset, so MariaDB is only reachable from loopback and the
+# box itself - both of which h-add-firewall-ban refuses to ban. A jail there would match and then decline to
+# act. An admin who deliberately opens 3306 owns the access control for it (source-restricted rule, DB
+# users) and can add a jail to suit.
 # Our jails read log FILES, so the backend is pinned here rather than inherited. Ubuntu 24.04's
 # jail.d/defaults-debian.conf sets `backend = systemd` in [DEFAULT], which applies to every jail: ours then
 # watch the journal, never read their logpath, and match nothing while reporting perfectly healthy. Debian
@@ -24,13 +28,6 @@ enabled  = true
 filter   = dovecot
 action   = hestia[name=MAIL]
 logpath  = /var/log/dovecot.log
-
-[mysqld-iptables]
-enabled  = false
-filter   = mysqld-auth
-action   = hestia[name=DB]
-logpath  = /var/log/mysql/error.log
-maxretry = 5
 
 [proftpd-iptables]
 enabled  = true

@@ -1004,6 +1004,20 @@ is_ipv4_cidr_format_valid() {
 	fi
 }
 
+# Either family. Bans accept both since the firewall carries a v6 set per jail; the single-family
+# validators stay for the places that genuinely mean one family (an IP object, a NAT address).
+is_ip_cidr_format_valid() {
+	object_name=${2-ip}
+	valid=$($HESTIA_PHP -r '$cidr=$argv[1]; $p=explode("/", $cidr); $ip=$p[0]; $m=$p[1]??null;
+		$v4=filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4);
+		$v6=filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6);
+		$ok=($v4 && ($m===null || $m<=32)) || ($v6 && ($m===null || $m<=128));
+		echo $ok ? 0 : 1;' "$1")
+	if [ "$valid" -ne 0 ]; then
+		check_result "$E_INVALID" "invalid $object_name :: $1"
+	fi
+}
+
 is_ipv6_cidr_format_valid() {
 	object_name=${2-ipv6}
 	valid=$($HESTIA_PHP -r '$cidr=$argv[1]; list($ip, $netmask) = [...explode("/", $cidr), 128]; echo ((filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) && $netmask <= 128) ? 0 : 1);' "$1")
@@ -1527,6 +1541,7 @@ is_format_valid() {
 				ip) is_ip_format_valid "$arg" ;;
 				ipv6) is_ipv6_format_valid "$arg" ;;
 				ip46) is_ip46_format_valid "$arg" ;;
+				ip_cidr) is_ip_cidr_format_valid "$arg" ;;
 				ipv4_cidr) is_ipv4_cidr_format_valid "$arg" ;;
 				ipv6_cidr) is_ipv6_cidr_format_valid "$arg" ;;
 				ip_name) is_domain_format_valid "$arg" 'IP name' ;;

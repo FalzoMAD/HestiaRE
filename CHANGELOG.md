@@ -10,6 +10,30 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **fail2ban bans IPv6 too** (#496). Service accept rules carry no family qualifier, so v6 already reached
+  exactly the ports the jails protect - while the jail sets were `ipv4_addr` and the ban command validated
+  v4, so a v6 brute force was logged, matched, and then failed its `actionban` on every attempt. A jail is
+  now two sets and two rules (`f2b_<CHAIN>` / `f2b6_<CHAIN>`), and bans route by family. **Nothing
+  presupposes a v6 stack**: an `ip6` rule and an `ipv6_addr` set load on a host with no v6 address and even
+  with `disable_ipv6=1`, verified on the fleet, so a v4-only box is unaffected. `::1` is refused like
+  `127.0.0.1`.
+- `h-add-firewall-ban` / `h-delete-firewall-ban` take an address of either family (`IP_CIDR`), via a new
+  `is_ip_cidr_format_valid`. The single-family validators stay for the places that genuinely mean one
+  family.
+
+### Changed
+
+- **The mysqld jail is gone** (#496). 3306 is not in the shipped ruleset, so MariaDB is reachable only from
+  loopback and the box itself - both of which `h-add-firewall-ban` refuses to ban, so the jail could only
+  ever match and then decline to act. An admin who deliberately opens 3306 owns the access control for it
+  and can add a jail to suit; the reason is recorded in `jail.local` rather than left as an unexplained
+  `enabled = false`.
+
+### Fixed
+
+- `h-add-firewall-chain` read the panel port out of `$HESTIA/nginx/conf/nginx.conf`, which Caddy replaced
+  (#496). It printed an error on every jail creation and fell back to 8083 - right by luck, wrong on any box
+  whose panel port was changed. It reads `BACKEND_PORT` now.
 - **fail2ban actually works again** (#496) - it had been installing a config it could not start. The
   installer copied `filter.d/*.conf` and `jail.local` but never `action.d/hestia.conf`, so every jail
   referencing `action = hestia[...]` was skipped and **6 of 7 jails were dead on every target**, with the
