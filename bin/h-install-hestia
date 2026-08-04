@@ -54,7 +54,9 @@ source /etc/hestia/hestia.env                 # sets HESTIA
 # shellcheck source=/usr/local/hestia/func/main.sh
 source "$HESTIA/func/main.sh"                  # source_conf hestia.conf, BIN, dirs, error codes, user
 # shellcheck source=/usr/local/hestia/func/helper.sh
-source "$HESTIA/func/helper.sh"                # hestia_apt, load_os_profile, seed_hestia_etc
+source "$HESTIA/func/helper.sh"                   # hestia_apt, load_os_profile, seed_hestia_etc
+# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+source "$HESTIA/func/fail2ban.sh"                # fail2ban_apply
 # shellcheck source=/usr/local/hestia/func/web-model.sh
 source "$HESTIA/func/web-model.sh"             # configure_apache2, web_model_keyset, apache_remoteip_* (#120)
 # shellcheck source=/etc/hestia/install.conf
@@ -530,18 +532,18 @@ install_security() {
 	[ -f "$CONF_DIR/.done.security" ] && { echo "[ skip ] security already configured"; return 0; }
 	echo "[ * ] Installing security packages (iptables, ipset)..."
 	hestia_apt -y install iptables ipset
-	wcv "FIREWALL_SYSTEM" "iptables"
+	wcv "FIREWALL_SYSTEM" "nftables"
 
 	if is_on "${COMPONENT_ADDON_FAIL2BAN:-}"; then
 		echo "[ * ] Installing & configuring fail2ban..."
+		local mail_block='no'
+		is_on "${COMPONENT_MAIL_BLOCK_PRESENT:-}" && mail_block='yes'
 		hestia_apt -y install fail2ban
 		wcv "FIREWALL_EXTENSION" "fail2ban"
-		mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
-		cp -rf "$HESTIA/share/fail2ban/filter.d/"*.conf /etc/fail2ban/filter.d/
-		cp -f "$HESTIA/share/fail2ban/jail.local" /etc/fail2ban/
-		update-rc.d fail2ban defaults > /dev/null 2>&1
-		systemctl enable fail2ban
-		systemctl start fail2ban
+		# One implementation of "configured fail2ban", shared with the addon commands. It copies the
+		# WHOLE share/fail2ban tree: enumerating the files is what silently left out action.d/hestia.conf
+		# and made every jail referencing `action = hestia[...]` unstartable.
+		fail2ban_apply "$mail_block" "${COMPONENT_ADDON_PROFTPD:-no}"
 	fi
 
 	# crowdsec — nginx-only web protection (#186); skipped on an apache-only model.
@@ -568,9 +570,9 @@ install_security() {
 			# detection + nginx Layer-A/B wiring (collections, bouncer, http glue)
 			source "$HESTIA/func/crowdsec.sh"
 			crowdsec_apply || echo "[ ! ] CrowdSec wiring reported an issue (non-fatal)"
-			# optional fleet-mesh (opt-in): arms the mechanism (publish + import timer). Inert until
-			# the transport that moves peer lists into MESH_PEERS_DIR is wired (a fleet-level step).
-			if is_on "${COMPONENT_CROWDSEC_MESH:-}"; then
+			# 'mesh' model: arm the mechanism (publish + import timer). Inert until peers are paired,
+			# which is a two-admin step done afterwards in the panel or via the pairing commands.
+			if [ "${COMPONENT_CROWDSEC_MODE:-}" = "mesh" ]; then
 				echo "[ * ] Enabling CrowdSec fleet-mesh..."
 				"$BIN/h-add-sys-crowdsec-mesh" > /dev/null 2>&1 || echo "[ ! ] fleet-mesh enable reported an issue (non-fatal)"
 			fi

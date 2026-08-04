@@ -18,6 +18,8 @@ format=${1-shell}
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+source $HESTIA/func/firewall.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -300,7 +302,7 @@ fi
 # Checking FIREWALL system
 if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != 'remote' ]; then
 	state="stopped"
-	if $(iptables -S INPUT | grep -qx '\-P INPUT DROP'); then
+	if [ "$(fw_policy_get INPUT)" = 'DROP' ]; then
 		state="running"
 	fi
 	data="$data\nNAME='$FIREWALL_SYSTEM' SYSTEM='firewall'"

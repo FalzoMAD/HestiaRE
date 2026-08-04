@@ -15,6 +15,10 @@
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+source $HESTIA/func/firewall.sh
+# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+source $HESTIA/func/fail2ban.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_* flags), if present
@@ -122,6 +126,138 @@ check_socket() {
 		ok "socket $2 ($1) listening"
 	else
 		no "socket $2 ($1) not listening"
+	fi
+}
+
+# check_firewall_closed - with the firewall enabled, INPUT must default to DROP.
+# Boot-path guard: iptables-restore is atomic PER TABLE, so one rule matching an ipset that
+# failed to load rejects the whole filter table and the box comes up with policy ACCEPT and no
+# rules at all. Nothing else in the system notices that.
+check_firewall_closed() {
+	local pol
+	pol=$(fw_policy_get INPUT)
+	if [ -z "$pol" ]; then
+		skip "firewall INPUT policy (backend not readable - root?)"
+	elif [ "$pol" = 'DROP' ]; then
+		ok "firewall INPUT policy closed (DROP)"
+	else
+		no "firewall INPUT policy is not DROP" "$pol"
+	fi
+}
+
+# check_firewall_ruleset_loadable - the persisted ruleset must still be accepted by the backend, since
+# that file IS what the boot unit reloads. Replaces the iptables-era check that every referenced ipset had
+# a provisioning path: sets and the rules matching them now live in one document and load in one
+# transaction, so the ordering hazard that could boot the box open no longer exists. What can still go
+# wrong is the file being unparseable, and then the box boots with no ruleset at all.
+check_firewall_ruleset_loadable() {
+	local ruleset=/etc/hestia/firewall/ruleset.nft
+	if [ ! -f "$ruleset" ]; then
+		no "firewall ruleset not persisted" "$ruleset missing - a reboot would come up unfiltered"
+		return
+	fi
+	if nft -c -f "$ruleset" > /dev/null 2>&1; then
+		ok "persisted firewall ruleset loads"
+	else
+		no "persisted firewall ruleset is rejected by nft" "$(nft -c -f "$ruleset" 2>&1 | head -n1)"
+	fi
+}
+
+# check_firewall_chains_tracked - the live ruleset must not carry a jail chain the object model has
+# forgotten. This is check_firewall_sets_bootable's mirror image: there the model promised more than the
+# live state delivered, here the live state holds more than the model admits to.
+#
+# Reachable today, and reproduced: deleting a multi-port jail leaves the jump behind (D4, bare --dport
+# where -m multiport is needed), the leaked jump keeps the chain referenced so the following -X fails,
+# and the next flush drops the jump while the teardown loop iterates chains.conf - where the record is
+# already gone. Nothing ever reclaims the chain. It survives as an orphan that no h-list-firewall*
+# command can see. Worth keeping after #496 fixes the cause: an untracked chain is a rule nobody audits.
+check_firewall_chains_tracked() {
+	local orphan='' c
+	for c in $(fw_jail_chains_live); do
+		grep -q "CHAIN='$c'" "$CONF_DIR/firewall/chains.conf" 2> /dev/null || orphan="$orphan $c"
+	done
+	if [ -n "$orphan" ]; then
+		no "live firewall jail chain with no chains.conf record" "${orphan# }"
+	else
+		ok "firewall jail chains all tracked in the object model"
+	fi
+}
+
+# check_fail2ban_jails - the jails fail2ban is actually running must equal the jails our config enables.
+# Catches both directions at once: one of ours missing (which is how the whole set stayed dead while the
+# service looked healthy) and a distro jail we never asked for still running.
+check_fail2ban_jails() {
+	local want have missing='' extra='' j
+	want=$(fail2ban_enabled_jails | sort)
+	have=$(fail2ban-client status 2> /dev/null | sed -n 's/.*Jail list:[[:space:]]*//p' | tr -d ' ' | tr ',' '\n' | sort)
+	for j in $want; do grep -qx "$j" <<< "$have" || missing="$missing $j"; done
+	for j in $have; do grep -qx "$j" <<< "$want" || extra="$extra $j"; done
+	if [ -n "$missing" ]; then
+		no "fail2ban jail enabled in config but not running" "${missing# }"
+	elif [ -n "$extra" ]; then
+		no "fail2ban is running a jail we did not enable" "${extra# } (a distro jail bans into a ruleset we do not manage)"
+	else
+		ok "fail2ban jails match the configured set"
+	fi
+}
+
+# check_fail2ban_config - a config error leaves the service up and the jail gone, so the exit status is not
+# enough: fail2ban prints these on stderr while the dump itself still succeeds.
+check_fail2ban_config() {
+	local errs
+	errs=$(fail2ban-client -d 2>&1 > /dev/null | grep ERROR | head -n1)
+	if [ -z "$errs" ]; then
+		ok "fail2ban config parses without error"
+	else
+		no "fail2ban config error" "${errs#*ERROR   }"
+	fi
+}
+
+# check_fail2ban_banaction - every jail must ban through OUR action. The single strongest guard here: it
+# catches the distro leftover, a future package default, and a renderer swap that leaves the action behind,
+# all as one assertion.
+check_fail2ban_banaction() {
+	local foreign
+	# `action = hestia[name=SSH]` is instantiated as the action `hestia-SSH`, so match the prefix. Testing
+	# for a bare `hestia` looks right and never matches anything.
+	foreign=$(fail2ban-client -d 2> /dev/null \
+		| grep -oE "'addaction', '[^']+'" | sed "s/.*'\(.*\)'/\1/" | sort -u | grep -v '^hestia-')
+	if [ -z "$foreign" ]; then
+		ok "fail2ban bans through the hestia action only"
+	else
+		no "fail2ban jail using a foreign banaction" "$(echo "$foreign" | tr '\n' ' ')"
+	fi
+}
+
+# check_fail2ban_logpaths - a jail watching a file that does not exist never fires and only says so in
+# fail2ban's own log. That is how the mail jails stayed enabled on boxes without mail.
+check_fail2ban_logpaths() {
+	local missing='' p
+	while read -r p; do
+		[ -n "$p" ] || continue
+		case "$p" in /*) [ -e "$p" ] || missing="$missing $p" ;; esac
+	done <<< "$(fail2ban-client -d 2> /dev/null | grep -oE "'addlogpath', '[^']+'" | sed "s/.*'\(.*\)'/\1/" | sort -u)"
+	if [ -z "$missing" ]; then
+		ok "fail2ban jail logpaths all exist"
+	else
+		no "fail2ban jail watching a missing logpath" "${missing# }"
+	fi
+}
+
+# check_fail2ban_backends - an enabled jail must actually be watching its log file. A jail put on the
+# systemd backend keeps its logpath in the config, starts cleanly and reports healthy, but monitors nothing -
+# so neither "the file exists" nor "the jail is running" catches it. Asking what it monitors does.
+check_fail2ban_backends() {
+	local blind='' j
+	for j in $(fail2ban_enabled_jails); do
+		fail2ban-client status "$j" > /dev/null 2>&1 || continue
+		fail2ban-client get "$j" logpath 2> /dev/null | grep -q '^ *`\?- */' || blind="$blind $j"
+	done
+	if [ -z "$blind" ]; then
+		ok "fail2ban jails are watching their log files"
+	else
+		no "fail2ban jail monitors no file (wrong backend?)" "${blind# }"
 	fi
 }
 
@@ -374,7 +510,16 @@ if echo "$DB_SYSTEM" | grep -qw 'mysql'; then check_service mariadb "database (m
 if echo "$DB_SYSTEM" | grep -qw 'pgsql' || is_on "${COMPONENT_DB_POSTGRESQL:-}"; then
 	check_service postgresql "database (pgsql)"
 fi
-is_on "${COMPONENT_ADDON_FAIL2BAN:-}" && check_service fail2ban "fail2ban"
+if is_on "${COMPONENT_ADDON_FAIL2BAN:-}"; then
+	check_service fail2ban "fail2ban"
+	# The service being up says nothing about whether any jail is: these four are what make a green run
+	# mean working brute-force protection.
+	check_fail2ban_config
+	check_fail2ban_jails
+	check_fail2ban_banaction
+	check_fail2ban_logpaths
+	check_fail2ban_backends
+fi
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
 is_on "${COMPONENT_ADDON_CROWDSEC:-}" && check_service crowdsec "crowdsec"
 # L3 feeder timer only where CrowdSec L3 is wired (the marker) - keyed off the artefact,
@@ -398,6 +543,17 @@ fi
 # redis: user's DB choice or rspamd's always-present Bayes companion
 if is_on "${COMPONENT_DB_REDIS:-}" || [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
 	check_service redis-server "redis"
+fi
+
+# --- Firewall datapath (live state, not just the daemon) ---
+# The two invariants a green service check cannot see. Both keyed off FIREWALL_SYSTEM, since an
+# ACCEPT policy is correct when the firewall is deliberately off. The invariants outlive the
+# iptables renderer (#495 re-expresses them against nft), the mechanism below does not.
+if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != 'remote' ]; then
+	echo "-- firewall --"
+	check_firewall_closed
+	check_firewall_ruleset_loadable
+	check_firewall_chains_tracked
 fi
 
 # --- Ports implied by the active config ---

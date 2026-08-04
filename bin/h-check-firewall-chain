@@ -1,16 +1,22 @@
 #!/bin/bash
-# info: stop system firewall
-# options: NONE
+# info: check that a firewall jail chain is wired
+# options: CHAIN
 #
-# example: h-stop-firewall
+# example: h-check-firewall-chain SSH
 #
-# This function stops iptables
+# fail2ban's actioncheck. Exits 0 while the jail chain exists and the base chain still jumps to it.
+#
+# Replaces a grep for the backend's own output, which goes stale as soon as the renderer changes. A wrong
+# "missing" is expensive: fail2ban answers a failed actioncheck with actionstop + actionstart, and
+# actionstop drops every banlist.conf row for the chain.
+# No v-* symlink.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
 #----------------------------------------------------------#
 
-# The backend path lives in func/firewall.sh now.
+# Argument definition
+chain=$(echo "$1" | tr '[:lower:]' '[:upper:]')
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -26,24 +32,13 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
+check_args '1' "$#" 'CHAIN'
+is_format_valid 'chain'
+is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Dropping our table wholesale - no chain-by-chain teardown needed, and nothing is left half applied.
-fw_table_destroy
-
-# A box mid-migration may still carry the old iptables ruleset, which would keep being evaluated.
-fw_legacy_teardown
-
-# Standing the boot unit down
-fw_persist_disable
-
-#----------------------------------------------------------#
-#                       Hestia                             #
-#----------------------------------------------------------#
-
-exit
+fw_jail_wired "$chain"
+exit $?

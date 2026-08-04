@@ -317,29 +317,18 @@
       "note": "nginx-only web protection (Layer-7 bouncer); offered only when nginx is in the model. Independent of Fail2Ban, both can run in parallel."
     },
 
-    "CROWDSEC_CAPI": {
+    "CROWDSEC_MODE": {
       "group": "addons",
       "type": "radio",
-      "question": "CrowdSec community blocklist (CAPI)?",
+      "question": "CrowdSec model (where ban decisions come from)?",
       "visible_if": "ADDON_CROWDSEC == true",
       "options": [
-        { "value": "enroll", "label": "Enroll (recommended)", "description": "Community blocklist + telemetry" },
-        { "value": "local", "label": "Local-only", "description": "Self-hosted, no telemetry" }
+        { "value": "capi", "label": "Community blocklist (CAPI, recommended)", "description": "Central CrowdSec blocklist + telemetry, this server alone" },
+        { "value": "local", "label": "Local only", "description": "Self-hosted, no telemetry, this server alone" },
+        { "value": "mesh", "label": "Fleet mesh", "description": "Local engine, own bans shared across your servers" }
       ],
-      "default": { "standard": "enroll", "compact": "enroll", "latest": "enroll", "singlephp": "enroll", "nomail": "enroll", "mailonly": "enroll", "custom": null }
-    },
-
-    "CROWDSEC_MESH": {
-      "group": "addons",
-      "type": "radio",
-      "question": "CrowdSec fleet-mesh (share bans across your servers)?",
-      "visible_if": "ADDON_CROWDSEC == true",
-      "options": [
-        { "value": "false", "label": "Off (recommended)", "description": "Single server, or no fleet sharing" },
-        { "value": "true", "label": "On", "description": "Share web-tier bans with paired peers" }
-      ],
-      "default": { "standard": "false", "compact": "false", "latest": "false", "singlephp": "false", "nomail": "false", "mailonly": "false", "custom": null },
-      "note": "A radio, not a group checkbox: its visible_if names ADDON_CROWDSEC, which the combined addons screen only sets on submit, so as a checkbox the row could never become visible (see fn_ask_group_checklist). Enabling only arms the mechanism - peers are paired afterwards in the panel (Firewall > Fleet Mesh) or with h-generate-sys-crowdsec-pairing / h-add-sys-crowdsec-peer. Toggle later with h-add/delete-sys-crowdsec-mesh."
+      "default": { "standard": "capi", "compact": "capi", "latest": "capi", "singlephp": "capi", "nomail": "capi", "mailonly": "capi", "custom": null },
+      "note": "One radio, not a CAPI question plus a separate mesh toggle: CAPI and mesh are technically orthogonal (different mechanisms, they do combine), but only these three models are supported. 'mesh' implies local - it disables the CAPI online_client - and only arms the mechanism; peers are paired afterwards in the panel (Firewall > Fleet Mesh) or with h-generate-sys-crowdsec-pairing / h-add-sys-crowdsec-peer, and the mesh stays togglable via h-add/delete-sys-crowdsec-mesh. A radio also because a checkbox in the combined addons screen can never see its own visible_if (see fn_ask_group_checklist)."
     },
 
     "ADDON_FAIL2BAN": {

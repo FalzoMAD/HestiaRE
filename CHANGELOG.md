@@ -9,6 +9,149 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Added
+- **fail2ban actually works again** (#496) - it had been installing a config it could not start. The
+  installer copied `filter.d/*.conf` and `jail.local` but never `action.d/hestia.conf`, so every jail
+  referencing `action = hestia[...]` was skipped and **6 of 7 jails were dead on every target**, with the
+  service reporting healthy. The only live jail was the distro's own `[sshd]`, banning into a ruleset
+  HestiaRE does not manage. Now: the **whole** `share/fail2ban` tree is installed (a copy that cannot skip
+  a directory, unlike an enumeration), via a new `func/fail2ban.sh` shared by the installer and the future
+  addon commands. Result on the fleet: 0 config errors, 7 live jails, every ban going through our action.
+- **Our jails ship as `jail.d/hestia.local`** (#496) instead of overwriting `jail.local`. fail2ban reads
+  `jail.conf` -> `jail.d/*.conf` -> `jail.local` -> `jail.d/*.local`, so ours is read last and wins, the
+  package's own file stays untouched, and an admin has a place for overrides we will never overwrite.
+- **The distro `[sshd]` jail is disabled from our own config**, not by deleting
+  `jail.d/defaults-debian.conf` (#496). Upstream deletes it; that file is a **dpkg conffile**, so removing
+  it is silently undone by the next package update and the second, uncoordinated firewall writer comes
+  back. Load order settles it instead.
+- **A proftpd jail**, gated on the FTP addon being present, and the mail jails gated on the mail block
+  (#496). A jail watching a logpath that does not exist never fires and says so only in fail2ban's own log.
+- **Four fail2ban smoke guards** (#496): config parses without error (checked on stderr, since the dump
+  still exits 0), the live jail set equals the configured set in **both** directions, no jail bans through
+  a foreign action, and every jail's logpath exists. Any one of them would have caught the breakage above.
+
+### Fixed
+
+- **A fail2ban restart no longer wipes the persistent banlist** (#496). `h-delete-firewall-chain` is
+  fail2ban's `actionstop` and it deleted the `chains.conf` and `banlist.conf` records, so every stop,
+  restart or package upgrade discarded exactly the state the hestia ban action exists to keep. It now takes
+  an optional `KEEP_RECORDS` argument; `actionstop` passes it and tears down only the live wiring, while a
+  human-initiated delete still purges. Verified: restart leaves the banlist intact and the ban enforced.
+- **The firewall renders as one nftables `inet` table** (#495) - the renderer swap, behind the seam that
+  landed first. Everything that follows is a consequence rather than a separate feature:
+  - **No fail-open window.** `table` / `delete table` / `table` in one `nft -f` means there is never an
+    instant with an open policy or an empty chain, which the iptables renderer could not avoid: it set
+    `-P INPUT ACCEPT`, flushed, and only restored `DROP` at the end of every rule change. The rendered
+    document is validated with `nft -c -f` first, so a bad ruleset is rejected instead of half-applied.
+  - **One transaction for the whole ruleset.** Jails and their bans are rendered into the same document as
+    the base rules; the three separate applies were an iptables necessity and were exactly what left a
+    window with the jails detached.
+  - **Persistence is the applied document**, reloaded by an own `hestia-nftables.service`. No dump to
+    post-process, and no `ExecStartPre` that provisions sets separately - sets and the rules matching them
+    load in one transaction, which retires the boot hazard where one unprovisioned set could make
+    `iptables-restore` reject the whole filter table and bring the box up unfiltered. Own unit and own
+    file, never `/etc/nftables.conf`: that is a dpkg conffile.
+  - **A jail is a set plus one rule** instead of a chain of per-IP rules, so a ban is an element add.
+    The multi-port delete bug dies with the shape that caused it: deleting a MAIL/WEB/DB/RECIDIVE jail now
+    removes rule, set and record cleanly, and cannot orphan a chain.
+  - **ipset is gone.** Native nft sets replace it, and every dynamic set renders from a source-of-truth
+    file (`ipset/<name>.iplist`, and a new `crowdsec.iplist` the L3 feeder owns) so a wholesale table
+    replace cannot lose its contents. Verified: elements survive a full rebuild.
+  - **Legacy teardown runs at cutover** and is mandatory, not housekeeping - iptables here is the nft shim,
+    so a leftover ruleset lives in the same kernel backend and would keep being evaluated alongside ours.
+    It is driven off the live ruleset rather than `chains.conf`, so it also reclaims chains orphaned by the
+    old delete bug.
+  - **`FIREWALL_SYSTEM` now reads `nftables`**, since the value names the backend. Pre-v1, so no migration
+    path is owed.
+  - **IPv6 is prepared, never presupposed.** One `inet` table covers both families; only v4 is rendered,
+    no rule references a host v6 address, and the ruleset was verified to validate, apply from scratch and
+    rebuild with `disable_ipv6=1`. The lab is v4-only, so v6 filtering is **not** behaviourally tested.
+- **`excludes.conf` is enforced, not just consulted** (#495). It used to suppress *new* bans only, which
+  left an already-banned admin locked out and gave the file no effect outside fail2ban. It now renders as
+  an accept set ahead of every ban match, which makes it the recovery primitive it was always meant to be.
+  Commands and a panel page for it remain #497.
+
+### Fixed
+
+- `h-delete-firewall-ipset` never actually refused to remove a list that was still in use (#495). The
+  guard ran `check_result $?` *inside* the `then` branch, so it saw the exit status of the successful
+  lookup and always passed. nft refuses to delete a referenced set, and that refusal is now the check.
+- **Firewall renderer seam** (#495) - every backend call in `bin/` and `func/` now goes through
+  `func/firewall.sh`; a repo-wide sweep for direct `iptables` invocation outside that file returns nothing.
+  Callers state what they want in object-model terms (`fw_rule`, `fw_jail_rebuild`, `fw_ban_add`,
+  `fw_set_jump`, `fw_policy`, `fw_persist_enable`) and the library renders it, so the nftables swap becomes
+  a change to one file instead of eight commands. **Deliberately zero behaviour change**: verified by
+  re-capturing the effective firewall state on all four targets after running the new renderer and diffing
+  it **byte-for-byte** against the pre-seam reference captures - identical on all four. Two known defects
+  are preserved verbatim rather than quietly fixed, because a behaviour change here would rob that gate of
+  its meaning: the swallowed apply errors (D2, fixed by the atomic nft apply) and `h-delete-firewall-chain`
+  using a bare `--dport` where multi-port jails need `-m multiport` (D4, fixed in #496). Both are now
+  commented at the single place they live instead of being buried in a caller. `h-update-firewall` drops
+  from 243 to 176 lines, `h-stop-firewall` from 113 to 67, and the duplicated persistence block collapses
+  into one helper.
+- **A third firewall smoke guard, `check_firewall_chains_tracked`** (#495) - the live ruleset must not
+  carry a jail chain the object model has forgotten. This is `check_firewall_sets_bootable`'s mirror
+  image: there the model promised more than the live state delivered, here the live state holds more than
+  the model admits to. Reachable today and reproduced: deleting a multi-port jail leaves the jump behind
+  (D4), the leaked jump keeps the chain referenced so the following `-X` fails, and the next flush drops
+  the jump while the teardown loop iterates `chains.conf` where the record is already gone - so nothing
+  ever reclaims the chain and it survives as an orphan no `h-list-firewall*` command can see. Stays
+  useful after #496 fixes the cause: an untracked chain is a rule nobody audits.
+- **`h-check-firewall-chain CHAIN`** (#495) - fail2ban's `actioncheck`, replacing an
+  `iptables -n -L INPUT | grep` in `share/fail2ban/action.d/hestia.conf` that would silently go stale the
+  moment the renderer changes. It asserts both halves of "wired": the jail chain exists *and* the base
+  chain still jumps to it - a chain can survive while a flush has dropped the jump, and in that state bans
+  are recorded but never enforced. This matters more than a normal check because fail2ban answers a failed
+  `actioncheck` by running actionstop + actionstart, and actionstop deletes every `banlist.conf` row for
+  the chain. No `v-*` symlink.
+
+- **Two firewall smoke guards** (#481) - `h-check-sys-smoke` now checks the firewall *datapath*, not just
+  that a daemon is up. `check_firewall_closed` asserts INPUT still defaults to DROP while
+  `FIREWALL_SYSTEM` is set; `check_firewall_sets_bootable` asserts every ipset the **persisted** ruleset
+  matches on can actually be recreated at boot. The second reads the saved file on purpose: the kernel
+  refuses `--match-set` for a set that does not exist, so a dangling reference cannot exist in the live
+  ruleset and looking for one there would always pass. The reachable failure is ordering -
+  `iptables-restore` is atomic per table, so one rule pointing at an unprovisioned set rejects the entire
+  filter table and the box boots with policy ACCEPT and no rules, while the unit's provisioning step is
+  dash-prefixed and its failure ignored. For a user ipset the check requires **both** its `ipset.conf`
+  record and its cached `.iplist`, because the cache is what decides boot provisioning, not the health of
+  the list source: `h-add-firewall-ipset` only re-fetches when the `.iplist` is missing, and the boot unit
+  is ordered `Before=network-pre.target`, so a fetch there cannot succeed at all. With the cache present a
+  long-dead URL is harmless at boot; with it missing, provisioning exits at the size/existence checks
+  before `ipset create` and the set is never created, empty or otherwise. All cases negative-tested
+  (forced ACCEPT policy; a persisted reference with no record; the same with the record but no cached
+  list) and green across the fleet.
+- **CODEMAP `firewall` and `fail2ban` components** (#481). The most security-critical subsystem in the
+  product had no entry at all - a bin-glob count and one line calling `func/firewall.sh` a "symlink
+  healing helper". The entries record the load-bearing INPUT emission order, the object model, the
+  persistence hazard above, and the fail2ban breakage described under Fixed/known issues.
+- **`h-change-sys-crowdsec-mode capi|local|mesh`** (#494) - switches the CrowdSec model at runtime, for
+  the case where the fleet grew and a box should start meshing after the fact. Previously only the mesh
+  half was switchable (`h-add/delete-sys-crowdsec-mesh`); there was no way back to the community
+  blocklist at all, because only `crowdsec_disable_capi` existed. Its inverse `crowdsec_enable_capi` now
+  does, including enrolment, and it rolls the config back to local if that fails rather than leaving
+  `online_client` pointing at credentials that are not there. The live model is derived from the
+  artefacts on disk, not from `install.conf` (that is the install recipe, not live state), and the
+  target is always enforced in full - which also normalises the inconsistent `capi`+`mesh` combination
+  the previous two-question wizard allowed.
+
+### Security
+
+- CrowdSec's `local_api_credentials.yaml` and `online_api_credentials.yaml` are chmod 0600 now (#494).
+  The packages generate them 0644 although both carry a machine password, and customers have shell
+  access on these boxes. The engine and `cscli` run as root, so nothing needs the world bit.
+
+### Changed
+
+- **CrowdSec is one three-way model question now instead of two** (#186). The wizard asked "community
+  blocklist?" and then "fleet-mesh?", which spans four combinations while only three are supported.
+  `CROWDSEC_CAPI` + `CROWDSEC_MESH` are replaced by a single `CROWDSEC_MODE` radio: `capi` (central
+  blocklist + telemetry, this server alone), `local` (self-hosted, this server alone), `mesh` (local
+  engine, own bans shared across the fleet). `mesh` implies local, so it disables the CAPI
+  `online_client` too. Note that the two are technically orthogonal and do combine - dropping
+  CAPI-plus-mesh is a deliberate product simplification, not a constraint. Both flags had exactly one
+  consumer each, so this is a rename plus a mapping, no behavioural change to the three kept models.
+
 ### Fixed
 
 - **CrowdSec was never installed by a fresh install** (#186). The installer's nginx-front gate read

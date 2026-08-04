@@ -19,7 +19,6 @@ protocol="$3"
 protocol=$(echo "$protocol" | tr '[:lower:]' '[:upper:]')
 
 # Defining absolute path to iptables
-iptables="/sbin/iptables"
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -51,9 +50,6 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
-
-# Self heal iptables links
-heal_iptables_links
 
 # Checking known chains
 case $chain in
@@ -93,18 +89,8 @@ case $chain in
 esac
 
 # Adding chain
-$iptables -N fail2ban-$chain 2> /dev/null
-if [ $? -eq 0 ]; then
-	$iptables -A fail2ban-$chain -j RETURN
-
-	# Adding multiport module
-	if [[ "$port" =~ ,|-|: ]]; then
-		port_str="-m multiport --dports $port"
-	else
-		port_str="--dport $port"
-	fi
-	$iptables -I INPUT -p $protocol $port_str -j fail2ban-$chain
-fi
+# Only wires the jump when the chain did not exist yet, so a re-run is a no-op.
+fw_jail_attach "$chain" "$protocol" "$port"
 
 # Preserving chain
 chains="$CONF_DIR/firewall/chains.conf"
