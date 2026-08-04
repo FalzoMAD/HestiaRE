@@ -139,6 +139,14 @@ fw_accept_source() {
 	fw_sec base "		ip saddr $1 accept"
 }
 
+# Loopback by INTERFACE, not by address. `ip saddr 127.0.0.1` is v4-only, and in an inet chain with a drop
+# policy that leaves ::1 with no accept at all - so anything reaching a service over IPv6 loopback is
+# dropped. The iptables ruleset never noticed because ip6tables was wide open; this chain filters both
+# families, so the v4-only spelling became a regression. redis, for one, binds -::1 expecting it to work.
+fw_accept_loopback() {
+	fw_sec base "		iif lo accept"
+}
+
 # excludes.conf used to only suppress NEW bans, which left an already-banned admin locked out and gave the
 # file no effect on anything but fail2ban. Rendering it as an accept ahead of the ban matches makes it the
 # recovery primitive it was always meant to be. Skipped when empty so an absent file costs nothing.
