@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: add firewall blocking rule
-# options: IPV4_CIDR CHAIN
+# options: IP_CIDR CHAIN
 #
 # example: h-add-firewall-ban 37.120.129.20 MAIL
 #
@@ -11,7 +11,7 @@
 #----------------------------------------------------------#
 
 # Argument definition
-ipv4_cidr=$1
+ip_cidr=$1
 chain=$(echo "$2" | tr '[:lower:]' '[:upper:]')
 
 # Defining absolute path for iptables and modprobe
@@ -30,8 +30,8 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '2' "$#" 'IPV4_CIDR CHAIN'
-is_format_valid 'ipv4_cidr' 'chain'
+check_args '2' "$#" 'IP_CIDR CHAIN'
+is_format_valid 'ip_cidr' 'chain'
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 
 # Perform verification if read-only mode is enabled
@@ -42,20 +42,22 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Checking server ip
-if [ -e "$CONF_DIR/ips/$ipv4_cidr" ] || [ "$ipv4_cidr" = '127.0.0.1' ]; then
+# Loopback in either family, and any of the box's own addresses: banning one of those is a self-inflicted
+# outage, and it is the shape a misconfigured proxy produces (the app sees 127.0.0.1, not the client).
+if [ -e "$CONF_DIR/ips/$ip_cidr" ] || [ "$ip_cidr" = '127.0.0.1' ] || [ "$ip_cidr" = '::1' ]; then
 	exit
 fi
 
 # Checking ip exclusions
 excludes="$CONF_DIR/firewall/excludes.conf"
-check_excludes=$(grep "^$ipv4_cidr$" $excludes 2> /dev/null)
+check_excludes=$(grep "^$ip_cidr$" $excludes 2> /dev/null)
 if [ -n "$check_excludes" ]; then
 	exit
 fi
 
 # Checking ip in banlist
 conf="$CONF_DIR/firewall/banlist.conf"
-check_ip=$(grep "IP='$ipv4_cidr' CHAIN='$chain'" $conf 2> /dev/null)
+check_ip=$(grep "IP='$ip_cidr' CHAIN='$chain'" $conf 2> /dev/null)
 if [ -n "$check_ip" ]; then
 	exit
 fi
@@ -69,8 +71,8 @@ time=$(echo "$time_n_date" | cut -f 1 -d \ )
 date=$(echo "$time_n_date" | cut -f 2 -d \ )
 
 # Adding ip to banlist
-echo "IP='$ipv4_cidr' CHAIN='$chain' TIME='$time' DATE='$date'" >> $conf
-fw_ban_add "$chain" "$ipv4_cidr"
+echo "IP='$ip_cidr' CHAIN='$chain' TIME='$time' DATE='$date'" >> $conf
+fw_ban_add "$chain" "$ip_cidr"
 
 # Changing permissions
 chmod 660 $conf
@@ -80,7 +82,7 @@ chmod 660 $conf
 #----------------------------------------------------------#
 
 # Logging
-$BIN/h-log-action "system" "Warning" "Firewall" "Banned IP address $ipv4_cidr."
+$BIN/h-log-action "system" "Warning" "Firewall" "Banned IP address $ip_cidr."
 log_event "$OK" "$ARGUMENTS"
 
 exit

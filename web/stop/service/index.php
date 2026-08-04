@@ -10,7 +10,8 @@ verify_csrf($_GET);
 
 if ($_SESSION["userContext"] === "admin") {
 	if (!empty($_GET["srv"])) {
-		if ($_GET["srv"] == "iptables") {
+		// Our own ruleset, not a systemd unit. Match the CONFIGURED name: a literal goes stale on a rename.
+		if (!empty($_SESSION["FIREWALL_SYSTEM"]) && $_GET["srv"] == $_SESSION["FIREWALL_SYSTEM"]) {
 			exec(HESTIA_CMD . "h-stop-firewall", $output, $return_var);
 		} else {
 			$v_service = quoteshellarg($_GET["srv"]);

@@ -30,11 +30,10 @@ source "$HESTIA/func/firewall.sh"
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
-# Get hestia port by reading nginx.conf
-hestiaport=$(sed -ne "/listen/{s/.*listen[^0-9]*\([0-9][0-9]*\)[ \t]*ssl\;/\1/p;q}" "$HESTIA/nginx/conf/nginx.conf")
-if [ -z "$hestiaport" ]; then
-	hestiaport=8083
-fi
+# The panel port comes from BACKEND_PORT. It used to be scraped out of $HESTIA/nginx/conf/nginx.conf,
+# which Caddy replaced - so the sed printed an error on every jail creation and silently fell back to the
+# default, which would guard the wrong port on a box whose panel port was changed.
+hestiaport="${BACKEND_PORT:-8083}"
 
 #----------------------------------------------------------#
 #                    Verifications                         #

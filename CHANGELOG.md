@@ -10,6 +10,53 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **fail2ban bans IPv6 too** (#496). Service accept rules carry no family qualifier, so v6 already reached
+  exactly the ports the jails protect - while the jail sets were `ipv4_addr` and the ban command validated
+  v4, so a v6 brute force was logged, matched, and then failed its `actionban` on every attempt. A jail is
+  now two sets and two rules (`f2b_<CHAIN>` / `f2b6_<CHAIN>`), and bans route by family. **Nothing
+  presupposes a v6 stack**: an `ip6` rule and an `ipv6_addr` set load on a host with no v6 address and even
+  with `disable_ipv6=1`, verified on the fleet, so a v4-only box is unaffected. `::1` is refused like
+  `127.0.0.1`.
+- `h-add-firewall-ban` / `h-delete-firewall-ban` take an address of either family (`IP_CIDR`), via a new
+  `is_ip_cidr_format_valid`. The single-family validators stay for the places that genuinely mean one
+  family.
+
+### Changed
+
+- **The mysqld jail is gone** (#496). 3306 is not in the shipped ruleset, so MariaDB is reachable only from
+  loopback and the box itself - both of which `h-add-firewall-ban` refuses to ban, so the jail could only
+  ever match and then decline to act. An admin who deliberately opens 3306 owns the access control for it
+  and can add a jail to suit; the reason is recorded in `jail.local` rather than left as an unexplained
+  `enabled = false`.
+
+### Fixed
+
+- **Restarting the firewall from the panel destroyed the ruleset** (#496). The service row is named after
+  `FIREWALL_SYSTEM`, which became `nftables` with the renderer swap - but `h-start/stop/restart-service` and
+  the three panel service pages still matched a hardcoded `iptables`. The firewall row therefore fell
+  through to `systemctl restart nftables`, which **tore down our `inet hestia` table and loaded the distro's
+  `/etc/nftables.conf`** instead. Verified on a live box before and after. All six sites now match the
+  configured name rather than a literal.
+- **Five commands validated an argument they never assigned**, found by the hardened `is_format_valid`
+  (#496): `h-add-user-2fa`, `h-check-user-2fa`, `h-delete-user-2fa` passed a `system` name that never
+  existed; `h-add-letsencrypt-host` passed `aliases`, which that command does not take; and
+  `h-move-firewall-rule` passed `rule` (the variable is `source_rule`) plus the *value* as a second name.
+  All were dead checks. `h-move-firewall-rule` now validates its rule id for the first time.
+
+- **`is_format_valid` now fails loudly when a name matches no variable** (#496). It validates by *variable
+  name* - each name is both the type to check and the variable to read via `${!name}` - so a name with no
+  matching variable expanded to empty, and empty meant "nothing to check, so valid". Renaming an argument or
+  typoing a type therefore disabled the check **silently** instead of failing. That had already cost us
+  twice, so it is fixed at the root rather than per call site: an unset variable is a hard error, while a
+  genuinely optional argument (declared, empty) is still a legitimate skip.
+- **Five `h-restart-*` commands validated an argument they never assigned** (#496), found immediately by the
+  hardening above. `h-restart-web` assigned `restart` *after* the verification block; `h-restart-proxy`,
+  `-cron`, `-ftp` and `-mail` never assigned it at all - so `is_format_valid 'restart'` checked nothing in
+  any of them, and an invalid value was accepted silently. Also fixes a `RESTARRT` typo in one header.
+
+- `h-add-firewall-chain` read the panel port out of `$HESTIA/nginx/conf/nginx.conf`, which Caddy replaced
+  (#496). It printed an error on every jail creation and fell back to 8083 - right by luck, wrong on any box
+  whose panel port was changed. It reads `BACKEND_PORT` now.
 - **fail2ban actually works again** (#496) - it had been installing a config it could not start. The
   installer copied `filter.d/*.conf` and `jail.local` but never `action.d/hestia.conf`, so every jail
   referencing `action = hestia[...]` was skipped and **6 of 7 jails were dead on every target**, with the
