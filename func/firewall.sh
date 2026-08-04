@@ -44,6 +44,7 @@ fw_batch_begin() {
 	: > "$FW_WORK/base"
 	: > "$FW_WORK/setjump"
 	: > "$FW_WORK/rules"
+	: > "$FW_WORK/local"
 	FW_INPUT_POLICY="drop"
 }
 
@@ -72,6 +73,14 @@ fw_batch_render() {
 	# a ban drops live connections too. Keep that.
 	cat "$FW_WORK/exclude" "$FW_WORK/jail" "$FW_WORK/base" "$FW_WORK/setjump" "$FW_WORK/rules"
 	echo "	}"
+	# An output chain only when something asks for one, and always policy accept: this exists to
+	# restrict a couple of loopback ports, not to filter egress.
+	if [ -s "$FW_WORK/local" ]; then
+		echo "	chain output {"
+		echo "		type filter hook output priority filter; policy accept;"
+		cat "$FW_WORK/local"
+		echo "	}"
+	fi
 	for f in "$FW_WORK"/chain.*; do
 		[ -e "$f" ] || continue
 		echo "	chain ${f##*/chain.} {"
@@ -289,6 +298,26 @@ fw_port_expr() {
 		*,* | *-*) echo "{ ${spec//,/, } }" ;;
 		*) echo "$spec" ;;
 	esac
+}
+
+# A TCP loopback listener has no filesystem permissions, so any local user reaches it - customers included.
+# Two local users share 127.0.0.1, so only the connecting UID can tell them apart. `reject` so a wrong
+# caller fails at once instead of hanging.
+fw_restrict_local_port() {
+	local port="$1" uids="$2"
+	fw_sec local "		oif lo tcp dport $port meta skuid != { $uids } reject with tcp reset"
+}
+
+# Root plus the web server that makes the proxy hop. By name, since the uid number is not the contract.
+# Root is not optional: h-check-sys-smoke probes these listeners over HTTP.
+fw_local_allowed_uids() {
+	local web
+	web="$(id -u www-data 2> /dev/null)"
+	if [ -n "$web" ]; then
+		echo "0, $web"
+	else
+		echo "0"
+	fi
 }
 
 # fw_rule <action> <protocol> <port> <source> [type] [conntrack_ftp]

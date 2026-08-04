@@ -10,6 +10,27 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **The webmail loopback listeners are restricted to the web server and root** (#507). Roundcube (`:8090`)
+  and SnappyMail (`:8091`) are plain TCP on `127.0.0.1`, so unlike the socket-based apps they had no access
+  control at all and **any local user could reach them - including customers, who have shells here**. That
+  reached further than the apps themselves: Caddy passes a client-supplied `X-Real-IP` straight through, so
+  a customer could hand the app an arbitrary address and, once a jail read it, have a third party banned.
+  IP-based filtering cannot help (two local users share `127.0.0.1`), so the rule keys on the connecting
+  **UID**, which is exactly the distinction needed. Rendered into `inet hestia` by the renderer itself, so
+  it is rebuilt on every apply, survives a reboot with the rest of the ruleset, and is covered by the
+  existing smoke guards rather than needing its own persistence. Verified against **both** webmail systems
+  and both ends of the nft range: the proxy still gets HTTP 200, root still gets 200 (`h-check-sys-smoke`
+  probes that port), and a customer is refused at connect time.
+
+### Fixed
+
+- **The roundcube logrotate entry conflicted with the package's** (#508). Both cover
+  `/var/log/roundcube/*.log`, so logrotate reported a duplicate and skipped one of the two files entirely.
+  Ours won only because `roundcube` sorts before `roundcube-core` - had it gone the other way, rotation
+  would have recreated the logs `www-data:adm`, which the caddy FPM pool cannot write, silently ending
+  webmail logging. Our entry now claims every path the package's does (the extension-less names included,
+  for a box with an empty `log_file_ext`) and documents the ordering dependency, so the outcome no longer
+  rests on filename luck. The package's file is a dpkg conffile and is deliberately left in place.
 - **fail2ban bans IPv6 too** (#496). Service accept rules carry no family qualifier, so v6 already reached
   exactly the ports the jails protect - while the jail sets were `ipv4_addr` and the ban command validated
   v4, so a v6 brute force was logged, matched, and then failed its `actionban` on every attempt. A jail is
