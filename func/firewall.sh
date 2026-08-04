@@ -7,85 +7,120 @@
 #===========================================================================#
 
 # The one place that knows the backend's syntax. Callers ask in object-model terms (action, protocol,
-# port, source, jail, set); this renders it. Swapping iptables for nft is a change here and nowhere else.
+# port, source, jail, set); this renders it into one nft table.
 #
-# Callers open a batch, append, apply. A batch is a script that gets bashed, so a rendered fragment can
-# carry shell quoting (--match-set 'name' src). An argv array would pass those quotes through literally
-# and never match. On nft a batch becomes one ruleset file and one atomic apply.
+# Callers open a batch, append, apply. A batch is buffered into sections and assembled into a single
+# document, because nft wants a document and because the order callers emit in is not the order the
+# ruleset needs. One `nft -f` swaps the whole table, so there is no moment with an open policy or an
+# empty chain - which is what the iptables renderer could not avoid.
+#
+# One inet table covers IPv4 and IPv6 and loads whether or not v6 is configured. Only v4 is rendered
+# today; nothing here may require a v6 address to exist.
 
-FW_IPTABLES="/sbin/iptables"
-FW_BATCH=""
-
-heal_iptables_links() {
-	packages="iptables iptables-save iptables-restore"
-	for package in $packages; do
-		if [ ! -e "/sbin/${package}" ]; then
-			if which ${package}; then
-				ln -s "$(which ${package})" /sbin/${package}
-			elif [ -e "/usr/sbin/${package}" ]; then
-				ln -s /usr/sbin/${package} /sbin/${package}
-			elif whereis -B /bin /sbin /usr/bin /usr/sbin -f -b ${package}; then
-				autoiptables=$(whereis -B /bin /sbin /usr/bin /usr/sbin -f -b ${package} | cut -d '' -f 2)
-				if [ -x "$autoiptables" ]; then
-					ln -s "$autoiptables" /sbin/${package}
-				fi
-			fi
-		fi
-	done
-}
+FW_NFT="/usr/sbin/nft"
+FW_FAMILY="inet"
+FW_TABLE="hestia"
+FW_RULESET="/etc/hestia/firewall/ruleset.nft"
+FW_WORK=""
+FW_INPUT_POLICY="drop"
 
 #----------------------------------------------------------#
 #                     Batch handling                       #
 #----------------------------------------------------------#
 
+# nft wants a document, not a command stream, and the order callers emit in is not the order the ruleset
+# needs: jail rules are added last but must match first. So a batch buffers into sections and the document
+# is assembled at apply time. Callers are unaffected.
 fw_batch_begin() {
-	FW_BATCH="$(mktemp)"
-}
-
-# Errors stay swallowed on purpose: keeping the old behaviour is what makes the byte-for-byte
-# comparison meaningful. So a half-applied ruleset is invisible until the atomic nft apply lands.
-fw_batch_apply() {
-	[ -n "$FW_BATCH" ] && bash "$FW_BATCH" 2> /dev/null
-	return 0
+	FW_WORK="$(mktemp -d)"
+	: > "$FW_WORK/jail"
+	: > "$FW_WORK/base"
+	: > "$FW_WORK/setjump"
+	: > "$FW_WORK/rules"
+	FW_INPUT_POLICY="drop"
 }
 
 fw_batch_discard() {
-	[ -n "$FW_BATCH" ] && rm -f "$FW_BATCH"
-	FW_BATCH=""
+	[ -n "${FW_WORK:-}" ] && rm -rf "$FW_WORK"
+	FW_WORK=""
 }
 
-# Internal. Callers use the semantic helpers below.
-fw_emit() {
-	echo "$1" >> "$FW_BATCH"
+# Append to a section, creating it on first use.
+fw_sec() {
+	echo "$2" >> "$FW_WORK/$1"
+}
+
+# Assemble the table and swap it in one transaction. The empty declaration before the delete is what
+# makes this idempotent on a box that has no table yet; without it the delete fails and takes the
+# transaction with it. There is no instant with an empty chain or an open policy.
+fw_batch_render() {
+	local f
+	echo "table $FW_FAMILY $FW_TABLE {}"
+	echo "delete table $FW_FAMILY $FW_TABLE"
+	echo "table $FW_FAMILY $FW_TABLE {"
+	fw_render_sets
+	echo "	chain input {"
+	echo "		type filter hook input priority filter; policy $FW_INPUT_POLICY;"
+	# Jails first: they used to be inserted at the head, which put them above the conntrack accept, so
+	# a ban drops live connections too. Keep that.
+	cat "$FW_WORK/jail" "$FW_WORK/base" "$FW_WORK/setjump" "$FW_WORK/rules"
+	echo "	}"
+	for f in "$FW_WORK"/chain.*; do
+		[ -e "$f" ] || continue
+		echo "	chain ${f##*/chain.} {"
+		cat "$f"
+		echo "	}"
+	done
+	echo "}"
+}
+
+# Validate before applying: nft -c parses and type-checks without touching the kernel. Note the flag
+# order, `nft -c -f FILE`. Written the other way round it eats -c as the filename and reports a syntax
+# error against the real path.
+fw_batch_apply() {
+	local doc="$FW_WORK/ruleset.nft"
+	fw_batch_render > "$doc"
+	if ! "$FW_NFT" -c -f "$doc" 2> "$FW_WORK/err"; then
+		echo "firewall: rendered ruleset rejected, keeping the running one" >&2
+		sed 's/^/  /' "$FW_WORK/err" >&2
+		return 1
+	fi
+	"$FW_NFT" -f "$doc" 2> "$FW_WORK/err" || {
+		echo "firewall: apply failed, ruleset unchanged" >&2
+		sed 's/^/  /' "$FW_WORK/err" >&2
+		return 1
+	}
+	cp -f "$doc" "$FW_RULESET"
+	return 0
 }
 
 #----------------------------------------------------------#
 #                  Chains and policy                       #
 #----------------------------------------------------------#
 
+# Policy is a property of the chain in nft, so this records it for the render instead of emitting.
 fw_policy() {
-	fw_emit "$FW_IPTABLES -P $1 $2"
+	[ "$1" = 'INPUT' ] && FW_INPUT_POLICY="$(echo "$2" | tr '[:upper:]' '[:lower:]')"
+	return 0
 }
 
-fw_flush() {
-	fw_emit "$FW_IPTABLES -F $1"
-}
+# No-ops: replacing the table is the flush, and chains are declared by being written to.
+fw_flush() { :; }
+fw_chain_create() { [ "$1" = 'INPUT' ] || touch "$FW_WORK/chain.$1"; }
+fw_chain_drop() { :; }
 
-fw_chain_create() {
-	fw_emit "$FW_IPTABLES -N $1"
-}
-
-fw_chain_drop() {
-	fw_emit "$FW_IPTABLES -X $1"
-}
-
-# Live queries, so no caller shells the backend just to look.
+# Callers name chains the way the object model does (INPUT); nft chains are lower case. Read from the
+# plain listing rather than the JSON: the JSON spacing is not stable enough to sed and jq is not a
+# dependency of this library.
 fw_policy_get() {
-	$FW_IPTABLES -S "$1" 2> /dev/null | sed -n "s/^-P $1 //p"
+	local chain
+	chain="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
+	"$FW_NFT" list chain "$FW_FAMILY" "$FW_TABLE" "$chain" 2> /dev/null \
+		| sed -n 's/.* policy \([a-z]*\);.*/\1/p' | head -1 | tr '[:lower:]' '[:upper:]'
 }
 
 fw_chain_exists() {
-	$FW_IPTABLES -n -L "$1" > /dev/null 2>&1
+	"$FW_NFT" list chain "$FW_FAMILY" "$FW_TABLE" "$(echo "$1" | tr '[:upper:]' '[:lower:]')" > /dev/null 2>&1
 }
 
 #----------------------------------------------------------#
@@ -93,133 +128,170 @@ fw_chain_exists() {
 #----------------------------------------------------------#
 
 fw_accept_established() {
-	fw_emit "$FW_IPTABLES -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT"
+	fw_sec base "		ct state established,related accept"
 }
 
 fw_accept_source() {
-	fw_emit "$FW_IPTABLES -A INPUT -s $1 -j ACCEPT"
+	fw_sec base "		ip saddr $1 accept"
 }
 
 fw_return_source() {
-	fw_emit "$FW_IPTABLES -A $1 -s $2 -j RETURN"
+	fw_sec "chain.$1" "		ip saddr $2 return"
 }
 
 fw_chain_tail() {
-	fw_emit "$FW_IPTABLES -A $1 -j $2"
+	fw_sec "chain.$1" "		$(echo "$2" | tr '[:upper:]' '[:lower:]')"
 }
 
-# Enter an owned chain for every source in a set.
+# A set-fed jump. The set is declared here so the document never references one that does not exist -
+# under iptables that mismatch was a boot-time landmine, in nft it is a parse error caught by -c.
 fw_set_jump() {
-	fw_emit "$FW_IPTABLES -A INPUT -m set --match-set $2 src -j $1"
+	fw_set_declare "$2" interval
+	fw_sec setjump "		ip saddr @$(fw_set_id "$2") jump $1"
+}
+
+# Set names: nft has a stricter charset than ipset, so dashes become underscores. One mapping, used by
+# every declaration and reference.
+fw_set_id() {
+	echo "${1//-/_}"
+}
+
+# Recorded as metadata, not as a finished line, so elements buffered later can be folded into the same
+# declaration. Idempotent: a set referenced twice is declared once. `interval` is required for CIDR
+# members, and carries auto-merge so overlapping ranges collapse instead of erroring.
+fw_set_declare() {
+	local id
+	id="$(fw_set_id "$1")"
+	echo "${2:-plain}" > "$FW_WORK/set.$id"
+}
+
+# Sets, with whatever elements were buffered for them.
+fw_render_sets() {
+	local f id kind elems
+	for f in "$FW_WORK"/set.*; do
+		[ -e "$f" ] || continue
+		id="${f##*/set.}"
+		kind="$(cat "$f")"
+		elems=""
+		if [ -s "$FW_WORK/elem.$id" ]; then
+			elems=" elements = { $(paste -sd, - < "$FW_WORK/elem.$id" | sed 's/,/, /g') };"
+		fi
+		if [ "$kind" = 'interval' ]; then
+			echo "	set $id { type ipv4_addr; flags interval; auto-merge;${elems} }"
+		else
+			echo "	set $id { type ipv4_addr;${elems} }"
+		fi
+	done
+}
+
+# A port list becomes an anonymous nft set. iptables writes ranges with a colon, nft with a dash.
+fw_port_expr() {
+	local spec="${1//:/-}"
+	case "$spec" in
+		*,* | *-*) echo "{ ${spec//,/, } }" ;;
+		*) echo "$spec" ;;
+	esac
 }
 
 # fw_rule <action> <protocol> <port> <source> [type] [conntrack_ftp]
-# Renders one rules.conf record. <source> is an IP/CIDR or `ipset:<name>`.
+# One rules.conf record.
 #
-# Two quirks kept verbatim, because changing either changes behaviour:
+# Two quirks carried over from the iptables renderer, deliberately:
 #   - `type` mirrors the old $TYPE, which nothing ever sets (the field is COMMENT). So the FTP conntrack
 #     branch only fires on a literal port 21, and the shipped rule is '21,12000-12100' - it never does.
 #     Custom PassivePorts therefore get neither the static range nor the dynamic fallback.
-#   - an empty port or state leaves double spaces. The kernel normalises them; do not tidy.
+#   - a source of 0.0.0.0/0 is omitted rather than rendered: matching everything is the default.
 fw_rule() {
 	local action="$1" protocol="$2" port_val="$3" source="$4" type="${5:-}" conntrack_ftp="${6:-}"
-	local proto="-p $protocol" port="--dport $port_val" state="" ip
+	local proto expr=""
 
-	if [[ "$source" =~ ^ipset: ]]; then
-		# Quotes survive because the batch is re-parsed by bash.
-		ip="-m set --match-set '${source#ipset:}' src"
-	else
-		ip="-s $source"
-	fi
+	proto="$(echo "$protocol" | tr '[:upper:]' '[:lower:]')"
 
-	[[ "$port_val" =~ ,|-|: ]] && port="-m multiport --dports ${port_val//-/:}"
-	{ [ "$port_val" = "0" ] || [ "$protocol" = 'ICMP' ]; } && port=""
+	case "$source" in
+		ipset:*)
+			fw_set_declare "${source#ipset:}" interval
+			expr="ip saddr @$(fw_set_id "${source#ipset:}") "
+			;;
+		0.0.0.0/0 | '') ;;
+		*) expr="ip saddr $source " ;;
+	esac
 
-	if [ "$type" = "FTP" ] || [ "$port_val" = '21' ]; then
+	if [ "$proto" = 'icmp' ] || [ "$port_val" = '0' ]; then
+		expr="${expr}ip protocol $proto "
+	elif [ "$type" = 'FTP' ] || [ "$port_val" = '21' ]; then
 		if [ "$conntrack_ftp" != 'no' ]; then
-			state="-m conntrack --ctstate NEW"
+			expr="${expr}${proto} dport $(fw_port_expr "$port_val") ct state new "
 		else
-			port="-m multiport --dports 20,21,12000:12100"
+			expr="${expr}${proto} dport $(fw_port_expr '20,21,12000-12100') "
 		fi
+	else
+		expr="${expr}${proto} dport $(fw_port_expr "$port_val") "
 	fi
 
-	fw_emit "$FW_IPTABLES -A INPUT $proto $port $ip $state -j $action"
+	fw_sec rules "		${expr}$(echo "$action" | tr '[:upper:]' '[:lower:]')"
 }
 
 #----------------------------------------------------------#
 #                     fail2ban jails                       #
 #----------------------------------------------------------#
 
-# Multiport unless the port list is a single number.
-fw_jail_port_match() {
-	if [[ "$1" =~ ,|-|: ]]; then
-		echo "-m multiport --dports $1"
-	else
-		echo "--dport $1"
-	fi
+# A jail is a set plus one rule, not a chain full of per-IP rules: nft matches a set in constant time and
+# a ban becomes an element add with no rule bookkeeping. The chain-with-RETURN-tail shape existed only
+# because iptables had no other way to hold a list.
+fw_jail_set() {
+	echo "f2b_$1"
 }
 
-# The jump is INSERTED, so jails land above every ACCEPT emitted before them, conntrack included. That
-# is why a fail2ban ban kills live connections while a set DROP further down only blocks new ones.
 fw_jail_rebuild() {
-	local chain="$1" protocol="$2" port_val="$3"
-	fw_emit "$FW_IPTABLES -N fail2ban-$chain"
-	fw_emit "$FW_IPTABLES -F fail2ban-$chain"
-	fw_emit "$FW_IPTABLES -I fail2ban-$chain -s 0.0.0.0/0 -j RETURN"
-	fw_emit "$FW_IPTABLES -I INPUT -p $protocol $(fw_jail_port_match "$port_val") -j fail2ban-$chain"
+	local chain="$1" protocol="$2" port_val="$3" proto
+	proto="$(echo "$protocol" | tr '[:upper:]' '[:lower:]')"
+	fw_set_declare "$(fw_jail_set "$chain")"
+	fw_sec jail "		ip saddr @$(fw_jail_set "$chain") ${proto} dport $(fw_port_expr "$port_val") reject with icmpx type port-unreachable"
 }
 
-fw_jail_teardown() {
-	fw_emit "$FW_IPTABLES -F fail2ban-$1"
-	fw_emit "$FW_IPTABLES -X fail2ban-$1"
-}
+fw_jail_teardown() { :; }
 
-# Live attach/detach (fail2ban actionstart/actionstop), outside a batch.
-#
-# The port match is two or three words, so it goes through an array: splitting is wanted, but it must not
-# depend on the caller's IFS. A caller with IFS=$'\n' would otherwise hand iptables one padded argument.
+# Live attach: the rule has to go to the head of the chain for a ban to outrank the service accepts.
 fw_jail_attach() {
-	local chain="$1" protocol="$2" port_val="$3"
-	local IFS=' '
-	local -a match
-	read -r -a match <<< "$(fw_jail_port_match "$port_val")"
-	$FW_IPTABLES -N "fail2ban-$chain" 2> /dev/null || return 1
-	$FW_IPTABLES -A "fail2ban-$chain" -j RETURN
-	$FW_IPTABLES -I INPUT -p "$protocol" "${match[@]}" -j "fail2ban-$chain"
+	local chain="$1" protocol="$2" port_val="$3" proto
+	proto="$(echo "$protocol" | tr '[:upper:]' '[:lower:]')"
+	"$FW_NFT" add set "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$chain")" '{ type ipv4_addr; }' 2> /dev/null
+	"$FW_NFT" list chain "$FW_FAMILY" "$FW_TABLE" input 2> /dev/null \
+		| grep -q "@$(fw_jail_set "$chain") " && return 0
+	"$FW_NFT" insert rule "$FW_FAMILY" "$FW_TABLE" input index 0 \
+		ip saddr "@$(fw_jail_set "$chain")" "$proto" dport "$(fw_port_expr "$port_val")" \
+		reject with icmpx type port-unreachable 2> /dev/null
 }
 
-# Asymmetric to fw_jail_attach on purpose: a bare --dport fails for every multi-port jail (MAIL, WEB,
-# DB, RECIDIVE) and leaks the jump after the record is gone. Kept so behaviour is unchanged, and kept
-# here where it is visible instead of buried in the caller.
+# Deleting the rule needs its handle; the set goes with it. No multiport asymmetry to inherit here,
+# because there is only one rule per jail whatever the port list looks like.
 fw_jail_detach() {
-	local chain="$1" protocol="$2" port_val="$3"
-	$FW_IPTABLES -D INPUT -p $protocol --dport $port_val -j fail2ban-$chain 2> /dev/null
-}
-
-# Present AND reachable. A chain can outlive its jump after a flush, and then bans are recorded but
-# never enforced.
-fw_jail_wired() {
-	$FW_IPTABLES -n -L "fail2ban-$1" > /dev/null 2>&1 || return 1
-	$FW_IPTABLES -S INPUT 2> /dev/null | grep -q -- "-j fail2ban-$1\$"
-}
-
-# Live jail chains, bare names.
-fw_jail_chains_live() {
-	$FW_IPTABLES -S 2> /dev/null | sed -n 's/^-N fail2ban-\(.*\)$/\1/p'
+	local handle
+	handle=$("$FW_NFT" -a list chain "$FW_FAMILY" "$FW_TABLE" input 2> /dev/null \
+		| sed -n "s/.*@$(fw_jail_set "$1") .*# handle \([0-9]*\)$/\1/p" | head -1)
+	[ -n "$handle" ] && "$FW_NFT" delete rule "$FW_FAMILY" "$FW_TABLE" input handle "$handle" 2> /dev/null
+	return 0
 }
 
 fw_jail_destroy() {
-	$FW_IPTABLES -F fail2ban-$1 2> /dev/null
-	$FW_IPTABLES -X fail2ban-$1 2> /dev/null
+	"$FW_NFT" delete set "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$1")" 2> /dev/null
+	return 0
 }
 
-# Live teardown of an owned set-fed chain. Direct, not batched: it runs once the marker is gone, so the
-# renderer no longer emits any of it.
+# Jail sets, reported under the chain names the object model uses.
+fw_jail_chains_live() {
+	"$FW_NFT" list sets "$FW_FAMILY" 2> /dev/null | sed -n 's/^	set f2b_\([A-Za-z0-9_]*\) .*/\1/p'
+}
+
+# Wired means the set exists and the input chain still matches it.
+fw_jail_wired() {
+	"$FW_NFT" list set "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$1")" > /dev/null 2>&1 || return 1
+	"$FW_NFT" list chain "$FW_FAMILY" "$FW_TABLE" input 2> /dev/null | grep -q "@$(fw_jail_set "$1") "
+}
+
 fw_set_chain_destroy() {
-	local chain="$1" setname="$2"
-	$FW_IPTABLES -D INPUT -m set --match-set "$setname" src -j "$chain" 2> /dev/null || true
-	$FW_IPTABLES -F "$chain" 2> /dev/null || true
-	$FW_IPTABLES -X "$chain" 2> /dev/null || true
+	"$FW_NFT" delete set "$FW_FAMILY" "$FW_TABLE" "$(fw_set_id "$2")" 2> /dev/null
+	"$FW_NFT" delete chain "$FW_FAMILY" "$FW_TABLE" "$1" 2> /dev/null
 	return 0
 }
 
@@ -228,45 +300,40 @@ fw_set_chain_destroy() {
 #----------------------------------------------------------#
 
 fw_ban_add() {
-	$FW_IPTABLES -I fail2ban-$1 1 -s $2 -j REJECT --reject-with icmp-port-unreachable 2> /dev/null
+	"$FW_NFT" add element "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$1")" "{ $2 }" 2> /dev/null
+	return 0
 }
 
+# Batched replay from banlist.conf. The set must exist in the same document, so declare on demand: a
+# banlist row can name a chain that chains.conf no longer has.
 fw_ban_emit() {
-	fw_emit "$FW_IPTABLES -I fail2ban-$1 1 -s $2 -j REJECT --reject-with icmp-port-unreachable"
+	fw_set_declare "$(fw_jail_set "$1")"
+	echo "$2" >> "$FW_WORK/elem.$(fw_jail_set "$1")"
 }
 
-# By rule number, since a ban rule carries no comment to match on. The lookup goes away on nft, where an
-# element is deleted by value.
 fw_ban_delete() {
-	local chain="$1" ip="$2" num
-	num=$($FW_IPTABLES -L fail2ban-$chain --line-number -n | grep -w "$ip" | awk '{print $1}')
-	[ -n "$num" ] && $FW_IPTABLES -D fail2ban-$chain $num 2> /dev/null
+	"$FW_NFT" delete element "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$1")" "{ $2 }" 2> /dev/null
 	return 0
 }
 
 #----------------------------------------------------------#
-#                      Persistence                         #
+#                      Persistence                        #
 #----------------------------------------------------------#
 
-# Ban rules are stripped from the dump on purpose: they are replayed from banlist.conf, so keeping them
-# here too would double them after a restore.
-fw_save() {
-	local dst=/etc/iptables.rules
-	[ -d "/etc/sysconfig" ] && dst=/etc/sysconfig/iptables
-	/sbin/iptables-save \
-		| sed -e 's/[[0-9]\+:[0-9]\+]/[0:0]/g' -e '/^-A fail2ban-[A-Z]\+ -s .\+$/d' > "$dst"
-}
-
+# The ruleset file is written by fw_batch_apply, so persisting is only ever "make sure the unit that
+# reloads it at boot exists and is enabled". There is no save step and no dump to post-process: the
+# document that was applied IS the document that gets reloaded.
+#
+# Own file and own unit, not /etc/nftables.conf and nftables.service. That file is a dpkg conffile, and
+# writing to a package's conffile is how the distro fail2ban jail kept coming back.
 fw_boot_unit_path() {
-	echo "/lib/systemd/system/hestia-iptables.service"
+	echo "/lib/systemd/system/hestia-nftables.service"
 }
 
-# Written once, then left alone, so a hand-edited unit survives.
 fw_boot_unit_write() {
-	local sd_unit version
+	local sd_unit
 	sd_unit="$(fw_boot_unit_path)"
 	[ -e "$sd_unit" ] && return 0
-	version="$(iptables --version | head -1 | awk '{print $2}' | cut -f -2 -d .)"
 	{
 		echo "[Unit]"
 		echo "Description=Loading Hestia firewall rules"
@@ -278,14 +345,9 @@ fw_boot_unit_write() {
 		echo "[Service]"
 		echo "Type=oneshot"
 		echo "RemainAfterExit=yes"
-		# Dash-prefixed, so a set that fails to load does not fail the unit. That is how a missing set
-		# lets iptables-restore reject the whole table and boot the box open. Smoke guards it.
-		echo "ExecStartPre=-${HESTIA}/bin/h-update-firewall-ipset load"
-		if [ "$version" = "v1.6" ]; then
-			echo "ExecStart=/sbin/iptables-restore /etc/iptables.rules"
-		else
-			echo "ExecStart=/sbin/iptables-restore --wait=10 /etc/iptables.rules"
-		fi
+		# No ExecStartPre that provisions sets separately: sets and the rules that match them are in one
+		# file and load in one transaction, so the ordering hazard that could boot the box open is gone.
+		echo "ExecStart=$FW_NFT -f $FW_RULESET"
 		echo ""
 		echo "[Install]"
 		echo "WantedBy=multi-user.target"
@@ -293,23 +355,60 @@ fw_boot_unit_write() {
 	systemctl -q daemon-reload
 }
 
-# Only the /etc/iptables.rules layout ever had a boot unit.
 fw_persist_enable() {
-	fw_save
-	[ -d "/etc/sysconfig" ] && return 0
 	fw_boot_unit_write
-	systemctl -q is-enabled hestia-iptables 2> /dev/null || systemctl -q enable hestia-iptables
+	systemctl -q is-enabled hestia-nftables 2> /dev/null || systemctl -q enable hestia-nftables
 	return 0
 }
 
 fw_persist_disable() {
-	fw_save
-	[ -d "/etc/sysconfig" ] && return 0
 	fw_boot_unit_write
-	systemctl -q is-enabled hestia-iptables 2> /dev/null && systemctl -q disable hestia-iptables
+	systemctl -q is-enabled hestia-nftables 2> /dev/null && systemctl -q disable hestia-nftables
 	if [ -z "$FIREWALL_SYSTEM" ]; then
 		rm -f "$(fw_boot_unit_path)"
 		systemctl -q daemon-reload
 	fi
+	return 0
+}
+
+# Drop our own table, for h-stop-firewall.
+fw_table_destroy() {
+	"$FW_NFT" delete table "$FW_FAMILY" "$FW_TABLE" 2> /dev/null
+	rm -f "$FW_RULESET"
+	return 0
+}
+
+#----------------------------------------------------------#
+#                    Legacy iptables                       #
+#----------------------------------------------------------#
+
+# Retire the iptables ruleset this box used to carry.
+#
+# This is required, not tidy-up. iptables here is xtables-nft-multi, so its rules live in the same kernel
+# backend as ours, as `table ip filter`. Left in place they keep being evaluated next to the nft table:
+# two firewalls, one of them managed by nothing.
+#
+# Driven off what is actually in the ruleset rather than off chains.conf, because a box that hit the
+# multi-port delete bug carries a fail2ban chain with no record left - and that is exactly the corpse a
+# model-driven teardown would walk past.
+fw_legacy_teardown() {
+	local ipt=/sbin/iptables c
+	[ -x "$ipt" ] || return 0
+	"$ipt" -S INPUT > /dev/null 2>&1 || return 0
+
+	"$ipt" -P INPUT ACCEPT 2> /dev/null
+	"$ipt" -F INPUT 2> /dev/null
+	for c in $("$ipt" -S 2> /dev/null | sed -n 's/^-N \(fail2ban-[A-Za-z0-9_]*\|hestia\|hestia-crowdsec\)$/\1/p'); do
+		"$ipt" -F "$c" 2> /dev/null
+		"$ipt" -X "$c" 2> /dev/null
+	done
+
+	# The old boot unit and its saved dump would otherwise reinstate all of it on the next reboot.
+	if [ -e /lib/systemd/system/hestia-iptables.service ]; then
+		systemctl -q disable hestia-iptables 2> /dev/null
+		rm -f /lib/systemd/system/hestia-iptables.service
+		systemctl -q daemon-reload
+	fi
+	rm -f /etc/iptables.rules /etc/sysconfig/iptables
 	return 0
 }

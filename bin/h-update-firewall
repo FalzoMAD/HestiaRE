@@ -34,9 +34,6 @@ is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Self heal iptables links
-heal_iptables_links
-
 # Checking local IPv4 rules
 rules="$CONF_DIR/firewall/rules.conf"
 
@@ -132,8 +129,32 @@ fw_policy INPUT DROP
 # Adding hestia chain
 fw_chain_create hestia
 
-# Applying rules
-fw_batch_apply
+# fail2ban jails and their bans go into the SAME batch as the base ruleset. Under iptables these were
+# three separate applies, which is precisely what left a window with the jails detached; one document
+# means the box never runs a ruleset that is missing them.
+if [ -n "$FIREWALL_EXTENSION" ]; then
+	if [ -f "$chains" ]; then
+		for chain in $(cat "$chains"); do
+			parse_object_kv_list "$chain"
+			fw_jail_rebuild "$CHAIN" "$PROTOCOL" "$PORT"
+		done
+	fi
+
+	# Replayed from banlist.conf, which is the record of truth: the ruleset is rebuilt from scratch.
+	if [ -f "$banlist" ]; then
+		for ban in $(cat "$banlist"); do
+			parse_object_kv_list "$ban"
+			fw_ban_emit "$CHAIN" "$IP"
+		done
+	fi
+fi
+
+# Applying the whole ruleset in one transaction
+fw_batch_apply || {
+	fw_batch_discard
+	log_event "$E_INVALID" "$ARGUMENTS"
+	exit "$E_INVALID"
+}
 fw_batch_discard
 
 # Checking custom trigger
@@ -141,31 +162,11 @@ if [ -x "$CONF_DIR/firewall/custom.sh" ]; then
 	bash "$CONF_DIR/firewall/custom.sh"
 fi
 
-# Checking fail2ban support
-if [ -n "$FIREWALL_EXTENSION" ]; then
-	if [ -f "$chains" ]; then
-		fw_batch_begin
-		for chain in $(cat "$chains"); do
-			parse_object_kv_list "$chain"
-			fw_jail_rebuild "$CHAIN" "$PROTOCOL" "$PORT"
-		done
-		fw_batch_apply
-		fw_batch_discard
-	fi
+# Retire any iptables ruleset this box still carries. Not housekeeping: iptables is the nft-shim here, so
+# its rules live in the same kernel backend and would keep being evaluated alongside ours.
+fw_legacy_teardown
 
-	# Replayed from banlist.conf rather than restored from the saved dump, which strips them.
-	if [ -f "$banlist" ]; then
-		fw_batch_begin
-		for ban in $(cat "$banlist"); do
-			parse_object_kv_list "$ban"
-			fw_ban_emit "$CHAIN" "$IP"
-		done
-		fw_batch_apply
-		fw_batch_discard
-	fi
-fi
-
-# Saving the ruleset + the boot unit that restores it
+# Enabling the boot unit that reloads the saved ruleset
 fw_persist_enable
 
 #----------------------------------------------------------#

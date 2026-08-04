@@ -33,31 +33,13 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Self heal iptables links
-heal_iptables_links
+# Dropping our table wholesale - no chain-by-chain teardown needed, and nothing is left half applied.
+fw_table_destroy
 
-# Opening the batch
-fw_batch_begin
+# A box mid-migration may still carry the old iptables ruleset, which would keep being evaluated.
+fw_legacy_teardown
 
-# Flushing INPUT chain
-fw_policy INPUT ACCEPT
-fw_flush INPUT
-
-# Deleting hestia chain
-fw_chain_drop hestia
-
-# Deleting custom chains
-IFS=$'\n'
-for chain in $(cat $CONF_DIR/firewall/chains.conf 2> /dev/null); do
-	parse_object_kv_list "$chain"
-	fw_jail_teardown "$CHAIN"
-done
-
-# Applying rules
-fw_batch_apply
-fw_batch_discard
-
-# Saving the flushed ruleset and standing the boot unit down
+# Standing the boot unit down
 fw_persist_disable
 
 #----------------------------------------------------------#
