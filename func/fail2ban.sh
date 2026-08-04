@@ -18,18 +18,28 @@ F2B_DIR="/etc/fail2ban"
 F2B_OURS="$F2B_DIR/jail.d/hestia.local"
 
 # Our jails live in jail.d/hestia.local, NOT in jail.local. fail2ban reads jail.conf -> jail.d/*.conf ->
-# jail.local -> jail.d/*.local, so ours is read last and wins, while the package's own jail.local stays
-# untouched and an admin has somewhere to put overrides that we will never overwrite. It also means the
-# addon has nothing to preserve as saved state: everything we install is re-renderable from share/.
+# jail.local -> jail.d/*.local, so ours is read last and wins, while /etc/fail2ban/jail.local is left for
+# the admin and never written by us. It also means the addon has nothing to preserve as saved state:
+# everything we install is re-renderable from share/.
 fail2ban_install_config() {
+	local stage
 	mkdir -p "$F2B_DIR/filter.d" "$F2B_DIR/action.d" "$F2B_DIR/jail.d"
-	# The whole tree, not an enumeration. Missing action.d/hestia.conf is what left every jail that
-	# referenced `action = hestia[...]` unstartable, so the copy must not be able to skip a directory.
-	cp -rf "$HESTIA/share/fail2ban/." "$F2B_DIR/"
-	# jail.local from share/ becomes ours under jail.d; the package keeps its own.
-	if [ -f "$F2B_DIR/jail.local" ] && [ ! -f "$F2B_OURS" ]; then
-		mv -f "$F2B_DIR/jail.local" "$F2B_OURS"
-	fi
+	# Copied as a whole tree, never as a list of files: leaving action.d out of such a list is what made
+	# every jail using `action = hestia[...]` unstartable, and a list cannot notice a directory added later.
+	#
+	# It goes through a staging dir so that share/'s jail.local never lands in /etc at all. Copying it there
+	# and moving it afterwards only works on the first run - on later runs the "do not clobber admin edits"
+	# guard skips the move and the fresh copy just stays. That matters because jail.local is read BEFORE
+	# jail.d/*.local: a jail block an admin deleted outright from hestia.local would come back from the
+	# stray file, silently undoing the one edit our own comment promises to respect. Deleting
+	# /etc/fail2ban/jail.local unconditionally would fix the stray but could also delete a file the admin
+	# wrote; not creating it is the only option that does neither.
+	stage="$(mktemp -d)"
+	cp -rf "$HESTIA/share/fail2ban/." "$stage/"
+	[ -f "$F2B_OURS" ] || cp -f "$stage/jail.local" "$F2B_OURS"
+	rm -f "$stage/jail.local"
+	cp -rf "$stage/." "$F2B_DIR/"
+	rm -rf "$stage"
 	chmod 644 "$F2B_OURS" 2> /dev/null
 }
 

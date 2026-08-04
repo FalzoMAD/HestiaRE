@@ -245,6 +245,22 @@ check_fail2ban_logpaths() {
 	fi
 }
 
+# check_fail2ban_backends - an enabled jail must actually be watching its log file. A jail put on the
+# systemd backend keeps its logpath in the config, starts cleanly and reports healthy, but monitors nothing -
+# so neither "the file exists" nor "the jail is running" catches it. Asking what it monitors does.
+check_fail2ban_backends() {
+	local blind='' j
+	for j in $(fail2ban_enabled_jails); do
+		fail2ban-client status "$j" > /dev/null 2>&1 || continue
+		fail2ban-client get "$j" logpath 2> /dev/null | grep -q '^ *`\?- */' || blind="$blind $j"
+	done
+	if [ -z "$blind" ]; then
+		ok "fail2ban jails are watching their log files"
+	else
+		no "fail2ban jail monitors no file (wrong backend?)" "${blind# }"
+	fi
+}
+
 # check_http <url> <label>
 check_http() {
 	local code
@@ -502,6 +518,7 @@ if is_on "${COMPONENT_ADDON_FAIL2BAN:-}"; then
 	check_fail2ban_jails
 	check_fail2ban_banaction
 	check_fail2ban_logpaths
+	check_fail2ban_backends
 fi
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
 is_on "${COMPONENT_ADDON_CROWDSEC:-}" && check_service crowdsec "crowdsec"
