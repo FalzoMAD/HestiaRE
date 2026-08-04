@@ -1,4 +1,23 @@
-/var/log/roundcube/*.log {
+# Roundcube logs as the caddy FPM pool user, so rotation must recreate the files caddy-owned. The
+# roundcube-core package rotates the same paths as www-data:adm, which would leave them unwritable and end
+# logging silently.
+#
+# Both this file and the package's cover /var/log/roundcube/*.log, so logrotate reports a duplicate entry
+# for whichever it reads second and skips that entire file. Ours is read first because "roundcube" sorts
+# before "roundcube-core", which is what makes the correct ownership win - do not rename this file. The
+# package's file is a dpkg conffile: deleting it to silence the message would only bring it back on the next
+# update, and its ownership would then apply.
+#
+# The extension-less names come from the package's list. roundcube's log_file_ext defaults to ".log", so
+# they are unused today; matching them here means a box configured with an empty log_file_ext still gets
+# caddy-owned files instead of falling through to the package's rule.
+/var/log/roundcube/*.log
+/var/log/roundcube/errors
+/var/log/roundcube/sendmail
+/var/log/roundcube/session
+/var/log/roundcube/userlogins
+{
+    su caddy caddy
     rotate 12
     monthly
     missingok

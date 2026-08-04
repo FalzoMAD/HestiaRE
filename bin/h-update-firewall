@@ -89,6 +89,13 @@ done
 # Loopback is accepted by interface so both families are covered; see fw_accept_loopback.
 fw_accept_loopback
 
+# The webmail listeners are plain TCP on loopback, so only a UID check can keep customers off them (#507).
+# Emitted unconditionally rather than gated on WEBMAIL_SYSTEM: a rule for a port nothing listens on costs
+# nothing, while gating it would leave the port unprotected between installing webmail and the next rebuild.
+for wm_port in 8090 8091; do
+	fw_restrict_local_port "$wm_port" "$(fw_local_allowed_uids)"
+done
+
 # Whitelist, evaluated before any ban match so it can rescue a locked-out admin
 fw_accept_excludes
 

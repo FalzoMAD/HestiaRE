@@ -44,6 +44,7 @@ fw_batch_begin() {
 	: > "$FW_WORK/base"
 	: > "$FW_WORK/setjump"
 	: > "$FW_WORK/rules"
+	: > "$FW_WORK/local"
 	FW_INPUT_POLICY="drop"
 }
 
@@ -72,6 +73,14 @@ fw_batch_render() {
 	# a ban drops live connections too. Keep that.
 	cat "$FW_WORK/exclude" "$FW_WORK/jail" "$FW_WORK/base" "$FW_WORK/setjump" "$FW_WORK/rules"
 	echo "	}"
+	# An output chain only when something asks for one, and always policy accept: this exists to
+	# restrict a couple of loopback ports, not to filter egress.
+	if [ -s "$FW_WORK/local" ]; then
+		echo "	chain output {"
+		echo "		type filter hook output priority filter; policy accept;"
+		cat "$FW_WORK/local"
+		echo "	}"
+	fi
 	for f in "$FW_WORK"/chain.*; do
 		[ -e "$f" ] || continue
 		echo "	chain ${f##*/chain.} {"
@@ -289,6 +298,36 @@ fw_port_expr() {
 		*,* | *-*) echo "{ ${spec//,/, } }" ;;
 		*) echo "$spec" ;;
 	esac
+}
+
+# Restrict a loopback port to a set of local users (#507).
+#
+# Some app listeners are plain TCP on 127.0.0.1 rather than unix sockets, so filesystem permissions cannot
+# gate them and ANY local user can connect - including customers, who have shells here. That matters beyond
+# the app itself: Caddy passes a client-supplied X-Real-IP straight through, so a customer could hand the
+# app an arbitrary address and, once a jail reads it, have a third party banned.
+#
+# IP-based filtering cannot help - two local users share 127.0.0.1 - so this keys on the connecting UID,
+# which is exactly the distinction that is needed. Rendered into our own table rather than a separate one,
+# so it is rebuilt on every apply, survives a reboot with the rest of the ruleset, and is covered by the
+# same smoke guards. `reject` rather than `drop` so a wrong caller fails immediately instead of hanging.
+fw_restrict_local_port() {
+	local port="$1" uids="$2"
+	fw_sec local "		oif lo tcp dport $port meta skuid != { $uids } reject with tcp reset"
+}
+
+# The UIDs allowed to reach those listeners: root, plus the web server that makes the reverse-proxy hop.
+# Resolved by NAME - the name is the stable contract, the number is not. Root matters as much as the proxy:
+# h-check-sys-smoke probes the webmail listener over HTTP, so a rule allowing only the web user would turn
+# smoke red.
+fw_local_allowed_uids() {
+	local web
+	web="$(id -u www-data 2> /dev/null)"
+	if [ -n "$web" ]; then
+		echo "0, $web"
+	else
+		echo "0"
+	fi
 }
 
 # fw_rule <action> <protocol> <port> <source> [type] [conntrack_ftp]
