@@ -53,7 +53,10 @@ sort_fw_rules() {
 #----------------------------------------------------------#
 
 check_args '2' "$#" 'RULE DIRECTION'
-is_format_valid 'rule' "$source_rule"
+# The variable is source_rule, and 'rule' named nothing - so this validated neither, and the value was
+# being passed as if it were a second name. is_format_valid dispatches on variable NAMES and has no
+# 'source_rule' case, so call the underlying validator with the value.
+is_int_format_valid "$source_rule" 'rule id'
 if [ ! -z "$comment" ]; then
 	is_format_valid 'comment'
 fi

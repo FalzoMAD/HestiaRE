@@ -44,7 +44,11 @@ else
 fi
 
 for service in $service_list; do
-	if [ "$service" = "iptables" ]; then
+	# The firewall is not a systemd unit for us - it is our own ruleset, and the service NAME follows
+	# FIREWALL_SYSTEM. Matching a hardcoded "iptables" here broke the moment that value became
+	# "nftables": the panel's firewall row fell through to systemctl and restarted the DISTRO
+	# nftables unit, which tore our table down and loaded /etc/nftables.conf instead.
+	if [ -n "$FIREWALL_SYSTEM" ] && [ "$service" = "$FIREWALL_SYSTEM" ]; then
 		$BIN/h-stop-firewall
 	else
 		systemctl stop "$service"

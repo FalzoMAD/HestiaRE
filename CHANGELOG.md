@@ -31,6 +31,18 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **Restarting the firewall from the panel destroyed the ruleset** (#496). The service row is named after
+  `FIREWALL_SYSTEM`, which became `nftables` with the renderer swap - but `h-start/stop/restart-service` and
+  the three panel service pages still matched a hardcoded `iptables`. The firewall row therefore fell
+  through to `systemctl restart nftables`, which **tore down our `inet hestia` table and loaded the distro's
+  `/etc/nftables.conf`** instead. Verified on a live box before and after. All six sites now match the
+  configured name rather than a literal.
+- **Five commands validated an argument they never assigned**, found by the hardened `is_format_valid`
+  (#496): `h-add-user-2fa`, `h-check-user-2fa`, `h-delete-user-2fa` passed a `system` name that never
+  existed; `h-add-letsencrypt-host` passed `aliases`, which that command does not take; and
+  `h-move-firewall-rule` passed `rule` (the variable is `source_rule`) plus the *value* as a second name.
+  All were dead checks. `h-move-firewall-rule` now validates its rule id for the first time.
+
 - **`is_format_valid` now fails loudly when a name matches no variable** (#496). It validates by *variable
   name* - each name is both the type to check and the variable to read via `${!name}` - so a name with no
   matching variable expanded to empty, and empty meant "nothing to check, so valid". Renaming an argument or

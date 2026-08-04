@@ -96,7 +96,7 @@ fw_accept_excludes
 # RETURNs loopback + RFC1918 FIRST. That exemption is defense-in-depth: a false-positive ban on
 # 127.0.0.1 or an internal address would otherwise be enforced box-wide, and CrowdSec's own
 # whitelist has demonstrably failed for loopback/internal before. Emitted below the loopback/
-# own-IP ACCEPTs, above the service ACCEPTs; the set is provisioned by h-update-firewall-ipset.
+# own-IP ACCEPTs, above the service ACCEPTs; the set is declared by the renderer and filled from its cache.
 if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
 	fw_chain_create hestia-crowdsec
 	fw_flush hestia-crowdsec
