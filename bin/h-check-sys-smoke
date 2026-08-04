@@ -149,8 +149,14 @@ check_firewall_closed() {
 # (atomic per table) and the box boots with policy ACCEPT. The unit's ExecStartPre that provisions
 # the sets is dash-prefixed, so its failure is ignored.
 #
-# Provisioning paths, matching h-update-firewall-ipset: crowdsec-blacklists comes from the L3
-# marker, every other set from its ipset.conf record plus the .iplist it restores from.
+# Provisioning paths, matching h-update-firewall-ipset: crowdsec-blacklists comes from the L3 marker;
+# every other set needs BOTH its ipset.conf record and its cached .iplist. The cache is the
+# load-bearing artefact, not the source's health: h-add-firewall-ipset only re-fetches when the
+# .iplist is missing (:87), and the boot unit is ordered Before=network-pre.target, so at boot a fetch
+# cannot succeed. With the cache present boot never touches the network and a long-dead URL is
+# harmless; with it missing, provisioning exits at the size/existence checks (:133-155) BEFORE
+# `ipset create` (:171), so the set is never created - empty or otherwise - and the rule referencing it
+# takes the whole filter table down with it.
 check_firewall_sets_bootable() {
 	local saved refs orphan='' s
 	for saved in /etc/iptables.rules /etc/sysconfig/iptables; do
@@ -167,9 +173,11 @@ check_firewall_sets_bootable() {
 	fi
 	for s in $refs; do
 		if [ "$s" = 'crowdsec-blacklists' ]; then
-			[ -f "$CONF_DIR/firewall/crowdsec.conf" ] || orphan="$orphan $s"
+			[ -f "$CONF_DIR/firewall/crowdsec.conf" ] || orphan="$orphan $s(no L3 marker)"
 		elif ! grep -q "LISTNAME='$s'" "$CONF_DIR/firewall/ipset.conf" 2> /dev/null; then
-			orphan="$orphan $s"
+			orphan="$orphan $s(no ipset.conf record)"
+		elif ! compgen -G "$CONF_DIR/firewall/ipset/$s".*.iplist > /dev/null; then
+			orphan="$orphan $s(no cached .iplist)"
 		fi
 	done
 	if [ -n "$orphan" ]; then
