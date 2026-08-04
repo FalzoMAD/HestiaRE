@@ -24,6 +24,13 @@ action   = hestia[name=DB]
 logpath  = /var/log/mysql/error.log
 maxretry = 5
 
+[proftpd-iptables]
+enabled  = true
+filter   = proftpd
+action   = hestia[name=FTP]
+logpath  = /var/log/proftpd/proftpd.log
+maxretry = 5
+
 [hestia-iptables]
 enabled  = true
 filter   = hestia
