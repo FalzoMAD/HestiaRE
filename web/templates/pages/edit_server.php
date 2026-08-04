@@ -1454,7 +1454,7 @@
 							<option value="no">
 								<?= tohtml( _("No")) ?>
 							</option>
-							<option value="yes" <?= tohtml($_SESSION["FIREWALL_SYSTEM"] == "iptables" ? "selected" : "") ?>>
+							<option value="yes" <?= tohtml($_SESSION["FIREWALL_SYSTEM"] == "nftables" ? "selected" : "") ?>>
 								<?= tohtml( _("Yes")) ?>
 							</option>
 						</select>

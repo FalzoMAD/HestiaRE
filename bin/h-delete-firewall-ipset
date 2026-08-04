@@ -17,6 +17,8 @@ ip_name=${1}
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+source $HESTIA/func/firewall.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -36,30 +38,18 @@ ip_version="$(get_object_value "$ipset_hstobject" 'LISTNAME' "$ip_name" '$IP_VER
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-IPSET_BIN="$(command -v ipset)"
 IPSET_PATH="$CONF_DIR/firewall/ipset"
 IPSET_FILE="${ip_name}.${ip_version}"
-
-# Install ipset package if missing
-if [ -z "$IPSET_BIN" ]; then
-	apt-get --quiet --yes install ipset > /dev/null
-	check_result $? "Installing IPset package"
-
-	IPSET_BIN="$(which ipset)"
-	check_result $? "IPset binary not found"
-fi
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-if $IPSET_BIN -quiet list "${ip_name}-tmp" > /dev/null; then
-	$IPSET_BIN -quiet destroy "${ip_name}-tmp"
-fi
-
-if $IPSET_BIN -quiet list "${ip_name}" > /dev/null; then
-	$IPSET_BIN -quiet destroy "${ip_name}"
-	check_result $? "ipset ${ip_name} still used by iptables. Cannot remove"
+# A set still matched by a rule cannot go: nft refuses to delete it, and that refusal is the check. The
+# old code asked ipset the same question but then tested the wrong exit status, so it never actually
+# blocked. Removing the object while a rule references it would make the next render fail validation.
+if fw_set_exists "$ip_name" && ! fw_set_destroy "$ip_name"; then
+	check_result "$E_INUSE" "IP list ${ip_name} is still referenced by a firewall rule. Cannot remove"
 fi
 
 sed -i "/LISTNAME='$ip_name'/d" "${IPSET_PATH}.conf"

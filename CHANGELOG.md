@@ -10,6 +10,45 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **The firewall renders as one nftables `inet` table** (#495) - the renderer swap, behind the seam that
+  landed first. Everything that follows is a consequence rather than a separate feature:
+  - **No fail-open window.** `table` / `delete table` / `table` in one `nft -f` means there is never an
+    instant with an open policy or an empty chain, which the iptables renderer could not avoid: it set
+    `-P INPUT ACCEPT`, flushed, and only restored `DROP` at the end of every rule change. The rendered
+    document is validated with `nft -c -f` first, so a bad ruleset is rejected instead of half-applied.
+  - **One transaction for the whole ruleset.** Jails and their bans are rendered into the same document as
+    the base rules; the three separate applies were an iptables necessity and were exactly what left a
+    window with the jails detached.
+  - **Persistence is the applied document**, reloaded by an own `hestia-nftables.service`. No dump to
+    post-process, and no `ExecStartPre` that provisions sets separately - sets and the rules matching them
+    load in one transaction, which retires the boot hazard where one unprovisioned set could make
+    `iptables-restore` reject the whole filter table and bring the box up unfiltered. Own unit and own
+    file, never `/etc/nftables.conf`: that is a dpkg conffile.
+  - **A jail is a set plus one rule** instead of a chain of per-IP rules, so a ban is an element add.
+    The multi-port delete bug dies with the shape that caused it: deleting a MAIL/WEB/DB/RECIDIVE jail now
+    removes rule, set and record cleanly, and cannot orphan a chain.
+  - **ipset is gone.** Native nft sets replace it, and every dynamic set renders from a source-of-truth
+    file (`ipset/<name>.iplist`, and a new `crowdsec.iplist` the L3 feeder owns) so a wholesale table
+    replace cannot lose its contents. Verified: elements survive a full rebuild.
+  - **Legacy teardown runs at cutover** and is mandatory, not housekeeping - iptables here is the nft shim,
+    so a leftover ruleset lives in the same kernel backend and would keep being evaluated alongside ours.
+    It is driven off the live ruleset rather than `chains.conf`, so it also reclaims chains orphaned by the
+    old delete bug.
+  - **`FIREWALL_SYSTEM` now reads `nftables`**, since the value names the backend. Pre-v1, so no migration
+    path is owed.
+  - **IPv6 is prepared, never presupposed.** One `inet` table covers both families; only v4 is rendered,
+    no rule references a host v6 address, and the ruleset was verified to validate, apply from scratch and
+    rebuild with `disable_ipv6=1`. The lab is v4-only, so v6 filtering is **not** behaviourally tested.
+- **`excludes.conf` is enforced, not just consulted** (#495). It used to suppress *new* bans only, which
+  left an already-banned admin locked out and gave the file no effect outside fail2ban. It now renders as
+  an accept set ahead of every ban match, which makes it the recovery primitive it was always meant to be.
+  Commands and a panel page for it remain #497.
+
+### Fixed
+
+- `h-delete-firewall-ipset` never actually refused to remove a list that was still in use (#495). The
+  guard ran `check_result $?` *inside* the `then` branch, so it saw the exit status of the successful
+  lookup and always passed. nft refuses to delete a referenced set, and that refusal is now the check.
 - **Firewall renderer seam** (#495) - every backend call in `bin/` and `func/` now goes through
   `func/firewall.sh`; a repo-wide sweep for direct `iptables` invocation outside that file returns nothing.
   Callers state what they want in object-model terms (`fw_rule`, `fw_jail_rebuild`, `fw_ban_add`,

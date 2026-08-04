@@ -22,7 +22,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-if [ "$FIREWALL_SYSTEM" = 'iptables' ]; then
+if [ "$FIREWALL_SYSTEM" = 'nftables' ]; then
 	exit
 fi
 
@@ -40,7 +40,7 @@ if [ -z "$(ls -A $CONF_DIR/firewall 2> /dev/null)" ]; then
 fi
 
 # Updating FIREWAL_SYSTEM value
-$BIN/h-change-sys-config-value "FIREWALL_SYSTEM" "iptables"
+$BIN/h-change-sys-config-value "FIREWALL_SYSTEM" "nftables"
 
 # Updating firewall rules
 $BIN/h-update-firewall

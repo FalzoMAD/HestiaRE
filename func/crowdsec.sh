@@ -170,7 +170,7 @@ crowdsec_apply() {
 	# L3: SYN-level ban of the same decisions; non-fatal so L7 stays up if L3 wiring hiccups.
 	crowdsec_l3_setup || echo "CrowdSec: L3 feeder setup reported an issue" >&2
 
-	echo "CrowdSec: applied (nginx front, L7 bouncer hestia-nginx + L3 ipset feeder)."
+	echo "CrowdSec: applied (nginx front, L7 bouncer hestia-nginx + L3 set feeder)."
 }
 
 # L3: an own feeder (h-update-firewall-crowdsec, systemd timer) fills the crowdsec-blacklists ipset;
@@ -194,7 +194,6 @@ crowdsec_l3_setup() {
 		chmod 640 "$marker"
 	fi
 
-	ipset create -exist crowdsec-blacklists hash:net timeout 0 maxelem 131072 2> /dev/null
 
 	# Timer + initial fill, then build the chain. h-update-firewall self-guards mid-install
 	# (no rules.conf yet -> the configure stage rebuilds later).
@@ -215,7 +214,7 @@ crowdsec_l3_teardown() {
 	rm -f "$CONF_DIR/firewall/crowdsec.conf"
 	# Tear the firewall side down directly (h-update-firewall now skips it - marker gone).
 	fw_set_chain_destroy hestia-crowdsec crowdsec-blacklists
-	ipset destroy crowdsec-blacklists 2> /dev/null || true
+	rm -f "$CONF_DIR/firewall/crowdsec.iplist"
 	"$BIN/h-update-firewall" > /dev/null 2>&1 || true
 }
 
