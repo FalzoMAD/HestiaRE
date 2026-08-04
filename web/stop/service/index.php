@@ -10,9 +10,7 @@ verify_csrf($_GET);
 
 if ($_SESSION["userContext"] === "admin") {
 	if (!empty($_GET["srv"])) {
-		// The firewall is our own ruleset, not a systemd unit, so it is handled directly. Match the
-		// CONFIGURED name rather than a literal: the value became "nftables" with the renderer swap,
-		// and a stale literal here sends the request to systemctl for a unit that is not ours.
+		// Our own ruleset, not a systemd unit. Match the CONFIGURED name: a literal goes stale on a rename.
 		if (!empty($_SESSION["FIREWALL_SYSTEM"]) && $_GET["srv"] == $_SESSION["FIREWALL_SYSTEM"]) {
 			exec(HESTIA_CMD . "h-stop-firewall", $output, $return_var);
 		} else {
