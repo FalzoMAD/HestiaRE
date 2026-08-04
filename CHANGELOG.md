@@ -31,7 +31,6 @@ section as part of its PR. On release, the section gets the version number.
   product had no entry at all - a bin-glob count and one line calling `func/firewall.sh` a "symlink
   healing helper". The entries record the load-bearing INPUT emission order, the object model, the
   persistence hazard above, and the fail2ban breakage described under Fixed/known issues.
-
 - **`h-change-sys-crowdsec-mode capi|local|mesh`** (#494) - switches the CrowdSec model at runtime, for
   the case where the fleet grew and a box should start meshing after the fact. Previously only the mesh
   half was switchable (`h-add/delete-sys-crowdsec-mesh`); there was no way back to the community
