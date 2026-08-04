@@ -10,8 +10,7 @@
 #                Variables & Functions                     #
 #----------------------------------------------------------#
 
-# Defining absolute path for iptables and modprobe
-iptables="/sbin/iptables"
+# The backend path lives in func/firewall.sh now; only the module probes stay local.
 modprobe="/sbin/modprobe"
 sysctl="/sbin/sysctl"
 
@@ -76,26 +75,24 @@ fi
 # Load ipset lists before adding Hestia iptables rules
 "$BIN/h-update-firewall-ipset" load
 
-# Creating temporary file
-tmp="$(mktemp)"
+# Opening the batch
+fw_batch_begin
 
 # Flushing INPUT chain
-echo "$iptables -P INPUT ACCEPT" >> "$tmp"
-echo "$iptables -F INPUT" >> "$tmp"
+fw_policy INPUT ACCEPT
+fw_flush INPUT
 
 # Enabling stateful support
 if [ "$conntrack" != 'no' ] || grep --quiet container=lxc /proc/1/environ; then
-	str="$iptables -A INPUT -m state"
-	str="$str --state ESTABLISHED,RELATED -j ACCEPT"
-	echo "$str" >> "$tmp"
+	fw_accept_established
 fi
 
 ips="$(ls $CONF_DIR/ips)"
 # Handling local traffic
 for ip in $ips; do
-	echo "$iptables -A INPUT -s $ip -j ACCEPT" >> "$tmp"
+	fw_accept_source "$ip"
 done
-echo "$iptables -A INPUT -s 127.0.0.1 -j ACCEPT" >> "$tmp"
+fw_accept_source '127.0.0.1'
 
 # CrowdSec L3: drop source IPs the feeder put in crowdsec-blacklists, via an owned chain that
 # RETURNs loopback + RFC1918 FIRST. That exemption is defense-in-depth: a false-positive ban on
@@ -103,14 +100,13 @@ echo "$iptables -A INPUT -s 127.0.0.1 -j ACCEPT" >> "$tmp"
 # whitelist has demonstrably failed for loopback/internal before. Emitted below the loopback/
 # own-IP ACCEPTs, above the service ACCEPTs; the set is provisioned by h-update-firewall-ipset.
 if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
-	echo "$iptables -N hestia-crowdsec" >> "$tmp"
-	echo "$iptables -F hestia-crowdsec" >> "$tmp"
-	echo "$iptables -A hestia-crowdsec -s 127.0.0.0/8 -j RETURN" >> "$tmp"
-	echo "$iptables -A hestia-crowdsec -s 10.0.0.0/8 -j RETURN" >> "$tmp"
-	echo "$iptables -A hestia-crowdsec -s 172.16.0.0/12 -j RETURN" >> "$tmp"
-	echo "$iptables -A hestia-crowdsec -s 192.168.0.0/16 -j RETURN" >> "$tmp"
-	echo "$iptables -A hestia-crowdsec -j DROP" >> "$tmp"
-	echo "$iptables -A INPUT -m set --match-set crowdsec-blacklists src -j hestia-crowdsec" >> "$tmp"
+	fw_chain_create hestia-crowdsec
+	fw_flush hestia-crowdsec
+	for net in 127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
+		fw_return_source hestia-crowdsec "$net"
+	done
+	fw_chain_tail hestia-crowdsec DROP
+	fw_set_jump hestia-crowdsec crowdsec-blacklists
 fi
 
 # Pasring iptables rules
@@ -118,56 +114,27 @@ IFS=$'\n'
 for line in $(sort -r -n -k 2 -t \' $rules); do
 	parse_object_kv_list "$line"
 	if [ "$SUSPENDED" = 'no' ]; then
-		proto="-p $PROTOCOL"
-		port="--dport $PORT"
-		state=""
-		action="-j $ACTION"
-
+		# A rule may point at an ipset instead of an address; warn but still render, matching the
+		# pre-seam behaviour (the missing set makes iptables reject the rule, not the whole batch).
 		if [[ "$IP" =~ ^ipset: ]]; then
-			ipset_name="${IP#ipset:}"
-			if ! "$BIN/h-list-firewall-ipset" plain | grep "^$ipset_name\s" > /dev/null; then
-				log_event $E_NOTEXIST "IPset IP list ($ipset_name) not found"
-			fi
-			ip="-m set --match-set '${ipset_name}' src"
-		else
-			ip="-s $IP"
-		fi
-
-		# Adding multiport module
-		if [[ "$PORT" =~ ,|-|: ]]; then
-			port="-m multiport --dports ${PORT//-/:}"
-		fi
-
-		# Accepting all dst ports
-		if [[ "$PORT" = "0" ]] || [ "$PROTOCOL" = 'ICMP' ]; then
-			port=""
-		fi
-
-		# Checking FTP for contrack module
-		if [ "$TYPE" = "FTP" ] || [ "$PORT" = '21' ]; then
-			if [ "$conntrack_ftp" != 'no' ]; then
-				state="-m conntrack --ctstate NEW"
-			else
-				port="-m multiport --dports 20,21,12000:12100"
+			if ! "$BIN/h-list-firewall-ipset" plain | grep "^${IP#ipset:}\s" > /dev/null; then
+				log_event $E_NOTEXIST "IPset IP list (${IP#ipset:}) not found"
 			fi
 		fi
 
-		# Adding firewall rule
-		echo "$iptables -A INPUT $proto $port $ip $state $action" >> "$tmp"
+		fw_rule "$ACTION" "$PROTOCOL" "$PORT" "$IP" "${TYPE:-}" "$conntrack_ftp"
 	fi
 done
 
 # Switching chain policy to DROP
-echo "$iptables -P INPUT DROP" >> "$tmp"
+fw_policy INPUT DROP
 
 # Adding hestia chain
-echo "$iptables -N hestia" >> "$tmp"
+fw_chain_create hestia
 
 # Applying rules
-bash "$tmp" 2> /dev/null
-
-# Deleting temporary file
-rm -f "$tmp"
+fw_batch_apply
+fw_batch_discard
 
 # Checking custom trigger
 if [ -x "$CONF_DIR/firewall/custom.sh" ]; then
@@ -177,64 +144,29 @@ fi
 # Checking fail2ban support
 if [ -n "$FIREWALL_EXTENSION" ]; then
 	if [ -f "$chains" ]; then
+		fw_batch_begin
 		for chain in $(cat "$chains"); do
 			parse_object_kv_list "$chain"
-			if [[ "$PORT" =~ ,|-|: ]]; then
-				port="-m multiport --dports $PORT"
-			else
-				port="--dport $PORT"
-			fi
-			echo "$iptables -N fail2ban-$CHAIN" >> "$tmp"
-			echo "$iptables -F fail2ban-$CHAIN" >> "$tmp"
-			echo "$iptables -I fail2ban-$CHAIN -s 0.0.0.0/0 -j RETURN" >> "$tmp"
-			echo "$iptables -I INPUT -p $PROTOCOL $port -j fail2ban-$CHAIN" >> "$tmp"
+			fw_jail_rebuild "$CHAIN" "$PROTOCOL" "$PORT"
 		done
-		bash "$tmp" 2> /dev/null
-		rm -f "$tmp"
+		fw_batch_apply
+		fw_batch_discard
 	fi
 
+	# Replayed from banlist.conf rather than restored from the saved dump, which strips them.
 	if [ -f "$banlist" ]; then
+		fw_batch_begin
 		for ban in $(cat "$banlist"); do
 			parse_object_kv_list "$ban"
-			echo -n "$iptables -I fail2ban-$CHAIN 1 -s $IP" >> "$tmp"
-			echo " -j REJECT --reject-with icmp-port-unreachable" >> "$tmp"
+			fw_ban_emit "$CHAIN" "$IP"
 		done
-		bash "$tmp" 2> /dev/null
-		rm -f "$tmp"
+		fw_batch_apply
+		fw_batch_discard
 	fi
 fi
 
-# Clean up and saving rules to the master iptables file
-if [ -d "/etc/sysconfig" ]; then
-	/sbin/iptables-save | sed -e 's/[[0-9]\+:[0-9]\+]/[0:0]/g' -e '/^-A fail2ban-[A-Z]\+ -s .\+$/d' > /etc/sysconfig/iptables
-else
-	/sbin/iptables-save | sed -e 's/[[0-9]\+:[0-9]\+]/[0:0]/g' -e '/^-A fail2ban-[A-Z]\+ -s .\+$/d' > /etc/iptables.rules
-	iptablesversion="$(iptables --version | head -1 | awk '{print $2}' | cut -f -2 -d .)"
-	sd_unit="/lib/systemd/system/hestia-iptables.service"
-	if [ ! -e "$sd_unit" ]; then
-		echo "[Unit]" >> $sd_unit
-		echo "Description=Loading Hestia firewall rules" >> $sd_unit
-		echo "DefaultDependencies=no" >> $sd_unit
-		echo "Wants=network-pre.target local-fs.target" >> $sd_unit
-		echo "Before=network-pre.target" >> $sd_unit
-		echo "After=local-fs.target" >> $sd_unit
-		echo "" >> $sd_unit
-		echo "[Service]" >> $sd_unit
-		echo "Type=oneshot" >> $sd_unit
-		echo "RemainAfterExit=yes" >> $sd_unit
-		echo "ExecStartPre=-${HESTIA}/bin/h-update-firewall-ipset load" >> $sd_unit
-		if [ "$iptablesversion" = "v1.6" ]; then
-			echo "ExecStart=/sbin/iptables-restore /etc/iptables.rules" >> $sd_unit
-		else
-			echo "ExecStart=/sbin/iptables-restore --wait=10 /etc/iptables.rules" >> $sd_unit
-		fi
-		echo "" >> $sd_unit
-		echo "[Install]" >> $sd_unit
-		echo "WantedBy=multi-user.target" >> $sd_unit
-		systemctl -q daemon-reload
-	fi
-	systemctl -q is-enabled hestia-iptables 2> /dev/null || systemctl -q enable hestia-iptables
-fi
+# Saving the ruleset + the boot unit that restores it
+fw_persist_enable
 
 #----------------------------------------------------------#
 #                       Hestia                             #

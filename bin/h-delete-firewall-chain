@@ -13,7 +13,6 @@
 # Argument definition
 chain=$(echo "$1" | tr '[:lower:]' '[:upper:]')
 
-iptables='/sbin/iptables'
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
@@ -50,14 +49,14 @@ chain_param=""
 if [ -n "$chain_param" ]; then
 	parse_object_kv_list "$chain_param"
 	sed -i "/CHAIN='$chain'/d" "$chains"
+	# NOTE this drops every ban recorded for the chain, and fail2ban calls this as actionstop - so a
+	# fail2ban restart wipes the persistent banlist (roadmap D4, fixed in #496). Preserved here.
 	sed -i "/CHAIN='$chain'/d" "$banlist"
-	$iptables -D INPUT -p $PROTOCOL \
-		--dport $PORT -j fail2ban-$CHAIN 2> /dev/null
+	fw_jail_detach "$CHAIN" "$PROTOCOL" "$PORT"
 fi
 
-# Deleting iptables chain
-$iptables -F fail2ban-$CHAIN 2> /dev/null
-$iptables -X fail2ban-$CHAIN 2> /dev/null
+# Deleting the backend chain
+fw_jail_destroy "$CHAIN"
 
 # Changing permissions
 [ -f "$chains" ] && chmod 660 "$chains"

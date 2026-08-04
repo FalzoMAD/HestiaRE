@@ -2,6 +2,11 @@
 # CrowdSec helpers: install + wire the engine + nginx Layer-A bouncer for the current web model.
 # Shared by the installer, the web-model switch and h-add-sys-crowdsec. Idempotent; no-op off-nginx.
 
+# L3 teardown renders through the firewall library, so declare the dependency here rather than in each
+# of the six callers. Guarded: re-sourcing would reset an in-flight batch.
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+declare -F fw_set_chain_destroy > /dev/null 2>&1 || source "$HESTIA/func/firewall.sh"
+
 # The EXPOSED web server (PROXY_SYSTEM fronts in 'both'), not "is nginx installed".
 crowdsec_public_web() {
 	if [ -n "$PROXY_SYSTEM" ]; then
@@ -208,10 +213,8 @@ crowdsec_l3_teardown() {
 	rm -f /etc/systemd/system/hestia-crowdsec-l3.service /etc/systemd/system/hestia-crowdsec-l3.timer
 	systemctl daemon-reload
 	rm -f "$CONF_DIR/firewall/crowdsec.conf"
-	# Tear the iptables side down directly (h-update-firewall now skips it - marker gone).
-	iptables -D INPUT -m set --match-set crowdsec-blacklists src -j hestia-crowdsec 2> /dev/null || true
-	iptables -F hestia-crowdsec 2> /dev/null || true
-	iptables -X hestia-crowdsec 2> /dev/null || true
+	# Tear the firewall side down directly (h-update-firewall now skips it - marker gone).
+	fw_set_chain_destroy hestia-crowdsec crowdsec-blacklists
 	ipset destroy crowdsec-blacklists 2> /dev/null || true
 	"$BIN/h-update-firewall" > /dev/null 2>&1 || true
 }
