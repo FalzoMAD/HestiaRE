@@ -10,6 +10,16 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **The firewall whitelist is manageable** (#496) - `h-add-firewall-exclude`, `h-delete-firewall-exclude`,
+  `h-list-firewall-exclude`. `excludes.conf` had been enforced since the nft swap but had no commands, no
+  panel page and no shipped default, so the only way to use it was to edit the file by hand. Adding an
+  address also **releases an existing ban** for it: the whitelist renders as an accept ahead of every ban
+  match, so leaving the ban in place would mean an accept and a reject for the same source, which is a
+  confusing state to leave behind when the point of the command is to end a lockout.
+- **The whitelist is mirrored into fail2ban's `ignoreip`** (#496). Without it a jail keeps counting and
+  logging an address the ruleset already exempts - it simply can never act on it. Written as our own
+  `[DEFAULT]` block in `jail.d/hestia.local`, which is read last, and re-synced whenever the whitelist
+  changes.
 - **A curated blocklist catalogue** (#481) in `share/firewall/blocklists.conf`, read by the panel's IPset
   picker. Ships FireHOL Level 1 and 2, Spamhaus DROP and Blocklist.de, each fetched from a VM and confirmed
   to yield parseable entries. Adding a source is now a data change rather than a PHP edit.

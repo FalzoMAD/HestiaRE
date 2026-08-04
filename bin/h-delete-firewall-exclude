@@ -1,0 +1,67 @@
+#!/bin/bash
+# info: remove an ip from the firewall whitelist
+# options: IP_CIDR
+#
+# example: h-delete-firewall-exclude 203.0.113.10
+#
+# Removing an address only stops it being exempt; it does not ban it. No v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+ip_cidr=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'IP_CIDR'
+is_format_valid 'ip_cidr'
+is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
+check_hestia_demo_mode
+
+excludes="$CONF_DIR/firewall/excludes.conf"
+if ! grep -qxF "$ip_cidr" "$excludes" 2> /dev/null; then
+	check_result "$E_NOTEXIST" "IP address $ip_cidr is not whitelisted"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# grep to a temp file rather than sed -i: the value is an address, and a sed pattern built from user input
+# would treat its dots as wildcards.
+tmp="$(mktemp)"
+grep -vxF "$ip_cidr" "$excludes" > "$tmp" 2> /dev/null
+mv -f "$tmp" "$excludes"
+chmod 660 "$excludes"
+
+$BIN/h-update-firewall > /dev/null 2>&1
+
+# fail2ban keeps its own copy of the whitelist, so it has to be told: without this the jail would carry on
+# counting an address the ruleset already exempts.
+if [ -n "$FIREWALL_EXTENSION" ] && [ -f "$HESTIA/func/fail2ban.sh" ]; then
+	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+	source "$HESTIA/func/fail2ban.sh"
+	fail2ban_sync_ignoreip
+	systemctl reload-or-restart fail2ban > /dev/null 2>&1
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "Firewall" "Removed IP address $ip_cidr from the whitelist."
+log_event "$OK" "$ARGUMENTS"
+
+exit

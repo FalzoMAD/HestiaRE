@@ -14,6 +14,11 @@
 # keep owning the ban action instead of using fail2ban's native nftables one, which would bypass the
 # banlist, the panel and the replay.
 
+# ignoreip mirrors the firewall whitelist, so the address pattern comes from there. Guarded: re-sourcing
+# would reset an in-flight batch.
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+declare -F fw_is_addr > /dev/null 2>&1 || source "$HESTIA/func/firewall.sh"
+
 F2B_DIR="/etc/fail2ban"
 F2B_OURS="$F2B_DIR/jail.d/hestia.local"
 
@@ -108,12 +113,33 @@ fail2ban_enabled_jails() {
 	     /^enabled[[:space:]]*=[[:space:]]*true/ { if (j != "") print j }' "$F2B_OURS"
 }
 
+# Mirror the firewall whitelist into fail2ban's ignoreip, so a whitelisted address is not merely unbannable
+# at the ruleset level but never counted in the first place - otherwise the jail keeps matching and logging
+# an address it can never act on. Written as our own [DEFAULT] block; ours is read last, so it wins.
+fail2ban_sync_ignoreip() {
+	local excludes="$CONF_DIR/firewall/excludes.conf" ips
+	[ -f "$F2B_OURS" ] || return 0
+	ips="$(grep -oE "$FW_ADDR_RE|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$" "$excludes" 2> /dev/null | paste -sd' ' -)"
+	# Always present, even empty: loopback belongs in ignoreip regardless, and a stable block means the
+	# rewrite below has something to replace instead of appending a new one each run.
+	sed -i '/^# HestiaRE whitelist/,/^$/d' "$F2B_OURS"
+	{
+		echo ""
+		echo "# HestiaRE whitelist - mirrored from firewall/excludes.conf by fail2ban_sync_ignoreip."
+		echo "# Edit the whitelist with h-add/delete-firewall-exclude; changes here are overwritten."
+		echo "[DEFAULT]"
+		echo "ignoreip = 127.0.0.1/8 ::1 $ips"
+		echo ""
+	} >> "$F2B_OURS"
+}
+
 fail2ban_apply() {
 	local mail="${1:-no}" ftp="${2:-no}"
 	fail2ban_install_config
 	fail2ban_disable_distro_jails
 	fail2ban_gate_jails "$mail" "$ftp"
 	fail2ban_ensure_authlog
+	fail2ban_sync_ignoreip
 	systemctl -q enable fail2ban 2> /dev/null
 	systemctl restart fail2ban 2> /dev/null
 }

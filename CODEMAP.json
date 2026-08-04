@@ -709,7 +709,11 @@
       "blocklists": "ipset lists referenced from a normal rule as IP='ipset:<name>', always hash:net, no timeout, refresh self-installed into /etc/hestia/queue/daily.pipe. NOTE the panel's shipped 'Block Malicious IPs' preset is broken: it points at script:/usr/local/hestia/install/common/firewall/ipset/blacklist.sh, and the install/ tree was dissolved in #119. h-add-firewall-ipset guards the script branch with [ -x ] and no else, so the list comes out empty and dies on IPSET_MIN_SIZE with a misleading error.",
       "core": "func/firewall.sh is the renderer library (#495); every backend call in bin/ and func/ goes through it - a repo-wide sweep for direct iptables invocation outside that file returns nothing.",
       "commands_native": [
-        "bin/h-check-firewall-chain"
+        "bin/h-check-firewall-chain",
+        "bin/h-add-firewall-exclude",
+        "bin/h-delete-firewall-exclude",
+        "bin/h-list-firewall-exclude",
+        "bin/h-change-sys-blocklist-interval"
       ],
       "smoke_guards": "bin/h-check-sys-smoke: check_firewall_closed (INPUT policy must be DROP while FIREWALL_SYSTEM is set) and check_firewall_sets_bootable (every --match-set in the PERSISTED ruleset must have a boot provisioning path). The second reads the saved file on purpose - the kernel refuses --match-set for a nonexistent set, so a live dangling reference cannot exist and checking for one would always pass.",
       "config_keys": "FIREWALL_SYSTEM (iptables|empty) gates every h-*-firewall* command via is_system_enabled and has h-add-sys-firewall/h-delete-sys-firewall plus a panel toggle. FIREWALL_EXTENSION (fail2ban|empty) is written ONLY by the installer and never cleared, so fail2ban cannot be turned off - see the fail2ban component.",
