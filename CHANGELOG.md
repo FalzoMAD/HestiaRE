@@ -11,6 +11,26 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Added
 
+- **Two firewall smoke guards** (#481) - `h-check-sys-smoke` now checks the firewall *datapath*, not just
+  that a daemon is up. `check_firewall_closed` asserts INPUT still defaults to DROP while
+  `FIREWALL_SYSTEM` is set; `check_firewall_sets_bootable` asserts every ipset the **persisted** ruleset
+  matches on can actually be recreated at boot. The second reads the saved file on purpose: the kernel
+  refuses `--match-set` for a set that does not exist, so a dangling reference cannot exist in the live
+  ruleset and looking for one there would always pass. The reachable failure is ordering -
+  `iptables-restore` is atomic per table, so one rule pointing at an unprovisioned set rejects the entire
+  filter table and the box boots with policy ACCEPT and no rules, while the unit's provisioning step is
+  dash-prefixed and its failure ignored. For a user ipset the check requires **both** its `ipset.conf`
+  record and its cached `.iplist`, because the cache is what decides boot provisioning, not the health of
+  the list source: `h-add-firewall-ipset` only re-fetches when the `.iplist` is missing, and the boot unit
+  is ordered `Before=network-pre.target`, so a fetch there cannot succeed at all. With the cache present a
+  long-dead URL is harmless at boot; with it missing, provisioning exits at the size/existence checks
+  before `ipset create` and the set is never created, empty or otherwise. All cases negative-tested
+  (forced ACCEPT policy; a persisted reference with no record; the same with the record but no cached
+  list) and green across the fleet.
+- **CODEMAP `firewall` and `fail2ban` components** (#481). The most security-critical subsystem in the
+  product had no entry at all - a bin-glob count and one line calling `func/firewall.sh` a "symlink
+  healing helper". The entries record the load-bearing INPUT emission order, the object model, the
+  persistence hazard above, and the fail2ban breakage described under Fixed/known issues.
 - **`h-change-sys-crowdsec-mode capi|local|mesh`** (#494) - switches the CrowdSec model at runtime, for
   the case where the fleet grew and a box should start meshing after the fact. Previously only the mesh
   half was switchable (`h-add/delete-sys-crowdsec-mesh`); there was no way back to the community

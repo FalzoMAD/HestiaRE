@@ -125,6 +125,68 @@ check_socket() {
 	fi
 }
 
+# check_firewall_closed - with the firewall enabled, INPUT must default to DROP.
+# Boot-path guard: iptables-restore is atomic PER TABLE, so one rule matching an ipset that
+# failed to load rejects the whole filter table and the box comes up with policy ACCEPT and no
+# rules at all. Nothing else in the system notices that.
+check_firewall_closed() {
+	local pol
+	pol=$(iptables -S INPUT 2> /dev/null | grep -m1 '^-P INPUT ')
+	if [ -z "$pol" ]; then
+		skip "firewall INPUT policy (iptables not readable - root?)"
+	elif [ "$pol" = '-P INPUT DROP' ]; then
+		ok "firewall INPUT policy closed (DROP)"
+	else
+		no "firewall INPUT policy is not DROP" "$pol"
+	fi
+}
+
+# check_firewall_sets_bootable - every ipset the PERSISTED ruleset matches on must have something
+# that recreates it at boot. Deliberately not a check of the live ruleset: the kernel refuses
+# `--match-set` for a set that does not exist, so a live dangling reference is impossible and
+# checking for one would always pass. The reachable failure is ordering - `iptables-restore` reads
+# /etc/iptables.rules before or without the set being provisioned, rejects the whole filter table
+# (atomic per table) and the box boots with policy ACCEPT. The unit's ExecStartPre that provisions
+# the sets is dash-prefixed, so its failure is ignored.
+#
+# Provisioning paths, matching h-update-firewall-ipset: crowdsec-blacklists comes from the L3 marker;
+# every other set needs BOTH its ipset.conf record and its cached .iplist. The cache is the
+# load-bearing artefact, not the source's health: h-add-firewall-ipset only re-fetches when the
+# .iplist is missing (:87), and the boot unit is ordered Before=network-pre.target, so at boot a fetch
+# cannot succeed. With the cache present boot never touches the network and a long-dead URL is
+# harmless; with it missing, provisioning exits at the size/existence checks (:133-155) BEFORE
+# `ipset create` (:171), so the set is never created - empty or otherwise - and the rule referencing it
+# takes the whole filter table down with it.
+check_firewall_sets_bootable() {
+	local saved refs orphan='' s
+	for saved in /etc/iptables.rules /etc/sysconfig/iptables; do
+		[ -f "$saved" ] && break
+	done
+	if [ ! -f "$saved" ]; then
+		skip "firewall persisted ruleset (none saved yet)"
+		return
+	fi
+	refs=$(grep -oE '\-\-match-set[[:space:]]+[^[:space:]]+' "$saved" 2> /dev/null | awk '{print $2}' | sort -u)
+	if [ -z "$refs" ]; then
+		ok "firewall persisted ruleset references no ipsets"
+		return
+	fi
+	for s in $refs; do
+		if [ "$s" = 'crowdsec-blacklists' ]; then
+			[ -f "$CONF_DIR/firewall/crowdsec.conf" ] || orphan="$orphan $s(no L3 marker)"
+		elif ! grep -q "LISTNAME='$s'" "$CONF_DIR/firewall/ipset.conf" 2> /dev/null; then
+			orphan="$orphan $s(no ipset.conf record)"
+		elif ! compgen -G "$CONF_DIR/firewall/ipset/$s".*.iplist > /dev/null; then
+			orphan="$orphan $s(no cached .iplist)"
+		fi
+	done
+	if [ -n "$orphan" ]; then
+		no "persisted firewall rule matches an ipset nothing recreates at boot" "${orphan# }"
+	else
+		ok "firewall ipsets in the persisted ruleset are all provisioned at boot"
+	fi
+}
+
 # check_http <url> <label>
 check_http() {
 	local code
@@ -398,6 +460,16 @@ fi
 # redis: user's DB choice or rspamd's always-present Bayes companion
 if is_on "${COMPONENT_DB_REDIS:-}" || [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
 	check_service redis-server "redis"
+fi
+
+# --- Firewall datapath (live state, not just the daemon) ---
+# The two invariants a green service check cannot see. Both keyed off FIREWALL_SYSTEM, since an
+# ACCEPT policy is correct when the firewall is deliberately off. The invariants outlive the
+# iptables renderer (#495 re-expresses them against nft), the mechanism below does not.
+if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != 'remote' ]; then
+	echo "-- firewall --"
+	check_firewall_closed
+	check_firewall_sets_bootable
 fi
 
 # --- Ports implied by the active config ---
