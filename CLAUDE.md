@@ -177,11 +177,36 @@ conf/             service configuration templates
 2. Create branch: `git checkout -b feature/N-short-desc`
 3. Make changes, commit with: `[#N] type: description`
    — larger changes also add a `CHANGELOG.md` entry (Unreleased section) in the same PR
-4. Push: `git push origin feature/N-short-desc`
-5. Open PR to `dev` (host + API call in `CLAUDE.local.md`)
-6. Stop. Do not merge. Author reviews and merges.
+4. **Blast-radius check** (below) — mandatory whenever an existing function, command signature,
+   shared variable or config VALUE was touched
+5. Push: `git push origin feature/N-short-desc`
+6. Open PR to `dev` (host + API call in `CLAUDE.local.md`)
+7. Stop. Do not merge. Author reviews and merges.
 
 **Never push to `dev`, `main`, or `upstream/hestiacp` directly.**
+
+### Blast-radius check (before every PR that touches existing code)
+
+Changing something that already existed — especially inherited from HestiaCP — is only safe once you
+know who else uses it. The issue scope is *not* the change's scope. Enumerate consumers **across the
+whole tree**, `bin/` + `func/` + `web/` + `share/` + `install.sh`, not just the files in the diff:
+
+- **A shared function**: every caller. A grep of the defining file alone is not an audit — it is how
+  four live callers of a "dead" helper get missed.
+- **A command signature or argument**: every caller, including `web/` PHP (`exec(HESTIA_CMD . ...)`)
+  and `share/` configs (fail2ban actions, systemd units, cron pipes).
+- **A config VALUE, not just a key**: every comparison against the old literal. Renaming
+  `FIREWALL_SYSTEM` from `iptables` to `nftables` left six sites comparing against the old string; the
+  panel's firewall row then fell through to `systemctl` and **destroyed the live ruleset**.
+- **A validator or guard**: hardening one makes previously-dead checks fire. Find the callers that were
+  silently passing before, and fix them in the same PR rather than exempting them.
+
+Prefer a **static sweep over sampling**: run the check against every call site, not a handful of
+commands that happen to come to mind. Sampling is what let those five commands through the first time.
+Verify empirically on a VM afterwards — including the failure path, not just the success path.
+
+Anything that survived only by luck (a fallback that happened to be right, a check that never ran)
+is a finding: fix it or record it, do not leave it silent.
 
 ### Commit message format
 ```
