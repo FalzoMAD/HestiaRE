@@ -33,6 +33,7 @@ FW_INPUT_POLICY="drop"
 # is assembled at apply time. Callers are unaffected.
 fw_batch_begin() {
 	FW_WORK="$(mktemp -d)"
+	: > "$FW_WORK/exclude"
 	: > "$FW_WORK/jail"
 	: > "$FW_WORK/base"
 	: > "$FW_WORK/setjump"
@@ -63,7 +64,7 @@ fw_batch_render() {
 	echo "		type filter hook input priority filter; policy $FW_INPUT_POLICY;"
 	# Jails first: they used to be inserted at the head, which put them above the conntrack accept, so
 	# a ban drops live connections too. Keep that.
-	cat "$FW_WORK/jail" "$FW_WORK/base" "$FW_WORK/setjump" "$FW_WORK/rules"
+	cat "$FW_WORK/exclude" "$FW_WORK/jail" "$FW_WORK/base" "$FW_WORK/setjump" "$FW_WORK/rules"
 	echo "	}"
 	for f in "$FW_WORK"/chain.*; do
 		[ -e "$f" ] || continue
@@ -135,6 +136,15 @@ fw_accept_source() {
 	fw_sec base "		ip saddr $1 accept"
 }
 
+# excludes.conf used to only suppress NEW bans, which left an already-banned admin locked out and gave the
+# file no effect on anything but fail2ban. Rendering it as an accept ahead of the ban matches makes it the
+# recovery primitive it was always meant to be. Skipped when empty so an absent file costs nothing.
+fw_accept_excludes() {
+	[ -s "$CONF_DIR/firewall/excludes.conf" ] || return 0
+	fw_set_declare excludes interval
+	fw_sec exclude "		ip saddr @excludes accept"
+}
+
 fw_return_source() {
 	fw_sec "chain.$1" "		ip saddr $2 return"
 }
@@ -156,32 +166,85 @@ fw_set_id() {
 	echo "${1//-/_}"
 }
 
-# Recorded as metadata, not as a finished line, so elements buffered later can be folded into the same
-# declaration. Idempotent: a set referenced twice is declared once. `interval` is required for CIDR
-# members, and carries auto-merge so overlapping ranges collapse instead of erroring.
+# Where a dynamic set's contents come from. Replacing the whole table would otherwise drop every element,
+# so a set is never the record of truth for itself: it is rendered from a file, the same way the ruleset is
+# rendered from the object model. The CrowdSec feeder and the blocklist refresh each own one of these.
+fw_set_src() {
+	case "$1" in
+		crowdsec-blacklists) echo "$CONF_DIR/firewall/crowdsec.iplist" ;;
+		excludes) echo "$CONF_DIR/firewall/excludes.conf" ;;
+		*) echo "$CONF_DIR/firewall/ipset/$1.v4.iplist" ;;
+	esac
+}
+
+# Recorded as metadata, not as a finished line, so elements can be folded in at assembly time.
+# Idempotent: a set referenced twice is declared once. `interval` is required for CIDR members and brings
+# auto-merge, so overlapping ranges collapse instead of failing the whole transaction.
 fw_set_declare() {
 	local id
 	id="$(fw_set_id "$1")"
 	echo "${2:-plain}" > "$FW_WORK/set.$id"
+	echo "$1" > "$FW_WORK/name.$id"
 }
 
-# Sets, with whatever elements were buffered for them.
+# One element list per set: whatever a caller buffered (bans) plus whatever the set's source file holds
+# (blocklists, CrowdSec decisions). Comments and blanks are dropped; nft rejects the whole document over
+# one bad element, so anything that is not an address or CIDR is filtered out here rather than trusted.
+fw_set_elements() {
+	local id="$1" src
+	[ -s "$FW_WORK/elem.$id" ] && cat "$FW_WORK/elem.$id"
+	src="$(fw_set_src "$(cat "$FW_WORK/name.$id")")"
+	[ -s "$src" ] && grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$' "$src"
+	return 0
+}
+
 fw_render_sets() {
 	local f id kind elems
 	for f in "$FW_WORK"/set.*; do
 		[ -e "$f" ] || continue
 		id="${f##*/set.}"
 		kind="$(cat "$f")"
-		elems=""
-		if [ -s "$FW_WORK/elem.$id" ]; then
-			elems=" elements = { $(paste -sd, - < "$FW_WORK/elem.$id" | sed 's/,/, /g') };"
-		fi
+		elems="$(fw_set_elements "$id" | sort -u | paste -sd, - | sed 's/,/, /g')"
+		[ -n "$elems" ] && elems=" elements = { $elems };"
 		if [ "$kind" = 'interval' ]; then
 			echo "	set $id { type ipv4_addr; flags interval; auto-merge;${elems} }"
 		else
 			echo "	set $id { type ipv4_addr;${elems} }"
 		fi
 	done
+}
+
+# Live replace of one set's contents, for the paths that must not rebuild the whole ruleset: the CrowdSec
+# feeder runs every 45s and a blocklist refresh is a cron job. Flush and refill in ONE transaction, so the
+# set is never observably empty - the ipset original needed a temporary set and a swap to get this.
+fw_set_replace() {
+	local id doc
+	id="$(fw_set_id "$1")"
+	doc="$(mktemp)"
+	{
+		echo "flush set $FW_FAMILY $FW_TABLE $id"
+		grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$' "$2" 2> /dev/null \
+			| sort -u | sed "s|^|add element $FW_FAMILY $FW_TABLE $id { |;s|$| }|"
+	} > "$doc"
+	"$FW_NFT" -f "$doc" 2> /dev/null
+	local rc=$?
+	rm -f "$doc"
+	return $rc
+}
+
+fw_set_exists() {
+	"$FW_NFT" list set "$FW_FAMILY" "$FW_TABLE" "$(fw_set_id "$1")" > /dev/null 2>&1
+}
+
+# Returns non-zero while a rule still matches the set: nft refuses to delete a referenced set, and that
+# refusal is a useful answer rather than an error to swallow.
+fw_set_destroy() {
+	"$FW_NFT" delete set "$FW_FAMILY" "$FW_TABLE" "$(fw_set_id "$1")" 2> /dev/null
+}
+
+fw_set_count() {
+	"$FW_NFT" list set "$FW_FAMILY" "$FW_TABLE" "$(fw_set_id "$1")" 2> /dev/null \
+		| grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}' | wc -l
 }
 
 # A port list becomes an anonymous nft set. iptables writes ranges with a colon, nft with a dash.

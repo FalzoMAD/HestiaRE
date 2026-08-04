@@ -21,6 +21,8 @@ refresh=${5:-no}
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+source $HESTIA/func/firewall.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -135,13 +137,14 @@ if [ ! -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ] || [ "$refresh" = "yes" ]; then
 
 fi
 
-# Load ipset in kernel
+# Apply to the live nft set, if a rule references this list yet. An unreferenced list has no set in the
+# table by design: the renderer declares a set only where a rule matches it, and it fills it from this
+# cache file. So the cache is written first and the kernel is updated second, never the other way round.
 inet_ver="inet"
 [ "$ip_version" == "v6" ] && inet_ver="inet6"
 
-# Set default value if $iplist_size is not defined or empty
-if [[ -z $iplist_size ]]; then
-	if [[ -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ]]; then
+if [ -z "$iplist_size" ]; then
+	if [ -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ]; then
 		iplist_size="$(grep -cEv '^(#|$)' < "${IPSET_PATH}/${IPSET_FILE}.iplist")"
 		[[ "$iplist_size" -lt "$IPSET_MIN_SIZE" ]] && check_result "$E_INVALID" "IP list file ${IPSET_PATH}/${IPSET_FILE}.iplist is too small (<${IPSET_MIN_SIZE}), ignoring"
 	else
@@ -149,39 +152,11 @@ if [[ -z $iplist_size ]]; then
 	fi
 fi
 
-# Ensure iplist_size is a valid positive integer
 if ! [[ "$iplist_size" =~ ^[0-9]+$ ]] || [[ "$iplist_size" -le 0 ]]; then
 	check_result "$E_INVALID" "Invalid or empty iplist: iplist_size=$iplist_size"
 fi
 
-# Set maxelem equal to the number of entries
-maxelem="$iplist_size"
-
-# Calculate hashsize as a power of 2 based on iplist_size/4
-# This balances memory usage and lookup performance
-min_buckets=$((iplist_size / 4))
-[[ "$min_buckets" -lt 64 ]] && min_buckets=64
-
-hashsize=64
-while [[ "$hashsize" -lt "$min_buckets" ]]; do
-	hashsize=$((hashsize * 2))
-done
-
-# Create the main set with calculated parameters (if it doesn't exist)
-$IPSET_BIN -quiet create -exist "$ip_name" hash:net family "$inet_ver" maxelem "$maxelem" hashsize "$hashsize"
-
-# Recreate the temporary set with the same parameters
-$IPSET_BIN -quiet destroy "${ip_name}-tmp"
-$IPSET_BIN -quiet create "${ip_name}-tmp" hash:net family "$inet_ver" maxelem "$maxelem" hashsize "$hashsize"
-$IPSET_BIN -quiet flush "${ip_name}-tmp"
-
-# Populate the temporary set from the iplist file
-sed -rn -e '/^#|^$/d' -e "s/^(.*)/add ${ip_name}-tmp \\1/p" "${IPSET_PATH}/${IPSET_FILE}.iplist" | $IPSET_BIN -quiet restore
-check_result $? "Populating ipset table ${ip_name}"
-
-# Atomically swap the temporary set with the main set
-$IPSET_BIN swap "${ip_name}-tmp" "${ip_name}"
-$IPSET_BIN -quiet destroy "${ip_name}-tmp"
+fw_set_replace "$ip_name" "${IPSET_PATH}/${IPSET_FILE}.iplist"
 
 # Generating timestamp
 time_n_date=$(date +'%T %F')

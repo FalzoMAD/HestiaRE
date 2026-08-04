@@ -32,24 +32,18 @@ check_hestia_demo_mode
 
 ipset_hstobject="$CONF_DIR/firewall/ipset"
 
-# CrowdSec L3: the feeder fills crowdsec-blacklists but does not create it. Provision it here so
-# it exists before the match-set DROP jump - this path runs at boot (hestia-iptables
-# ExecStartPre) and before every h-update-firewall rebuild, covering cold-start and rebuild.
-if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
-	cs_ipset="$(command -v ipset)"
-	[ -n "$cs_ipset" ] && "$cs_ipset" create -exist crowdsec-blacklists hash:net timeout 0 maxelem 131072 2> /dev/null
-fi
-
 for ipset_name in $(search_objects "$ipset_hstobject" 'SUSPENDED' 'no' 'LISTNAME' 2> /dev/null); do
 
 	ipset_time="$(get_object_value "$ipset_hstobject" 'LISTNAME' "$ipset_name" '$TIME')"
 	ipset_date="$(get_object_value "$ipset_hstobject" 'LISTNAME' "$ipset_name" '$DATE')"
 	ipset_au="$(get_object_value "$ipset_hstobject" 'LISTNAME' "$ipset_name" '$AUTOUPDATE')"
 
-	if [ "$ipset_au" = 'no' ] || [ "$refresh" = 'load' ]; then
-		# Load existing ip list files in the kernel but don't auto update them
-		# The "load" refresh option is only used by hestia-iptables systemd service
-		$BIN/h-add-firewall-ipset "$ipset_name"
+	# 'load' used to mean "put the cached lists back in the kernel at boot". The ruleset document now
+	# carries every set's contents, so there is nothing to reload and nothing to order against.
+	if [ "$refresh" = 'load' ]; then
+		continue
+	fi
+	if [ "$ipset_au" = 'no' ]; then
 		continue
 	fi
 
@@ -58,8 +52,6 @@ for ipset_name in $(search_objects "$ipset_hstobject" 'SUSPENDED' 'no' 'LISTNAME
 	hours_since_update=$(((now - last_updated_ts) / (60 * 60)))
 
 	if [[ "$hours_since_update" -lt 24 ]] && [ "$refresh" = 'no' ]; then
-		# Load existing ip list files in the kernel but don't auto update them
-		$BIN/h-add-firewall-ipset "$ipset_name"
 		continue
 	fi
 

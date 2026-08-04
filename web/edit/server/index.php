@@ -560,10 +560,10 @@ if (!empty($_POST["save"])) {
 
 	// Set firewall support
 	if (empty($_SESSION["error_msg"])) {
-		if ($_SESSION["FIREWALL_SYSTEM"] == "iptables") {
+		if ($_SESSION["FIREWALL_SYSTEM"] == "nftables") {
 			$v_firewall = "yes";
 		}
-		if ($_SESSION["FIREWALL_SYSTEM"] != "iptables") {
+		if ($_SESSION["FIREWALL_SYSTEM"] != "nftables") {
 			$v_firewall = "no";
 		}
 		if (!empty($_POST["v_firewall"]) && $v_firewall != $_POST["v_firewall"]) {
@@ -572,7 +572,7 @@ if (!empty($_POST["save"])) {
 				check_return_code($return_var, $output);
 				unset($output);
 				if (empty($_SESSION["error_msg"])) {
-					$_SESSION["FIREWALL_SYSTEM"] = "iptables";
+					$_SESSION["FIREWALL_SYSTEM"] = "nftables";
 				}
 			} else {
 				exec(HESTIA_CMD . "h-delete-sys-firewall", $output, $return_var);

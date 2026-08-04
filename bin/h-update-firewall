@@ -69,9 +69,6 @@ if echo "$sshport" | grep -E '^[0-9]+(,[0-9]+)*$' &> /dev/null; then
 	fi
 fi
 
-# Load ipset lists before adding Hestia iptables rules
-"$BIN/h-update-firewall-ipset" load
-
 # Opening the batch
 fw_batch_begin
 
@@ -91,6 +88,9 @@ for ip in $ips; do
 done
 fw_accept_source '127.0.0.1'
 
+# Whitelist, evaluated before any ban match so it can rescue a locked-out admin
+fw_accept_excludes
+
 # CrowdSec L3: drop source IPs the feeder put in crowdsec-blacklists, via an owned chain that
 # RETURNs loopback + RFC1918 FIRST. That exemption is defense-in-depth: a false-positive ban on
 # 127.0.0.1 or an internal address would otherwise be enforced box-wide, and CrowdSec's own
@@ -106,7 +106,7 @@ if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
 	fw_set_jump hestia-crowdsec crowdsec-blacklists
 fi
 
-# Pasring iptables rules
+# Rendering the object model
 IFS=$'\n'
 for line in $(sort -r -n -k 2 -t \' $rules); do
 	parse_object_kv_list "$line"
