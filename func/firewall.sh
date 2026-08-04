@@ -214,6 +214,11 @@ fw_jail_wired() {
 	$FW_IPTABLES -S INPUT 2> /dev/null | grep -q -- "-j fail2ban-$1\$"
 }
 
+# The jail chains that actually exist in the live ruleset, bare names. Backend-specific by nature.
+fw_jail_chains_live() {
+	$FW_IPTABLES -S 2> /dev/null | sed -n 's/^-N fail2ban-\(.*\)$/\1/p'
+}
+
 fw_jail_destroy() {
 	$FW_IPTABLES -F fail2ban-$1 2> /dev/null
 	$FW_IPTABLES -X fail2ban-$1 2> /dev/null

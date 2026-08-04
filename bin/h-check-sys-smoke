@@ -189,6 +189,27 @@ check_firewall_sets_bootable() {
 	fi
 }
 
+# check_firewall_chains_tracked - the live ruleset must not carry a jail chain the object model has
+# forgotten. This is check_firewall_sets_bootable's mirror image: there the model promised more than the
+# live state delivered, here the live state holds more than the model admits to.
+#
+# Reachable today, and reproduced: deleting a multi-port jail leaves the jump behind (D4, bare --dport
+# where -m multiport is needed), the leaked jump keeps the chain referenced so the following -X fails,
+# and the next flush drops the jump while the teardown loop iterates chains.conf - where the record is
+# already gone. Nothing ever reclaims the chain. It survives as an orphan that no h-list-firewall*
+# command can see. Worth keeping after #496 fixes the cause: an untracked chain is a rule nobody audits.
+check_firewall_chains_tracked() {
+	local orphan='' c
+	for c in $(fw_jail_chains_live); do
+		grep -q "CHAIN='$c'" "$CONF_DIR/firewall/chains.conf" 2> /dev/null || orphan="$orphan $c"
+	done
+	if [ -n "$orphan" ]; then
+		no "live firewall jail chain with no chains.conf record" "${orphan# }"
+	else
+		ok "firewall jail chains all tracked in the object model"
+	fi
+}
+
 # check_http <url> <label>
 check_http() {
 	local code
@@ -472,6 +493,7 @@ if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != 'remote' ]; then
 	echo "-- firewall --"
 	check_firewall_closed
 	check_firewall_sets_bootable
+	check_firewall_chains_tracked
 fi
 
 # --- Ports implied by the active config ---

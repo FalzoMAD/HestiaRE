@@ -23,6 +23,14 @@ section as part of its PR. On release, the section gets the version number.
   commented at the single place they live instead of being buried in a caller. `h-update-firewall` drops
   from 243 to 176 lines, `h-stop-firewall` from 113 to 67, and the duplicated persistence block collapses
   into one helper.
+- **A third firewall smoke guard, `check_firewall_chains_tracked`** (#495) - the live ruleset must not
+  carry a jail chain the object model has forgotten. This is `check_firewall_sets_bootable`'s mirror
+  image: there the model promised more than the live state delivered, here the live state holds more than
+  the model admits to. Reachable today and reproduced: deleting a multi-port jail leaves the jump behind
+  (D4), the leaked jump keeps the chain referenced so the following `-X` fails, and the next flush drops
+  the jump while the teardown loop iterates `chains.conf` where the record is already gone - so nothing
+  ever reclaims the chain and it survives as an orphan no `h-list-firewall*` command can see. Stays
+  useful after #496 fixes the cause: an untracked chain is a rule nobody audits.
 - **`h-check-firewall-chain CHAIN`** (#495) - fail2ban's `actioncheck`, replacing an
   `iptables -n -L INPUT | grep` in `share/fail2ban/action.d/hestia.conf` that would silently go stale the
   moment the renderer changes. It asserts both halves of "wired": the jail chain exists *and* the base
