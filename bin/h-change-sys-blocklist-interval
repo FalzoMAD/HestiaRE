@@ -1,0 +1,72 @@
+#!/bin/bash
+# info: change how often firewall blocklists refresh
+# options: INTERVAL
+#
+# example: h-change-sys-blocklist-interval 12h
+#
+# INTERVAL is a systemd time span (30min, 6h, 1d, 2d). One interval for all lists: a per-list schedule would
+# be rework once native sets reshape the per-object model. No v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+interval=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+source $HESTIA/func/firewall.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_args '1' "$#" 'INTERVAL'
+check_hestia_demo_mode
+is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
+
+# A systemd time span, not free text: a malformed value would leave the timer inert with the failure only
+# visible in journalctl.
+if ! [[ "$interval" =~ ^[0-9]+(s|m|min|h|d|w)$ ]]; then
+	echo "Error: INTERVAL must be a systemd time span, e.g. 30min, 6h, 1d"
+	exit "$E_INVALID"
+fi
+
+if [ ! -f /etc/systemd/system/hestia-blocklist.timer ]; then
+	echo "Error: no blocklist timer installed - add an IP list first"
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+fw_blocklist_interval_apply "$interval"
+systemctl -q daemon-reload
+systemctl -q restart hestia-blocklist.timer 2> /dev/null
+
+$BIN/h-change-sys-config-value 'BLOCKLIST_INTERVAL' "$interval"
+
+echo "Blocklist refresh interval: $interval"
+systemctl list-timers hestia-blocklist.timer --no-pager --no-legend 2> /dev/null | awk '{print "  next run: " $1, $2, $3}'
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Blocklist refresh interval changed to $interval."
+log_event "$OK" "$ARGUMENTS"
+
+exit

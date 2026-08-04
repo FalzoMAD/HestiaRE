@@ -558,6 +558,39 @@ fw_table_destroy() {
 }
 
 #----------------------------------------------------------#
+#                       Blocklists                         #
+#----------------------------------------------------------#
+
+# Install and enable the refresh timer, and drop the cron line older installs appended to the daily queue -
+# otherwise a box that predates the timer would refresh twice.
+fw_blocklist_timer_install() {
+	local src="$HESTIA/share/firewall/systemd"
+	[ -d "$src" ] || return 0
+	cp -f "$src/hestia-blocklist.service" "$src/hestia-blocklist.timer" /etc/systemd/system/ 2> /dev/null || return 0
+	fw_blocklist_interval_apply "${BLOCKLIST_INTERVAL:-1d}"
+	sed -i '/h-update-firewall-ipset/d' "$CONF_DIR/queue/daily.pipe" 2> /dev/null
+	systemctl -q daemon-reload
+	systemctl -q enable --now hestia-blocklist.timer 2> /dev/null
+	return 0
+}
+
+# One global interval rather than one per list: native sets may reshape the per-object model later, and a
+# per-list schedule would be rework. Written into the unit because a timer cannot read hestia.conf.
+fw_blocklist_interval_apply() {
+	local unit=/etc/systemd/system/hestia-blocklist.timer
+	[ -f "$unit" ] || return 0
+	sed -i "s|^OnUnitActiveSec=.*|OnUnitActiveSec=${1}|" "$unit"
+	return 0
+}
+
+fw_blocklist_timer_remove() {
+	systemctl -q disable --now hestia-blocklist.timer 2> /dev/null
+	rm -f /etc/systemd/system/hestia-blocklist.service /etc/systemd/system/hestia-blocklist.timer
+	systemctl -q daemon-reload
+	return 0
+}
+
+#----------------------------------------------------------#
 #                    Legacy iptables                       #
 #----------------------------------------------------------#
 

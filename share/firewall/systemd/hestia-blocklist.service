@@ -1,0 +1,11 @@
+# HestiaRE blocklist refresh. Replaces the daily.pipe cron line h-add-firewall-ipset used to append:
+# a timer is inspectable (systemctl list-timers), survives a queue rebuild, and carries its own schedule
+# rather than inheriting whatever the daily queue happens to run at.
+[Unit]
+Description=HestiaRE firewall blocklist refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/hestia/bin/h-update-firewall-ipset yes

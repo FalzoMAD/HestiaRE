@@ -10,6 +10,28 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **A curated blocklist catalogue** (#481) in `share/firewall/blocklists.conf`, read by the panel's IPset
+  picker. Ships FireHOL Level 1 and 2, Spamhaus DROP and Blocklist.de, each fetched from a VM and confirmed
+  to yield parseable entries. Adding a source is now a data change rather than a PHP edit.
+- **`h-change-sys-blocklist-interval INTERVAL`** (#481) - one global refresh interval, validated as a
+  systemd time span so a typo cannot leave the timer inert. Per-list schedules were deliberately not built:
+  native sets may reshape the per-object model, and that would be rework.
+
+### Changed
+
+- **Blocklists refresh on a systemd timer instead of the daily cron queue** (#481). `h-add-firewall-ipset`
+  used to append a line to `queue/daily.pipe`, which gave every list whatever schedule the queue happened to
+  run at and left no way to inspect or change it. `hestia-blocklist.timer` is visible in
+  `systemctl list-timers`, carries its own interval, is `Persistent=true` so a box that was off still
+  refreshes, and spreads a fleet with `RandomizedDelaySec`. Installing a list enables it and removes any
+  stale cron line; deleting the last list removes the timer.
+
+### Fixed
+
+- **The panel's shipped "Block Malicious IPs" preset could never work** (#481, D5). It pointed at
+  `script:/usr/local/hestia/install/common/firewall/ipset/blacklist.sh`, and the `install/` tree was
+  dissolved in #119 - so `h-add-firewall-ipset` produced an empty list and died on the minimum-size check
+  with a misleading "too small" error. Every admin who picked it got a failing ipset.
 - **The webmail loopback listeners are restricted to the web server and root** (#507). Roundcube (`:8090`)
   and SnappyMail (`:8091`) are plain TCP on `127.0.0.1`, so unlike the socket-based apps they had no access
   control at all and **any local user could reach them - including customers, who have shells here**. That
