@@ -1499,8 +1499,17 @@ is_hash_format_valid() {
 }
 
 # Format validation controller
+# Validates by VARIABLE NAME: each name is both the type to check and the variable to read via ${!name}.
+# That coupling is the trap - a name with no matching variable expands to empty, and empty used to mean
+# "nothing to check, so valid". So renaming an argument, or typoing a type, silently disabled the check
+# instead of failing. It has cost us twice. An UNSET variable is therefore a hard error now: it can only be
+# a programming mistake, since a caller with a genuinely optional argument still has the variable declared
+# and empty, which stays a legitimate skip.
 is_format_valid() {
 	for arg_name in $*; do
+		if ! declare -p "$arg_name" > /dev/null 2>&1; then
+			check_result "$E_INVALID" "internal: is_format_valid '$arg_name' names no variable - check for a rename or typo"
+		fi
 		arg="${!arg_name}"
 		if [ -n "$arg" ]; then
 			case $arg_name in

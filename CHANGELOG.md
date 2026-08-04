@@ -31,6 +31,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **`is_format_valid` now fails loudly when a name matches no variable** (#496). It validates by *variable
+  name* - each name is both the type to check and the variable to read via `${!name}` - so a name with no
+  matching variable expanded to empty, and empty meant "nothing to check, so valid". Renaming an argument or
+  typoing a type therefore disabled the check **silently** instead of failing. That had already cost us
+  twice, so it is fixed at the root rather than per call site: an unset variable is a hard error, while a
+  genuinely optional argument (declared, empty) is still a legitimate skip.
+- **Five `h-restart-*` commands validated an argument they never assigned** (#496), found immediately by the
+  hardening above. `h-restart-web` assigned `restart` *after* the verification block; `h-restart-proxy`,
+  `-cron`, `-ftp` and `-mail` never assigned it at all - so `is_format_valid 'restart'` checked nothing in
+  any of them, and an invalid value was accepted silently. Also fixes a `RESTARRT` typo in one header.
+
 - `h-add-firewall-chain` read the panel port out of `$HESTIA/nginx/conf/nginx.conf`, which Caddy replaced
   (#496). It printed an error on every jail creation and fell back to 8083 - right by luck, wrong on any box
   whose panel port was changed. It reads `BACKEND_PORT` now.
