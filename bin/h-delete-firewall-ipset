@@ -55,6 +55,9 @@ fi
 sed -i "/LISTNAME='$ip_name'/d" "${IPSET_PATH}.conf"
 rm -f "${IPSET_PATH}/${IPSET_FILE}.iplist"
 
+# Nothing left to refresh: stop the timer rather than leave it firing against an empty object list.
+grep -q "LISTNAME=" "${IPSET_PATH}.conf" 2> /dev/null || fw_blocklist_timer_remove
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
