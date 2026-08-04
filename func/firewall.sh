@@ -182,11 +182,19 @@ fw_jail_teardown() {
 }
 
 # Live jail attach/detach (fail2ban's actionstart/actionstop paths, which run outside a batch).
+#
+# The port match expands to two or three words, so it goes through an array rather than an unquoted
+# substitution: word splitting is wanted, but it must not depend on the caller's IFS. h-update-firewall
+# sets IFS=$'\n' for its object-model loops, and under that an unquoted expansion would hand iptables
+# one argument containing spaces instead of separate flags.
 fw_jail_attach() {
 	local chain="$1" protocol="$2" port_val="$3"
-	$FW_IPTABLES -N fail2ban-$chain 2> /dev/null || return 1
-	$FW_IPTABLES -A fail2ban-$chain -j RETURN
-	$FW_IPTABLES -I INPUT -p $protocol $(fw_jail_port_match "$port_val") -j fail2ban-$chain
+	local IFS=' '
+	local -a match
+	read -r -a match <<< "$(fw_jail_port_match "$port_val")"
+	$FW_IPTABLES -N "fail2ban-$chain" 2> /dev/null || return 1
+	$FW_IPTABLES -A "fail2ban-$chain" -j RETURN
+	$FW_IPTABLES -I INPUT -p "$protocol" "${match[@]}" -j "fail2ban-$chain"
 }
 
 # Note the asymmetry with fw_jail_attach, preserved on purpose: the delete uses a bare --dport, so it
