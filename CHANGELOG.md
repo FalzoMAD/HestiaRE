@@ -10,6 +10,33 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **fail2ban actually works again** (#496) - it had been installing a config it could not start. The
+  installer copied `filter.d/*.conf` and `jail.local` but never `action.d/hestia.conf`, so every jail
+  referencing `action = hestia[...]` was skipped and **6 of 7 jails were dead on every target**, with the
+  service reporting healthy. The only live jail was the distro's own `[sshd]`, banning into a ruleset
+  HestiaRE does not manage. Now: the **whole** `share/fail2ban` tree is installed (a copy that cannot skip
+  a directory, unlike an enumeration), via a new `func/fail2ban.sh` shared by the installer and the future
+  addon commands. Result on the fleet: 0 config errors, 7 live jails, every ban going through our action.
+- **Our jails ship as `jail.d/hestia.local`** (#496) instead of overwriting `jail.local`. fail2ban reads
+  `jail.conf` -> `jail.d/*.conf` -> `jail.local` -> `jail.d/*.local`, so ours is read last and wins, the
+  package's own file stays untouched, and an admin has a place for overrides we will never overwrite.
+- **The distro `[sshd]` jail is disabled from our own config**, not by deleting
+  `jail.d/defaults-debian.conf` (#496). Upstream deletes it; that file is a **dpkg conffile**, so removing
+  it is silently undone by the next package update and the second, uncoordinated firewall writer comes
+  back. Load order settles it instead.
+- **A proftpd jail**, gated on the FTP addon being present, and the mail jails gated on the mail block
+  (#496). A jail watching a logpath that does not exist never fires and says so only in fail2ban's own log.
+- **Four fail2ban smoke guards** (#496): config parses without error (checked on stderr, since the dump
+  still exits 0), the live jail set equals the configured set in **both** directions, no jail bans through
+  a foreign action, and every jail's logpath exists. Any one of them would have caught the breakage above.
+
+### Fixed
+
+- **A fail2ban restart no longer wipes the persistent banlist** (#496). `h-delete-firewall-chain` is
+  fail2ban's `actionstop` and it deleted the `chains.conf` and `banlist.conf` records, so every stop,
+  restart or package upgrade discarded exactly the state the hestia ban action exists to keep. It now takes
+  an optional `KEEP_RECORDS` argument; `actionstop` passes it and tears down only the live wiring, while a
+  human-initiated delete still purges. Verified: restart leaves the banlist intact and the ban enforced.
 - **The firewall renders as one nftables `inet` table** (#495) - the renderer swap, behind the seam that
   landed first. Everything that follows is a consequence rather than a separate feature:
   - **No fail-open window.** `table` / `delete table` / `table` in one `nft -f` means there is never an

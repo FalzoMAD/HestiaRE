@@ -219,8 +219,10 @@ check_fail2ban_config() {
 # all as one assertion.
 check_fail2ban_banaction() {
 	local foreign
+	# `action = hestia[name=SSH]` is instantiated as the action `hestia-SSH`, so match the prefix. Testing
+	# for a bare `hestia` looks right and never matches anything.
 	foreign=$(fail2ban-client -d 2> /dev/null \
-		| grep -oE "'addaction', '[^']+'" | sed "s/.*'\(.*\)'/\1/" | sort -u | grep -vx 'hestia')
+		| grep -oE "'addaction', '[^']+'" | sed "s/.*'\(.*\)'/\1/" | sort -u | grep -v '^hestia-')
 	if [ -z "$foreign" ]; then
 		ok "fail2ban bans through the hestia action only"
 	else
