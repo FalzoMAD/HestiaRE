@@ -6,15 +6,12 @@
 #                                                                           #
 #===========================================================================#
 
-# The ONE place that knows the backend's syntax (#495). Every h-*-firewall* command states what it
-# wants in object-model terms (action, protocol, port, source, jail, set) and this library renders it,
-# so swapping iptables for nft is a change here and nowhere else.
+# The one place that knows the backend's syntax. Callers ask in object-model terms (action, protocol,
+# port, source, jail, set); this renders it. Swapping iptables for nft is a change here and nowhere else.
 #
-# Emission model, deliberately unchanged by the seam step: callers open a batch, append to it, then
-# apply it. A batch is a script of backend commands that gets `bash`ed, which is what lets a rendered
-# fragment carry shell quoting (`--match-set 'name' src`); executing an argv array instead would pass
-# those quotes through literally and silently never match. The nft step replaces a batch with one
-# ruleset file applied via a single `nft -f`, which is also what closes the fail-open window.
+# Callers open a batch, append, apply. A batch is a script that gets bashed, so a rendered fragment can
+# carry shell quoting (--match-set 'name' src). An argv array would pass those quotes through literally
+# and never match. On nft a batch becomes one ruleset file and one atomic apply.
 
 FW_IPTABLES="/sbin/iptables"
 FW_BATCH=""
@@ -45,9 +42,8 @@ fw_batch_begin() {
 	FW_BATCH="$(mktemp)"
 }
 
-# Errors are swallowed to match the pre-seam behaviour exactly. That is a known defect (a
-# half-applied ruleset is invisible, roadmap D2) and it is fixed with the atomic nft apply, not here:
-# the seam step must not change behaviour or the byte-equality gate loses its meaning.
+# Errors stay swallowed on purpose: keeping the old behaviour is what makes the byte-for-byte
+# comparison meaningful. So a half-applied ruleset is invisible until the atomic nft apply lands.
 fw_batch_apply() {
 	[ -n "$FW_BATCH" ] && bash "$FW_BATCH" 2> /dev/null
 	return 0
@@ -58,7 +54,7 @@ fw_batch_discard() {
 	FW_BATCH=""
 }
 
-# Append a rendered backend command. Internal; callers use the semantic helpers below.
+# Internal. Callers use the semantic helpers below.
 fw_emit() {
 	echo "$1" >> "$FW_BATCH"
 }
@@ -83,7 +79,7 @@ fw_chain_drop() {
 	fw_emit "$FW_IPTABLES -X $1"
 }
 
-# Live queries, so callers never shell the backend themselves just to look.
+# Live queries, so no caller shells the backend just to look.
 fw_policy_get() {
 	$FW_IPTABLES -S "$1" 2> /dev/null | sed -n "s/^-P $1 //p"
 }
@@ -112,7 +108,7 @@ fw_chain_tail() {
 	fw_emit "$FW_IPTABLES -A $1 -j $2"
 }
 
-# Enter an owned chain for every source in a named set.
+# Enter an owned chain for every source in a set.
 fw_set_jump() {
 	fw_emit "$FW_IPTABLES -A INPUT -m set --match-set $2 src -j $1"
 }
@@ -120,19 +116,17 @@ fw_set_jump() {
 # fw_rule <action> <protocol> <port> <source> [type] [conntrack_ftp]
 # Renders one rules.conf record. <source> is an IP/CIDR or `ipset:<name>`.
 #
-# Faithful to the pre-seam construction, including two quirks that must not be "fixed" here:
-#   - `type` is the old $TYPE reference, which nothing ever sets (the object model field is COMMENT).
-#     So the FTP conntrack branch is reachable only via a literal PORT of 21, and the shipped FTP rule
-#     is '21,12000-12100' - meaning that branch and its 20,21,12000:12100 fallback are dead for the
-#     default ruleset. Kept verbatim; changing it is a behavioural change and belongs to its own issue.
-#   - an empty port or state leaves double spaces in the emitted command. Harmless (the kernel
-#     normalises, and the captures compare effective state) but do not "tidy" it into a behaviour change.
+# Two quirks kept verbatim, because changing either changes behaviour:
+#   - `type` mirrors the old $TYPE, which nothing ever sets (the field is COMMENT). So the FTP conntrack
+#     branch only fires on a literal port 21, and the shipped rule is '21,12000-12100' - it never does.
+#     Custom PassivePorts therefore get neither the static range nor the dynamic fallback.
+#   - an empty port or state leaves double spaces. The kernel normalises them; do not tidy.
 fw_rule() {
 	local action="$1" protocol="$2" port_val="$3" source="$4" type="${5:-}" conntrack_ftp="${6:-}"
 	local proto="-p $protocol" port="--dport $port_val" state="" ip
 
 	if [[ "$source" =~ ^ipset: ]]; then
-		# Quoting survives because the batch is re-parsed by bash - see the header note.
+		# Quotes survive because the batch is re-parsed by bash.
 		ip="-m set --match-set '${source#ipset:}' src"
 	else
 		ip="-s $source"
@@ -156,7 +150,7 @@ fw_rule() {
 #                     fail2ban jails                       #
 #----------------------------------------------------------#
 
-# The port match for a jail jump. Multiport whenever the port list is not a single number.
+# Multiport unless the port list is a single number.
 fw_jail_port_match() {
 	if [[ "$1" =~ ,|-|: ]]; then
 		echo "-m multiport --dports $1"
@@ -165,9 +159,8 @@ fw_jail_port_match() {
 	fi
 }
 
-# Batched jail rebuild (h-update-firewall). The jump is INSERTED, so jails end up above every ACCEPT
-# emitted before them - including the conntrack one, which is why a fail2ban ban also kills live
-# connections while a set-based DROP further down only blocks new ones.
+# The jump is INSERTED, so jails land above every ACCEPT emitted before them, conntrack included. That
+# is why a fail2ban ban kills live connections while a set DROP further down only blocks new ones.
 fw_jail_rebuild() {
 	local chain="$1" protocol="$2" port_val="$3"
 	fw_emit "$FW_IPTABLES -N fail2ban-$chain"
@@ -181,12 +174,10 @@ fw_jail_teardown() {
 	fw_emit "$FW_IPTABLES -X fail2ban-$1"
 }
 
-# Live jail attach/detach (fail2ban's actionstart/actionstop paths, which run outside a batch).
+# Live attach/detach (fail2ban actionstart/actionstop), outside a batch.
 #
-# The port match expands to two or three words, so it goes through an array rather than an unquoted
-# substitution: word splitting is wanted, but it must not depend on the caller's IFS. h-update-firewall
-# sets IFS=$'\n' for its object-model loops, and under that an unquoted expansion would hand iptables
-# one argument containing spaces instead of separate flags.
+# The port match is two or three words, so it goes through an array: splitting is wanted, but it must not
+# depend on the caller's IFS. A caller with IFS=$'\n' would otherwise hand iptables one padded argument.
 fw_jail_attach() {
 	local chain="$1" protocol="$2" port_val="$3"
 	local IFS=' '
@@ -197,24 +188,22 @@ fw_jail_attach() {
 	$FW_IPTABLES -I INPUT -p "$protocol" "${match[@]}" -j "fail2ban-$chain"
 }
 
-# Note the asymmetry with fw_jail_attach, preserved on purpose: the delete uses a bare --dport, so it
-# fails for every multi-port jail (MAIL, WEB, DB, RECIDIVE) and leaks the jump while the chains.conf
-# record is already gone. That is roadmap D4 and it is fixed in #496 - the seam step must not change
-# behaviour, so the bug is kept here where it is visible rather than buried in the caller.
+# Asymmetric to fw_jail_attach on purpose: a bare --dport fails for every multi-port jail (MAIL, WEB,
+# DB, RECIDIVE) and leaks the jump after the record is gone. Kept so behaviour is unchanged, and kept
+# here where it is visible instead of buried in the caller.
 fw_jail_detach() {
 	local chain="$1" protocol="$2" port_val="$3"
 	$FW_IPTABLES -D INPUT -p $protocol --dport $port_val -j fail2ban-$chain 2> /dev/null
 }
 
-# Is the jail chain present AND reachable from the base chain? Both halves matter: the chain can
-# survive while h-update-firewall's flush has dropped the jump, and in that state bans are recorded
-# but never enforced. Backend-specific, which is exactly why it lives here.
+# Present AND reachable. A chain can outlive its jump after a flush, and then bans are recorded but
+# never enforced.
 fw_jail_wired() {
 	$FW_IPTABLES -n -L "fail2ban-$1" > /dev/null 2>&1 || return 1
 	$FW_IPTABLES -S INPUT 2> /dev/null | grep -q -- "-j fail2ban-$1\$"
 }
 
-# The jail chains that actually exist in the live ruleset, bare names. Backend-specific by nature.
+# Live jail chains, bare names.
 fw_jail_chains_live() {
 	$FW_IPTABLES -S 2> /dev/null | sed -n 's/^-N fail2ban-\(.*\)$/\1/p'
 }
@@ -224,8 +213,8 @@ fw_jail_destroy() {
 	$FW_IPTABLES -X fail2ban-$1 2> /dev/null
 }
 
-# Live teardown of an owned set-fed chain (CrowdSec L3). Direct, not batched: it runs after the
-# marker is gone, so h-update-firewall would no longer emit any of it.
+# Live teardown of an owned set-fed chain. Direct, not batched: it runs once the marker is gone, so the
+# renderer no longer emits any of it.
 fw_set_chain_destroy() {
 	local chain="$1" setname="$2"
 	$FW_IPTABLES -D INPUT -m set --match-set "$setname" src -j "$chain" 2> /dev/null || true
@@ -246,8 +235,8 @@ fw_ban_emit() {
 	fw_emit "$FW_IPTABLES -I fail2ban-$1 1 -s $2 -j REJECT --reject-with icmp-port-unreachable"
 }
 
-# Deleting by rule number, since the ban rule carries no comment to match on. The line-number lookup
-# is the fragile part the nft step removes outright (a set element is deleted by value).
+# By rule number, since a ban rule carries no comment to match on. The lookup goes away on nft, where an
+# element is deleted by value.
 fw_ban_delete() {
 	local chain="$1" ip="$2" num
 	num=$($FW_IPTABLES -L fail2ban-$chain --line-number -n | grep -w "$ip" | awk '{print $1}')
@@ -259,8 +248,8 @@ fw_ban_delete() {
 #                      Persistence                         #
 #----------------------------------------------------------#
 
-# Individual fail2ban ban rules are stripped from the dump on purpose: bans are replayed from
-# banlist.conf, so persisting them too would double them up after a restore.
+# Ban rules are stripped from the dump on purpose: they are replayed from banlist.conf, so keeping them
+# here too would double them after a restore.
 fw_save() {
 	local dst=/etc/iptables.rules
 	[ -d "/etc/sysconfig" ] && dst=/etc/sysconfig/iptables
@@ -272,7 +261,7 @@ fw_boot_unit_path() {
 	echo "/lib/systemd/system/hestia-iptables.service"
 }
 
-# Written once and left alone afterwards, so a hand-edited unit survives.
+# Written once, then left alone, so a hand-edited unit survives.
 fw_boot_unit_write() {
 	local sd_unit version
 	sd_unit="$(fw_boot_unit_path)"
@@ -289,9 +278,8 @@ fw_boot_unit_write() {
 		echo "[Service]"
 		echo "Type=oneshot"
 		echo "RemainAfterExit=yes"
-		# Dash-prefixed, so a set that fails to load does not fail the unit. That is exactly how a
-		# missing set can let iptables-restore reject the whole table and boot the box open, which is
-		# what h-check-sys-smoke's check_firewall_sets_bootable guards.
+		# Dash-prefixed, so a set that fails to load does not fail the unit. That is how a missing set
+		# lets iptables-restore reject the whole table and boot the box open. Smoke guards it.
 		echo "ExecStartPre=-${HESTIA}/bin/h-update-firewall-ipset load"
 		if [ "$version" = "v1.6" ]; then
 			echo "ExecStart=/sbin/iptables-restore /etc/iptables.rules"
@@ -305,7 +293,7 @@ fw_boot_unit_write() {
 	systemctl -q daemon-reload
 }
 
-# The /etc/sysconfig branch never had a boot unit; only the /etc/iptables.rules layout does.
+# Only the /etc/iptables.rules layout ever had a boot unit.
 fw_persist_enable() {
 	fw_save
 	[ -d "/etc/sysconfig" ] && return 0

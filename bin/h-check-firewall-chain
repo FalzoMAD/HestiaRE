@@ -4,15 +4,12 @@
 #
 # example: h-check-firewall-chain SSH
 #
-# fail2ban's actioncheck (#495). Exits 0 while the jail's chain is present and reachable from the base
-# chain, non-zero otherwise. It exists so the check stops being a backend-specific grep in
-# share/fail2ban/action.d/hestia.conf: that file used `iptables -n -L INPUT | grep fail2ban-<name>`,
-# which silently goes stale the moment the renderer changes.
+# fail2ban's actioncheck. Exits 0 while the jail chain exists and the base chain still jumps to it.
 #
-# Getting this wrong is not cosmetic. fail2ban answers a failed actioncheck by running
-# actionstop + actionstart to "restore a sane environment", and actionstop deletes every banlist.conf
-# row for the chain - so a check that wrongly reports missing wipes the persistent ban list.
-# No v-* symlink (HestiaRE-native).
+# Replaces a grep for the backend's own output, which goes stale as soon as the renderer changes. A wrong
+# "missing" is expensive: fail2ban answers a failed actioncheck with actionstop + actionstart, and
+# actionstop drops every banlist.conf row for the chain.
+# No v-* symlink.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
