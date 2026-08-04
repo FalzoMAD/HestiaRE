@@ -24,6 +24,9 @@ FW_RULESET="/etc/hestia/firewall/ruleset.nft"
 FW_WORK=""
 FW_INPUT_POLICY="drop"
 
+# One address pattern for the whole library, so the grep form and the test form cannot drift apart.
+FW_ADDR_RE='^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$'
+
 #----------------------------------------------------------#
 #                     Batch handling                       #
 #----------------------------------------------------------#
@@ -105,24 +108,24 @@ fw_policy() {
 	return 0
 }
 
+# nft chain names are lower case, and every helper naming a chain has to agree or a lookup silently misses
+# a chain that exists. One conversion, used by all of them.
+fw_chain_id() {
+	echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 # No-ops: replacing the table is the flush, and chains are declared by being written to.
 fw_flush() { :; }
-fw_chain_create() { [ "$1" = 'INPUT' ] || touch "$FW_WORK/chain.$1"; }
-fw_chain_drop() { :; }
+fw_chain_create() { [ "$(fw_chain_id "$1")" = 'input' ] || touch "$FW_WORK/chain.$(fw_chain_id "$1")"; }
 
-# Callers name chains the way the object model does (INPUT); nft chains are lower case. Read from the
-# plain listing rather than the JSON: the JSON spacing is not stable enough to sed and jq is not a
-# dependency of this library.
+# Read the schema-versioned JSON instead of scraping the text rendering, whose layout can shift between nft
+# versions. jq is an install prerequisite, so it is always present.
 fw_policy_get() {
-	local chain
-	chain="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
-	"$FW_NFT" list chain "$FW_FAMILY" "$FW_TABLE" "$chain" 2> /dev/null \
-		| sed -n 's/.* policy \([a-z]*\);.*/\1/p' | head -1 | tr '[:lower:]' '[:upper:]'
+	"$FW_NFT" -j list chain "$FW_FAMILY" "$FW_TABLE" "$(fw_chain_id "$1")" 2> /dev/null \
+		| jq -r 'first(.nftables[] | select(.chain) | .chain.policy) // empty' 2> /dev/null \
+		| tr '[:lower:]' '[:upper:]'
 }
 
-fw_chain_exists() {
-	"$FW_NFT" list chain "$FW_FAMILY" "$FW_TABLE" "$(echo "$1" | tr '[:upper:]' '[:lower:]')" > /dev/null 2>&1
-}
 
 #----------------------------------------------------------#
 #                    Base INPUT rules                      #
@@ -146,24 +149,31 @@ fw_accept_excludes() {
 }
 
 fw_return_source() {
-	fw_sec "chain.$1" "		ip saddr $2 return"
+	fw_sec "chain.$(fw_chain_id "$1")" "		ip saddr $2 return"
 }
 
 fw_chain_tail() {
-	fw_sec "chain.$1" "		$(echo "$2" | tr '[:upper:]' '[:lower:]')"
+	fw_sec "chain.$(fw_chain_id "$1")" "		$(echo "$2" | tr '[:upper:]' '[:lower:]')"
 }
 
 # A set-fed jump. The set is declared here so the document never references one that does not exist -
 # under iptables that mismatch was a boot-time landmine, in nft it is a parse error caught by -c.
 fw_set_jump() {
 	fw_set_declare "$2" interval
-	fw_sec setjump "		ip saddr @$(fw_set_id "$2") jump $1"
+	fw_sec setjump "		ip saddr @$(fw_set_id "$2") jump $(fw_chain_id "$1")"
 }
 
 # Set names: nft has a stricter charset than ipset, so dashes become underscores. One mapping, used by
 # every declaration and reference.
 fw_set_id() {
 	echo "${1//-/_}"
+}
+
+# Anything handed to nft as a set element passes this first. nft joins its arguments and re-parses them, so
+# an element carrying extra grammar could append more than an element, and one bad element fails the whole
+# document. The file-fed paths already filtered; the live ban path did not, which was the real gap.
+fw_is_addr() {
+	[[ "$1" =~ $FW_ADDR_RE ]]
 }
 
 # Where a dynamic set's contents come from. Replacing the whole table would otherwise drop every element,
@@ -194,7 +204,7 @@ fw_set_elements() {
 	local id="$1" src
 	[ -s "$FW_WORK/elem.$id" ] && cat "$FW_WORK/elem.$id"
 	src="$(fw_set_src "$(cat "$FW_WORK/name.$id")")"
-	[ -s "$src" ] && grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$' "$src"
+	[ -s "$src" ] && grep -oE "$FW_ADDR_RE" "$src"
 	return 0
 }
 
@@ -223,7 +233,7 @@ fw_set_replace() {
 	doc="$(mktemp)"
 	{
 		echo "flush set $FW_FAMILY $FW_TABLE $id"
-		grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$' "$2" 2> /dev/null \
+		grep -oE "$FW_ADDR_RE" "$2" 2> /dev/null \
 			| sort -u | sed "s|^|add element $FW_FAMILY $FW_TABLE $id { |;s|$| }|"
 	} > "$doc"
 	"$FW_NFT" -f "$doc" 2> /dev/null
@@ -242,10 +252,6 @@ fw_set_destroy() {
 	"$FW_NFT" delete set "$FW_FAMILY" "$FW_TABLE" "$(fw_set_id "$1")" 2> /dev/null
 }
 
-fw_set_count() {
-	"$FW_NFT" list set "$FW_FAMILY" "$FW_TABLE" "$(fw_set_id "$1")" 2> /dev/null \
-		| grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}' | wc -l
-}
 
 # A port list becomes an anonymous nft set. iptables writes ranges with a colon, nft with a dash.
 fw_port_expr() {
@@ -312,7 +318,6 @@ fw_jail_rebuild() {
 	fw_sec jail "		ip saddr @$(fw_jail_set "$chain") ${proto} dport $(fw_port_expr "$port_val") reject with icmpx type port-unreachable"
 }
 
-fw_jail_teardown() { :; }
 
 # Live attach: the rule has to go to the head of the chain for a ban to outrank the service accepts.
 fw_jail_attach() {
@@ -328,10 +333,13 @@ fw_jail_attach() {
 
 # Deleting the rule needs its handle; the set goes with it. No multiport asymmetry to inherit here,
 # because there is only one rule per jail whatever the port list looks like.
+# The handle is found by exact token match rather than a regex built from the jail name: a name carrying a
+# regex metacharacter would skew or invalidate the pattern, leave the handle empty, and let this "succeed"
+# without ever removing the rule.
 fw_jail_detach() {
 	local handle
 	handle=$("$FW_NFT" -a list chain "$FW_FAMILY" "$FW_TABLE" input 2> /dev/null \
-		| sed -n "s/.*@$(fw_jail_set "$1") .*# handle \([0-9]*\)$/\1/p" | head -1)
+		| awk -v tok="@$(fw_jail_set "$1")" '{ for (i = 1; i < NF; i++) if ($i == tok) { print $NF; exit } }')
 	[ -n "$handle" ] && "$FW_NFT" delete rule "$FW_FAMILY" "$FW_TABLE" input handle "$handle" 2> /dev/null
 	return 0
 }
@@ -354,7 +362,7 @@ fw_jail_wired() {
 
 fw_set_chain_destroy() {
 	"$FW_NFT" delete set "$FW_FAMILY" "$FW_TABLE" "$(fw_set_id "$2")" 2> /dev/null
-	"$FW_NFT" delete chain "$FW_FAMILY" "$FW_TABLE" "$1" 2> /dev/null
+	"$FW_NFT" delete chain "$FW_FAMILY" "$FW_TABLE" "$(fw_chain_id "$1")" 2> /dev/null
 	return 0
 }
 
@@ -363,6 +371,7 @@ fw_set_chain_destroy() {
 #----------------------------------------------------------#
 
 fw_ban_add() {
+	fw_is_addr "$2" || return 1
 	"$FW_NFT" add element "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$1")" "{ $2 }" 2> /dev/null
 	return 0
 }
@@ -370,11 +379,13 @@ fw_ban_add() {
 # Batched replay from banlist.conf. The set must exist in the same document, so declare on demand: a
 # banlist row can name a chain that chains.conf no longer has.
 fw_ban_emit() {
+	fw_is_addr "$2" || return 0
 	fw_set_declare "$(fw_jail_set "$1")"
 	echo "$2" >> "$FW_WORK/elem.$(fw_jail_set "$1")"
 }
 
 fw_ban_delete() {
+	fw_is_addr "$2" || return 1
 	"$FW_NFT" delete element "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$1")" "{ $2 }" 2> /dev/null
 	return 0
 }
@@ -393,10 +404,13 @@ fw_boot_unit_path() {
 	echo "/lib/systemd/system/hestia-nftables.service"
 }
 
+# Always rendered, never appended to. The rest of the library re-renders everything from its source of
+# truth and this follows suit: a template change reaches a box that already has the unit, and a second call
+# can never bolt a second [Unit] block onto the file. daemon-reload only when the content actually moved.
 fw_boot_unit_write() {
-	local sd_unit
+	local sd_unit tmp
 	sd_unit="$(fw_boot_unit_path)"
-	[ -e "$sd_unit" ] && return 0
+	tmp="$(mktemp)"
 	{
 		echo "[Unit]"
 		echo "Description=Loading Hestia firewall rules"
@@ -414,7 +428,13 @@ fw_boot_unit_write() {
 		echo ""
 		echo "[Install]"
 		echo "WantedBy=multi-user.target"
-	} >> "$sd_unit"
+	} > "$tmp"
+	if cmp -s "$tmp" "$sd_unit" 2> /dev/null; then
+		rm -f "$tmp"
+		return 0
+	fi
+	mv -f "$tmp" "$sd_unit"
+	chmod 644 "$sd_unit"
 	systemctl -q daemon-reload
 }
 
