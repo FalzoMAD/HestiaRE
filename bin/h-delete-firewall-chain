@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: delete firewall chain
-# options: CHAIN
+# options: CHAIN [KEEP_RECORDS]
 #
 # example: h-delete-firewall-chain WEB
 #
@@ -12,6 +12,7 @@
 
 # Argument definition
 chain=$(echo "$1" | tr '[:lower:]' '[:upper:]')
+keep=${2:-no}
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -45,10 +46,14 @@ chain_param=""
 [ -f "$chains" ] && chain_param=$(grep "CHAIN='$chain'" "$chains")
 if [ -n "$chain_param" ]; then
 	parse_object_kv_list "$chain_param"
-	sed -i "/CHAIN='$chain'/d" "$chains"
-	# NOTE this drops every ban recorded for the chain, and fail2ban calls this as actionstop - so a
-	# fail2ban restart wipes the persistent banlist (roadmap D4, fixed in #496). Preserved here.
-	sed -i "/CHAIN='$chain'/d" "$banlist"
+	# fail2ban calls this as actionstop, on every stop, restart and package upgrade. Deleting the
+	# records there wiped the persistent banlist, which is the one property the hestia ban action exists
+	# to provide. So the records are only purged when a human asks; actionstop passes KEEP='yes' and
+	# tears down the live wiring alone.
+	if [ "$keep" != 'yes' ]; then
+		sed -i "/CHAIN='$chain'/d" "$chains"
+		sed -i "/CHAIN='$chain'/d" "$banlist" 2> /dev/null
+	fi
 	fw_jail_detach "$CHAIN" "$PROTOCOL" "$PORT"
 fi
 

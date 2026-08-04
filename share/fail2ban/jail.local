@@ -1,3 +1,11 @@
+# Our jails read log FILES, so the backend is pinned here rather than inherited. Ubuntu 24.04's
+# jail.d/defaults-debian.conf sets `backend = systemd` in [DEFAULT], which applies to every jail: ours then
+# watch the journal, never read their logpath, and match nothing while reporting perfectly healthy. Debian
+# 12 omits the key and Debian 13 / Ubuntu 26 scope it to [sshd], so this only bites on one target - which is
+# exactly why it has to be pinned instead of assumed.
+[DEFAULT]
+backend = auto
+
 [ssh-iptables]
 enabled  = true
 filter   = sshd
@@ -22,6 +30,13 @@ enabled  = false
 filter   = mysqld-auth
 action   = hestia[name=DB]
 logpath  = /var/log/mysql/error.log
+maxretry = 5
+
+[proftpd-iptables]
+enabled  = true
+filter   = proftpd
+action   = hestia[name=FTP]
+logpath  = /var/log/proftpd/proftpd.log
 maxretry = 5
 
 [hestia-iptables]
