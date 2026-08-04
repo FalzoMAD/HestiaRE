@@ -86,7 +86,8 @@ ips="$(ls $CONF_DIR/ips)"
 for ip in $ips; do
 	fw_accept_source "$ip"
 done
-fw_accept_source '127.0.0.1'
+# Loopback is accepted by interface so both families are covered; see fw_accept_loopback.
+fw_accept_loopback
 
 # Whitelist, evaluated before any ban match so it can rescue a locked-out admin
 fw_accept_excludes
