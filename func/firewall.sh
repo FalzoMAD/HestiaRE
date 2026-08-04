@@ -300,26 +300,16 @@ fw_port_expr() {
 	esac
 }
 
-# Restrict a loopback port to a set of local users (#507).
-#
-# Some app listeners are plain TCP on 127.0.0.1 rather than unix sockets, so filesystem permissions cannot
-# gate them and ANY local user can connect - including customers, who have shells here. That matters beyond
-# the app itself: Caddy passes a client-supplied X-Real-IP straight through, so a customer could hand the
-# app an arbitrary address and, once a jail reads it, have a third party banned.
-#
-# IP-based filtering cannot help - two local users share 127.0.0.1 - so this keys on the connecting UID,
-# which is exactly the distinction that is needed. Rendered into our own table rather than a separate one,
-# so it is rebuilt on every apply, survives a reboot with the rest of the ruleset, and is covered by the
-# same smoke guards. `reject` rather than `drop` so a wrong caller fails immediately instead of hanging.
+# A TCP loopback listener has no filesystem permissions, so any local user reaches it - customers included.
+# Two local users share 127.0.0.1, so only the connecting UID can tell them apart. `reject` so a wrong
+# caller fails at once instead of hanging.
 fw_restrict_local_port() {
 	local port="$1" uids="$2"
 	fw_sec local "		oif lo tcp dport $port meta skuid != { $uids } reject with tcp reset"
 }
 
-# The UIDs allowed to reach those listeners: root, plus the web server that makes the reverse-proxy hop.
-# Resolved by NAME - the name is the stable contract, the number is not. Root matters as much as the proxy:
-# h-check-sys-smoke probes the webmail listener over HTTP, so a rule allowing only the web user would turn
-# smoke red.
+# Root plus the web server that makes the proxy hop. By name, since the uid number is not the contract.
+# Root is not optional: h-check-sys-smoke probes these listeners over HTTP.
 fw_local_allowed_uids() {
 	local web
 	web="$(id -u www-data 2> /dev/null)"
