@@ -10,6 +10,10 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **A panel page for the firewall whitelist** (#496) - `Firewall -> Whitelist`, with add, per-row delete and
+  bulk delete, matching the banlist pages. Deliberately **not** gated on `FIREWALL_EXTENSION` the way the
+  banlist button is: the whitelist renders as a firewall accept and works with no fail2ban installed, and
+  hiding it in that state would remove the one recovery path from the UI.
 - **The firewall whitelist is manageable** (#496) - `h-add-firewall-exclude`, `h-delete-firewall-exclude`,
   `h-list-firewall-exclude`. `excludes.conf` had been enforced since the nft swap but had no commands, no
   panel page and no shipped default, so the only way to use it was to edit the file by hand. Adding an

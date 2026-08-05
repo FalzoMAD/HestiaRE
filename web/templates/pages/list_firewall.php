@@ -13,6 +13,11 @@
 					<i class="fas fa-eye icon-red"></i><?= tohtml( _("Banned IP Addresses")) ?>
 				</a>
 			<?php endif; ?>
+			<!-- Not gated on FIREWALL_EXTENSION: the whitelist renders as a firewall accept and works
+			     without fail2ban, which is also what makes it the way back in after a lockout. -->
+			<a class="button button-secondary" href="/list/firewall/exclude/">
+				<i class="fas fa-circle-check icon-green"></i><?= tohtml( _("Whitelist")) ?>
+			</a>
 			<a class="button button-secondary" href="/list/firewall/ipset/">
 				<i class="fas fa-list icon-blue"></i><?= tohtml( _("IPset IP Lists")) ?>
 			</a>
