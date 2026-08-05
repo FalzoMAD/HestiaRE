@@ -128,6 +128,13 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **The installer duplicated config keys when a stage re-ran** (#523). `wcv` appended `KEY='value'` to
+  hestia.conf unconditionally, so any stage that ran twice wrote the key again instead of replacing it -
+  most realistically an admin restarting the installer after an abort mid-stage, the exact situation #520
+  produced before it was fixed. Harmless at runtime (bash sources last-wins) but it left stray lines
+  (`FIREWALL_EXTENSION` reached 4x on repeatedly-resumed boxes). `wcv` now replaces an existing key,
+  collapsing any duplicates to one, and appends only a genuinely new key. `_wcv` (the install-base seed) was
+  already safe - it wipes and recreates hestia.conf before writing.
 - **A fresh install aborted silently in the fail2ban stage** (#520). Two bugs, both under the installer's
   `set -eo pipefail`, both only visible on a genuinely fresh box (earlier checks re-ran on boxes that
   already had the missing state). First and primary: `fail2ban_sync_ignoreip` built its list with

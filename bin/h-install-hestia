@@ -81,7 +81,19 @@ PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".
 PHP_VER="${PHP_VER:-8.3}"                        # panel + default web PHP (Sury)
 
 # write a config value to hestia.conf
-wcv() { echo "$1='$2'" >> "$HESTIA/conf/hestia.conf"; }
+# Write a config value idempotently: replace an existing key (collapsing any duplicates to one) or append.
+# Append-only duplicated a key whenever a stage re-ran - an admin restarting the installer after an abort
+# mid-stage is the real-world path, exactly how FIREWALL_EXTENSION doubled up after the #520 abort.
+wcv() {
+	local conf="$HESTIA/conf/hestia.conf" line
+	line="$1='$2'"
+	if grep -q "^$1=" "$conf" 2> /dev/null; then
+		awk -v k="$1" -v repl="$line" '$0 ~ "^" k "=" { if (!seen) { print repl; seen = 1 } next } { print }' \
+			"$conf" > "$conf.tmp" && mv -f "$conf.tmp" "$conf"
+	else
+		printf '%s\n' "$line" >> "$conf"
+	fi
+}
 
 # truthiness helper for COMPONENT_* values
 is_on() { [ "${1:-}" = "true" ] || [ "${1:-}" = "yes" ]; }
