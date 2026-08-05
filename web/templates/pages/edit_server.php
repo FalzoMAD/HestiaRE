@@ -240,8 +240,9 @@
 					<?php } ?>
 					<!-- Bot rate-limit family table (Layer B, #482). Lives inline here for now; placement
 					     may move with the panel overhaul. Saved with the main settings form: every row
-					     runs APPLY=no and one apply follows, so the web server reloads once. -->
-					<details class="box-collapse u-mb10">
+					     runs APPLY=no and one apply follows, so the web server reloads once. The id is the
+					     deep-link target for the Server page's "Bot Rate Limiting" button (#482). -->
+					<details class="box-collapse u-mb10" id="botlimit">
 						<summary class="box-collapse-header">
 							<i class="fas fa-robot u-mr10"></i><?= tohtml( _("Bot Rate Limiting")) ?>
 							<span class="optional u-ml5">
