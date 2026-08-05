@@ -266,6 +266,26 @@ check_fail2ban_backends() {
 	fi
 }
 
+# check_fail2ban_roundcube_injection - the roundcube filter logs the attacker-controlled username verbatim,
+# so it defeats a smuggled "X-Real-IP: <fake>" block only as long as it matches the real trailing block
+# greedily. A Roundcube format change or a filter edit (greedy -> non-greedy, dropped anchor) would reopen
+# the injection silently. Replay an injection line through the DEPLOYED failregex and assert the real
+# trailing IP is what would be banned, not the smuggled one. Canary, like the source_conf identifier guard.
+check_fail2ban_roundcube_injection() {
+	local f='/etc/fail2ban/filter.d/hestia-roundcube.conf' fr prefix got
+	[ -f "$f" ] || { skip "roundcube filter absent (webmail off)"; return; }
+	fr="$(sed -n 's/^failregex[[:space:]]*=[[:space:]]*//p' "$f" | head -1)"
+	prefix="${fr%%<HOST>*}"
+	[ "$prefix" != "$fr" ] || { no "roundcube filter failregex has no <HOST>"; return; }
+	local inj='[05-Aug-2026 11:19:03 +0000]: <x> Failed login for evil from 6.6.6.6 (X-Real-IP: 8.8.8.8,X-Forwarded-For: z) in session zz (error: 0) from 127.0.0.1 (X-Real-IP: 203.0.113.99,X-Forwarded-For: 127.0.0.1) in session ok (error: 1)'
+	got="$(printf '%s' "$inj" | grep -oP "${prefix}\K[0-9A-Fa-f:.]+" 2> /dev/null | tail -1)"
+	if [ "$got" = '203.0.113.99' ]; then
+		ok "roundcube filter bans the real IP, not an injected one"
+	else
+		no "roundcube filter injection defence regressed" "captured '$got', expected 203.0.113.99"
+	fi
+}
+
 # check_http <url> <label>
 check_http() {
 	local code
@@ -524,6 +544,7 @@ if is_on "${COMPONENT_ADDON_FAIL2BAN:-}"; then
 	check_fail2ban_banaction
 	check_fail2ban_logpaths
 	check_fail2ban_backends
+	check_fail2ban_roundcube_injection
 fi
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
 is_on "${COMPONENT_ADDON_CROWDSEC:-}" && check_service crowdsec "crowdsec"

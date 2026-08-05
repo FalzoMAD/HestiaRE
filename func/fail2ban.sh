@@ -6,39 +6,24 @@
 #                                                                           #
 #===========================================================================#
 
-# Shared by the installer and the addon commands, so one implementation decides what a configured
-# fail2ban looks like. Mirrors func/crowdsec.sh. Idempotent throughout.
-#
-# fail2ban is a CLIENT of the hestia firewall: action.d/hestia.conf maps its actions onto h-*-firewall-*
-# commands, so a ban lands in banlist.conf and in the live ruleset, and survives a rebuild. That is why we
-# keep owning the ban action instead of using fail2ban's native nftables one, which would bypass the
-# banlist, the panel and the replay.
+# One implementation of "a configured fail2ban", shared by the installer and the addon commands. fail2ban
+# is a CLIENT of the hestia firewall: action.d/hestia.conf maps its actions onto h-*-firewall-*, so bans
+# land in banlist.conf + the live ruleset and survive a rebuild. Idempotent throughout.
 
 F2B_DIR="/etc/fail2ban"
 F2B_OURS="$F2B_DIR/jail.d/hestia.local"
-# The whitelist gets its OWN file rather than a delimited block inside hestia.local. A generated block in a
-# shared file has to be found again to be replaced, and every way of delimiting it ends badly when an admin
-# edits around it: a sed range whose end address has been removed deletes to end of file. A whole file we
-# own outright cannot take admin content with it. Sorts after hestia.local, so its [DEFAULT] wins.
+# Own file, not a block inside hestia.local: a delimited block is unsafe to rewrite around admin edits (a
+# broken sed range deletes to EOF). Sorts after hestia.local, so its [DEFAULT] wins.
 F2B_WHITELIST="$F2B_DIR/jail.d/hestia-zz-whitelist.local"
 
-# Our jails live in jail.d/hestia.local, NOT in jail.local. fail2ban reads jail.conf -> jail.d/*.conf ->
-# jail.local -> jail.d/*.local, so ours is read last and wins, while /etc/fail2ban/jail.local is left for
-# the admin and never written by us. It also means the addon has nothing to preserve as saved state:
-# everything we install is re-renderable from share/.
+# Our jails live in jail.d/hestia.local (read last, wins); jail.local is left to the admin. Nothing needs
+# preserving as addon state - it all re-renders from share/.
 fail2ban_install_config() {
 	local stage
 	mkdir -p "$F2B_DIR/filter.d" "$F2B_DIR/action.d" "$F2B_DIR/jail.d"
-	# Copied as a whole tree, never as a list of files: leaving action.d out of such a list is what made
-	# every jail using `action = hestia[...]` unstartable, and a list cannot notice a directory added later.
-	#
-	# It goes through a staging dir so that share/'s jail.local never lands in /etc at all. Copying it there
-	# and moving it afterwards only works on the first run - on later runs the "do not clobber admin edits"
-	# guard skips the move and the fresh copy just stays. That matters because jail.local is read BEFORE
-	# jail.d/*.local: a jail block an admin deleted outright from hestia.local would come back from the
-	# stray file, silently undoing the one edit our own comment promises to respect. Deleting
-	# /etc/fail2ban/jail.local unconditionally would fix the stray but could also delete a file the admin
-	# wrote; not creating it is the only option that does neither.
+	# Copy the WHOLE tree (a file list once omitted action.d/hestia.conf and broke every jail). Via a staging
+	# dir so share/'s jail.local never reaches /etc: it is read before jail.d/*.local, so a stray copy would
+	# resurrect a jail block an admin deleted. Never overwrite an existing hestia.local.
 	stage="$(mktemp -d)"
 	cp -rf "$HESTIA/share/fail2ban/." "$stage/"
 	[ -f "$F2B_OURS" ] || cp -f "$stage/jail.local" "$F2B_OURS"
@@ -48,10 +33,8 @@ fail2ban_install_config() {
 	chmod 644 "$F2B_OURS" 2> /dev/null
 }
 
-# The distro ships jail.d/defaults-debian.conf enabling its own [sshd] jail with its own banaction, which
-# bans into a ruleset we do not manage - a second, uncoordinated firewall writer. Upstream deletes that
-# file; we must not, because it is a dpkg conffile and a reinstall or package revision would silently
-# bring it back. Disabling the jail from our own config wins on load order and survives both.
+# Disable the distro [sshd] jail (its banaction writes a ruleset we do not manage) from our own config,
+# not by deleting jail.d/defaults-debian.conf - a dpkg conffile a package update would restore.
 fail2ban_disable_distro_jails() {
 	grep -q '^\[sshd\]' "$F2B_OURS" 2> /dev/null && return 0
 	{
@@ -64,9 +47,8 @@ fail2ban_disable_distro_jails() {
 	} >> "$F2B_OURS"
 }
 
-# install.conf writes its booleans as "true", while the installer's own locals read "yes". Accept both
-# rather than depending on which caller passed which: comparing against a single spelling is what silently
-# disabled the proftpd jail on every box that actually had proftpd.
+# install.conf writes "true", the installer's locals write "yes" - accept both (one spelling once silently
+# disabled the proftpd jail on boxes that had proftpd).
 fail2ban_flag_on() {
 	case "${1:-}" in
 		true | yes | 1) return 0 ;;
@@ -74,8 +56,7 @@ fail2ban_flag_on() {
 	esac
 }
 
-# A jail whose logpath does not exist never matches anything and says so only in fail2ban's own log, so
-# the jails are gated on the services actually present rather than shipped on and left to fail quietly.
+# Disable jails whose service is absent: a jail on a missing logpath never fires, silently.
 fail2ban_gate_jails() {
 	local mail="${1:-no}" ftp="${2:-no}"
 	[ -f "$F2B_OURS" ] || return 0
@@ -86,10 +67,8 @@ fail2ban_gate_jails() {
 	fail2ban_flag_on "$ftp" || fail2ban_set_enabled 'proftpd-iptables' 'false'
 }
 
-# The web jail follows the per-domain logs, and those live under /var/log/<web system>/domains regardless of
-# which server writes them - in the nginx-in-front-of-apache model the vhost template hands nginx the apache
-# path too. Read from the config FILE, not the variable: during the install run the key is already written
-# but the installer's own shell has never seen it.
+# Per-domain web logs live under /var/log/<web system>/domains (nginx-in-front-of-apache uses the apache
+# path too). Read WEB_SYSTEM from the FILE: the installer's own shell never saw the key it just wrote.
 fail2ban_web_logdir() {
 	local ws
 	ws="$(sed -n "s/^WEB_SYSTEM='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)"
@@ -112,17 +91,23 @@ fail2ban_gate_web_jail() {
 	' "$F2B_OURS" > "$F2B_OURS.tmp" && mv -f "$F2B_OURS.tmp" "$F2B_OURS"
 }
 
-# fail2ban expands a logpath glob once, when the jail starts, and never again - a domain added afterwards is
-# simply not watched, silently, until the daemon next restarts. So every place that creates or removes a
-# domain log has to say so. addlogpath/dellogpath touch only that jail's file list: no reload, no action
-# churn, no effect on live bans. Never fails its caller; this must not be able to break a domain add.
+# fail2ban globs a logpath once at jail start, so a later domain goes unwatched - tell it on every add/del.
+# Never fails its caller: a domain add must not break because fail2ban is unhappy.
 fail2ban_watch_domain() {
 	local verb="$1" domain="$2" dir
 	[ -n "${FIREWALL_EXTENSION:-}" ] || return 0
 	systemctl -q is-active fail2ban 2> /dev/null || return 0
 	dir="$(fail2ban_web_logdir)" || return 0
 	case "$verb" in
-		add) fail2ban-client set web-botsearch addlogpath "$dir/$domain.log" tail > /dev/null 2>&1 ;;
+		add)
+			# First domain re-arms web-botsearch if it was pruned at install (reload re-globs); later
+			# domains just addlogpath.
+			if fail2ban_jail_enabled web-botsearch; then
+				fail2ban-client set web-botsearch addlogpath "$dir/$domain.log" tail > /dev/null 2>&1
+			else
+				fail2ban_rearm_jail web-botsearch
+			fi
+			;;
 		del) fail2ban-client set web-botsearch dellogpath "$dir/$domain.log" > /dev/null 2>&1 ;;
 	esac
 	return 0
@@ -138,8 +123,35 @@ fail2ban_set_enabled() {
 	' "$F2B_OURS" > "$F2B_OURS.tmp" && mv -f "$F2B_OURS.tmp" "$F2B_OURS"
 }
 
-# Debian moved auth logging to the journal, and a jail reading a file that is never created is a jail that
-# silently never fires. Create it so the sshd and phpmyadmin filters have something to follow.
+# Is a jail currently enabled in our config?
+fail2ban_jail_enabled() {
+	[ "$(sed -n "/^\[$1\]/,/^\[/{/^enabled[[:space:]]*=/p}" "$F2B_OURS" 2> /dev/null | head -1 | tr -d ' ')" = 'enabled=true' ]
+}
+
+# fail2ban aborts startup on an enabled jail whose logpath matches zero files. On a fresh box proftpd
+# (installs later) and web-botsearch (no domains yet) hit that and aborted the installer. Disable such jails
+# last so the daemon always starts; h-add-sys-proftpd / fail2ban_watch_domain re-arm them once the log exists.
+fail2ban_prune_empty_jails() {
+	[ -f "$F2B_OURS" ] || return 0
+	local j lp
+	for j in $(fail2ban_enabled_jails); do
+		lp="$(fail2ban_jail_logpath "$j")"
+		[ -n "$lp" ] || continue
+		compgen -G "$lp" > /dev/null 2>&1 || fail2ban_set_enabled "$j" 'false'
+	done
+}
+
+# Re-enable a jail prune switched off, once its log exists; reload re-globs. No-op unless fail2ban is ours
+# and running.
+fail2ban_rearm_jail() {
+	[ "${FIREWALL_EXTENSION:-}" = 'fail2ban' ] || return 0
+	systemctl -q is-active fail2ban 2> /dev/null || return 0
+	fail2ban_jail_enabled "$1" && return 0
+	fail2ban_set_enabled "$1" 'true'
+	systemctl reload-or-restart fail2ban > /dev/null 2>&1
+}
+
+# Debian logs auth to the journal; create /var/log/auth.log so the sshd/phpmyadmin filters have a file.
 fail2ban_ensure_authlog() {
 	[ -e /var/log/auth.log ] && return 0
 	touch /var/log/auth.log
@@ -147,11 +159,8 @@ fail2ban_ensure_authlog() {
 	chown root:adm /var/log/auth.log 2> /dev/null
 }
 
-# Webmail auth jails, gated on the configured client(s). Read from the FILE, not the variable: during the
-# install run the key is already written but the installer's own shell has never seen it. WEBMAIL_SYSTEM
-# can name both (roundcube,snappymail), so each jail is gated independently. A jail whose logpath does not
-# exist never fires and says so only in fail2ban's own log, so the log file is created here (owned by the
-# webmail FPM pool, caddy, which is what writes it) rather than shipped on and left to fail quietly.
+# Enable each webmail jail whose client is in WEBMAIL_SYSTEM (read from the FILE - installer-shell trap;
+# both clients gated independently) and create the log it watches, caddy-owned (the webmail FPM pool).
 fail2ban_gate_webmail_jails() {
 	local wm
 	[ -f "$F2B_OURS" ] || return 0
@@ -172,9 +181,8 @@ fail2ban_gate_webmail_jails() {
 	esac
 }
 
-# Re-gate the webmail jails after a webmail client is added or removed at runtime. A no-op unless fail2ban
-# is the active extension, so the webmail commands can call it unconditionally. WEBMAIL_SYSTEM must already
-# be written before this runs (the add/delete-sys-* command updates it first).
+# Re-gate the webmail jails after a client is added/removed at runtime (WEBMAIL_SYSTEM already updated).
+# No-op unless fail2ban is ours and running, so callers invoke it unconditionally.
 fail2ban_refresh_webmail() {
 	[ "${FIREWALL_EXTENSION:-}" = 'fail2ban' ] || return 0
 	systemctl -q is-active fail2ban 2> /dev/null || return 0
@@ -182,8 +190,7 @@ fail2ban_refresh_webmail() {
 	systemctl reload-or-restart fail2ban > /dev/null 2>&1
 }
 
-# Touch a webmail auth log so its jail has a file to watch before the first failed login. caddy is the
-# webmail FPM pool and the process that appends to it, so it must own it.
+# Create a webmail auth log (caddy-owned - caddy is the pool that writes it) so its jail has a file to watch.
 fail2ban_ensure_webmail_log() {
 	local f="$1"
 	[ -e "$f" ] && return 0
@@ -193,8 +200,7 @@ fail2ban_ensure_webmail_log() {
 	chmod 640 "$f" 2> /dev/null
 }
 
-# Every jail we enable, by name. The single source of truth for "what should be running", which is what
-# lets a smoke guard compare intent against reality instead of hardcoding a list.
+# The jails our config enables, by name - the source of truth a smoke guard compares against reality.
 fail2ban_enabled_jails() {
 	[ -f "$F2B_OURS" ] || return 0
 	awk '/^\[/ { j = substr($0, 2, length($0) - 2) }
@@ -210,17 +216,19 @@ fail2ban_jail_logpath() {
 	' "$F2B_OURS" 2> /dev/null
 }
 
-# Mirror the firewall whitelist into fail2ban's ignoreip, so a whitelisted address is not merely unbannable
-# at the ruleset level but never counted in the first place - otherwise the jail keeps matching and logging
-# an address it can never act on. Rewritten whole, never edited in place.
+# Mirror the whitelist into ignoreip so a whitelisted address is never even counted. Own file, whole rewrite.
 fail2ban_sync_ignoreip() {
-	local excludes="$CONF_DIR/firewall/excludes.conf" ips
+	local excludes="$CONF_DIR/firewall/excludes.conf" ips='' rc=0
 	[ -d "$F2B_DIR/jail.d" ] || return 0
-	# Needed only here, so it is sourced here: this file is also read by h-add-web-domain, where pulling in
-	# the renderer would be dead weight and could reset an in-flight batch.
 	# shellcheck source=/usr/local/hestia/func/firewall.sh
 	declare -F fw_is_addr > /dev/null 2>&1 || source "$HESTIA/func/firewall.sh"
-	ips="$(grep -oE "$FW_ADDR_RE|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$" "$excludes" 2> /dev/null | paste -sd' ' -)"
+	# An absent or entry-less whitelist is the normal empty case (grep rc 0/1); a real read failure (rc>=2)
+	# must still surface, not be swallowed like a blanket `|| true`, which once let a genuine error vanish.
+	if [ -f "$excludes" ]; then
+		ips="$(grep -oE "$FW_ADDR_RE|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$" "$excludes")" || rc=$?
+		[ "$rc" -le 1 ] || check_result "$E_PARSING" "fail2ban_sync_ignoreip: cannot read $excludes (grep rc=$rc)"
+		ips="$(printf '%s' "$ips" | paste -sd' ' -)"
+	fi
 	# Written even when the whitelist is empty: loopback belongs in ignoreip regardless.
 	{
 		echo "# Generated by fail2ban_sync_ignoreip from firewall/excludes.conf - do not edit."
@@ -240,6 +248,7 @@ fail2ban_apply() {
 	fail2ban_gate_webmail_jails
 	fail2ban_ensure_authlog
 	fail2ban_sync_ignoreip
+	fail2ban_prune_empty_jails
 	systemctl -q enable fail2ban 2> /dev/null
 	systemctl restart fail2ban 2> /dev/null
 }
