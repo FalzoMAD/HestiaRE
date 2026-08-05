@@ -598,6 +598,14 @@ check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$
 # GHSA-cr7q: search-object commands must not eval raw conf-field payloads
 check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
 	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
+# GHSA-xffx class: source_conf must keep its identifier guard on the key, or a
+# `key[$(cmd)]=` line in any parsed conf executes cmd through declare -g. Positive
+# check: the sink is shared by ~500 callers, so losing the guard is a silent hole.
+if grep -qE '\[\[ \$lhs =~ \^\[A-Za-z_\]' "$HESTIA/func/main.sh" 2> /dev/null; then
+	ok "invariant: source_conf rejects non-identifier keys (GHSA-xffx class)"
+else
+	no "invariant: source_conf rejects non-identifier keys (GHSA-xffx class)" "guard missing in func/main.sh"
+fi
 # #438: the real session user may only be touched by allowlisted files (auth /
 # dispatch / reset / real-identity display) — everything else must use the
 # look-aware $user/$user_plain, or an admin impersonating a customer mis-targets.

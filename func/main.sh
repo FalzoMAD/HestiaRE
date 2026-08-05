@@ -10,6 +10,11 @@
 source_conf() {
 	while IFS='= ' read -r lhs rhs; do
 		if [[ ! $lhs =~ ^\ *# && -n $lhs ]]; then
+			# A config key is a plain identifier, never an array subscript. Rejecting anything else stops
+			# `declare -g $lhs=` from evaluating a command substitution smuggled into a `key[$(...)]`
+			# subscript (the GHSA-xffx-jj33-p2px class) - a hardening of the sink that covers every caller,
+			# not just the one command that reads an attacker-supplied file.
+			[[ $lhs =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
 			rhs="${rhs%%^\#*}" # Del in line right comments
 			rhs="${rhs%%*( )}" # Del trailing spaces
 			rhs="${rhs%\'*}"   # Del opening string quotes
