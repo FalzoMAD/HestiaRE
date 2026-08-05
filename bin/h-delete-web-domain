@@ -107,7 +107,12 @@ if [ -n "$STATS" ] && [ "$STATS" != 'no' ]; then
 	rm -f /etc/awstats/$STATS.$domain.conf
 fi
 
-# Deleting logs
+# Deleting logs - detach first, or the jail keeps polling a path that is gone
+if [ -n "$FIREWALL_EXTENSION" ]; then
+	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+	source $HESTIA/func/fail2ban.sh
+	fail2ban_watch_domain del "$domain"
+fi
 rm -f /var/log/$WEB_SYSTEM/domains/$domain.log*
 rm -f /var/log/$WEB_SYSTEM/domains/$domain.bytes
 rm -f /var/log/$WEB_SYSTEM/domains/$domain.error*

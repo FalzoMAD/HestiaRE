@@ -114,6 +114,14 @@ touch /var/log/$WEB_SYSTEM/domains/$domain.bytes \
 ln -f -s /var/log/$WEB_SYSTEM/domains/$domain.*log \
 	$HOMEDIR/$user/web/$domain/logs/
 
+# fail2ban resolves its logpath glob once, at jail start, so a domain added later goes unwatched until the
+# daemon restarts. Hand it the new file explicitly.
+if [ -n "$FIREWALL_EXTENSION" ]; then
+	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+	source $HESTIA/func/fail2ban.sh
+	fail2ban_watch_domain add "$domain"
+fi
+
 # Adding domain skeleton
 user_exec cp -r $WEBTPL/skel/* "$HOMEDIR/$user/web/$domain/" > /dev/null 2>&1
 for file in $(find "$HOMEDIR/$user/web/$domain/" -type f); do

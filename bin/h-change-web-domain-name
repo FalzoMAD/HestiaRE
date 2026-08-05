@@ -84,6 +84,14 @@ mv "$domain.error.log" "$new_domain.error.log"
 mv "$domain.bytes" "$new_domain.bytes"
 rm -f "$HOMEDIR/$user/web/$new_domain/logs/$domain.*"
 
+# The jail is watching the old filename; a rename is invisible to it.
+if [ -n "$FIREWALL_EXTENSION" ]; then
+	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+	source $HESTIA/func/fail2ban.sh
+	fail2ban_watch_domain del "$domain"
+	fail2ban_watch_domain add "$new_domain"
+fi
+
 # Updating domain certificates
 if [ -e "$USER_DATA/ssl/$domain.crt" ]; then
 	cd $USER_DATA/ssl

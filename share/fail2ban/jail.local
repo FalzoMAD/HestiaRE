@@ -57,6 +57,17 @@ action   = hestia[name=WEB]
 logpath  = /var/log/auth.log
 maxretry = 5
 
+# The L7 jail: scanners probing customer vhosts for apps that are not installed. logpath is rewritten to the
+# configured web system by fail2ban_gate_web_jail - the value here is only a placeholder. Deliberately NOT
+# extended to the rate limiter's 429s: Layer B (nginx limit_req / apache mod_qos) throttles bots on its own
+# and its verdicts must not escalate into firewall bans.
+[web-botsearch]
+enabled  = true
+filter   = hestia-botsearch
+action   = hestia[name=WEB]
+logpath  = /var/log/apache2/domains/*.log
+maxretry = 5
+
 [recidive]
 enabled  = true
 filter   = recidive
@@ -66,6 +77,5 @@ maxretry = 5
 findtime = 86400
 bantime  = 864000
 
-#Uncomment and add your IPs and or domains to the Whitelist
-#[DEFAULT]
-#ignoreip = 111.111.111.111 222.222.222.222 subdomain.example.tld example.tld 333.333.333.333
+# Whitelisting is not done here: h-add-firewall-exclude maintains the firewall whitelist and mirrors it into
+# jail.d/hestia-zz-whitelist.local, so one list covers the ruleset and fail2ban both.

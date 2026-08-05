@@ -17,9 +17,18 @@ section as part of its PR. On release, the section gets the version number.
   match, so leaving the ban in place would mean an accept and a reject for the same source, which is a
   confusing state to leave behind when the point of the command is to end a lockout.
 - **The whitelist is mirrored into fail2ban's `ignoreip`** (#496). Without it a jail keeps counting and
-  logging an address the ruleset already exempts - it simply can never act on it. Written as our own
-  `[DEFAULT]` block in `jail.d/hestia.local`, which is read last, and re-synced whenever the whitelist
-  changes.
+  logging an address the ruleset already exempts - it simply can never act on it. Written whole into its own
+  `jail.d/hestia-zz-whitelist.local` and re-synced whenever the whitelist changes. A generated block inside
+  a shared file would have to be found again to be replaced, and every way of delimiting it fails badly once
+  an admin edits around it - a `sed` range whose end address has been removed deletes to end of file.
+- **An L7 jail, `web-botsearch`** (#496) - scanners probing customer vhosts for apps that are not installed
+  (wp-login, phpmyadmin, webmail, cgi-bin). It reads the per-domain `combined` **access** log, which is the
+  only uniform source: nginx writes no error entry at all for a 404, and apache with php-fpm answers a probe
+  for a missing `.php` with `AH01071 Primary script unknown` rather than "File does not exist", so the
+  distro's `apache-botsearch` cannot fire here regardless of its `/var/www` webroot. The 404 is what makes
+  it safe on shared hosting: a domain that really runs WordPress answers `/wp-login.php` with 200, so a real
+  user is never counted. Deliberately not extended to the rate limiter's 429s - Layer B throttles bots
+  itself and its verdicts must not escalate into firewall bans.
 - **A curated blocklist catalogue** (#481) in `share/firewall/blocklists.conf`, read by the panel's IPset
   picker. Ships FireHOL Level 1 and 2, Spamhaus DROP and Blocklist.de, each fetched from a VM and confirmed
   to yield parseable entries. Adding a source is now a data change rather than a PHP edit.
@@ -35,6 +44,21 @@ section as part of its PR. On release, the section gets the version number.
   `systemctl list-timers`, carries its own interval, is `Persistent=true` so a box that was off still
   refreshes, and spreads a fleet with `RandomizedDelaySec`. Installing a list enables it and removes any
   stale cron line; deleting the last list removes the timer.
+- **Adding, renaming or restoring a web domain now tells fail2ban about its log** (#496). fail2ban expands a
+  `logpath` glob once, when the jail starts, and never again, so a domain created afterwards went unwatched
+  - silently - until the daemon next restarted. `h-add-web-domain`, `h-delete-web-domain`,
+  `h-change-web-domain-name` and `rebuild_web_domain_conf` call `fail2ban_watch_domain`, which uses
+  `addlogpath`/`dellogpath` to touch only that jail's file list: no reload, no action churn, no effect on
+  live bans. It can never fail its caller - a domain add must not break because fail2ban is unhappy.
+- **`check_fail2ban_backends` no longer trips on a box with no web domains** (#496). The guard exists to
+  catch a jail put on the wrong backend, which reports healthy while monitoring nothing. A `logpath` glob
+  that currently matches no file is not that: it is a box with nothing to watch yet, so the guard now
+  compares against the configured pattern before calling a jail blind.
+- **CODEMAP's firewall and fail2ban entries are current again** (#496). Both had drifted across the
+  migration series: the firewall entry still described the iptables renderer, the `queue/daily.pipe`
+  refresh and the shipped preset fixed in #481, and gave `FIREWALL_SYSTEM` its pre-#495 value - the exact
+  config-VALUE staleness that let the panel destroy a live ruleset once already. The fail2ban entry still
+  flagged D1 as an open P0 and D4/D6/D7 as live hazards, all of which shipped fixed.
 
 ### Fixed
 

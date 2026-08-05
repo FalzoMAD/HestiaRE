@@ -14,13 +14,13 @@
 # keep owning the ban action instead of using fail2ban's native nftables one, which would bypass the
 # banlist, the panel and the replay.
 
-# ignoreip mirrors the firewall whitelist, so the address pattern comes from there. Guarded: re-sourcing
-# would reset an in-flight batch.
-# shellcheck source=/usr/local/hestia/func/firewall.sh
-declare -F fw_is_addr > /dev/null 2>&1 || source "$HESTIA/func/firewall.sh"
-
 F2B_DIR="/etc/fail2ban"
 F2B_OURS="$F2B_DIR/jail.d/hestia.local"
+# The whitelist gets its OWN file rather than a delimited block inside hestia.local. A generated block in a
+# shared file has to be found again to be replaced, and every way of delimiting it ends badly when an admin
+# edits around it: a sed range whose end address has been removed deletes to end of file. A whole file we
+# own outright cannot take admin content with it. Sorts after hestia.local, so its [DEFAULT] wins.
+F2B_WHITELIST="$F2B_DIR/jail.d/hestia-zz-whitelist.local"
 
 # Our jails live in jail.d/hestia.local, NOT in jail.local. fail2ban reads jail.conf -> jail.d/*.conf ->
 # jail.local -> jail.d/*.local, so ours is read last and wins, while /etc/fail2ban/jail.local is left for
@@ -86,6 +86,48 @@ fail2ban_gate_jails() {
 	fail2ban_flag_on "$ftp" || fail2ban_set_enabled 'proftpd-iptables' 'false'
 }
 
+# The web jail follows the per-domain logs, and those live under /var/log/<web system>/domains regardless of
+# which server writes them - in the nginx-in-front-of-apache model the vhost template hands nginx the apache
+# path too. Read from the config FILE, not the variable: during the install run the key is already written
+# but the installer's own shell has never seen it.
+fail2ban_web_logdir() {
+	local ws
+	ws="$(sed -n "s/^WEB_SYSTEM='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)"
+	[ -n "$ws" ] || return 1
+	echo "/var/log/$ws/domains"
+}
+
+fail2ban_gate_web_jail() {
+	local dir
+	[ -f "$F2B_OURS" ] || return 0
+	if ! dir="$(fail2ban_web_logdir)"; then
+		fail2ban_set_enabled 'web-botsearch' 'false'
+		return 0
+	fi
+	awk -v jail='[web-botsearch]' -v path="$dir/*.log" '
+		$0 == jail { inj = 1; print; next }
+		/^\[/ { inj = 0 }
+		inj && /^logpath[[:space:]]*=/ { print "logpath  = " path; next }
+		{ print }
+	' "$F2B_OURS" > "$F2B_OURS.tmp" && mv -f "$F2B_OURS.tmp" "$F2B_OURS"
+}
+
+# fail2ban expands a logpath glob once, when the jail starts, and never again - a domain added afterwards is
+# simply not watched, silently, until the daemon next restarts. So every place that creates or removes a
+# domain log has to say so. addlogpath/dellogpath touch only that jail's file list: no reload, no action
+# churn, no effect on live bans. Never fails its caller; this must not be able to break a domain add.
+fail2ban_watch_domain() {
+	local verb="$1" domain="$2" dir
+	[ -n "${FIREWALL_EXTENSION:-}" ] || return 0
+	systemctl -q is-active fail2ban 2> /dev/null || return 0
+	dir="$(fail2ban_web_logdir)" || return 0
+	case "$verb" in
+		add) fail2ban-client set web-botsearch addlogpath "$dir/$domain.log" tail > /dev/null 2>&1 ;;
+		del) fail2ban-client set web-botsearch dellogpath "$dir/$domain.log" > /dev/null 2>&1 ;;
+	esac
+	return 0
+}
+
 # Flip one jail's `enabled` without disturbing the rest of its block.
 fail2ban_set_enabled() {
 	awk -v jail="[$1]" -v val="$2" '
@@ -113,24 +155,34 @@ fail2ban_enabled_jails() {
 	     /^enabled[[:space:]]*=[[:space:]]*true/ { if (j != "") print j }' "$F2B_OURS"
 }
 
+# The logpath our config gives a jail, before fail2ban expands any glob in it.
+fail2ban_jail_logpath() {
+	awk -v jail="[$1]" '
+		$0 == jail { inj = 1; next }
+		/^\[/ { inj = 0 }
+		inj && /^logpath[[:space:]]*=/ { sub(/^logpath[[:space:]]*=[[:space:]]*/, ""); print; exit }
+	' "$F2B_OURS" 2> /dev/null
+}
+
 # Mirror the firewall whitelist into fail2ban's ignoreip, so a whitelisted address is not merely unbannable
 # at the ruleset level but never counted in the first place - otherwise the jail keeps matching and logging
-# an address it can never act on. Written as our own [DEFAULT] block; ours is read last, so it wins.
+# an address it can never act on. Rewritten whole, never edited in place.
 fail2ban_sync_ignoreip() {
 	local excludes="$CONF_DIR/firewall/excludes.conf" ips
-	[ -f "$F2B_OURS" ] || return 0
+	[ -d "$F2B_DIR/jail.d" ] || return 0
+	# Needed only here, so it is sourced here: this file is also read by h-add-web-domain, where pulling in
+	# the renderer would be dead weight and could reset an in-flight batch.
+	# shellcheck source=/usr/local/hestia/func/firewall.sh
+	declare -F fw_is_addr > /dev/null 2>&1 || source "$HESTIA/func/firewall.sh"
 	ips="$(grep -oE "$FW_ADDR_RE|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$" "$excludes" 2> /dev/null | paste -sd' ' -)"
-	# Always present, even empty: loopback belongs in ignoreip regardless, and a stable block means the
-	# rewrite below has something to replace instead of appending a new one each run.
-	sed -i '/^# HestiaRE whitelist/,/^$/d' "$F2B_OURS"
+	# Written even when the whitelist is empty: loopback belongs in ignoreip regardless.
 	{
-		echo ""
-		echo "# HestiaRE whitelist - mirrored from firewall/excludes.conf by fail2ban_sync_ignoreip."
-		echo "# Edit the whitelist with h-add/delete-firewall-exclude; changes here are overwritten."
+		echo "# Generated by fail2ban_sync_ignoreip from firewall/excludes.conf - do not edit."
+		echo "# Manage entries with h-add-firewall-exclude / h-delete-firewall-exclude."
 		echo "[DEFAULT]"
 		echo "ignoreip = 127.0.0.1/8 ::1 $ips"
-		echo ""
-	} >> "$F2B_OURS"
+	} > "$F2B_WHITELIST"
+	chmod 644 "$F2B_WHITELIST" 2> /dev/null
 }
 
 fail2ban_apply() {
@@ -138,6 +190,7 @@ fail2ban_apply() {
 	fail2ban_install_config
 	fail2ban_disable_distro_jails
 	fail2ban_gate_jails "$mail" "$ftp"
+	fail2ban_gate_web_jail
 	fail2ban_ensure_authlog
 	fail2ban_sync_ignoreip
 	systemctl -q enable fail2ban 2> /dev/null
