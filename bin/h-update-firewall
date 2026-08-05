@@ -86,7 +86,14 @@ ips="$(ls $CONF_DIR/ips)"
 for ip in $ips; do
 	fw_accept_source "$ip"
 done
-fw_accept_source '127.0.0.1'
+# Loopback is accepted by interface so both families are covered; see fw_accept_loopback.
+fw_accept_loopback
+
+# Ungated on WEBMAIL_SYSTEM on purpose: a rule for an unused port is free, while gating would leave the
+# port open between installing webmail and the next rebuild.
+for wm_port in 8090 8091; do
+	fw_restrict_local_port "$wm_port" "$(fw_local_allowed_uids)"
+done
 
 # Whitelist, evaluated before any ban match so it can rescue a locked-out admin
 fw_accept_excludes
@@ -95,7 +102,7 @@ fw_accept_excludes
 # RETURNs loopback + RFC1918 FIRST. That exemption is defense-in-depth: a false-positive ban on
 # 127.0.0.1 or an internal address would otherwise be enforced box-wide, and CrowdSec's own
 # whitelist has demonstrably failed for loopback/internal before. Emitted below the loopback/
-# own-IP ACCEPTs, above the service ACCEPTs; the set is provisioned by h-update-firewall-ipset.
+# own-IP ACCEPTs, above the service ACCEPTs; the set is declared by the renderer and filled from its cache.
 if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
 	fw_chain_create hestia-crowdsec
 	fw_flush hestia-crowdsec

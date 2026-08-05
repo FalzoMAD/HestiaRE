@@ -185,11 +185,10 @@ fi
 chmod 660 $CONF_DIR/firewall/ipset.conf
 chmod 660 "${IPSET_PATH}/${IPSET_FILE}.iplist"
 
-# Install ipset daily cron updater
-if ! grep --silent --no-messages "h-update-firewall-ipset" $CONF_DIR/queue/daily.pipe; then
-	cmd="$BIN/h-update-firewall-ipset yes"
-	echo "$cmd" >> $CONF_DIR/queue/daily.pipe
-fi
+# Refresh cadence: a systemd timer, not a line appended to the daily queue. The queue gave every list the
+# same schedule as everything else in it and left no way to inspect or change it; the timer is visible in
+# systemctl list-timers and its interval is a config key.
+fw_blocklist_timer_install
 
 #----------------------------------------------------------#
 #                       Hestia                             #

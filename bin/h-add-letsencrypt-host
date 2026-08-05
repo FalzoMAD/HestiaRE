@@ -38,7 +38,9 @@ USER_DATA=$CONF_DIR/users/$user
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-is_format_valid 'user' 'domain' 'aliases'
+# No aliases argument here - the command derives the domain from the hostname, so the name validated
+# nothing and would now hard-error.
+is_format_valid 'user' 'domain'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'

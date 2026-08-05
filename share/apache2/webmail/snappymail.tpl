@@ -28,6 +28,11 @@
     ProxyPreserveHost On
     ProxyPass / http://127.0.0.1:8091/ retry=0
     ProxyPassReverse / http://127.0.0.1:8091/
+    # Apache is the public front in the apache-only profile, so REMOTE_ADDR is the real client.
+    # set (not add) overwrites any client-supplied value, so both are non-forgeable. X-Real-IP
+    # feeds Roundcube, Client-IP feeds SnappyMail (X-Forwarded-For is clobbered downstream).
+    RequestHeader set X-Real-IP "expr=%{REMOTE_ADDR}"
+    RequestHeader set Client-IP "expr=%{REMOTE_ADDR}"
     RequestHeader set X-Forwarded-Proto "http"
 
     IncludeOptional %home%/%user%/conf/mail/%root_domain%/%web_system%.conf_*

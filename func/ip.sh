@@ -27,9 +27,11 @@ is_ip_free() {
 # Check ip address specific value
 is_ip_key_empty() {
 	key="$1"
-	string=$(cat $CONF_DIR/ips/$ip)
-	eval $string
-	eval value="$key"
+	# source_conf, not `eval $(cat ...)`: the old form executed the whole IP conf as bash, so any content
+	# in it ran (the GHSA-xffx class). Callers pass a single '$VARNAME', so strip the $ and deref safely.
+	[ -e "$CONF_DIR/ips/$ip" ] && source_conf "$CONF_DIR/ips/$ip"
+	local varname="${key#\$}"
+	value="${!varname}"
 	if [ -n "$value" ] && [ "$value" != '0' ]; then
 		key="$(echo $key | sed -e "s/\$U_//")"
 		check_result "$E_EXISTS" "IP is in use / $key = $value"
@@ -61,10 +63,11 @@ update_ip_value() {
 	key="$1"
 	value="$2"
 	conf="$CONF_DIR/ips/$ip"
-	str=$(cat $conf)
-	eval $str
+	# See is_ip_key_empty: source_conf instead of eval-ing the file content as bash.
+	[ -e "$conf" ] && source_conf "$conf"
 	c_key=$(echo "${key//$/}")
-	eval old="${key}"
+	local varname="${key#\$}"
+	old="${!varname}"
 	old=$(echo "$old" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/\//\\\//g')
 	new=$(echo "$value" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/\//\\\//g')
 	sed -i "$str_number s/$c_key='${old//\*/\\*}'/$c_key='${new//\*/\\*}'/g" \
@@ -165,9 +168,10 @@ decrease_ip_value() {
 # Get ip address value
 get_ip_value() {
 	key="$1"
-	string=$(cat $CONF_DIR/ips/$ip)
-	eval $string
-	eval value="$key"
+	# See is_ip_key_empty: source_conf instead of eval-ing the file content as bash.
+	[ -e "$CONF_DIR/ips/$ip" ] && source_conf "$CONF_DIR/ips/$ip"
+	local varname="${key#\$}"
+	value="${!varname}"
 	echo "$value"
 }
 

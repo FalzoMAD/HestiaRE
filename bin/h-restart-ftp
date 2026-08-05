@@ -10,6 +10,10 @@
 #                Variables & Functions                     #
 #----------------------------------------------------------#
 
+# Argument definition. Assigned here rather than left to $1 further down: the verification block validates
+# `restart`, and a variable that is never assigned validates nothing at all.
+restart=$1
+
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env

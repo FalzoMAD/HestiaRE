@@ -10,6 +10,11 @@
 source_conf() {
 	while IFS='= ' read -r lhs rhs; do
 		if [[ ! $lhs =~ ^\ *# && -n $lhs ]]; then
+			# A config key is a plain identifier, never an array subscript. Rejecting anything else stops
+			# `declare -g $lhs=` from evaluating a command substitution smuggled into a `key[$(...)]`
+			# subscript (the GHSA-xffx-jj33-p2px class) - a hardening of the sink that covers every caller,
+			# not just the one command that reads an attacker-supplied file.
+			[[ $lhs =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
 			rhs="${rhs%%^\#*}" # Del in line right comments
 			rhs="${rhs%%*( )}" # Del trailing spaces
 			rhs="${rhs%\'*}"   # Del opening string quotes
@@ -1004,6 +1009,20 @@ is_ipv4_cidr_format_valid() {
 	fi
 }
 
+# Either family. Bans accept both since the firewall carries a v6 set per jail; the single-family
+# validators stay for the places that genuinely mean one family (an IP object, a NAT address).
+is_ip_cidr_format_valid() {
+	object_name=${2-ip}
+	valid=$($HESTIA_PHP -r '$cidr=$argv[1]; $p=explode("/", $cidr); $ip=$p[0]; $m=$p[1]??null;
+		$v4=filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4);
+		$v6=filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6);
+		$ok=($v4 && ($m===null || $m<=32)) || ($v6 && ($m===null || $m<=128));
+		echo $ok ? 0 : 1;' "$1")
+	if [ "$valid" -ne 0 ]; then
+		check_result "$E_INVALID" "invalid $object_name :: $1"
+	fi
+}
+
 is_ipv6_cidr_format_valid() {
 	object_name=${2-ipv6}
 	valid=$($HESTIA_PHP -r '$cidr=$argv[1]; list($ip, $netmask) = [...explode("/", $cidr), 128]; echo ((filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) && $netmask <= 128) ? 0 : 1);' "$1")
@@ -1485,8 +1504,17 @@ is_hash_format_valid() {
 }
 
 # Format validation controller
+# Validates by VARIABLE NAME: each name is both the type to check and the variable to read via ${!name}.
+# That coupling is the trap - a name with no matching variable expands to empty, and empty used to mean
+# "nothing to check, so valid". So renaming an argument, or typoing a type, silently disabled the check
+# instead of failing. It has cost us twice. An UNSET variable is therefore a hard error now: it can only be
+# a programming mistake, since a caller with a genuinely optional argument still has the variable declared
+# and empty, which stays a legitimate skip.
 is_format_valid() {
 	for arg_name in $*; do
+		if ! declare -p "$arg_name" > /dev/null 2>&1; then
+			check_result "$E_INVALID" "internal: is_format_valid '$arg_name' names no variable - check for a rename or typo"
+		fi
 		arg="${!arg_name}"
 		if [ -n "$arg" ]; then
 			case $arg_name in
@@ -1527,6 +1555,7 @@ is_format_valid() {
 				ip) is_ip_format_valid "$arg" ;;
 				ipv6) is_ipv6_format_valid "$arg" ;;
 				ip46) is_ip46_format_valid "$arg" ;;
+				ip_cidr) is_ip_cidr_format_valid "$arg" ;;
 				ipv4_cidr) is_ipv4_cidr_format_valid "$arg" ;;
 				ipv6_cidr) is_ipv6_cidr_format_valid "$arg" ;;
 				ip_name) is_domain_format_valid "$arg" 'IP name' ;;

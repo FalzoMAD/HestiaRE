@@ -57,11 +57,22 @@
 		// Uncomment below for IPv6
 		// $country_ipv6lists = generate_iplist($country, 'IPv6');
 
-		$blacklist_iplists = [
-			["name" => "[IPv4] " . _("Block Malicious IPs"), "source" => "script:/usr/local/hestia/install/common/firewall/ipset/blacklist.sh"],
-			// Uncomment below for IPv6
-			// array('name' => "[IPv6] " . _("Block Malicious IPs"), 'source' => "script:/usr/local/hestia/install/common/firewall/ipset/blacklist.ipv6.sh"),
-		];
+		// Read from share/firewall/blocklists.conf rather than hard-coded here: the previous entry pointed at
+		// a script under install/, which no longer exists, so the shipped preset could only ever fail.
+		$blacklist_iplists = [];
+		foreach (file("/usr/local/hestia/share/firewall/blocklists.conf", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+			if ($line === "" || $line[0] === "#") {
+				continue;
+			}
+			if (preg_match("/NAME='([^']*)'.*LEVEL='([^']*)'.*FAMILY='([^']*)'.*SOURCE='([^']*)'/", $line, $m)) {
+				$blacklist_iplists[] = [
+					// Raw here: the array is escaped once as a whole at the data- attribute below, exactly as
+					// generate_iplist's names are. Escaping the name too rendered "Blocklist&period;de".
+					"name" => "[" . strtoupper($m[3]) . "] " . $m[1] . " (" . _("level") . " " . $m[2] . ")",
+					"source" => $m[4],
+				];
+			}
+		}
 		?>
 
 		<div class="form-container">

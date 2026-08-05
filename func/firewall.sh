@@ -26,6 +26,9 @@ FW_INPUT_POLICY="drop"
 
 # One address pattern for the whole library, so the grep form and the test form cannot drift apart.
 FW_ADDR_RE='^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$'
+# Deliberately loose: hex groups and colons, optional prefix. It is a sanity filter, not a parser - nft
+# does the real validation, and this only has to stop anything carrying nft grammar from reaching it.
+FW_ADDR6_RE='^[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*(/[0-9]{1,3})?$'
 
 #----------------------------------------------------------#
 #                     Batch handling                       #
@@ -41,6 +44,7 @@ fw_batch_begin() {
 	: > "$FW_WORK/base"
 	: > "$FW_WORK/setjump"
 	: > "$FW_WORK/rules"
+	: > "$FW_WORK/local"
 	FW_INPUT_POLICY="drop"
 }
 
@@ -69,6 +73,14 @@ fw_batch_render() {
 	# a ban drops live connections too. Keep that.
 	cat "$FW_WORK/exclude" "$FW_WORK/jail" "$FW_WORK/base" "$FW_WORK/setjump" "$FW_WORK/rules"
 	echo "	}"
+	# An output chain only when something asks for one, and always policy accept: this exists to
+	# restrict a couple of loopback ports, not to filter egress.
+	if [ -s "$FW_WORK/local" ]; then
+		echo "	chain output {"
+		echo "		type filter hook output priority filter; policy accept;"
+		cat "$FW_WORK/local"
+		echo "	}"
+	fi
 	for f in "$FW_WORK"/chain.*; do
 		[ -e "$f" ] || continue
 		echo "	chain ${f##*/chain.} {"
@@ -139,6 +151,14 @@ fw_accept_source() {
 	fw_sec base "		ip saddr $1 accept"
 }
 
+# Loopback by INTERFACE, not by address. `ip saddr 127.0.0.1` is v4-only, and in an inet chain with a drop
+# policy that leaves ::1 with no accept at all - so anything reaching a service over IPv6 loopback is
+# dropped. The iptables ruleset never noticed because ip6tables was wide open; this chain filters both
+# families, so the v4-only spelling became a regression. redis, for one, binds -::1 expecting it to work.
+fw_accept_loopback() {
+	fw_sec base "		iif lo accept"
+}
+
 # excludes.conf used to only suppress NEW bans, which left an already-banned admin locked out and gave the
 # file no effect on anything but fail2ban. Rendering it as an accept ahead of the ban matches makes it the
 # recovery primitive it was always meant to be. Skipped when empty so an absent file costs nothing.
@@ -176,6 +196,19 @@ fw_is_addr() {
 	[[ "$1" =~ $FW_ADDR_RE ]]
 }
 
+fw_is_addr6() {
+	[[ "$1" =~ $FW_ADDR6_RE ]]
+}
+
+# 4, 6, or nothing. The nothing case is what keeps a malformed value out of nft entirely.
+fw_addr_family() {
+	if fw_is_addr "$1"; then
+		echo 4
+	elif fw_is_addr6 "$1"; then
+		echo 6
+	fi
+}
+
 # Where a dynamic set's contents come from. Replacing the whole table would otherwise drop every element,
 # so a set is never the record of truth for itself: it is rendered from a file, the same way the ruleset is
 # rendered from the object model. The CrowdSec feeder and the blocklist refresh each own one of these.
@@ -204,7 +237,12 @@ fw_set_elements() {
 	local id="$1" src
 	[ -s "$FW_WORK/elem.$id" ] && cat "$FW_WORK/elem.$id"
 	src="$(fw_set_src "$(cat "$FW_WORK/name.$id")")"
-	[ -s "$src" ] && grep -oE "$FW_ADDR_RE" "$src"
+	# A v6 set fed a v4 literal fails the whole document, and vice versa - so filter by the set type.
+	if [ "$(cat "$FW_WORK/set.$id" 2> /dev/null)" = 'v6' ]; then
+		[ -s "$src" ] && grep -oE "$FW_ADDR6_RE" "$src"
+	else
+		[ -s "$src" ] && grep -oE "$FW_ADDR_RE" "$src"
+	fi
 	return 0
 }
 
@@ -216,11 +254,11 @@ fw_render_sets() {
 		kind="$(cat "$f")"
 		elems="$(fw_set_elements "$id" | sort -u | paste -sd, - | sed 's/,/, /g')"
 		[ -n "$elems" ] && elems=" elements = { $elems };"
-		if [ "$kind" = 'interval' ]; then
-			echo "	set $id { type ipv4_addr; flags interval; auto-merge;${elems} }"
-		else
-			echo "	set $id { type ipv4_addr;${elems} }"
-		fi
+		case "$kind" in
+			interval) echo "	set $id { type ipv4_addr; flags interval; auto-merge;${elems} }" ;;
+			v6) echo "	set $id { type ipv6_addr;${elems} }" ;;
+			*) echo "	set $id { type ipv4_addr;${elems} }" ;;
+		esac
 	done
 }
 
@@ -260,6 +298,26 @@ fw_port_expr() {
 		*,* | *-*) echo "{ ${spec//,/, } }" ;;
 		*) echo "$spec" ;;
 	esac
+}
+
+# A TCP loopback listener has no filesystem permissions, so any local user reaches it - customers included.
+# Two local users share 127.0.0.1, so only the connecting UID can tell them apart. `reject` so a wrong
+# caller fails at once instead of hanging.
+fw_restrict_local_port() {
+	local port="$1" uids="$2"
+	fw_sec local "		oif lo tcp dport $port meta skuid != { $uids } reject with tcp reset"
+}
+
+# Root plus the web server that makes the proxy hop. By name, since the uid number is not the contract.
+# Root is not optional: h-check-sys-smoke probes these listeners over HTTP.
+fw_local_allowed_uids() {
+	local web
+	web="$(id -u www-data 2> /dev/null)"
+	if [ -n "$web" ]; then
+		echo "0, $web"
+	else
+		echo "0"
+	fi
 }
 
 # fw_rule <action> <protocol> <port> <source> [type] [conntrack_ftp]
@@ -311,11 +369,30 @@ fw_jail_set() {
 	echo "f2b_$1"
 }
 
+# The v6 sibling. nft cannot hold both families in one set, so a jail is two sets and two rules. That
+# also makes v6 banning additive: the v4 path is untouched by it.
+fw_jail_set6() {
+	echo "f2b6_$1"
+}
+
+# Which of a jail's two sets an address belongs in. Empty for anything that is neither.
+fw_jail_set_for() {
+	case "$(fw_addr_family "$2")" in
+		4) fw_jail_set "$1" ;;
+		6) fw_jail_set6 "$1" ;;
+	esac
+}
+
 fw_jail_rebuild() {
 	local chain="$1" protocol="$2" port_val="$3" proto
 	proto="$(echo "$protocol" | tr '[:upper:]' '[:lower:]')"
 	fw_set_declare "$(fw_jail_set "$chain")"
+	fw_set_declare "$(fw_jail_set6 "$chain")" v6
 	fw_sec jail "		ip saddr @$(fw_jail_set "$chain") ${proto} dport $(fw_port_expr "$port_val") reject with icmpx type port-unreachable"
+	# Emitted unconditionally. An ip6 rule and an ipv6_addr set load on a host with no v6 address and
+	# even with ipv6 disabled outright, so this presupposes nothing. It is needed because the service
+	# accepts carry no family qualifier: v6 reaches exactly the ports the jails protect.
+	fw_sec jail "		ip6 saddr @$(fw_jail_set6 "$chain") ${proto} dport $(fw_port_expr "$port_val") reject with icmpx type port-unreachable"
 }
 
 
@@ -324,10 +401,14 @@ fw_jail_attach() {
 	local chain="$1" protocol="$2" port_val="$3" proto
 	proto="$(echo "$protocol" | tr '[:upper:]' '[:lower:]')"
 	"$FW_NFT" add set "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$chain")" '{ type ipv4_addr; }' 2> /dev/null
+	"$FW_NFT" add set "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set6 "$chain")" '{ type ipv6_addr; }' 2> /dev/null
 	"$FW_NFT" list chain "$FW_FAMILY" "$FW_TABLE" input 2> /dev/null \
 		| grep -q "@$(fw_jail_set "$chain") " && return 0
 	"$FW_NFT" insert rule "$FW_FAMILY" "$FW_TABLE" input index 0 \
 		ip saddr "@$(fw_jail_set "$chain")" "$proto" dport "$(fw_port_expr "$port_val")" \
+		reject with icmpx type port-unreachable 2> /dev/null
+	"$FW_NFT" insert rule "$FW_FAMILY" "$FW_TABLE" input index 0 \
+		ip6 saddr "@$(fw_jail_set6 "$chain")" "$proto" dport "$(fw_port_expr "$port_val")" \
 		reject with icmpx type port-unreachable 2> /dev/null
 }
 
@@ -337,21 +418,26 @@ fw_jail_attach() {
 # regex metacharacter would skew or invalidate the pattern, leave the handle empty, and let this "succeed"
 # without ever removing the rule.
 fw_jail_detach() {
-	local handle
-	handle=$("$FW_NFT" -a list chain "$FW_FAMILY" "$FW_TABLE" input 2> /dev/null \
-		| awk -v tok="@$(fw_jail_set "$1")" '{ for (i = 1; i < NF; i++) if ($i == tok) { print $NF; exit } }')
-	[ -n "$handle" ] && "$FW_NFT" delete rule "$FW_FAMILY" "$FW_TABLE" input handle "$handle" 2> /dev/null
+	local handle tok
+	for tok in "@$(fw_jail_set "$1")" "@$(fw_jail_set6 "$1")"; do
+		handle=$("$FW_NFT" -a list chain "$FW_FAMILY" "$FW_TABLE" input 2> /dev/null \
+			| awk -v tok="$tok" '{ for (i = 1; i < NF; i++) if ($i == tok) { print $NF; exit } }')
+		[ -n "$handle" ] && "$FW_NFT" delete rule "$FW_FAMILY" "$FW_TABLE" input handle "$handle" 2> /dev/null
+	done
 	return 0
 }
 
 fw_jail_destroy() {
 	"$FW_NFT" delete set "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$1")" 2> /dev/null
+	"$FW_NFT" delete set "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set6 "$1")" 2> /dev/null
 	return 0
 }
 
 # Jail sets, reported under the chain names the object model uses.
 fw_jail_chains_live() {
-	"$FW_NFT" list sets "$FW_FAMILY" 2> /dev/null | sed -n 's/^	set f2b_\([A-Za-z0-9_]*\) .*/\1/p'
+	# Both prefixes map to the same jail, so collapse them - a jail is one object to the object model.
+	"$FW_NFT" list sets "$FW_FAMILY" 2> /dev/null \
+		| sed -n 's/^	set f2b6\?_\([A-Za-z0-9_]*\) .*/\1/p' | sort -u
 }
 
 # Wired means the set exists and the input chain still matches it.
@@ -371,22 +457,32 @@ fw_set_chain_destroy() {
 #----------------------------------------------------------#
 
 fw_ban_add() {
-	fw_is_addr "$2" || return 1
-	"$FW_NFT" add element "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$1")" "{ $2 }" 2> /dev/null
+	local set
+	set="$(fw_jail_set_for "$1" "$2")"
+	[ -n "$set" ] || return 1
+	"$FW_NFT" add element "$FW_FAMILY" "$FW_TABLE" "$set" "{ $2 }" 2> /dev/null
 	return 0
 }
 
 # Batched replay from banlist.conf. The set must exist in the same document, so declare on demand: a
 # banlist row can name a chain that chains.conf no longer has.
 fw_ban_emit() {
-	fw_is_addr "$2" || return 0
-	fw_set_declare "$(fw_jail_set "$1")"
-	echo "$2" >> "$FW_WORK/elem.$(fw_jail_set "$1")"
+	local set
+	set="$(fw_jail_set_for "$1" "$2")"
+	[ -n "$set" ] || return 0
+	if [ "$set" = "$(fw_jail_set6 "$1")" ]; then
+		fw_set_declare "$set" v6
+	else
+		fw_set_declare "$set"
+	fi
+	echo "$2" >> "$FW_WORK/elem.$set"
 }
 
 fw_ban_delete() {
-	fw_is_addr "$2" || return 1
-	"$FW_NFT" delete element "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$1")" "{ $2 }" 2> /dev/null
+	local set
+	set="$(fw_jail_set_for "$1" "$2")"
+	[ -n "$set" ] || return 1
+	"$FW_NFT" delete element "$FW_FAMILY" "$FW_TABLE" "$set" "{ $2 }" 2> /dev/null
 	return 0
 }
 
@@ -458,6 +554,39 @@ fw_persist_disable() {
 fw_table_destroy() {
 	"$FW_NFT" delete table "$FW_FAMILY" "$FW_TABLE" 2> /dev/null
 	rm -f "$FW_RULESET"
+	return 0
+}
+
+#----------------------------------------------------------#
+#                       Blocklists                         #
+#----------------------------------------------------------#
+
+# Install and enable the refresh timer, and drop the cron line older installs appended to the daily queue -
+# otherwise a box that predates the timer would refresh twice.
+fw_blocklist_timer_install() {
+	local src="$HESTIA/share/firewall/systemd"
+	[ -d "$src" ] || return 0
+	cp -f "$src/hestia-blocklist.service" "$src/hestia-blocklist.timer" /etc/systemd/system/ 2> /dev/null || return 0
+	fw_blocklist_interval_apply "${BLOCKLIST_INTERVAL:-1d}"
+	sed -i '/h-update-firewall-ipset/d' "$CONF_DIR/queue/daily.pipe" 2> /dev/null
+	systemctl -q daemon-reload
+	systemctl -q enable --now hestia-blocklist.timer 2> /dev/null
+	return 0
+}
+
+# One global interval rather than one per list: native sets may reshape the per-object model later, and a
+# per-list schedule would be rework. Written into the unit because a timer cannot read hestia.conf.
+fw_blocklist_interval_apply() {
+	local unit=/etc/systemd/system/hestia-blocklist.timer
+	[ -f "$unit" ] || return 0
+	sed -i "s|^OnUnitActiveSec=.*|OnUnitActiveSec=${1}|" "$unit"
+	return 0
+}
+
+fw_blocklist_timer_remove() {
+	systemctl -q disable --now hestia-blocklist.timer 2> /dev/null
+	rm -f /etc/systemd/system/hestia-blocklist.service /etc/systemd/system/hestia-blocklist.timer
+	systemctl -q daemon-reload
 	return 0
 }
 

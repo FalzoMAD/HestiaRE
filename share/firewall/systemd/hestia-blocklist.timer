@@ -1,0 +1,19 @@
+# Interval comes from BLOCKLIST_INTERVAL (hestia.conf) via h-change-sys-blocklist-interval, which rewrites
+# OnUnitActiveSec here. Daily by default: these lists change on the order of hours, and every refresh is a
+# full re-download per list.
+#
+# RandomizedDelaySec spreads a fleet out, so 15 servers do not hit the same source in the same second.
+# Persistent so a box that was off at the scheduled time refreshes on the next boot instead of waiting.
+[Unit]
+Description=HestiaRE firewall blocklist refresh timer
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1d
+RandomizedDelaySec=30min
+Persistent=true
+AccuracySec=1h
+Unit=hestia-blocklist.service
+
+[Install]
+WantedBy=timers.target

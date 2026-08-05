@@ -5,6 +5,11 @@
 			<a href="/edit/server/" class="button button-secondary">
 				<i class="fas fa-gear icon-maroon"></i><?= tohtml( _("Configure")) ?>
 			</a>
+			<!-- Bot rate limiting lives in a collapsed section of Server Settings, so it was reachable but
+			     not discoverable (#482). Deep-link straight to it; the section header still expands on click. -->
+			<a href="/edit/server/#botlimit" class="button button-secondary">
+				<i class="fas fa-robot icon-blue"></i><?= tohtml( _("Bot Rate Limiting")) ?>
+			</a>
 			<a href="/list/rrd/" class="button button-secondary">
 				<i class="fas fa-chart-area icon-blue"></i><?= tohtml( _("Task Monitor")) ?>
 			</a>

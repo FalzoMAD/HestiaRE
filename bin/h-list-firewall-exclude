@@ -1,0 +1,71 @@
+#!/bin/bash
+# info: list firewall whitelist
+# options: [FORMAT]
+#
+# example: h-list-firewall-exclude json
+#
+# The whitelist is a bare address per line, so there is no object model to parse - the formats exist to
+# match the other h-list-firewall-* commands rather than because the data needs them. No v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+format=${1-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+excludes="$CONF_DIR/firewall/excludes.conf"
+
+json_list() {
+	echo '{'
+	local i=0
+	while read -r ip; do
+		[ -n "$ip" ] || continue
+		[ "$i" -gt 0 ] && echo -e '\t},'
+		echo -e "\t\"$ip\": {"
+		echo -e "\t\t\"IP\": \"$ip\""
+		i=$((i + 1))
+	done < <(grep -v '^\s*$' "$excludes" 2> /dev/null)
+	[ "$i" -gt 0 ] && echo -e '\t}'
+	echo '}'
+}
+
+shell_list() {
+	echo "IP"
+	echo "----"
+	grep -v '^\s*$' "$excludes" 2> /dev/null
+}
+
+plain_list() {
+	grep -v '^\s*$' "$excludes" 2> /dev/null
+}
+
+csv_list() {
+	echo "IP"
+	grep -v '^\s*$' "$excludes" 2> /dev/null
+}
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

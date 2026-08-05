@@ -1,3 +1,7 @@
+# No mysqld jail: 3306 is not in the shipped ruleset, so MariaDB is only reachable from loopback and the
+# box itself - both of which h-add-firewall-ban refuses to ban. A jail there would match and then decline to
+# act. An admin who deliberately opens 3306 owns the access control for it (source-restricted rule, DB
+# users) and can add a jail to suit.
 # Our jails read log FILES, so the backend is pinned here rather than inherited. Ubuntu 24.04's
 # jail.d/defaults-debian.conf sets `backend = systemd` in [DEFAULT], which applies to every jail: ours then
 # watch the journal, never read their logpath, and match nothing while reporting perfectly healthy. Debian
@@ -25,13 +29,6 @@ filter   = dovecot
 action   = hestia[name=MAIL]
 logpath  = /var/log/dovecot.log
 
-[mysqld-iptables]
-enabled  = false
-filter   = mysqld-auth
-action   = hestia[name=DB]
-logpath  = /var/log/mysql/error.log
-maxretry = 5
-
 [proftpd-iptables]
 enabled  = true
 filter   = proftpd
@@ -46,11 +43,22 @@ action   = hestia[name=HESTIA]
 logpath  = /var/log/hestia/auth.log
 maxretry = 5
 
+# Webmail auth jails. enabled is a placeholder: fail2ban_gate_webmail_jails flips each on when its client
+# is in WEBMAIL_SYSTEM and ensures the logpath exists (a jail on a missing file never fires). Both ban at
+# the WEB chain - webmail is web-tier. The real client reaches the log via the webmail vhost header fixes
+# (X-Real-IP for Roundcube, Client-IP for SnappyMail); see the two filters.
 [roundcube-auth]
 enabled  = false
-filter   = roundcube-auth
+filter   = hestia-roundcube
 action   = hestia[name=WEB]
-logpath  = /var/log/roundcube/errors.log
+logpath  = /var/log/roundcube/userlogins.log
+maxretry = 5
+
+[snappymail-auth]
+enabled  = false
+filter   = hestia-snappymail
+action   = hestia[name=WEB]
+logpath  = /var/log/snappymail/fail2ban/auth.txt
 maxretry = 5
 
 [phpmyadmin-auth]
@@ -59,6 +67,26 @@ filter   = phpmyadmin-syslog
 action   = hestia[name=WEB]
 logpath  = /var/log/auth.log
 maxretry = 5
+
+# The L7 jail: scanners probing customer vhosts for apps that are not installed. logpath is rewritten to the
+# configured web system by fail2ban_gate_web_jail - the value here is only a placeholder. Deliberately NOT
+# extended to the rate limiter's 429s: Layer B (nginx limit_req / apache mod_qos) throttles bots on its own
+# and its verdicts must not escalate into firewall bans.
+#
+# findtime/bantime are spelled out rather than inherited from jail.conf: this jail is armed on every domain
+# of every box, so the thresholds are a decision, not a distro default that could shift under us. 5 in 10
+# minutes is safe here because the filter counts only 404s on the botsearch vocabulary (wp-login/signup/
+# admin.php, phpmyadmin, webmail, cgi-bin) - measured: eight ordinary 404s from a link checker, /wp-admin/
+# among them, count zero. A client reaching 5 of those has no innocent reading. Note the knock-on: five
+# bans inside a day also trips recidive, which is all-ports for 10 days.
+[web-botsearch]
+enabled  = true
+filter   = hestia-botsearch
+action   = hestia[name=WEB]
+logpath  = /var/log/apache2/domains/*.log
+maxretry = 5
+findtime = 600
+bantime  = 600
 
 [recidive]
 enabled  = true
@@ -69,6 +97,5 @@ maxretry = 5
 findtime = 86400
 bantime  = 864000
 
-#Uncomment and add your IPs and or domains to the Whitelist
-#[DEFAULT]
-#ignoreip = 111.111.111.111 222.222.222.222 subdomain.example.tld example.tld 333.333.333.333
+# Whitelisting is not done here: h-add-firewall-exclude maintains the firewall whitelist and mirrors it into
+# jail.d/hestia-zz-whitelist.local, so one list covers the ruleset and fail2ban both.

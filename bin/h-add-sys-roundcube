@@ -63,7 +63,7 @@ dbpass=$(generate_password)
 db_client="mysql"
 [ -x /usr/bin/mariadb ] && db_client="mariadb"
 
-# bail on a foreign 'roundcube' DB — CREATE IF NOT EXISTS would adopt it and write
+# bail on a foreign 'roundcube' DB - CREATE IF NOT EXISTS would adopt it and write
 # a mismatched password, leaving a silently-broken config
 if $db_client -e "SHOW DATABASES LIKE 'roundcube'" 2>/dev/null | grep -q 'roundcube'; then
 	echo "ERROR: Database 'roundcube' already exists but is not managed by this HestiaRE instance."
@@ -112,6 +112,11 @@ $config['plugins'] = ['password', 'newmail_notifier', 'zipdownload', 'archive'];
 $config['log_dir'] = '/var/log/roundcube/';
 $config['smtp_log'] = false;
 $config['log_session'] = true;
+// Log failed logins to /var/log/roundcube/userlogins for the fail2ban webmail jail. remote_ip() reports
+// the socket peer (the panel-Caddy hop, 127.0.0.1) plus an "X-Real-IP: <client>" annotation only when the
+// proxy is trusted - so 127.0.0.1 must be whitelisted or the real client never appears in the log line.
+$config['log_logins'] = true;
+$config['proxy_whitelist'] = ['127.0.0.1'];
 $config['imap_conn_options'] = ['ssl' => [
 	'verify_peer' => false,
 	'verify_peer_name' => false,
@@ -127,7 +132,7 @@ sed -i "s/_DES_KEY_/$des_key/" "$RC_CONFIG_DIR/config.inc.php"
 chmod 644 "$RC_CONFIG_DIR/config.inc.php"
 chown root:caddy "$RC_CONFIG_DIR/config.inc.php"
 
-# HestiaRE password driver. Extra files in apt-managed dirs survive upgrades —
+# HestiaRE password driver. Extra files in apt-managed dirs survive upgrades -
 # dpkg only removes files it installed.
 cp -f "$HESTIA/share/roundcube/hestia.php" "$RC_DRIVERS_DIR/hestia.php"
 chmod 644 "$RC_DRIVERS_DIR/hestia.php"
@@ -155,7 +160,7 @@ cp -f "$HESTIA/share/roundcube/plugins/config_zipdownload.inc.php" \
 mkdir -p /var/log/roundcube
 chown caddy:caddy /var/log/roundcube
 chmod 750 /var/log/roundcube
-# the fail2ban roundcube-auth jail tails errors.log, so the log must rotate
+# the fail2ban roundcube-auth jail tails userlogins, so the log must rotate
 cp -f "$HESTIA/share/roundcube/logrotate" /etc/logrotate.d/roundcube
 
 # Panel-Caddy delivery: caddy FPM pool behind the :8090 loopback listener; the
@@ -164,7 +169,7 @@ chown caddy:caddy /var/lib/roundcube/temp 2> /dev/null || true
 cp -f "$HESTIA/share/panel-php/pool.d/roundcube.conf" /etc/php/hestia/fpm/pool.d/roundcube.conf
 systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
 cp -f "$HESTIA/share/panel-caddy/webmail-roundcube.conf" /etc/caddy/webmail-roundcube.conf
-# :8083/webmail route for admin access without a customer domain. Roundcube-only —
+# :8083/webmail route for admin access without a customer domain. Roundcube-only -
 # SnappyMail is root-mounted and can't run under a sub-path.
 mkdir -p /etc/caddy/apps
 cp -f "$HESTIA/share/panel-caddy/apps/webmail.tpl" /etc/caddy/apps/webmail.conf
@@ -191,4 +196,10 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 set_install_component MAIL_WEBMAILER ROUNDCUBE
 
 $BIN/h-log-action "system" "Info" "Plugins" "Roundcube installed (OS package)."
+# Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).
+# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+source "$HESTIA/func/fail2ban.sh"
+source_conf "$HESTIA/conf/hestia.conf"
+fail2ban_refresh_webmail
+
 log_event "$OK" "$ARGUMENTS"

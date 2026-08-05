@@ -9,7 +9,208 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Security
+- **The webmail vhost overwrites the client-IP headers it forwards** (#515). Both `X-Real-IP` (Roundcube)
+  and `Client-IP` (SnappyMail) are now set from `$remote_addr` at the client-facing proxy - nginx front and
+  apache front alike - so a client cannot forge the address a webmail jail would ban. `X-Forwarded-For` is
+  unusable as a source here: the panel-Caddy hop overwrites it to `127.0.0.1`. Measured end to end: a
+  forged `X-Real-IP`/`Client-IP` is replaced before the app sees it.
+- **The Roundcube jail filter is hardened against username log-injection** (#515). Roundcube logs the
+  submitted username verbatim, so a login as `x from 1.1.1.1 (X-Real-IP: 8.8.8.8) in session y (error: 0)`
+  smuggles a fake IP block into the line. The filter anchors the genuine trailer to end-of-line and lets
+  the greedy user match backtrack to the last block, which is always the real one Roundcube appends - so
+  the smuggled address is never the one banned. Verified with an injection line on the fleet.
+- **`source_conf` no longer executes code smuggled into a config key** (GHSA-xffx-jj33-p2px class). The
+  parser assigned every key with `declare -g $lhs=...`, and `$lhs` was unvalidated - so a line like
+  `key[$(cmd)]='x'` in any parsed conf ran `cmd`, because `declare` evaluates a command substitution in an
+  array subscript. Measured: `a[$(touch${IFS}/tmp/x)]=…` and the backtick form both executed. The key is
+  now required to be a plain identifier (`^[A-Za-z_][A-Za-z0-9_]*$`) and anything else is skipped. Fixed at
+  the sink rather than at one command, because `source_conf` has ~500 callers and several read files a
+  non-admin can influence - `h-update-user-backup-exclusions` (the upstream advisory's own vector) among
+  them. That command's character blacklist happened to block the known payload, but the blacklist is a
+  defense that covers by luck; the sink fix removes the class. A positive smoke guard
+  (`h-check-sys-smoke`) now fails if the identifier check is ever dropped. The sibling parser
+  `parse_object_kv_list` was audited and is already safe - it validates the key against the same identifier
+  regex in PHP before emitting the `eval`. `func/ip.sh` had the same shape in three functions
+  (`is_ip_key_empty`, `update_ip_value`, `get_ip_value`), each doing `eval $(cat ips/<ip>)` to load the
+  conf and `eval value="$key"` to dereference - admin-only, so not the priv-esc class, but fixed here too:
+  they now parse through the hardened `source_conf` and dereference with `${!var}`. A smoke guard keeps raw
+  `eval` out of `func/ip.sh`. The identifier tightening was checked against **every** file type
+  `source_conf` reads - hestia.conf, user.conf, `*.pkg`, the remote-backup and `le.conf` writers, `ips/*`,
+  `backup-excludes.conf` - across all four OS and against each writer in the code: no legitimate config key
+  is anything but a plain identifier, so no caller loses a line it used to parse.
+
 ### Added
+- **Webmail brute-force jails** (#515, closes the last #496 item) - `roundcube-auth` and `snappymail-auth`,
+  each gated on `WEBMAIL_SYSTEM` (both if both clients are installed). Roundcube gets `log_logins` and a
+  `proxy_whitelist`; SnappyMail gets `auth_logging` to a stable `/var/log/snappymail/fail2ban/auth.txt`
+  (no `{date}` in the name, or fail2ban's once-at-start glob would go blind after midnight) plus
+  `http_client_ip_check_proxy`. Both ban at the WEB chain. `func/fail2ban.sh` gates and creates the logs;
+  the four `h-add/delete-sys-{roundcube,snappymail}` commands re-gate at runtime so adding a client after
+  fail2ban still arms its jail. Roundcube proven end to end on deb13 (real failed login -> real client IP
+  -> ban); SnappyMail's filter, IPv6 match, injection guard and ban path verified, its SPA login not
+  scriptable headless.
+- **A "Bot Rate Limiting" button on the Server page** (#482). The admin bot family table lives in a
+  collapsed section of Server Settings, so it was reachable but not discoverable - you had to know it was
+  there. The toolbar now deep-links to it, next to Firewall; the section still expands on click.
+- **A CODEMAP consistency check** (#513) - `.gitea/tools/lint-codemap.sh`. CODEMAP.json exists so nobody
+  re-derives a subsystem from the code, but it had drifted within a few PRs: a dead
+  `install/.../blacklist.sh` reference and a pre-#495 `FIREWALL_SYSTEM` value. The tool validates JSON and
+  that every path in the structured fields (entry_points, key_files, commands, commands_native,
+  directories) resolves - the class that caught the dead reference. Local/manual, not CI: it needs python3
+  to parse JSON and the runner host carries no language runtime, same as the PHP linters. Prose accuracy,
+  config-VALUE literals and closed-issue references are deliberately out of scope - a guard that
+  false-positives gets muted.
+- **A jail-status page and `h-list-firewall-jail`** (#496). fail2ban's state had no surface anywhere in the
+  panel: whether a jail was running, what it had matched, what it had banned. The page reports the jails our
+  config enables **union** the jails fail2ban is running, so a jail that is configured but not running reads
+  as `stopped` rather than quietly vanishing from the list - that gap is the whole reason it exists, and it
+  is the same comparison `check_fail2ban_jails` makes in smoke.
+- **A panel page for the firewall whitelist** (#496) - `Firewall -> Whitelist`, with add, per-row delete and
+  bulk delete, matching the banlist pages. Deliberately **not** gated on `FIREWALL_EXTENSION` the way the
+  banlist button is: the whitelist renders as a firewall accept and works with no fail2ban installed, and
+  hiding it in that state would remove the one recovery path from the UI.
+- **The firewall whitelist is manageable** (#496) - `h-add-firewall-exclude`, `h-delete-firewall-exclude`,
+  `h-list-firewall-exclude`. `excludes.conf` had been enforced since the nft swap but had no commands, no
+  panel page and no shipped default, so the only way to use it was to edit the file by hand. Adding an
+  address also **releases an existing ban** for it: the whitelist renders as an accept ahead of every ban
+  match, so leaving the ban in place would mean an accept and a reject for the same source, which is a
+  confusing state to leave behind when the point of the command is to end a lockout.
+- **The whitelist is mirrored into fail2ban's `ignoreip`** (#496). Without it a jail keeps counting and
+  logging an address the ruleset already exempts - it simply can never act on it. Written whole into its own
+  `jail.d/hestia-zz-whitelist.local` and re-synced whenever the whitelist changes. A generated block inside
+  a shared file would have to be found again to be replaced, and every way of delimiting it fails badly once
+  an admin edits around it - a `sed` range whose end address has been removed deletes to end of file.
+- **An L7 jail, `web-botsearch`** (#496) - scanners probing customer vhosts for apps that are not installed
+  (wp-login, phpmyadmin, webmail, cgi-bin). It reads the per-domain `combined` **access** log, which is the
+  only uniform source: nginx writes no error entry at all for a 404, and apache with php-fpm answers a probe
+  for a missing `.php` with `AH01071 Primary script unknown` rather than "File does not exist", so the
+  distro's `apache-botsearch` cannot fire here regardless of its `/var/www` webroot. The 404 is what makes
+  it safe on shared hosting: a domain that really runs WordPress answers `/wp-login.php` with 200, so a real
+  user is never counted. Deliberately not extended to the rate limiter's 429s - Layer B throttles bots
+  itself and its verdicts must not escalate into firewall bans.
+- **A curated blocklist catalogue** (#481) in `share/firewall/blocklists.conf`, read by the panel's IPset
+  picker. Ships FireHOL Level 1 and 2, Spamhaus DROP and Blocklist.de, each fetched from a VM and confirmed
+  to yield parseable entries. Adding a source is now a data change rather than a PHP edit.
+- **`h-change-sys-blocklist-interval INTERVAL`** (#481) - one global refresh interval, validated as a
+  systemd time span so a typo cannot leave the timer inert. Per-list schedules were deliberately not built:
+  native sets may reshape the per-object model, and that would be rework.
+
+### Changed
+
+- **Blocklists refresh on a systemd timer instead of the daily cron queue** (#481). `h-add-firewall-ipset`
+  used to append a line to `queue/daily.pipe`, which gave every list whatever schedule the queue happened to
+  run at and left no way to inspect or change it. `hestia-blocklist.timer` is visible in
+  `systemctl list-timers`, carries its own interval, is `Persistent=true` so a box that was off still
+  refreshes, and spreads a fleet with `RandomizedDelaySec`. Installing a list enables it and removes any
+  stale cron line; deleting the last list removes the timer.
+- **Adding, renaming or restoring a web domain now tells fail2ban about its log** (#496). fail2ban expands a
+  `logpath` glob once, when the jail starts, and never again, so a domain created afterwards went unwatched
+  - silently - until the daemon next restarted. `h-add-web-domain`, `h-delete-web-domain`,
+  `h-change-web-domain-name` and `rebuild_web_domain_conf` call `fail2ban_watch_domain`, which uses
+  `addlogpath`/`dellogpath` to touch only that jail's file list: no reload, no action churn, no effect on
+  live bans. It can never fail its caller - a domain add must not break because fail2ban is unhappy.
+- **`check_fail2ban_backends` no longer trips on a box with no web domains** (#496). The guard exists to
+  catch a jail put on the wrong backend, which reports healthy while monitoring nothing. A `logpath` glob
+  that currently matches no file is not that: it is a box with nothing to watch yet, so the guard now
+  compares against the configured pattern before calling a jail blind.
+- **CODEMAP's firewall and fail2ban entries are current again** (#496). Both had drifted across the
+  migration series: the firewall entry still described the iptables renderer, the `queue/daily.pipe`
+  refresh and the shipped preset fixed in #481, and gave `FIREWALL_SYSTEM` its pre-#495 value - the exact
+  config-VALUE staleness that let the panel destroy a live ruleset once already. The fail2ban entry still
+  flagged D1 as an open P0 and D4/D6/D7 as live hazards, all of which shipped fixed.
+
+### Fixed
+
+- **Ten panel controllers checked CSRF before checking the role** (#496). Both guards are independent and
+  both currently work, so the order changes no outcome today - it decides how much protection is left when
+  one of them has a bug, and this series produced two such bugs already (the silent `is_format_valid` gap,
+  the transposed `check_result` in `h-delete-firewall-ipset`). With CSRF first, the role check was the only
+  remaining brake against a customer holding a valid token of their own session; with the role check first,
+  an attacker needs two independent failures instead of one. Found by sweeping every controller rather than
+  the one that prompted it: `bulk/firewall/{,banlist,exclude,ipset}`, `move/firewall`,
+  `suspend/firewall`, `unsuspend/firewall`, `suspend/user`, `unsuspend/user`, `copy/package`.
+  `download/backup` matched the pattern but was left alone - there `!= "admin"` is the legitimate customer
+  branch of a user-scoped download, not a deny gate.
+- **Blocklist names were double-escaped in the IPset picker** (#481). The catalogue built each name with
+  `tohtml()` and the whole array was escaped again at the `data-` attribute, so `Blocklist.de (all)` reached
+  the browser as `Blocklist&period;de &lpar;all&rpar;`. Only that entry showed it - the others carry no
+  punctuation. Names are now raw, escaped once as a whole exactly like the country list's.
+- **`h-delete-user-backup-exclusions` wiped the CRON exclusion on every delete** - a copy-paste bug wrote
+  `CRON='$DB'` instead of `CRON='$CRON'`, so removing any single exclusion also cleared the cron one. The
+  update command was already correct. Found while auditing the file family for the `source_conf` fix above.
+- **The panel's shipped "Block Malicious IPs" preset could never work** (#481, D5). It pointed at
+  `script:/usr/local/hestia/install/common/firewall/ipset/blacklist.sh`, and the `install/` tree was
+  dissolved in #119 - so `h-add-firewall-ipset` produced an empty list and died on the minimum-size check
+  with a misleading "too small" error. Every admin who picked it got a failing ipset.
+- **The webmail loopback listeners are restricted to the web server and root** (#507). Roundcube (`:8090`)
+  and SnappyMail (`:8091`) are plain TCP on `127.0.0.1`, so unlike the socket-based apps they had no access
+  control at all and **any local user could reach them - including customers, who have shells here**. That
+  reached further than the apps themselves: Caddy passes a client-supplied `X-Real-IP` straight through, so
+  a customer could hand the app an arbitrary address and, once a jail read it, have a third party banned.
+  IP-based filtering cannot help (two local users share `127.0.0.1`), so the rule keys on the connecting
+  **UID**, which is exactly the distinction needed. Rendered into `inet hestia` by the renderer itself, so
+  it is rebuilt on every apply, survives a reboot with the rest of the ruleset, and is covered by the
+  existing smoke guards rather than needing its own persistence. Verified against **both** webmail systems
+  and both ends of the nft range: the proxy still gets HTTP 200, root still gets 200 (`h-check-sys-smoke`
+  probes that port), and a customer is refused at connect time.
+
+### Fixed
+
+- **The roundcube logrotate entry conflicted with the package's** (#508). Both cover
+  `/var/log/roundcube/*.log`, so logrotate reported a duplicate and skipped one of the two files entirely.
+  Ours won only because `roundcube` sorts before `roundcube-core` - had it gone the other way, rotation
+  would have recreated the logs `www-data:adm`, which the caddy FPM pool cannot write, silently ending
+  webmail logging. Our entry now claims every path the package's does (the extension-less names included,
+  for a box with an empty `log_file_ext`) and documents the ordering dependency, so the outcome no longer
+  rests on filename luck. The package's file is a dpkg conffile and is deliberately left in place.
+- **fail2ban bans IPv6 too** (#496). Service accept rules carry no family qualifier, so v6 already reached
+  exactly the ports the jails protect - while the jail sets were `ipv4_addr` and the ban command validated
+  v4, so a v6 brute force was logged, matched, and then failed its `actionban` on every attempt. A jail is
+  now two sets and two rules (`f2b_<CHAIN>` / `f2b6_<CHAIN>`), and bans route by family. **Nothing
+  presupposes a v6 stack**: an `ip6` rule and an `ipv6_addr` set load on a host with no v6 address and even
+  with `disable_ipv6=1`, verified on the fleet, so a v4-only box is unaffected. `::1` is refused like
+  `127.0.0.1`.
+- `h-add-firewall-ban` / `h-delete-firewall-ban` take an address of either family (`IP_CIDR`), via a new
+  `is_ip_cidr_format_valid`. The single-family validators stay for the places that genuinely mean one
+  family.
+
+### Changed
+
+- **The mysqld jail is gone** (#496). 3306 is not in the shipped ruleset, so MariaDB is reachable only from
+  loopback and the box itself - both of which `h-add-firewall-ban` refuses to ban, so the jail could only
+  ever match and then decline to act. An admin who deliberately opens 3306 owns the access control for it
+  and can add a jail to suit; the reason is recorded in `jail.local` rather than left as an unexplained
+  `enabled = false`.
+
+### Fixed
+
+- **Restarting the firewall from the panel destroyed the ruleset** (#496). The service row is named after
+  `FIREWALL_SYSTEM`, which became `nftables` with the renderer swap - but `h-start/stop/restart-service` and
+  the three panel service pages still matched a hardcoded `iptables`. The firewall row therefore fell
+  through to `systemctl restart nftables`, which **tore down our `inet hestia` table and loaded the distro's
+  `/etc/nftables.conf`** instead. Verified on a live box before and after. All six sites now match the
+  configured name rather than a literal.
+- **Five commands validated an argument they never assigned**, found by the hardened `is_format_valid`
+  (#496): `h-add-user-2fa`, `h-check-user-2fa`, `h-delete-user-2fa` passed a `system` name that never
+  existed; `h-add-letsencrypt-host` passed `aliases`, which that command does not take; and
+  `h-move-firewall-rule` passed `rule` (the variable is `source_rule`) plus the *value* as a second name.
+  All were dead checks. `h-move-firewall-rule` now validates its rule id for the first time.
+
+- **`is_format_valid` now fails loudly when a name matches no variable** (#496). It validates by *variable
+  name* - each name is both the type to check and the variable to read via `${!name}` - so a name with no
+  matching variable expanded to empty, and empty meant "nothing to check, so valid". Renaming an argument or
+  typoing a type therefore disabled the check **silently** instead of failing. That had already cost us
+  twice, so it is fixed at the root rather than per call site: an unset variable is a hard error, while a
+  genuinely optional argument (declared, empty) is still a legitimate skip.
+- **Five `h-restart-*` commands validated an argument they never assigned** (#496), found immediately by the
+  hardening above. `h-restart-web` assigned `restart` *after* the verification block; `h-restart-proxy`,
+  `-cron`, `-ftp` and `-mail` never assigned it at all - so `is_format_valid 'restart'` checked nothing in
+  any of them, and an invalid value was accepted silently. Also fixes a `RESTARRT` typo in one header.
+
+- `h-add-firewall-chain` read the panel port out of `$HESTIA/nginx/conf/nginx.conf`, which Caddy replaced
+  (#496). It printed an error on every jail creation and fell back to 8083 - right by luck, wrong on any box
+  whose panel port was changed. It reads `BACKEND_PORT` now.
 - **fail2ban actually works again** (#496) - it had been installing a config it could not start. The
   installer copied `filter.d/*.conf` and `jail.local` but never `action.d/hestia.conf`, so every jail
   referencing `action = hestia[...]` was skipped and **6 of 7 jails were dead on every target**, with the

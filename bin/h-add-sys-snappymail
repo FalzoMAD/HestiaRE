@@ -131,6 +131,15 @@ if [ "$UPDATE" == "no" ]; then
 	chown -R caddy:caddy $SM_CONFIG_DIR/
 	chmod -R 750 $SM_CONFIG_DIR/data
 
+	# Auth-log target for the fail2ban webmail jail. SnappyMail runs as caddy and writes
+	# /var/log/snappymail/fail2ban/auth.txt (see share/snappymail/install.php); create the root here so
+	# the first failed login has somewhere to write and the jail has a file to watch.
+	mkdir -p /var/log/snappymail
+	chown caddy:caddy /var/log/snappymail
+	chmod 750 /var/log/snappymail
+	# the fail2ban snappymail-auth jail tails fail2ban/auth.txt, so the log must rotate
+	cp -f "$HESTIA/share/snappymail/logrotate" /etc/logrotate.d/snappymail
+
 	# Remove the downloaded file
 	rm ${SM_INSTALL_DIR}/${SM_FILE}
 	# Add robots.txt
@@ -194,4 +203,10 @@ if [ "$UPDATE" = "yes" ]; then
 else
 	$BIN/h-log-action "system" "Info" "Plugins" "SnappyMail enabled (Version: $version)."
 fi
+# Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).
+# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+source "$HESTIA/func/fail2ban.sh"
+source_conf "$HESTIA/conf/hestia.conf"
+fail2ban_refresh_webmail
+
 log_event "$OK" "$ARGUMENTS"
