@@ -66,6 +66,10 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **Blocklist names were double-escaped in the IPset picker** (#481). The catalogue built each name with
+  `tohtml()` and the whole array was escaped again at the `data-` attribute, so `Blocklist.de (all)` reached
+  the browser as `Blocklist&period;de &lpar;all&rpar;`. Only that entry showed it - the others carry no
+  punctuation. Names are now raw, escaped once as a whole exactly like the country list's.
 - **The panel's shipped "Block Malicious IPs" preset could never work** (#481, D5). It pointed at
   `script:/usr/local/hestia/install/common/firewall/ipset/blacklist.sh`, and the `install/` tree was
   dissolved in #119 - so `h-add-firewall-ipset` produced an empty list and died on the minimum-size check
