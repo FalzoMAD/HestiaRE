@@ -208,6 +208,18 @@ Verify empirically on a VM afterwards — including the failure path, not just t
 Anything that survived only by luck (a fallback that happened to be right, a check that never ran)
 is a finding: fix it or record it, do not leave it silent.
 
+### Fresh-install verification (installer / firewall / fail2ban changes)
+
+Any change to `h-install-hestia`, `func/fail2ban.sh`, the firewall renderer, or the service configs they
+apply must be verified against a **genuinely fresh from-scratch install**, not only a re-run of the apply
+step on an already-populated box. Re-running on a box that already has domains, proftpd, a whitelist, etc.
+is what hid two separate breaks: the v0.12.2 template-include gap, and the installer aborting in the
+fail2ban stage (a jail on a not-yet-existent log, and `grep` on an absent `excludes.conf` under
+`set -eo pipefail`). Both were green on a re-run because the missing state existed by then. A smoke run
+after the fact is not a substitute: by then the logs and files exist. If a full reinstall is not possible
+in the moment, at minimum reproduce the empty starting state (no domains, addon not yet installed, config
+file absent) before trusting the result.
+
 ### Commit message format
 ```
 [#N] type: short description

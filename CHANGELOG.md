@@ -41,6 +41,12 @@ section as part of its PR. On release, the section gets the version number.
   is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
+- **A smoke canary for the Roundcube filter's injection defence** (#520). The filter defeats a username
+  that smuggles a fake `X-Real-IP:` block only while it matches the real trailing block greedily; a
+  Roundcube format change or a filter edit could weaken that silently. The guard replays an injection line
+  through the *deployed* failregex and fails if the smuggled IP would be banned instead of the real one -
+  the same canary shape as the `source_conf` identifier guard. A matching rule was also added to CLAUDE.md:
+  installer/firewall/fail2ban changes must be verified on a from-scratch install, not just a re-run.
 - **Webmail brute-force jails** (#515, closes the last #496 item) - `roundcube-auth` and `snappymail-auth`,
   each gated on `WEBMAIL_SYSTEM` (both if both clients are installed). Roundcube gets `log_logins` and a
   `proxy_whitelist`; SnappyMail gets `auth_logging` to a stable `/var/log/snappymail/fail2ban/auth.txt`
@@ -122,6 +128,19 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **A fresh install aborted silently in the fail2ban stage** (#520). Two bugs, both under the installer's
+  `set -eo pipefail`, both only visible on a genuinely fresh box (earlier checks re-ran on boxes that
+  already had the missing state). First and primary: `fail2ban_sync_ignoreip` built its list with
+  `ips="$(grep ... "$excludes" | paste)"`, and a fresh box has no `excludes.conf` (no whitelist yet), so
+  grep exits non-zero, `pipefail` propagates, the assignment fails, and the run aborted here - before
+  fail2ban was even restarted. It now guards on the file and distinguishes grep's "no match" (rc 1, the
+  normal empty case) from a real read failure (rc >= 2, which still surfaces), rather than a blanket
+  `|| true` that would swallow both. Second: fail2ban refuses to start if any enabled jail's logpath matches
+  zero files, which `proftpd-iptables` (proftpd installs in the addon stage, after fail2ban) and
+  `web-botsearch` (per-domain glob, empty until the first domain) both hit. `fail2ban_apply` now prunes any
+  enabled jail with zero matching log files as its last step before start; `h-add-sys-proftpd` and
+  `h-add-web-domain` (via `fail2ban_watch_domain`) re-arm the jail once the log exists. Both underlying
+  jails predate this (#502, #512); the webmail jails were already immune (they create their log up front).
 - **Ten panel controllers checked CSRF before checking the role** (#496). Both guards are independent and
   both currently work, so the order changes no outcome today - it decides how much protection is left when
   one of them has a bug, and this series produced two such bugs already (the silent `is_format_valid` gap,
