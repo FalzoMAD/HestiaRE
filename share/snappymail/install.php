@@ -19,6 +19,16 @@ $oConfig->Set("contacts", "pdo_dsn", "mysql:host=127.0.0.1;port=3306;dbname=snap
 $oConfig->Set("contacts", "pdo_user", "snappymail");
 $oConfig->Set("contacts", "pdo_password", $argv[4]);
 
+// Failed-login logging for the fail2ban webmail jail. auth_logging_filename has no {date} token on
+// purpose: fail2ban expands a logpath glob once at jail start, so a per-day file would leave the jail
+// blind after midnight. path is pinned to a stable location instead of the deep data-dir default, so the
+// jail and logrotate have a fixed target. http_client_ip_check_proxy makes {request:ip} read a proxy
+// header; the webmail vhost sets Client-IP to the real client (X-Forwarded-For is clobbered downstream).
+$oConfig->Set("logs", "auth_logging", "On");
+$oConfig->Set("logs", "auth_logging_filename", "fail2ban/auth.txt");
+$oConfig->Set("logs", "path", "/var/log/snappymail");
+$oConfig->Set("labs", "http_client_ip_check_proxy", true);
+
 // Plugins
 $oConfig->Set("plugins", "enable", "On");
 

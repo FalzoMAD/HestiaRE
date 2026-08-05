@@ -48,7 +48,7 @@ DEBIAN_FRONTEND=noninteractive apt-get -y purge \
 	roundcube roundcube-core roundcube-mysql roundcube-plugins
 DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
 
-# INTENTIONAL DATA LOSS: the roundcube DB (UI prefs + contacts, NOT mail — that
+# INTENTIONAL DATA LOSS: the roundcube DB (UI prefs + contacts, NOT mail - that
 # lives in Dovecot) is dropped; no migration across a delete/re-add cycle.
 db_client="mysql"
 [ -x /usr/bin/mariadb ] && db_client="mariadb"
@@ -76,7 +76,7 @@ systemctl try-restart caddy > /dev/null 2>&1 || true
 rm -f /etc/php/hestia/fpm/pool.d/roundcube.conf
 systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
 
-# Update hestia.conf — remove roundcube from WEBMAIL_SYSTEM
+# Update hestia.conf - remove roundcube from WEBMAIL_SYSTEM
 new_webmail=$(echo "$WEBMAIL_SYSTEM" | sed 's/roundcube,\?//g; s/,$//')
 if [ -z "$new_webmail" ]; then
 	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' ''
@@ -98,4 +98,10 @@ if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "ROUNDCUBE" ]; then
 fi
 
 $BIN/h-log-action "system" "Info" "Plugins" "Roundcube removed."
+# Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).
+# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+source "$HESTIA/func/fail2ban.sh"
+source_conf "$HESTIA/conf/hestia.conf"
+fail2ban_refresh_webmail
+
 log_event "$OK" "$ARGUMENTS"
