@@ -122,7 +122,17 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
-- **Ten panel controllers checked CSRF before checking the role** (#496). Both guards are independent and
+- **A fresh install aborted in the fail2ban stage when a jail had no log to watch yet** (#520). fail2ban
+  refuses to start if any enabled jail's logpath matches zero files, and under the installer's `set -e`
+  that silently aborted the whole run. Two jails hit it on a fresh box: `proftpd-iptables` (proftpd is not
+  installed until the addon stage, which runs *after* fail2ban) and `web-botsearch` (its per-domain glob
+  matches nothing until the first web domain). Both are pre-existing (the proftpd jail is from #502,
+  web-botsearch from #512) and only surface on a genuinely fresh install with FTP selected and no domains -
+  earlier fleet checks re-ran on boxes that already had both. `fail2ban_apply` now prunes any enabled jail
+  with zero matching log files as its last step before start, so the daemon always comes up; the events
+  that create the log re-arm the jail - `h-add-sys-proftpd` once proftpd and its log exist, and
+  `h-add-web-domain` (via `fail2ban_watch_domain`) on the first domain. The webmail jails were already
+  immune because they create their log up front.
   both currently work, so the order changes no outcome today - it decides how much protection is left when
   one of them has a bug, and this series produced two such bugs already (the silent `is_format_valid` gap,
   the transposed `check_result` in `h-delete-firewall-ipset`). With CSRF first, the role check was the only
