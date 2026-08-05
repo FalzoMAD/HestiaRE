@@ -21,8 +21,14 @@ section as part of its PR. On release, the section gets the version number.
   defense that covers by luck; the sink fix removes the class. A positive smoke guard
   (`h-check-sys-smoke`) now fails if the identifier check is ever dropped. The sibling parser
   `parse_object_kv_list` was audited and is already safe - it validates the key against the same identifier
-  regex in PHP before emitting the `eval`. Left as a recorded follow-up: `func/ip.sh` raw-`eval`s an IP
-  conf file, which is admin-only (no privilege escalation) but the same fragile shape.
+  regex in PHP before emitting the `eval`. `func/ip.sh` had the same shape in three functions
+  (`is_ip_key_empty`, `update_ip_value`, `get_ip_value`), each doing `eval $(cat ips/<ip>)` to load the
+  conf and `eval value="$key"` to dereference - admin-only, so not the priv-esc class, but fixed here too:
+  they now parse through the hardened `source_conf` and dereference with `${!var}`. A smoke guard keeps raw
+  `eval` out of `func/ip.sh`. The identifier tightening was checked against **every** file type
+  `source_conf` reads - hestia.conf, user.conf, `*.pkg`, the remote-backup and `le.conf` writers, `ips/*`,
+  `backup-excludes.conf` - across all four OS and against each writer in the code: no legitimate config key
+  is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
 - **A jail-status page and `h-list-firewall-jail`** (#496). fail2ban's state had no surface anywhere in the

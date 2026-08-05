@@ -598,6 +598,10 @@ check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$
 # GHSA-cr7q: search-object commands must not eval raw conf-field payloads
 check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
 	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
+# GHSA-xffx class: func/ip.sh must not go back to eval-ing an IP conf as bash - it now parses via the
+# hardened source_conf and derefs with ${!var}. A reintroduced `eval` would re-open the sink.
+check_source_absent "no raw eval in func/ip.sh (GHSA-xffx class)" '(^|[^_])eval[[:space:]]' \
+	"$HESTIA/func/ip.sh"
 # GHSA-xffx class: source_conf must keep its identifier guard on the key, or a
 # `key[$(cmd)]=` line in any parsed conf executes cmd through declare -g. Positive
 # check: the sink is shared by ~500 callers, so losing the guard is a silent hole.
