@@ -66,7 +66,9 @@
 			}
 			if (preg_match("/NAME='([^']*)'.*LEVEL='([^']*)'.*FAMILY='([^']*)'.*SOURCE='([^']*)'/", $line, $m)) {
 				$blacklist_iplists[] = [
-					"name" => "[" . strtoupper($m[3]) . "] " . tohtml($m[1]) . " (" . _("level") . " " . $m[2] . ")",
+					// Raw here: the array is escaped once as a whole at the data- attribute below, exactly as
+					// generate_iplist's names are. Escaping the name too rendered "Blocklist&period;de".
+					"name" => "[" . strtoupper($m[3]) . "] " . $m[1] . " (" . _("level") . " " . $m[2] . ")",
 					"source" => $m[4],
 				];
 			}

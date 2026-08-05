@@ -10,6 +10,15 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **A jail-status page and `h-list-firewall-jail`** (#496). fail2ban's state had no surface anywhere in the
+  panel: whether a jail was running, what it had matched, what it had banned. The page reports the jails our
+  config enables **union** the jails fail2ban is running, so a jail that is configured but not running reads
+  as `stopped` rather than quietly vanishing from the list - that gap is the whole reason it exists, and it
+  is the same comparison `check_fail2ban_jails` makes in smoke.
+- **A panel page for the firewall whitelist** (#496) - `Firewall -> Whitelist`, with add, per-row delete and
+  bulk delete, matching the banlist pages. Deliberately **not** gated on `FIREWALL_EXTENSION` the way the
+  banlist button is: the whitelist renders as a firewall accept and works with no fail2ban installed, and
+  hiding it in that state would remove the one recovery path from the UI.
 - **The firewall whitelist is manageable** (#496) - `h-add-firewall-exclude`, `h-delete-firewall-exclude`,
   `h-list-firewall-exclude`. `excludes.conf` had been enforced since the nft swap but had no commands, no
   panel page and no shipped default, so the only way to use it was to edit the file by hand. Adding an
@@ -62,6 +71,20 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **Ten panel controllers checked CSRF before checking the role** (#496). Both guards are independent and
+  both currently work, so the order changes no outcome today - it decides how much protection is left when
+  one of them has a bug, and this series produced two such bugs already (the silent `is_format_valid` gap,
+  the transposed `check_result` in `h-delete-firewall-ipset`). With CSRF first, the role check was the only
+  remaining brake against a customer holding a valid token of their own session; with the role check first,
+  an attacker needs two independent failures instead of one. Found by sweeping every controller rather than
+  the one that prompted it: `bulk/firewall/{,banlist,exclude,ipset}`, `move/firewall`,
+  `suspend/firewall`, `unsuspend/firewall`, `suspend/user`, `unsuspend/user`, `copy/package`.
+  `download/backup` matched the pattern but was left alone - there `!= "admin"` is the legitimate customer
+  branch of a user-scoped download, not a deny gate.
+- **Blocklist names were double-escaped in the IPset picker** (#481). The catalogue built each name with
+  `tohtml()` and the whole array was escaped again at the `data-` attribute, so `Blocklist.de (all)` reached
+  the browser as `Blocklist&period;de &lpar;all&rpar;`. Only that entry showed it - the others carry no
+  punctuation. Names are now raw, escaped once as a whole exactly like the country list's.
 - **The panel's shipped "Block Malicious IPs" preset could never work** (#481, D5). It pointed at
   `script:/usr/local/hestia/install/common/firewall/ipset/blacklist.sh`, and the `install/` tree was
   dissolved in #119 - so `h-add-firewall-ipset` produced an empty list and died on the minimum-size check
