@@ -147,6 +147,52 @@ fail2ban_ensure_authlog() {
 	chown root:adm /var/log/auth.log 2> /dev/null
 }
 
+# Webmail auth jails, gated on the configured client(s). Read from the FILE, not the variable: during the
+# install run the key is already written but the installer's own shell has never seen it. WEBMAIL_SYSTEM
+# can name both (roundcube,snappymail), so each jail is gated independently. A jail whose logpath does not
+# exist never fires and says so only in fail2ban's own log, so the log file is created here (owned by the
+# webmail FPM pool, caddy, which is what writes it) rather than shipped on and left to fail quietly.
+fail2ban_gate_webmail_jails() {
+	local wm
+	[ -f "$F2B_OURS" ] || return 0
+	wm="$(sed -n "s/^WEBMAIL_SYSTEM='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)"
+	case ",$wm," in
+		*,roundcube,*)
+			fail2ban_set_enabled 'roundcube-auth' 'true'
+			fail2ban_ensure_webmail_log /var/log/roundcube/userlogins.log
+			;;
+		*) fail2ban_set_enabled 'roundcube-auth' 'false' ;;
+	esac
+	case ",$wm," in
+		*,snappymail,*)
+			fail2ban_set_enabled 'snappymail-auth' 'true'
+			fail2ban_ensure_webmail_log /var/log/snappymail/fail2ban/auth.txt
+			;;
+		*) fail2ban_set_enabled 'snappymail-auth' 'false' ;;
+	esac
+}
+
+# Re-gate the webmail jails after a webmail client is added or removed at runtime. A no-op unless fail2ban
+# is the active extension, so the webmail commands can call it unconditionally. WEBMAIL_SYSTEM must already
+# be written before this runs (the add/delete-sys-* command updates it first).
+fail2ban_refresh_webmail() {
+	[ "${FIREWALL_EXTENSION:-}" = 'fail2ban' ] || return 0
+	systemctl -q is-active fail2ban 2> /dev/null || return 0
+	fail2ban_gate_webmail_jails
+	systemctl reload-or-restart fail2ban > /dev/null 2>&1
+}
+
+# Touch a webmail auth log so its jail has a file to watch before the first failed login. caddy is the
+# webmail FPM pool and the process that appends to it, so it must own it.
+fail2ban_ensure_webmail_log() {
+	local f="$1"
+	[ -e "$f" ] && return 0
+	mkdir -p "$(dirname "$f")"
+	touch "$f"
+	chown -R caddy:caddy "$(dirname "$f")" 2> /dev/null
+	chmod 640 "$f" 2> /dev/null
+}
+
 # Every jail we enable, by name. The single source of truth for "what should be running", which is what
 # lets a smoke guard compare intent against reality instead of hardcoding a list.
 fail2ban_enabled_jails() {
@@ -191,6 +237,7 @@ fail2ban_apply() {
 	fail2ban_disable_distro_jails
 	fail2ban_gate_jails "$mail" "$ftp"
 	fail2ban_gate_web_jail
+	fail2ban_gate_webmail_jails
 	fail2ban_ensure_authlog
 	fail2ban_sync_ignoreip
 	systemctl -q enable fail2ban 2> /dev/null

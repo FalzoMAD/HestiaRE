@@ -71,6 +71,9 @@ systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev
 
 rm -f -r $SM_INSTALL_DIR
 rm -f -r $SM_CONFIG_DIR
+rm -f -r $SM_LOG
+# logrotate fragment deployed by h-add-sys-snappymail
+rm -f /etc/logrotate.d/snappymail
 rm ~/.snappymail
 
 if [ -f '/usr/bin/mariadb' ]; then
@@ -101,5 +104,11 @@ if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "SNAPPYMAIL" ]; then
 fi
 
 $BIN/h-log-action "system" "Info" "Plugins" "SnappyMail removed (Version: $version)."
+
+# Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).
+# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+source "$HESTIA/func/fail2ban.sh"
+source_conf "$HESTIA/conf/hestia.conf"
+fail2ban_refresh_webmail
 
 log_event "$OK" "$ARGUMENTS"

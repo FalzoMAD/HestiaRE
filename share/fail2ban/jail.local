@@ -43,11 +43,22 @@ action   = hestia[name=HESTIA]
 logpath  = /var/log/hestia/auth.log
 maxretry = 5
 
+# Webmail auth jails. enabled is a placeholder: fail2ban_gate_webmail_jails flips each on when its client
+# is in WEBMAIL_SYSTEM and ensures the logpath exists (a jail on a missing file never fires). Both ban at
+# the WEB chain - webmail is web-tier. The real client reaches the log via the webmail vhost header fixes
+# (X-Real-IP for Roundcube, Client-IP for SnappyMail); see the two filters.
 [roundcube-auth]
 enabled  = false
-filter   = roundcube-auth
+filter   = hestia-roundcube
 action   = hestia[name=WEB]
-logpath  = /var/log/roundcube/errors.log
+logpath  = /var/log/roundcube/userlogins.log
+maxretry = 5
+
+[snappymail-auth]
+enabled  = false
+filter   = hestia-snappymail
+action   = hestia[name=WEB]
+logpath  = /var/log/snappymail/fail2ban/auth.txt
 maxretry = 5
 
 [phpmyadmin-auth]

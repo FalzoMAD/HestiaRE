@@ -10,6 +10,16 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Security
+- **The webmail vhost overwrites the client-IP headers it forwards** (#515). Both `X-Real-IP` (Roundcube)
+  and `Client-IP` (SnappyMail) are now set from `$remote_addr` at the client-facing proxy - nginx front and
+  apache front alike - so a client cannot forge the address a webmail jail would ban. `X-Forwarded-For` is
+  unusable as a source here: the panel-Caddy hop overwrites it to `127.0.0.1`. Measured end to end: a
+  forged `X-Real-IP`/`Client-IP` is replaced before the app sees it.
+- **The Roundcube jail filter is hardened against username log-injection** (#515). Roundcube logs the
+  submitted username verbatim, so a login as `x from 1.1.1.1 (X-Real-IP: 8.8.8.8) in session y (error: 0)`
+  smuggles a fake IP block into the line. The filter anchors the genuine trailer to end-of-line and lets
+  the greedy user match backtrack to the last block, which is always the real one Roundcube appends - so
+  the smuggled address is never the one banned. Verified with an injection line on the fleet.
 - **`source_conf` no longer executes code smuggled into a config key** (GHSA-xffx-jj33-p2px class). The
   parser assigned every key with `declare -g $lhs=...`, and `$lhs` was unvalidated - so a line like
   `key[$(cmd)]='x'` in any parsed conf ran `cmd`, because `declare` evaluates a command substitution in an
@@ -31,6 +41,15 @@ section as part of its PR. On release, the section gets the version number.
   is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
+- **Webmail brute-force jails** (#515, closes the last #496 item) - `roundcube-auth` and `snappymail-auth`,
+  each gated on `WEBMAIL_SYSTEM` (both if both clients are installed). Roundcube gets `log_logins` and a
+  `proxy_whitelist`; SnappyMail gets `auth_logging` to a stable `/var/log/snappymail/fail2ban/auth.txt`
+  (no `{date}` in the name, or fail2ban's once-at-start glob would go blind after midnight) plus
+  `http_client_ip_check_proxy`. Both ban at the WEB chain. `func/fail2ban.sh` gates and creates the logs;
+  the four `h-add/delete-sys-{roundcube,snappymail}` commands re-gate at runtime so adding a client after
+  fail2ban still arms its jail. Roundcube proven end to end on deb13 (real failed login -> real client IP
+  -> ban); SnappyMail's filter, IPv6 match, injection guard and ban path verified, its SPA login not
+  scriptable headless.
 - **A "Bot Rate Limiting" button on the Server page** (#482). The admin bot family table lives in a
   collapsed section of Server Settings, so it was reachable but not discoverable - you had to know it was
   there. The toolbar now deep-links to it, next to Firewall; the section still expands on click.
