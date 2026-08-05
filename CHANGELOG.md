@@ -31,6 +31,9 @@ section as part of its PR. On release, the section gets the version number.
   is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
+- **A "Bot Rate Limiting" button on the Server page** (#482). The admin bot family table lives in a
+  collapsed section of Server Settings, so it was reachable but not discoverable - you had to know it was
+  there. The toolbar now deep-links to it, next to Firewall; the section still expands on click.
 - **A CODEMAP consistency check** (#513) - `.gitea/tools/lint-codemap.sh`. CODEMAP.json exists so nobody
   re-derives a subsystem from the code, but it had drifted within a few PRs: a dead
   `install/.../blacklist.sh` reference and a pre-#495 `FIREWALL_SYSTEM` value. The tool validates JSON and
