@@ -6,14 +6,14 @@ ob_start();
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
-// Check token
-verify_csrf($_POST);
-
 // Check user
 if ($_SESSION["userContext"] != "admin") {
 	header("Location: /list/user");
 	exit();
 }
+
+// Check token
+verify_csrf($_POST);
 
 if (empty($_POST["ipchain"])) {
 	header("Location: /list/firewall/banlist/");

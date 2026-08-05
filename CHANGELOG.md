@@ -71,6 +71,16 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **Ten panel controllers checked CSRF before checking the role** (#496). Both guards are independent and
+  both currently work, so the order changes no outcome today - it decides how much protection is left when
+  one of them has a bug, and this series produced two such bugs already (the silent `is_format_valid` gap,
+  the transposed `check_result` in `h-delete-firewall-ipset`). With CSRF first, the role check was the only
+  remaining brake against a customer holding a valid token of their own session; with the role check first,
+  an attacker needs two independent failures instead of one. Found by sweeping every controller rather than
+  the one that prompted it: `bulk/firewall/{,banlist,exclude,ipset}`, `move/firewall`,
+  `suspend/firewall`, `unsuspend/firewall`, `suspend/user`, `unsuspend/user`, `copy/package`.
+  `download/backup` matched the pattern but was left alone - there `!= "admin"` is the legitimate customer
+  branch of a user-scoped download, not a deny gate.
 - **Blocklist names were double-escaped in the IPset picker** (#481). The catalogue built each name with
   `tohtml()` and the whole array was escaped again at the `data-` attribute, so `Blocklist.de (all)` reached
   the browser as `Blocklist&period;de &lpar;all&rpar;`. Only that entry showed it - the others carry no
