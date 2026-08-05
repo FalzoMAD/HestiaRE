@@ -31,6 +31,14 @@ section as part of its PR. On release, the section gets the version number.
   is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
+- **A CODEMAP consistency check** (#513) - `.gitea/tools/lint-codemap.sh`. CODEMAP.json exists so nobody
+  re-derives a subsystem from the code, but it had drifted within a few PRs: a dead
+  `install/.../blacklist.sh` reference and a pre-#495 `FIREWALL_SYSTEM` value. The tool validates JSON and
+  that every path in the structured fields (entry_points, key_files, commands, commands_native,
+  directories) resolves - the class that caught the dead reference. Local/manual, not CI: it needs python3
+  to parse JSON and the runner host carries no language runtime, same as the PHP linters. Prose accuracy,
+  config-VALUE literals and closed-issue references are deliberately out of scope - a guard that
+  false-positives gets muted.
 - **A jail-status page and `h-list-firewall-jail`** (#496). fail2ban's state had no surface anywhere in the
   panel: whether a jail was running, what it had matched, what it had banned. The page reports the jails our
   config enables **union** the jails fail2ban is running, so a jail that is configured but not running reads
