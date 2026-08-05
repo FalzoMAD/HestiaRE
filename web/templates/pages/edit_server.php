@@ -1460,6 +1460,19 @@
 							</option>
 						</select>
 					</div>
+					<div class="u-mb10">
+						<label for="v_fail2ban" class="form-label">
+							<?= tohtml( _("Brute-force protection (Fail2Ban)")) ?>
+						</label>
+						<select class="form-select" name="v_fail2ban" id="v_fail2ban">
+							<option value="no">
+								<?= tohtml( _("No")) ?>
+							</option>
+							<option value="yes" <?= tohtml($_SESSION["FIREWALL_EXTENSION"] == "fail2ban" ? "selected" : "") ?>>
+								<?= tohtml( _("Yes")) ?>
+							</option>
+						</select>
+					</div>
 				</div>
 			</details>
 		</div>
