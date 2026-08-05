@@ -282,6 +282,13 @@ rebuild_web_domain_conf() {
 	ln -f -s /var/log/$WEB_SYSTEM/domains/$domain.error.log .
 	cd /
 
+	# A restore or rebuild recreates the log, and fail2ban only globs at jail start. Idempotent.
+	if [ -n "$FIREWALL_EXTENSION" ]; then
+		# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+		source $HESTIA/func/fail2ban.sh
+		fail2ban_watch_domain add "$domain"
+	fi
+
 	# Set ownership
 	chown --no-dereference $user:$user \
 		$HOMEDIR/$user/web/$domain \
