@@ -10,6 +10,11 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Added
+- **A jail-status page and `h-list-firewall-jail`** (#496). fail2ban's state had no surface anywhere in the
+  panel: whether a jail was running, what it had matched, what it had banned. The page reports the jails our
+  config enables **union** the jails fail2ban is running, so a jail that is configured but not running reads
+  as `stopped` rather than quietly vanishing from the list - that gap is the whole reason it exists, and it
+  is the same comparison `check_fail2ban_jails` makes in smoke.
 - **A panel page for the firewall whitelist** (#496) - `Firewall -> Whitelist`, with add, per-row delete and
   bulk delete, matching the banlist pages. Deliberately **not** gated on `FIREWALL_EXTENSION` the way the
   banlist button is: the whitelist renders as a firewall accept and works with no fail2ban installed, and

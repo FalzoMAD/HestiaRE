@@ -1,0 +1,126 @@
+#!/bin/bash
+# info: list fail2ban jail status
+# options: [FORMAT]
+#
+# example: h-list-firewall-jail json
+#
+# Reports the jails our config enables UNION the jails fail2ban is running, so a jail that is configured but
+# not running shows up as STATE='stopped' instead of silently vanishing from the list - that gap is the whole
+# reason this exists, and it is exactly what smoke's check_fail2ban_jails compares. No v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+format=${1-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+source $HESTIA/func/fail2ban.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+f2bcli="/usr/bin/fail2ban-client"
+
+# Every jail worth reporting: what we configure plus what is actually up. Sorted and de-duplicated so the
+# two sources cannot produce a jail twice.
+jail_names() {
+	{
+		fail2ban_enabled_jails
+		"$f2bcli" status 2> /dev/null | grep -i 'Jail list:' | cut -d':' -f2- | tr ',' '\n' | tr -d '[:blank:]'
+	} | grep -v '^$' | sort -u
+}
+
+# One field out of `fail2ban-client status <jail>`; the value follows the label after whitespace.
+status_field() {
+	echo "$1" | sed -n "s/.*$2:[[:space:]]*//p" | head -1
+}
+
+jail_row() {
+	local jail="$1" out
+	out="$("$f2bcli" status "$jail" 2> /dev/null)"
+	if [ -z "$out" ]; then
+		JAIL="$jail" STATE='stopped' FAILED='0' FAILED_TOTAL='0' BANNED='0' BANNED_TOTAL='0' LOGPATH=''
+		return 0
+	fi
+	JAIL="$jail"
+	STATE='running'
+	FAILED="$(status_field "$out" 'Currently failed')"
+	FAILED_TOTAL="$(status_field "$out" 'Total failed')"
+	BANNED="$(status_field "$out" 'Currently banned')"
+	BANNED_TOTAL="$(status_field "$out" 'Total banned')"
+	LOGPATH="$(status_field "$out" 'File list')"
+}
+
+json_list() {
+	local i=0
+	echo '{'
+	while read -r jail; do
+		jail_row "$jail"
+		[ "$i" -gt 0 ] && echo -e '\t},'
+		echo -e "\t\"$JAIL\": {"
+		echo -e "\t\t\"JAIL\": \"$JAIL\","
+		echo -e "\t\t\"STATE\": \"$STATE\","
+		echo -e "\t\t\"FAILED\": \"$FAILED\","
+		echo -e "\t\t\"FAILED_TOTAL\": \"$FAILED_TOTAL\","
+		echo -e "\t\t\"BANNED\": \"$BANNED\","
+		echo -e "\t\t\"BANNED_TOTAL\": \"$BANNED_TOTAL\","
+		echo -e "\t\t\"LOGPATH\": \"$LOGPATH\""
+		i=$((i + 1))
+	done < <(jail_names)
+	[ "$i" -gt 0 ] && echo -e '\t}'
+	echo '}'
+}
+
+shell_list() {
+	printf "%-20s %-9s %-8s %-8s\n" "JAIL" "STATE" "FAILED" "BANNED"
+	printf "%-20s %-9s %-8s %-8s\n" "--------------------" "---------" "--------" "--------"
+	while read -r jail; do
+		jail_row "$jail"
+		printf "%-20s %-9s %-8s %-8s\n" "$JAIL" "$STATE" "$FAILED" "$BANNED"
+	done < <(jail_names)
+}
+
+plain_list() {
+	while read -r jail; do
+		jail_row "$jail"
+		echo -e "$JAIL\t$STATE\t$FAILED\t$FAILED_TOTAL\t$BANNED\t$BANNED_TOTAL\t$LOGPATH"
+	done < <(jail_names)
+}
+
+csv_list() {
+	echo "JAIL,STATE,FAILED,FAILED_TOTAL,BANNED,BANNED_TOTAL,LOGPATH"
+	while read -r jail; do
+		jail_row "$jail"
+		echo "$JAIL,$STATE,$FAILED,$FAILED_TOTAL,$BANNED,$BANNED_TOTAL,\"$LOGPATH\""
+	done < <(jail_names)
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
+is_system_enabled "$FIREWALL_EXTENSION" 'FIREWALL_EXTENSION'
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit
