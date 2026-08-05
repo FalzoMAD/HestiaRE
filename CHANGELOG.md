@@ -9,6 +9,27 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Security
+- **`source_conf` no longer executes code smuggled into a config key** (GHSA-xffx-jj33-p2px class). The
+  parser assigned every key with `declare -g $lhs=...`, and `$lhs` was unvalidated - so a line like
+  `key[$(cmd)]='x'` in any parsed conf ran `cmd`, because `declare` evaluates a command substitution in an
+  array subscript. Measured: `a[$(touch${IFS}/tmp/x)]=…` and the backtick form both executed. The key is
+  now required to be a plain identifier (`^[A-Za-z_][A-Za-z0-9_]*$`) and anything else is skipped. Fixed at
+  the sink rather than at one command, because `source_conf` has ~500 callers and several read files a
+  non-admin can influence - `h-update-user-backup-exclusions` (the upstream advisory's own vector) among
+  them. That command's character blacklist happened to block the known payload, but the blacklist is a
+  defense that covers by luck; the sink fix removes the class. A positive smoke guard
+  (`h-check-sys-smoke`) now fails if the identifier check is ever dropped. The sibling parser
+  `parse_object_kv_list` was audited and is already safe - it validates the key against the same identifier
+  regex in PHP before emitting the `eval`. `func/ip.sh` had the same shape in three functions
+  (`is_ip_key_empty`, `update_ip_value`, `get_ip_value`), each doing `eval $(cat ips/<ip>)` to load the
+  conf and `eval value="$key"` to dereference - admin-only, so not the priv-esc class, but fixed here too:
+  they now parse through the hardened `source_conf` and dereference with `${!var}`. A smoke guard keeps raw
+  `eval` out of `func/ip.sh`. The identifier tightening was checked against **every** file type
+  `source_conf` reads - hestia.conf, user.conf, `*.pkg`, the remote-backup and `le.conf` writers, `ips/*`,
+  `backup-excludes.conf` - across all four OS and against each writer in the code: no legitimate config key
+  is anything but a plain identifier, so no caller loses a line it used to parse.
+
 ### Added
 - **A jail-status page and `h-list-firewall-jail`** (#496). fail2ban's state had no surface anywhere in the
   panel: whether a jail was running, what it had matched, what it had banned. The page reports the jails our
@@ -85,6 +106,9 @@ section as part of its PR. On release, the section gets the version number.
   `tohtml()` and the whole array was escaped again at the `data-` attribute, so `Blocklist.de (all)` reached
   the browser as `Blocklist&period;de &lpar;all&rpar;`. Only that entry showed it - the others carry no
   punctuation. Names are now raw, escaped once as a whole exactly like the country list's.
+- **`h-delete-user-backup-exclusions` wiped the CRON exclusion on every delete** - a copy-paste bug wrote
+  `CRON='$DB'` instead of `CRON='$CRON'`, so removing any single exclusion also cleared the cron one. The
+  update command was already correct. Found while auditing the file family for the `source_conf` fix above.
 - **The panel's shipped "Block Malicious IPs" preset could never work** (#481, D5). It pointed at
   `script:/usr/local/hestia/install/common/firewall/ipset/blacklist.sh`, and the `install/` tree was
   dissolved in #119 - so `h-add-firewall-ipset` produced an empty list and died on the minimum-size check
