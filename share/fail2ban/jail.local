@@ -61,12 +61,21 @@ maxretry = 5
 # configured web system by fail2ban_gate_web_jail - the value here is only a placeholder. Deliberately NOT
 # extended to the rate limiter's 429s: Layer B (nginx limit_req / apache mod_qos) throttles bots on its own
 # and its verdicts must not escalate into firewall bans.
+#
+# findtime/bantime are spelled out rather than inherited from jail.conf: this jail is armed on every domain
+# of every box, so the thresholds are a decision, not a distro default that could shift under us. 5 in 10
+# minutes is safe here because the filter counts only 404s on the botsearch vocabulary (wp-login/signup/
+# admin.php, phpmyadmin, webmail, cgi-bin) - measured: eight ordinary 404s from a link checker, /wp-admin/
+# among them, count zero. A client reaching 5 of those has no innocent reading. Note the knock-on: five
+# bans inside a day also trips recidive, which is all-ports for 10 days.
 [web-botsearch]
 enabled  = true
 filter   = hestia-botsearch
 action   = hestia[name=WEB]
 logpath  = /var/log/apache2/domains/*.log
 maxretry = 5
+findtime = 600
+bantime  = 600
 
 [recidive]
 enabled  = true
