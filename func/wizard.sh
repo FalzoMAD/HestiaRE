@@ -554,7 +554,10 @@ fn_ask_group_checklist() {
     local -A lbl2id=()
     local id
     for id in "${cb_ids[@]}"; do
-        local fnp; fnp=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].fixed_no_prompt[$p] // empty')
+        # has()-based, not `[$p] // empty`: jq's // treats a boolean false as absent, so a
+        # fixed_no_prompt value of false (e.g. ADDON_CROWDSEC on mailonly) would fall through and the
+        # row would still be offered. has() keys off presence, so false is honoured and the row hidden.
+        local fnp; fnp=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '(.components[$id].fixed_no_prompt // {}) as $f | if ($f | has($p)) then ($f[$p] | tostring) else "" end')
         if [ -n "$fnp" ]; then COMP_VALUES["$id"]="$fnp"; continue; fi
         local vis; vis=$(mq --arg id "$id" '.components[$id].visible_if // empty')
         if [ -n "$vis" ]; then
@@ -638,7 +641,7 @@ fn_ask_components() {
 
         # fixed_no_prompt for this preset
         local fixed
-        fixed=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].fixed_no_prompt[$p] // empty')
+        fixed=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '(.components[$id].fixed_no_prompt // {}) as $f | if ($f | has($p)) then ($f[$p] | tostring) else "" end')
         if [ -n "$fixed" ]; then COMP_VALUES["$id"]="$fixed"; continue; fi
 
         # visible_if / dependent_on

@@ -161,6 +161,15 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **The mail-only preset offered and default-enabled CrowdSec** (#529). `mailonly` fixes
+  `WEB_SERVER=NGINX` (nginx fronts Roundcube + ACME), and `ADDON_CROWDSEC.visible_if` is
+  `WEB_SERVER != APACHE`, so the wizard preselected CrowdSec on a box with no customer web where it adds
+  little. It is now `fixed_no_prompt: {mailonly: false}` - not offered and forced off on mailonly, in both
+  the interactive and fasttrack paths - while staying installable by hand (`h-add-sys-crowdsec` still works,
+  nginx being the mailonly front). Uncovered and fixed a latent wizard bug in the same pass: the
+  grouped-checklist and single-component `fixed_no_prompt` reads used `[$p] // empty`, and jq's `//` treats
+  a boolean `false` as absent, so a `fixed_no_prompt` value of `false` fell through and the row was still
+  shown; both reads now key off `has($preset)` like the default resolver, so a `false` is honoured.
 - **The installer duplicated config keys when a stage re-ran** (#523). `wcv` appended `KEY='value'` to
   hestia.conf unconditionally, so any stage that ran twice wrote the key again instead of replacing it -
   most realistically an admin restarting the installer after an abort mid-stage, the exact situation #520
