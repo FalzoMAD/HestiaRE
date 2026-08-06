@@ -41,6 +41,16 @@ fi
 
 check_hestia_demo_mode
 
+# Hold the #120 web-model freeze across the front check + nginx wiring: crowdsec_apply mutates nginx
+# config and depends on the public front, so a concurrent h-add/delete-sys-nginx must not flip the front
+# (both <-> apache-only) mid-run (#528). Reentrant, so h-delete-sys-nginx's two-step teardown and
+# h-change-sys-firewall-model, which already hold it, pass straight through. Re-read the front under the
+# lock, since it was computed before we held it.
+web_lock_acquire || exit "$E_INUSE"
+source_conf "$HESTIA/conf/hestia.conf"
+cs_pub="$PROXY_SYSTEM"
+[ -z "$cs_pub" ] && cs_pub="$WEB_SYSTEM"
+
 if [ "$cs_pub" != 'nginx' ]; then
 	echo "ERROR: CrowdSec is an nginx-only addon; the public web front is '${cs_pub:-none}'."
 	echo "       Nothing to install on an apache-only model."
