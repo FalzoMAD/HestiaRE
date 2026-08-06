@@ -82,17 +82,8 @@ if (isset($_GET["web"])) {
 	exit();
 }
 
-// DNS info
-if (isset($_GET["dns"])) {
-	$TAB = "DNS";
-	include $_SERVER["DOCUMENT_ROOT"] . "/templates/pages/list_server_info.php";
-	exec(HESTIA_CMD . "h-list-sys-dns-status", $output, $return_var);
-	foreach ($output as $file) {
-		echo $file . "\n";
-	}
-	end_html();
-	exit();
-}
+// No DNS info block: bind9 is gone, and so is h-list-sys-dns-status. The handler stayed behind execing a
+// command that does not exist. Nothing links here - the ?dns links in the panel belong to the mail pages.
 
 // Mail info
 if (isset($_GET["mail"])) {

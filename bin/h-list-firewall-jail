@@ -4,9 +4,8 @@
 #
 # example: h-list-firewall-jail json
 #
-# Reports the jails our config enables UNION the jails fail2ban is running, so a jail that is configured but
-# not running shows up as STATE='stopped' instead of silently vanishing from the list - that gap is the whole
-# reason this exists, and it is exactly what smoke's check_fail2ban_jails compares. No v-* symlink.
+# Configured UNION running, so a jail that is configured but NOT running reports STATE='stopped' instead of
+# vanishing from the list - that gap is the whole reason this exists. No v-* symlink.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -27,8 +26,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 f2bcli="/usr/bin/fail2ban-client"
 
-# Every jail worth reporting: what we configure plus what is actually up. Sorted and de-duplicated so the
-# two sources cannot produce a jail twice.
+# Sorted and de-duplicated, so the two sources cannot report one jail twice.
 jail_names() {
 	{
 		fail2ban_enabled_jails

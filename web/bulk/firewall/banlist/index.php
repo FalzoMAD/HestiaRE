@@ -27,20 +27,34 @@ if (empty($_POST["action"])) {
 $ipchain = $_POST["ipchain"];
 $action = $_POST["action"];
 
-switch ($action) {
-	case "delete":
-		$cmd = "h-delete-firewall-ban";
-		break;
-	default:
-		header("Location: /list/firewall/banlist/");
-		exit();
+if ($action !== "delete") {
+	header("Location: /list/firewall/banlist/");
+	exit();
 }
 
+// Each value is "source|ip|chain" - "|" not ":" because an IPv6 address contains colons, and the source
+// picks the unban command (fail2ban banlist vs a CrowdSec cscli decision).
 foreach ($ipchain as $value) {
-	[$ip, $chain] = explode(":", $value);
-	$v_ip = quoteshellarg($ip);
-	$v_chain = quoteshellarg($chain);
-	exec(HESTIA_CMD . $cmd . " " . $v_ip . " " . $v_chain, $output, $return_var);
+	$parts = explode("|", $value, 3);
+	if (count($parts) < 2 || $parts[1] === "") {
+		continue;
+	}
+	$src = $parts[0];
+	$v_ip = quoteshellarg($parts[1]);
+	// exec() APPENDS, so a shared $output would grow across the loop and mis-attribute one row's error
+	// to the next. Reset per iteration.
+	$output = [];
+	if ($src === "crowdsec") {
+		exec(HESTIA_CMD . "h-delete-firewall-crowdsec-ban " . $v_ip, $output, $return_var);
+	} else {
+		// A fail2ban ban is keyed by chain; without one there is no row to delete.
+		if (empty($parts[2])) {
+			continue;
+		}
+		$v_chain = quoteshellarg($parts[2]);
+		exec(HESTIA_CMD . "h-delete-firewall-ban " . $v_ip . " " . $v_chain, $output, $return_var);
+	}
 }
+unset($output);
 
 header("Location: /list/firewall/banlist");

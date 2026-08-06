@@ -1,17 +1,18 @@
 #!/bin/bash
-# info: change how often firewall blocklists refresh
-# options: INTERVAL
+# info: delete a CrowdSec ban decision
+# options: IP
 #
-# example: h-change-sys-blocklist-interval 12h
+# example: h-delete-firewall-crowdsec-ban 203.0.113.5
 #
-# INTERVAL is a systemd time span (30min, 6h, 1d). One for all lists - per-list would be rework. No v-* symlink.
+# The panel unban path: delete the decision, then refresh the feeder so the drop lifts at once rather than
+# after ~45s. A CAPI decision is not locally deletable and is not shown in the panel. No v-* symlink.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
 #----------------------------------------------------------#
 
 # Argument definition
-interval=$1
+ip=$1
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -27,44 +28,36 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
+check_args '1' "$#" 'IP'
+
 if [ "x$(id -u)" != 'x0' ]; then
 	echo "Error: Script can be run executed only by root"
 	exit 10
 fi
 
-check_args '1' "$#" 'INTERVAL'
+# Sanity-filtered before it reaches cscli; the panel quoteshellargs it too, this is depth.
+if ! fw_is_addr "$ip" && ! fw_is_addr6 "$ip"; then
+	check_result "$E_INVALID" "invalid IP: $ip"
+fi
+
 check_hestia_demo_mode
-is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 
-# Not free text: a malformed value leaves the timer inert with the failure only visible in journalctl.
-if ! [[ "$interval" =~ ^[0-9]+(s|m|min|h|d|w)$ ]]; then
-	echo "Error: INTERVAL must be a systemd time span, e.g. 30min, 6h, 1d"
-	exit "$E_INVALID"
-fi
-
-if [ ! -f /etc/systemd/system/hestia-blocklist.timer ]; then
-	echo "Error: no blocklist timer installed - add an IP list first"
-	exit "$E_NOTEXIST"
-fi
+command -v cscli > /dev/null 2>&1 || check_result "$E_NOTEXIST" "CrowdSec is not installed"
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-fw_blocklist_interval_apply "$interval"
-systemctl -q daemon-reload
-systemctl -q restart hestia-blocklist.timer 2> /dev/null
+cscli decisions delete -i "$ip" > /dev/null 2>&1
 
-$BIN/h-change-sys-config-value 'BLOCKLIST_INTERVAL' "$interval"
-
-echo "Blocklist refresh interval: $interval"
-systemctl list-timers hestia-blocklist.timer --no-pager --no-legend 2> /dev/null | awk '{print "  next run: " $1, $2, $3}'
+# Refresh L3 now (both families) so the set drops it immediately rather than after the feeder timer.
+[ -f "$CONF_DIR/firewall/crowdsec.conf" ] && $BIN/h-update-firewall-crowdsec
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-$BIN/h-log-action "system" "Info" "System" "Blocklist refresh interval changed to $interval."
+$BIN/h-log-action "system" "Info" "Firewall" "Removed CrowdSec ban $ip."
 log_event "$OK" "$ARGUMENTS"
 
 exit

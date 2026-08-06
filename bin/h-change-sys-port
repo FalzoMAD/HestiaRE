@@ -86,9 +86,12 @@ else
 		sed -i "/CHAIN='HESTIA'/c\CHAIN='HESTIA' PORT='$PORT' PROTOCOL='TCP'" "$CONF_DIR/firewall/chains.conf"
 	fi
 
-	# Restart services
+	# Restart services. The name has to BE $FIREWALL_SYSTEM: h-restart-service recognises the firewall by
+	# comparing against that key, so the literal stopped matching when the value became nftables and fell
+	# through to `systemctl restart iptables` - which fails, aborts this command, and leaves the new panel
+	# port written into rules.conf but never applied. That is a lockout, not a cosmetic error.
 	if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != no ]; then
-		"$BIN/h-restart-service" iptables
+		"$BIN/h-restart-service" "$FIREWALL_SYSTEM"
 	fi
 
 	# Check if Hestia is running

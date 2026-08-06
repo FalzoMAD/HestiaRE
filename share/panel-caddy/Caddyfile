@@ -4,6 +4,18 @@
     # the automatic HTTP->HTTPS redirect server, which otherwise binds :80 and
     # squats the port nginx needs for customer vhosts.
     auto_https disable_redirects
+    # A plain HTTP request to the HTTPS-only :8083 (typing host:8083 without a
+    # scheme) otherwise gets a bare 400 "Client sent an HTTP request to an HTTPS
+    # server". The http_redirect listener wrapper answers such a request with a
+    # 308 to the https:// URL on the same port instead. `tls` must stay listed or
+    # TLS termination is lost. Scoped to :8083 ONLY - applied globally it also
+    # wraps the plain-HTTP loopback webmail listeners (:8090/:8091) and 308s them.
+    servers :8083 {
+        listener_wrappers {
+            http_redirect
+            tls
+        }
+    }
     log {
         output file /var/log/caddy/error.log
         level ERROR
