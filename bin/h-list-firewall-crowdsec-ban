@@ -4,10 +4,12 @@
 #
 # example: h-list-firewall-crowdsec-ban json
 #
-# Lists the CrowdSec decisions that reach L3 - origin==crowdsec ban decisions (own detections + mesh),
-# NOT the CAPI/community blocklist (L7-only, thousands of entries). Lets the panel banlist show and unban
-# crowdsec-sourced bans next to fail2ban's. Empty output when CrowdSec is absent, so the panel merge is a
-# no-op. New h-* command: no v-* symlink.
+# Lists the CrowdSec decisions that reach L3 - origin==crowdsec ban decisions, i.e. THIS box's own local
+# detections (the only ones the feeder puts in the firewall set). Deliberately NOT the CAPI/community
+# blocklist and NOT mesh-imported bans (origin cscli-import, scenario hestia-mesh:<peer>): both are L7-only
+# by design (the bouncer live-queries the LAPI) and never reach the firewall, so they are not firewall bans
+# to unban here. Lets the panel banlist show and unban crowdsec-sourced bans next to fail2ban's. Empty
+# output when CrowdSec is absent, so the panel merge is a no-op. New h-* command: no v-* symlink.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
