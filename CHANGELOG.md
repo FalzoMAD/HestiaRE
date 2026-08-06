@@ -10,6 +10,19 @@ interim builds within a cycle and their changes appear under the minor they
 belong to. On release, the section gets that version number and a new Unreleased
 opens above it.
 
+## Unreleased
+
+### Fixed
+
+- **One Cloudflare range in the panel's IP validator was wrong, and it was exploitable in both directions**
+  (#553). `web/inc/cloudflare-ip.php` listed `131.0.232.0/22` where Cloudflare publishes `131.0.72.0/22` -
+  a transcription slip in the hand-maintained list that replaced the vendored validator. Traffic from the
+  real range was therefore not recognised as Cloudflare, so `get_real_user_ip()` attributed panel logins to
+  the CF edge and fail2ban would ban the edge itself, locking out everyone behind it; meanwhile the range
+  that is not Cloudflare's was trusted, letting whoever holds it forge `CF-Connecting-IP` on the login path
+  and drive an arbitrary IP into the banlist. Both lists now match the published set exactly, and the
+  header says to diff the live list rather than retype it. Found in the upstream 1.10 triage (#5273).
+
 ## v0.14.0 (2026-08-06)
 
 The firewall release: the last subsystem still inherited near-verbatim from HestiaCP, rebuilt on nftables,

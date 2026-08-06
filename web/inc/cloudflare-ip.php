@@ -1,8 +1,12 @@
 <?php
 // Static Cloudflare IP ranges (Eigenbau - replaces divinity76/cloudflare-ip-validator).
-// Source: https://www.cloudflare.com/ips/ (fetched 2026-06-21)
+// Source: https://www.cloudflare.com/ips/ (verified against the live list 2026-08-06)
 // Update procedure: run `curl -s https://www.cloudflare.com/ips-v4/` and
 // `curl -s https://www.cloudflare.com/ips-v6/` and replace the arrays below.
+// Diff the result, do not retype it: an entry that is wrong in either direction is
+// exploitable. A missing real range makes get_real_user_ip() log the CF edge, so
+// fail2ban bans the edge and locks out everyone behind it; a range that is not
+// Cloudflare's lets whoever holds it forge CF-Connecting-IP on the login path.
 
 const CLOUDFLARE_IPV4_CIDRS = [
     '103.21.244.0/22',
@@ -11,7 +15,7 @@ const CLOUDFLARE_IPV4_CIDRS = [
     '104.16.0.0/13',
     '104.24.0.0/14',
     '108.162.192.0/18',
-    '131.0.232.0/22',
+    '131.0.72.0/22',
     '141.101.64.0/18',
     '162.158.0.0/15',
     '172.64.0.0/13',
