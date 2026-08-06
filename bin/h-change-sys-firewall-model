@@ -114,9 +114,10 @@ if [ "$want_cs" = 'no' ] && [ "$cs" = 'yes' ]; then
 	$BIN/h-delete-sys-crowdsec
 fi
 
-# The feeder's auth-family denylist is conditional on FIREWALL_EXTENSION, which may have just flipped;
-# refresh the L3 set now instead of waiting up to 45s for the timer. No-op unless L3 is wired (marker).
-[ -f "$CONF_DIR/firewall/crowdsec.conf" ] && $BIN/h-update-firewall-crowdsec
+# No feeder refresh here: each component command owns its own L3 consequence - the fail2ban add/delete
+# refresh the feeder (the denylist keys off FIREWALL_EXTENSION), and crowdsec_apply/teardown set up or
+# remove L3. So the indirect path (calling the addon commands directly) reaches the same enforcement
+# state as this switch, not just this switch.
 
 #----------------------------------------------------------#
 #                       Hestia                             #

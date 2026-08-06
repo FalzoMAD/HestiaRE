@@ -53,8 +53,12 @@ section as part of its PR. On release, the section gets the version number.
   denies CrowdSec's auth-family decisions (ssh/ftp/mail/db) from the firewall only while fail2ban is
   present - with fail2ban gone, those decisions reach L3 (at the feeder's ~45s latency, connections not
   cut), so SSH/web brute force is enforced. `req-limit` stays denied in every model, so a Layer-B rate
-  limit 429 never escalates into a firewall ban. Known gap: mail has no CrowdSec detection surface (no
-  exim/dovecot collections), and crowdsec-only bans are visible via `cscli`, not the panel banlist (#527).
+  limit 429 never escalates into a firewall ban. The handover is **path-independent**: `h-add-sys-fail2ban`
+  and `h-delete-sys-fail2ban` refresh the feeder themselves (guarded on the L3 marker), so reaching
+  crowdsec-only by calling the addon commands directly - not only via the model switch - lets CrowdSec take
+  over the auth families at once instead of after the ~45s timer. Known gap: mail has no CrowdSec detection
+  surface (no exim/dovecot collections), and crowdsec-only bans are visible via `cscli`, not the panel
+  banlist (#527).
   The switch holds the #120 web-model freeze across a crowdsec transition, so a concurrent web-model
   change cannot flip the public front (both -> apache-only) between the apache-only refuse check and the
   nginx wiring; the standalone `h-add/delete-sys-crowdsec` remain exposed to that race when called
