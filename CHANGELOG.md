@@ -20,6 +20,16 @@ section as part of its PR. On release, the section gets the version number.
   moved to native nft sets - verified across `bin/`, `func/`, `share/`, `web/` and the installer. Only
   `nftables` is installed now. `fw_legacy_teardown` still retires an older box's iptables ruleset and is
   guarded on the binary, so it is simply a no-op on a fresh install; `docker.io` depends on iptables itself.
+- **Dead references left behind by removed subsystems** (#548). The Server page's DNS handler still
+  exec'd `h-list-sys-dns-status`, removed with bind9, and nothing linked to it. `h-refresh-sys-theme`
+  called `h-change-sys-theme`, which exists neither here nor upstream - the command has never worked, had
+  no callers, and nothing in this codebase caches a theme, so it and its `v-*` symlink are gone. The
+  phpMyAdmin-key control on the Server page built a `disabled` attribute in a ternary whose result was
+  never echoed, gated on the removed API key. Two `# example:` header lines named commands that do not
+  exist, and those lines are what `--help` prints.
+- **`h-update-sys-defaults system` described a configuration the product no longer has** (#548). Its key
+  list had drifted 43 keys behind what is actually written to `hestia.conf` - every `POLICY_*`, the SMTP
+  settings, `ROOT_USER`, `DEMO_MODE`, `FILE_MANAGER_PORT`.
 - **A scheduled cron-job restore queued a command that does not exist** (#548).
   `h-schedule-user-restore-restic` wrote `h-restore-cron-restic` into `backup.pipe`; the command is
   `h-restore-cron-job-restic`, so the queue entry failed silently while the restore looked scheduled.

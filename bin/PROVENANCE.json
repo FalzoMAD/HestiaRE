@@ -5871,22 +5871,6 @@
       "note": ""
     },
     {
-      "path": "h-refresh-sys-theme",
-      "source_type": "derived",
-      "upstream_path": "bin/v-refresh-sys-theme",
-      "upstream_ref": "ca19b9f",
-      "last_reconciled": "2026-08-03",
-      "divergence": {
-        "upstream_lines": 30,
-        "our_lines": 30,
-        "added": 5,
-        "removed": 5,
-        "pct": 17,
-        "measured_at": "2026-08-03"
-      },
-      "note": ""
-    },
-    {
       "path": "h-rename-user-package",
       "source_type": "derived",
       "upstream_path": "bin/v-rename-user-package",
