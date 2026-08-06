@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: add firewall rule
-# options: ACTION IPV4_CIDR PORT [PROTOCOL] [COMMENT] [RULE]
+# options: ACTION IP_CIDR PORT [PROTOCOL] [COMMENT] [RULE]
 #
 # example: h-add-firewall-rule DROP 185.137.111.77 25
 #
@@ -47,7 +47,7 @@ sort_fw_rules() {
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '3' "$#" 'ACTION IPV4_CIDR PORT [PROTOCOL] [COMMENT] [RULE]'
+check_args '3' "$#" 'ACTION IP_CIDR PORT [PROTOCOL] [COMMENT] [RULE]'
 is_format_valid 'action' 'protocol' 'port_ext'
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 get_next_fw_rule
@@ -61,7 +61,8 @@ if [[ "$ipv4_cidr" =~ ^ipset: ]]; then
 	$BIN/h-list-firewall-ipset plain | grep "^$ipset_name\s" > /dev/null
 	check_result $? 'ipset object not found' "$E_NOTEXIST"
 else
-	is_format_valid 'ipv4_cidr'
+	# Either family: a v6 source renders `ip6 saddr` (#545). The variable keeps its legacy name.
+	is_ip_cidr_format_valid "$ipv4_cidr"
 fi
 
 # Perform verification if read-only mode is enabled
