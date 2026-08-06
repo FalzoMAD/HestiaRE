@@ -14,6 +14,18 @@ opens above it.
 
 ### Fixed
 
+- **The Cloudflare realip fallback trusted a header the client controls** (#553). The installer rewrites
+  `cloudflare.inc` from the CF API and skips that step silently when the fetch fails, so what ships in
+  `share/nginx/` is what a box without egress ends up running - and it named the trusted *sources* but not
+  the trusted *header*. nginx then applies its own default, `X-Real-IP`, which Cloudflare does not manage
+  and forwards from the client verbatim, while `CF-Connecting-IP` is ignored outright. Measured on nginx
+  1.26.3: `X-Real-IP: 1.2.3.4` became `$remote_addr` and propagated through `proxy_set_header` into apache
+  `mod_remoteip` and the Roundcube jail, so a forged header could drive an arbitrary IP into the banlist
+  and the nft set; conversely a real visitor behind Cloudflare logged as the edge, which fail2ban would
+  eventually ban and lock everyone out behind it. The shipped file now carries
+  `real_ip_header CF-Connecting-IP;`, and `h-check-sys-smoke` asserts the directive is present so the
+  silent fallback cannot recur. The API-generated file was always correct - only the fallback was not.
+
 - **One Cloudflare range in the panel's IP validator was wrong, and it was exploitable in both directions**
   (#553). `web/inc/cloudflare-ip.php` listed `131.0.232.0/22` where Cloudflare publishes `131.0.72.0/22` -
   a transcription slip in the hand-maintained list that replaced the vendored validator. Traffic from the
