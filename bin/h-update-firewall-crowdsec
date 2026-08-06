@@ -80,4 +80,16 @@ rm -f "$raw"
 fw_set_replace "$SET" "$CACHE"
 fw_set_replace "$SET6" "$CACHE6" 6
 
+# Self-heal the brute-force layer separation (#542): while fail2ban is present it owns brute force, so
+# CrowdSec's ssh scenarios must stay removed. A manual `cscli hub upgrade` (no automated one runs here) can
+# re-write them and silently restore the double-ban - the D1 dpkg-conffile class - and the model gates only
+# run at explicit transitions. Re-assert on this 45s timer. File-checked, so a no-op (no cscli, no reload)
+# unless a scenario actually drifted back. Only the removal direction: the install side is a transition
+# concern, and re-adding here would fight a deliberate admin removal in the crowdsec-only model.
+if [ "$FIREWALL_EXTENSION" = 'fail2ban' ]; then
+	# shellcheck source=/usr/local/hestia/func/crowdsec.sh
+	declare -F crowdsec_gate_bruteforce > /dev/null 2>&1 || source "$HESTIA/func/crowdsec.sh"
+	crowdsec_gate_bruteforce
+fi
+
 exit 0
