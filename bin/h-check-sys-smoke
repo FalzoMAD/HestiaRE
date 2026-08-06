@@ -331,6 +331,30 @@ check_fail2ban_web_signatures() {
 	[ "$n_bad" -eq 0 ] && ok "web signature filters (badactor/exploit/authprobe) match+reject as designed"
 }
 
+# check_fail2ban_web_logpath - a web jail must watch the CURRENT web system's domains dir. This is the
+# #502 class ("jail watches a real file but the wrong one") one step further: after a #120 web-model
+# switch that forgets to re-gate (fail2ban_gate_web_jail), the jail's persisted logpath points at the OLD
+# stack's dir - a real path, so the "what does a jail watch" guard cannot see it - and ANY later fail2ban
+# restart (unattended-upgrades, a package update, an OOM-kill, an unrelated manual restart) silently leaves
+# it watching a stack that no longer receives traffic. Compare the configured logpath against the
+# WEB_SYSTEM-derived dir, so this catches the #537 regression AND any future switch path that forgets to
+# re-gate.
+check_fail2ban_web_logpath() {
+	local want jail lp bad=''
+	want="$(fail2ban_web_logdir 2> /dev/null)" || { skip "web jail logpath (no web system)"; return; }
+	for jail in $F2B_WEB_JAILS; do
+		fail2ban_jail_enabled "$jail" || continue
+		lp="$(fail2ban_jail_logpath "$jail")"
+		[ -n "$lp" ] || continue
+		case "$lp" in "$want"/*) ;; *) bad="$bad $jail" ;; esac
+	done
+	if [ -z "$bad" ]; then
+		ok "fail2ban web jails watch the current web system ($want)"
+	else
+		no "fail2ban web jail logpath stale vs WEB_SYSTEM" "${bad# } not under $want - a web-model switch did not re-gate; a fail2ban restart would go blind"
+	fi
+}
+
 # check_http <url> <label>
 check_http() {
 	local code
@@ -591,6 +615,7 @@ if is_on "${COMPONENT_ADDON_FAIL2BAN:-}"; then
 	check_fail2ban_backends
 	check_fail2ban_roundcube_injection
 	check_fail2ban_web_signatures
+	check_fail2ban_web_logpath
 fi
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
 is_on "${COMPONENT_ADDON_CROWDSEC:-}" && check_service crowdsec "crowdsec"
