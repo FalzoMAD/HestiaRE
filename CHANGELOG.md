@@ -14,6 +14,18 @@ opens above it.
 
 ### Fixed
 
+- **The panel served its own includes, templates and locale data over HTTP** (#554, upstream #5446).
+  Nothing denied `/inc`, `/locale` or `/templates`, so unauthenticated requests reached them: the two
+  `web/locale/*.sh` helpers and `hestiacp.pot` were returned as source, include-only PHP was executed, and
+  `templates/includes/panel.php` rendered its markup outside any auth context. Measured impact today is
+  low - the templates emit empty scaffolding, no data and no path disclosure - but the exposure is one
+  refactor away from mattering, since any of those files gaining a `$_GET` read or assuming an
+  authenticated caller becomes reachable without a session. The panel Caddy now answers 404 for those
+  prefixes and for `*.map|log|sh|sql|bak|env`, placed first inside the existing `route` because `respond`
+  otherwise sorts after `file_server`. Unlike upstream we do not deny `/src`: their panel root has a
+  `web/src`, ours does not, so the rule would have no object. i18n is unaffected - it reads
+  `languages.json` from disk, not over HTTP.
+
 - **The Cloudflare realip fallback trusted a header the client controls** (#553). The installer rewrites
   `cloudflare.inc` from the CF API and skips that step silently when the fetch fails, so what ships in
   `share/nginx/` is what a box without egress ends up running - and it named the trusted *sources* but not
