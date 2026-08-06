@@ -111,8 +111,16 @@ if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
 	for net in 127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
 		fw_return_source hestia-crowdsec "$net"
 	done
+	# v6 backstop, same defense-in-depth as the v4 RFC1918/loopback RETURNs above: loopback, link-local
+	# (NDP rides on it) and ULA must never be L3-dropped by a false-positive decision (#536).
+	for net6 in ::1 fe80::/10 fc00::/7; do
+		fw_return_source6 hestia-crowdsec "$net6"
+	done
 	fw_chain_tail hestia-crowdsec DROP
+	# Both families feed the one chain: a v4 decision via crowdsec-blacklists, a v6 decision via
+	# crowdsec6-blacklists (the feeder fills both caches).
 	fw_set_jump hestia-crowdsec crowdsec-blacklists
+	fw_set_jump6 hestia-crowdsec crowdsec6-blacklists
 fi
 
 # Rendering the object model

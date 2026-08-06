@@ -33,7 +33,9 @@ command -v jq > /dev/null 2>&1 || exit 0
 #----------------------------------------------------------#
 
 SET="crowdsec-blacklists"
+SET6="crowdsec6-blacklists"
 CACHE="$CONF_DIR/firewall/crowdsec.iplist"
+CACHE6="$CONF_DIR/firewall/crowdsec6.iplist"
 
 # The set is rendered from CACHE every time the ruleset is rebuilt, so the cache is the record of truth
 # and has to be written even when the live update fails.
@@ -50,27 +52,32 @@ CACHE="$CONF_DIR/firewall/crowdsec.iplist"
 # (CGNAT collateral).
 deny='req-limit'
 [ -n "$FIREWALL_EXTENSION" ] && deny='ssh|ftp|smtp|imap|pop3|dovecot|postfix|exim|mysql|mariadb|postgres|req-limit'
-tmp="$(mktemp)"
+# One extraction of every kept decision (both families), then split by family below.
+raw="$(mktemp)"
 cscli decisions list -o json 2> /dev/null \
 	| jq -r --arg deny "$deny" '(if type=="array" then .[] else . end)
 		| (.decisions // [])[]
 		| select(.type == "ban" and .origin == "crowdsec"
 			and ((.scenario // "") | ascii_downcase | test($deny) | not))
 		| .value' 2> /dev/null \
-	| grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$' | sort -u > "$tmp"
+	| sort -u > "$raw"
 
-# Never overwrite the cache just because cscli or jq hiccuped: an empty cache renders an empty set, which
+# Never overwrite the caches just because cscli or jq hiccuped: an empty cache renders an empty set, which
 # would silently lift every L3 ban. An empty result is trusted only when cscli itself answered cleanly.
-if [ -s "$tmp" ] || cscli decisions list -o json > /dev/null 2>&1; then
-	mv -f "$tmp" "$CACHE"
-	chmod 640 "$CACHE"
-else
-	rm -f "$tmp"
+if [ ! -s "$raw" ] && ! cscli decisions list -o json > /dev/null 2>&1; then
+	rm -f "$raw"
 	exit 0
 fi
+# Split by family - a v4 element in the v6 set (or vice versa) fails the whole nft document. Both caches
+# are rewritten together, so a decision that flips family is never left stale in the other set.
+grep -oE "$FW_ADDR_RE" "$raw" > "$CACHE" || true
+grep -oE "$FW_ADDR6_RE" "$raw" > "$CACHE6" || true
+chmod 640 "$CACHE" "$CACHE6"
+rm -f "$raw"
 
-# Flush and refill in one transaction, so the set is never observably empty. The ipset original needed a
-# temporary set and a swap for the same guarantee.
+# Flush and refill in one transaction per set, so the set is never observably empty. The ipset original
+# needed a temporary set and a swap for the same guarantee.
 fw_set_replace "$SET" "$CACHE"
+fw_set_replace "$SET6" "$CACHE6" 6
 
 exit 0

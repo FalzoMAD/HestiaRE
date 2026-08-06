@@ -183,6 +183,10 @@ fw_return_source() {
 	fw_sec "chain.$(fw_chain_id "$1")" "		ip saddr $2 return"
 }
 
+fw_return_source6() {
+	fw_sec "chain.$(fw_chain_id "$1")" "		ip6 saddr $2 return"
+}
+
 fw_chain_tail() {
 	fw_sec "chain.$(fw_chain_id "$1")" "		$(echo "$2" | tr '[:upper:]' '[:lower:]')"
 }
@@ -192,6 +196,13 @@ fw_chain_tail() {
 fw_set_jump() {
 	fw_set_declare "$2" interval
 	fw_sec setjump "		ip saddr @$(fw_set_id "$2") jump $(fw_chain_id "$1")"
+}
+
+# IPv6 counterpart: an ipv6_addr set feeding the same chain. Declared v6 so the render types it and filters
+# its source file to v6 addresses.
+fw_set_jump6() {
+	fw_set_declare "$2" v6
+	fw_sec setjump "		ip6 saddr @$(fw_set_id "$2") jump $(fw_chain_id "$1")"
 }
 
 # Set names: nft has a stricter charset than ipset, so dashes become underscores. One mapping, used by
@@ -226,6 +237,7 @@ fw_addr_family() {
 fw_set_src() {
 	case "$1" in
 		crowdsec-blacklists) echo "$CONF_DIR/firewall/crowdsec.iplist" ;;
+		crowdsec6-blacklists) echo "$CONF_DIR/firewall/crowdsec6.iplist" ;;
 		excludes) echo "$CONF_DIR/firewall/excludes.conf" ;;
 		*) echo "$CONF_DIR/firewall/ipset/$1.v4.iplist" ;;
 	esac
@@ -277,12 +289,14 @@ fw_render_sets() {
 # feeder runs every 45s and a blocklist refresh is a cron job. Flush and refill in ONE transaction, so the
 # set is never observably empty - the ipset original needed a temporary set and a swap to get this.
 fw_set_replace() {
-	local id doc
+	local id doc re="$FW_ADDR_RE"
+	# $3=6 loads an ipv6_addr set: filter the source to v6 literals (a v4 element fails the whole document).
+	[ "${3:-}" = '6' ] && re="$FW_ADDR6_RE"
 	id="$(fw_set_id "$1")"
 	doc="$(mktemp)"
 	{
 		echo "flush set $FW_FAMILY $FW_TABLE $id"
-		grep -oE "$FW_ADDR_RE" "$2" 2> /dev/null \
+		grep -oE "$re" "$2" 2> /dev/null \
 			| sort -u | sed "s|^|add element $FW_FAMILY $FW_TABLE $id { |;s|$| }|"
 	} > "$doc"
 	"$FW_NFT" -f "$doc" 2> /dev/null
