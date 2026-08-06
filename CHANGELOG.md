@@ -54,7 +54,12 @@ section as part of its PR. On release, the section gets the version number.
   present - with fail2ban gone, those decisions reach L3 (at the feeder's ~45s latency, connections not
   cut), so SSH/web brute force is enforced. `req-limit` stays denied in every model, so a Layer-B rate
   limit 429 never escalates into a firewall ban. Known gap: mail has no CrowdSec detection surface (no
-  exim/dovecot collections), and crowdsec-only bans are visible via `cscli`, not the panel banlist.
+  exim/dovecot collections), and crowdsec-only bans are visible via `cscli`, not the panel banlist (#527).
+  The switch holds the #120 web-model freeze across a crowdsec transition, so a concurrent web-model
+  change cannot flip the public front (both -> apache-only) between the apache-only refuse check and the
+  nginx wiring; the standalone `h-add/delete-sys-crowdsec` remain exposed to that race when called
+  directly (#528). The Server Settings toggle warns, when mail is installed, that relying on CrowdSec
+  alone leaves mail brute force unprotected.
 - **fail2ban is now a removable addon** (#497), like proftpd/clamav/crowdsec. `h-add-sys-fail2ban`
   installs the package, sets `FIREWALL_EXTENSION` and runs the shared `fail2ban_apply`;
   `h-delete-sys-fail2ban` stops the daemon, drops every chain it created (via `h-delete-firewall-chain`),

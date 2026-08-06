@@ -89,6 +89,16 @@ case "$model" in
 	crowdsec) want_cs='yes' ;;
 esac
 
+# When crowdsec is added or removed, hold the #120 web-model freeze across the whole switch: crowdsec
+# wiring depends on the public web front and mutates nginx config, so a concurrent h-add/delete-sys-nginx
+# must not flip the front (both -> apache-only) between the refuse check and the wiring. Reentrant, so the
+# child crowdsec command shares this lock rather than blocking on it. Only for crowdsec transitions - a
+# pure fail2ban toggle touches the firewall, not web config, and should not freeze domain ops. (The
+# standalone h-add/delete-sys-crowdsec still race a web switch when called directly - pre-existing, #528.)
+if { [ "$want_cs" = 'yes' ] && [ "$cs" = 'no' ]; } || { [ "$want_cs" = 'no' ] && [ "$cs" = 'yes' ]; }; then
+	web_lock_acquire || exit "$E_INUSE"
+fi
+
 # Add the target's components first (a crowdsec add may refuse on apache and abort here, leaving the
 # current model intact), then remove what the target does not want.
 if [ "$want_f2b" = 'yes' ] && [ "$f2b" = 'no' ]; then
