@@ -65,6 +65,11 @@ fi
 
 set_install_component ADDON_FAIL2BAN false
 
+# With fail2ban gone, nothing else enforces the auth families unless CrowdSec takes them to L3. The feeder
+# denylist keys off FIREWALL_EXTENSION (just cleared), so refresh it now instead of leaving up to 45s where
+# a crowdsec-only box detects SSH brute force but enforces nothing. No-op unless CrowdSec L3 is wired.
+[ -f "$CONF_DIR/firewall/crowdsec.conf" ] && $BIN/h-update-firewall-crowdsec
+
 echo "fail2ban has been removed."
 
 #----------------------------------------------------------#

@@ -1,0 +1,129 @@
+#!/bin/bash
+# info: switch the brute-force protection model
+# options: [MODEL]
+#
+# example: h-change-sys-firewall-model crowdsec
+#
+# Runtime switch across the four models the two addons encode: none, fail2ban, fail2ban+crowdsec,
+# crowdsec. The current model is DERIVED from the artefacts on disk (fail2ban -> FIREWALL_EXTENSION,
+# crowdsec -> the installed package), not from install.conf (that is the install recipe, not live state).
+# The target is enforced in full by orchestrating h-add/delete-sys-fail2ban and h-add/delete-sys-crowdsec:
+# the target's components are added BEFORE the others are removed, so the box is never left with neither.
+# No MODEL arg just prints the current one.
+#
+# CrowdSec is nginx-only, so a crowdsec target refuses on an apache-only front - h-add-sys-crowdsec does
+# the refusing, and because it runs before any removal the box keeps its existing protection. crowdsec-only
+# enforcement is best-effort: SSH/web decisions now reach L3 (the feeder stops denying the auth families
+# when fail2ban is absent), but mail has no CrowdSec detection surface and bans are visible via cscli, not
+# the panel banlist.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+model=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Derive the live model from the artefacts, not install.conf.
+f2b='no'
+[ "$FIREWALL_EXTENSION" = 'fail2ban' ] && f2b='yes'
+cs='no'
+dpkg -l crowdsec 2> /dev/null | grep -q '^ii' && cs='yes'
+case "$f2b/$cs" in
+	no/no) current='none' ;;
+	yes/no) current='fail2ban' ;;
+	yes/yes) current='fail2ban+crowdsec' ;;
+	no/yes) current='crowdsec' ;;
+esac
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+# No argument: report the current model and exit (lets the panel and scripts read it cheaply).
+if [ -z "$model" ]; then
+	echo "$current"
+	exit 0
+fi
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+case "$model" in
+	none | fail2ban | fail2ban+crowdsec | crowdsec) ;;
+	*)
+		echo "ERROR: MODEL must be one of: none fail2ban fail2ban+crowdsec crowdsec"
+		exit "$E_INVALID"
+		;;
+esac
+
+if [ "$model" = "$current" ]; then
+	echo "INFO: brute-force protection model is already '$current'."
+	exit 0
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+want_f2b='no'
+want_cs='no'
+case "$model" in
+	fail2ban) want_f2b='yes' ;;
+	fail2ban+crowdsec)
+		want_f2b='yes'
+		want_cs='yes'
+		;;
+	crowdsec) want_cs='yes' ;;
+esac
+
+# When crowdsec is added or removed, hold the #120 web-model freeze across the whole switch: crowdsec
+# wiring depends on the public web front and mutates nginx config, so a concurrent h-add/delete-sys-nginx
+# must not flip the front (both -> apache-only) between the refuse check and the wiring. Reentrant, so the
+# child crowdsec command shares this lock rather than blocking on it. Only for crowdsec transitions - a
+# pure fail2ban toggle touches the firewall, not web config, and should not freeze domain ops. (The
+# standalone h-add/delete-sys-crowdsec still race a web switch when called directly - pre-existing, #528.)
+if { [ "$want_cs" = 'yes' ] && [ "$cs" = 'no' ]; } || { [ "$want_cs" = 'no' ] && [ "$cs" = 'yes' ]; }; then
+	web_lock_acquire || exit "$E_INUSE"
+fi
+
+# Add the target's components first (a crowdsec add may refuse on apache and abort here, leaving the
+# current model intact), then remove what the target does not want.
+if [ "$want_f2b" = 'yes' ] && [ "$f2b" = 'no' ]; then
+	$BIN/h-add-sys-fail2ban || exit "$E_INVALID"
+fi
+if [ "$want_cs" = 'yes' ] && [ "$cs" = 'no' ]; then
+	$BIN/h-add-sys-crowdsec || exit "$E_INVALID"
+fi
+if [ "$want_f2b" = 'no' ] && [ "$f2b" = 'yes' ]; then
+	$BIN/h-delete-sys-fail2ban
+fi
+if [ "$want_cs" = 'no' ] && [ "$cs" = 'yes' ]; then
+	$BIN/h-delete-sys-crowdsec
+fi
+
+# No feeder refresh here: each component command owns its own L3 consequence - the fail2ban add/delete
+# refresh the feeder (the denylist keys off FIREWALL_EXTENSION), and crowdsec_apply/teardown set up or
+# remove L3. So the indirect path (calling the addon commands directly) reaches the same enforcement
+# state as this switch, not just this switch.
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Brute-force protection model changed ($current -> $model)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

@@ -41,6 +41,29 @@ section as part of its PR. On release, the section gets the version number.
   is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
+- **A runtime switch for the brute-force protection model** (#498). `h-change-sys-firewall-model`
+  moves the box between the four models the two addons encode - `none`, `fail2ban`,
+  `fail2ban+crowdsec`, `crowdsec` - by orchestrating `h-add/delete-sys-fail2ban` and
+  `h-add/delete-sys-crowdsec`. The current model is derived from the artefacts on disk (fail2ban ->
+  `FIREWALL_EXTENSION`, crowdsec -> the installed package), and the target's components are added before
+  the others are removed, so the box is never left unprotected mid-switch; a `crowdsec` target on an
+  apache-only front is refused (crowdsec is nginx-only) before anything is torn down. No argument prints
+  the current model. The four models stay expressible from the wizard's two existing checkboxes, so
+  there is no manifest change. **crowdsec-only enforcement is now wired, best-effort**: the L3 feeder
+  denies CrowdSec's auth-family decisions (ssh/ftp/mail/db) from the firewall only while fail2ban is
+  present - with fail2ban gone, those decisions reach L3 (at the feeder's ~45s latency, connections not
+  cut), so SSH/web brute force is enforced. `req-limit` stays denied in every model, so a Layer-B rate
+  limit 429 never escalates into a firewall ban. The handover is **path-independent**: `h-add-sys-fail2ban`
+  and `h-delete-sys-fail2ban` refresh the feeder themselves (guarded on the L3 marker), so reaching
+  crowdsec-only by calling the addon commands directly - not only via the model switch - lets CrowdSec take
+  over the auth families at once instead of after the ~45s timer. Known gap: mail has no CrowdSec detection
+  surface (no exim/dovecot collections), and crowdsec-only bans are visible via `cscli`, not the panel
+  banlist (#527).
+  The switch holds the #120 web-model freeze across a crowdsec transition, so a concurrent web-model
+  change cannot flip the public front (both -> apache-only) between the apache-only refuse check and the
+  nginx wiring; the standalone `h-add/delete-sys-crowdsec` remain exposed to that race when called
+  directly (#528). The Server Settings toggle warns, when mail is installed, that relying on CrowdSec
+  alone leaves mail brute force unprotected.
 - **fail2ban is now a removable addon** (#497), like proftpd/clamav/crowdsec. `h-add-sys-fail2ban`
   installs the package, sets `FIREWALL_EXTENSION` and runs the shared `fail2ban_apply`;
   `h-delete-sys-fail2ban` stops the daemon, drops every chain it created (via `h-delete-firewall-chain`),

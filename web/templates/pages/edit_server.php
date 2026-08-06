@@ -1472,6 +1472,11 @@
 								<?= tohtml( _("Yes")) ?>
 							</option>
 						</select>
+						<?php if (!empty($_SESSION["MAIL_SYSTEM"])) { ?>
+							<span class="hint">
+								<?= tohtml( _("Mail is installed: turning this off and relying on CrowdSec alone leaves mail brute force unprotected - CrowdSec has no mail detection surface.")) ?>
+							</span>
+						<?php } ?>
 					</div>
 				</div>
 			</details>

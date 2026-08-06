@@ -1776,6 +1776,15 @@
       "note": ""
     },
     {
+      "path": "h-change-sys-firewall-model",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": ""
+    },
+    {
       "path": "h-change-sys-hostname",
       "source_type": "derived",
       "upstream_path": "bin/v-change-sys-hostname",

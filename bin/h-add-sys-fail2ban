@@ -76,6 +76,12 @@ fi
 
 set_install_component ADDON_FAIL2BAN true
 
+# fail2ban now owns the auth families, so the L3 feeder must stop sending their CrowdSec decisions to L3
+# (its denylist keys off FIREWALL_EXTENSION, just set). Refresh now instead of waiting up to 45s for the
+# timer, so the handover is prompt whether the model changed via this command or h-change-sys-firewall-model.
+# No-op unless CrowdSec L3 is wired (marker).
+[ -f "$CONF_DIR/firewall/crowdsec.conf" ] && $BIN/h-update-firewall-crowdsec
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
