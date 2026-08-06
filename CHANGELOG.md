@@ -41,6 +41,7 @@ section as part of its PR. On release, the section gets the version number.
   is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
+- **The panel banlist shows and unbans CrowdSec bans** (#527). The Firewall > Banned IP Addresses page now lists CrowdSec local L3 decisions (origin==crowdsec) alongside fail2ban bans, source-tagged, and the button appears in the crowdsec-only model too (a `CROWDSEC` session signal from `h-list-sys-config`, derived from the L3 marker). Unban routes by source: fail2ban via the banlist, CrowdSec via `h-delete-firewall-crowdsec-ban` (`cscli decisions delete` + an immediate L3 feeder refresh). Two new read/act commands (`h-list-firewall-crowdsec-ban`, `h-delete-firewall-crowdsec-ban`); the CAPI/community blocklist is deliberately not listed (L7-only, thousands of entries, not locally removable). The bulk selector value is now `source|ip|chain` (a `|`, not a `:`, so IPv6 addresses no longer mis-split). Verified end to end on the dual-stack box: page renders, a crowdsec row shows source-tagged with a source-routed unban link, and the list/delete commands work (the delete command rejects a non-IP argument).
 - **fail2ban L7 signature jails** (#531) - `web-badactor`, `web-exploit`, `web-authprobe`, alongside the
   retuned `web-botsearch`, so the fail2ban-only model has real Layer-7 coverage (the mirror of crowdsec-only
   gaining brute-force enforcement in #498). `web-badactor` bans secret/config file-discovery probes

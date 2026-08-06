@@ -2740,6 +2740,15 @@
       "note": ""
     },
     {
+      "path": "h-delete-firewall-crowdsec-ban",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": ""
+    },
+    {
       "path": "h-delete-firewall-chain",
       "source_type": "derived",
       "upstream_path": "bin/v-delete-firewall-chain",
@@ -4404,6 +4413,15 @@
         "pct": 9,
         "measured_at": "2026-08-03"
       },
+      "note": ""
+    },
+    {
+      "path": "h-list-firewall-crowdsec-ban",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
       "note": ""
     },
     {

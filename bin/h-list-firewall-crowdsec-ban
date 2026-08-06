@@ -1,0 +1,91 @@
+#!/bin/bash
+# info: list CrowdSec local ban decisions
+# options: [FORMAT]
+#
+# example: h-list-firewall-crowdsec-ban json
+#
+# Lists the CrowdSec decisions that reach L3 - origin==crowdsec ban decisions (own detections + mesh),
+# NOT the CAPI/community blocklist (L7-only, thousands of entries). Lets the panel banlist show and unban
+# crowdsec-sourced bans next to fail2ban's. Empty output when CrowdSec is absent, so the panel merge is a
+# no-op. New h-* command: no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+format=${1-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# cscli filter: origin==crowdsec ban decisions, as TSV (ip, scenario, id, until).
+cs_rows() {
+	local out
+	command -v cscli > /dev/null 2>&1 || return 0
+	command -v jq > /dev/null 2>&1 || return 0
+	out="$(cscli decisions list -o json 2> /dev/null)"
+	[ -n "$out" ] || return 0
+	echo "$out" | jq -r '(if type=="array" then .[] else . end) | (.decisions // [])[]
+		| select(.type=="ban" and .origin=="crowdsec")
+		| [.value, (.scenario//""), (.id|tostring), (.until//"")] | @tsv' 2> /dev/null
+}
+
+json_list() {
+	local first=1 ip scen id until
+	echo "{"
+	while IFS=$'\t' read -r ip scen id until; do
+		[ -n "$ip" ] || continue
+		[ "$first" = 1 ] || echo ','
+		first=0
+		printf '    "%s": {\n        "IP": "%s",\n        "SCENARIO": "%s",\n        "ID": "%s",\n        "UNTIL": "%s"\n    }' \
+			"$ip" "$ip" "$scen" "$id" "$until"
+	done < <(cs_rows)
+	echo
+	echo '}'
+}
+
+shell_list() {
+	local ip scen id until
+	echo "IP   SCENARIO   ID   UNTIL"
+	echo "--   --------   --   -----"
+	while IFS=$'\t' read -r ip scen id until; do
+		[ -n "$ip" ] || continue
+		echo "$ip $scen $id $until"
+	done < <(cs_rows)
+}
+
+plain_list() {
+	cs_rows
+}
+
+csv_list() {
+	local ip scen id until
+	echo "IP,SCENARIO,ID,UNTIL"
+	while IFS=$'\t' read -r ip scen id until; do
+		[ -n "$ip" ] || continue
+		echo "$ip,$scen,$id,$until"
+	done < <(cs_rows)
+}
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list | column -t ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

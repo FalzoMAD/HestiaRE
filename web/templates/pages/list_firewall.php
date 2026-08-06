@@ -8,10 +8,14 @@
 			<a href="/add/firewall/" class="button button-secondary js-button-create">
 				<i class="fas fa-circle-plus icon-green"></i><?= tohtml( _("Add Rule")) ?>
 			</a>
-			<?php if (!empty($_SESSION["FIREWALL_EXTENSION"])): ?>
+			<?php if (!empty($_SESSION["FIREWALL_EXTENSION"]) || !empty($_SESSION["CROWDSEC"])): ?>
+				<!-- Banlist covers fail2ban AND crowdsec bans, so it shows in the crowdsec-only model too
+				     (FIREWALL_EXTENSION empty there). Jail Status stays fail2ban-only. -->
 				<a class="button button-secondary" href="/list/firewall/banlist/">
 					<i class="fas fa-eye icon-red"></i><?= tohtml( _("Banned IP Addresses")) ?>
 				</a>
+			<?php endif; ?>
+			<?php if (!empty($_SESSION["FIREWALL_EXTENSION"])): ?>
 				<a class="button button-secondary" href="/list/firewall/jail/">
 					<i class="fas fa-gauge-high icon-orange"></i><?= tohtml( _("Jail Status")) ?>
 				</a>

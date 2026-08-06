@@ -36,21 +36,34 @@
 			</div>
 			<div class="units-table-cell"><?= tohtml( _("IP Address")) ?></div>
 			<div class="units-table-cell"></div>
-			<div class="units-table-cell u-text-center"><?= tohtml( _("Date")) ?></div>
-			<div class="units-table-cell u-text-center"><?= tohtml( _("Time")) ?></div>
-			<div class="units-table-cell u-text-center"><?= tohtml( _("Chain")) ?></div>
+			<div class="units-table-cell u-text-center"><?= tohtml( _("Source")) ?></div>
+			<div class="units-table-cell u-text-center"><?= tohtml( _("Chain / Scenario")) ?></div>
+			<div class="units-table-cell u-text-center"><?= tohtml( _("When")) ?></div>
 		</div>
 
-		<!-- Begin banned IP address list item loop -->
+		<!-- Begin banned IP address list item loop. Rows come from fail2ban (banlist.conf) and, when
+		     CrowdSec is present, its local decisions; $value["SOURCE"] routes the unban. -->
 		<?php
 			foreach ($data as $key => $value) {
 				++$i;
-				$ip = $key;
+				$ip = $value["IP"];
+				$source = $value["SOURCE"];
+				$is_cs = $source === "crowdsec";
+				$detail = $is_cs ? ($value["SCENARIO"] ?? "") : ($value["CHAIN"] ?? "");
+				$when = $is_cs
+					? ($value["UNTIL"] ?? "")
+					: trim(($value["DATE"] ?? "") . " " . ($value["TIME"] ?? ""));
+				// Bulk value carries the source so the bulk handler can route; "|" not ":" because an IPv6
+				// address contains colons.
+				$cbval = $source . "|" . $ip . "|" . ($value["CHAIN"] ?? "");
+				$delq = $is_cs
+					? ["ip" => $ip, "source" => "crowdsec", "token" => $_SESSION["token"]]
+					: ["ip" => $ip, "chain" => $value["CHAIN"] ?? "", "token" => $_SESSION["token"]];
 			?>
 			<div class="units-table-row js-unit">
 				<div class="units-table-cell">
 					<div>
-						<input id="check<?= tohtml($i) ?>" class="js-unit-checkbox" type="checkbox" title="<?= tohtml( _("Select")) ?>" name="ipchain[]" value="<?= tohtml($ip . ":" . $value["CHAIN"]) ?>">
+						<input id="check<?= tohtml($i) ?>" class="js-unit-checkbox" type="checkbox" title="<?= tohtml( _("Select")) ?>" name="ipchain[]" value="<?= tohtml($cbval) ?>">
 						<label for="check<?= tohtml($i) ?>" class="u-hide-desktop"><?= tohtml( _("Select")) ?></label>
 					</div>
 				</div>
@@ -63,10 +76,10 @@
 						<li class="units-table-row-action shortcut-delete" data-key-action="js">
 							<a
 								class="units-table-row-action-link data-controls js-confirm-action"
-								href="/delete/firewall/banlist/?<?= tohtml(http_build_query(["ip" => $ip, "chain" => $value["CHAIN"], "token" => $_SESSION["token"]])) ?>"
+								href="/delete/firewall/banlist/?<?= tohtml(http_build_query($delq)) ?>"
 								title="<?= tohtml( _("Delete")) ?>"
 								data-confirm-title="<?= tohtml( _("Delete")) ?>"
-								data-confirm-message="<?= tohtml(sprintf(_("Are you sure you want to delete IP address %s?"), $key)) ?>"
+								data-confirm-message="<?= tohtml(sprintf(_("Are you sure you want to delete IP address %s?"), $ip)) ?>"
 							>
 								<i class="fas fa-trash icon-red"></i>
 								<span class="u-hide-desktop"><?= tohtml( _("Delete")) ?></span>
@@ -74,17 +87,17 @@
 						</li>
 					</ul>
 				</div>
-				<div class="units-table-cell u-text-center-desktop">
-					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("Date")) ?>:</span>
-					<time datetime="<?= tohtml( _($data[$key]["DATE"])) ?>"><?= tohtml( _($data[$key]["DATE"])) ?></time>
-				</div>
-				<div class="units-table-cell u-text-center-desktop">
-					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("Time")) ?>:</span>
-					<?= tohtml($data[$key]["TIME"]) ?>
-				</div>
 				<div class="units-table-cell u-text-bold u-text-center-desktop">
-					<span class="u-hide-desktop"><?= tohtml( _("Chain")) ?>:</span>
-					<?= tohtml( _($value["CHAIN"])) ?>
+					<span class="u-hide-desktop"><?= tohtml( _("Source")) ?>:</span>
+					<?= tohtml($source) ?>
+				</div>
+				<div class="units-table-cell u-text-center-desktop">
+					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("Chain / Scenario")) ?>:</span>
+					<?= tohtml( _($detail)) ?>
+				</div>
+				<div class="units-table-cell u-text-center-desktop">
+					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("When")) ?>:</span>
+					<?= tohtml($when) ?>
 				</div>
 			</div>
 		<?php } ?>

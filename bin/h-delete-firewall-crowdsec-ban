@@ -1,0 +1,66 @@
+#!/bin/bash
+# info: delete a CrowdSec ban decision
+# options: IP
+#
+# example: h-delete-firewall-crowdsec-ban 203.0.113.5
+#
+# Panel unban path for a crowdsec-sourced ban: delete the decision by IP with cscli, then refresh the L3
+# feeder so the drop lifts at once instead of after the ~45s timer. Only origin==crowdsec (local/mesh)
+# decisions are removable this way; a CAPI/community decision is not locally deletable and is not shown in
+# the panel. New h-* command: no v-* symlink.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+ip=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/firewall.sh
+source $HESTIA/func/firewall.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'IP'
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+# Sanity-filter the address (v4 or v6) before it reaches cscli - the panel quoteshellargs it too, this is
+# defense in depth.
+if ! fw_is_addr "$ip" && ! fw_is_addr6 "$ip"; then
+	check_result "$E_INVALID" "invalid IP: $ip"
+fi
+
+check_hestia_demo_mode
+
+command -v cscli > /dev/null 2>&1 || check_result "$E_NOTEXIST" "CrowdSec is not installed"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+cscli decisions delete -i "$ip" > /dev/null 2>&1
+
+# Refresh L3 now (both families) so the set drops it immediately rather than after the feeder timer.
+[ -f "$CONF_DIR/firewall/crowdsec.conf" ] && $BIN/h-update-firewall-crowdsec
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "Firewall" "Removed CrowdSec ban $ip."
+log_event "$OK" "$ARGUMENTS"
+
+exit
