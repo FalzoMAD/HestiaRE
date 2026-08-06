@@ -286,6 +286,38 @@ check_fail2ban_roundcube_injection() {
 	fi
 }
 
+# check_fail2ban_web_signatures - the L7 signature jails (#531) defend purely by regex on the access log,
+# so a filter edit or a log-format drift could silently stop matching a real probe, or start matching benign
+# traffic. Replay a malicious AND a benign line through each DEPLOYED filter with fail2ban-regex and assert
+# match / no-match. The benign cases pin the deliberate decisions: a single ../ is NOT an exploit, and a 403
+# is NOT an authprobe (401-only).
+check_fail2ban_web_signatures() {
+	command -v fail2ban-regex > /dev/null 2>&1 || { skip "fail2ban-regex absent - web signature canary"; return; }
+	local fdir='/etc/fail2ban/filter.d' d='[05/Aug/2026:11:00:00 +0000]' pre='1.2.3.4 - -'
+	local n_bad=0
+	_f2b_n() { fail2ban-regex "$1" "$2" 2> /dev/null | sed -n 's/.*, \([0-9]*\) matched,.*/\1/p' | tail -1; }
+	# case = "filter|expect(hit/miss)|request-line-and-status"
+	local c filt exp line got
+	for c in \
+		"badactor|hit|\"GET /.env HTTP/1.1\" 404 12" \
+		"badactor|miss|\"GET /index.html HTTP/1.1\" 200 12" \
+		"exploit|hit|\"GET /a?x=../../../../etc/passwd HTTP/1.1\" 404 12" \
+		"exploit|miss|\"GET /a/../b HTTP/1.1\" 200 12" \
+		"authprobe|hit|\"GET /admin HTTP/1.1\" 401 12" \
+		"authprobe|miss|\"GET /admin HTTP/1.1\" 403 12"; do
+		filt="${c%%|*}"; exp="${c#*|}"; line="${exp#*|}"; exp="${exp%%|*}"
+		[ -f "$fdir/hestia-$filt.conf" ] || { skip "hestia-$filt.conf absent"; continue; }
+		got="$(_f2b_n "$pre $d $line" "$fdir/hestia-$filt.conf")"
+		got="${got:-0}"
+		if { [ "$exp" = hit ] && [ "$got" -ge 1 ]; } || { [ "$exp" = miss ] && [ "$got" -eq 0 ]; }; then
+			continue
+		fi
+		no "web signature filter hestia-$filt: expected $exp, got $got match(es)" "$line"
+		n_bad=$((n_bad + 1))
+	done
+	[ "$n_bad" -eq 0 ] && ok "web signature filters (badactor/exploit/authprobe) match+reject as designed"
+}
+
 # check_http <url> <label>
 check_http() {
 	local code
@@ -545,6 +577,7 @@ if is_on "${COMPONENT_ADDON_FAIL2BAN:-}"; then
 	check_fail2ban_logpaths
 	check_fail2ban_backends
 	check_fail2ban_roundcube_injection
+	check_fail2ban_web_signatures
 fi
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
 is_on "${COMPONENT_ADDON_CROWDSEC:-}" && check_service crowdsec "crowdsec"

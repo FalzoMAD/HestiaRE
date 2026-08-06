@@ -41,6 +41,21 @@ section as part of its PR. On release, the section gets the version number.
   is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
+- **fail2ban L7 signature jails** (#531) - `web-badactor`, `web-exploit`, `web-authprobe`, alongside the
+  retuned `web-botsearch`, so the fail2ban-only model has real Layer-7 coverage (the mirror of crowdsec-only
+  gaining brute-force enforcement in #498). `web-badactor` bans secret/config file-discovery probes
+  (`/.env`, `/.git/`, `/id_rsa`, `wp-config.php~`, ...); `web-exploit` bans traversal (>=2 segments, plus
+  single/double URL-encoded), RCE payloads (`system(`, `${jndi:`, `wget http`, ...) and known appliance
+  paths (`/boaform/`, `/HNAP1/`, ...); both are status-agnostic, `maxretry=2`. `web-authprobe` bans repeated
+  **401 only** (never a global 403, which has too many benign causes), `maxretry=20`. `web-botsearch` goes to
+  `maxretry=10`. **Hard demarcation to Layer B**: all four are signature/behaviour based and never key off
+  request rate - the rate limiter (`nginx limit_req` / `apache mod_qos`) owns volume and its 429s never
+  escalate to a ban. **Multi-tenant note**: thresholds count per source IP across ALL vhosts on the host,
+  not per domain, which is why `web-authprobe=20` is conservative rather than high. Deliberately NOT a WAF:
+  literal-string regex, so URL/UTF-8-encoding beyond the covered single/double `%2e` forms evades by design.
+  Gated as one set in `func/fail2ban.sh` (`F2B_WEB_JAILS`); a per-filter smoke canary
+  (`check_fail2ban_web_signatures`, via `fail2ban-regex`) pins match+reject. The UA-based `web-badbots` jail
+  from the proposal was dropped: user-agents are trivially forged and largely covered by IP blocklists.
 - **A runtime switch for the brute-force protection model** (#498). `h-change-sys-firewall-model`
   moves the box between the four models the two addons encode - `none`, `fail2ban`,
   `fail2ban+crowdsec`, `crowdsec` - by orchestrating `h-add/delete-sys-fail2ban` and

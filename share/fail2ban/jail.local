@@ -74,19 +74,56 @@ maxretry = 5
 # and its verdicts must not escalate into firewall bans.
 #
 # findtime/bantime are spelled out rather than inherited from jail.conf: this jail is armed on every domain
-# of every box, so the thresholds are a decision, not a distro default that could shift under us. 5 in 10
+# of every box, so the thresholds are a decision, not a distro default that could shift under us. 10 in 10
 # minutes is safe here because the filter counts only 404s on the botsearch vocabulary (wp-login/signup/
 # admin.php, phpmyadmin, webmail, cgi-bin) - measured: eight ordinary 404s from a link checker, /wp-admin/
-# among them, count zero. A client reaching 5 of those has no innocent reading. Note the knock-on: five
-# bans inside a day also trips recidive, which is all-ports for 10 days.
+# among them, count zero. maxretry is set conservatively (10) so an odd burst is tolerated; recidive still
+# escalates a client that keeps tripping bans across the day (all-ports, 10 days).
 [web-botsearch]
 enabled  = true
 filter   = hestia-botsearch
 action   = hestia[name=WEB]
 logpath  = /var/log/apache2/domains/*.log
-maxretry = 5
+maxretry = 10
 findtime = 600
 bantime  = 600
+
+# The signature web jails (#531). Like web-botsearch, all three read the per-domain combined access log
+# (logpath is a placeholder, pointed at the configured web system by fail2ban_gate_web_jail) and ban at the
+# WEB chain; recidive escalates repeat offenders on top. Deliberately signature/behaviour based, never rate
+# (that is Layer B's job and its 429s must not escalate). maxretry >= 2 everywhere so nothing bans on a
+# single hit. See share/fail2ban/filter.d/hestia-{badactor,exploit,authprobe}.conf for what each matches.
+
+# "Looking for files that should not be here" - secrets/config/info-leak paths, status-agnostic.
+[web-badactor]
+enabled  = true
+filter   = hestia-badactor
+action   = hestia[name=WEB]
+logpath  = /var/log/apache2/domains/*.log
+maxretry = 2
+findtime = 600
+bantime  = 3600
+
+# "Trying to execute code or break out of the directory" - traversal / RCE / appliance-exploit payloads.
+[web-exploit]
+enabled  = true
+filter   = hestia-exploit
+action   = hestia[name=WEB]
+logpath  = /var/log/apache2/domains/*.log
+maxretry = 2
+findtime = 600
+bantime  = 3600
+
+# Repeated 401 (auth failures) only. Counts per source IP AGGREGATED across every vhost on the box, not per
+# domain, so maxretry is high on purpose - it must tolerate a shared NAT/monitoring IP touching several sites.
+[web-authprobe]
+enabled  = true
+filter   = hestia-authprobe
+action   = hestia[name=WEB]
+logpath  = /var/log/apache2/domains/*.log
+maxretry = 20
+findtime = 600
+bantime  = 1800
 
 [recidive]
 enabled  = true
