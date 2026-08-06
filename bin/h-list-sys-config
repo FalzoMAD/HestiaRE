@@ -23,11 +23,17 @@ source $HESTIA/conf/hestia.conf
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
+# CrowdSec presence, artefact-derived (the L3 marker), exposed so the panel can gate on it - the banlist
+# button must appear in the crowdsec-only model where FIREWALL_EXTENSION is empty (#527).
+CROWDSEC=''
+[ -f "$CONF_DIR/firewall/crowdsec.conf" ] && CROWDSEC='yes'
+
 # JSON list function
 json_list() {
 	echo '{
 		"config": {
 			"ANTISPAM_SYSTEM": "'$ANTISPAM_SYSTEM'",
+			"CROWDSEC": "'$CROWDSEC'",
 			"ANTIVIRUS_SYSTEM": "'$ANTIVIRUS_SYSTEM'",
 			"APP_NAME": "'$APP_NAME'",
 			"BACKEND_PORT": "'$BACKEND_PORT'",
