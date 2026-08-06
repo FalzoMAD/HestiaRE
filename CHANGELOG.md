@@ -9,6 +9,28 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Fixed
+- **The installer never named `nftables`** (#548). The renderer shells `/usr/sbin/nft`, but the package
+  only ever reached the box as a *Recommends* of `iptables`. Debian 12/13 base images already carry it,
+  Ubuntu 24.04/26.04 do not - measured: `apt-get -s --no-install-recommends install iptables ipset` pulls
+  no nftables on either. So the firewall backend on half the targets depended on apt honouring Recommends.
+  Named explicitly now, with a smoke guard, because the policy check only *skips* when the backend cannot
+  be read - which is exactly how a missing `nft` would have passed.
+- **The firewall whitelist was IPv4-only** (#548). `h-add-firewall-exclude` accepts either family, but only
+  an `ipv4_addr` set was rendered, so a v6 entry reached fail2ban's `ignoreip` and nothing else: the one
+  documented way to release a lockout could not release a v6 one. Both families are rendered from the one
+  file now.
+- **IPv6 IP lists were accepted and silently blocked nothing** (#548). The cache path, the set type and the
+  match qualifier were all hardcoded v4, so a list created as v6 - the panel picker offers it - wrote
+  `<name>.v6.iplist` while the renderer read `<name>.v4.iplist`. The family now comes from the list's own
+  record, and a rule matching an empty list is a smoke failure instead of a silent no-op.
+- **A v6 address among the server's own IPs would have stopped every firewall update** (#548).
+  `fw_accept_source` rendered `ip saddr` unconditionally while every other source path became family-aware;
+  one invalid line fails the whole nft document, so the box would have kept its last ruleset indefinitely.
+- **Unbanning a CIDR never reached fail2ban** (#548). `h-delete-firewall-ban` passed the sed-escaped address
+  to `fail2ban-client unbanip`, i.e. asked it to unban `10.0.0.0\/8`. Plain addresses were unaffected, which
+  is why it went unnoticed.
+
 ### Security
 - **The webmail vhost overwrites the client-IP headers it forwards** (#515). Both `X-Real-IP` (Roundcube)
   and `Client-IP` (SnappyMail) are now set from `$remote_addr` at the client-facing proxy - nginx front and
