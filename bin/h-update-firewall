@@ -88,6 +88,8 @@ for ip in $ips; do
 done
 # Loopback is accepted by interface so both families are covered; see fw_accept_loopback.
 fw_accept_loopback
+# ICMPv6 (NDP/PMTUD) must always be accepted or IPv6 breaks under the drop policy; see fw_accept_icmpv6.
+fw_accept_icmpv6
 
 # Ungated on WEBMAIL_SYSTEM on purpose: a rule for an unused port is free, while gating would leave the
 # port open between installing webmail and the next rebuild.

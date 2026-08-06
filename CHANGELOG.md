@@ -176,6 +176,19 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **The firewall broke IPv6 by dropping ICMPv6** (#534). The `inet hestia` input chain has a drop policy
+  and accepted only IPv4 ICMP (`ip protocol icmp`, from the rules.conf rule) - there was no ICMPv6 accept
+  anywhere, so NDP (neighbour/router discovery) and PMTUD were dropped and IPv6 stopped working entirely:
+  measured on a real dual-stack host, `ping6` was 100% loss and the gateway neighbour stayed `INCOMPLETE`.
+  Invisible on the v4-only test fleet (`ip6tables` was wide open in the iptables era, and the lab has no
+  global v6), which is why it survived the nftables migration. Fixed with a base rule
+  (`fw_accept_icmpv6` -> `meta l4proto ipv6-icmp accept`), emitted always like loopback/conntrack because
+  ICMPv6 is v6 infrastructure, not an optional user rule. A smoke guard (`check_firewall_icmpv6`) now fails
+  if the accept is ever dropped again. Knock-on: this also cured a ~12s SMTP greeting (and the associated
+  smoke failure) on that box - exim's pre-greeting reverse-DNS lookup was timing out because the
+  IPv6-first resolvers were unreachable while v6 was broken. Accept-all ICMPv6 for now; per-type/rate
+  limiting is a possible later hardening. (Separate, still open: CrowdSec L3 is IPv4-only - its feeder and
+  the `crowdsec_blacklists` jump do not cover v6.)
 - **The mail-only preset offered and default-enabled CrowdSec** (#529). `mailonly` fixes
   `WEB_SERVER=NGINX` (nginx fronts Roundcube + ACME), and `ADDON_CROWDSEC.visible_if` is
   `WEB_SERVER != APACHE`, so the wizard preselected CrowdSec on a box with no customer web where it adds
