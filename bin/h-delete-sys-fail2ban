@@ -70,6 +70,14 @@ set_install_component ADDON_FAIL2BAN false
 # a crowdsec-only box detects SSH brute force but enforces nothing. No-op unless CrowdSec L3 is wired.
 [ -f "$CONF_DIR/firewall/crowdsec.conf" ] && $BIN/h-update-firewall-crowdsec
 
+# fail2ban no longer owns brute force, so if CrowdSec is present it takes SSH BF back: re-install the ssh
+# scenarios it drops while fail2ban is around (#542). Reads FIREWALL_EXTENSION from the file, just cleared.
+if dpkg -l crowdsec 2> /dev/null | grep -q '^ii'; then
+	# shellcheck source=/usr/local/hestia/func/crowdsec.sh
+	source "$HESTIA/func/crowdsec.sh"
+	crowdsec_gate_bruteforce
+fi
+
 echo "fail2ban has been removed."
 
 #----------------------------------------------------------#
