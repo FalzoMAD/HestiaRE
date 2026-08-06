@@ -197,6 +197,30 @@ check_firewall_chains_tracked() {
 	fi
 }
 
+# check_firewall_rules_rendered - every active rule must actually render a live rule. fw_rule skips a rule
+# whose source is neither any / ipset / a valid v4 or v6 address (#545 turned a bad source from "breaks the
+# whole ruleset" into "silently vanishes"). This is check_firewall_chains_tracked's other direction: assert
+# each non-suspended rules.conf entry has a renderable source, so a corrupted one surfaces here instead of
+# quietly dropping out of the firewall with nothing going red.
+check_firewall_rules_rendered() {
+	local rules="$CONF_DIR/firewall/rules.conf" bad='' line
+	[ -f "$rules" ] || { ok "firewall rules all renderable (none)"; return; }
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		parse_object_kv_list "$line"
+		[ "${SUSPENDED:-no}" = 'yes' ] && continue
+		case "$IP" in
+			0.0.0.0/0 | ::/0 | '' | ipset:*) continue ;;
+		esac
+		fw_is_addr "$IP" || fw_is_addr6 "$IP" || bad="$bad RULE=$RULE($IP)"
+	done < "$rules"
+	if [ -z "$bad" ]; then
+		ok "firewall rules all render (valid source per entry)"
+	else
+		no "firewall rule with an unrenderable source (silently skipped)" "${bad# }"
+	fi
+}
+
 # check_fail2ban_jails - the jails fail2ban is actually running must equal the jails our config enables.
 # Catches both directions at once: one of ours missing (which is how the whole set stayed dead while the
 # service looked healthy) and a distro jail we never asked for still running.
@@ -652,6 +676,7 @@ if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != 'remote' ]; then
 	check_firewall_icmpv6
 	check_firewall_ruleset_loadable
 	check_firewall_chains_tracked
+	check_firewall_rules_rendered
 fi
 
 # --- Ports implied by the active config ---
