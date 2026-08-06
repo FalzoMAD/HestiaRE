@@ -729,6 +729,15 @@
       "note": ""
     },
     {
+      "path": "h-add-sys-fail2ban",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": ""
+    },
+    {
       "path": "h-add-sys-firewall",
       "source_type": "derived",
       "upstream_path": "bin/v-add-sys-firewall",
@@ -1764,6 +1773,15 @@
         "pct": 8,
         "measured_at": "2026-08-03"
       },
+      "note": ""
+    },
+    {
+      "path": "h-change-sys-firewall-model",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
       "note": ""
     },
     {
@@ -3204,6 +3222,15 @@
         "pct": 58,
         "measured_at": "2026-08-03"
       },
+      "note": ""
+    },
+    {
+      "path": "h-delete-sys-fail2ban",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
       "note": ""
     },
     {

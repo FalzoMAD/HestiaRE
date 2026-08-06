@@ -16,6 +16,11 @@ F2B_OURS="$F2B_DIR/jail.d/hestia.local"
 # broken sed range deletes to EOF). Sorts after hestia.local, so its [DEFAULT] wins.
 F2B_WHITELIST="$F2B_DIR/jail.d/hestia-zz-whitelist.local"
 
+# The L7 jails that read the per-domain web access log: gated on the web system, logpath repointed at the
+# configured web system, and told about each domain's log on add/del. One list so all of them are handled
+# uniformly (a new signature jail is added here and nowhere else).
+F2B_WEB_JAILS="web-botsearch web-badactor web-exploit web-authprobe"
+
 # Our jails live in jail.d/hestia.local (read last, wins); jail.local is left to the admin. Nothing needs
 # preserving as addon state - it all re-renders from share/.
 fail2ban_install_config() {
@@ -77,39 +82,43 @@ fail2ban_web_logdir() {
 }
 
 fail2ban_gate_web_jail() {
-	local dir
+	local dir jail
 	[ -f "$F2B_OURS" ] || return 0
 	if ! dir="$(fail2ban_web_logdir)"; then
-		fail2ban_set_enabled 'web-botsearch' 'false'
+		for jail in $F2B_WEB_JAILS; do fail2ban_set_enabled "$jail" 'false'; done
 		return 0
 	fi
-	awk -v jail='[web-botsearch]' -v path="$dir/*.log" '
-		$0 == jail { inj = 1; print; next }
-		/^\[/ { inj = 0 }
-		inj && /^logpath[[:space:]]*=/ { print "logpath  = " path; next }
-		{ print }
-	' "$F2B_OURS" > "$F2B_OURS.tmp" && mv -f "$F2B_OURS.tmp" "$F2B_OURS"
+	for jail in $F2B_WEB_JAILS; do
+		awk -v jail="[$jail]" -v path="$dir/*.log" '
+			$0 == jail { inj = 1; print; next }
+			/^\[/ { inj = 0 }
+			inj && /^logpath[[:space:]]*=/ { print "logpath  = " path; next }
+			{ print }
+		' "$F2B_OURS" > "$F2B_OURS.tmp" && mv -f "$F2B_OURS.tmp" "$F2B_OURS"
+	done
 }
 
 # fail2ban globs a logpath once at jail start, so a later domain goes unwatched - tell it on every add/del.
 # Never fails its caller: a domain add must not break because fail2ban is unhappy.
 fail2ban_watch_domain() {
-	local verb="$1" domain="$2" dir
+	local verb="$1" domain="$2" dir jail
 	[ -n "${FIREWALL_EXTENSION:-}" ] || return 0
 	systemctl -q is-active fail2ban 2> /dev/null || return 0
 	dir="$(fail2ban_web_logdir)" || return 0
-	case "$verb" in
-		add)
-			# First domain re-arms web-botsearch if it was pruned at install (reload re-globs); later
-			# domains just addlogpath.
-			if fail2ban_jail_enabled web-botsearch; then
-				fail2ban-client set web-botsearch addlogpath "$dir/$domain.log" tail > /dev/null 2>&1
-			else
-				fail2ban_rearm_jail web-botsearch
-			fi
-			;;
-		del) fail2ban-client set web-botsearch dellogpath "$dir/$domain.log" > /dev/null 2>&1 ;;
-	esac
+	for jail in $F2B_WEB_JAILS; do
+		case "$verb" in
+			add)
+				# First domain re-arms a jail pruned at install (reload re-globs); later domains just
+				# addlogpath the one new file.
+				if fail2ban_jail_enabled "$jail"; then
+					fail2ban-client set "$jail" addlogpath "$dir/$domain.log" tail > /dev/null 2>&1
+				else
+					fail2ban_rearm_jail "$jail"
+				fi
+				;;
+			del) fail2ban-client set "$jail" dellogpath "$dir/$domain.log" > /dev/null 2>&1 ;;
+		esac
+	done
 	return 0
 }
 
@@ -251,4 +260,20 @@ fail2ban_apply() {
 	fail2ban_prune_empty_jails
 	systemctl -q enable fail2ban 2> /dev/null
 	systemctl restart fail2ban 2> /dev/null
+}
+
+# Tear down the live wiring (h-delete-sys-fail2ban): stop the daemon, then drop every chain it created.
+# Chain names are captured before the loop, since h-delete-firewall-chain rewrites chains.conf as it goes.
+# KEEP defaults to no here, so the banlist records go too - a human removing the addon wants the bans gone.
+# The caller re-renders the ruleset afterwards. Our config files re-render from share/, so nothing is saved;
+# the admin's own jail.local is never touched.
+fail2ban_teardown() {
+	local chains="$CONF_DIR/firewall/chains.conf" chain
+	systemctl -q disable --now fail2ban 2> /dev/null
+	if [ -f "$chains" ]; then
+		for chain in $(sed -n "s/.*CHAIN='\([^']*\)'.*/\1/p" "$chains"); do
+			"$BIN/h-delete-firewall-chain" "$chain" > /dev/null 2>&1
+		done
+	fi
+	rm -f "$F2B_OURS" "$F2B_WHITELIST"
 }

@@ -39,15 +39,23 @@ CACHE="$CONF_DIR/firewall/crowdsec.iplist"
 # and has to be written even when the live update fails.
 #
 # Only local web-tier bans reach L3: origin==crowdsec (manual and CAPI stay L7-only), minus a denylist of
-# fail2ban's auth families + req-limit (rate-limit breach, CGNAT collateral). Denylist so advisory-named
-# exploits (vmsa) are not missed; the flip side is a web scenario named with a denied token skips L3.
+# scenario tokens. Denylist so advisory-named exploits (vmsa) are not missed; the flip side is a web
+# scenario named with a denied token skips L3.
+#
+# The auth families are denied only while fail2ban is present (FIREWALL_EXTENSION): fail2ban enforces them
+# at L1 in ~1s and cuts live connections, so keeping their CrowdSec decisions off L3 avoids a slower,
+# weaker duplicate. In the crowdsec-only model nothing else would enforce them, so they are let through -
+# best-effort, at the feeder's ~45s latency (mail still has no CrowdSec detection surface; that gap stands).
+# req-limit is denied in EVERY model: a Layer-B rate-limit 429 must never escalate into a firewall ban
+# (CGNAT collateral).
+deny='req-limit'
+[ -n "$FIREWALL_EXTENSION" ] && deny='ssh|ftp|smtp|imap|pop3|dovecot|postfix|exim|mysql|mariadb|postgres|req-limit'
 tmp="$(mktemp)"
 cscli decisions list -o json 2> /dev/null \
-	| jq -r '(if type=="array" then .[] else . end)
+	| jq -r --arg deny "$deny" '(if type=="array" then .[] else . end)
 		| (.decisions // [])[]
 		| select(.type == "ban" and .origin == "crowdsec"
-			and ((.scenario // "") | ascii_downcase
-				| test("ssh|ftp|smtp|imap|pop3|dovecot|postfix|exim|mysql|mariadb|postgres|req-limit") | not))
+			and ((.scenario // "") | ascii_downcase | test($deny) | not))
 		| .value' 2> /dev/null \
 	| grep -oE '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$' | sort -u > "$tmp"
 

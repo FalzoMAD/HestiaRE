@@ -1,0 +1,92 @@
+#!/bin/bash
+# info: install the fail2ban brute-force protection addon
+# options: NONE
+#
+# example: h-add-sys-fail2ban
+#
+# Installs fail2ban wired as a CLIENT of the hestia firewall: bans land in banlist.conf + the live
+# ruleset and survive a rebuild. Requires FIREWALL_SYSTEM active - inert otherwise. Idempotent. The
+# heavy lifting is the shared fail2ban_apply helper (also used by the installer).
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+# The ban action writes into the hestia ruleset; with no firewall there is nothing to write to.
+if [ -z "$FIREWALL_SYSTEM" ]; then
+	echo "ERROR: fail2ban needs the system firewall; enable it first (h-add-sys-firewall)."
+	exit "$E_INVALID"
+fi
+
+# already fully active? idempotent early-exit
+if [ "$FIREWALL_EXTENSION" = 'fail2ban' ] && systemctl is-active --quiet fail2ban 2> /dev/null; then
+	echo "INFO: fail2ban is already installed and active."
+	exit 0
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+echo "[ * ] Installing fail2ban..."
+DEBIAN_FRONTEND=noninteractive apt-get -y -qq install fail2ban > /dev/null 2>&1
+if ! dpkg -l fail2ban 2> /dev/null | grep -q '^ii'; then
+	echo "ERROR: the fail2ban package failed to install."
+	exit "$E_INVALID"
+fi
+
+$BIN/h-change-sys-config-value "FIREWALL_EXTENSION" "fail2ban"
+
+# Gate the mail/ftp jails on the actual model (an enabled jail on a missing log aborts the daemon).
+mail='no'
+[ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && mail='yes'
+ftp='no'
+[ -n "$FTP_SYSTEM" ] && ftp='yes'
+
+# One implementation of "configured fail2ban", shared with the installer: copies the WHOLE share/fail2ban
+# tree, gates jails, syncs ignoreip and starts the daemon.
+source "$HESTIA/func/fail2ban.sh"
+fail2ban_apply "$mail" "$ftp"
+
+if ! systemctl is-active --quiet fail2ban 2> /dev/null; then
+	echo "ERROR: fail2ban did not start; check 'fail2ban-client -d'."
+	exit "$E_INVALID"
+fi
+
+set_install_component ADDON_FAIL2BAN true
+
+# fail2ban now owns the auth families, so the L3 feeder must stop sending their CrowdSec decisions to L3
+# (its denylist keys off FIREWALL_EXTENSION, just set). Refresh now instead of waiting up to 45s for the
+# timer, so the handover is prompt whether the model changed via this command or h-change-sys-firewall-model.
+# No-op unless CrowdSec L3 is wired (marker).
+[ -f "$CONF_DIR/firewall/crowdsec.conf" ] && $BIN/h-update-firewall-crowdsec
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Installed fail2ban addon."
+log_event "$OK" "$ARGUMENTS"
+
+exit

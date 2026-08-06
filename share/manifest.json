@@ -313,8 +313,9 @@
       "label": "CrowdSec",
       "description": "Collaborative intrusion prevention (nginx web protection)",
       "visible_if": "WEB_SERVER != APACHE",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null },
-      "note": "nginx-only web protection (Layer-7 bouncer); offered only when nginx is in the model. Independent of Fail2Ban, both can run in parallel."
+      "fixed_no_prompt": { "mailonly": false },
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false, "custom": null },
+      "note": "nginx-only web protection (Layer-7 bouncer); offered only when nginx is in the model. Independent of Fail2Ban, both can run in parallel. NOT offered on mailonly (fixed_no_prompt) - crowdsec adds little on a box with no customer web; it stays installable by hand via h-add-sys-crowdsec since nginx is the mailonly front."
     },
 
     "CROWDSEC_MODE": {

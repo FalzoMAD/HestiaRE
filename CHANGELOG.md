@@ -41,6 +41,54 @@ section as part of its PR. On release, the section gets the version number.
   is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
+- **fail2ban L7 signature jails** (#531) - `web-badactor`, `web-exploit`, `web-authprobe`, alongside the
+  retuned `web-botsearch`, so the fail2ban-only model has real Layer-7 coverage (the mirror of crowdsec-only
+  gaining brute-force enforcement in #498). `web-badactor` bans secret/config file-discovery probes
+  (`/.env`, `/.git/`, `/id_rsa`, `wp-config.php~`, ...); `web-exploit` bans traversal (>=2 segments, plus
+  single/double URL-encoded), RCE payloads (`system(`, `${jndi:`, `wget http`, ...) and known appliance
+  paths (`/boaform/`, `/HNAP1/`, ...); both are status-agnostic, `maxretry=2`. `web-authprobe` bans repeated
+  **401 only** (never a global 403, which has too many benign causes), `maxretry=20`. `web-botsearch` goes to
+  `maxretry=10`. **Hard demarcation to Layer B**: all four are signature/behaviour based and never key off
+  request rate - the rate limiter (`nginx limit_req` / `apache mod_qos`) owns volume and its 429s never
+  escalate to a ban. **Multi-tenant note**: thresholds count per source IP across ALL vhosts on the host,
+  not per domain, which is why `web-authprobe=20` is conservative rather than high. Deliberately NOT a WAF:
+  literal-string regex, so URL/UTF-8-encoding beyond the covered single/double `%2e` forms evades by design.
+  Gated as one set in `func/fail2ban.sh` (`F2B_WEB_JAILS`); a per-filter smoke canary
+  (`check_fail2ban_web_signatures`, via `fail2ban-regex`) pins match+reject. The UA-based `web-badbots` jail
+  from the proposal was dropped: user-agents are trivially forged and largely covered by IP blocklists.
+- **A runtime switch for the brute-force protection model** (#498). `h-change-sys-firewall-model`
+  moves the box between the four models the two addons encode - `none`, `fail2ban`,
+  `fail2ban+crowdsec`, `crowdsec` - by orchestrating `h-add/delete-sys-fail2ban` and
+  `h-add/delete-sys-crowdsec`. The current model is derived from the artefacts on disk (fail2ban ->
+  `FIREWALL_EXTENSION`, crowdsec -> the installed package), and the target's components are added before
+  the others are removed, so the box is never left unprotected mid-switch; a `crowdsec` target on an
+  apache-only front is refused (crowdsec is nginx-only) before anything is torn down. No argument prints
+  the current model. The four models stay expressible from the wizard's two existing checkboxes, so
+  there is no manifest change. **crowdsec-only enforcement is now wired, best-effort**: the L3 feeder
+  denies CrowdSec's auth-family decisions (ssh/ftp/mail/db) from the firewall only while fail2ban is
+  present - with fail2ban gone, those decisions reach L3 (at the feeder's ~45s latency, connections not
+  cut), so SSH/web brute force is enforced. `req-limit` stays denied in every model, so a Layer-B rate
+  limit 429 never escalates into a firewall ban. The handover is **path-independent**: `h-add-sys-fail2ban`
+  and `h-delete-sys-fail2ban` refresh the feeder themselves (guarded on the L3 marker), so reaching
+  crowdsec-only by calling the addon commands directly - not only via the model switch - lets CrowdSec take
+  over the auth families at once instead of after the ~45s timer. Known gap: mail has no CrowdSec detection
+  surface (no exim/dovecot collections), and crowdsec-only bans are visible via `cscli`, not the panel
+  banlist (#527).
+  The switch holds the #120 web-model freeze across a crowdsec transition, so a concurrent web-model
+  change cannot flip the public front (both -> apache-only) between the apache-only refuse check and the
+  nginx wiring; the standalone `h-add/delete-sys-crowdsec` remain exposed to that race when called
+  directly (#528). The Server Settings toggle warns, when mail is installed, that relying on CrowdSec
+  alone leaves mail brute force unprotected.
+- **fail2ban is now a removable addon** (#497), like proftpd/clamav/crowdsec. `h-add-sys-fail2ban`
+  installs the package, sets `FIREWALL_EXTENSION` and runs the shared `fail2ban_apply`;
+  `h-delete-sys-fail2ban` stops the daemon, drops every chain it created (via `h-delete-firewall-chain`),
+  clears `FIREWALL_EXTENSION`, re-renders the ruleset without the fail2ban block and purges the package
+  (`PURGE_DATA=yes` also removes `/etc/fail2ban`). A panel toggle sits next to the firewall one in Server
+  Settings. `add` refuses unless `FIREWALL_SYSTEM` is active - the ban action has no ruleset to write to
+  otherwise. No saved state: our config re-renders from `share/`, and the admin's own `jail.local` is
+  never touched. The three flags stay in lockstep - `COMPONENT_ADDON_FAIL2BAN` gates the smoke block,
+  `FIREWALL_EXTENSION` gates the runtime and panel, `$_SESSION` mirrors it - so a removed addon leaves a
+  green smoke run and no live wiring.
 - **A smoke canary for the Roundcube filter's injection defence** (#520). The filter defeats a username
   that smuggles a fake `X-Real-IP:` block only while it matches the real trailing block greedily; a
   Roundcube format change or a filter edit could weaken that silently. The guard replays an injection line
@@ -128,6 +176,22 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **The mail-only preset offered and default-enabled CrowdSec** (#529). `mailonly` fixes
+  `WEB_SERVER=NGINX` (nginx fronts Roundcube + ACME), and `ADDON_CROWDSEC.visible_if` is
+  `WEB_SERVER != APACHE`, so the wizard preselected CrowdSec on a box with no customer web where it adds
+  little. It is now `fixed_no_prompt: {mailonly: false}` - not offered and forced off on mailonly, in both
+  the interactive and fasttrack paths - while staying installable by hand (`h-add-sys-crowdsec` still works,
+  nginx being the mailonly front). Uncovered and fixed a latent wizard bug in the same pass: the
+  grouped-checklist and single-component `fixed_no_prompt` reads used `[$p] // empty`, and jq's `//` treats
+  a boolean `false` as absent, so a `fixed_no_prompt` value of `false` fell through and the row was still
+  shown; both reads now key off `has($preset)` like the default resolver, so a `false` is honoured.
+- **The installer duplicated config keys when a stage re-ran** (#523). `wcv` appended `KEY='value'` to
+  hestia.conf unconditionally, so any stage that ran twice wrote the key again instead of replacing it -
+  most realistically an admin restarting the installer after an abort mid-stage, the exact situation #520
+  produced before it was fixed. Harmless at runtime (bash sources last-wins) but it left stray lines
+  (`FIREWALL_EXTENSION` reached 4x on repeatedly-resumed boxes). `wcv` now replaces an existing key,
+  collapsing any duplicates to one, and appends only a genuinely new key. `_wcv` (the install-base seed) was
+  already safe - it wipes and recreates hestia.conf before writing.
 - **A fresh install aborted silently in the fail2ban stage** (#520). Two bugs, both under the installer's
   `set -eo pipefail`, both only visible on a genuinely fresh box (earlier checks re-ran on boxes that
   already had the missing state). First and primary: `fail2ban_sync_ignoreip` built its list with

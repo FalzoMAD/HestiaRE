@@ -585,6 +585,28 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
+	// Set fail2ban brute-force protection (gated on the firewall being on - the ban action needs a ruleset)
+	if (empty($_SESSION["error_msg"])) {
+		$v_fail2ban = $_SESSION["FIREWALL_EXTENSION"] == "fail2ban" ? "yes" : "no";
+		if (!empty($_POST["v_fail2ban"]) && $v_fail2ban != $_POST["v_fail2ban"]) {
+			if ($_POST["v_fail2ban"] == "yes") {
+				exec(HESTIA_CMD . "h-add-sys-fail2ban", $output, $return_var);
+				check_return_code($return_var, $output);
+				unset($output);
+				if (empty($_SESSION["error_msg"])) {
+					$_SESSION["FIREWALL_EXTENSION"] = "fail2ban";
+				}
+			} else {
+				exec(HESTIA_CMD . "h-delete-sys-fail2ban", $output, $return_var);
+				check_return_code($return_var, $output);
+				unset($output);
+				if (empty($_SESSION["error_msg"])) {
+					$_SESSION["FIREWALL_EXTENSION"] = "";
+				}
+			}
+		}
+	}
+
 	// Update mysql pasword
 	if (empty($_SESSION["error_msg"])) {
 		if (!empty($_POST["v_mysql_password"])) {
