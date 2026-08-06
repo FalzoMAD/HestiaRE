@@ -1,12 +1,8 @@
-# No mysqld jail: 3306 is not in the shipped ruleset, so MariaDB is only reachable from loopback and the
-# box itself - both of which h-add-firewall-ban refuses to ban. A jail there would match and then decline to
-# act. An admin who deliberately opens 3306 owns the access control for it (source-restricted rule, DB
-# users) and can add a jail to suit.
-# Our jails read log FILES, so the backend is pinned here rather than inherited. Ubuntu 24.04's
-# jail.d/defaults-debian.conf sets `backend = systemd` in [DEFAULT], which applies to every jail: ours then
-# watch the journal, never read their logpath, and match nothing while reporting perfectly healthy. Debian
-# 12 omits the key and Debian 13 / Ubuntu 26 scope it to [sshd], so this only bites on one target - which is
-# exactly why it has to be pinned instead of assumed.
+# No mysqld jail: 3306 is not in the shipped ruleset, so MariaDB is reachable only from loopback and the box
+# itself - both of which h-add-firewall-ban refuses to ban. Whoever opens 3306 owns its access control.
+#
+# The backend is PINNED, not inherited: Ubuntu 24.04's defaults-debian.conf puts `backend = systemd` in
+# [DEFAULT], so ours would watch the journal, never read their logpath, and match nothing while looking healthy.
 [DEFAULT]
 backend = auto
 
@@ -43,10 +39,8 @@ action   = hestia[name=HESTIA]
 logpath  = /var/log/hestia/auth.log
 maxretry = 5
 
-# Webmail auth jails. enabled is a placeholder: fail2ban_gate_webmail_jails flips each on when its client
-# is in WEBMAIL_SYSTEM and ensures the logpath exists (a jail on a missing file never fires). Both ban at
-# the WEB chain - webmail is web-tier. The real client reaches the log via the webmail vhost header fixes
-# (X-Real-IP for Roundcube, Client-IP for SnappyMail); see the two filters.
+# enabled is a placeholder: fail2ban_gate_webmail_jails flips each on per WEBMAIL_SYSTEM and creates its log,
+# since a jail on a missing file never fires. The real client reaches the log via the webmail vhost headers.
 [roundcube-auth]
 enabled  = false
 filter   = hestia-roundcube
@@ -68,15 +62,11 @@ action   = hestia[name=WEB]
 logpath  = /var/log/auth.log
 maxretry = 5
 
-# The L7 jail: scanners probing customer vhosts for apps that are not installed. logpath is rewritten to the
-# configured web system by fail2ban_gate_web_jail - the value here is only a placeholder. Deliberately NOT
-# extended to the rate limiter's 429s: Layer B (nginx limit_req / apache mod_qos) throttles bots on its own
-# and its verdicts must not escalate into firewall bans.
+# Scanners probing customer vhosts for apps that are not installed; logpath is a placeholder, repointed by
+# fail2ban_gate_web_jail. Never extended to the rate limiter's 429s - Layer B must not escalate into bans.
 #
-# Thresholds are spelled out, not inherited from jail.conf: this jail is armed on every domain of every
-# box, so they are a decision rather than a distro default that could shift under us. 10-in-10-minutes is
-# safe because only 404s on the botsearch vocabulary count - measured: eight ordinary 404s from a link
-# checker, /wp-admin/ among them, counted zero. recidive escalates a repeat offender on top.
+# Thresholds spelled out, not inherited: this is armed on every domain of every box, so they are a decision.
+# 10-in-10 is safe because only botsearch-vocabulary 404s count - eight ordinary ones measured zero.
 [web-botsearch]
 enabled  = true
 filter   = hestia-botsearch
@@ -110,8 +100,7 @@ maxretry = 2
 findtime = 600
 bantime  = 3600
 
-# Repeated 401 (auth failures) only. Counts per source IP AGGREGATED across every vhost on the box, not per
-# domain, so maxretry is high on purpose - it must tolerate a shared NAT/monitoring IP touching several sites.
+# 401 only, counted per source IP AGGREGATED over every vhost - hence the high maxretry, for shared NAT.
 [web-authprobe]
 enabled  = true
 filter   = hestia-authprobe
@@ -130,5 +119,4 @@ maxretry = 5
 findtime = 86400
 bantime  = 864000
 
-# Whitelisting is not done here: h-add-firewall-exclude maintains the firewall whitelist and mirrors it into
-# jail.d/hestia-zz-whitelist.local, so one list covers the ruleset and fail2ban both.
+# No whitelisting here: h-add-firewall-exclude mirrors one list into jail.d/hestia-zz-whitelist.local.

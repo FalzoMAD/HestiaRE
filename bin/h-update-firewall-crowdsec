@@ -4,10 +4,8 @@
 #
 # example: h-update-firewall-crowdsec
 #
-# Feeds the crowdsec-blacklists nft set from CrowdSec's own local web-tier bans (cscli);
-# h-update-firewall's hestia-crowdsec chain drops them at L3. Own feeder, not the OS
-# crowdsec-firewall-bouncer: 0.0.25 nil-panics non-deterministically, and its native nft mode was only
-# ever measured on one distro. No-op without the marker.
+# Fills the L3 sets from cscli; h-update-firewall owns the DROP. Own feeder, not the OS bouncer: 0.0.25
+# nil-panics non-deterministically and its nft mode was only ever measured on one distro.
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -37,15 +35,11 @@ SET6="crowdsec6-blacklists"
 CACHE="$CONF_DIR/firewall/crowdsec.iplist"
 CACHE6="$CONF_DIR/firewall/crowdsec6.iplist"
 
-# The cache is the record of truth (the set is re-rendered from it on every ruleset rebuild), so it is
-# written even when the live update fails.
+# The cache is the record of truth - every rebuild re-renders from it - so it is written even if the live set is not.
 #
-# Only origin==crowdsec bans reach L3 - manual and CAPI decisions stay L7-only. A denylist, not an
-# allowlist, so advisory-named exploits (vmsa) are not missed; the cost is that a web scenario carrying a
-# denied token skips L3. The auth families are denied only while fail2ban is present: it enforces them in
-# ~1s and cuts live connections, so a CrowdSec duplicate at this timer's ~45s would be slower and weaker.
-# Crowdsec-only lets them through instead - best-effort, and mail has no CrowdSec detection surface at all.
-# req-limit is denied in EVERY model: a Layer-B 429 must never escalate into a firewall ban (CGNAT).
+# Only origin==crowdsec reaches L3, minus a denylist - which keeps advisory-named exploits (vmsa), at the
+# cost of a web scenario carrying a denied token. The auth families are denied only while fail2ban is there,
+# since it acts in ~1s against this timer's ~45s; req-limit is denied always, a 429 must never become a ban.
 deny='req-limit'
 [ -n "$FIREWALL_EXTENSION" ] && deny='ssh|ftp|smtp|imap|pop3|dovecot|postfix|exim|mysql|mariadb|postgres|req-limit'
 # One extraction of every kept decision (both families), then split by family below.
@@ -58,30 +52,24 @@ cscli decisions list -o json 2> /dev/null \
 		| .value' 2> /dev/null \
 	| sort -u > "$raw"
 
-# Never overwrite the caches just because cscli or jq hiccuped: an empty cache renders an empty set, which
-# would silently lift every L3 ban. An empty result is trusted only when cscli itself answered cleanly.
+# An empty cache renders an empty set and lifts every L3 ban, so trust one only when cscli answered cleanly.
 if [ ! -s "$raw" ] && ! cscli decisions list -o json > /dev/null 2>&1; then
 	rm -f "$raw"
 	exit 0
 fi
-# Split by family - a v4 element in the v6 set (or vice versa) fails the whole nft document. Both caches
-# are rewritten together, so a decision that flips family is never left stale in the other set.
+# A v4 element in the v6 set fails the whole document. Rewritten together, so neither is left stale.
 grep -oE "$FW_ADDR_RE" "$raw" > "$CACHE" || true
 grep -oE "$FW_ADDR6_RE" "$raw" > "$CACHE6" || true
 chmod 640 "$CACHE" "$CACHE6"
 rm -f "$raw"
 
-# Flush and refill in one transaction per set, so the set is never observably empty. The ipset original
-# needed a temporary set and a swap for the same guarantee.
+# One transaction per set, so it is never observably empty - ipset needed a temp set and a swap for that.
 fw_set_replace "$SET" "$CACHE"
 fw_set_replace "$SET6" "$CACHE6" 6
 
-# Self-heal the brute-force layer separation: while fail2ban is present it owns brute force, so
-# CrowdSec's ssh scenarios must stay removed. A manual `cscli hub upgrade` (no automated one runs here) can
-# re-write them and silently restore the double-ban - the D1 dpkg-conffile class - and the model gates only
-# run at explicit transitions. Re-assert on this 45s timer. File-checked, so a no-op (no cscli, no reload)
-# unless a scenario actually drifted back. Only the removal direction: the install side is a transition
-# concern, and re-adding here would fight a deliberate admin removal in the crowdsec-only model.
+# Self-heal: a manual `cscli hub upgrade` can rewrite the ssh scenarios and silently restore the double-ban,
+# and the model gates only run at explicit transitions - so re-assert on this timer. File-checked, so a
+# no-op unless one actually drifted back. Removal direction only: re-adding would fight a deliberate removal.
 if [ "$FIREWALL_EXTENSION" = 'fail2ban' ]; then
 	# shellcheck source=/usr/local/hestia/func/crowdsec.sh
 	declare -F crowdsec_gate_bruteforce > /dev/null 2>&1 || source "$HESTIA/func/crowdsec.sh"

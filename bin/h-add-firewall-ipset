@@ -39,9 +39,7 @@ is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-# Define variables for ipset configuration. No ipset binary probe or install any more: the renderer builds
-# native nft sets, so the ipset package is not on this path at all - it only ever installed a dependency
-# nothing then used.
+# No ipset binary probe or install: the renderer builds native nft sets, so the package is not on this path.
 ipset_hstobject="$CONF_DIR/firewall/ipset"
 IPSET_PATH="$CONF_DIR/firewall/ipset"
 
@@ -87,8 +85,7 @@ if [ ! -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ] || [ "$refresh" = "yes" ]; then
 		wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet "$data_source" -O "$iplist_tempfile"
 		check_result $? "Downloading ip list"
 
-		# Advanced: execute script with the same basename for aditional pre-processing
-		# ex:
+		# Advanced: a script with the same basename gets to pre-process the downloaded list.
 		if [ -x "${IPSET_PATH}/${IPSET_FILE}.sh" ]; then
 			preprocess_output="$(cat "$iplist_tempfile" | setpriv --clear-groups --reuid nobody --regid nogroup -- "${IPSET_PATH}/${IPSET_FILE}.sh" "$ip_name" "$iplist_tempfile")"
 			check_result $? "Preprocessing script failed (${IPSET_FILE}.sh)"
@@ -97,8 +94,7 @@ if [ ! -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ] || [ "$refresh" = "yes" ]; then
 
 	elif [[ "$data_source" =~ ^script:/ ]]; then
 
-		# Generate the ip list file trough a external script
-		# ex: compiling a ip list from multiple sources on demand
+		# An external script generates the list, e.g. compiled from several sources on demand.
 		if [ -x "${data_source#script:}" ]; then
 
 			setpriv --clear-groups --reuid nobody --regid nogroup -- "${data_source#script:}" "$ip_name" > "$iplist_tempfile"
@@ -108,8 +104,7 @@ if [ ! -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ] || [ "$refresh" = "yes" ]; then
 
 	elif [[ "$data_source" =~ ^file:/ ]]; then
 
-		# Use a external ip-list file managed by other apps
-		# ex: Using a ip list that is continuously updated
+		# An external file another app maintains, e.g. one that is continuously updated.
 		[ -f "${data_source#file:}" ] && cp -f "${data_source#file:}" "$iplist_tempfile"
 
 	fi
@@ -129,9 +124,8 @@ if [ ! -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ] || [ "$refresh" = "yes" ]; then
 
 fi
 
-# Apply to the live nft set, if a rule references this list yet. An unreferenced list has no set in the
-# table by design: the renderer declares a set only where a rule matches it, and it fills it from this
-# cache file. So the cache is written first and the kernel is updated second, never the other way round.
+# An unreferenced list has no set in the table by design - the renderer declares one only where a rule
+# matches it. So the cache is written first and the kernel second, never the other way round.
 if [ -z "$iplist_size" ]; then
 	if [ -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ]; then
 		iplist_size="$(grep -cEv '^(#|$)' < "${IPSET_PATH}/${IPSET_FILE}.iplist")"
@@ -145,8 +139,7 @@ if ! [[ "$iplist_size" =~ ^[0-9]+$ ]] || [[ "$iplist_size" -le 0 ]]; then
 	check_result "$E_INVALID" "Invalid or empty iplist: iplist_size=$iplist_size"
 fi
 
-# Family passed explicitly: on a first add the ipset.conf record does not exist yet, so the renderer's
-# lookup has nothing to read - and loading v6 prefixes with the v4 filter yields an empty set, silently.
+# Explicit: on a first add there is no ipset.conf record to look up, and the wrong filter yields an empty set.
 fw_family=4
 [ "$ip_version" = 'v6' ] && fw_family=6
 fw_set_replace "$ip_name" "${IPSET_PATH}/${IPSET_FILE}.iplist" "$fw_family"
@@ -178,9 +171,8 @@ fi
 chmod 660 $CONF_DIR/firewall/ipset.conf
 chmod 660 "${IPSET_PATH}/${IPSET_FILE}.iplist"
 
-# Refresh cadence: a systemd timer, not a line appended to the daily queue. The queue gave every list the
-# same schedule as everything else in it and left no way to inspect or change it; the timer is visible in
-# systemctl list-timers and its interval is a config key.
+# A timer, not a line in the daily queue: the queue gave every list the same schedule and no way to see or
+# change it, while a timer shows up in list-timers and its interval is a config key.
 fw_blocklist_timer_install
 
 #----------------------------------------------------------#

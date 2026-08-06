@@ -129,14 +129,8 @@ check_socket() {
 	fi
 }
 
-# check_firewall_closed - with the firewall enabled, INPUT must default to DROP.
-# Boot-path guard: iptables-restore is atomic PER TABLE, so one rule matching an ipset that
-# failed to load rejects the whole filter table and the box comes up with policy ACCEPT and no
-# rules at all. Nothing else in the system notices that.
-# check_firewall_backend - the renderer shells /usr/sbin/nft, so without it FIREWALL_SYSTEM is a claim the
-# box cannot honour: every apply fails and the policy check below only SKIPS ("not readable"), which is how
-# a missing backend would pass for a permissions quirk. nftables reached the box as a Recommends of iptables
-# until it was named explicitly, so this is the guard for it never silently going away again.
+# check_firewall_backend - without /usr/sbin/nft, FIREWALL_SYSTEM is a claim the box cannot honour, and the
+# policy check below only SKIPs, so a missing backend would pass for a permissions quirk.
 check_firewall_backend() {
 	if [ -x "$FW_NFT" ]; then
 		ok "firewall backend present ($FW_NFT)"
@@ -145,6 +139,8 @@ check_firewall_backend() {
 	fi
 }
 
+# With the firewall enabled INPUT must default to DROP; nothing else notices a box that came up with policy
+# ACCEPT and no rules at all.
 check_firewall_closed() {
 	local pol
 	pol=$(fw_policy_get INPUT)
@@ -157,9 +153,8 @@ check_firewall_closed() {
 	fi
 }
 
-# check_firewall_icmpv6 - the inet chain drops by default, so ICMPv6 (NDP/PMTUD) must be explicitly
-# accepted or IPv6 breaks entirely: the box cannot resolve its gateway (neigh INCOMPLETE, ping6 100% loss).
-# Invisible on the v4-only fleet; guard it so the accept can never silently drop out again.
+# check_firewall_icmpv6 - without an explicit accept, NDP/PMTUD die under the drop policy and IPv6 breaks
+# entirely (neigh INCOMPLETE, ping6 100% loss). Invisible on the v4-only fleet, hence the guard.
 check_firewall_icmpv6() {
 	local rules
 	rules=$(nft list chain inet hestia input 2> /dev/null) || { skip "firewall ICMPv6 accept (inet hestia not readable)"; return; }
@@ -170,11 +165,8 @@ check_firewall_icmpv6() {
 	fi
 }
 
-# check_firewall_ruleset_loadable - the persisted ruleset must still be accepted by the backend, since
-# that file IS what the boot unit reloads. Replaces the iptables-era check that every referenced ipset had
-# a provisioning path: sets and the rules matching them now live in one document and load in one
-# transaction, so the ordering hazard that could boot the box open no longer exists. What can still go
-# wrong is the file being unparseable, and then the box boots with no ruleset at all.
+# check_firewall_ruleset_loadable - that file IS what the boot unit reloads, so if it stops parsing the box
+# boots with no ruleset at all. Sets and their rules load in one transaction now, so only this can go wrong.
 check_firewall_ruleset_loadable() {
 	local ruleset=/etc/hestia/firewall/ruleset.nft
 	if [ ! -f "$ruleset" ]; then
@@ -188,15 +180,9 @@ check_firewall_ruleset_loadable() {
 	fi
 }
 
-# check_firewall_chains_tracked - the live ruleset must not carry a jail chain the object model has
-# forgotten. This is check_firewall_sets_bootable's mirror image: there the model promised more than the
-# live state delivered, here the live state holds more than the model admits to.
-#
-# Reachable today, and reproduced: deleting a multi-port jail leaves the jump behind (D4, bare --dport
-# where -m multiport is needed), the leaked jump keeps the chain referenced so the following -X fails,
-# and the next flush drops the jump while the teardown loop iterates chains.conf - where the record is
-# already gone. Nothing ever reclaims the chain. It survives as an orphan that no h-list-firewall*
-# command can see. Worth keeping now the cause is fixed: an untracked chain is a rule nobody audits.
+# check_firewall_chains_tracked - the live ruleset must not carry a jail chain the object model forgot.
+# Reproduced under iptables, where a leaked jump kept a chain referenced until its record was already gone;
+# kept now the cause is fixed, because an untracked chain is a rule nobody audits.
 check_firewall_chains_tracked() {
 	local orphan='' c
 	for c in $(fw_jail_chains_live); do
@@ -209,11 +195,8 @@ check_firewall_chains_tracked() {
 	fi
 }
 
-# check_firewall_rules_rendered - every active rule must actually render a live rule. fw_rule skips a rule
-# whose source is neither any / ipset / a valid v4 or v6 address (a bad source went from "breaks the
-# whole ruleset" into "silently vanishes"). This is check_firewall_chains_tracked's other direction: assert
-# each non-suspended rules.conf entry has a renderable source, so a corrupted one surfaces here instead of
-# quietly dropping out of the firewall with nothing going red.
+# check_firewall_rules_rendered - the other direction: fw_rule skips a source that is neither any, an ipset
+# nor a valid address, so a corrupted entry drops out of the firewall with nothing going red.
 check_firewall_rules_rendered() {
 	local rules="$CONF_DIR/firewall/rules.conf" bad='' line
 	[ -f "$rules" ] || { ok "firewall rules all renderable (none)"; return; }
@@ -233,11 +216,8 @@ check_firewall_rules_rendered() {
 	fi
 }
 
-# check_firewall_ipsets_populated - a rule matching an IP list must match a set that actually has entries.
-# The rules_rendered guard above accepts any ipset: source as renderable; nothing then checks that the list
-# behind it exists. A referenced list with no cache file renders an EMPTY set: the rule is present, the panel
-# shows the list, and it matches nothing - which is exactly how a v6 list read from the v4 cache path blocked
-# traffic for nobody. The cache is the renderer's only input, so its absence is the whole failure.
+# check_firewall_ipsets_populated - the guard above accepts any ipset: source, but never checks the list
+# behind it. No cache file renders an EMPTY set: rule present, panel shows the list, nothing matches.
 check_firewall_ipsets_populated() {
 	local rules="$CONF_DIR/firewall/rules.conf" bad='' line name src
 	[ -f "$rules" ] || { ok "firewall IP lists all populated (no rules)"; return; }
@@ -257,9 +237,8 @@ check_firewall_ipsets_populated() {
 	fi
 }
 
-# check_fail2ban_jails - the jails fail2ban is actually running must equal the jails our config enables.
-# Catches both directions at once: one of ours missing (which is how the whole set stayed dead while the
-# service looked healthy) and a distro jail we never asked for still running.
+# check_fail2ban_jails - running must equal configured, in both directions: one of ours missing (how the
+# whole set stayed dead while the service looked healthy) and a distro jail we never asked for.
 check_fail2ban_jails() {
 	local want have missing='' extra='' j
 	want=$(fail2ban_enabled_jails | sort)
@@ -287,9 +266,8 @@ check_fail2ban_config() {
 	fi
 }
 
-# check_fail2ban_banaction - every jail must ban through OUR action. The single strongest guard here: it
-# catches the distro leftover, a future package default, and a renderer swap that leaves the action behind,
-# all as one assertion.
+# check_fail2ban_banaction - one assertion covering the distro leftover, a future package default and a
+# renderer swap that leaves the action behind.
 check_fail2ban_banaction() {
 	local foreign
 	# `action = hestia[name=SSH]` is instantiated as the action `hestia-SSH`, so match the prefix. Testing
@@ -303,8 +281,8 @@ check_fail2ban_banaction() {
 	fi
 }
 
-# check_fail2ban_logpaths - a jail watching a file that does not exist never fires and only says so in
-# fail2ban's own log. That is how the mail jails stayed enabled on boxes without mail.
+# A jail watching a missing file never fires and says so only in fail2ban's own log - how the mail jails
+# stayed enabled on boxes without mail.
 check_fail2ban_logpaths() {
 	local missing='' p
 	while read -r p; do
@@ -318,9 +296,8 @@ check_fail2ban_logpaths() {
 	fi
 }
 
-# check_fail2ban_backends - an enabled jail must actually be watching its log file. A jail put on the
-# systemd backend keeps its logpath in the config, starts cleanly and reports healthy, but monitors nothing -
-# so neither "the file exists" nor "the jail is running" catches it. Asking what it monitors does.
+# A jail on the systemd backend keeps its logpath, starts cleanly and reports healthy while monitoring
+# nothing - so neither "the file exists" nor "the jail runs" catches it. Asking what it monitors does.
 check_fail2ban_backends() {
 	local blind='' j pat
 	for j in $(fail2ban_enabled_jails); do
@@ -339,11 +316,9 @@ check_fail2ban_backends() {
 	fi
 }
 
-# check_fail2ban_roundcube_injection - the roundcube filter logs the attacker-controlled username verbatim,
-# so it defeats a smuggled "X-Real-IP: <fake>" block only as long as it matches the real trailing block
-# greedily. A Roundcube format change or a filter edit (greedy -> non-greedy, dropped anchor) would reopen
-# the injection silently. Replay an injection line through the DEPLOYED failregex and assert the real
-# trailing IP is what would be banned, not the smuggled one. Canary, like the source_conf identifier guard.
+# Roundcube logs the username verbatim, so the filter defeats a smuggled "X-Real-IP:" block only while it
+# matches the real trailing one greedily - a dropped anchor would reopen the injection silently. A canary:
+# replay an injection line and assert the REAL trailing IP is what gets banned.
 check_fail2ban_roundcube_injection() {
 	local f='/etc/fail2ban/filter.d/hestia-roundcube.conf' fr prefix got
 	[ -f "$f" ] || { skip "roundcube filter absent (webmail off)"; return; }
@@ -359,11 +334,9 @@ check_fail2ban_roundcube_injection() {
 	fi
 }
 
-# check_fail2ban_web_signatures - the L7 signature jails defend purely by regex on the access log,
-# so a filter edit or a log-format drift could silently stop matching a real probe, or start matching benign
-# traffic. Replay a malicious AND a benign line through each DEPLOYED filter with fail2ban-regex and assert
-# match / no-match. The benign cases pin the deliberate decisions: a single ../ is NOT an exploit, and a 403
-# is NOT an authprobe (401-only).
+# Purely regex on the access log, so a filter edit or log-format drift silently stops matching a real probe
+# or starts matching benign traffic. Both cases replayed through the DEPLOYED filter; the benign ones pin
+# the decisions - a single ../ is not an exploit, a 403 is not an authprobe.
 check_fail2ban_web_signatures() {
 	command -v fail2ban-regex > /dev/null 2>&1 || { skip "fail2ban-regex absent - web signature canary"; return; }
 	local fdir='/etc/fail2ban/filter.d' d='[05/Aug/2026:11:00:00 +0000]' pre='1.2.3.4 - -'
@@ -391,14 +364,9 @@ check_fail2ban_web_signatures() {
 	[ "$n_bad" -eq 0 ] && ok "web signature filters (badactor/exploit/authprobe) match+reject as designed"
 }
 
-# check_fail2ban_web_logpath - a web jail must watch the CURRENT web system's domains dir. This is the
-# #502 class ("jail watches a real file but the wrong one") one step further: after a #120 web-model
-# switch that forgets to re-gate (fail2ban_gate_web_jail), the jail's persisted logpath points at the OLD
-# stack's dir - a real path, so the "what does a jail watch" guard cannot see it - and ANY later fail2ban
-# restart (unattended-upgrades, a package update, an OOM-kill, an unrelated manual restart) silently leaves
-# it watching a stack that no longer receives traffic. Compare the configured logpath against the
-# WEB_SYSTEM-derived dir, so this catches the #537 regression AND any future switch path that forgets to
-# re-gate.
+# A web jail must watch the CURRENT web system's dir. After a switch that forgets to re-gate, its logpath
+# points at the old stack - a REAL path, so the "what does a jail watch" guard cannot see it, and the next
+# restart from any cause leaves it watching a stack with no traffic. Compared against the WEB_SYSTEM dir.
 check_fail2ban_web_logpath() {
 	local want jail lp bad=''
 	want="$(fail2ban_web_logdir 2> /dev/null)" || { skip "web jail logpath (no web system)"; return; }
@@ -415,10 +383,8 @@ check_fail2ban_web_logpath() {
 	fi
 }
 
-# check_firewall_layer_separation - fail2ban and crowdsec must not both cover the same layer:
-# CrowdSec owns Layer-7, so no fail2ban web jail runs while crowdsec is present; fail2ban owns brute force,
-# so CrowdSec's ssh scenarios are removed while fail2ban is present. A regated transition that forgets one
-# direction reintroduces the double-ban - a class-level invariant, not a single symptom.
+# CrowdSec owns Layer-7 and fail2ban owns brute force, so each side's jobs are off while the other is there.
+# A transition that re-gates only one direction reintroduces the double-ban.
 check_firewall_layer_separation() {
 	local bad='' j s
 	if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then

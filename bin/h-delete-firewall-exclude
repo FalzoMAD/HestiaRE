@@ -39,8 +39,7 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# grep to a temp file rather than sed -i: the value is an address, and a sed pattern built from user input
-# would treat its dots as wildcards.
+# grep -F to a temp file, not sed -i: a pattern built from an address would treat its dots as wildcards.
 tmp="$(mktemp)"
 grep -vxF "$ip_cidr" "$excludes" > "$tmp" 2> /dev/null
 mv -f "$tmp" "$excludes"
@@ -48,8 +47,7 @@ chmod 660 "$excludes"
 
 $BIN/h-update-firewall > /dev/null 2>&1
 
-# fail2ban keeps its own copy of the whitelist, so it has to be told: without this the jail would carry on
-# counting an address the ruleset already exempts.
+# fail2ban keeps its own copy, or the jail keeps counting an address the ruleset already exempts.
 if [ -n "$FIREWALL_EXTENSION" ] && [ -f "$HESTIA/func/fail2ban.sh" ]; then
 	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
 	source "$HESTIA/func/fail2ban.sh"

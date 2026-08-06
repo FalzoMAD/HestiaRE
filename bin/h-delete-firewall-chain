@@ -46,10 +46,8 @@ chain_param=""
 [ -f "$chains" ] && chain_param=$(grep "CHAIN='$chain'" "$chains")
 if [ -n "$chain_param" ]; then
 	parse_object_kv_list "$chain_param"
-	# fail2ban calls this as actionstop, on every stop, restart and package upgrade. Deleting the
-	# records there wiped the persistent banlist, which is the one property the hestia ban action exists
-	# to provide. So the records are only purged when a human asks; actionstop passes KEEP='yes' and
-	# tears down the live wiring alone.
+	# fail2ban calls this as actionstop on every stop, restart and upgrade, and purging there wiped the
+	# persistent banlist - the one property the hestia action exists for. actionstop passes KEEP='yes'.
 	if [ "$keep" != 'yes' ]; then
 		sed -i "/CHAIN='$chain'/d" "$chains"
 		sed -i "/CHAIN='$chain'/d" "$banlist" 2> /dev/null
