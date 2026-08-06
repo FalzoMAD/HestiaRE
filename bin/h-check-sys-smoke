@@ -145,6 +145,19 @@ check_firewall_closed() {
 	fi
 }
 
+# check_firewall_icmpv6 - the inet chain drops by default, so ICMPv6 (NDP/PMTUD) must be explicitly
+# accepted or IPv6 breaks entirely: the box cannot resolve its gateway (neigh INCOMPLETE, ping6 100% loss).
+# Invisible on the v4-only fleet (#534); guard it so the accept can never silently drop out again.
+check_firewall_icmpv6() {
+	local rules
+	rules=$(nft list chain inet hestia input 2> /dev/null) || { skip "firewall ICMPv6 accept (inet hestia not readable)"; return; }
+	if echo "$rules" | grep -q 'ipv6-icmp'; then
+		ok "firewall accepts ICMPv6 (NDP/PMTUD - IPv6 stays functional)"
+	else
+		no "firewall drops ICMPv6" "no icmpv6 accept in inet hestia input - IPv6 NDP breaks under the drop policy"
+	fi
+}
+
 # check_firewall_ruleset_loadable - the persisted ruleset must still be accepted by the backend, since
 # that file IS what the boot unit reloads. Replaces the iptables-era check that every referenced ipset had
 # a provisioning path: sets and the rules matching them now live in one document and load in one
@@ -611,6 +624,7 @@ fi
 if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != 'remote' ]; then
 	echo "-- firewall --"
 	check_firewall_closed
+	check_firewall_icmpv6
 	check_firewall_ruleset_loadable
 	check_firewall_chains_tracked
 fi
