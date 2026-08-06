@@ -2,7 +2,7 @@
 # info: Enable cgroup support for user
 # options: NONE
 #
-# example: h-add-sys-cgroup
+# example: h-add-sys-cgroups
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

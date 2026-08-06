@@ -4,18 +4,10 @@
 #
 # example: h-change-sys-firewall-model crowdsec
 #
-# Runtime switch across the four models the two addons encode: none, fail2ban, fail2ban+crowdsec,
-# crowdsec. The current model is DERIVED from the artefacts on disk (fail2ban -> FIREWALL_EXTENSION,
-# crowdsec -> the installed package), not from install.conf (that is the install recipe, not live state).
-# The target is enforced in full by orchestrating h-add/delete-sys-fail2ban and h-add/delete-sys-crowdsec:
-# the target's components are added BEFORE the others are removed, so the box is never left with neither.
-# No MODEL arg just prints the current one.
-#
-# CrowdSec is nginx-only, so a crowdsec target refuses on an apache-only front - h-add-sys-crowdsec does
-# the refusing, and because it runs before any removal the box keeps its existing protection. crowdsec-only
-# enforcement is best-effort: SSH/web decisions now reach L3 (the feeder stops denying the auth families
-# when fail2ban is absent), but mail has no CrowdSec detection surface and bans are visible via cscli, not
-# the panel banlist.
+# Runtime switch across the four models the two addons encode. The current one is DERIVED from artefacts on
+# disk, not install.conf, which holds the recipe rather than the live state; no MODEL arg just prints it.
+# Components are added BEFORE any removal, so a crowdsec target that refuses on apache leaves the box with
+# its existing protection. crowdsec-only is best-effort: mail has no detection surface, bans only via cscli.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -89,18 +81,14 @@ case "$model" in
 	crowdsec) want_cs='yes' ;;
 esac
 
-# When crowdsec is added or removed, hold the #120 web-model freeze across the whole switch: crowdsec
-# wiring depends on the public web front and mutates nginx config, so a concurrent h-add/delete-sys-nginx
-# must not flip the front (both -> apache-only) between the refuse check and the wiring. Reentrant, so the
-# child crowdsec command shares this lock rather than blocking on it. Only for crowdsec transitions - a
-# pure fail2ban toggle touches the firewall, not web config, and should not freeze domain ops. (The
-# standalone h-add/delete-sys-crowdsec still race a web switch when called directly - pre-existing, #528.)
+# Held across the WHOLE switch, so a web switch cannot flip the front between the refuse check and the
+# wiring; reentrant, so the child command shares it. Only for crowdsec transitions - a pure fail2ban toggle
+# touches the firewall, not web config, and should not freeze domain ops.
 if { [ "$want_cs" = 'yes' ] && [ "$cs" = 'no' ]; } || { [ "$want_cs" = 'no' ] && [ "$cs" = 'yes' ]; }; then
 	web_lock_acquire || exit "$E_INUSE"
 fi
 
-# Add the target's components first (a crowdsec add may refuse on apache and abort here, leaving the
-# current model intact), then remove what the target does not want.
+# Add first, then remove: a crowdsec add that refuses on apache aborts here with the model still intact.
 if [ "$want_f2b" = 'yes' ] && [ "$f2b" = 'no' ]; then
 	$BIN/h-add-sys-fail2ban || exit "$E_INVALID"
 fi
@@ -114,10 +102,8 @@ if [ "$want_cs" = 'no' ] && [ "$cs" = 'yes' ]; then
 	$BIN/h-delete-sys-crowdsec
 fi
 
-# No feeder refresh here: each component command owns its own L3 consequence - the fail2ban add/delete
-# refresh the feeder (the denylist keys off FIREWALL_EXTENSION), and crowdsec_apply/teardown set up or
-# remove L3. So the indirect path (calling the addon commands directly) reaches the same enforcement
-# state as this switch, not just this switch.
+# No feeder refresh here: each component command owns its own L3 consequence, so calling the addon commands
+# directly reaches the same enforcement state as this switch does.
 
 #----------------------------------------------------------#
 #                       Hestia                             #

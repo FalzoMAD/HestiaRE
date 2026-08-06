@@ -562,7 +562,6 @@
 									class="form-select"
 									name="v_phpmyadmin_key"
 									id="v_phpmyadmin_key"
-									<?php $_SESSION["API"] != "yes" ? "disabled" : ""; ?>
 								>
 									<option value="no">
 										<?= tohtml( _("Disabled")) ?>

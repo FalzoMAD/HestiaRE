@@ -4,9 +4,8 @@
 #
 # example: h-add-sys-crowdsec
 #
-# Installs CrowdSec as the nginx-gated web-protection addon: engine + LAPI on 127.0.0.1:8054,
-# the L7 nginx bouncer and the L3 ipset feeder. nginx-only - refuses on an apache-only front.
-# The heavy lifting is the shared crowdsec_apply helper (also used by the installer). Idempotent.
+# Engine + LAPI on 127.0.0.1:8054, the L7 nginx bouncer and the L3 feeder. nginx-only, refuses on apache.
+# Idempotent; the work is crowdsec_apply, shared with the installer.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -41,11 +40,8 @@ fi
 
 check_hestia_demo_mode
 
-# Hold the #120 web-model freeze across the front check + nginx wiring: crowdsec_apply mutates nginx
-# config and depends on the public front, so a concurrent h-add/delete-sys-nginx must not flip the front
-# (both <-> apache-only) mid-run (#528). Reentrant, so h-delete-sys-nginx's two-step teardown and
-# h-change-sys-firewall-model, which already hold it, pass straight through. Re-read the front under the
-# lock, since it was computed before we held it.
+# Held across the front check AND the wiring, or a concurrent web switch could flip the front between them.
+# Reentrant, so callers already holding it pass through. The front is re-read under the lock.
 web_lock_acquire || exit "$E_INUSE"
 source_conf "$HESTIA/conf/hestia.conf"
 cs_pub="$PROXY_SYSTEM"
@@ -70,8 +66,7 @@ fi
 #----------------------------------------------------------#
 
 echo "[ * ] Installing CrowdSec engine..."
-# force-conf*: a re-add keeps our :8054-patched /etc/crowdsec/config.yaml as saved state; with no
-# conffile policy dpkg prompts on it and hits EOF under noninteractive, leaving the pkg half-configured.
+# force-conf*: a re-add finds our :8054-patched config.yaml, and dpkg would prompt and hit EOF unattended.
 DEBIAN_FRONTEND=noninteractive apt-get -y -qq \
 	-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
 	install crowdsec > /dev/null 2>&1 || true

@@ -4,10 +4,8 @@
 #
 # example: h-delete-sys-crowdsec
 #
-# Unwires and uninstalls CrowdSec: the L3 feeder (chain/set/jump), the L7 nginx bouncer + http
-# glue, then purges the engine. /etc/crowdsec is kept as saved state so a re-add reuses LAPI
-# creds, collections and CAPI enrolment (PURGE_DATA=yes wipes it). First step of the two-step
-# delete-nginx teardown: remove CrowdSec here, then h-delete-sys-nginx. Fragments stay (inert).
+# Unwires L3 and the L7 bouncer, then purges the engine. /etc/crowdsec is kept so a re-add reuses the LAPI
+# creds, collections and CAPI enrolment. First step of the two-step delete-nginx teardown.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -25,8 +23,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 # live component state
 [ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
 
-# purge would drop /etc/crowdsec; keep it as saved state. Trap-restore so an aborted purge
-# can't strand it under .saved (invisible to a later re-add); mirrors h-delete-sys-clamav.
+# Trap-restore, so an aborted purge cannot strand /etc/crowdsec under .saved where a re-add never looks.
 restore_cs_state() {
 	if [ -d /etc/crowdsec.saved ]; then
 		rm -rf /etc/crowdsec
@@ -45,8 +42,7 @@ fi
 
 check_hestia_demo_mode
 
-# guard on the package, not COMPONENT_* - a timed-out install may have ADDON_CROWDSEC=true
-# but a half-wired engine; the package is the honest signal.
+# Guard on the package, not COMPONENT_*: a timed-out install leaves the flag true with a half-wired engine.
 if ! dpkg -l crowdsec 2> /dev/null | grep -q '^ii' && [ "$FORCE" != 'yes' ]; then
 	echo "ERROR: CrowdSec is not installed. Use FORCE=yes to clean up anyway."
 	exit "$E_NOTEXIST"
@@ -58,13 +54,11 @@ fi
 
 source "$HESTIA/func/crowdsec.sh"
 
-# Hold the #120 web-model freeze: crowdsec_remove_nginx rewrites nginx config + reloads it, so a concurrent
-# h-add/delete-sys-nginx must not race it (#528). Reentrant - h-delete-sys-nginx's two-step teardown, which
-# already holds the lock when it calls this, passes straight through.
+# crowdsec_remove_nginx rewrites and reloads nginx config, so a concurrent web switch must not race it.
+# Reentrant, so h-delete-sys-nginx's teardown passes straight through.
 web_lock_acquire || exit "$E_INUSE"
 
-# L3 first: stop the feeder timer, drop the marker + chain/jump + set (h-update-firewall then
-# skips the L3 block - marker gone).
+# L3 first: with the marker gone, h-update-firewall skips the L3 block on the re-render.
 crowdsec_l3_teardown
 
 # L7: remove the nginx bouncer + http glue (the reload happens inside).
@@ -90,8 +84,7 @@ fi
 
 set_install_component ADDON_CROWDSEC false
 
-# CrowdSec no longer owns L7 (marker gone), so if fail2ban is present its web jails come back on - the
-# fail2ban-only model regains its Layer-7 coverage (#542).
+# CrowdSec no longer owns L7, so fail2ban's web jails come back on and that model regains its coverage.
 if [ "$FIREWALL_EXTENSION" = 'fail2ban' ] && [ -f /etc/fail2ban/jail.d/hestia.local ]; then
 	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
 	source "$HESTIA/func/fail2ban.sh"
@@ -100,8 +93,7 @@ if [ "$FIREWALL_EXTENSION" = 'fail2ban' ] && [ -f /etc/fail2ban/jail.d/hestia.lo
 	systemctl reload-or-restart fail2ban > /dev/null 2>&1
 fi
 
-# per-domain fragments (nginx.crowdsec.conf / crowdsec.apache2.conf) stay as saved state -
-# inert without the http-block zones, restored by a re-add.
+# The per-domain fragments stay as saved state: inert without the http-block zones, restored by a re-add.
 
 echo "CrowdSec has been removed. You can now run h-delete-sys-nginx if the model requires it."
 

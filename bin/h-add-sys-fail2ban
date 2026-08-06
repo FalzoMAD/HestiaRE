@@ -4,9 +4,8 @@
 #
 # example: h-add-sys-fail2ban
 #
-# Installs fail2ban wired as a CLIENT of the hestia firewall: bans land in banlist.conf + the live
-# ruleset and survive a rebuild. Requires FIREWALL_SYSTEM active - inert otherwise. Idempotent. The
-# heavy lifting is the shared fail2ban_apply helper (also used by the installer).
+# fail2ban wired as a CLIENT of the hestia firewall, so bans survive a rebuild. Requires FIREWALL_SYSTEM,
+# inert otherwise. Idempotent; the work is fail2ban_apply, shared with the installer.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -64,8 +63,7 @@ mail='no'
 ftp='no'
 [ -n "$FTP_SYSTEM" ] && ftp='yes'
 
-# One implementation of "configured fail2ban", shared with the installer: copies the WHOLE share/fail2ban
-# tree, gates jails, syncs ignoreip and starts the daemon.
+# Copies the WHOLE share/fail2ban tree, gates the jails, syncs ignoreip and starts the daemon.
 source "$HESTIA/func/fail2ban.sh"
 fail2ban_apply "$mail" "$ftp"
 
@@ -76,10 +74,8 @@ fi
 
 set_install_component ADDON_FAIL2BAN true
 
-# fail2ban now owns the auth families, so the L3 feeder must stop sending their CrowdSec decisions to L3
-# (its denylist keys off FIREWALL_EXTENSION, just set). Refresh now instead of waiting up to 45s for the
-# timer, so the handover is prompt whether the model changed via this command or h-change-sys-firewall-model.
-# No-op unless CrowdSec L3 is wired (marker).
+# fail2ban now owns the auth families, and the feeder's denylist keys off FIREWALL_EXTENSION, just set.
+# Refresh here rather than waiting up to 45s, so the direct path hands over as promptly as the model switch.
 [ -f "$CONF_DIR/firewall/crowdsec.conf" ] && $BIN/h-update-firewall-crowdsec
 
 #----------------------------------------------------------#

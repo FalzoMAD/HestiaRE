@@ -2,7 +2,7 @@
 # info: change package name
 # options: OLD_NAME NEW_NAME [mode]
 #
-# example: h-rename-package package package2
+# example: h-rename-user-package package package2
 #
 # This function changes the name of an existing package.
 

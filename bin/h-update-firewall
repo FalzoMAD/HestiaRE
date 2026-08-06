@@ -91,8 +91,7 @@ fw_accept_loopback
 # ICMPv6 (NDP/PMTUD) must always be accepted or IPv6 breaks under the drop policy; see fw_accept_icmpv6.
 fw_accept_icmpv6
 
-# Ungated on WEBMAIL_SYSTEM on purpose: a rule for an unused port is free, while gating would leave the
-# port open between installing webmail and the next rebuild.
+# Ungated on WEBMAIL_SYSTEM: gating would leave the port open between installing webmail and the next rebuild.
 for wm_port in 8090 8091; do
 	fw_restrict_local_port "$wm_port" "$(fw_local_allowed_uids)"
 done
@@ -100,25 +99,20 @@ done
 # Whitelist, evaluated before any ban match so it can rescue a locked-out admin
 fw_accept_excludes
 
-# CrowdSec L3: drop source IPs the feeder put in crowdsec-blacklists, via an owned chain that
-# RETURNs loopback + RFC1918 FIRST. That exemption is defense-in-depth: a false-positive ban on
-# 127.0.0.1 or an internal address would otherwise be enforced box-wide, and CrowdSec's own
-# whitelist has demonstrably failed for loopback/internal before. Emitted below the loopback/
-# own-IP ACCEPTs, above the service ACCEPTs; the set is declared by the renderer and filled from its cache.
+# An owned chain that RETURNs loopback + RFC1918 FIRST: CrowdSec's own whitelist has failed for those
+# before, and a false-positive ban on an internal address would otherwise be enforced box-wide.
 if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
 	fw_chain_create hestia-crowdsec
 	fw_flush hestia-crowdsec
 	for net in 127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
 		fw_return_source hestia-crowdsec "$net"
 	done
-	# v6 backstop, same defense-in-depth as the v4 RFC1918/loopback RETURNs above: loopback, link-local
-	# (NDP rides on it) and ULA must never be L3-dropped by a false-positive decision (#536).
+	# Same backstop for v6: loopback, link-local (NDP rides on it) and ULA must never be L3-dropped.
 	for net6 in ::1 fe80::/10 fc00::/7; do
 		fw_return_source6 hestia-crowdsec "$net6"
 	done
 	fw_chain_tail hestia-crowdsec DROP
-	# Both families feed the one chain: a v4 decision via crowdsec-blacklists, a v6 decision via
-	# crowdsec6-blacklists (the feeder fills both caches).
+	# Both families feed the one chain; the feeder fills both caches.
 	fw_set_jump hestia-crowdsec crowdsec-blacklists
 	fw_set_jump6 hestia-crowdsec crowdsec6-blacklists
 fi
@@ -128,8 +122,7 @@ IFS=$'\n'
 for line in $(sort -r -n -k 2 -t \' $rules); do
 	parse_object_kv_list "$line"
 	if [ "$SUSPENDED" = 'no' ]; then
-		# A rule may point at an ipset instead of an address; warn but still render, matching the
-		# pre-seam behaviour (the missing set makes iptables reject the rule, not the whole batch).
+		# Warn but still render: a missing set costs the one rule, not the whole batch.
 		if [[ "$IP" =~ ^ipset: ]]; then
 			if ! "$BIN/h-list-firewall-ipset" plain | grep "^${IP#ipset:}\s" > /dev/null; then
 				log_event $E_NOTEXIST "IPset IP list (${IP#ipset:}) not found"
@@ -146,9 +139,8 @@ fw_policy INPUT DROP
 # Adding hestia chain
 fw_chain_create hestia
 
-# fail2ban jails and their bans go into the SAME batch as the base ruleset. Under iptables these were
-# three separate applies, which is precisely what left a window with the jails detached; one document
-# means the box never runs a ruleset that is missing them.
+# Jails and bans go in the SAME batch as the base ruleset: under iptables these were three separate applies,
+# which is exactly what left a window with the jails detached.
 if [ -n "$FIREWALL_EXTENSION" ]; then
 	if [ -f "$chains" ]; then
 		for chain in $(cat "$chains"); do
@@ -179,8 +171,7 @@ if [ -x "$CONF_DIR/firewall/custom.sh" ]; then
 	bash "$CONF_DIR/firewall/custom.sh"
 fi
 
-# Retire any iptables ruleset this box still carries. Not housekeeping: iptables is the nft-shim here, so
-# its rules live in the same kernel backend and would keep being evaluated alongside ours.
+# Not housekeeping: iptables is the nft-shim here, so its rules keep being evaluated alongside ours.
 fw_legacy_teardown
 
 # Enabling the boot unit that reloads the saved ruleset

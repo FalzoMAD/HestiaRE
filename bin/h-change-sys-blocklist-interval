@@ -4,8 +4,7 @@
 #
 # example: h-change-sys-blocklist-interval 12h
 #
-# INTERVAL is a systemd time span (30min, 6h, 1d, 2d). One interval for all lists: a per-list schedule would
-# be rework once native sets reshape the per-object model. No v-* symlink.
+# INTERVAL is a systemd time span (30min, 6h, 1d). One for all lists - per-list would be rework. No v-* symlink.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -37,8 +36,7 @@ check_args '1' "$#" 'INTERVAL'
 check_hestia_demo_mode
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 
-# A systemd time span, not free text: a malformed value would leave the timer inert with the failure only
-# visible in journalctl.
+# Not free text: a malformed value leaves the timer inert with the failure only visible in journalctl.
 if ! [[ "$interval" =~ ^[0-9]+(s|m|min|h|d|w)$ ]]; then
 	echo "Error: INTERVAL must be a systemd time span, e.g. 30min, 6h, 1d"
 	exit "$E_INVALID"
