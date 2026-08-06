@@ -9,6 +9,15 @@ section as part of its PR. On release, the section gets the version number.
 
 ## Unreleased
 
+### Changed
+- **PROVENANCE reconciled against `upstream/hestiacp@ca19b9f`** (#548). All three manifests were a snapshot
+  from before the firewall series, so 38 files on disk had no entry at all and every aggregate was stale -
+  `share/` claimed 21% weighted divergence where its own per-file numbers gave 7%. Churn recomputed for
+  every mapped file, the 38 missing entries added, the aggregates derived from the data instead of asserted.
+  `source_type` was deliberately left untouched: 60 entries disagree with the manifest's own "<=3% is
+  verbatim" rule, including identical webfonts typed `derived` in the old data, so that is a labelling
+  decision rather than a number to recompute (#551).
+
 ### Fixed
 - **Changing the panel port left the new port firewalled shut** (#548). `h-change-sys-port` asked
   `h-restart-service` for the service `iptables`, but that command recognises the firewall by comparing
