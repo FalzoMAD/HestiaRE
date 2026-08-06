@@ -559,6 +559,18 @@ web_model_run() {
 	# the front ports BEFORE removing the rollback path - else a dark box "succeeds".
 	web_model_verify_up "$target" || { _wm_fail "target server(s) did not come up after restart"; return 1; }
 
+	# Re-gate the fail2ban web jails to the new web system's log dir (#537). The per-domain rebuild above
+	# already addlogpath'd the live logs, so the running jails follow the switch, but their PERSISTED
+	# logpath still points at the old model's domains dir - a later `systemctl restart fail2ban` would
+	# re-glob that stale path and silently stop watching the new logs. Repoint + reload now so the switch
+	# survives a restart. Guarded on fail2ban being our extension; no-op otherwise.
+	if [ "${FIREWALL_EXTENSION:-}" = 'fail2ban' ] && [ -f "$HESTIA/func/fail2ban.sh" ]; then
+		# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+		source "$HESTIA/func/fail2ban.sh"
+		fail2ban_gate_web_jail
+		systemctl reload-or-restart fail2ban > /dev/null 2>&1
+	fi
+
 	# Deferred PURGE (irreversible): only now that the target is proven serving. Until here
 	# apache was merely stopped, so a verify_up failure above could still roll back to it.
 	if [ "$purge" = "yes" ] && ! web_model_uses_apache "$target"; then

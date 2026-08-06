@@ -159,6 +159,17 @@ fw_accept_loopback() {
 	fw_sec base "		iif lo accept"
 }
 
+# ICMPv6 is not an optional user rule on a dual-stack host - it is infrastructure, like loopback and
+# conntrack. NDP (neighbour/router discovery) and PMTUD ride on it, and in this inet chain with a drop
+# policy they are NEW packets, so without an explicit accept the box cannot resolve its own gateway and
+# IPv6 breaks entirely (measured on a dual-stack box: ping6 100% loss, gateway neigh INCOMPLETE, until this
+# rule is present). Same class as the loopback-by-address regression above; the v4-only `ip protocol icmp`
+# rule from rules.conf never covered v6. Accept-all rather than narrowing to NDP/PMTUD types: conservative
+# and complete, per-type/rate limiting is a later hardening.
+fw_accept_icmpv6() {
+	fw_sec base "		meta l4proto ipv6-icmp accept"
+}
+
 # excludes.conf used to only suppress NEW bans, which left an already-banned admin locked out and gave the
 # file no effect on anything but fail2ban. Rendering it as an accept ahead of the ban matches makes it the
 # recovery primitive it was always meant to be. Skipped when empty so an absent file costs nothing.

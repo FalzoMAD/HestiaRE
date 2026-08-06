@@ -176,6 +176,20 @@ section as part of its PR. On release, the section gets the version number.
 
 ### Fixed
 
+- **The firewall broke IPv6 by dropping ICMPv6** (#534). The `inet hestia` input chain has a drop policy
+  and accepted only IPv4 ICMP (`ip protocol icmp`, from the rules.conf rule) - there was no ICMPv6 accept
+  anywhere, so NDP (neighbour/router discovery) and PMTUD were dropped and IPv6 stopped working entirely:
+  measured on a real dual-stack host, `ping6` was 100% loss and the gateway neighbour stayed `INCOMPLETE`.
+  Invisible on the v4-only test fleet (`ip6tables` was wide open in the iptables era, and the lab has no
+  global v6), which is why it survived the nftables migration. Fixed with a base rule
+  (`fw_accept_icmpv6` -> `meta l4proto ipv6-icmp accept`), emitted always like loopback/conntrack because
+  ICMPv6 is v6 infrastructure, not an optional user rule. A smoke guard (`check_firewall_icmpv6`) now fails
+  if the accept is ever dropped again. Knock-on: this also cured a ~12s SMTP greeting (and the associated
+  smoke failure) on that box - exim's pre-greeting reverse-DNS lookup was timing out because the
+  IPv6-first resolvers were unreachable while v6 was broken. Accept-all ICMPv6 for now; per-type/rate
+  limiting is a possible later hardening. (Separate, still open: CrowdSec L3 is IPv4-only - its feeder and
+  the `crowdsec_blacklists` jump do not cover v6.)
+- **A live web-model switch left the fail2ban web jails watching the old log dir** (#537). `h-add/delete-sys-{nginx,apache2}` flip `WEB_SYSTEM` but did not re-gate the fail2ban web jails, so after e.g. both -> nginx-only the `web-*` jails' persisted `logpath` still read `/var/log/apache2/domains/*.log`. At runtime the per-domain rebuild's `addlogpath` hook kept the running jails on the live logs, so the box looked fine - but the persisted logpath is what fail2ban re-globs on (re)start, so **any** subsequent fail2ban restart silently left the jails watching a stack that no longer receives traffic: not just a deliberate restart but unattended-upgrades, a package update, an OOM-kill, or an admin restarting for an unrelated reason. In effect **every box that had ever done a #120 web-model switch was one fail2ban restart away from silent L7 blindness**, not only exposed under a targeted test. The switch core now calls `fail2ban_gate_web_jail` + reloads fail2ban after the target is proven serving (guarded on `FIREWALL_EXTENSION`). A permanent smoke guard (`check_fail2ban_web_logpath`) compares each enabled web jail's configured logpath against the `WEB_SYSTEM`-derived dir and fails on a mismatch - covering this and any future switch path that forgets to re-gate (the #502 "watches a real file but the wrong one" class, which the existing watch-guard misses because the path exists). Verified on a dual-stack box: after the switch the logpath repoints and a fail2ban restart keeps the jails on the current web system's domains dir.
 - **The mail-only preset offered and default-enabled CrowdSec** (#529). `mailonly` fixes
   `WEB_SERVER=NGINX` (nginx fronts Roundcube + ACME), and `ADDON_CROWDSEC.visible_if` is
   `WEB_SERVER != APACHE`, so the wizard preselected CrowdSec on a box with no customer web where it adds
