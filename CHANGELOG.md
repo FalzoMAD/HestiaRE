@@ -5,13 +5,15 @@ point — a HestiaCP 1.9.6 snapshot, kept read-only in the `upstream/hestiacp`
 branch (upstream's own history was dropped from this file with #307).
 
 Maintenance rule: every larger change adds an entry to the Unreleased
-section as part of its PR. On release, the section gets the version number.
+section as part of its PR. Only whole minors get a section - point releases are
+interim builds within a cycle and their changes appear under the minor they
+belong to. On release, the section gets that version number and a new Unreleased
+opens above it.
 
 ## v0.14.0 (2026-08-06)
 
 The firewall release: the last subsystem still inherited near-verbatim from HestiaCP, rebuilt on nftables,
-with fail2ban as a removable addon and IPv4/IPv6 parity throughout. v0.13.1 to v0.13.7 were interim builds
-in this cycle; their changes are folded in here.
+with fail2ban as a removable addon and IPv4/IPv6 parity throughout.
 
 ### Added
 
