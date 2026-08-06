@@ -1,0 +1,77 @@
+#!/bin/bash
+# info: remove the fail2ban brute-force protection addon
+# options: [FORCE]
+#
+# example: h-delete-sys-fail2ban
+#
+# Unwires and uninstalls fail2ban: stop the daemon, drop the chains/jumps it created, clear
+# FIREWALL_EXTENSION, re-render the ruleset without the fail2ban block, then purge the package. Our
+# config re-renders from share/, so nothing is kept as saved state; the admin's own jail.local stays.
+# PURGE_DATA=yes also removes /etc/fail2ban leftovers.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+FORCE=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# live component state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "Error: Script can be run executed only by root"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+# guard on the package, not COMPONENT_* - a timed-out install may have ADDON_FAIL2BAN=true but no
+# daemon; the package is the honest signal.
+if ! dpkg -l fail2ban 2> /dev/null | grep -q '^ii' && [ "$FORCE" != 'yes' ]; then
+	echo "ERROR: fail2ban is not installed. Use FORCE=yes to clean up anyway."
+	exit "$E_NOTEXIST"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Stop the daemon, drop the live chains/jumps + our config (banlist records go too).
+source "$HESTIA/func/fail2ban.sh"
+fail2ban_teardown
+
+# Clear the key first so the re-render skips the fail2ban block, then re-render the base ruleset.
+$BIN/h-change-sys-config-value "FIREWALL_EXTENSION" ""
+$BIN/h-update-firewall
+
+# purge the package (its prerm stop is a no-op now - the daemon is already down)
+apt-get -y -qq purge fail2ban > /dev/null 2>&1
+
+if [ "${PURGE_DATA:-}" = "yes" ]; then
+	rm -rf /etc/fail2ban
+	echo "[ * ] PURGE_DATA=yes - /etc/fail2ban removed."
+fi
+
+set_install_component ADDON_FAIL2BAN false
+
+echo "fail2ban has been removed."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Warning" "System" "Removed fail2ban addon."
+log_event "$OK" "$ARGUMENTS"
+
+exit

@@ -41,6 +41,16 @@ section as part of its PR. On release, the section gets the version number.
   is anything but a plain identifier, so no caller loses a line it used to parse.
 
 ### Added
+- **fail2ban is now a removable addon** (#497), like proftpd/clamav/crowdsec. `h-add-sys-fail2ban`
+  installs the package, sets `FIREWALL_EXTENSION` and runs the shared `fail2ban_apply`;
+  `h-delete-sys-fail2ban` stops the daemon, drops every chain it created (via `h-delete-firewall-chain`),
+  clears `FIREWALL_EXTENSION`, re-renders the ruleset without the fail2ban block and purges the package
+  (`PURGE_DATA=yes` also removes `/etc/fail2ban`). A panel toggle sits next to the firewall one in Server
+  Settings. `add` refuses unless `FIREWALL_SYSTEM` is active - the ban action has no ruleset to write to
+  otherwise. No saved state: our config re-renders from `share/`, and the admin's own `jail.local` is
+  never touched. The three flags stay in lockstep - `COMPONENT_ADDON_FAIL2BAN` gates the smoke block,
+  `FIREWALL_EXTENSION` gates the runtime and panel, `$_SESSION` mirrors it - so a removed addon leaves a
+  green smoke run and no live wiring.
 - **A smoke canary for the Roundcube filter's injection defence** (#520). The filter defeats a username
   that smuggles a fake `X-Real-IP:` block only while it matches the real trailing block greedily; a
   Roundcube format change or a filter edit could weaken that silently. The guard replays an injection line

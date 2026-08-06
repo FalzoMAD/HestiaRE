@@ -252,3 +252,19 @@ fail2ban_apply() {
 	systemctl -q enable fail2ban 2> /dev/null
 	systemctl restart fail2ban 2> /dev/null
 }
+
+# Tear down the live wiring (h-delete-sys-fail2ban): stop the daemon, then drop every chain it created.
+# Chain names are captured before the loop, since h-delete-firewall-chain rewrites chains.conf as it goes.
+# KEEP defaults to no here, so the banlist records go too - a human removing the addon wants the bans gone.
+# The caller re-renders the ruleset afterwards. Our config files re-render from share/, so nothing is saved;
+# the admin's own jail.local is never touched.
+fail2ban_teardown() {
+	local chains="$CONF_DIR/firewall/chains.conf" chain
+	systemctl -q disable --now fail2ban 2> /dev/null
+	if [ -f "$chains" ]; then
+		for chain in $(sed -n "s/.*CHAIN='\([^']*\)'.*/\1/p" "$chains"); do
+			"$BIN/h-delete-firewall-chain" "$chain" > /dev/null 2>&1
+		done
+	fi
+	rm -f "$F2B_OURS" "$F2B_WHITELIST"
+}
