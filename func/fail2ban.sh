@@ -85,7 +85,7 @@ fail2ban_gate_web_jail() {
 	local dir jail
 	[ -f "$F2B_OURS" ] || return 0
 	# CrowdSec owns Layer-7 when present, so our web jails would double its http scenarios. Disable them in
-	# any crowdsec-present model - they belong to the fail2ban-only model (#542). Re-enabled below once the
+	# any crowdsec-present model - they belong to the fail2ban-only model. Re-enabled below once the
 	# marker is gone.
 	if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
 		for jail in $F2B_WEB_JAILS; do fail2ban_set_enabled "$jail" 'false'; done
@@ -115,7 +115,7 @@ fail2ban_watch_domain() {
 	[ -n "${FIREWALL_EXTENSION:-}" ] || return 0
 	systemctl -q is-active fail2ban 2> /dev/null || return 0
 	# CrowdSec owns L7 while present - our web jails are disabled then, so never arm them (rearm would flip
-	# a deliberately-off jail back on) (#542).
+	# a deliberately-off jail back on).
 	[ -f "$CONF_DIR/firewall/crowdsec.conf" ] && return 0
 	dir="$(fail2ban_web_logdir)" || return 0
 	for jail in $F2B_WEB_JAILS; do
@@ -273,7 +273,7 @@ fail2ban_apply() {
 	fail2ban_prune_empty_jails
 	systemctl -q enable fail2ban 2> /dev/null
 	systemctl restart fail2ban 2> /dev/null
-	# Non-overlap with CrowdSec (#542): fail2ban now owns brute force, so CrowdSec must drop its SSH
+	# Non-overlap with CrowdSec: fail2ban now owns brute force, so CrowdSec must drop its SSH
 	# scenarios. No-op at install time (crowdsec stage runs later); fires when fail2ban is added to a box
 	# that already has crowdsec.
 	if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then

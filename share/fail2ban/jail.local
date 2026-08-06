@@ -73,12 +73,10 @@ maxretry = 5
 # extended to the rate limiter's 429s: Layer B (nginx limit_req / apache mod_qos) throttles bots on its own
 # and its verdicts must not escalate into firewall bans.
 #
-# findtime/bantime are spelled out rather than inherited from jail.conf: this jail is armed on every domain
-# of every box, so the thresholds are a decision, not a distro default that could shift under us. 10 in 10
-# minutes is safe here because the filter counts only 404s on the botsearch vocabulary (wp-login/signup/
-# admin.php, phpmyadmin, webmail, cgi-bin) - measured: eight ordinary 404s from a link checker, /wp-admin/
-# among them, count zero. maxretry is set conservatively (10) so an odd burst is tolerated; recidive still
-# escalates a client that keeps tripping bans across the day (all-ports, 10 days).
+# Thresholds are spelled out, not inherited from jail.conf: this jail is armed on every domain of every
+# box, so they are a decision rather than a distro default that could shift under us. 10-in-10-minutes is
+# safe because only 404s on the botsearch vocabulary count - measured: eight ordinary 404s from a link
+# checker, /wp-admin/ among them, counted zero. recidive escalates a repeat offender on top.
 [web-botsearch]
 enabled  = true
 filter   = hestia-botsearch
@@ -88,11 +86,9 @@ maxretry = 10
 findtime = 600
 bantime  = 600
 
-# The signature web jails (#531). Like web-botsearch, all three read the per-domain combined access log
-# (logpath is a placeholder, pointed at the configured web system by fail2ban_gate_web_jail) and ban at the
-# WEB chain; recidive escalates repeat offenders on top. Deliberately signature/behaviour based, never rate
-# (that is Layer B's job and its 429s must not escalate). maxretry >= 2 everywhere so nothing bans on a
-# single hit. See share/fail2ban/filter.d/hestia-{badactor,exploit,authprobe}.conf for what each matches.
+# The signature web jails: same log, same placeholder logpath and same WEB chain as web-botsearch.
+# Signature/behaviour based, never rate - that is Layer B's job and its 429s must not escalate.
+# maxretry >= 2 everywhere so nothing bans on a single hit. The filters say what each one matches.
 
 # "Looking for files that should not be here" - secrets/config/info-leak paths, status-agnostic.
 [web-badactor]

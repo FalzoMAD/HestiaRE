@@ -37,19 +37,15 @@ SET6="crowdsec6-blacklists"
 CACHE="$CONF_DIR/firewall/crowdsec.iplist"
 CACHE6="$CONF_DIR/firewall/crowdsec6.iplist"
 
-# The set is rendered from CACHE every time the ruleset is rebuilt, so the cache is the record of truth
-# and has to be written even when the live update fails.
+# The cache is the record of truth (the set is re-rendered from it on every ruleset rebuild), so it is
+# written even when the live update fails.
 #
-# Only local web-tier bans reach L3: origin==crowdsec (manual and CAPI stay L7-only), minus a denylist of
-# scenario tokens. Denylist so advisory-named exploits (vmsa) are not missed; the flip side is a web
-# scenario named with a denied token skips L3.
-#
-# The auth families are denied only while fail2ban is present (FIREWALL_EXTENSION): fail2ban enforces them
-# at L1 in ~1s and cuts live connections, so keeping their CrowdSec decisions off L3 avoids a slower,
-# weaker duplicate. In the crowdsec-only model nothing else would enforce them, so they are let through -
-# best-effort, at the feeder's ~45s latency (mail still has no CrowdSec detection surface; that gap stands).
-# req-limit is denied in EVERY model: a Layer-B rate-limit 429 must never escalate into a firewall ban
-# (CGNAT collateral).
+# Only origin==crowdsec bans reach L3 - manual and CAPI decisions stay L7-only. A denylist, not an
+# allowlist, so advisory-named exploits (vmsa) are not missed; the cost is that a web scenario carrying a
+# denied token skips L3. The auth families are denied only while fail2ban is present: it enforces them in
+# ~1s and cuts live connections, so a CrowdSec duplicate at this timer's ~45s would be slower and weaker.
+# Crowdsec-only lets them through instead - best-effort, and mail has no CrowdSec detection surface at all.
+# req-limit is denied in EVERY model: a Layer-B 429 must never escalate into a firewall ban (CGNAT).
 deny='req-limit'
 [ -n "$FIREWALL_EXTENSION" ] && deny='ssh|ftp|smtp|imap|pop3|dovecot|postfix|exim|mysql|mariadb|postgres|req-limit'
 # One extraction of every kept decision (both families), then split by family below.
@@ -80,7 +76,7 @@ rm -f "$raw"
 fw_set_replace "$SET" "$CACHE"
 fw_set_replace "$SET6" "$CACHE6" 6
 
-# Self-heal the brute-force layer separation (#542): while fail2ban is present it owns brute force, so
+# Self-heal the brute-force layer separation: while fail2ban is present it owns brute force, so
 # CrowdSec's ssh scenarios must stay removed. A manual `cscli hub upgrade` (no automated one runs here) can
 # re-write them and silently restore the double-ban - the D1 dpkg-conffile class - and the model gates only
 # run at explicit transitions. Re-assert on this 45s timer. File-checked, so a no-op (no cscli, no reload)

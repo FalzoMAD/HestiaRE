@@ -36,17 +36,25 @@ if ($action !== "delete") {
 // picks the unban command (fail2ban banlist vs a CrowdSec cscli decision).
 foreach ($ipchain as $value) {
 	$parts = explode("|", $value, 3);
-	if (count($parts) < 2) {
+	if (count($parts) < 2 || $parts[1] === "") {
 		continue;
 	}
 	$src = $parts[0];
 	$v_ip = quoteshellarg($parts[1]);
+	// exec() APPENDS, so a shared $output would grow across the loop and mis-attribute one row's error
+	// to the next. Reset per iteration.
+	$output = [];
 	if ($src === "crowdsec") {
 		exec(HESTIA_CMD . "h-delete-firewall-crowdsec-ban " . $v_ip, $output, $return_var);
 	} else {
-		$v_chain = quoteshellarg($parts[2] ?? "");
+		// A fail2ban ban is keyed by chain; without one there is no row to delete.
+		if (empty($parts[2])) {
+			continue;
+		}
+		$v_chain = quoteshellarg($parts[2]);
 		exec(HESTIA_CMD . "h-delete-firewall-ban " . $v_ip . " " . $v_chain, $output, $return_var);
 	}
 }
+unset($output);
 
 header("Location: /list/firewall/banlist");

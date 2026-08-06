@@ -34,7 +34,7 @@ crowdsec_secure_credentials() {
 	chmod 600 /etc/crowdsec/local_api_credentials.yaml /etc/crowdsec/online_api_credentials.yaml 2> /dev/null || true
 }
 
-# Inverse of crowdsec_disable_capi, for a runtime switch back to the community blocklist (#494).
+# Inverse of crowdsec_disable_capi, for a runtime switch back to the community blocklist.
 crowdsec_enable_capi() {
 	local cfg="/etc/crowdsec/config.yaml" creds="/etc/crowdsec/online_api_credentials.yaml"
 	[ -f "$cfg" ] || return 0
@@ -75,7 +75,7 @@ crowdsec_enable_capi() {
 }
 
 # The live model, DERIVED from artefacts rather than stored: install.conf holds the install recipe,
-# not the current state (#494). mesh wins because it implies local; a box carrying both mesh and an
+# not the current state. mesh wins because it implies local; a box carrying both mesh and an
 # active CAPI is the inconsistent legacy combination the two-flag wizard (<= v0.13.2) allowed, so it
 # reports mesh+capi and the mode command re-normalises it.
 crowdsec_current_mode() {
@@ -97,7 +97,7 @@ crowdsec_current_mode() {
 }
 
 # CrowdSec does SSH brute-force detection only when fail2ban is ABSENT - otherwise fail2ban owns brute
-# force and the two must not double up (#542). Scenario-level, not collection: crowdsecurity/linux bundles
+# force and the two must not double up. Scenario-level, not collection: crowdsecurity/linux bundles
 # crowdsecurity/sshd, so removing the collection would be re-pulled on the next hub op; removing the two ssh
 # scenarios stops detection cleanly and leaves linux's syslog/geoip parsers intact. Durable across a reload
 # and reboot (only a manual `cscli hub upgrade` would restore them). Idempotent. fail2ban presence is read
@@ -156,7 +156,7 @@ crowdsec_apply() {
 		key=$(cscli bouncers add hestia-nginx -o raw 2> /dev/null)
 		[ -n "$key" ] || { echo "CrowdSec: bouncer registration failed" >&2; return 1; }
 		cat > "$keyfile" <<-EOF
-			-- CrowdSec nginx bouncer config (#186). Generated - do not edit.
+			-- CrowdSec nginx bouncer config. Generated - do not edit.
 			return {
 				host = "127.0.0.1", port = 8054,
 				api_key = "$key",
@@ -193,7 +193,7 @@ crowdsec_apply() {
 	# L3: SYN-level ban of the same decisions; non-fatal so L7 stays up if L3 wiring hiccups.
 	crowdsec_l3_setup || echo "CrowdSec: L3 feeder setup reported an issue" >&2
 
-	# Non-overlap with fail2ban (#542): CrowdSec drops its SSH brute-force scenarios when fail2ban is
+	# Non-overlap with fail2ban: CrowdSec drops its SSH brute-force scenarios when fail2ban is
 	# present (fail2ban owns brute force), and CrowdSec now owns Layer-7, so the fail2ban web jails go off.
 	crowdsec_gate_bruteforce
 	if [ "$(sed -n "s/^FIREWALL_EXTENSION='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)" = 'fail2ban' ] \

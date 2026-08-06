@@ -133,6 +133,18 @@ check_socket() {
 # Boot-path guard: iptables-restore is atomic PER TABLE, so one rule matching an ipset that
 # failed to load rejects the whole filter table and the box comes up with policy ACCEPT and no
 # rules at all. Nothing else in the system notices that.
+# check_firewall_backend - the renderer shells /usr/sbin/nft, so without it FIREWALL_SYSTEM is a claim the
+# box cannot honour: every apply fails and the policy check below only SKIPS ("not readable"), which is how
+# a missing backend would pass for a permissions quirk. nftables reached the box as a Recommends of iptables
+# until it was named explicitly, so this is the guard for it never silently going away again.
+check_firewall_backend() {
+	if [ -x "$FW_NFT" ]; then
+		ok "firewall backend present ($FW_NFT)"
+	else
+		no "firewall backend missing" "$FW_NFT not executable - FIREWALL_SYSTEM is set but nothing can apply a ruleset"
+	fi
+}
+
 check_firewall_closed() {
 	local pol
 	pol=$(fw_policy_get INPUT)
@@ -147,7 +159,7 @@ check_firewall_closed() {
 
 # check_firewall_icmpv6 - the inet chain drops by default, so ICMPv6 (NDP/PMTUD) must be explicitly
 # accepted or IPv6 breaks entirely: the box cannot resolve its gateway (neigh INCOMPLETE, ping6 100% loss).
-# Invisible on the v4-only fleet (#534); guard it so the accept can never silently drop out again.
+# Invisible on the v4-only fleet; guard it so the accept can never silently drop out again.
 check_firewall_icmpv6() {
 	local rules
 	rules=$(nft list chain inet hestia input 2> /dev/null) || { skip "firewall ICMPv6 accept (inet hestia not readable)"; return; }
@@ -184,7 +196,7 @@ check_firewall_ruleset_loadable() {
 # where -m multiport is needed), the leaked jump keeps the chain referenced so the following -X fails,
 # and the next flush drops the jump while the teardown loop iterates chains.conf - where the record is
 # already gone. Nothing ever reclaims the chain. It survives as an orphan that no h-list-firewall*
-# command can see. Worth keeping after #496 fixes the cause: an untracked chain is a rule nobody audits.
+# command can see. Worth keeping now the cause is fixed: an untracked chain is a rule nobody audits.
 check_firewall_chains_tracked() {
 	local orphan='' c
 	for c in $(fw_jail_chains_live); do
@@ -198,7 +210,7 @@ check_firewall_chains_tracked() {
 }
 
 # check_firewall_rules_rendered - every active rule must actually render a live rule. fw_rule skips a rule
-# whose source is neither any / ipset / a valid v4 or v6 address (#545 turned a bad source from "breaks the
+# whose source is neither any / ipset / a valid v4 or v6 address (a bad source went from "breaks the
 # whole ruleset" into "silently vanishes"). This is check_firewall_chains_tracked's other direction: assert
 # each non-suspended rules.conf entry has a renderable source, so a corrupted one surfaces here instead of
 # quietly dropping out of the firewall with nothing going red.
@@ -218,6 +230,30 @@ check_firewall_rules_rendered() {
 		ok "firewall rules all render (valid source per entry)"
 	else
 		no "firewall rule with an unrenderable source (silently skipped)" "${bad# }"
+	fi
+}
+
+# check_firewall_ipsets_populated - a rule matching an IP list must match a set that actually has entries.
+# The rules_rendered guard above accepts any ipset: source as renderable; nothing then checks that the list
+# behind it exists. A referenced list with no cache file renders an EMPTY set: the rule is present, the panel
+# shows the list, and it matches nothing - which is exactly how a v6 list read from the v4 cache path blocked
+# traffic for nobody. The cache is the renderer's only input, so its absence is the whole failure.
+check_firewall_ipsets_populated() {
+	local rules="$CONF_DIR/firewall/rules.conf" bad='' line name src
+	[ -f "$rules" ] || { ok "firewall IP lists all populated (no rules)"; return; }
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		parse_object_kv_list "$line"
+		[ "${SUSPENDED:-no}" = 'yes' ] && continue
+		case "$IP" in ipset:*) ;; *) continue ;; esac
+		name="${IP#ipset:}"
+		src="$(fw_set_src "$name")"
+		[ -s "$src" ] || bad="$bad $name(${src##*/})"
+	done < "$rules"
+	if [ -z "$bad" ]; then
+		ok "firewall IP lists referenced by a rule are populated"
+	else
+		no "firewall rule matches an empty IP list (blocks nothing)" "${bad# }"
 	fi
 }
 
@@ -323,7 +359,7 @@ check_fail2ban_roundcube_injection() {
 	fi
 }
 
-# check_fail2ban_web_signatures - the L7 signature jails (#531) defend purely by regex on the access log,
+# check_fail2ban_web_signatures - the L7 signature jails defend purely by regex on the access log,
 # so a filter edit or a log-format drift could silently stop matching a real probe, or start matching benign
 # traffic. Replay a malicious AND a benign line through each DEPLOYED filter with fail2ban-regex and assert
 # match / no-match. The benign cases pin the deliberate decisions: a single ../ is NOT an exploit, and a 403
@@ -379,7 +415,7 @@ check_fail2ban_web_logpath() {
 	fi
 }
 
-# check_firewall_layer_separation - fail2ban and crowdsec must not both cover the same layer (#542):
+# check_firewall_layer_separation - fail2ban and crowdsec must not both cover the same layer:
 # CrowdSec owns Layer-7, so no fail2ban web jail runs while crowdsec is present; fail2ban owns brute force,
 # so CrowdSec's ssh scenarios are removed while fail2ban is present. A regated transition that forgets one
 # direction reintroduces the double-ban - a class-level invariant, not a single symptom.
@@ -697,11 +733,13 @@ fi
 # iptables renderer (#495 re-expresses them against nft), the mechanism below does not.
 if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != 'remote' ]; then
 	echo "-- firewall --"
+	check_firewall_backend
 	check_firewall_closed
 	check_firewall_icmpv6
 	check_firewall_ruleset_loadable
 	check_firewall_chains_tracked
 	check_firewall_rules_rendered
+	check_firewall_ipsets_populated
 fi
 
 # --- Ports implied by the active config ---

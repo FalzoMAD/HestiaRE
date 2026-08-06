@@ -16,7 +16,7 @@
 #
 # One inet table covers IPv4 and IPv6 and loads whether or not v6 is configured. Both families are rendered:
 # service ACCEPTs are family-agnostic, jail bans and the CrowdSec L3 set carry v6 counterparts (f2b6_* /
-# crowdsec6-blacklists), and a rule renders in its source's family (#545). Still, nothing here may REQUIRE a
+# crowdsec6-blacklists), and a rule renders in its source's family. Still, nothing here may REQUIRE a
 # v6 address to exist - the ruleset must load on a v4-only host and with disable_ipv6=1.
 
 FW_NFT="/usr/sbin/nft"
@@ -36,9 +36,7 @@ FW_ADDR6_RE='^[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*(/[0-9]{1,3})?$'
 #                     Batch handling                       #
 #----------------------------------------------------------#
 
-# nft wants a document, not a command stream, and the order callers emit in is not the order the ruleset
-# needs: jail rules are added last but must match first. So a batch buffers into sections and the document
-# is assembled at apply time. Callers are unaffected.
+# Sections, not one buffer: jail rules are added last but must match first (see the header).
 fw_batch_begin() {
 	FW_WORK="$(mktemp -d)"
 	: > "$FW_WORK/exclude"
@@ -55,8 +53,10 @@ fw_batch_discard() {
 	FW_WORK=""
 }
 
-# Append to a section, creating it on first use.
+# Append to a section, creating it on first use. Refuses without an open batch: $FW_WORK is empty then, so
+# the append would land on /$1 at the filesystem root instead of failing.
 fw_sec() {
+	[ -n "${FW_WORK:-}" ] || { echo "firewall: fw_sec '$1' without an open batch" >&2; return 1; }
 	echo "$2" >> "$FW_WORK/$1"
 }
 
@@ -149,8 +149,19 @@ fw_accept_established() {
 	fw_sec base "		ct state established,related accept"
 }
 
+# The box's own addresses. Family from the source, as in fw_rule: `ip saddr <v6>` is invalid nft and would
+# fail the WHOLE document, so a single v6 IP object would leave the box with its last ruleset and no update.
+# IP objects validate as v4 today, which is the only reason the hardcoded spelling never bit.
 fw_accept_source() {
-	fw_sec base "		ip saddr $1 accept"
+	case "$(fw_addr_family "$1")" in
+		4) fw_sec base "		ip saddr $1 accept" ;;
+		6) fw_sec base "		ip6 saddr $1 accept" ;;
+		*)
+			command -v log_event > /dev/null 2>&1 \
+				&& log_event "${E_PARSING:-}" "firewall: own-IP accept skipped, unparseable address '$1'"
+			;;
+	esac
+	return 0
 }
 
 # Loopback by INTERFACE, not by address. `ip saddr 127.0.0.1` is v4-only, and in an inet chain with a drop
@@ -161,13 +172,10 @@ fw_accept_loopback() {
 	fw_sec base "		iif lo accept"
 }
 
-# ICMPv6 is not an optional user rule on a dual-stack host - it is infrastructure, like loopback and
-# conntrack. NDP (neighbour/router discovery) and PMTUD ride on it, and in this inet chain with a drop
-# policy they are NEW packets, so without an explicit accept the box cannot resolve its own gateway and
-# IPv6 breaks entirely (measured on a dual-stack box: ping6 100% loss, gateway neigh INCOMPLETE, until this
-# rule is present). Same class as the loopback-by-address regression above; the v4-only `ip protocol icmp`
-# rule from rules.conf never covered v6. Accept-all rather than narrowing to NDP/PMTUD types: conservative
-# and complete, per-type/rate limiting is a later hardening.
+# Infrastructure, not a user rule: NDP and PMTUD ride on ICMPv6 and are NEW packets under the drop policy,
+# so without this the box cannot resolve its own gateway (measured: ping6 100% loss, neigh INCOMPLETE).
+# rules.conf's `ip protocol icmp` is v4-only and never covered it. Accept-all for now; per-type limiting
+# would be a later hardening.
 fw_accept_icmpv6() {
 	fw_sec base "		meta l4proto ipv6-icmp accept"
 }
@@ -175,10 +183,16 @@ fw_accept_icmpv6() {
 # excludes.conf used to only suppress NEW bans, which left an already-banned admin locked out and gave the
 # file no effect on anything but fail2ban. Rendering it as an accept ahead of the ban matches makes it the
 # recovery primitive it was always meant to be. Skipped when empty so an absent file costs nothing.
+#
+# Both families, because h-add-firewall-exclude accepts both: a v6 entry used to reach fail2ban's ignoreip
+# and nothing else, so the one command documented for releasing a lockout could not release a v6 one.
+# One file, two sets - fw_set_elements filters each to its own family.
 fw_accept_excludes() {
 	[ -s "$CONF_DIR/firewall/excludes.conf" ] || return 0
 	fw_set_declare excludes interval
+	fw_set_declare excludes6 v6interval
 	fw_sec exclude "		ip saddr @excludes accept"
+	fw_sec exclude "		ip6 saddr @excludes6 accept"
 }
 
 fw_return_source() {
@@ -207,8 +221,9 @@ fw_set_jump6() {
 	fw_sec setjump "		ip6 saddr @$(fw_set_id "$2") jump $(fw_chain_id "$1")"
 }
 
-# Set names: nft has a stricter charset than ipset, so dashes become underscores. One mapping, used by
-# every declaration and reference.
+# Set names: dashes become underscores. Measured, not assumed - nft 1.0.6 and 1.1.3 both accept dots and
+# dashes in a set name, so this mapping is cosmetic rather than load-bearing. Left as is because it is the
+# name every existing box already carries; do not widen it into a rename.
 fw_set_id() {
 	echo "${1//-/_}"
 }
@@ -233,6 +248,16 @@ fw_addr_family() {
 	fi
 }
 
+# An IP list's family, from its own record. The cache file, the set type and the match qualifier all have to
+# agree; before this they were hardcoded v4 everywhere, so a v6 list (the panel offers one) wrote
+# <name>.v6.iplist while the renderer read <name>.v4.iplist - an empty set that blocked nothing, silently.
+fw_ipset_family() {
+	case "$(sed -n "s/.*LISTNAME='$1'.*IP_VERSION='\([^']*\)'.*/\1/p" "$CONF_DIR/firewall/ipset.conf" 2> /dev/null | head -1)" in
+		v6) echo 6 ;;
+		*) echo 4 ;;
+	esac
+}
+
 # Where a dynamic set's contents come from. Replacing the whole table would otherwise drop every element,
 # so a set is never the record of truth for itself: it is rendered from a file, the same way the ruleset is
 # rendered from the object model. The CrowdSec feeder and the blocklist refresh each own one of these.
@@ -240,8 +265,14 @@ fw_set_src() {
 	case "$1" in
 		crowdsec-blacklists) echo "$CONF_DIR/firewall/crowdsec.iplist" ;;
 		crowdsec6-blacklists) echo "$CONF_DIR/firewall/crowdsec6.iplist" ;;
-		excludes) echo "$CONF_DIR/firewall/excludes.conf" ;;
-		*) echo "$CONF_DIR/firewall/ipset/$1.v4.iplist" ;;
+		excludes | excludes6) echo "$CONF_DIR/firewall/excludes.conf" ;;
+		*)
+			if [ "$(fw_ipset_family "$1")" = 6 ]; then
+				echo "$CONF_DIR/firewall/ipset/$1.v6.iplist"
+			else
+				echo "$CONF_DIR/firewall/ipset/$1.v4.iplist"
+			fi
+			;;
 	esac
 }
 
@@ -263,11 +294,10 @@ fw_set_elements() {
 	[ -s "$FW_WORK/elem.$id" ] && cat "$FW_WORK/elem.$id"
 	src="$(fw_set_src "$(cat "$FW_WORK/name.$id")")"
 	# A v6 set fed a v4 literal fails the whole document, and vice versa - so filter by the set type.
-	if [ "$(cat "$FW_WORK/set.$id" 2> /dev/null)" = 'v6' ]; then
-		[ -s "$src" ] && grep -oE "$FW_ADDR6_RE" "$src"
-	else
-		[ -s "$src" ] && grep -oE "$FW_ADDR_RE" "$src"
-	fi
+	case "$(cat "$FW_WORK/set.$id" 2> /dev/null)" in
+		v6*) [ -s "$src" ] && grep -oE "$FW_ADDR6_RE" "$src" ;;
+		*) [ -s "$src" ] && grep -oE "$FW_ADDR_RE" "$src" ;;
+	esac
 	return 0
 }
 
@@ -281,6 +311,9 @@ fw_render_sets() {
 		[ -n "$elems" ] && elems=" elements = { $elems };"
 		case "$kind" in
 			interval) echo "	set $id { type ipv4_addr; flags interval; auto-merge;${elems} }" ;;
+			# Blocklists are prefixes, so a v6 list needs interval too; jail and CrowdSec v6 sets hold single
+			# addresses and stay plain, matching what fw_jail_attach creates live.
+			v6interval) echo "	set $id { type ipv6_addr; flags interval; auto-merge;${elems} }" ;;
 			v6) echo "	set $id { type ipv6_addr;${elems} }" ;;
 			*) echo "	set $id { type ipv4_addr;${elems} }" ;;
 		esac
@@ -363,13 +396,19 @@ fw_rule() {
 
 	case "$source" in
 		ipset:*)
-			fw_set_declare "${source#ipset:}" interval
-			expr="ip saddr @$(fw_set_id "${source#ipset:}") "
+			# Per the list's own family: a v6 list in an ipv4_addr set matched nothing and said nothing.
+			if [ "$(fw_ipset_family "${source#ipset:}")" = 6 ]; then
+				fw_set_declare "${source#ipset:}" v6interval
+				expr="ip6 saddr @$(fw_set_id "${source#ipset:}") "
+			else
+				fw_set_declare "${source#ipset:}" interval
+				expr="ip saddr @$(fw_set_id "${source#ipset:}") "
+			fi
 			;;
 		0.0.0.0/0 | ::/0 | '') ;; # match everything: no family qualifier, so the rule covers v4 and v6
 		*)
 			# Family from the source, so a v6 source renders `ip6 saddr` - rendering `ip saddr <v6>` is
-			# invalid nft and would fail the whole document (#545). A malformed source is skipped, not
+			# invalid nft and would fail the whole document. A malformed source is skipped, not
 			# rendered wide open: the add/change validators prevent it, this is defense in depth.
 			case "$(fw_addr_family "$source")" in
 				4) expr="ip saddr $source " ;;
@@ -616,9 +655,12 @@ fw_blocklist_timer_install() {
 
 # One global interval rather than one per list: native sets may reshape the per-object model later, and a
 # per-list schedule would be rework. Written into the unit because a timer cannot read hestia.conf.
+# Re-validated here and not only in the command: the install path feeds it BLOCKLIST_INTERVAL straight out
+# of hestia.conf, and an unvetted value lands in a sed replacement and in a unit file.
 fw_blocklist_interval_apply() {
 	local unit=/etc/systemd/system/hestia-blocklist.timer
 	[ -f "$unit" ] || return 0
+	[[ "$1" =~ ^[0-9]+(s|m|min|h|d|w)$ ]] || return 1
 	sed -i "s|^OnUnitActiveSec=.*|OnUnitActiveSec=${1}|" "$unit"
 	return 0
 }

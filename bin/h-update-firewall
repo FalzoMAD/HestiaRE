@@ -112,7 +112,7 @@ if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
 		fw_return_source hestia-crowdsec "$net"
 	done
 	# v6 backstop, same defense-in-depth as the v4 RFC1918/loopback RETURNs above: loopback, link-local
-	# (NDP rides on it) and ULA must never be L3-dropped by a false-positive decision (#536).
+	# (NDP rides on it) and ULA must never be L3-dropped by a false-positive decision.
 	for net6 in ::1 fe80::/10 fc00::/7; do
 		fw_return_source6 hestia-crowdsec "$net6"
 	done

@@ -39,19 +39,11 @@ is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-# Define variables for ipset configuration
+# Define variables for ipset configuration. No ipset binary probe or install any more: the renderer builds
+# native nft sets, so the ipset package is not on this path at all - it only ever installed a dependency
+# nothing then used.
 ipset_hstobject="$CONF_DIR/firewall/ipset"
-IPSET_BIN="$(command -v ipset)"
 IPSET_PATH="$CONF_DIR/firewall/ipset"
-
-# Ensure ipset is installed
-if [ -z "$IPSET_BIN" ]; then
-	apt-get --quiet --yes install ipset > /dev/null
-	check_result $? "Installing IPset package"
-
-	IPSET_BIN="$(which ipset)"
-	check_result $? "IPset binary not found"
-fi
 
 # Ensure ipset configuration path and master file exist before attempting to parse
 mkdir -p "$IPSET_PATH"
@@ -74,7 +66,7 @@ if [ "$ip_version" != "v4" ] && [ "$ip_version" != "v6" ]; then
 	check_result "$E_INVALID" "invalid ip version, valid: (v4|v6)"
 fi
 
-if ! echo "$data_source" | egrep -q '^(https?|script|file):'; then
+if ! echo "$data_source" | grep -Eq '^(https?|script|file):'; then
 	check_result "$E_INVALID" "invalid ipset source, valid: (http[s]://|script:|file:)"
 fi
 
@@ -98,7 +90,7 @@ if [ ! -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ] || [ "$refresh" = "yes" ]; then
 		# Advanced: execute script with the same basename for aditional pre-processing
 		# ex:
 		if [ -x "${IPSET_PATH}/${IPSET_FILE}.sh" ]; then
-			preprocess_output="$(cat "$iplist_tempfile" | setpriv --clear-groups --reuid nobody --regid nogroup -- ${IPSET_PATH}/${IPSET_FILE}.sh "$ip_name" "$iplist_tempfile")"
+			preprocess_output="$(cat "$iplist_tempfile" | setpriv --clear-groups --reuid nobody --regid nogroup -- "${IPSET_PATH}/${IPSET_FILE}.sh" "$ip_name" "$iplist_tempfile")"
 			check_result $? "Preprocessing script failed (${IPSET_FILE}.sh)"
 			[[ "$preprocess_output" ]] && echo "$preprocess_output" > "$iplist_tempfile"
 		fi
@@ -109,7 +101,7 @@ if [ ! -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ] || [ "$refresh" = "yes" ]; then
 		# ex: compiling a ip list from multiple sources on demand
 		if [ -x "${data_source#script:}" ]; then
 
-			setpriv --clear-groups --reuid nobody --regid nogroup -- ${data_source#script:} "$ip_name" > "$iplist_tempfile"
+			setpriv --clear-groups --reuid nobody --regid nogroup -- "${data_source#script:}" "$ip_name" > "$iplist_tempfile"
 			check_result $? "Running custom ip list update script"
 
 		fi
@@ -140,9 +132,6 @@ fi
 # Apply to the live nft set, if a rule references this list yet. An unreferenced list has no set in the
 # table by design: the renderer declares a set only where a rule matches it, and it fills it from this
 # cache file. So the cache is written first and the kernel is updated second, never the other way round.
-inet_ver="inet"
-[ "$ip_version" == "v6" ] && inet_ver="inet6"
-
 if [ -z "$iplist_size" ]; then
 	if [ -f "${IPSET_PATH}/${IPSET_FILE}.iplist" ]; then
 		iplist_size="$(grep -cEv '^(#|$)' < "${IPSET_PATH}/${IPSET_FILE}.iplist")"
@@ -156,7 +145,11 @@ if ! [[ "$iplist_size" =~ ^[0-9]+$ ]] || [[ "$iplist_size" -le 0 ]]; then
 	check_result "$E_INVALID" "Invalid or empty iplist: iplist_size=$iplist_size"
 fi
 
-fw_set_replace "$ip_name" "${IPSET_PATH}/${IPSET_FILE}.iplist"
+# Family passed explicitly: on a first add the ipset.conf record does not exist yet, so the renderer's
+# lookup has nothing to read - and loading v6 prefixes with the v4 filter yields an empty set, silently.
+fw_family=4
+[ "$ip_version" = 'v6' ] && fw_family=6
+fw_set_replace "$ip_name" "${IPSET_PATH}/${IPSET_FILE}.iplist" "$fw_family"
 
 # Generating timestamp
 time_n_date=$(date +'%T %F')

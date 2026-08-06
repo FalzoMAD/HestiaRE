@@ -58,8 +58,8 @@ fi
 
 source "$HESTIA/func/crowdsec.sh"
 
-# Hold the #120 web-model freeze: crowdsec_remove_nginx rewrites nginx config + reloads it, so a concurrent
-# h-add/delete-sys-nginx must not race it (#528). Reentrant - h-delete-sys-nginx's two-step teardown, which
+# Hold the web-model freeze: crowdsec_remove_nginx rewrites nginx config + reloads it, so a concurrent
+# h-add/delete-sys-nginx must not race it. Reentrant - h-delete-sys-nginx's two-step teardown, which
 # already holds the lock when it calls this, passes straight through.
 web_lock_acquire || exit "$E_INUSE"
 
@@ -91,7 +91,7 @@ fi
 set_install_component ADDON_CROWDSEC false
 
 # CrowdSec no longer owns L7 (marker gone), so if fail2ban is present its web jails come back on - the
-# fail2ban-only model regains its Layer-7 coverage (#542).
+# fail2ban-only model regains its Layer-7 coverage.
 if [ "$FIREWALL_EXTENSION" = 'fail2ban' ] && [ -f /etc/fail2ban/jail.d/hestia.local ]; then
 	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
 	source "$HESTIA/func/fail2ban.sh"
