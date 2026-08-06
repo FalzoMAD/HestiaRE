@@ -364,8 +364,21 @@ fw_rule() {
 			fw_set_declare "${source#ipset:}" interval
 			expr="ip saddr @$(fw_set_id "${source#ipset:}") "
 			;;
-		0.0.0.0/0 | '') ;;
-		*) expr="ip saddr $source " ;;
+		0.0.0.0/0 | ::/0 | '') ;; # match everything: no family qualifier, so the rule covers v4 and v6
+		*)
+			# Family from the source, so a v6 source renders `ip6 saddr` - rendering `ip saddr <v6>` is
+			# invalid nft and would fail the whole document (#545). A malformed source is skipped, not
+			# rendered wide open: the add/change validators prevent it, this is defense in depth.
+			case "$(fw_addr_family "$source")" in
+				4) expr="ip saddr $source " ;;
+				6) expr="ip6 saddr $source " ;;
+				*)
+					command -v log_event > /dev/null 2>&1 \
+						&& log_event "${E_PARSING:-}" "firewall rule skipped: unparseable source '$source'"
+					return 0
+					;;
+			esac
+			;;
 	esac
 
 	if [ "$proto" = 'icmp' ] || [ "$port_val" = '0' ]; then
