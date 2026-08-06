@@ -84,11 +84,21 @@ fail2ban_web_logdir() {
 fail2ban_gate_web_jail() {
 	local dir jail
 	[ -f "$F2B_OURS" ] || return 0
+	# CrowdSec owns Layer-7 when present, so our web jails would double its http scenarios. Disable them in
+	# any crowdsec-present model - they belong to the fail2ban-only model (#542). Re-enabled below once the
+	# marker is gone.
+	if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
+		for jail in $F2B_WEB_JAILS; do fail2ban_set_enabled "$jail" 'false'; done
+		return 0
+	fi
 	if ! dir="$(fail2ban_web_logdir)"; then
 		for jail in $F2B_WEB_JAILS; do fail2ban_set_enabled "$jail" 'false'; done
 		return 0
 	fi
 	for jail in $F2B_WEB_JAILS; do
+		# Enable (a prior crowdsec-present state may have disabled them); prune_empty_jails later turns off
+		# any whose log glob is still empty (no domains yet), and watch_domain re-arms on the first domain.
+		fail2ban_set_enabled "$jail" 'true'
 		awk -v jail="[$jail]" -v path="$dir/*.log" '
 			$0 == jail { inj = 1; print; next }
 			/^\[/ { inj = 0 }
@@ -104,6 +114,9 @@ fail2ban_watch_domain() {
 	local verb="$1" domain="$2" dir jail
 	[ -n "${FIREWALL_EXTENSION:-}" ] || return 0
 	systemctl -q is-active fail2ban 2> /dev/null || return 0
+	# CrowdSec owns L7 while present - our web jails are disabled then, so never arm them (rearm would flip
+	# a deliberately-off jail back on) (#542).
+	[ -f "$CONF_DIR/firewall/crowdsec.conf" ] && return 0
 	dir="$(fail2ban_web_logdir)" || return 0
 	for jail in $F2B_WEB_JAILS; do
 		case "$verb" in
@@ -260,6 +273,14 @@ fail2ban_apply() {
 	fail2ban_prune_empty_jails
 	systemctl -q enable fail2ban 2> /dev/null
 	systemctl restart fail2ban 2> /dev/null
+	# Non-overlap with CrowdSec (#542): fail2ban now owns brute force, so CrowdSec must drop its SSH
+	# scenarios. No-op at install time (crowdsec stage runs later); fires when fail2ban is added to a box
+	# that already has crowdsec.
+	if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
+		# shellcheck source=/usr/local/hestia/func/crowdsec.sh
+		declare -F crowdsec_gate_bruteforce > /dev/null 2>&1 || source "$HESTIA/func/crowdsec.sh"
+		crowdsec_gate_bruteforce
+	fi
 }
 
 # Tear down the live wiring (h-delete-sys-fail2ban): stop the daemon, then drop every chain it created.

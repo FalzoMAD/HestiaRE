@@ -96,6 +96,29 @@ crowdsec_current_mode() {
 	fi
 }
 
+# CrowdSec does SSH brute-force detection only when fail2ban is ABSENT - otherwise fail2ban owns brute
+# force and the two must not double up (#542). Scenario-level, not collection: crowdsecurity/linux bundles
+# crowdsecurity/sshd, so removing the collection would be re-pulled on the next hub op; removing the two ssh
+# scenarios stops detection cleanly and leaves linux's syslog/geoip parsers intact. Durable across a reload
+# and reboot (only a manual `cscli hub upgrade` would restore them). Idempotent. fail2ban presence is read
+# from the FILE - the installer shell never sees the FIREWALL_EXTENSION it just wrote.
+CS_BF_SCENARIOS="crowdsecurity/ssh-bf crowdsecurity/ssh-slow-bf"
+crowdsec_gate_bruteforce() {
+	command -v cscli > /dev/null 2>&1 || return 0
+	local f2b changed='no' s f
+	f2b="$(sed -n "s/^FIREWALL_EXTENSION='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)"
+	for s in $CS_BF_SCENARIOS; do
+		f="/etc/crowdsec/scenarios/${s##*/}.yaml"
+		if [ "$f2b" = 'fail2ban' ]; then
+			[ -e "$f" ] && { cscli scenarios remove "$s" > /dev/null 2>&1; changed='yes'; }
+		else
+			[ -e "$f" ] || { cscli scenarios install "$s" > /dev/null 2>&1; changed='yes'; }
+		fi
+	done
+	[ "$changed" = 'yes' ] && systemctl reload crowdsec > /dev/null 2>&1
+	return 0
+}
+
 # Install + wire CrowdSec detection and the nginx Layer-A bouncer. Safe to re-run.
 crowdsec_apply() {
 	local share="$HESTIA/share/crowdsec"
@@ -169,6 +192,17 @@ crowdsec_apply() {
 
 	# L3: SYN-level ban of the same decisions; non-fatal so L7 stays up if L3 wiring hiccups.
 	crowdsec_l3_setup || echo "CrowdSec: L3 feeder setup reported an issue" >&2
+
+	# Non-overlap with fail2ban (#542): CrowdSec drops its SSH brute-force scenarios when fail2ban is
+	# present (fail2ban owns brute force), and CrowdSec now owns Layer-7, so the fail2ban web jails go off.
+	crowdsec_gate_bruteforce
+	if [ "$(sed -n "s/^FIREWALL_EXTENSION='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)" = 'fail2ban' ] \
+		&& [ -f /etc/fail2ban/jail.d/hestia.local ]; then
+		# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+		declare -F fail2ban_gate_web_jail > /dev/null 2>&1 || source "$HESTIA/func/fail2ban.sh"
+		fail2ban_gate_web_jail
+		systemctl reload-or-restart fail2ban > /dev/null 2>&1
+	fi
 
 	echo "CrowdSec: applied (nginx front, L7 bouncer hestia-nginx + L3 set feeder)."
 }

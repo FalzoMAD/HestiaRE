@@ -90,6 +90,16 @@ fi
 
 set_install_component ADDON_CROWDSEC false
 
+# CrowdSec no longer owns L7 (marker gone), so if fail2ban is present its web jails come back on - the
+# fail2ban-only model regains its Layer-7 coverage (#542).
+if [ "$FIREWALL_EXTENSION" = 'fail2ban' ] && [ -f /etc/fail2ban/jail.d/hestia.local ]; then
+	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
+	source "$HESTIA/func/fail2ban.sh"
+	fail2ban_gate_web_jail
+	fail2ban_prune_empty_jails
+	systemctl reload-or-restart fail2ban > /dev/null 2>&1
+fi
+
 # per-domain fragments (nginx.crowdsec.conf / crowdsec.apache2.conf) stay as saved state -
 # inert without the http-block zones, restored by a re-add.
 
