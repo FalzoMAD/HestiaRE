@@ -14,8 +14,10 @@
 # ruleset needs. One `nft -f` swaps the whole table, so there is no moment with an open policy or an
 # empty chain - which is what the iptables renderer could not avoid.
 #
-# One inet table covers IPv4 and IPv6 and loads whether or not v6 is configured. Only v4 is rendered
-# today; nothing here may require a v6 address to exist.
+# One inet table covers IPv4 and IPv6 and loads whether or not v6 is configured. Both families are rendered:
+# service ACCEPTs are family-agnostic, jail bans and the CrowdSec L3 set carry v6 counterparts (f2b6_* /
+# crowdsec6-blacklists), and a rule renders in its source's family (#545). Still, nothing here may REQUIRE a
+# v6 address to exist - the ruleset must load on a v4-only host and with disable_ipv6=1.
 
 FW_NFT="/usr/sbin/nft"
 FW_FAMILY="inet"
