@@ -10,6 +10,19 @@ section as part of its PR. On release, the section gets the version number.
 ## Unreleased
 
 ### Fixed
+- **Changing the panel port left the new port firewalled shut** (#548). `h-change-sys-port` asked
+  `h-restart-service` for the service `iptables`, but that command recognises the firewall by comparing
+  against `FIREWALL_SYSTEM` - so once the value became `nftables` the literal stopped matching, fell through
+  to `systemctl restart iptables`, failed, and aborted the command *after* writing the new port into
+  `rules.conf` and *before* applying it. Same config-VALUE-rename class as the six sites fixed with #495;
+  this call site was missed. Found by sweeping every caller rather than the ones in the diff.
+- **`iptables` and `ipset` are no longer installed** (#548). Nothing calls either binary since the renderer
+  moved to native nft sets - verified across `bin/`, `func/`, `share/`, `web/` and the installer. Only
+  `nftables` is installed now. `fw_legacy_teardown` still retires an older box's iptables ruleset and is
+  guarded on the binary, so it is simply a no-op on a fresh install; `docker.io` depends on iptables itself.
+- **A scheduled cron-job restore queued a command that does not exist** (#548).
+  `h-schedule-user-restore-restic` wrote `h-restore-cron-restic` into `backup.pipe`; the command is
+  `h-restore-cron-job-restic`, so the queue entry failed silently while the restore looked scheduled.
 - **The installer never named `nftables`** (#548). The renderer shells `/usr/sbin/nft`, but the package
   only ever reached the box as a *Recommends* of `iptables`. Debian 12/13 base images already carry it,
   Ubuntu 24.04/26.04 do not - measured: `apt-get -s --no-install-recommends install iptables ipset` pulls

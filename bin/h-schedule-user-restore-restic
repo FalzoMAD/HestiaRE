@@ -59,7 +59,7 @@ else
 		is_database_format_valid "$value" 'value'
 		echo "$BIN/h-restore-database-restic '$user' '$snapshot' '$value' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe
 	elif [ "$object" = "cron" ]; then
-		echo "$BIN/h-restore-cron-restic '$user' '$snapshot' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe
+		echo "$BIN/h-restore-cron-job-restic '$user' '$snapshot' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe
 	else
 		check_result "$E_INVALID" "Not supported"
 	fi

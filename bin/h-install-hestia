@@ -120,7 +120,7 @@ install_base() {
 	hestia_apt -y install \
 		acl at bc bsdmainutils bsdutils ca-certificates \
 		cron curl dnsutils e2fslibs e2fsprogs expect flex ftp \
-		git gnupg idn2 imagemagick ipset iptables jq nftables \
+		git gnupg idn2 imagemagick jq nftables \
 		lsb-release lsof mc net-tools openssh-server quota \
 		rrdtool rsyslog sysstat unzip util-linux vim-common \
 		wget whois xxd zip zstd bubblewrap restic sudo \
@@ -542,12 +542,14 @@ install_mail() {
 # ════════════════════════════════════════════════════════════════════════════
 install_security() {
 	[ -f "$CONF_DIR/.done.security" ] && { echo "[ skip ] security already configured"; return 0; }
-	# nftables is named explicitly because it IS the backend: func/firewall.sh renders one inet table and
-	# shells /usr/sbin/nft. It arrived only as a Recommends of iptables, which Debian's base image happens to
-	# satisfy already and Ubuntu's does not - so the whole firewall hung on apt's default of honouring
-	# Recommends. iptables stays for fw_legacy_teardown, which retires an older box's ruleset.
-	echo "[ * ] Installing security packages (nftables, iptables, ipset)..."
-	hestia_apt -y install nftables iptables ipset
+	# nftables and nothing else: it IS the backend (func/firewall.sh renders one inet table and shells
+	# /usr/sbin/nft), and it used to arrive only as a Recommends of iptables - which Debian's base image
+	# happens to satisfy and Ubuntu's does not. iptables and ipset are gone with the old renderer: no code
+	# calls either binary any more. fw_legacy_teardown still retires an older box's iptables ruleset, but it
+	# is guarded on the binary, so on a fresh install it is simply a no-op. docker.io depends on iptables
+	# itself, so the addon still gets it.
+	echo "[ * ] Installing security packages (nftables)..."
+	hestia_apt -y install nftables
 	wcv "FIREWALL_SYSTEM" "nftables"
 
 	if is_on "${COMPONENT_ADDON_FAIL2BAN:-}"; then
