@@ -64,11 +64,21 @@ old_uid=$(cut -f 3 -d : $tmpdir/passwd)
 
 domains=""
 parse_object_kv_list $(cat $tmpdir/backup.conf)
+# Split on commas without leaking IFS: it stayed ',' for the rest of the script, so every later
+# word split collapsed - that is how the generated nginx conf came out wrong. And iterate the
+# array itself: "$domains" is element 0, so a user with several domains had all but the first
+# silently skipped.
+OLD_IFS="$IFS"
 IFS=','
-read -a domains_array <<< "$web"
-read -a domains <<< "$WEB"
-for domain in $domains; do
-	if [[ "${IFS}${domains_array[*]}${IFS}" =~ "${IFS}${domain}${IFS}" || "$web" = '*' ]]; then
+read -r -a domains_array <<< "$web"
+read -r -a domains <<< "$WEB"
+IFS="$OLD_IFS"
+requested=",$(
+	IFS=','
+	echo "${domains_array[*]}"
+),"
+for domain in "${domains[@]}"; do
+	if [[ "$web" = '*' || "$requested" == *",${domain},"* ]]; then
 		# Cleanup previous domain keys
 		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME LETSENCRYPT FTP_USER FTP_MD5 BACKEND PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT U_DISK CUSTOM_DOCROOT CUSTOM_PHPROOT
 

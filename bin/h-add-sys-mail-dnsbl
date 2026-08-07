@@ -1,0 +1,69 @@
+#!/bin/bash
+# info: add a dnsbl host for exim to check
+# options: HOST [RESTART]
+#
+# example: h-add-sys-mail-dnsbl zen.spamhaus.org
+#
+# This function adds a DNSBL server exim checks incoming mail against.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+host=$1
+restart=${2-yes}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source "$HESTIA/func/main.sh"
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# The live file exim reads per message (exim4.conf.template: readfile /etc/exim4/dnsbl.conf).
+# Edited in place rather than through a shadow copy in CONF_DIR: exim reads only this path, and a
+# second master would need syncing in both directions. Preserving it belongs to the update path (#206).
+DNSBL_CONF="/etc/exim4/dnsbl.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'HOST [RESTART]'
+# A host, optionally with exim's "!=" result filter (zen.spamhaus.org!=127.0.0.10). The value goes into
+# a colon-joined exim dnslists expression, so anything else here becomes a broken ACL rather than a
+# rejected argument.
+if [[ ! "$host" =~ ^[a-zA-Z0-9.-]+(!=[0-9.,]+)?$ ]]; then
+	check_result "$E_INVALID" "invalid dnsbl host format :: $host"
+fi
+is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+touch "$DNSBL_CONF"
+if grep -qxF "$host" "$DNSBL_CONF"; then
+	check_result "$E_EXISTS" "dnsbl host $host already exists"
+fi
+
+echo "$host" >> "$DNSBL_CONF"
+chmod 644 "$DNSBL_CONF"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+"$BIN/h-log-action" "system" "Info" "Mail" "DNSBL host added (Host: $host)."
+log_event "$OK" "$ARGUMENTS"
+
+# Restart exim so the ACL picks up the new list
+"$BIN/h-restart-service" "$MAIL_SYSTEM" "$restart"
+
+exit

@@ -12,7 +12,72 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **DNSBL management from the CLI** (#555, upstream #5464). Exim has always consulted
+  `/etc/exim4/dnsbl.conf`, but the list could only be edited by hand.
+  `h-add-sys-mail-dnsbl` / `h-delete-sys-mail-dnsbl` / `h-list-sys-mail-dnsbl` (with `v-*` aliases, since
+  upstream ships the same commands) manage it, validate the host against exim's own grammar - including
+  the `host!=127.0.0.10` result filter - and restart exim. Unlike upstream there is no shadow copy under
+  `conf/` and no revert-to-default comparison: exim reads exactly one path, and a second master would need
+  syncing both ways. Preserving admin edits across an update belongs to #206. Deletion uses `grep -vxF`,
+  so a host is matched whole and literally - removing `zen.spamhaus.org!=127.0.0.10` leaves a plain
+  `zen.spamhaus.org` entry intact, verified live.
+
+### Changed
+
+- **Scanner bans drop, credential bans still reject** (#555). The renderer gave every jail chain the same
+  `reject with icmpx type port-unreachable`. Upstream #5442 switches wholesale to `drop`; that is right for
+  scanners and wrong for anything with a login behind it, where a silent black hole hides the far more
+  common case of a phone retrying a stale mail password. The verdict is per chain now: only the
+  scanner-signature jails drop. That needed a chain split, because seven jails shared `WEB` - three pure
+  signature jails (`web-botsearch`, `web-badactor`, `web-exploit`) alongside the roundcube, SnappyMail and
+  phpMyAdmin logins. The three moved to a new `WEBSCAN` chain on the same ports; everything else, including
+  `web-authprobe` - whose own high `maxretry` exists for humans behind shared NAT - and `RECIDIVE`, keeps
+  rejecting. Rendered document verified against nft 1.1.3: both chains match 80/443, with different
+  verdicts.
+
 ### Fixed
+
+- **Backup retention could delete another user's archives** (#556, upstream #4918). The retention list was
+  built with `grep "^$user\." | grep ".tar"`, so listing user `foo` also matched `foo.bar.*.tar` -
+  measured on a fixture: four files returned instead of two, including another user's backups and an
+  unrelated `.tar.gz`. Since that list drives the rotation delete, `foo` hitting its retention limit
+  removed `foo.bar`'s backups. Now anchored on the actual name shape (`user.YYYY-...tar`). New users
+  cannot contain a dot, but the general user validator allows one, so a user restored from HestiaCP can.
+  Applied to all seven affected backends - upstream fixed three, we also have sftp and rclone. The
+  Backblaze path filters server-side by prefix and is left alone: the same class may apply, but it cannot
+  be verified without an account.
+- **The services list showed database servers that are not installed** (#556). `h-add-database-host`
+  writes the type into `DB_SYSTEM` for a **remote** host too, so registering a remote PostgreSQL left a
+  permanent `postgresql - stopped` row with panel buttons for a unit that does not exist. Reproduced and
+  fixed live. The check fails open: a row is dropped only on a definite "no such unit", so an unexpected
+  `systemctl` answer can never hide a running service.
+
+- **The manual-ban chain picker offered a chain that no longer exists and hid two that do** (#555). It
+  still listed `DNS` although bind9 is gone, and omitted `RECIDIVE`. Now lists the real set including
+  `WEBSCAN`.
+
+- **Restic restored only the first domain or database of a multi-object user** (#555, upstream #4987,
+  #4986, #5100-adjacent). All three selective restore commands split a comma-separated list into a bash
+  array and then iterated `$domains` rather than `"${domains[@]}"`, which expands to element 0 alone -
+  measured: 1 of 3 domains processed, the rest silently skipped with a success exit. The mail command was
+  broken differently: it never set `IFS` at all, so the whole list stayed one element and it tried to
+  restore a domain literally named `a.de,b.de,c.de`. On top of that, web and database set `IFS=','`
+  globally and never restored it, so every later word split in those scripts collapsed to a single word -
+  which is what produced the malformed nginx configuration upstream reported. Splitting is now scoped and
+  `IFS` restored immediately, membership is tested against an explicitly joined list, and the loops
+  iterate the arrays. Verified across five selection cases per command plus a post-split word-split check.
+- **A Let's Encrypt account whose user.key no longer matched failed forever** (#555, upstream #5294).
+  `h-add-letsencrypt-user` exits early whenever `KID` is set, so a key replaced by a restore left the
+  stored modulus stale and every later issuance was signed with a key the ACME account does not know -
+  permanently, with no path back. The modulus is compared against the key on disk now and the account is
+  re-registered on a mismatch; the `le.conf` rewrite also refreshes `EXPONENT`/`MODULUS`/`THUMB` instead
+  of only `KID`, which is what left them stale in the first place.
+- **The panel's default organisation could not pass its own validator** (#555, upstream #5483). Generating
+  a self-signed certificate with the shipped defaults failed with `invalid org format :: MyCompany Inc.` -
+  `is_common_format_spaces_valid` requires an alphanumeric last character, and our validator is stricter
+  than upstream's here. Default is now `MyCompany Inc`.
 
 - **The firewall list showed rules in the reverse of the order they are evaluated** (#554/#555, upstream
   #5080/#5466). The renderer emits by descending RULE id into one chain and nft takes the first match, so

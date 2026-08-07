@@ -418,15 +418,27 @@ fw_jail_set_for() {
 	esac
 }
 
+# Ban verdict per chain. Scanner-signature jails have no credential prompt behind them, so nobody
+# legitimate lands there and a silent drop costs the attacker time and us the ICMP. Every other chain
+# guards a login - a phone with a stale mail password is the normal way in - and there a visible
+# failure is what lets the owner notice instead of seeing a black hole.
+fw_jail_verdict() {
+	case "$1" in
+		WEBSCAN) echo "drop" ;;
+		*) echo "reject with icmpx type port-unreachable" ;;
+	esac
+}
+
 fw_jail_rebuild() {
-	local chain="$1" protocol="$2" port_val="$3" proto
+	local chain="$1" protocol="$2" port_val="$3" proto verdict
 	proto="$(echo "$protocol" | tr '[:upper:]' '[:lower:]')"
+	verdict="$(fw_jail_verdict "$chain")"
 	fw_set_declare "$(fw_jail_set "$chain")"
 	fw_set_declare "$(fw_jail_set6 "$chain")" v6
-	fw_sec jail "		ip saddr @$(fw_jail_set "$chain") ${proto} dport $(fw_port_expr "$port_val") reject with icmpx type port-unreachable"
+	fw_sec jail "		ip saddr @$(fw_jail_set "$chain") ${proto} dport $(fw_port_expr "$port_val") $verdict"
 	# Unconditional: an ip6 rule and an ipv6_addr set load with no v6 address and with ipv6 off, so nothing is
 	# presupposed. Needed because the service accepts carry no family qualifier - v6 reaches the jailed ports.
-	fw_sec jail "		ip6 saddr @$(fw_jail_set6 "$chain") ${proto} dport $(fw_port_expr "$port_val") reject with icmpx type port-unreachable"
+	fw_sec jail "		ip6 saddr @$(fw_jail_set6 "$chain") ${proto} dport $(fw_port_expr "$port_val") $verdict"
 }
 
 

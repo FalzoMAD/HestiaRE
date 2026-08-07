@@ -18,7 +18,9 @@ $v_email = "";
 $v_country = "US";
 $v_state = "California";
 $v_locality = "San Francisco";
-$v_org = "MyCompany Inc.";
+// No trailing dot: is_common_format_spaces_valid requires an alphanumeric last character,
+// so the old default could not pass our own validator.
+$v_org = "MyCompany Inc";
 $v_org_unit = "IT";
 
 // Back uri

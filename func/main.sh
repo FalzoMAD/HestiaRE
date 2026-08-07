@@ -660,9 +660,14 @@ update_object_value() {
 # Add object key
 add_object_key() {
 	row=$(grep -n "$2='$3'" "$(_object_conf "$1")")
-	lnr=$(echo $row | cut -f 1 -d ':')
-	object=$(echo $row | sed "s/^$lnr://")
-	if [ -z "$(echo $object | grep $4=)" ]; then
+	lnr=$(echo "$row" | cut -f 1 -d ':')
+	object=$(echo "$row" | sed "s/^$lnr://")
+	# Bail on an empty line number or anchor key: sed without an address edits EVERY line, so a
+	# lookup that found nothing would inject the key into every record in the file.
+	if [[ -z "$lnr" || -z "$5" ]]; then
+		return 1
+	fi
+	if [ -z "$(echo "$object" | grep "$4=")" ]; then
 		local varname="${4#\$}"
 		old="${!varname}"
 		sed -i "$lnr s/$5='/$4='' $5='/" "$(_object_conf "$1")"

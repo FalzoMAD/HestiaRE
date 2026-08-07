@@ -70,7 +70,7 @@ maxretry = 5
 [web-botsearch]
 enabled  = true
 filter   = hestia-botsearch
-action   = hestia[name=WEB]
+action   = hestia[name=WEBSCAN]
 logpath  = /var/log/apache2/domains/*.log
 maxretry = 10
 findtime = 600
@@ -84,7 +84,7 @@ bantime  = 600
 [web-badactor]
 enabled  = true
 filter   = hestia-badactor
-action   = hestia[name=WEB]
+action   = hestia[name=WEBSCAN]
 logpath  = /var/log/apache2/domains/*.log
 maxretry = 2
 findtime = 600
@@ -94,7 +94,7 @@ bantime  = 3600
 [web-exploit]
 enabled  = true
 filter   = hestia-exploit
-action   = hestia[name=WEB]
+action   = hestia[name=WEBSCAN]
 logpath  = /var/log/apache2/domains/*.log
 maxretry = 2
 findtime = 600

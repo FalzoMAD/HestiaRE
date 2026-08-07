@@ -154,6 +154,9 @@ function syshealth_repair_mail_account_config() {
 	system="mail_accounts"
 	sanitize_config_file "$system"
 	get_object_values "mail/$domain" 'ACCOUNT' "$account"
+	# Anchor the first insert, as the web and mail siblings do: without it $prev carries over from a
+	# previous call, and add_object_key would anchor the new key on some other object's last field.
+	prev="ACCOUNT"
 	for key in $known_keys; do
 		if [ -z "${!key}" ]; then
 			add_object_key "mail/$domain" 'ACCOUNT' "$account" "$key" "$prev"
