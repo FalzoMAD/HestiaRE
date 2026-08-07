@@ -312,4 +312,77 @@ migrate_data_layout() {
 
 	# restrict the shell-profile snippet to root on existing installs (was world-readable)
 	[ -f /etc/profile.d/hestia.sh ] && chmod 600 /etc/profile.d/hestia.sh
+
+	# move /proc hardening off the @reboot cron and into fstab (see proc_hardening_apply);
+	# idempotent, so a box already converted just gets its gid re-asserted
+	proc_hardening_apply || true
+}
+
+# ── /proc hardening (hidepid) ───────────────────────────────────────────────
+# hidepid stops one panel user from seeing another's processes.
+#
+# Persisted through a systemd unit, deliberately NOT through /etc/fstab: the
+# fstab generator skips the API filesystems, so a "proc /proc proc ..." line there
+# produces no mount unit and is ignored at boot. Verified on the fleet - running
+# systemd-fstab-generator against an fstab carrying that line emits -.mount,
+# boot.mount and media-cdrom0.mount, never proc.mount. It would have looked correct
+# and done nothing. It also keeps us out of a file whose layout differs per host.
+# The @reboot cron this replaced ran after most services, leaving open exactly the
+# window hidepid exists to close.
+#
+# The gid= exemption is load-bearing, not cosmetic. systemd upstream treats hidepid on
+# /proc as an unsupported configuration: with PIDs hidden, the D-Bus credential check
+# behind a user-scope request fails and rootless container runtimes abort with
+# "Interactive authentication required" (moby#45014). Members of the exemption group
+# keep a full /proc; everyone else stays hidden.
+PROC_VISIBLE_GROUP='procvis'
+PROC_HARDENING_UNIT='hestia-proc-hardening.service'
+
+proc_visible_gid() { getent group "$PROC_VISIBLE_GROUP" 2> /dev/null | cut -d: -f3; }
+
+# Re-runnable on purpose: this is also how a later "enable Docker" re-asserts the gid
+# after the exemption group was (re)created. Returns 0 when hidepid is not applicable
+# (container), so callers cannot tell that apart from success by exit code alone.
+proc_hardening_apply() {
+	local gid opts src="${HESTIA:-/usr/local/hestia}/share/security/systemd/$PROC_HARDENING_UNIT"
+	local dst="/etc/systemd/system/$PROC_HARDENING_UNIT"
+
+	getent group "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 \
+		|| groupadd --system "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 \
+		|| { echo "Warning: cannot create group $PROC_VISIBLE_GROUP - skipping /proc hardening" >&2; return 1; }
+
+	gid="$(proc_visible_gid)"
+	[ -n "$gid" ] || { echo "Warning: cannot resolve gid of $PROC_VISIBLE_GROUP" >&2; return 1; }
+
+	# Numeric gid: the group is created per host, so a name would resolve to a different
+	# id on a restored box - silently exempting whoever happens to hold it there.
+	opts="nosuid,nodev,noexec,relatime,hidepid=invisible,gid=$gid"
+
+	# The legacy @reboot job goes regardless of which branch we take below.
+	rm -f /etc/cron.d/hestia-proc
+
+	# Apply to the running kernel first. A container refuses this, and there the unit
+	# would only fail at every boot, so skip installing it at all.
+	if ! mount -o "remount,$opts" /proc > /dev/null 2>&1; then
+		echo "Info: cannot remount /proc (container) - skipping hidepid"
+		systemctl disable --now "$PROC_HARDENING_UNIT" > /dev/null 2>&1 || true
+		rm -f "$dst"
+		systemctl daemon-reload
+		return 0
+	fi
+
+	[ -f "$src" ] || { echo "Warning: $src missing - hidepid applied live, not persisted" >&2; return 1; }
+	sed "s|%opts%|$opts|g" "$src" > "$dst" || return 1
+	chmod 644 "$dst"
+	systemctl daemon-reload
+	systemctl enable "$PROC_HARDENING_UNIT" > /dev/null 2>&1
+}
+
+# Grant a user the full /proc view. The user manager caches supplementary groups, so a
+# session already running under that uid must be restarted for this to take effect.
+proc_visible_add() {
+	local user="$1"
+	[ -n "$user" ] || return 1
+	getent group "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 || return 1
+	usermod -aG "$PROC_VISIBLE_GROUP" "$user"
 }

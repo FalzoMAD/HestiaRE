@@ -14,6 +14,18 @@ opens above it.
 
 ### Changed
 
+- **`/proc` hardening now lives in `/etc/fstab` instead of an `@reboot` cron job.** The old line remounted
+  `/proc` with `hidepid=2` and re-applied it from `/etc/cron.d/hestia-proc` after boot, guarded by a
+  `sleep 5`. Cron starts *after* most services, so that sleep papered over a window in which `/proc` was
+  still unhardened; systemd applies fstab options before the services come up and closes it. The new
+  `proc_hardening_apply` (`func/helper.sh`) also creates the `procvis` group and writes a **numeric**
+  `gid=` exemption - a name would resolve to a different id on a restored box and silently exempt whoever
+  holds it there. The entry is only persisted after the remount is proven to work on the running kernel,
+  so LXC still degrades to the documented skip rather than to an fstab that fails at boot, and a
+  hand-written `/proc` entry is left alone. Existing boxes are converted on upgrade. The exemption group
+  is what makes rootless container runtimes work at all under hidepid (moby#45014), so this is a
+  prerequisite for #389.
+
 - **`sync-upstream.sh` names its source branch** and archives that branch instead of whatever the mirror
   happens to have checked out. A manual checkout in the mirror made one sync archive `1.10-beta`, which is
   *behind* `main`, so the upstream reference moved backwards while the commit still read

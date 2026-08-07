@@ -1,0 +1,31 @@
+#=========================================================================#
+# HestiaRE - /proc hardening (hidepid)                                    #
+# Template. %opts% is substituted by proc_hardening_apply (func/helper.sh) #
+# because the gid= exemption resolves to a different id on every host.     #
+# DO NOT MODIFY THE INSTALLED COPY - it is regenerated.                    #
+#=========================================================================#
+#
+# Why a unit and not /etc/fstab: systemd-fstab-generator deliberately skips the
+# API filesystems, so a "proc /proc proc ..." line in fstab produces no mount unit
+# and is silently ignored at boot. Verified on the fleet - the generator emits
+# -.mount, boot.mount and media-cdrom0.mount from the same file, never proc.mount.
+#
+# Why not the @reboot cron this replaced: cron starts after most services, so the
+# window it left was exactly the one hidepid is supposed to close.
+
+[Unit]
+Description=HestiaRE /proc hardening (hidepid)
+Documentation=man:proc(5)
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=sysinit.target
+# Containers refuse the remount; failing loudly there would be noise, not a finding.
+ConditionVirtualization=!container
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mount -o remount,%opts% /proc
+
+[Install]
+WantedBy=sysinit.target
