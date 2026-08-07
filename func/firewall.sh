@@ -443,19 +443,24 @@ fw_jail_rebuild() {
 
 
 # Live attach: the rule has to go to the head of the chain for a ban to outrank the service accepts.
+# Same verdict table as fw_jail_rebuild. fail2ban's actionstart reaches this path, so a hardcoded
+# reject here left every runtime-created jail rejecting until the next full re-render - WEBSCAN silently
+# lost its drop on a fresh box, and only got it back once something happened to re-render.
 fw_jail_attach() {
 	local chain="$1" protocol="$2" port_val="$3" proto
+	local -a verdict
 	proto="$(echo "$protocol" | tr '[:upper:]' '[:lower:]')"
+	read -r -a verdict <<< "$(fw_jail_verdict "$chain")"
 	"$FW_NFT" add set "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set "$chain")" '{ type ipv4_addr; }' 2> /dev/null
 	"$FW_NFT" add set "$FW_FAMILY" "$FW_TABLE" "$(fw_jail_set6 "$chain")" '{ type ipv6_addr; }' 2> /dev/null
 	"$FW_NFT" list chain "$FW_FAMILY" "$FW_TABLE" input 2> /dev/null \
 		| grep -q "@$(fw_jail_set "$chain") " && return 0
 	"$FW_NFT" insert rule "$FW_FAMILY" "$FW_TABLE" input index 0 \
 		ip saddr "@$(fw_jail_set "$chain")" "$proto" dport "$(fw_port_expr "$port_val")" \
-		reject with icmpx type port-unreachable 2> /dev/null
+		"${verdict[@]}" 2> /dev/null
 	"$FW_NFT" insert rule "$FW_FAMILY" "$FW_TABLE" input index 0 \
 		ip6 saddr "@$(fw_jail_set6 "$chain")" "$proto" dport "$(fw_port_expr "$port_val")" \
-		reject with icmpx type port-unreachable 2> /dev/null
+		"${verdict[@]}" 2> /dev/null
 }
 
 # The handle is found by exact token match, not a regex built from the jail name: a regex metacharacter
