@@ -14,6 +14,27 @@ opens above it.
 
 ### Fixed
 
+- **Restic restored only the first domain or database of a multi-object user** (#555, upstream #4987,
+  #4986, #5100-adjacent). All three selective restore commands split a comma-separated list into a bash
+  array and then iterated `$domains` rather than `"${domains[@]}"`, which expands to element 0 alone -
+  measured: 1 of 3 domains processed, the rest silently skipped with a success exit. The mail command was
+  broken differently: it never set `IFS` at all, so the whole list stayed one element and it tried to
+  restore a domain literally named `a.de,b.de,c.de`. On top of that, web and database set `IFS=','`
+  globally and never restored it, so every later word split in those scripts collapsed to a single word -
+  which is what produced the malformed nginx configuration upstream reported. Splitting is now scoped and
+  `IFS` restored immediately, membership is tested against an explicitly joined list, and the loops
+  iterate the arrays. Verified across five selection cases per command plus a post-split word-split check.
+- **A Let's Encrypt account whose user.key no longer matched failed forever** (#555, upstream #5294).
+  `h-add-letsencrypt-user` exits early whenever `KID` is set, so a key replaced by a restore left the
+  stored modulus stale and every later issuance was signed with a key the ACME account does not know -
+  permanently, with no path back. The modulus is compared against the key on disk now and the account is
+  re-registered on a mismatch; the `le.conf` rewrite also refreshes `EXPONENT`/`MODULUS`/`THUMB` instead
+  of only `KID`, which is what left them stale in the first place.
+- **The panel's default organisation could not pass its own validator** (#555, upstream #5483). Generating
+  a self-signed certificate with the shipped defaults failed with `invalid org format :: MyCompany Inc.` -
+  `is_common_format_spaces_valid` requires an alphanumeric last character, and our validator is stricter
+  than upstream's here. Default is now `MyCompany Inc`.
+
 - **The firewall list showed rules in the reverse of the order they are evaluated** (#554/#555, upstream
   #5080/#5466). The renderer emits by descending RULE id into one chain and nft takes the first match, so
   the highest id wins - but the panel sorted ascending, and its up arrow lowered a rule's precedence.
