@@ -7,11 +7,10 @@
 # This function is used for moving an existing firewall rule.
 # Direction can be either "up" or "down".
 #
-# If the direction is "up", the rule will be moved to a lower
-# number (higher priority).
-#
-# If the direction is "down", the rule will be moved to a
-# higher number (lower priority).
+# "up" swaps the rule to the next LOWER number, "down" to the next higher.
+# Note that lower is not higher priority: the renderer emits by descending RULE
+# id and nft takes the first match, so a higher number wins. The panel lists in
+# that same descending order, and its up arrow therefore calls "down".
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

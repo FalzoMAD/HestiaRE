@@ -14,6 +14,19 @@ opens above it.
 
 ### Fixed
 
+- **The firewall list showed rules in the reverse of the order they are evaluated** (#554/#555, upstream
+  #5080/#5466). The renderer emits by descending RULE id into one chain and nft takes the first match, so
+  the highest id wins - but the panel sorted ascending, and its up arrow lowered a rule's precedence.
+  Worse, the order depended on `userSortOrder`: one setting agreed with precedence, the other inverted it,
+  so what the arrows appeared to do changed with a display preference. A ruleset is ordered data, not a
+  sortable table, so the list is now always in evaluation order and ignores that preference. The arrows
+  are deliberately crossed against the CLI verbs - `h-move-firewall-rule` keeps upstream's meaning of
+  "up" (RULE-1) and the panel maps its visual up arrow onto it. Also fixed the move buttons themselves:
+  `$move_down_enabled` was never set on the first row, so it inherited the previous row's value, and the
+  disabled branch forced the arrow *visible* instead of hiding it - the bottom rule offered a "down" that
+  the CLI then refuses. Verified end to end: clicking up on the 80/443 rule moved it from second to first
+  in the live nft chain.
+
 - **A valid host certificate looked invalid, so Let's Encrypt reissued it on every run** (#555, upstream
   #5397). `h-add-letsencrypt-host` validated with `openssl verify -CAfile <(openssl x509 -in $domain.ca)`,
   and `openssl x509 -in` prints only the **first** certificate in a file. A two-link chain therefore lost

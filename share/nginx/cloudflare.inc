@@ -1,12 +1,5 @@
-# Cloudflare IP Ranges
-#
-# This is the FALLBACK: the installer overwrites this file wholesale from the CF API and
-# only then, so a failed fetch leaves exactly what stands here. real_ip_header must
-# therefore be part of it - without the directive nginx falls back to its own default,
-# X-Real-IP, which Cloudflare does not manage and forwards from the client verbatim. That
-# ignores CF-Connecting-IP entirely (measured on 1.26.3), so every visitor is logged as the
-# CF edge and fail2ban eventually bans the edge itself, while a forged X-Real-IP is taken
-# as the client and propagates through proxy_set_header into apache and the webmail jails.
+# Cloudflare IP Ranges. Fallback when the installer's CF-API fetch fails; keep real_ip_header
+# here, or nginx defaults to the client-settable X-Real-IP and ignores CF-Connecting-IP.
 # IPv4
 set_real_ip_from 103.21.244.0/22;
 set_real_ip_from 103.22.200.0/22;
