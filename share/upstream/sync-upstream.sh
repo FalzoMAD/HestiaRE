@@ -7,14 +7,22 @@ HESTIACP_DIR="$HOME/hestiacp"
 HESTIARE_DIR="$HOME/hestiare"
 PHPQUOTESHELLARG_DIR="$HOME/phpquoteshellarg"
 
+# Which hestiacp branch the snapshot represents. Named explicitly and checked out below rather than
+# taking whatever the mirror happens to sit on: a manual checkout in that repo once made the sync
+# archive the 1.10-beta branch, which is BEHIND main, so the snapshot silently moved backwards and
+# the commit message still read "snapshot <today>". Override only on purpose, e.g.
+#   UPSTREAM_BRANCH=1.10-beta share/upstream/sync-upstream.sh
+UPSTREAM_BRANCH="${UPSTREAM_BRANCH:-main}"
+
 # ════════════════════════════════════════════════════════════════════════════
 # PART 1 - HestiaCP (full mirror, branch-based, frequent changes expected)
 # ════════════════════════════════════════════════════════════════════════════
 
 # ── 1.1 Pull hestiacp mirror ─────────────────────────────────────────────────
-echo "==> Updating hestiacp mirror..."
+echo "==> Updating hestiacp mirror (branch: $UPSTREAM_BRANCH)..."
 cd "$HESTIACP_DIR"
-BEFORE=$(git rev-parse HEAD)
+BEFORE=$(git rev-parse --verify --quiet "$UPSTREAM_BRANCH" || true)
+git checkout --quiet "$UPSTREAM_BRANCH"
 git pull
 AFTER=$(git rev-parse HEAD)
 
@@ -23,16 +31,22 @@ echo "==> Updating upstream/hestiacp snapshot..."
 cd "$HESTIARE_DIR"
 git checkout upstream/hestiacp
 git rm -rf .
-git archive --remote="$HESTIACP_DIR" HEAD | tar -x
+# Archive the named branch, not HEAD: with HEAD the result depends on the mirror's checkout state.
+git archive --remote="$HESTIACP_DIR" "$UPSTREAM_BRANCH" | tar -x
 git add -A
-git commit -m "upstream: HestiaCP snapshot $(date +%Y-%m-%d)" --allow-empty
+# Source branch and commit go in the subject, so a snapshot taken from the wrong branch is visible in
+# `git log --oneline` instead of only in a version string somewhere inside the tree.
+git commit -m "upstream: HestiaCP snapshot $(date +%Y-%m-%d) ($UPSTREAM_BRANCH @ ${AFTER:0:8})" --allow-empty
 git push origin upstream/hestiacp
 git checkout dev
 
 # ── 1.3 Show changes since last snapshot ─────────────────────────────────────
 echo ""
 echo "==> Changes in hestiacp since last sync:"
-if [ "$BEFORE" = "$AFTER" ]; then
+if [ -z "$BEFORE" ]; then
+  # First sync of this branch - a "$BEFORE..$AFTER" range would be its entire history.
+  echo "    Branch $UPSTREAM_BRANCH had no local ref before this run; skipping the change list."
+elif [ "$BEFORE" = "$AFTER" ]; then
   echo "    No new commits in hestiacp mirror."
 else
   echo ""

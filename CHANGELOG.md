@@ -12,6 +12,14 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **`sync-upstream.sh` names its source branch** and archives that branch instead of whatever the mirror
+  happens to have checked out. A manual checkout in the mirror made one sync archive `1.10-beta`, which is
+  *behind* `main`, so the upstream reference moved backwards while the commit still read
+  "HestiaCP snapshot <today>" - only a version string deep in the tree gave it away. The subject now
+  carries `(<branch> @ <sha>)`, and `UPSTREAM_BRANCH=` overrides it on purpose.
+
 ### Fixed
 
 - **A deleted key in `hestia.conf` came back on the next syshealth run** (upstream #5584). The repair
