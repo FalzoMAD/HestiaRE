@@ -82,7 +82,10 @@ _identity_owner() { getent passwd "$1" 2> /dev/null | cut -d: -f1; }
 # Usage: identity_assert_free <user>   -> 0 = usable, 1 = conflict (reason on stdout)
 identity_assert_free() {
 	local user="$1" uid uid_c owner
-	uid="$(identity_uid "$user")" || { echo "cannot compute identity for '$user'"; return 1; }
+	uid="$(identity_uid "$user")" || {
+		echo "cannot compute identity for '$user'"
+		return 1
+	}
 	uid_c=$((uid - IDENTITY_BLOCK))
 
 	owner="$(_identity_owner "$uid")"
