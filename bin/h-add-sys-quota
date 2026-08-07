@@ -337,7 +337,9 @@ fi
 
 # Enabling group and user quota
 if quotaon -pa | grep " $mnt " | grep -E 'user|group' | grep -q 'is off'; then
-	quotaon -v "$mnt"
+	# quotaon warns about tmpfs it cannot stat and about ext4 kernel-level quota even on success;
+	# both read as install errors. Filter those two, keep every other line and the exit status.
+	quotaon -v "$mnt" 2> >(grep -vE 'Cannot stat.*device tmpfs|kernel probably supports ext4 quota' >&2) > /dev/null
 	check_result $? "quota can't be enabled in $mnt" "$E_DISK"
 fi
 

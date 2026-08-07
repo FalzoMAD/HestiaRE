@@ -779,6 +779,15 @@
       "note": ""
     },
     {
+      "path": "h-add-sys-mail-dnsbl",
+      "source_type": "derived",
+      "upstream_path": "bin/v-add-sys-mail-dnsbl",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "reimplemented for #5464: single source of truth in /etc/exim4/dnsbl.conf, no shadow copy under conf/"
+    },
+    {
       "path": "h-add-sys-mariadb",
       "source_type": "eigenbau",
       "upstream_path": null,
@@ -3320,6 +3329,15 @@
       "note": ""
     },
     {
+      "path": "h-delete-sys-mail-dnsbl",
+      "source_type": "derived",
+      "upstream_path": "bin/v-delete-sys-mail-dnsbl",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "reimplemented for #5464: single source of truth in /etc/exim4/dnsbl.conf, no shadow copy under conf/"
+    },
+    {
       "path": "h-delete-sys-mail-queue",
       "source_type": "derived",
       "upstream_path": "bin/v-delete-sys-mail-queue",
@@ -4924,6 +4942,15 @@
         "measured_at": "2026-08-06"
       },
       "note": ""
+    },
+    {
+      "path": "h-list-sys-mail-dnsbl",
+      "source_type": "derived",
+      "upstream_path": "bin/v-list-sys-mail-dnsbl",
+      "upstream_ref": "ca19b9f",
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "reimplemented for #5464: single source of truth in /etc/exim4/dnsbl.conf, no shadow copy under conf/"
     },
     {
       "path": "h-list-sys-mail-status",

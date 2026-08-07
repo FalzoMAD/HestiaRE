@@ -613,6 +613,21 @@ check_mesh_serve_staged() {
 	fi
 }
 
+check_realip_header() {
+	local f=/etc/nginx/conf.d/cloudflare.inc
+	# The installer rewrites this file from the CF API and skips it silently on a failed
+	# fetch. Without real_ip_header nginx defaults to X-Real-IP, which the client controls:
+	# CF-Connecting-IP is then ignored (every visitor logs as the CF edge, so fail2ban bans
+	# the edge) and a forged X-Real-IP becomes $remote_addr for every ban consumer.
+	if [ ! -f "$f" ]; then
+		skip "cloudflare realip include absent"
+	elif grep -qE '^\s*real_ip_header' "$f"; then
+		ok "cloudflare realip names its header"
+	else
+		no "cloudflare realip has no real_ip_header (#553)" "nginx then trusts client-set X-Real-IP; re-copy share/nginx/cloudflare.inc"
+	fi
+}
+
 check_web_model_sentinel() {
 	local s="/var/lib/hestia/web-model-switch/IN_PROGRESS" op
 	if [ -f "$s" ]; then
@@ -779,6 +794,7 @@ check_policy_fragment_coverage
 check_web_lock_coverage
 check_web_switch_prechecks
 check_web_model_sentinel
+check_realip_header
 
 #----------------------------------------------------------#
 #                       Result                             #

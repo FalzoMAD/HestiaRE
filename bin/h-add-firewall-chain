@@ -71,6 +71,12 @@ case $chain in
 		port='80,443'
 		protocol=TCP
 		;;
+	# Same ports as WEB, separate chain purely so the scanner-signature jails can drop while the
+	# webmail/phpMyAdmin logins on the same ports keep rejecting (see fw_jail_verdict).
+	WEBSCAN)
+		port='80,443'
+		protocol=TCP
+		;;
 	DB)
 		port='3306,5432'
 		protocol=TCP

@@ -1,8 +1,7 @@
 <?php
 // Static Cloudflare IP ranges (Eigenbau - replaces divinity76/cloudflare-ip-validator).
-// Source: https://www.cloudflare.com/ips/ (fetched 2026-06-21)
-// Update procedure: run `curl -s https://www.cloudflare.com/ips-v4/` and
-// `curl -s https://www.cloudflare.com/ips-v6/` and replace the arrays below.
+// Update from cloudflare.com/ips-v4 + /ips-v6 (last verified 2026-08-06). Diff, never retype:
+// a missing range gets the CF edge banned, a foreign one lets its owner forge CF-Connecting-IP.
 
 const CLOUDFLARE_IPV4_CIDRS = [
     '103.21.244.0/22',
@@ -11,7 +10,7 @@ const CLOUDFLARE_IPV4_CIDRS = [
     '104.16.0.0/13',
     '104.24.0.0/14',
     '108.162.192.0/18',
-    '131.0.232.0/22',
+    '131.0.72.0/22',
     '141.101.64.0/18',
     '162.158.0.0/15',
     '172.64.0.0/13',

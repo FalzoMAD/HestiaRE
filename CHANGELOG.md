@@ -10,6 +10,156 @@ interim builds within a cycle and their changes appear under the minor they
 belong to. On release, the section gets that version number and a new Unreleased
 opens above it.
 
+## Unreleased
+
+### Changed
+
+- **`sync-upstream.sh` names its source branch** and archives that branch instead of whatever the mirror
+  happens to have checked out. A manual checkout in the mirror made one sync archive `1.10-beta`, which is
+  *behind* `main`, so the upstream reference moved backwards while the commit still read
+  "HestiaCP snapshot <today>" - only a version string deep in the tree gave it away. The subject now
+  carries `(<branch> @ <sha>)`, and `UPSTREAM_BRANCH=` overrides it on purpose.
+
+### Fixed
+
+- **A deleted key in `hestia.conf` came back on the next syshealth run** (upstream #5584). The repair
+  built `hestia.conf.new` with `touch` plus `>>`, and removed it only when it had actually rewritten the
+  config - so a run that found nothing to fix left the file behind, and the next run appended into that
+  stale copy. Reproduced: delete a key, run twice, the key returns. It now truncates and removes
+  unconditionally. Matters here because `h-delete-sys-*` clears keys (`FIREWALL_EXTENSION`, the
+  `DB_SYSTEM` tokens), so a removed component could look installed again. The same hunk fixes two inert
+  patterns: `${rhs%%^\#*}` never stripped an inline comment (`^` is literal in a shell pattern) and
+  `${rhs%%*( )}` needs `extglob` - both verified before and after.
+- **A quote or backslash in a certificate field broke the SSL JSON the panel parses** (upstream #5585).
+  Only `ISSUER` was escaped, from the earlier #5524 adoption; `SUBJECT`, `ALIASES`, the validity dates,
+  `SIGNATURE` and `PUB_KEY` were interpolated raw. Applied to all three listers - mail, web and the panel
+  certificate - and verified that the escaped values round-trip unchanged through a JSON parse.
+### Added
+
+- **DNSBL management from the CLI** (#555, upstream #5464). Exim has always consulted
+  `/etc/exim4/dnsbl.conf`, but the list could only be edited by hand.
+  `h-add-sys-mail-dnsbl` / `h-delete-sys-mail-dnsbl` / `h-list-sys-mail-dnsbl` (with `v-*` aliases, since
+  upstream ships the same commands) manage it, validate the host against exim's own grammar - including
+  the `host!=127.0.0.10` result filter - and restart exim. Unlike upstream there is no shadow copy under
+  `conf/` and no revert-to-default comparison: exim reads exactly one path, and a second master would need
+  syncing both ways. Preserving admin edits across an update belongs to #206. Deletion uses `grep -vxF`,
+  so a host is matched whole and literally - removing `zen.spamhaus.org!=127.0.0.10` leaves a plain
+  `zen.spamhaus.org` entry intact, verified live.
+
+### Changed
+
+- **Scanner bans drop, credential bans still reject** (#555). The renderer gave every jail chain the same
+  `reject with icmpx type port-unreachable`. Upstream #5442 switches wholesale to `drop`; that is right for
+  scanners and wrong for anything with a login behind it, where a silent black hole hides the far more
+  common case of a phone retrying a stale mail password. The verdict is per chain now: only the
+  scanner-signature jails drop. That needed a chain split, because seven jails shared `WEB` - three pure
+  signature jails (`web-botsearch`, `web-badactor`, `web-exploit`) alongside the roundcube, SnappyMail and
+  phpMyAdmin logins. The three moved to a new `WEBSCAN` chain on the same ports; everything else, including
+  `web-authprobe` - whose own high `maxretry` exists for humans behind shared NAT - and `RECIDIVE`, keeps
+  rejecting. Rendered document verified against nft 1.1.3: both chains match 80/443, with different
+  verdicts.
+
+### Fixed
+
+- **Backup retention could delete another user's archives** (#556, upstream #4918). The retention list was
+  built with `grep "^$user\." | grep ".tar"`, so listing user `foo` also matched `foo.bar.*.tar` -
+  measured on a fixture: four files returned instead of two, including another user's backups and an
+  unrelated `.tar.gz`. Since that list drives the rotation delete, `foo` hitting its retention limit
+  removed `foo.bar`'s backups. Now anchored on the actual name shape (`user.YYYY-...tar`). New users
+  cannot contain a dot, but the general user validator allows one, so a user restored from HestiaCP can.
+  Applied to all seven affected backends - upstream fixed three, we also have sftp and rclone. The
+  Backblaze path filters server-side by prefix and is left alone: the same class may apply, but it cannot
+  be verified without an account.
+- **The services list showed database servers that are not installed** (#556). `h-add-database-host`
+  writes the type into `DB_SYSTEM` for a **remote** host too, so registering a remote PostgreSQL left a
+  permanent `postgresql - stopped` row with panel buttons for a unit that does not exist. Reproduced and
+  fixed live. The check fails open: a row is dropped only on a definite "no such unit", so an unexpected
+  `systemctl` answer can never hide a running service.
+
+- **The manual-ban chain picker offered a chain that no longer exists and hid two that do** (#555). It
+  still listed `DNS` although bind9 is gone, and omitted `RECIDIVE`. Now lists the real set including
+  `WEBSCAN`.
+
+- **Restic restored only the first domain or database of a multi-object user** (#555, upstream #4987,
+  #4986, #5100-adjacent). All three selective restore commands split a comma-separated list into a bash
+  array and then iterated `$domains` rather than `"${domains[@]}"`, which expands to element 0 alone -
+  measured: 1 of 3 domains processed, the rest silently skipped with a success exit. The mail command was
+  broken differently: it never set `IFS` at all, so the whole list stayed one element and it tried to
+  restore a domain literally named `a.de,b.de,c.de`. On top of that, web and database set `IFS=','`
+  globally and never restored it, so every later word split in those scripts collapsed to a single word -
+  which is what produced the malformed nginx configuration upstream reported. Splitting is now scoped and
+  `IFS` restored immediately, membership is tested against an explicitly joined list, and the loops
+  iterate the arrays. Verified across five selection cases per command plus a post-split word-split check.
+- **A Let's Encrypt account whose user.key no longer matched failed forever** (#555, upstream #5294).
+  `h-add-letsencrypt-user` exits early whenever `KID` is set, so a key replaced by a restore left the
+  stored modulus stale and every later issuance was signed with a key the ACME account does not know -
+  permanently, with no path back. The modulus is compared against the key on disk now and the account is
+  re-registered on a mismatch; the `le.conf` rewrite also refreshes `EXPONENT`/`MODULUS`/`THUMB` instead
+  of only `KID`, which is what left them stale in the first place.
+- **The panel's default organisation could not pass its own validator** (#555, upstream #5483). Generating
+  a self-signed certificate with the shipped defaults failed with `invalid org format :: MyCompany Inc.` -
+  `is_common_format_spaces_valid` requires an alphanumeric last character, and our validator is stricter
+  than upstream's here. Default is now `MyCompany Inc`.
+
+- **The firewall list showed rules in the reverse of the order they are evaluated** (#554/#555, upstream
+  #5080/#5466). The renderer emits by descending RULE id into one chain and nft takes the first match, so
+  the highest id wins - but the panel sorted ascending, and its up arrow lowered a rule's precedence.
+  Worse, the order depended on `userSortOrder`: one setting agreed with precedence, the other inverted it,
+  so what the arrows appeared to do changed with a display preference. A ruleset is ordered data, not a
+  sortable table, so the list is now always in evaluation order and ignores that preference. The arrows
+  are deliberately crossed against the CLI verbs - `h-move-firewall-rule` keeps upstream's meaning of
+  "up" (RULE-1) and the panel maps its visual up arrow onto it. Also fixed the move buttons themselves:
+  `$move_down_enabled` was never set on the first row, so it inherited the previous row's value, and the
+  disabled branch forced the arrow *visible* instead of hiding it - the bottom rule offered a "down" that
+  the CLI then refuses. Verified end to end: clicking up on the 80/443 rule moved it from second to first
+  in the live nft chain.
+
+- **A valid host certificate looked invalid, so Let's Encrypt reissued it on every run** (#555, upstream
+  #5397). `h-add-letsencrypt-host` validated with `openssl verify -CAfile <(openssl x509 -in $domain.ca)`,
+  and `openssl x509 -in` prints only the **first** certificate in a file. A two-link chain therefore lost
+  its root and verification failed with "unable to get issuer certificate", leaving `add_ssl=yes` so the
+  certificate was requested again - burning the duplicate-certificate rate limit for nothing. Reproduced
+  with a purpose-built two-level chain: the old form fails, passing the `.ca` file directly succeeds.
+- **`useradd` ran on every rebuild and restore even when the account existed** (#555, upstream #5557),
+  failing silently but writing a syslog line per user each time. All six callers of `rebuild_user_conf`
+  are rebuild or restore paths, so this was the normal case rather than the exception; guarded with `id`.
+- **`quotaon` warnings read as install errors** (#555, upstream #5465). It reports tmpfs it cannot stat
+  and ext4 kernel-level quota support even on success. Both are filtered now; every other line and the
+  exit status are untouched, verified against a stub that returns a non-zero status.
+
+- **The panel served its own includes, templates and locale data over HTTP** (#554, upstream #5446).
+  Nothing denied `/inc`, `/locale` or `/templates`, so unauthenticated requests reached them: the two
+  `web/locale/*.sh` helpers and `hestiacp.pot` were returned as source, include-only PHP was executed, and
+  `templates/includes/panel.php` rendered its markup outside any auth context. Measured impact today is
+  low - the templates emit empty scaffolding, no data and no path disclosure - but the exposure is one
+  refactor away from mattering, since any of those files gaining a `$_GET` read or assuming an
+  authenticated caller becomes reachable without a session. The panel Caddy now answers 404 for those
+  prefixes and for `*.map|log|sh|sql|bak|env`, placed first inside the existing `route` because `respond`
+  otherwise sorts after `file_server`. Unlike upstream we do not deny `/src`: their panel root has a
+  `web/src`, ours does not, so the rule would have no object. i18n is unaffected - it reads
+  `languages.json` from disk, not over HTTP.
+
+- **The Cloudflare realip fallback trusted a header the client controls** (#553). The installer rewrites
+  `cloudflare.inc` from the CF API and skips that step silently when the fetch fails, so what ships in
+  `share/nginx/` is what a box without egress ends up running - and it named the trusted *sources* but not
+  the trusted *header*. nginx then applies its own default, `X-Real-IP`, which Cloudflare does not manage
+  and forwards from the client verbatim, while `CF-Connecting-IP` is ignored outright. Measured on nginx
+  1.26.3: `X-Real-IP: 1.2.3.4` became `$remote_addr` and propagated through `proxy_set_header` into apache
+  `mod_remoteip` and the Roundcube jail, so a forged header could drive an arbitrary IP into the banlist
+  and the nft set; conversely a real visitor behind Cloudflare logged as the edge, which fail2ban would
+  eventually ban and lock everyone out behind it. The shipped file now carries
+  `real_ip_header CF-Connecting-IP;`, and `h-check-sys-smoke` asserts the directive is present so the
+  silent fallback cannot recur. The API-generated file was always correct - only the fallback was not.
+
+- **One Cloudflare range in the panel's IP validator was wrong, and it was exploitable in both directions**
+  (#553). `web/inc/cloudflare-ip.php` listed `131.0.232.0/22` where Cloudflare publishes `131.0.72.0/22` -
+  a transcription slip in the hand-maintained list that replaced the vendored validator. Traffic from the
+  real range was therefore not recognised as Cloudflare, so `get_real_user_ip()` attributed panel logins to
+  the CF edge and fail2ban would ban the edge itself, locking out everyone behind it; meanwhile the range
+  that is not Cloudflare's was trusted, letting whoever holds it forge `CF-Connecting-IP` on the login path
+  and drive an arbitrary IP into the banlist. Both lists now match the published set exactly, and the
+  header says to diff the live list rather than retype it. Found in the upstream 1.10 triage (#5273).
+
 ## v0.14.0 (2026-08-06)
 
 The firewall release: the last subsystem still inherited near-verbatim from HestiaCP, rebuilt on nftables,

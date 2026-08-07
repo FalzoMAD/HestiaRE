@@ -154,6 +154,9 @@ function syshealth_repair_mail_account_config() {
 	system="mail_accounts"
 	sanitize_config_file "$system"
 	get_object_values "mail/$domain" 'ACCOUNT' "$account"
+	# Anchor the first insert, as the web and mail siblings do: without it $prev carries over from a
+	# previous call, and add_object_key would anchor the new key on some other object's last field.
+	prev="ACCOUNT"
 	for key in $known_keys; do
 		if [ -z "${!key}" ]; then
 			add_object_key "mail/$domain" 'ACCOUNT' "$account" "$key" "$prev"
@@ -491,14 +494,17 @@ function syshealth_repair_system_config() {
 		$BIN/h-change-sys-config-value "DOMAINDIR_WRITABLE" "no"
 	fi
 
-	touch $HESTIA/conf/hestia.conf.new
+	# TRUNCATE, and remove unconditionally below: with `touch` plus `>>`, a .new file left behind by a
+	# run that found nothing to fix was appended to on the next one - so a key deleted in the meantime
+	# came back from the stale copy. Reproduced: delete a key, run twice, the key returns.
+	: > "$HESTIA/conf/hestia.conf.new"
 	while IFS='= ' read -r lhs rhs; do
 		if [[ ! $lhs =~ ^\ *# && -n $lhs ]]; then
-			rhs="${rhs%%^\#*}" # Del in line right comments
-			rhs="${rhs%%*( )}" # Del trailing spaces
-			rhs="${rhs%\'*}"   # Del opening string quotes
-			rhs="${rhs#\'*}"   # Del closing string quotes
-
+			# The old patterns were inert: '^' is literal in a shell pattern, and *( ) needs extglob.
+			rhs="${rhs%%#*}"             # Del inline right comments
+			rhs="${rhs%"${rhs##*[! ]}"}" # Del trailing spaces
+			rhs="${rhs%\'}"              # Del closing string quote
+			rhs="${rhs#\'}"              # Del opening string quote
 		fi
 		check_ckey=$(grep "^$lhs='" "$HESTIA/conf/hestia.conf.new")
 		if [ -z "$check_ckey" ]; then
@@ -506,15 +512,13 @@ function syshealth_repair_system_config() {
 		else
 			sed -i "s|^$lhs=.*|$lhs='$rhs'|g" "$HESTIA/conf/hestia.conf.new"
 		fi
-	done < $HESTIA/conf/hestia.conf
+	done < "$HESTIA/conf/hestia.conf"
 
-	cmp --silent $HESTIA/conf/hestia.conf $HESTIA/conf/hestia.conf.new
-	if [ $? -ne 0 ]; then
+	if ! cmp --silent "$HESTIA/conf/hestia.conf" "$HESTIA/conf/hestia.conf.new"; then
 		echo "[ ! ] Duplicated keys found repair config"
-		rm $HESTIA/conf/hestia.conf
-		cp $HESTIA/conf/hestia.conf.new $HESTIA/conf/hestia.conf
-		rm $HESTIA/conf/hestia.conf.new
+		cp "$HESTIA/conf/hestia.conf.new" "$HESTIA/conf/hestia.conf"
 	fi
+	rm -f "$HESTIA/conf/hestia.conf.new"
 
 	source_conf "$HESTIA/conf/hestia.conf"
 }
