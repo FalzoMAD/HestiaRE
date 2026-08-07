@@ -70,9 +70,10 @@ rebuild_user_conf() {
 		$HESTIA/packages/$PACKAGE.sh "$user" "$CONTACT" "$NAME"
 	fi
 
-	# Rebuild user
+	# Rebuild user. Every caller is a rebuild or restore path, so the account usually exists and
+	# useradd only fails - silently here, but it still writes a failure line to syslog per user.
 	shell=$(grep -w "$SHELL" /etc/shells | head -n1)
-	/usr/sbin/useradd "$user" -s "$shell" -c "$CONTACT" \
+	id "$user" > /dev/null 2>&1 || /usr/sbin/useradd "$user" -s "$shell" -c "$CONTACT" \
 		-m -d "$HOMEDIR/$user" > /dev/null 2>&1
 
 	# Add a general group for normal users created by Hestia

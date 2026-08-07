@@ -14,6 +14,19 @@ opens above it.
 
 ### Fixed
 
+- **A valid host certificate looked invalid, so Let's Encrypt reissued it on every run** (#555, upstream
+  #5397). `h-add-letsencrypt-host` validated with `openssl verify -CAfile <(openssl x509 -in $domain.ca)`,
+  and `openssl x509 -in` prints only the **first** certificate in a file. A two-link chain therefore lost
+  its root and verification failed with "unable to get issuer certificate", leaving `add_ssl=yes` so the
+  certificate was requested again - burning the duplicate-certificate rate limit for nothing. Reproduced
+  with a purpose-built two-level chain: the old form fails, passing the `.ca` file directly succeeds.
+- **`useradd` ran on every rebuild and restore even when the account existed** (#555, upstream #5557),
+  failing silently but writing a syslog line per user each time. All six callers of `rebuild_user_conf`
+  are rebuild or restore paths, so this was the normal case rather than the exception; guarded with `id`.
+- **`quotaon` warnings read as install errors** (#555, upstream #5465). It reports tmpfs it cannot stat
+  and ext4 kernel-level quota support even on success. Both are filtered now; every other line and the
+  exit status are untouched, verified against a stub that returns a non-zero status.
+
 - **The panel served its own includes, templates and locale data over HTTP** (#554, upstream #5446).
   Nothing denied `/inc`, `/locale` or `/templates`, so unauthenticated requests reached them: the two
   `web/locale/*.sh` helpers and `hestiacp.pot` were returned as source, include-only PHP was executed, and
