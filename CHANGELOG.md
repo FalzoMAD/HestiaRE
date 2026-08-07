@@ -22,6 +22,13 @@ opens above it.
 
 ### Fixed
 
+- **The per-chain ban verdict was missing on the live-attach path.** `fw_jail_verdict` was wired into the
+  full re-render but not into `fw_jail_attach`, which hardcoded `reject` for both families. fail2ban's
+  `actionstart` reaches exactly that path, so on a fresh install every jail rule - `WEBSCAN` included -
+  came up rejecting, and only picked up its `drop` if something later forced a full re-render. Found on the
+  v0.14.1 fleet: deb12/deb13 happened to have re-rendered and showed `drop`, ub26 still carried the
+  live-attached `reject`, from identical code. The two emitters now share one verdict table.
+
 - **A deleted key in `hestia.conf` came back on the next syshealth run** (upstream #5584). The repair
   built `hestia.conf.new` with `touch` plus `>>`, and removed it only when it had actually rewritten the
   config - so a run that found nothing to fix left the file behind, and the next run appended into that
