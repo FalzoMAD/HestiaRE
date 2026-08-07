@@ -1,0 +1,78 @@
+#!/bin/bash
+# info: list dnsbl hosts checked by exim
+# options: [FORMAT]
+#
+# example: h-list-sys-mail-dnsbl json
+#
+# This function lists the DNSBL servers exim checks incoming mail against.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+format=${1-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source "$HESTIA/func/main.sh"
+
+# The live file exim reads per message (exim4.conf.template: readfile /etc/exim4/dnsbl.conf).
+# There is no shadow copy - this is the source of truth.
+DNSBL_CONF="/etc/exim4/dnsbl.conf"
+
+# Blank lines and comments are not entries; exim would treat a stray one as a lookup domain.
+dnsbl_hosts() {
+	[ -f "$DNSBL_CONF" ] || return 0
+	grep -vE '^\s*(#|$)' "$DNSBL_CONF"
+}
+
+json_list() {
+	local host first=1
+	echo '{'
+	while read -r host; do
+		[ -z "$host" ] && continue
+		[ "$first" -eq 1 ] || echo ','
+		first=0
+		echo -n "    \"$host\": {
+        \"HOST\": \"$host\"
+    }"
+	done < <(dnsbl_hosts)
+	[ "$first" -eq 1 ] || echo ''
+	echo '}'
+}
+
+shell_list() {
+	echo "HOST"
+	echo "----"
+	dnsbl_hosts
+}
+
+plain_list() {
+	dnsbl_hosts
+}
+
+csv_list() {
+	echo "HOST"
+	dnsbl_hosts
+}
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list ;;
+	*) check_args '1' '0' '[FORMAT]' ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

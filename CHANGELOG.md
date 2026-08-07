@@ -12,6 +12,18 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **DNSBL management from the CLI** (#555, upstream #5464). Exim has always consulted
+  `/etc/exim4/dnsbl.conf`, but the list could only be edited by hand.
+  `h-add-sys-mail-dnsbl` / `h-delete-sys-mail-dnsbl` / `h-list-sys-mail-dnsbl` (with `v-*` aliases, since
+  upstream ships the same commands) manage it, validate the host against exim's own grammar - including
+  the `host!=127.0.0.10` result filter - and restart exim. Unlike upstream there is no shadow copy under
+  `conf/` and no revert-to-default comparison: exim reads exactly one path, and a second master would need
+  syncing both ways. Preserving admin edits across an update belongs to #206. Deletion uses `grep -vxF`,
+  so a host is matched whole and literally - removing `zen.spamhaus.org!=127.0.0.10` leaves a plain
+  `zen.spamhaus.org` entry intact, verified live.
+
 ### Changed
 
 - **Scanner bans drop, credential bans still reject** (#555). The renderer gave every jail chain the same
