@@ -13,7 +13,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v6
 
       - name: Set version
         run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
@@ -22,7 +22,7 @@ jobs:
         run: |
           # VERSION aus dem Tag in die Datei schreiben
           echo "${VERSION}" > VERSION
-          
+
           mkdir -p dist/hestiare-${VERSION}
           # Dev-only trees never ship: the tarball is what lands on a customer box.
           rsync -a \
@@ -34,7 +34,7 @@ jobs:
           tar -czf dist/hestiare-${VERSION}.tar.gz -C dist hestiare-${VERSION}
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2.3.2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/hestiare-${{ env.VERSION }}.tar.gz
           generate_release_notes: false
@@ -42,5 +42,5 @@ jobs:
             HestiaRE ${{ env.VERSION }}
 
             Install:
-              curl -fsSL https://hestiare.com/install.sh 
+              curl -fsSL https://hestiare.com/install.sh
               bash install.sh
