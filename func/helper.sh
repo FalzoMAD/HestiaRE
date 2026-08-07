@@ -313,7 +313,7 @@ migrate_data_layout() {
 	# restrict the shell-profile snippet to root on existing installs (was world-readable)
 	[ -f /etc/profile.d/hestia.sh ] && chmod 600 /etc/profile.d/hestia.sh
 
-	# move /proc hardening off the @reboot cron and into fstab (see proc_hardening_apply);
+	# move /proc hardening off the @reboot cron onto its systemd unit (proc_hardening_apply);
 	# idempotent, so a box already converted just gets its gid re-asserted
 	proc_hardening_apply || true
 }
