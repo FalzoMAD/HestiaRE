@@ -1,4 +1,5 @@
-# Cloudflare IP Ranges
+# Cloudflare IP Ranges. Fallback when the installer's CF-API fetch fails; keep real_ip_header
+# here, or nginx defaults to the client-settable X-Real-IP and ignores CF-Connecting-IP.
 # IPv4
 set_real_ip_from 103.21.244.0/22;
 set_real_ip_from 103.22.200.0/22;
@@ -23,3 +24,5 @@ set_real_ip_from 2606:4700::/32;
 set_real_ip_from 2803:f800::/32;
 set_real_ip_from 2a06:98c0::/29;
 set_real_ip_from 2c0f:f248::/32;
+
+real_ip_header CF-Connecting-IP;

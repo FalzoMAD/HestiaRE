@@ -10,6 +10,69 @@ interim builds within a cycle and their changes appear under the minor they
 belong to. On release, the section gets that version number and a new Unreleased
 opens above it.
 
+## Unreleased
+
+### Fixed
+
+- **The firewall list showed rules in the reverse of the order they are evaluated** (#554/#555, upstream
+  #5080/#5466). The renderer emits by descending RULE id into one chain and nft takes the first match, so
+  the highest id wins - but the panel sorted ascending, and its up arrow lowered a rule's precedence.
+  Worse, the order depended on `userSortOrder`: one setting agreed with precedence, the other inverted it,
+  so what the arrows appeared to do changed with a display preference. A ruleset is ordered data, not a
+  sortable table, so the list is now always in evaluation order and ignores that preference. The arrows
+  are deliberately crossed against the CLI verbs - `h-move-firewall-rule` keeps upstream's meaning of
+  "up" (RULE-1) and the panel maps its visual up arrow onto it. Also fixed the move buttons themselves:
+  `$move_down_enabled` was never set on the first row, so it inherited the previous row's value, and the
+  disabled branch forced the arrow *visible* instead of hiding it - the bottom rule offered a "down" that
+  the CLI then refuses. Verified end to end: clicking up on the 80/443 rule moved it from second to first
+  in the live nft chain.
+
+- **A valid host certificate looked invalid, so Let's Encrypt reissued it on every run** (#555, upstream
+  #5397). `h-add-letsencrypt-host` validated with `openssl verify -CAfile <(openssl x509 -in $domain.ca)`,
+  and `openssl x509 -in` prints only the **first** certificate in a file. A two-link chain therefore lost
+  its root and verification failed with "unable to get issuer certificate", leaving `add_ssl=yes` so the
+  certificate was requested again - burning the duplicate-certificate rate limit for nothing. Reproduced
+  with a purpose-built two-level chain: the old form fails, passing the `.ca` file directly succeeds.
+- **`useradd` ran on every rebuild and restore even when the account existed** (#555, upstream #5557),
+  failing silently but writing a syslog line per user each time. All six callers of `rebuild_user_conf`
+  are rebuild or restore paths, so this was the normal case rather than the exception; guarded with `id`.
+- **`quotaon` warnings read as install errors** (#555, upstream #5465). It reports tmpfs it cannot stat
+  and ext4 kernel-level quota support even on success. Both are filtered now; every other line and the
+  exit status are untouched, verified against a stub that returns a non-zero status.
+
+- **The panel served its own includes, templates and locale data over HTTP** (#554, upstream #5446).
+  Nothing denied `/inc`, `/locale` or `/templates`, so unauthenticated requests reached them: the two
+  `web/locale/*.sh` helpers and `hestiacp.pot` were returned as source, include-only PHP was executed, and
+  `templates/includes/panel.php` rendered its markup outside any auth context. Measured impact today is
+  low - the templates emit empty scaffolding, no data and no path disclosure - but the exposure is one
+  refactor away from mattering, since any of those files gaining a `$_GET` read or assuming an
+  authenticated caller becomes reachable without a session. The panel Caddy now answers 404 for those
+  prefixes and for `*.map|log|sh|sql|bak|env`, placed first inside the existing `route` because `respond`
+  otherwise sorts after `file_server`. Unlike upstream we do not deny `/src`: their panel root has a
+  `web/src`, ours does not, so the rule would have no object. i18n is unaffected - it reads
+  `languages.json` from disk, not over HTTP.
+
+- **The Cloudflare realip fallback trusted a header the client controls** (#553). The installer rewrites
+  `cloudflare.inc` from the CF API and skips that step silently when the fetch fails, so what ships in
+  `share/nginx/` is what a box without egress ends up running - and it named the trusted *sources* but not
+  the trusted *header*. nginx then applies its own default, `X-Real-IP`, which Cloudflare does not manage
+  and forwards from the client verbatim, while `CF-Connecting-IP` is ignored outright. Measured on nginx
+  1.26.3: `X-Real-IP: 1.2.3.4` became `$remote_addr` and propagated through `proxy_set_header` into apache
+  `mod_remoteip` and the Roundcube jail, so a forged header could drive an arbitrary IP into the banlist
+  and the nft set; conversely a real visitor behind Cloudflare logged as the edge, which fail2ban would
+  eventually ban and lock everyone out behind it. The shipped file now carries
+  `real_ip_header CF-Connecting-IP;`, and `h-check-sys-smoke` asserts the directive is present so the
+  silent fallback cannot recur. The API-generated file was always correct - only the fallback was not.
+
+- **One Cloudflare range in the panel's IP validator was wrong, and it was exploitable in both directions**
+  (#553). `web/inc/cloudflare-ip.php` listed `131.0.232.0/22` where Cloudflare publishes `131.0.72.0/22` -
+  a transcription slip in the hand-maintained list that replaced the vendored validator. Traffic from the
+  real range was therefore not recognised as Cloudflare, so `get_real_user_ip()` attributed panel logins to
+  the CF edge and fail2ban would ban the edge itself, locking out everyone behind it; meanwhile the range
+  that is not Cloudflare's was trusted, letting whoever holds it forge `CF-Connecting-IP` on the login path
+  and drive an arbitrary IP into the banlist. Both lists now match the published set exactly, and the
+  header says to diff the live list rather than retype it. Found in the upstream 1.10 triage (#5273).
+
 ## v0.14.0 (2026-08-06)
 
 The firewall release: the last subsystem still inherited near-verbatim from HestiaCP, rebuilt on nftables,

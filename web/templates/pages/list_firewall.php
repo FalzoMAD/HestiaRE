@@ -98,6 +98,9 @@
 				++$i;
 				if ($i === 1) {
 					$move_up_enabled = false;
+					// Was left unset here, so the first row inherited the previous row's value
+					// (and was undefined on the very first one).
+					$move_down_enabled = true;
 				} elseif ($i == count($data)) {
 					$move_up_enabled = true;
 					$move_down_enabled = false;
@@ -144,11 +147,16 @@
 				</div>
 				<div class="units-table-cell" style="padding-left: 0;padding-right: 0;">
 					<ul class="units-table-row-actions">
+						<?php // The arrows are deliberately crossed against the CLI verbs: h-move-firewall-rule
+      // counts "up" as RULE-1, while the list is in evaluation order (descending), so
+      // moving a row visually up means raising its id. Keeping the CLI verb as upstream
+      // defines it is worth the crossing; do not "fix" this to match the icon.
+						?>
 						<li class="units-table-row-action shortcut-up" data-key-action="js">
 							<a
 								class="units-table-row-action-link data-controls js-confirm-action"
 								style="<?= tohtml($move_up_enabled ? "display:block!important" : "display:none!important") ?>"
-								href="/move/firewall/?<?= tohtml(http_build_query(["rule" => $key, "direction" => 'up', "token" => $_SESSION["token"]])) ?>"
+								href="/move/firewall/?<?= tohtml(http_build_query(["rule" => $key, "direction" => 'down', "token" => $_SESSION["token"]])) ?>"
 								title="<?= tohtml( _("Move Firewall Rule Up")) ?>"
 								data-confirm-title="<?= tohtml( _("Move Up")) ?>"
 								data-confirm-message="<?= tohtml(sprintf(_("Are you sure you want to move rule #%s up?"), $key)) ?>">
@@ -159,8 +167,8 @@
 						<li class="units-table-row-action shortcut-down" data-key-action="js">
 							<a
 								class="units-table-row-action-link data-controls js-confirm-action"
-								style="<?= tohtml($move_down_enabled ? "" : "display:block!important") ?>"
-								href="/move/firewall/?<?= tohtml(http_build_query(["rule" => $key, "direction" => 'down', "token" => $_SESSION["token"]])) ?>"
+								style="<?= tohtml($move_down_enabled ? "display:block!important" : "display:none!important") ?>"
+								href="/move/firewall/?<?= tohtml(http_build_query(["rule" => $key, "direction" => 'up', "token" => $_SESSION["token"]])) ?>"
 								title="<?= tohtml( _("Move Firewall Rule Down")) ?>"
 								data-confirm-title="<?= tohtml( _("Move Down")) ?>"
 								data-confirm-message="<?= tohtml(sprintf(_("Are you sure you want to move rule #%s down?"), $key)) ?>">
