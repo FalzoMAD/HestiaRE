@@ -12,7 +12,24 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **Scanner bans drop, credential bans still reject** (#555). The renderer gave every jail chain the same
+  `reject with icmpx type port-unreachable`. Upstream #5442 switches wholesale to `drop`; that is right for
+  scanners and wrong for anything with a login behind it, where a silent black hole hides the far more
+  common case of a phone retrying a stale mail password. The verdict is per chain now: only the
+  scanner-signature jails drop. That needed a chain split, because seven jails shared `WEB` - three pure
+  signature jails (`web-botsearch`, `web-badactor`, `web-exploit`) alongside the roundcube, SnappyMail and
+  phpMyAdmin logins. The three moved to a new `WEBSCAN` chain on the same ports; everything else, including
+  `web-authprobe` - whose own high `maxretry` exists for humans behind shared NAT - and `RECIDIVE`, keeps
+  rejecting. Rendered document verified against nft 1.1.3: both chains match 80/443, with different
+  verdicts.
+
 ### Fixed
+
+- **The manual-ban chain picker offered a chain that no longer exists and hid two that do** (#555). It
+  still listed `DNS` although bind9 is gone, and omitted `RECIDIVE`. Now lists the real set including
+  `WEBSCAN`.
 
 - **Restic restored only the first domain or database of a multi-object user** (#555, upstream #4987,
   #4986, #5100-adjacent). All three selective restore commands split a comma-separated list into a bash

@@ -35,11 +35,12 @@
 				<select class="form-select" name="v_chain" id="v_chain">
 					<option value="SSH" <?php if ((!empty($v_chain)) && ( $v_chain == "'SSH'" )) echo 'selected'?>><?= tohtml( _("SSH")) ?></option>
 					<option value="WEB" <?php if ((!empty($v_chain)) && ( $v_chain == "'WEB'" )) echo 'selected'?>><?= tohtml( _("WEB")) ?></option>
+					<option value="WEBSCAN" <?php if ((!empty($v_chain)) && ( $v_chain == "'WEBSCAN'" )) echo 'selected'?>><?= tohtml( _("WEBSCAN")) ?></option>
 					<option value="FTP" <?php if ((!empty($v_chain)) && ( $v_chain == "'FTP'" )) echo 'selected'?>><?= tohtml( _("FTP")) ?></option>
-					<option value="DNS" <?php if ((!empty($v_chain)) && ( $v_chain == "'DNS'" )) echo 'selected'?>><?= tohtml( _("DNS")) ?></option>
 					<option value="MAIL" <?php if ((!empty($v_chain)) && ( $v_chain == "'MAIL'" )) echo 'selected'?>><?= tohtml( _("MAIL")) ?></option>
 					<option value="DB" <?php if ((!empty($v_chain)) && ( $v_chain == "'DB'" )) echo 'selected'?>><?= tohtml( _("DB")) ?></option>
 					<option value="HESTIA" <?php if ((!empty($v_chain)) && ( $v_chain == "'HESTIA'" )) echo 'selected'?>><?= tohtml( _("HESTIA")) ?></option>
+					<option value="RECIDIVE" <?php if ((!empty($v_chain)) && ( $v_chain == "'RECIDIVE'" )) echo 'selected'?>><?= tohtml( _("RECIDIVE")) ?></option>
 				</select>
 			</div>
 		</div>
