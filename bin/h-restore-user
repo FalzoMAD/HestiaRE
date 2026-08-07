@@ -175,9 +175,8 @@ if [ "$create_user" = 'yes' ]; then
 		check_result "$E_PARSING" "Can't unpack user container"
 	fi
 
-	# Deterministic identity (#388): refuse before creating anything if this host cannot
-	# hand out the identity the name computes to. Restoring onto a foreign account's uid
-	# would mis-own the whole home, so this aborts rather than falling back to a probe.
+	# Refuse before creating anything: restoring onto a foreign account's uid would
+	# mis-own the whole home (#388).
 	if ! identity_conflict="$(identity_assert_free "$user")"; then
 		rm -rf $tmpdir
 		echo "$identity_conflict" | $SENDMAIL -s "$subj" $email $notify
@@ -185,9 +184,7 @@ if [ "$create_user" = 'yes' ]; then
 		check_result "$E_EXISTS" "$identity_conflict"
 	fi
 
-	# A pinned identity that disagrees with the recomputation means the archive was
-	# written under a different scheme or edited by hand - which of the two is
-	# authoritative is not ours to guess.
+	# Archive written under a different scheme, or hand-edited.
 	if [ -f "$tmpdir/$backup_system/identity.conf" ]; then
 		if ! identity_diverged="$(identity_verify_conf "$user" "$tmpdir/$backup_system/identity.conf")"; then
 			rm -rf $tmpdir
@@ -206,8 +203,7 @@ if [ "$create_user" = 'yes' ]; then
 	# Rebuilding user
 	rebuild_user_conf
 
-	# Refresh rather than copy the archived file: it is a verification artefact, and the
-	# authoritative values are the ones just recomputed for this host.
+	# Refresh, not copy: the authoritative values are the ones recomputed for this host.
 	identity_write_conf "$user" "$USER_DATA"
 fi
 

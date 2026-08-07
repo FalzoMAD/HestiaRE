@@ -313,21 +313,14 @@ migrate_data_layout() {
 	# restrict the shell-profile snippet to root on existing installs (was world-readable)
 	[ -f /etc/profile.d/hestia.sh ] && chmod 600 /etc/profile.d/hestia.sh
 
-	# The band guard has to travel with the formula (#388): without it a bare useradd on an
-	# already-installed box can still land inside the deterministic band and become the
-	# restore conflict the scheme exists to prevent. Existing accounts are left alone.
+	# The guard has to travel with the formula (#388); existing accounts are left alone.
 	login_defs_guard || true
 }
 
 # ── login.defs guard rail for the deterministic UID band (#388) ─────────────
-# Panel users own 11000-41999, their Docker companions the interleaved block below.
-# Both are assigned by formula from the username, so anything created with a bare
-# useradd/adduser has to stay out of that band - otherwise a restore lands on a uid a
-# foreign local account already holds, which is the main source of the restore
-# conflicts the scheme exists to remove.
-# The SUB_UID/SUB_GID bounds are set for the same reason: companion subordinate ranges
-# are computed, never auto-assigned, and shadow's own allocator must not wander into
-# them. Idempotent - rewrites the key in place whether it was set or shipped commented.
+# Keeps a bare useradd/adduser out of the band func/identity.sh assigns by formula; a
+# foreign account inside it becomes a restore conflict. SUB_UID_MAX has to be raised
+# too - the shipped 600100000 is below our highest computed range end (1048675999).
 login_defs_guard() {
 	local f='/etc/login.defs' kv k v
 	[ -f "$f" ] || return 0

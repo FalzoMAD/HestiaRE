@@ -6,7 +6,6 @@
 #                                                                           #
 #===========================================================================#
 
-# Deterministic identity (#388) - side-effect free, only constants and functions.
 # shellcheck source=/usr/local/hestia/func/identity.sh
 [ -f "$HESTIA/func/identity.sh" ] && source "$HESTIA/func/identity.sh"
 
@@ -76,10 +75,8 @@ rebuild_user_conf() {
 
 	# Rebuild user. Every caller is a rebuild or restore path, so the account usually exists and
 	# useradd only fails - silently here, but it still writes a failure line to syslog per user.
-	# When it genuinely has to create the account (restore onto a fresh host) it must use the
-	# deterministic identity (#388), not the next sequential uid, or the restored home would be
-	# re-chowned to a host-specific value and any mapped container ids would break.
-	# An existing account keeps whatever uid it has: legacy users are not migrated.
+	# Creating for real (restore onto a fresh host) must use the deterministic identity
+	# (#388); an existing account keeps its uid - legacy users are not migrated.
 	shell=$(grep -w "$SHELL" /etc/shells | head -n1)
 	if ! id "$user" > /dev/null 2>&1; then
 		local identity_conflict user_uid
