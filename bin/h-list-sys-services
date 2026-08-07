@@ -239,7 +239,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB_SYSTEM" != 'remote' ]; then
 			mysql="/usr/bin/mariadb"
 		fi
 		if [ "$service" = 'mysql' ]; then
-			mysql_version=$($mysql -V)
+			mysql_version=$($mysql -V 2> /dev/null)
 			mariadb_string="MariaDB"
 			if [[ ! $mysql_version =~ $mariadb_string ]]; then
 				# MySQL
@@ -270,6 +270,15 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB_SYSTEM" != 'remote' ]; then
 			if [ ! -e '/etc/init.d/postgresql' ]; then
 				proc_name='postgres'
 			fi
+		fi
+		# A DB_SYSTEM token does not imply a local server: h-add-database-host writes the type for a
+		# REMOTE host too, and the row then reads "stopped" forever while the panel offers start and
+		# restart for a unit that does not exist. Fail open - skip only on a definite "no such unit",
+		# so an unexpected systemctl answer can never hide a running service.
+		if command -v systemctl > /dev/null 2>&1 \
+			&& ! systemctl list-unit-files "$service.service" 2> /dev/null | grep -q "^$service\.service"; then
+			proc_name=''
+			continue
 		fi
 		get_srv_state "$service" "$proc_name"
 		data="$data\nNAME='$service' SYSTEM='database server' STATE='$state'"

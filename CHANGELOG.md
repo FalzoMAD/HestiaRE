@@ -39,6 +39,21 @@ opens above it.
 
 ### Fixed
 
+- **Backup retention could delete another user's archives** (#556, upstream #4918). The retention list was
+  built with `grep "^$user\." | grep ".tar"`, so listing user `foo` also matched `foo.bar.*.tar` -
+  measured on a fixture: four files returned instead of two, including another user's backups and an
+  unrelated `.tar.gz`. Since that list drives the rotation delete, `foo` hitting its retention limit
+  removed `foo.bar`'s backups. Now anchored on the actual name shape (`user.YYYY-...tar`). New users
+  cannot contain a dot, but the general user validator allows one, so a user restored from HestiaCP can.
+  Applied to all seven affected backends - upstream fixed three, we also have sftp and rclone. The
+  Backblaze path filters server-side by prefix and is left alone: the same class may apply, but it cannot
+  be verified without an account.
+- **The services list showed database servers that are not installed** (#556). `h-add-database-host`
+  writes the type into `DB_SYSTEM` for a **remote** host too, so registering a remote PostgreSQL left a
+  permanent `postgresql - stopped` row with panel buttons for a unit that does not exist. Reproduced and
+  fixed live. The check fails open: a row is dropped only on a definite "no such unit", so an unexpected
+  `systemctl` answer can never hide a running service.
+
 - **The manual-ban chain picker offered a chain that no longer exists and hid two that do** (#555). It
   still listed `DNS` although bind9 is gone, and omitted `RECIDIVE`. Now lists the real set including
   `WEBSCAN`.
