@@ -12,6 +12,20 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **A deleted key in `hestia.conf` came back on the next syshealth run** (upstream #5584). The repair
+  built `hestia.conf.new` with `touch` plus `>>`, and removed it only when it had actually rewritten the
+  config - so a run that found nothing to fix left the file behind, and the next run appended into that
+  stale copy. Reproduced: delete a key, run twice, the key returns. It now truncates and removes
+  unconditionally. Matters here because `h-delete-sys-*` clears keys (`FIREWALL_EXTENSION`, the
+  `DB_SYSTEM` tokens), so a removed component could look installed again. The same hunk fixes two inert
+  patterns: `${rhs%%^\#*}` never stripped an inline comment (`^` is literal in a shell pattern) and
+  `${rhs%%*( )}` needs `extglob` - both verified before and after.
+- **A quote or backslash in a certificate field broke the SSL JSON the panel parses** (upstream #5585).
+  Only `ISSUER` was escaped, from the earlier #5524 adoption; `SUBJECT`, `ALIASES`, the validity dates,
+  `SIGNATURE` and `PUB_KEY` were interpolated raw. Applied to all three listers - mail, web and the panel
+  certificate - and verified that the escaped values round-trip unchanged through a JSON parse.
 ### Added
 
 - **DNSBL management from the CLI** (#555, upstream #5464). Exim has always consulted
