@@ -23,8 +23,8 @@ jobs:
           # VERSION aus dem Tag in die Datei schreiben
           echo "${VERSION}" > VERSION
           mkdir -p dist/hestiare-${VERSION}
-          EXCLUDES=$(grep 'export-ignore' .gitattributes | awk '{print $1}')
           # Dev-only trees never ship: the tarball is what lands on a customer box.
+          EXCLUDES=$(grep 'export-ignore' .gitattributes | awk '{print $1}')
           rsync -a \
             --exclude='.git*' \
             --exclude='dist' \
