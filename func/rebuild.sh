@@ -6,6 +6,10 @@
 #                                                                           #
 #===========================================================================#
 
+# Deterministic identity (#388) - side-effect free, only constants and functions.
+# shellcheck source=/usr/local/hestia/func/identity.sh
+[ -f "$HESTIA/func/identity.sh" ] && source "$HESTIA/func/identity.sh"
+
 # User account rebuild
 rebuild_user_conf() {
 
@@ -72,9 +76,22 @@ rebuild_user_conf() {
 
 	# Rebuild user. Every caller is a rebuild or restore path, so the account usually exists and
 	# useradd only fails - silently here, but it still writes a failure line to syslog per user.
+	# When it genuinely has to create the account (restore onto a fresh host) it must use the
+	# deterministic identity (#388), not the next sequential uid, or the restored home would be
+	# re-chowned to a host-specific value and any mapped container ids would break.
+	# An existing account keeps whatever uid it has: legacy users are not migrated.
 	shell=$(grep -w "$SHELL" /etc/shells | head -n1)
-	id "$user" > /dev/null 2>&1 || /usr/sbin/useradd "$user" -s "$shell" -c "$CONTACT" \
-		-m -d "$HOMEDIR/$user" > /dev/null 2>&1
+	if ! id "$user" > /dev/null 2>&1; then
+		local identity_conflict user_uid
+		if ! identity_conflict="$(identity_assert_free "$user")"; then
+			echo "Error: $identity_conflict"
+			return 1
+		fi
+		user_uid="$(identity_uid "$user")"
+		getent group "$user" > /dev/null 2>&1 || /usr/sbin/groupadd -g "$user_uid" "$user"
+		/usr/sbin/useradd -K "UID_MAX=$IDENTITY_BAND_END" "$user" -u "$user_uid" -g "$user_uid" \
+			-s "$shell" -c "$CONTACT" -m -d "$HOMEDIR/$user" > /dev/null 2>&1
+	fi
 
 	# Add a general group for normal users created by Hestia
 	if [ -z "$(grep "^hestia-users:" /etc/group)" ]; then

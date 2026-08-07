@@ -312,4 +312,34 @@ migrate_data_layout() {
 
 	# restrict the shell-profile snippet to root on existing installs (was world-readable)
 	[ -f /etc/profile.d/hestia.sh ] && chmod 600 /etc/profile.d/hestia.sh
+
+	# The band guard has to travel with the formula (#388): without it a bare useradd on an
+	# already-installed box can still land inside the deterministic band and become the
+	# restore conflict the scheme exists to prevent. Existing accounts are left alone.
+	login_defs_guard || true
+}
+
+# ── login.defs guard rail for the deterministic UID band (#388) ─────────────
+# Panel users own 11000-41999, their Docker companions the interleaved block below.
+# Both are assigned by formula from the username, so anything created with a bare
+# useradd/adduser has to stay out of that band - otherwise a restore lands on a uid a
+# foreign local account already holds, which is the main source of the restore
+# conflicts the scheme exists to remove.
+# The SUB_UID/SUB_GID bounds are set for the same reason: companion subordinate ranges
+# are computed, never auto-assigned, and shadow's own allocator must not wander into
+# them. Idempotent - rewrites the key in place whether it was set or shipped commented.
+login_defs_guard() {
+	local f='/etc/login.defs' kv k v
+	[ -f "$f" ] || return 0
+	for kv in 'UID_MAX 9999' 'GID_MAX 9999' \
+		'SUB_UID_MIN 100000' 'SUB_UID_MAX 2147483647' \
+		'SUB_GID_MIN 100000' 'SUB_GID_MAX 2147483647'; do
+		k="${kv%% *}"
+		v="${kv##* }"
+		if grep -qE "^[[:space:]]*#?[[:space:]]*${k}[[:space:]]" "$f"; then
+			sed -i -E "s|^[[:space:]]*#?[[:space:]]*${k}[[:space:]].*|${k}\t\t\t${v}|" "$f"
+		else
+			printf '%s\t\t\t%s\n' "$k" "$v" >> "$f"
+		fi
+	done
 }

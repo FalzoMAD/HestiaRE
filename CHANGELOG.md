@@ -12,6 +12,28 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **Deterministic user identity (UID/GID scheme v2).** A panel user's uid, gid, the companion uid reserved
+  for rootless Docker and the subordinate-id base are now a pure function of the username
+  (`func/identity.sh`), so a restore on a fresh host reproduces the identity with no metadata at all -
+  which is what makes user backups portable once container data owned by mapped ids is in play. Customers
+  occupy the odd thousands (11000-41999), each companion the interleaved block below (10000-40999);
+  `sub_base = 100000 + k*65536`, disjoint by construction and below 2^31. There is **no probing at
+  creation**: a name whose uid, companion uid or gid is already taken is rejected with a message naming
+  the conflicting account, which keeps the identity reproducible from the name alone. `identity.conf` sits
+  next to `user.conf` and rides in the backup as a **verification artefact only** - restore recomputes
+  from the name and refuses on divergence rather than trusting the file, and an archive without it (any
+  HestiaCP backup) still restores by recomputation plus the existing re-chown. Both account-creation paths
+  are covered: `h-add-user` and `rebuild_user_conf`, the latter being what all restore and rebuild
+  commands go through. Existing accounts keep their uid; legacy users are not migrated.
+
+  Paired with `login_defs_guard`, which caps `UID_MAX`/`GID_MAX` below the band so a bare `useradd` cannot
+  wander into it. That also raises `SUB_UID_MAX`/`SUB_GID_MAX`: the shipped default of 600100000 sits
+  *below* our highest computed range end (1048675999) and would have rejected the subordinate ranges of
+  roughly 43% of all usernames. The explicit `-u` inside the band passes `-K UID_MAX=` so useradd does not
+  warn about the guard rail on every single user creation.
+
 ### Changed
 
 - **`sync-upstream.sh` names its source branch** and archives that branch instead of whatever the mirror

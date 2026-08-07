@@ -29,6 +29,8 @@ FROM_V_ADD_USER=true
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/identity.sh
+source $HESTIA/func/identity.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -85,8 +87,23 @@ fi
 shell=$(grep -w "$shell_conf" /etc/shells | head -n1)
 
 # Adding user
-/usr/sbin/useradd "$user" -s "$shell" -c "$email" -m -d "$HOMEDIR/$user" -U
-check_result $? "user creation failed" "$E_INVALID"
+# Deterministic identity (#388): uid and gid are a pure function of the username, so a
+# restore on another host reproduces them with no metadata at all. No probing at
+# creation - a name whose slot is taken is rejected instead, which is what keeps
+# UID_PROBE=0 true for every regularly created user.
+identity_conflict="$(identity_assert_free "$user")" \
+	|| check_result "$E_EXISTS" "$identity_conflict"
+user_uid="$(identity_uid "$user")"
+
+# The private group is created explicitly rather than via useradd -U, which would pick
+# the next free gid instead of mirroring the uid.
+/usr/sbin/groupadd -g "$user_uid" "$user"
+check_result $? "group creation failed" "$E_INVALID"
+if ! /usr/sbin/useradd -K "UID_MAX=$IDENTITY_BAND_END" "$user" -u "$user_uid" -g "$user_uid" \
+	-s "$shell" -c "$email" -m -d "$HOMEDIR/$user"; then
+	/usr/sbin/groupdel "$user" > /dev/null 2>&1
+	check_result "$E_INVALID" "user creation failed"
+fi
 
 # Adding password
 echo "$user:$password" | /usr/sbin/chpasswd
@@ -179,6 +196,10 @@ chmod 660 $USER_DATA/backup.conf \
 	$USER_DATA/mail.conf \
 	$USER_DATA/db.conf \
 	$USER_DATA/cron.conf
+
+# Pin the computed identity next to user.conf. Verification artefact only - the restore
+# recomputes it from the name and refuses on divergence rather than trusting this file.
+identity_write_conf "$user" "$USER_DATA"
 
 # Updating queue pipes
 echo "$BIN/h-update-user-disk $user" >> $CONF_DIR/queue/disk.pipe

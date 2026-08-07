@@ -127,6 +127,11 @@ install_base() {
 		apt-transport-https awstats \
 		$BASE_PKGS_EXTRA
 
+	# Must precede every useradd on the box, including the panel's own service account:
+	# it caps the auto-assigned range below the deterministic panel-user band (#388).
+	echo "[ * ] Reserving the panel UID band in login.defs..."
+	login_defs_guard
+
 	echo "[ * ] Creating system users..."
 	id hestia &> /dev/null || useradd hestia -c "HestiaRE Panel" --no-create-home -s /sbin/nologin
 	getent group hestia-users &> /dev/null || groupadd hestia-users
