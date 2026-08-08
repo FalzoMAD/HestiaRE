@@ -82,6 +82,13 @@ sed -i "/ $user$/d" "$CONF_DIR/queue/traffic.pipe"
 # Deleting sftp jail
 $BIN/h-delete-user-sftp-jail "$user"
 
+# Deleting the Docker companion. Must precede the userdel below: the companion lives
+# inside this home and holds subordinate id ranges, and its uid becomes free again -
+# leaving it behind would orphan files that a later account on that uid would inherit.
+if getent passwd "${user}-docker" > /dev/null 2>&1; then
+	$BIN/h-delete-user-docker "$user" > /dev/null 2>&1
+fi
+
 # Deleting system user
 /usr/sbin/userdel -f "$user" >> /dev/null 2>&1
 if [ $? -ne 0 ]; then

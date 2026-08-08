@@ -12,7 +12,101 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **Rootless Docker per customer** (#389). Each Docker-enabled customer gets a *companion* account one
+  uid block below their own, which runs their private rootless daemon as container uid 0 while the
+  customer maps to container uid 1000 - the id stock images expect, so upstream compose files work
+  unmodified. The customer never touches the companion: they reach the daemon through a group-owned
+  socket in `~/.companion`, which lives inside their home so both travel as one backup unit. Verified
+  end-to-end: the maps inside a container come out exactly as designed, and an unmodified image running
+  as 1000 writes files owned by the customer on the host.
+
+  `h-add-user-docker` / `h-delete-user-docker` enable and disable it; `h-delete-user` takes the companion
+  with it, and `h-restore-user` re-creates it after a restore - the companion uid follows the customer's,
+  which the identity allocator (#388) reassigns freshly, so it is recomputed rather than restored.
+  Backups exclude the companion image store, since images are reproduced by pulling them; a 201 MB store
+  turned a 222 MB home into a 21 MB archive.
+
+- **Docker is installed from the official repo as a scoped addon** (`h-add-sys-docker` /
+  `h-delete-sys-docker`, #389), replacing the inline `docker.io` install. The OS route cannot deliver
+  this feature: neither Debian packages compose v2 at all, the OS `docker.io` spans 20.10 to 29.1 across
+  the four targets, and `dockerd-rootless.sh` ships only in Debian's build. The exception stays scoped -
+  the repo, keyring and pin are added by the addon and removed with it, so a box without Docker carries
+  no Docker repo. The rootful daemon is disabled (service **and** socket, else socket activation brings
+  it back), and the removal side refuses while customers still have it enabled unless forced. No cgroup
+  delegation drop-in is installed: systemd already ships `user@.service` with `Delegate=pids memory cpu`
+  on all four targets (verified down to systemd 252), which is what `--memory`, `--cpus` and
+  `docker stats` need. Adding `cpuset`/`io` on the template would have widened every customer's session,
+  Docker or not, for limits nothing asks for.
+
+  The repo is deliberately **not** pinned. The condition it was added for - stop it shadowing OS packages
+  - describes a risk that cannot occur: no OS package shares a name with it (Debian and Ubuntu carry
+  `containerd`, `docker.io`, `docker-cli`, `docker-compose`, `docker-buildx`; the repo carries
+  `containerd.io`, `docker-ce*` and the `*-plugin` variants). A pin could only have narrowed what the
+  repo offers, never bounded it: apt's allow-list form does not work - a `Package: *` pin on the origin
+  overrides any specific-package stanza regardless of order or quoting, which silently pinned `docker-ce`
+  itself to -1 and would have blocked its security updates - and a name-based deny list cannot cover
+  packages added later. `h-delete-sys-docker` still removes a pin from an earlier revision.
+
+- **`h-check-sys-smoke` guards the identity allocator's preconditions** (#388). Not its output - panel
+  users created before the change keep their old uid by design, so their position is deliberately not
+  checked. What must hold is that `UID_MAX`/`GID_MAX` cap below the band (else a bare `useradd` can land
+  inside it and collide with an allocation), that `SUB_UID_MAX`/`SUB_GID_MAX` cover the whole computed
+  range (the shipped 600100000 would reject the companion subuid ranges of roughly 43% of usernames, and
+  only at "enable Docker", long after the account was created), and that no two panel users share a uid.
+  Verified in both directions: all four checks fail on a box without the guard rail and pass after it runs.
+
+### Added
+
+- **Panel users get their uid allocated from a dedicated band** (`func/identity.sh`). The username hash
+  only picks where to start looking; the first free slot wins and is that user's uid from then on, as in
+  classic HestiaCP. A taken slot is not an error - it reprobes. Customers occupy the odd thousands
+  (11000-41999), each companion the interleaved block below (10000-40999), which reserves the second id
+  rootless Docker needs (#389).
+
+  Backups carry **no** authoritative identity and restores allocate a fresh uid rather than trying to
+  reproduce one. Portability comes from `tar` resolving ownership by **name** on extract: the account is
+  created before the unpack, so the files land on the new uid by themselves - measured, a file archived
+  under uid 5001 extracts as 5099 once the name maps there. This is also why `h-backup-user` must never
+  gain `--numeric-owner`: it pins the archived numbers and destroys exactly that property. HestiaCP
+  archives need no special path, since their sequential uids are discarded like any other. The one case
+  still needing a chown is a restore under a *different* username, where `tar` finds no local name to
+  resolve to; the inherited `old_uid`/`new_uid` re-chown already covers it.
+
+  Paired with `login_defs_guard`, which caps `UID_MAX`/`GID_MAX` below the band so a bare `useradd`
+  cannot wander into it. That also raises `SUB_UID_MAX`/`SUB_GID_MAX`: the shipped default of 600100000
+  sits *below* our highest range end (1048675999) and would have rejected the subordinate ranges of
+  roughly 43% of all usernames.
+
 ### Changed
+
+- **The /proc exemption gid is resolved at every boot instead of baked in at install time.** The unit
+  carried the numeric gid that `procvis` happened to have when the installer ran. Delete and recreate that
+  group - or let anything else claim the id - and the frozen number keeps exempting whatever now holds it,
+  with nothing noticing. The unit now reads `/etc/group` in its own `ExecStart`, so the exemption is
+  always whatever this host says right now, and a missing group means `gid=0`, i.e. nobody extra. That
+  also settles the original name-vs-numeric argument: resolving per boot is exactly the behaviour a
+  restored box needs. `gid=0` is deliberate rather than omitting the option - a remount that merely leaves
+  `gid` out keeps the previous value (mount options are sticky) and `gid=` is rejected outright, so this
+  is what actually withdraws a stale exemption on a running box.
+
+- **`h-check-sys-smoke` verifies the live /proc state.** Failure of the hardening is fail-open and
+  invisible to users, so the box now checks what is actually mounted: unit not failed, hidepid present,
+  and the mounted gid still pointing at `procvis`. The last one caught a deliberately drifted gid during
+  testing.
+
+- **`/proc` hardening now lives in `/etc/fstab` instead of an `@reboot` cron job.** The old line remounted
+  `/proc` with `hidepid=2` and re-applied it from `/etc/cron.d/hestia-proc` after boot, guarded by a
+  `sleep 5`. Cron starts *after* most services, so that sleep papered over a window in which `/proc` was
+  still unhardened; systemd applies fstab options before the services come up and closes it. The new
+  `proc_hardening_apply` (`func/helper.sh`) also creates the `procvis` group and writes a **numeric**
+  `gid=` exemption - a name would resolve to a different id on a restored box and silently exempt whoever
+  holds it there. The entry is only persisted after the remount is proven to work on the running kernel,
+  so LXC still degrades to the documented skip rather than to an fstab that fails at boot, and a
+  hand-written `/proc` entry is left alone. Existing boxes are converted on upgrade. The exemption group
+  is what makes rootless container runtimes work at all under hidepid (moby#45014), so this is a
+  prerequisite for #389.
 
 - **`sync-upstream.sh` names its source branch** and archives that branch instead of whatever the mirror
   happens to have checked out. A manual checkout in the mirror made one sync archive `1.10-beta`, which is
@@ -21,6 +115,13 @@ opens above it.
   carries `(<branch> @ <sha>)`, and `UPSTREAM_BRANCH=` overrides it on purpose.
 
 ### Fixed
+
+- **The per-chain ban verdict was missing on the live-attach path.** `fw_jail_verdict` was wired into the
+  full re-render but not into `fw_jail_attach`, which hardcoded `reject` for both families. fail2ban's
+  `actionstart` reaches exactly that path, so on a fresh install every jail rule - `WEBSCAN` included -
+  came up rejecting, and only picked up its `drop` if something later forced a full re-render. Found on the
+  v0.14.1 fleet: deb12/deb13 happened to have re-rendered and showed `drop`, ub26 still carried the
+  live-attached `reject`, from identical code. The two emitters now share one verdict table.
 
 - **A deleted key in `hestia.conf` came back on the next syshealth run** (upstream #5584). The repair
   built `hestia.conf.new` with `touch` plus `>>`, and removed it only when it had actually rewritten the

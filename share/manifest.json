@@ -382,9 +382,9 @@
       "group": "addons",
       "type": "checkbox",
       "label": "Docker",
-      "description": "Container runtime (proxy)",
+      "description": "Rootless containers per customer",
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Shown in all presets, preset nowhere. Real resource footprint (RAM/disk), deliberately no automatic activation."
+      "note": "Shown in all presets, preset nowhere. Real resource footprint (RAM/disk), deliberately no automatic activation. Installs the host side only (#389); a customer gets a companion and their own daemon via h-add-user-docker."
     },
 
     "ADDON_FILEMANAGER": {

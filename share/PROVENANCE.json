@@ -369,6 +369,24 @@
       "note": ""
     },
     {
+      "path": "docker/profile.d-hestia-docker.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "HestiaRE-native (#389); per-user rootless Docker"
+    },
+    {
+      "path": "docker/systemd/docker-rootless-override.conf",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "HestiaRE-native (#389); per-user rootless Docker"
+    },
+    {
       "path": "dovecot/2.3/conf.d/10-auth.conf",
       "source_type": "derived",
       "upstream_path": "install/common/dovecot/2.3/conf.d/10-auth.conf",
@@ -1929,6 +1947,15 @@
       "last_reconciled": null,
       "divergence": null,
       "note": "no upstream counterpart found; native or renamed - confirm manually"
+    },
+    {
+      "path": "security/systemd/hestia-proc-hardening.service",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "HestiaRE-native (#565); replaces the inherited @reboot cron for the hidepid remount"
     },
     {
       "path": "snappymail/install.php",

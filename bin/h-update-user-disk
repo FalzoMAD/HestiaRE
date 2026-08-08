@@ -39,6 +39,10 @@ IFS=$(echo -en "\n\b")
 
 #Starting update disk space excluding web, mail, conf directory
 disk_usage='0'
+# The companion image store is counted here on purpose, unlike in h-backup-user. These
+# answer different questions: the archive excludes it because images are pulled again,
+# while this is what the customer actually occupies on disk. Excluding it would
+# understate usage for exactly the customers using the most of it (#389).
 disk_usage=$(du -shm $HOMEDIR/$user --exclude $HOMEDIR/$user/web --exclude $HOMEDIR/$user/mail --exclude $HOMEDIR/$user/conf | cut -f 1)
 
 # Restoring old IFS

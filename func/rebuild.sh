@@ -6,6 +6,9 @@
 #                                                                           #
 #===========================================================================#
 
+# shellcheck source=/usr/local/hestia/func/identity.sh
+[ -f "$HESTIA/func/identity.sh" ] && source "$HESTIA/func/identity.sh"
+
 # User account rebuild
 rebuild_user_conf() {
 
@@ -72,9 +75,22 @@ rebuild_user_conf() {
 
 	# Rebuild user. Every caller is a rebuild or restore path, so the account usually exists and
 	# useradd only fails - silently here, but it still writes a failure line to syslog per user.
+	# Creating for real (restore onto a fresh host) allocates a free slot in the panel
+	# band (#388). The archived uid is deliberately ignored: tar resolves ownership by
+	# name on extract, and this runs BEFORE the unpack, so the files land here by
+	# themselves. An existing account keeps its uid.
 	shell=$(grep -w "$SHELL" /etc/shells | head -n1)
-	id "$user" > /dev/null 2>&1 || /usr/sbin/useradd "$user" -s "$shell" -c "$CONTACT" \
-		-m -d "$HOMEDIR/$user" > /dev/null 2>&1
+	if ! id "$user" > /dev/null 2>&1; then
+		local user_uid
+		read -r user_uid _ < <(identity_allocate "$user")
+		if [ -z "$user_uid" ]; then
+			echo "Error: no free uid slot in the panel band for '$user'"
+			return 1
+		fi
+		getent group "$user" > /dev/null 2>&1 || /usr/sbin/groupadd -g "$user_uid" "$user"
+		/usr/sbin/useradd -K "UID_MAX=$IDENTITY_BAND_END" "$user" -u "$user_uid" -g "$user_uid" \
+			-s "$shell" -c "$CONTACT" -m -d "$HOMEDIR/$user" > /dev/null 2>&1
+	fi
 
 	# Add a general group for normal users created by Hestia
 	if [ -z "$(grep "^hestia-users:" /etc/group)" ]; then

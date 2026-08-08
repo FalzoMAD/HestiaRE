@@ -29,6 +29,8 @@ FROM_V_ADD_USER=true
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/identity.sh
+source $HESTIA/func/identity.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -85,8 +87,18 @@ fi
 shell=$(grep -w "$shell_conf" /etc/shells | head -n1)
 
 # Adding user
-/usr/sbin/useradd "$user" -s "$shell" -c "$email" -m -d "$HOMEDIR/$user" -U
-check_result $? "user creation failed" "$E_INVALID"
+# Allocated from the panel band, not derived - see func/identity.sh (#388).
+read -r user_uid _ < <(identity_allocate "$user")
+[ -n "$user_uid" ] || check_result "$E_LIMIT" "no free uid slot in the panel band for '$user'"
+
+# Explicit, not useradd -U: -U would take the next free gid instead of mirroring uid.
+/usr/sbin/groupadd -g "$user_uid" "$user"
+check_result $? "group creation failed" "$E_INVALID"
+if ! /usr/sbin/useradd -K "UID_MAX=$IDENTITY_BAND_END" "$user" -u "$user_uid" -g "$user_uid" \
+	-s "$shell" -c "$email" -m -d "$HOMEDIR/$user"; then
+	/usr/sbin/groupdel "$user" > /dev/null 2>&1
+	check_result "$E_INVALID" "user creation failed"
+fi
 
 # Adding password
 echo "$user:$password" | /usr/sbin/chpasswd
