@@ -1,0 +1,146 @@
+#!/bin/bash
+# info: install Docker for per-user rootless containers
+# options: NONE
+#
+# example: h-add-sys-docker
+#
+# Host side of the per-user rootless Docker feature (#389): repo, packages, host
+# prerequisites. Enabling it for a customer is a separate, per-user action.
+# Idempotent - re-running heals a partial install.
+#
+# Uses the OFFICIAL Docker repo, a deliberate exception to the OS-repo rule. Measured
+# across the four targets: neither Debian packages compose v2 at all, the OS docker.io
+# spans 20.10 to 29.1, and dockerd-rootless.sh ships only in Debian's build, never
+# Ubuntu's. The exception is scoped - the repo is added by this addon, pinned so it can
+# only supply the Docker packages, and removed again by h-delete-sys-docker.
+#
+# The rootful daemon is disabled on purpose: this feature runs one daemon per customer
+# under their companion. docker.socket has to go too, or socket activation resurrects
+# the rootful one on first access to /var/run/docker.sock.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/helper.sh
+source $HESTIA/func/helper.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+# COMPONENT_* state
+[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
+
+DOCKER_KEYRING='/usr/share/keyrings/docker-keyring.gpg'
+DOCKER_LIST='/etc/apt/sources.list.d/docker.list'
+DOCKER_PREF='/etc/apt/preferences.d/hestia-docker.pref'
+DOCKER_DELEGATE='/etc/systemd/system/user@.service.d/hestia-delegate.conf'
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "ERROR: h-add-sys-docker can only be executed by the root user"
+	exit 10
+fi
+
+if [ -z "$HESTIA" ]; then HESTIA="/usr/local/hestia"; fi
+
+check_hestia_demo_mode
+
+# Rootless needs cgroup v2. On cgroup v1 the delegation below is meaningless and
+# container resource limits silently do nothing, so refuse rather than half-install.
+if [ "$(stat -fc %T /sys/fs/cgroup 2> /dev/null)" != 'cgroup2fs' ]; then
+	echo "ERROR: /sys/fs/cgroup is not cgroup v2 - rootless Docker is not supported here."
+	exit "$E_INVALID"
+fi
+
+os_id="$(. /etc/os-release 2> /dev/null && echo "${ID:-}")"
+os_codename="$(. /etc/os-release 2> /dev/null && echo "${VERSION_CODENAME:-}")"
+if [ "$os_id" != 'debian' ] && [ "$os_id" != 'ubuntu' ]; then
+	echo "ERROR: unsupported distribution '$os_id' for the Docker repo."
+	exit "$E_INVALID"
+fi
+[ -n "$os_codename" ] || { echo "ERROR: cannot determine the OS codename."; exit "$E_INVALID"; }
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# The old inline addon installed the OS docker.io, which is the rootful daemon this
+# feature replaces. It conflicts with docker-ce, so it goes first rather than letting
+# apt resolve it mid-transaction.
+if dpkg-query -W -f='${db:Status-Status}' docker.io 2> /dev/null | grep -q '^installed$'; then
+	echo "Removing the OS docker.io (superseded by docker-ce)..."
+	apt-get -y -qq purge docker.io > /dev/null 2>&1
+fi
+
+echo "Adding the Docker repository..."
+install -m 0755 -d /usr/share/keyrings /etc/apt/keyrings
+if [ ! -s "$DOCKER_KEYRING" ]; then
+	curl -fsSL "https://download.docker.com/linux/$os_id/gpg" -o /tmp/docker_apt.gpg \
+		|| { echo "ERROR: failed to download the Docker signing key"; exit "$E_CONNECT"; }
+	gpg --dearmor < /tmp/docker_apt.gpg > "$DOCKER_KEYRING" \
+		|| { echo "ERROR: failed to dearmor the Docker signing key"; rm -f /tmp/docker_apt.gpg; exit "$E_INVALID"; }
+	rm -f /tmp/docker_apt.gpg
+fi
+[ -s "$DOCKER_KEYRING" ] || { echo "ERROR: Docker keyring empty"; exit "$E_INVALID"; }
+chmod a+r "$DOCKER_KEYRING"
+
+arch="$(dpkg --print-architecture 2> /dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+printf 'deb [arch=%s signed-by=%s] https://download.docker.com/linux/%s %s stable\n' \
+	"$arch" "$DOCKER_KEYRING" "$os_id" "$os_codename" > "$DOCKER_LIST"
+install -m 644 "$HESTIA/share/docker/docker.pref" "$DOCKER_PREF"
+
+apt-get -qq update > /dev/null 2>&1
+
+# uidmap/slirp4netns/fuse-overlayfs are what rootlesskit needs; dbus-user-session and
+# systemd-container are what reaching a user context needs - su does not create a
+# session, so panel actions go through systemd-run --machine instead.
+docker_pkgs="docker-ce docker-ce-cli containerd.io docker-ce-rootless-extras docker-compose-plugin"
+host_pkgs="uidmap slirp4netns fuse-overlayfs dbus-user-session systemd-container"
+echo "Installing Docker ($docker_pkgs)..."
+# shellcheck disable=SC2086
+apt-get -y -qq install $docker_pkgs $host_pkgs > /dev/null 2>&1
+for p in docker-ce docker-ce-rootless-extras uidmap; do
+	dpkg-query -W -f='${db:Status-Status}' "$p" 2> /dev/null | grep -q '^installed$' \
+		|| { echo "ERROR: $p was not installed - see apt output above."; exit "$E_INVALID"; }
+done
+
+echo "Disabling the rootful daemon..."
+systemctl disable --now docker.service docker.socket > /dev/null 2>&1 || true
+# The end state is what matters; systemd prints a triggering-units warning even when
+# both are handled in one call.
+for u in docker.service docker.socket; do
+	if [ "$(systemctl is-active "$u" 2> /dev/null)" = 'active' ]; then
+		echo "ERROR: $u is still active - a rootful daemon would preempt the per-user ones."
+		exit "$E_INVALID"
+	fi
+done
+
+echo "Delegating cgroup controllers to user sessions..."
+mkdir -p "$(dirname "$DOCKER_DELEGATE")"
+install -m 644 "$HESTIA/share/docker/systemd/delegate.conf" "$DOCKER_DELEGATE"
+systemctl daemon-reload
+
+# hidepid hides the pids runc needs to have its container scope started; the companion
+# has to be in the exemption group for that. Re-asserted here so the group exists before
+# the first customer is enabled (#565).
+proc_hardening_apply || true
+
+set_install_component ADDON_DOCKER true
+
+echo "Docker is now installed. Enable it per customer to create their companion."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Installed Docker (rootless, per-user)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

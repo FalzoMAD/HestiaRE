@@ -14,6 +14,20 @@ opens above it.
 
 ### Added
 
+- **Docker is installed from the official repo as a scoped addon** (`h-add-sys-docker` /
+  `h-delete-sys-docker`, #389), replacing the inline `docker.io` install. The OS route cannot deliver
+  this feature: neither Debian packages compose v2 at all, the OS `docker.io` spans 20.10 to 29.1 across
+  the four targets, and `dockerd-rootless.sh` ships only in Debian's build. The exception stays scoped -
+  the repo, keyring and pin are added by the addon and removed with it, so a box without Docker carries
+  no Docker repo. The rootful daemon is disabled (service **and** socket, else socket activation brings
+  it back), cgroup controllers are delegated to user sessions, and the removal side refuses while
+  customers still have it enabled unless forced.
+
+  The apt pin is a **deny** list, not an allow list. A `Package: *` pin on that origin overrides any
+  specific-package stanza regardless of order or quoting - measured on deb13, where the allow-list form
+  silently pinned `docker-ce` itself to -1 and would have blocked its security updates. No OS package is
+  shadowed either way, since the repo's package names do not exist in Debian or Ubuntu.
+
 - **`h-check-sys-smoke` guards the identity allocator's preconditions** (#388). Not its output - panel
   users created before the change keep their old uid by design, so their position is deliberately not
   checked. What must hold is that `UID_MAX`/`GID_MAX` cap below the band (else a bare `useradd` can land

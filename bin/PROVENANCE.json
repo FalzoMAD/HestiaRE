@@ -722,6 +722,15 @@
       "note": ""
     },
     {
+      "path": "h-add-sys-docker",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "HestiaRE-native (#389); per-user rootless Docker"
+    },
+    {
       "path": "h-add-sys-fail2ban",
       "source_type": "eigenbau",
       "upstream_path": null,
@@ -3270,6 +3279,15 @@
       "last_reconciled": null,
       "divergence": null,
       "note": ""
+    },
+    {
+      "path": "h-delete-sys-docker",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "HestiaRE-native (#389); per-user rootless Docker"
     },
     {
       "path": "h-delete-sys-fail2ban",

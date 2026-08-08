@@ -617,8 +617,8 @@ install_addons() {
 		"$BIN/h-add-sys-proftpd" >> "$LOG" 2>&1 || true
 	fi
 	if is_on "${COMPONENT_ADDON_DOCKER:-}"; then
-		echo "[ * ] Installing docker.io (minimal — see #123)..."
-		apt_install_optional "Docker" docker.io || true
+		echo "[ * ] Installing Docker (rootless, per-user)..."
+		"$BIN/h-add-sys-docker" >> "$LOG" 2>&1 || true
 	fi
 	if is_on "${COMPONENT_ADDON_FILEMANAGER:-}"; then
 		echo "[ * ] Installing File Manager..."
