@@ -14,6 +14,20 @@ opens above it.
 
 ### Added
 
+- **Rootless Docker per customer** (#389). Each Docker-enabled customer gets a *companion* account one
+  uid block below their own, which runs their private rootless daemon as container uid 0 while the
+  customer maps to container uid 1000 - the id stock images expect, so upstream compose files work
+  unmodified. The customer never touches the companion: they reach the daemon through a group-owned
+  socket in `~/.companion`, which lives inside their home so both travel as one backup unit. Verified
+  end-to-end: the maps inside a container come out exactly as designed, and an unmodified image running
+  as 1000 writes files owned by the customer on the host.
+
+  `h-add-user-docker` / `h-delete-user-docker` enable and disable it; `h-delete-user` takes the companion
+  with it, and `h-restore-user` re-creates it after a restore - the companion uid follows the customer's,
+  which the identity allocator (#388) reassigns freshly, so it is recomputed rather than restored.
+  Backups exclude the companion image store, since images are reproduced by pulling them; a 201 MB store
+  turned a 222 MB home into a 21 MB archive.
+
 - **Docker is installed from the official repo as a scoped addon** (`h-add-sys-docker` /
   `h-delete-sys-docker`, #389), replacing the inline `docker.io` install. The OS route cannot deliver
   this feature: neither Debian packages compose v2 at all, the OS `docker.io` spans 20.10 to 29.1 across
