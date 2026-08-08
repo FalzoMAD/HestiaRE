@@ -4,19 +4,17 @@
 #
 # example: h-add-sys-docker
 #
-# Host side of the per-user rootless Docker feature (#389): repo, packages, host
-# prerequisites. Enabling it for a customer is a separate, per-user action.
-# Idempotent - re-running heals a partial install.
+# Host side of per-user rootless Docker (#389): repo, packages, prerequisites.
+# Enabling it for a customer is a separate action. Idempotent.
 #
-# Uses the OFFICIAL Docker repo, a deliberate exception to the OS-repo rule. Measured
-# across the four targets: neither Debian packages compose v2 at all, the OS docker.io
-# spans 20.10 to 29.1, and dockerd-rootless.sh ships only in Debian's build, never
-# Ubuntu's. The exception is scoped - the repo is added by this addon, pinned so it can
-# only supply the Docker packages, and removed again by h-delete-sys-docker.
+# Official Docker repo, a deliberate exception to the OS-repo rule: neither Debian
+# packages compose v2, the OS docker.io spans 20.10 to 29.1 across the targets, and
+# dockerd-rootless.sh ships only in Debian's build. Scoped - the addon adds the repo,
+# h-delete-sys-docker removes it. Unpinned: no OS package shares a name with this repo,
+# so there is nothing to shadow.
 #
-# The rootful daemon is disabled on purpose: this feature runs one daemon per customer
-# under their companion. docker.socket has to go too, or socket activation resurrects
-# the rootful one on first access to /var/run/docker.sock.
+# The rootful daemon is disabled - one daemon per customer runs under their companion.
+# docker.socket goes too, else socket activation resurrects it.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -48,8 +46,8 @@ fi
 
 check_hestia_demo_mode
 
-# Rootless needs cgroup v2. On cgroup v1 the delegation below is meaningless and
-# container resource limits silently do nothing, so refuse rather than half-install.
+# On cgroup v1 container resource limits are silent no-ops - refuse rather than
+# half-install.
 if [ "$(stat -fc %T /sys/fs/cgroup 2> /dev/null)" != 'cgroup2fs' ]; then
 	echo "ERROR: /sys/fs/cgroup is not cgroup v2 - rootless Docker is not supported here."
 	exit "$E_INVALID"
@@ -93,17 +91,14 @@ printf 'deb [arch=%s signed-by=%s] https://download.docker.com/linux/%s %s stabl
 
 apt-get -qq update > /dev/null 2>&1
 
-# Named explicitly rather than left to Recommends: rootless-extras only *recommends*
-# slirp4netns, and buildx arrives the same way - an apt configured with
-# --no-install-recommends would silently produce a Docker that cannot network or build.
-# uidmap/slirp4netns are what rootlesskit needs; dbus-user-session and systemd-container
-# are what reaching a user context needs, since su creates no session and panel actions
-# go through systemd-run --machine.
+# Named explicitly, not left to Recommends: rootless-extras only *recommends*
+# slirp4netns, buildx arrives the same way, and --no-install-recommends would then yield
+# a Docker that cannot network or build. systemd-container is for systemd-run --machine,
+# since su creates no session.
 docker_req="docker-ce docker-ce-cli containerd.io docker-ce-rootless-extras docker-compose-plugin"
 host_req="uidmap slirp4netns dbus-user-session systemd-container"
-# Degradations, not blockers: fuse-overlayfs is only needed where the kernel has no
-# native rootless overlayfs (none of the supported targets), buildx only for building
-# images rather than pulling them.
+# Degradations, not blockers: no supported target needs fuse-overlayfs, and buildx only
+# matters for building images rather than pulling them.
 optional_pkgs="fuse-overlayfs docker-buildx-plugin"
 
 apt_log="$(mktemp -t hestia-docker-apt.XXXXXX)"
@@ -111,9 +106,8 @@ echo "Installing Docker ($docker_req)..."
 # shellcheck disable=SC2086
 apt-get -y -qq install $docker_req $host_req $optional_pkgs > "$apt_log" 2>&1
 
-# Verify every package, not a sample. apt's exit code alone is not enough - a partial
-# transaction can still report success, and a missing piece would only surface later,
-# when a customer is enabled, as a much less obvious failure.
+# Every package, not a sample: apt can report success on a partial transaction, and the
+# gap would surface only when a customer is enabled.
 missing=''
 for p in $docker_req $host_req; do
 	dpkg-query -W -f='${db:Status-Status}' "$p" 2> /dev/null | grep -q '^installed$' \
@@ -132,8 +126,8 @@ rm -f "$apt_log"
 
 echo "Disabling the rootful daemon..."
 systemctl disable --now docker.service docker.socket > /dev/null 2>&1 || true
-# The end state is what matters; systemd prints a triggering-units warning even when
-# both are handled in one call.
+# End state, not exit code: systemd warns about triggering units even when both are
+# handled in one call.
 for u in docker.service docker.socket; do
 	if [ "$(systemctl is-active "$u" 2> /dev/null)" = 'active' ]; then
 		echo "ERROR: $u is still active - a rootful daemon would preempt the per-user ones."
@@ -141,17 +135,13 @@ for u in docker.service docker.socket; do
 	fi
 done
 
-# No cgroup delegation drop-in: systemd ships user@.service with
-# `Delegate=pids memory cpu` on all four targets (verified, down to systemd 252 on
-# deb12), which is exactly what --memory, --cpus and `docker stats` need. Adding
-# cpuset/io on the template would widen every customer's session, Docker or not, for
-# limits nothing currently asks for. If a container ever needs them, that belongs on
-# the companion's own uid at enable time, not here.
+# No cgroup delegation drop-in: systemd already ships user@.service with
+# `Delegate=pids memory cpu` (verified down to systemd 252), which is what --memory,
+# --cpus and `docker stats` need. Adding cpuset/io on the template would widen every
+# session on the box for limits nothing asks for; it belongs on the companion's uid.
 
-# hidepid hides the pids runc needs to have its container scope started; the companion
-# has to be in the exemption group for that. Re-asserted here so the group exists before
-# the first customer is enabled (#565). Guarded on the function so a helper.sh predating
-# it degrades quietly instead of printing a command-not-found mid-install.
+# runc cannot start a container scope while hidepid hides the pids, so the companion
+# needs the exemption group (#565); created here, before any customer is enabled.
 if command -v proc_hardening_apply > /dev/null 2>&1; then
 	proc_hardening_apply || true
 else

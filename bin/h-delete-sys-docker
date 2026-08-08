@@ -4,14 +4,14 @@
 #
 # example: h-delete-sys-docker
 #
-# Counterpart to h-add-sys-docker: purges the Docker packages and removes the repo and
-# keyring again, so a box without the addon carries no Docker repo at all.
+# Counterpart to h-add-sys-docker: purges the packages and takes the repo and keyring
+# with them, so a box without the addon carries no Docker repo.
 #
-# Refuses while customers still have it enabled - their companion, subid entries and
-# container data would be left behind with nothing to manage them. FORCE overrides.
+# Refuses while customers still have it enabled, else their companion, subid entries and
+# container data are left with nothing to manage them. FORCE overrides.
 #
-# Image data under each companion's home is NOT touched here: it belongs to the
-# customer's backup unit, and removing the host packages is not a reason to delete it.
+# Image data under a companion's home is NOT touched: it belongs to the customer's
+# backup unit.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -42,8 +42,7 @@ fi
 
 check_hestia_demo_mode
 
-# A companion is named <user>-docker and is the only thing that identifies an enabled
-# customer without reading every user.conf.
+# <user>-docker identifies an enabled customer without reading every user.conf.
 enabled=$(getent passwd | cut -d: -f1 | grep -c -- '-docker$' || true)
 if [ "$enabled" -gt 0 ] && [ "$force" != 'yes' ]; then
 	echo "ERROR: $enabled customer(s) still have Docker enabled."
@@ -61,12 +60,12 @@ apt-get -y -qq purge docker-ce docker-ce-cli docker-ce-rootless-extras \
 apt-get -y -qq autoremove > /dev/null 2>&1
 
 echo "Removing the Docker repository..."
-# The pin an earlier revision installed goes too, so an upgraded box does not keep it.
+# Also the pin an earlier revision installed, so an upgraded box does not keep it.
 rm -f "$DOCKER_LIST" "$DOCKER_KEYRING" /etc/apt/preferences.d/hestia-docker.pref
 apt-get -qq update > /dev/null 2>&1
 
-# Both left by earlier revisions; harmless when absent, but an upgraded box must not
-# keep a global cgroup widening that the add side no longer installs.
+# Left by an earlier revision: an upgraded box must not keep a global cgroup widening
+# the add side no longer installs.
 rm -f "$DOCKER_DELEGATE"
 rmdir "$(dirname "$DOCKER_DELEGATE")" 2> /dev/null || true
 systemctl daemon-reload
