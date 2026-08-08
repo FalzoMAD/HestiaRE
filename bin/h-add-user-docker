@@ -1,0 +1,218 @@
+#!/bin/bash
+# info: enable rootless Docker for a user
+# options: USER
+#
+# example: h-add-user-docker john
+#
+# Creates the customer's companion and starts their own rootless daemon (#389).
+# Idempotent - re-running heals a partial enable.
+#
+# Two accounts, one trust domain. The companion is container uid 0 and runs the daemon;
+# the customer is container uid 1000, which is what stock images expect, so upstream
+# compose files work unmodified. Mapping the customer to container 0 instead - the
+# earlier design - fails on any image that refuses to run as root.
+#
+# The customer never touches the companion account: they reach the daemon through a
+# group-owned socket in ~/.companion. Socket access is full daemon control, which is
+# fine inside one trust domain and is why only the owning customer's group gets it.
+#
+# The companion home lives INSIDE the customer home so both travel as one backup unit.
+# It is created there directly: relocating afterwards breaks the absolute enable
+# symlinks the rootless setup writes.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/identity.sh
+source $HESTIA/func/identity.sh
+# shellcheck source=/usr/local/hestia/func/helper.sh
+source $HESTIA/func/helper.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# Run something in the companion's user context. NOT su: it creates no login session, so
+# XDG_RUNTIME_DIR and the user bus are missing and systemctl --user cannot reach the
+# manager. systemd-run builds a real session regardless of the account's login shell,
+# which also means a nologin companion works.
+# HOME and PATH are passed explicitly - systemd-run --machine starts from a bare
+# environment, and dockerd-rootless-setuptool.sh refuses outright without HOME.
+companion_run() {
+	systemd-run --machine="${companion}@" --user --pipe --wait --quiet \
+		--setenv=HOME="$companion_home" --setenv=PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+		--setenv=XDG_RUNTIME_DIR="/run/user/$companion_uid" "$@"
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'USER'
+is_format_valid 'user'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "ERROR: h-add-user-docker can only be executed by the root user"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+command -v dockerd-rootless.sh > /dev/null 2>&1 \
+	|| {
+		echo "ERROR: Docker is not installed - run h-add-sys-docker first."
+		exit "$E_NOTEXIST"
+	}
+
+uid="$(id -u "$user" 2> /dev/null)"
+gid="$(id -g "$user" 2> /dev/null)"
+[ -n "$uid" ] || {
+	echo "ERROR: $user has no system account."
+	exit "$E_NOTEXIST"
+}
+
+# The companion sits one block below, and the subordinate base comes from the slot the
+# uid encodes. A uid outside the band predates the allocator and has no reserved
+# companion block, so there is nowhere safe to put one.
+k="$(identity_k_from_uid "$uid")" \
+	|| {
+		echo "ERROR: $user has uid $uid, outside the panel band - no companion block is reserved for it."
+		exit "$E_INVALID"
+	}
+companion="${user}-docker"
+companion_uid=$((uid - IDENTITY_BLOCK))
+sub_base="$(identity_sub_base_from_k "$k")"
+companion_home="$HOMEDIR/$user/.companion"
+
+existing="$(getent passwd "$companion_uid" | cut -d: -f1)"
+if [ -n "$existing" ] && [ "$existing" != "$companion" ]; then
+	echo "ERROR: companion uid $companion_uid is held by '$existing'."
+	exit "$E_EXISTS"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+if ! getent passwd "$companion" > /dev/null 2>&1; then
+	echo "Creating companion $companion (uid $companion_uid)..."
+	# Its OWN private group, not the customer's. h-add-user leaves the customer home at
+	# group::--- with other::--x, so an account whose primary group is the customer's is
+	# matched by that empty group entry and never reaches other:: - the companion could
+	# not even traverse into its own home.
+	getent group "$companion" > /dev/null 2>&1 \
+		|| /usr/sbin/groupadd -g "$companion_uid" "$companion"
+	# -K SUB_UID_COUNT=0 suppresses the range useradd hands out on its own. On Ubuntu it
+	# does, and it would sit FIRST in /etc/subuid and shift the whole mapping.
+	/usr/sbin/useradd "$companion" -u "$companion_uid" -g "$companion_uid" \
+		-K UID_MAX="$IDENTITY_BAND_END" -K SUB_UID_COUNT=0 -K SUB_GID_COUNT=0 \
+		-d "$companion_home" -m -s /usr/sbin/nologin \
+		-c "Docker companion for $user" \
+		|| {
+			echo "ERROR: could not create $companion"
+			exit "$E_INVALID"
+		}
+fi
+
+# The DIRECTORY carries the customer's group at 0710: they traverse to the socket but
+# cannot list, and it all stays one backup unit. That is separate from the companion's
+# own primary group above.
+mkdir -p "$companion_home"
+chown "$companion":"$gid" "$companion_home"
+chmod 0710 "$companion_home"
+
+# Order is semantic - newuidmap consumes the lines in file order, so these three produce
+# container 1-999, container 1000 = the customer, container 1001-65536. Rewritten from
+# scratch rather than appended to, so a re-run cannot stack a second set.
+echo "Writing subordinate id ranges..."
+for f in /etc/subuid /etc/subgid; do
+	sed -i "/^${companion}:/d" "$f"
+done
+{
+	printf '%s:%s:999\n' "$companion" "$sub_base"
+	printf '%s:%s:1\n' "$companion" "$uid"
+	printf '%s:%s:64536\n' "$companion" "$((sub_base + 999))"
+} >> /etc/subuid
+{
+	printf '%s:%s:999\n' "$companion" "$sub_base"
+	printf '%s:%s:1\n' "$companion" "$gid"
+	printf '%s:%s:64536\n' "$companion" "$((sub_base + 999))"
+} >> /etc/subgid
+
+# runc cannot start a container scope while hidepid hides the pids; the companion runs
+# the daemon, so it is the account that needs the exemption (#565).
+if command -v proc_visible_add > /dev/null 2>&1; then
+	proc_visible_add "$companion" > /dev/null 2>&1 || true
+fi
+
+# Containers have to survive logout and reboot, which is what linger buys - and it is
+# the one real capability change here.
+loginctl enable-linger "$companion" > /dev/null 2>&1
+for _ in $(seq 1 20); do
+	[ "$(systemctl is-active "user@${companion_uid}.service" 2> /dev/null)" = 'active' ] && break
+	sleep 1
+done
+if [ "$(systemctl is-active "user@${companion_uid}.service" 2> /dev/null)" != 'active' ]; then
+	echo "ERROR: the companion's user manager did not start."
+	exit "$E_INVALID"
+fi
+
+echo "Installing the rootless daemon..."
+setup_log="$(mktemp -t hestia-docker-setup.XXXXXX)"
+if ! companion_run dockerd-rootless-setuptool.sh install > "$setup_log" 2>&1; then
+	echo "ERROR: dockerd-rootless-setuptool.sh failed for $companion"
+	echo "       output: $setup_log"
+	exit "$E_INVALID"
+fi
+rm -f "$setup_log"
+
+# BOTH sockets: the per-session one the daemon defaults to, plus a group-owned one in
+# the companion home that the customer reaches without touching the companion account.
+# Replacing ExecStart drops the default, so it has to be restated.
+# --group is NUMERIC: dockerd resolves a group NAME inside its own namespace, where it
+# would land on a filler-range gid outside; namespace gid 1000 is the customer's group
+# by way of the subgid triple. unix:// needs THREE slashes - the two-slash form parses
+# the first path element as a hostname and the daemon exits 1.
+# Placeholders are __UPPER__ rather than %x%, so substitution cannot rewrite prose.
+override_dir="$companion_home/.config/systemd/user/docker.service.d"
+mkdir -p "$override_dir"
+sed -e "s|__RUNSOCK__|/run/user/$companion_uid/docker.sock|g" \
+	-e "s|__SOCK__|$companion_home/docker.sock|g" -e "s|__GID__|1000|g" \
+	"$HESTIA/share/docker/systemd/docker-rootless-override.conf" > "$override_dir/hestia.conf"
+chown -R "$companion":"$gid" "$companion_home/.config"
+
+install -m 644 "$HESTIA/share/docker/profile.d-hestia-docker.sh" /etc/profile.d/hestia-docker.sh
+
+# restart, not enable --now: the setuptool already started the daemon, so on an
+# already-running unit --now is a no-op and it would keep the pre-override ExecStart.
+companion_run systemctl --user daemon-reload > /dev/null 2>&1
+companion_run systemctl --user enable docker > /dev/null 2>&1
+companion_run systemctl --user restart docker > /dev/null 2>&1
+for _ in $(seq 1 60); do
+	[ -S "$companion_home/docker.sock" ] && break
+	sleep 1
+done
+[ -S "$companion_home/docker.sock" ] \
+	|| {
+		echo "ERROR: the companion daemon did not expose $companion_home/docker.sock"
+		exit "$E_INVALID"
+	}
+
+echo "Docker is enabled for $user."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Enabled rootless Docker for $user."
+log_event "$OK" "$ARGUMENTS"
+
+exit

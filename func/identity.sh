@@ -49,6 +49,19 @@ identity_uid_from_k() {
 
 identity_sub_base_from_k() { echo $((IDENTITY_SUB_START + $1 * IDENTITY_SUB_SIZE)); }
 
+# Inverse of identity_uid_from_k. Nothing stores the slot, so enabling Docker for an
+# existing customer recovers it from the uid to place the subordinate range. Empty when
+# the uid is not a customer slot (a companion uid lands in the gap and is rejected).
+identity_k_from_uid() {
+	local uid="$1" d b r
+	[ "$uid" -ge "$IDENTITY_BAND_START" ] 2> /dev/null || return 1
+	d=$((uid - IDENTITY_BAND_START))
+	b=$((d / IDENTITY_STRIDE))
+	r=$((d % IDENTITY_STRIDE))
+	[ "$r" -lt "$IDENTITY_BLOCK" ] || return 1
+	echo $((b * IDENTITY_BLOCK + r))
+}
+
 # Both blocks: a free customer uid over an occupied companion block would only break
 # "enable Docker" later, when moving the account is no longer cheap.
 _identity_slot_free() {
