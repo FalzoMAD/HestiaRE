@@ -1,0 +1,95 @@
+#!/bin/bash
+# info: disable rootless Docker for a user
+# options: USER
+#
+# example: h-delete-user-docker john
+#
+# Counterpart to h-add-user-docker: stops the customer's daemon and removes the
+# companion, its subordinate id ranges and its home. Idempotent.
+#
+# Running containers are stopped - the companion's session goes with it.
+#
+# The companion home IS removed. Leaving it would put files owned by a freed uid inside
+# the customer home, and that uid becomes available again; images are reproduced by
+# pulling them, and payload lives in the customer's own tree, not here.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'USER'
+is_format_valid 'user'
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "ERROR: h-delete-user-docker can only be executed by the root user"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+companion="${user}-docker"
+companion_home="$HOMEDIR/$user/.companion"
+
+if ! getent passwd "$companion" > /dev/null 2>&1; then
+	echo "Docker is not enabled for $user."
+	# Sweep anyway: a partial enable can leave ranges or a home behind.
+	sed -i "/^${companion}:/d" /etc/subuid /etc/subgid 2> /dev/null
+	rm -rf "$companion_home"
+	exit
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+companion_uid="$(id -u "$companion")"
+
+# Order matters: userdel refuses while the account still owns processes, and it fails
+# quietly enough that a later re-enable would silently reuse the old account.
+echo "Stopping the companion's daemon..."
+loginctl disable-linger "$companion" > /dev/null 2>&1
+loginctl terminate-user "$companion" > /dev/null 2>&1
+systemctl stop "user@${companion_uid}.service" "user-runtime-dir@${companion_uid}.service" > /dev/null 2>&1
+for _ in $(seq 1 20); do
+	pgrep -u "$companion_uid" > /dev/null 2>&1 || break
+	sleep 1
+done
+pkill -KILL -u "$companion_uid" > /dev/null 2>&1
+
+echo "Removing companion $companion..."
+if ! /usr/sbin/userdel "$companion" > /dev/null 2>&1; then
+	echo "ERROR: could not remove $companion - processes may still be running."
+	exit "$E_INVALID"
+fi
+getent group "$companion" > /dev/null 2>&1 && /usr/sbin/groupdel "$companion" > /dev/null 2>&1
+
+sed -i "/^${companion}:/d" /etc/subuid /etc/subgid 2> /dev/null
+rm -rf "$companion_home"
+
+# /etc/profile.d/hestia-docker.sh stays: it is guarded on the socket, so it is inert for
+# a customer without one, and other customers may still have Docker enabled.
+
+echo "Docker is disabled for $user."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Disabled rootless Docker for $user."
+log_event "$OK" "$ARGUMENTS"
+
+exit

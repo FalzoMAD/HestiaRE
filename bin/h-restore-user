@@ -839,6 +839,26 @@ chown -R $user:$user $HOMEDIR/$user/tmp
 # Delete Hestia File manager key
 rm -f $HOMEDIR/$user/.ssh/hst-filemanager-key
 
+# Re-enable Docker if the archive carried a companion home. The account itself is not in
+# the archive, and its uid is derived from the customer's - which was just reallocated -
+# so it is recreated here, with fresh subordinate ranges for the new number. The old
+# companion uid is computable from the archived customer uid, so its files can be
+# re-owned without any stored metadata; tar could not resolve them by name because the
+# account did not exist yet at unpack time. Images are not restored, they are pulled.
+if [ -d "$HOMEDIR/$user/.companion" ] && [ -x "$BIN/h-add-user-docker" ]; then
+	echo -e "$(date "+%F %T") docker companion" | tee -a $tmpdir/restore.log
+	if "$BIN/h-add-user-docker" "$user" >> $tmpdir/restore.log 2>&1; then
+		old_companion=$((old_uid - 1000))
+		new_companion=$(id -u "${user}-docker" 2> /dev/null)
+		if [ -n "$new_companion" ] && [ "$old_companion" -ne "$new_companion" ]; then
+			find "$HOMEDIR/$user/.companion" -uid "$old_companion" \
+				-exec chown -h "${user}-docker" {} \;
+		fi
+	else
+		echo "Warning!: could not re-enable Docker for $user - see the log above." | tee -a $tmpdir/restore.log
+	fi
+fi
+
 # Sending mail notification
 subj="$user → restore has been completed"
 cat $tmpdir/restore.log | $SENDMAIL -s "$subj" $email $notify
