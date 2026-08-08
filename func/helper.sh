@@ -319,15 +319,16 @@ migrate_data_layout() {
 }
 
 # ── /proc hardening (hidepid) ───────────────────────────────────────────────
-# Why a unit rather than fstab or cron, and why the gid= exemption exists at all:
-# see the header of share/security/systemd/hestia-proc-hardening.service.
+# Why a unit, why hidepid=invisible, why the gid= exemption and why the gid is resolved
+# at boot: see the header of share/security/systemd/hestia-proc-hardening.service.
 PROC_VISIBLE_GROUP='procvis'
 PROC_HARDENING_UNIT='hestia-proc-hardening.service'
 
 proc_visible_gid() { getent group "$PROC_VISIBLE_GROUP" 2> /dev/null | cut -d: -f3; }
 
-# Re-runnable: this is how "enable Docker" re-asserts the gid later. Returns 0 when
-# hidepid is not applicable (container), so 0 does not imply the unit is installed.
+# Re-runnable: proc_visible_add plus a re-run is how "enable Docker" wires a companion
+# in. Returns 0 when hidepid is not applicable (container), so 0 does not imply the
+# unit is installed.
 proc_hardening_apply() {
 	local gid opts src="${HESTIA:-/usr/local/hestia}/share/security/systemd/$PROC_HARDENING_UNIT"
 	local dst="/etc/systemd/system/$PROC_HARDENING_UNIT"
@@ -336,11 +337,11 @@ proc_hardening_apply() {
 		|| groupadd --system "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 \
 		|| { echo "Warning: cannot create group $PROC_VISIBLE_GROUP - skipping /proc hardening" >&2; return 1; }
 
+	# Mirrors what the unit does at every boot. gid=0 when the group is gone: a remount
+	# that merely omits gid keeps the previous value, so this is what actually withdraws
+	# a stale exemption on a running box.
 	gid="$(proc_visible_gid)"
-	[ -n "$gid" ] || { echo "Warning: cannot resolve gid of $PROC_VISIBLE_GROUP" >&2; return 1; }
-
-	# Numeric: a group name would resolve to a different id on a restored box.
-	opts="nosuid,nodev,noexec,relatime,hidepid=invisible,gid=$gid"
+	opts="nosuid,nodev,noexec,relatime,hidepid=invisible,gid=${gid:-0}"
 
 	# The legacy @reboot job goes regardless of which branch we take below.
 	rm -f /etc/cron.d/hestia-proc
@@ -355,9 +356,10 @@ proc_hardening_apply() {
 		return 0
 	fi
 
+	# Installed verbatim: the unit resolves the gid itself on every start, so there is
+	# nothing host-specific to substitute and nothing to go stale.
 	[ -f "$src" ] || { echo "Warning: $src missing - hidepid applied live, not persisted" >&2; return 1; }
-	sed "s|%opts%|$opts|g" "$src" > "$dst" || return 1
-	chmod 644 "$dst"
+	install -m 644 "$src" "$dst" || return 1
 	systemctl daemon-reload
 	systemctl enable "$PROC_HARDENING_UNIT" > /dev/null 2>&1
 }

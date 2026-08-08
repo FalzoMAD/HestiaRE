@@ -1,12 +1,13 @@
 #=========================================================================#
 # HestiaRE - /proc hardening (hidepid)                                    #
 #                                                                         #
-# Template: %opts% is substituted by proc_hardening_apply (func/helper.sh).#
+# Installed verbatim by proc_hardening_apply (func/helper.sh).            #
 # DO NOT MODIFY THE INSTALLED COPY - it is regenerated.                   #
 #=========================================================================#
 #
-# hidepid keeps one panel user from seeing another's processes. This file is the
-# design rationale for the whole mechanism; the shell side only implements it.
+# hidepid keeps one panel user from seeing another's processes - including the
+# container processes of other customers, which is the reason it is on at all.
+# This file is the design rationale; the shell side only installs it.
 #
 # Why a unit and not /etc/fstab: systemd-fstab-generator skips the API filesystems,
 # so a "proc /proc proc ..." line there produces no mount unit and is ignored at
@@ -17,12 +18,30 @@
 # Why not cron: a @reboot job runs after the services it is meant to protect.
 #
 # Why the gid= exemption: systemd upstream treats hidepid on /proc as an unsupported
-# configuration. With PIDs hidden, the D-Bus credential check behind a user-scope
-# request fails and rootless container runtimes abort with "Interactive
-# authentication required" (moby#45014). Members of the group keep a full /proc.
+# configuration. With PIDs hidden, runc cannot get its container scope started and
+# rootless Docker aborts - "Interactive authentication required" on systemd 255,
+# "Permission denied" on 257, same cause (moby#45014). Members of the group keep a
+# full /proc. Measured on deb13 and ub24, hidepid without the exemption breaks
+# `docker run` outright.
 #
-# Why numeric: the group is created per host, so a name would resolve to a different
-# id on a restored box and exempt whoever holds it there.
+# Why hidepid=invisible and not =noaccess: noaccess protects the contents of foreign
+# /proc/<pid> but leaves the directories enumerable. Measured with a foreign user:
+# noaccess = 156 visible pids plus their owners, invisible = 3 (its own). Since the
+# point is hiding other customers' containers, noaccess is not a lighter alternative
+# - it defeats the purpose. It does NOT avoid the exemption either; it breaks
+# rootless Docker exactly like invisible does.
+#
+# Why the gid is resolved here and not baked in at install time: a fixed numeric id
+# keeps pointing at that number after the group is deleted and the id recycled, which
+# silently exempts an unrelated group. Resolving per start binds to whatever
+# /etc/group says on THIS host right now. No group -> no gid= option at all, so the
+# hardening stays on and nobody is exempt.
+#
+# Failure is deliberately fail-open: if this unit fails the box boots normally with
+# an unhardened /proc and lands in `systemctl --failed` / a degraded system state.
+# hidepid is information disclosure, not privilege escalation - environ, mem, fd/ and
+# maps stay owner-only regardless - so trading a bootable box for it is the wrong way
+# round. h-check-sys-smoke carries the guard that makes the silent case visible.
 
 [Unit]
 Description=HestiaRE /proc hardening (hidepid)
@@ -36,7 +55,13 @@ ConditionVirtualization=!container
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/mount -o remount,%opts% /proc
+# $$ is a literal $ for systemd, which would otherwise expand these itself. /etc/group
+# is read directly rather than via getent: this runs before sysinit.target, and the
+# exemption group is always a local system group, so NSS buys nothing here.
+# gid=0 is how an exemption is withdrawn: a bare gid= is rejected and a remount that
+# just omits it keeps the previous value (mount options are sticky), whereas gid=0
+# clears it - root sees everything anyway, so group 0 exempts nobody in practice.
+ExecStart=/bin/sh -c 'g=$$(grep -m1 "^procvis:" /etc/group | cut -d: -f3); exec mount -o remount,nosuid,nodev,noexec,relatime,hidepid=invisible,gid=$${g:-0} /proc'
 
 [Install]
 WantedBy=sysinit.target
