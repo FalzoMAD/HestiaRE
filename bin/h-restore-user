@@ -181,7 +181,8 @@ if [ "$create_user" = 'yes' ]; then
 	cp -r $tmpdir/$backup_system/ssl $USER_DATA/ > /dev/null 2>&1
 	cp $tmpdir/$backup_system/backup-excludes.conf $USER_DATA/ > /dev/null 2>&1
 
-	# Rebuilding user
+	# Creates the account with a freshly allocated uid, before anything is unpacked, so
+	# tar can resolve the archived owner name onto it.
 	rebuild_user_conf
 fi
 

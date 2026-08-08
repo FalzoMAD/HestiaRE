@@ -12,6 +12,28 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **Panel users get their uid allocated from a dedicated band** (`func/identity.sh`). The username hash
+  only picks where to start looking; the first free slot wins and is that user's uid from then on, as in
+  classic HestiaCP. A taken slot is not an error - it reprobes. Customers occupy the odd thousands
+  (11000-41999), each companion the interleaved block below (10000-40999), which reserves the second id
+  rootless Docker needs (#389).
+
+  Backups carry **no** authoritative identity and restores allocate a fresh uid rather than trying to
+  reproduce one. Portability comes from `tar` resolving ownership by **name** on extract: the account is
+  created before the unpack, so the files land on the new uid by themselves - measured, a file archived
+  under uid 5001 extracts as 5099 once the name maps there. This is also why `h-backup-user` must never
+  gain `--numeric-owner`: it pins the archived numbers and destroys exactly that property. HestiaCP
+  archives need no special path, since their sequential uids are discarded like any other. The one case
+  still needing a chown is a restore under a *different* username, where `tar` finds no local name to
+  resolve to; the inherited `old_uid`/`new_uid` re-chown already covers it.
+
+  Paired with `login_defs_guard`, which caps `UID_MAX`/`GID_MAX` below the band so a bare `useradd`
+  cannot wander into it. That also raises `SUB_UID_MAX`/`SUB_GID_MAX`: the shipped default of 600100000
+  sits *below* our highest range end (1048675999) and would have rejected the subordinate ranges of
+  roughly 43% of all usernames.
+
 ### Changed
 
 - **The /proc exemption gid is resolved at every boot instead of baked in at install time.** The unit

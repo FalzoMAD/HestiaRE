@@ -316,6 +316,9 @@ migrate_data_layout() {
 	# move /proc hardening off the @reboot cron onto its systemd unit (proc_hardening_apply);
 	# idempotent, so a box already converted just gets its gid re-asserted
 	proc_hardening_apply || true
+
+	# The band guard travels with the allocator (#388); existing accounts are left alone.
+	login_defs_guard || true
 }
 
 # ── /proc hardening (hidepid) ───────────────────────────────────────────────
@@ -371,4 +374,24 @@ proc_visible_add() {
 	[ -n "$user" ] || return 1
 	getent group "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 || return 1
 	usermod -aG "$PROC_VISIBLE_GROUP" "$user"
+}
+
+# ── login.defs guard rail for the panel UID band (#388) ─────────────────────
+# Keeps a bare useradd/adduser out of the band func/identity.sh allocates from; a
+# foreign account inside it would collide with an allocation. SUB_UID_MAX has to be
+# raised too - the shipped 600100000 is below our highest range end (1048675999).
+login_defs_guard() {
+	local f='/etc/login.defs' kv k v
+	[ -f "$f" ] || return 0
+	for kv in 'UID_MAX 9999' 'GID_MAX 9999' \
+		'SUB_UID_MIN 100000' 'SUB_UID_MAX 2147483647' \
+		'SUB_GID_MIN 100000' 'SUB_GID_MAX 2147483647'; do
+		k="${kv%% *}"
+		v="${kv##* }"
+		if grep -qE "^[[:space:]]*#?[[:space:]]*${k}[[:space:]]" "$f"; then
+			sed -i -E "s|^[[:space:]]*#?[[:space:]]*${k}[[:space:]].*|${k}\t\t\t${v}|" "$f"
+		else
+			printf '%s\t\t\t%s\n' "$k" "$v" >> "$f"
+		fi
+	done
 }
