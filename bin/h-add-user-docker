@@ -165,14 +165,13 @@ if [ "$(systemctl is-active "user@${companion_uid}.service" 2> /dev/null)" != 'a
 	exit "$E_INVALID"
 fi
 
+# The setuptool's exit code is NOT the verdict. Its last act is to start the daemon, and
+# that fails whenever one is already running or a stale unit came in with a restored
+# home - both ordinary here. What it is needed for is writing the unit; the override and
+# restart below are ours regardless, so the socket further down is the real test.
 echo "Installing the rootless daemon..."
 setup_log="$(mktemp -t hestia-docker-setup.XXXXXX)"
-if ! companion_run dockerd-rootless-setuptool.sh install > "$setup_log" 2>&1; then
-	echo "ERROR: dockerd-rootless-setuptool.sh failed for $companion"
-	echo "       output: $setup_log"
-	exit "$E_INVALID"
-fi
-rm -f "$setup_log"
+companion_run dockerd-rootless-setuptool.sh install > "$setup_log" 2>&1 || true
 
 # BOTH sockets: the per-session one the daemon defaults to, plus a group-owned one in
 # the companion home that the customer reaches without touching the companion account.
@@ -200,11 +199,12 @@ for _ in $(seq 1 60); do
 	[ -S "$companion_home/docker.sock" ] && break
 	sleep 1
 done
-[ -S "$companion_home/docker.sock" ] \
-	|| {
-		echo "ERROR: the companion daemon did not expose $companion_home/docker.sock"
-		exit "$E_INVALID"
-	}
+if [ ! -S "$companion_home/docker.sock" ]; then
+	echo "ERROR: the companion daemon did not expose $companion_home/docker.sock"
+	echo "       rootless setup output: $setup_log"
+	exit "$E_INVALID"
+fi
+rm -f "$setup_log"
 
 echo "Docker is enabled for $user."
 

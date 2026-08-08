@@ -847,16 +847,21 @@ rm -f $HOMEDIR/$user/.ssh/hst-filemanager-key
 # account did not exist yet at unpack time. Images are not restored, they are pulled.
 if [ -d "$HOMEDIR/$user/.companion" ] && [ -x "$BIN/h-add-user-docker" ]; then
 	echo -e "$(date "+%F %T") docker companion" | tee -a $tmpdir/restore.log
-	if "$BIN/h-add-user-docker" "$user" >> $tmpdir/restore.log 2>&1; then
-		old_companion=$((old_uid - 1000))
-		new_companion=$(id -u "${user}-docker" 2> /dev/null)
-		if [ -n "$new_companion" ] && [ "$old_companion" -ne "$new_companion" ]; then
-			find "$HOMEDIR/$user/.companion" -uid "$old_companion" \
-				-exec chown -h "${user}-docker" {} \;
-		fi
-	else
-		echo "Warning!: could not re-enable Docker for $user - see the log above." | tee -a $tmpdir/restore.log
+
+	# Re-own BEFORE enabling, not after. The unpacked tree still belongs to the archived
+	# companion uid, and tar could not map it by name because that account did not exist
+	# yet. Enabling first would run the rootless setup as the new companion against a
+	# home it cannot write, and the setup fails there. Both uids follow from the customer
+	# uid, so this needs no stored metadata and the target need not exist yet.
+	old_companion=$((old_uid - 1000))
+	new_companion=$((new_uid - 1000))
+	if [ "$old_companion" -ne "$new_companion" ]; then
+		find "$HOMEDIR/$user/.companion" -uid "$old_companion" \
+			-exec chown -h "$new_companion" {} \;
 	fi
+
+	"$BIN/h-add-user-docker" "$user" >> $tmpdir/restore.log 2>&1 \
+		|| echo "Warning!: could not re-enable Docker for $user - see the log above." | tee -a $tmpdir/restore.log
 fi
 
 # Sending mail notification
