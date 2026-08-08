@@ -14,6 +14,37 @@ opens above it.
 
 ### Added
 
+- **Docker is installed from the official repo as a scoped addon** (`h-add-sys-docker` /
+  `h-delete-sys-docker`, #389), replacing the inline `docker.io` install. The OS route cannot deliver
+  this feature: neither Debian packages compose v2 at all, the OS `docker.io` spans 20.10 to 29.1 across
+  the four targets, and `dockerd-rootless.sh` ships only in Debian's build. The exception stays scoped -
+  the repo, keyring and pin are added by the addon and removed with it, so a box without Docker carries
+  no Docker repo. The rootful daemon is disabled (service **and** socket, else socket activation brings
+  it back), and the removal side refuses while customers still have it enabled unless forced. No cgroup
+  delegation drop-in is installed: systemd already ships `user@.service` with `Delegate=pids memory cpu`
+  on all four targets (verified down to systemd 252), which is what `--memory`, `--cpus` and
+  `docker stats` need. Adding `cpuset`/`io` on the template would have widened every customer's session,
+  Docker or not, for limits nothing asks for.
+
+  The repo is deliberately **not** pinned. The condition it was added for - stop it shadowing OS packages
+  - describes a risk that cannot occur: no OS package shares a name with it (Debian and Ubuntu carry
+  `containerd`, `docker.io`, `docker-cli`, `docker-compose`, `docker-buildx`; the repo carries
+  `containerd.io`, `docker-ce*` and the `*-plugin` variants). A pin could only have narrowed what the
+  repo offers, never bounded it: apt's allow-list form does not work - a `Package: *` pin on the origin
+  overrides any specific-package stanza regardless of order or quoting, which silently pinned `docker-ce`
+  itself to -1 and would have blocked its security updates - and a name-based deny list cannot cover
+  packages added later. `h-delete-sys-docker` still removes a pin from an earlier revision.
+
+- **`h-check-sys-smoke` guards the identity allocator's preconditions** (#388). Not its output - panel
+  users created before the change keep their old uid by design, so their position is deliberately not
+  checked. What must hold is that `UID_MAX`/`GID_MAX` cap below the band (else a bare `useradd` can land
+  inside it and collide with an allocation), that `SUB_UID_MAX`/`SUB_GID_MAX` cover the whole computed
+  range (the shipped 600100000 would reject the companion subuid ranges of roughly 43% of usernames, and
+  only at "enable Docker", long after the account was created), and that no two panel users share a uid.
+  Verified in both directions: all four checks fail on a box without the guard rail and pass after it runs.
+
+### Added
+
 - **Panel users get their uid allocated from a dedicated band** (`func/identity.sh`). The username hash
   only picks where to start looking; the first free slot wins and is that user's uid from then on, as in
   classic HestiaCP. A taken slot is not an error - it reprobes. Customers occupy the odd thousands

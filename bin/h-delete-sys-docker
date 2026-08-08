@@ -1,0 +1,86 @@
+#!/bin/bash
+# info: remove Docker and the per-user rootless support
+# options: [FORCE]
+#
+# example: h-delete-sys-docker
+#
+# Counterpart to h-add-sys-docker: purges the packages and takes the repo and keyring
+# with them, so a box without the addon carries no Docker repo.
+#
+# Refuses while customers still have it enabled, else their companion, subid entries and
+# container data are left with nothing to manage them. FORCE overrides.
+#
+# Image data under a companion's home is NOT touched: it belongs to the customer's
+# backup unit.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+force=${1-no}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+DOCKER_KEYRING='/usr/share/keyrings/docker-keyring.gpg'
+DOCKER_LIST='/etc/apt/sources.list.d/docker.list'
+DOCKER_DELEGATE='/etc/systemd/system/user@.service.d/hestia-delegate.conf'
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "ERROR: h-delete-sys-docker can only be executed by the root user"
+	exit 10
+fi
+
+check_hestia_demo_mode
+
+# <user>-docker identifies an enabled customer without reading every user.conf.
+enabled=$(getent passwd | cut -d: -f1 | grep -c -- '-docker$' || true)
+if [ "$enabled" -gt 0 ] && [ "$force" != 'yes' ]; then
+	echo "ERROR: $enabled customer(s) still have Docker enabled."
+	echo "       Disable it for them first, or re-run with: h-delete-sys-docker yes"
+	exit "$E_INVALID"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+echo "Removing Docker packages..."
+apt-get -y -qq purge docker-ce docker-ce-cli docker-ce-rootless-extras \
+	docker-compose-plugin docker-buildx-plugin containerd.io > /dev/null 2>&1
+apt-get -y -qq autoremove > /dev/null 2>&1
+
+echo "Removing the Docker repository..."
+# Also the pin an earlier revision installed, so an upgraded box does not keep it.
+rm -f "$DOCKER_LIST" "$DOCKER_KEYRING" /etc/apt/preferences.d/hestia-docker.pref
+apt-get -qq update > /dev/null 2>&1
+
+# Left by an earlier revision: an upgraded box must not keep a global cgroup widening
+# the add side no longer installs.
+rm -f "$DOCKER_DELEGATE"
+rmdir "$(dirname "$DOCKER_DELEGATE")" 2> /dev/null || true
+systemctl daemon-reload
+
+# procvis stays: it is the /proc hardening exemption group (#565), not ours to remove.
+
+set_install_component ADDON_DOCKER false
+
+echo "Docker has been removed."
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Removed Docker."
+log_event "$OK" "$ARGUMENTS"
+
+exit
