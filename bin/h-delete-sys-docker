@@ -67,6 +67,8 @@ echo "Removing the Docker repository..."
 rm -f "$DOCKER_LIST" "$DOCKER_KEYRING" /etc/apt/preferences.d/hestia-docker.pref
 apt-get -qq update > /dev/null 2>&1
 
+# Both left by earlier revisions; harmless when absent, but an upgraded box must not
+# keep a global cgroup widening that the add side no longer installs.
 rm -f "$DOCKER_DELEGATE"
 rmdir "$(dirname "$DOCKER_DELEGATE")" 2> /dev/null || true
 systemctl daemon-reload

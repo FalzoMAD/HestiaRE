@@ -20,8 +20,11 @@ opens above it.
   the four targets, and `dockerd-rootless.sh` ships only in Debian's build. The exception stays scoped -
   the repo, keyring and pin are added by the addon and removed with it, so a box without Docker carries
   no Docker repo. The rootful daemon is disabled (service **and** socket, else socket activation brings
-  it back), cgroup controllers are delegated to user sessions, and the removal side refuses while
-  customers still have it enabled unless forced.
+  it back), and the removal side refuses while customers still have it enabled unless forced. No cgroup
+  delegation drop-in is installed: systemd already ships `user@.service` with `Delegate=pids memory cpu`
+  on all four targets (verified down to systemd 252), which is what `--memory`, `--cpus` and
+  `docker stats` need. Adding `cpuset`/`io` on the template would have widened every customer's session,
+  Docker or not, for limits nothing asks for.
 
   The repo is deliberately **not** pinned. The condition it was added for - stop it shadowing OS packages
   - describes a risk that cannot occur: no OS package shares a name with it (Debian and Ubuntu carry

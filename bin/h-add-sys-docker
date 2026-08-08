@@ -36,7 +36,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 DOCKER_KEYRING='/usr/share/keyrings/docker-keyring.gpg'
 DOCKER_LIST='/etc/apt/sources.list.d/docker.list'
-DOCKER_DELEGATE='/etc/systemd/system/user@.service.d/hestia-delegate.conf'
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -120,10 +119,12 @@ for u in docker.service docker.socket; do
 	fi
 done
 
-echo "Delegating cgroup controllers to user sessions..."
-mkdir -p "$(dirname "$DOCKER_DELEGATE")"
-install -m 644 "$HESTIA/share/docker/systemd/delegate.conf" "$DOCKER_DELEGATE"
-systemctl daemon-reload
+# No cgroup delegation drop-in: systemd ships user@.service with
+# `Delegate=pids memory cpu` on all four targets (verified, down to systemd 252 on
+# deb12), which is exactly what --memory, --cpus and `docker stats` need. Adding
+# cpuset/io on the template would widen every customer's session, Docker or not, for
+# limits nothing currently asks for. If a container ever needs them, that belongs on
+# the companion's own uid at enable time, not here.
 
 # hidepid hides the pids runc needs to have its container scope started; the companion
 # has to be in the exemption group for that. Re-asserted here so the group exists before
