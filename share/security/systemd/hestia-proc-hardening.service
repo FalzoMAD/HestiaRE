@@ -1,0 +1,42 @@
+#=========================================================================#
+# HestiaRE - /proc hardening (hidepid)                                    #
+#                                                                         #
+# Template: %opts% is substituted by proc_hardening_apply (func/helper.sh).#
+# DO NOT MODIFY THE INSTALLED COPY - it is regenerated.                   #
+#=========================================================================#
+#
+# hidepid keeps one panel user from seeing another's processes. This file is the
+# design rationale for the whole mechanism; the shell side only implements it.
+#
+# Why a unit and not /etc/fstab: systemd-fstab-generator skips the API filesystems,
+# so a "proc /proc proc ..." line there produces no mount unit and is ignored at
+# boot. Verified: the generator emits -.mount, boot.mount and media-cdrom0.mount
+# from an fstab carrying that line, never proc.mount. It would look correct and do
+# nothing. A unit also keeps us out of a file whose layout differs per host.
+#
+# Why not cron: a @reboot job runs after the services it is meant to protect.
+#
+# Why the gid= exemption: systemd upstream treats hidepid on /proc as an unsupported
+# configuration. With PIDs hidden, the D-Bus credential check behind a user-scope
+# request fails and rootless container runtimes abort with "Interactive
+# authentication required" (moby#45014). Members of the group keep a full /proc.
+#
+# Why numeric: the group is created per host, so a name would resolve to a different
+# id on a restored box and exempt whoever holds it there.
+
+[Unit]
+Description=HestiaRE /proc hardening (hidepid)
+Documentation=man:proc(5)
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=sysinit.target
+# Containers refuse the remount; failing loudly there would be noise, not a finding.
+ConditionVirtualization=!container
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mount -o remount,%opts% /proc
+
+[Install]
+WantedBy=sysinit.target

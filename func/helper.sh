@@ -312,4 +312,61 @@ migrate_data_layout() {
 
 	# restrict the shell-profile snippet to root on existing installs (was world-readable)
 	[ -f /etc/profile.d/hestia.sh ] && chmod 600 /etc/profile.d/hestia.sh
+
+	# move /proc hardening off the @reboot cron onto its systemd unit (proc_hardening_apply);
+	# idempotent, so a box already converted just gets its gid re-asserted
+	proc_hardening_apply || true
+}
+
+# ── /proc hardening (hidepid) ───────────────────────────────────────────────
+# Why a unit rather than fstab or cron, and why the gid= exemption exists at all:
+# see the header of share/security/systemd/hestia-proc-hardening.service.
+PROC_VISIBLE_GROUP='procvis'
+PROC_HARDENING_UNIT='hestia-proc-hardening.service'
+
+proc_visible_gid() { getent group "$PROC_VISIBLE_GROUP" 2> /dev/null | cut -d: -f3; }
+
+# Re-runnable: this is how "enable Docker" re-asserts the gid later. Returns 0 when
+# hidepid is not applicable (container), so 0 does not imply the unit is installed.
+proc_hardening_apply() {
+	local gid opts src="${HESTIA:-/usr/local/hestia}/share/security/systemd/$PROC_HARDENING_UNIT"
+	local dst="/etc/systemd/system/$PROC_HARDENING_UNIT"
+
+	getent group "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 \
+		|| groupadd --system "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 \
+		|| { echo "Warning: cannot create group $PROC_VISIBLE_GROUP - skipping /proc hardening" >&2; return 1; }
+
+	gid="$(proc_visible_gid)"
+	[ -n "$gid" ] || { echo "Warning: cannot resolve gid of $PROC_VISIBLE_GROUP" >&2; return 1; }
+
+	# Numeric: a group name would resolve to a different id on a restored box.
+	opts="nosuid,nodev,noexec,relatime,hidepid=invisible,gid=$gid"
+
+	# The legacy @reboot job goes regardless of which branch we take below.
+	rm -f /etc/cron.d/hestia-proc
+
+	# Prove it on the running kernel first: a container refuses the remount, and the unit
+	# would then only fail at every boot.
+	if ! mount -o "remount,$opts" /proc > /dev/null 2>&1; then
+		echo "Info: cannot remount /proc (container) - skipping hidepid"
+		systemctl disable --now "$PROC_HARDENING_UNIT" > /dev/null 2>&1 || true
+		rm -f "$dst"
+		systemctl daemon-reload
+		return 0
+	fi
+
+	[ -f "$src" ] || { echo "Warning: $src missing - hidepid applied live, not persisted" >&2; return 1; }
+	sed "s|%opts%|$opts|g" "$src" > "$dst" || return 1
+	chmod 644 "$dst"
+	systemctl daemon-reload
+	systemctl enable "$PROC_HARDENING_UNIT" > /dev/null 2>&1
+}
+
+# The user manager caches supplementary groups: an already-running session under that
+# uid must be restarted before this takes effect.
+proc_visible_add() {
+	local user="$1"
+	[ -n "$user" ] || return 1
+	getent group "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 || return 1
+	usermod -aG "$PROC_VISIBLE_GROUP" "$user"
 }
