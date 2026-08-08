@@ -46,8 +46,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-if [ -z "$HESTIA" ]; then HESTIA="/usr/local/hestia"; fi
-
 check_hestia_demo_mode
 
 # Rootless needs cgroup v2. On cgroup v1 the delegation below is meaningless and
@@ -78,7 +76,7 @@ if dpkg-query -W -f='${db:Status-Status}' docker.io 2> /dev/null | grep -q '^ins
 fi
 
 echo "Adding the Docker repository..."
-install -m 0755 -d /usr/share/keyrings /etc/apt/keyrings
+install -m 0755 -d /usr/share/keyrings
 if [ ! -s "$DOCKER_KEYRING" ]; then
 	curl -fsSL "https://download.docker.com/linux/$os_id/gpg" -o /tmp/docker_apt.gpg \
 		|| { echo "ERROR: failed to download the Docker signing key"; exit "$E_CONNECT"; }
@@ -95,18 +93,42 @@ printf 'deb [arch=%s signed-by=%s] https://download.docker.com/linux/%s %s stabl
 
 apt-get -qq update > /dev/null 2>&1
 
-# uidmap/slirp4netns/fuse-overlayfs are what rootlesskit needs; dbus-user-session and
-# systemd-container are what reaching a user context needs - su does not create a
-# session, so panel actions go through systemd-run --machine instead.
-docker_pkgs="docker-ce docker-ce-cli containerd.io docker-ce-rootless-extras docker-compose-plugin"
-host_pkgs="uidmap slirp4netns fuse-overlayfs dbus-user-session systemd-container"
-echo "Installing Docker ($docker_pkgs)..."
+# Named explicitly rather than left to Recommends: rootless-extras only *recommends*
+# slirp4netns, and buildx arrives the same way - an apt configured with
+# --no-install-recommends would silently produce a Docker that cannot network or build.
+# uidmap/slirp4netns are what rootlesskit needs; dbus-user-session and systemd-container
+# are what reaching a user context needs, since su creates no session and panel actions
+# go through systemd-run --machine.
+docker_req="docker-ce docker-ce-cli containerd.io docker-ce-rootless-extras docker-compose-plugin"
+host_req="uidmap slirp4netns dbus-user-session systemd-container"
+# Degradations, not blockers: fuse-overlayfs is only needed where the kernel has no
+# native rootless overlayfs (none of the supported targets), buildx only for building
+# images rather than pulling them.
+optional_pkgs="fuse-overlayfs docker-buildx-plugin"
+
+apt_log="$(mktemp -t hestia-docker-apt.XXXXXX)"
+echo "Installing Docker ($docker_req)..."
 # shellcheck disable=SC2086
-apt-get -y -qq install $docker_pkgs $host_pkgs > /dev/null 2>&1
-for p in docker-ce docker-ce-rootless-extras uidmap; do
+apt-get -y -qq install $docker_req $host_req $optional_pkgs > "$apt_log" 2>&1
+
+# Verify every package, not a sample. apt's exit code alone is not enough - a partial
+# transaction can still report success, and a missing piece would only surface later,
+# when a customer is enabled, as a much less obvious failure.
+missing=''
+for p in $docker_req $host_req; do
 	dpkg-query -W -f='${db:Status-Status}' "$p" 2> /dev/null | grep -q '^installed$' \
-		|| { echo "ERROR: $p was not installed - see apt output above."; exit "$E_INVALID"; }
+		|| missing="$missing $p"
 done
+if [ -n "$missing" ]; then
+	echo "ERROR: required package(s) not installed:$missing"
+	echo "       apt output: $apt_log"
+	exit "$E_INVALID"
+fi
+for p in $optional_pkgs; do
+	dpkg-query -W -f='${db:Status-Status}' "$p" 2> /dev/null | grep -q '^installed$' \
+		|| echo "Warning: $p is not installed (apt output: $apt_log)" >&2
+done
+rm -f "$apt_log"
 
 echo "Disabling the rootful daemon..."
 systemctl disable --now docker.service docker.socket > /dev/null 2>&1 || true
