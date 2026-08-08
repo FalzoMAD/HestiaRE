@@ -1931,6 +1931,15 @@
       "note": "no upstream counterpart found; native or renamed - confirm manually"
     },
     {
+      "path": "security/systemd/hestia-proc-hardening.service",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "HestiaRE-native (#565); replaces the inherited @reboot cron for the hidepid remount"
+    },
+    {
       "path": "snappymail/install.php",
       "source_type": "derived",
       "upstream_path": "install/common/snappymail/install.php",

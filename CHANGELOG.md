@@ -36,6 +36,33 @@ opens above it.
 
 ### Changed
 
+- **The /proc exemption gid is resolved at every boot instead of baked in at install time.** The unit
+  carried the numeric gid that `procvis` happened to have when the installer ran. Delete and recreate that
+  group - or let anything else claim the id - and the frozen number keeps exempting whatever now holds it,
+  with nothing noticing. The unit now reads `/etc/group` in its own `ExecStart`, so the exemption is
+  always whatever this host says right now, and a missing group means `gid=0`, i.e. nobody extra. That
+  also settles the original name-vs-numeric argument: resolving per boot is exactly the behaviour a
+  restored box needs. `gid=0` is deliberate rather than omitting the option - a remount that merely leaves
+  `gid` out keeps the previous value (mount options are sticky) and `gid=` is rejected outright, so this
+  is what actually withdraws a stale exemption on a running box.
+
+- **`h-check-sys-smoke` verifies the live /proc state.** Failure of the hardening is fail-open and
+  invisible to users, so the box now checks what is actually mounted: unit not failed, hidepid present,
+  and the mounted gid still pointing at `procvis`. The last one caught a deliberately drifted gid during
+  testing.
+
+- **`/proc` hardening now lives in `/etc/fstab` instead of an `@reboot` cron job.** The old line remounted
+  `/proc` with `hidepid=2` and re-applied it from `/etc/cron.d/hestia-proc` after boot, guarded by a
+  `sleep 5`. Cron starts *after* most services, so that sleep papered over a window in which `/proc` was
+  still unhardened; systemd applies fstab options before the services come up and closes it. The new
+  `proc_hardening_apply` (`func/helper.sh`) also creates the `procvis` group and writes a **numeric**
+  `gid=` exemption - a name would resolve to a different id on a restored box and silently exempt whoever
+  holds it there. The entry is only persisted after the remount is proven to work on the running kernel,
+  so LXC still degrades to the documented skip rather than to an fstab that fails at boot, and a
+  hand-written `/proc` entry is left alone. Existing boxes are converted on upgrade. The exemption group
+  is what makes rootless container runtimes work at all under hidepid (moby#45014), so this is a
+  prerequisite for #389.
+
 - **`sync-upstream.sh` names its source branch** and archives that branch instead of whatever the mirror
   happens to have checked out. A manual checkout in the mirror made one sync archive `1.10-beta`, which is
   *behind* `main`, so the upstream reference moved backwards while the commit still read

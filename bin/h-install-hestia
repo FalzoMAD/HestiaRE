@@ -167,9 +167,7 @@ EOF
 	grep -q '^/usr/sbin/nologin' /etc/shells || echo "/usr/sbin/nologin" >> /etc/shells
 	grep -q 'LS_COLORS="$LS_COLORS:di=00;33"' /etc/profile \
 		|| echo 'LS_COLORS="$LS_COLORS:di=00;33"' >> /etc/profile
-	mount -o remount,defaults,hidepid=2 /proc > /dev/null 2>&1 \
-		&& echo "@reboot root sleep 5 && mount -o remount,defaults,hidepid=2 /proc" > /etc/cron.d/hestia-proc \
-		|| echo "Info: Cannot remount /proc (LXC — skip hidepid)"
+	proc_hardening_apply
 
 	# DH params in the base stage: nginx and dovecot both fatal without /etc/ssl/dhparam.pem, 
     # so it must exist before any TLS service starts. Ship the curated file; regenerate only as a fallback.
