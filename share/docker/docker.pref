@@ -1,10 +1,17 @@
-# HestiaRE: keep the Docker repo to Docker (#389).
-# Deny list, not an allow list: a `Package: *` pin on this origin overrides any
-# specific-package stanza regardless of order or quoting (measured on apt/deb13), so
-# the allow-list form silently pins docker-ce itself to -1 and blocks its security
-# updates. Named packages work, hence this shape.
-# No OS package is shadowed either way - the repo's names (docker-ce*, containerd.io,
-# *-plugin) do not exist in Debian/Ubuntu, which carry containerd and docker.io.
+# HestiaRE: keep the Docker repo from becoming a channel for unrelated software (#389).
+#
+# Deny list, not an allow list. A `Package: *` pin on this origin overrides any
+# specific-package stanza regardless of order or quoting (measured on apt/deb13), so the
+# allow-list form silently pins docker-ce itself to -1 and blocks its security updates.
+# Named packages work, hence this shape.
+#
+# This NARROWS, it does not bound: a name list cannot cover packages Docker adds later.
+# Revisit when the repo's contents change. A complete boundary is not expressible here -
+# without the wildcard everything from the origin gets the default 500.
+#
+# It is not protecting against shadowing: no OS package shares a name with this repo.
+# Debian/Ubuntu carry containerd, docker.io, docker-cli, docker-compose, docker-buildx;
+# the repo carries containerd.io, docker-ce*, and the *-plugin variants.
 Package: cagent docker-model-plugin docker-secrets-engine docker-secrets-engine-plugins
 Pin: origin download.docker.com
 Pin-Priority: -1
