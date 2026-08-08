@@ -4,8 +4,8 @@
 #
 # example: h-delete-sys-docker
 #
-# Counterpart to h-add-sys-docker: purges the Docker packages and removes the repo,
-# keyring and apt pin again, so a box without the addon carries no Docker repo at all.
+# Counterpart to h-add-sys-docker: purges the Docker packages and removes the repo and
+# keyring again, so a box without the addon carries no Docker repo at all.
 #
 # Refuses while customers still have it enabled - their companion, subid entries and
 # container data would be left behind with nothing to manage them. FORCE overrides.
@@ -29,7 +29,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 DOCKER_KEYRING='/usr/share/keyrings/docker-keyring.gpg'
 DOCKER_LIST='/etc/apt/sources.list.d/docker.list'
-DOCKER_PREF='/etc/apt/preferences.d/hestia-docker.pref'
 DOCKER_DELEGATE='/etc/systemd/system/user@.service.d/hestia-delegate.conf'
 
 #----------------------------------------------------------#
@@ -64,7 +63,8 @@ apt-get -y -qq purge docker-ce docker-ce-cli docker-ce-rootless-extras \
 apt-get -y -qq autoremove > /dev/null 2>&1
 
 echo "Removing the Docker repository..."
-rm -f "$DOCKER_LIST" "$DOCKER_PREF" "$DOCKER_KEYRING"
+# The pin an earlier revision installed goes too, so an upgraded box does not keep it.
+rm -f "$DOCKER_LIST" "$DOCKER_KEYRING" /etc/apt/preferences.d/hestia-docker.pref
 apt-get -qq update > /dev/null 2>&1
 
 rm -f "$DOCKER_DELEGATE"

@@ -23,10 +23,14 @@ opens above it.
   it back), cgroup controllers are delegated to user sessions, and the removal side refuses while
   customers still have it enabled unless forced.
 
-  The apt pin is a **deny** list, not an allow list. A `Package: *` pin on that origin overrides any
-  specific-package stanza regardless of order or quoting - measured on deb13, where the allow-list form
-  silently pinned `docker-ce` itself to -1 and would have blocked its security updates. No OS package is
-  shadowed either way, since the repo's package names do not exist in Debian or Ubuntu.
+  The repo is deliberately **not** pinned. The condition it was added for - stop it shadowing OS packages
+  - describes a risk that cannot occur: no OS package shares a name with it (Debian and Ubuntu carry
+  `containerd`, `docker.io`, `docker-cli`, `docker-compose`, `docker-buildx`; the repo carries
+  `containerd.io`, `docker-ce*` and the `*-plugin` variants). A pin could only have narrowed what the
+  repo offers, never bounded it: apt's allow-list form does not work - a `Package: *` pin on the origin
+  overrides any specific-package stanza regardless of order or quoting, which silently pinned `docker-ce`
+  itself to -1 and would have blocked its security updates - and a name-based deny list cannot cover
+  packages added later. `h-delete-sys-docker` still removes a pin from an earlier revision.
 
 - **`h-check-sys-smoke` guards the identity allocator's preconditions** (#388). Not its output - panel
   users created before the change keep their old uid by design, so their position is deliberately not

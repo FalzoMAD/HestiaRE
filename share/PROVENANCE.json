@@ -369,15 +369,6 @@
       "note": ""
     },
     {
-      "path": "docker/docker.pref",
-      "source_type": "eigenbau",
-      "upstream_path": null,
-      "upstream_ref": null,
-      "last_reconciled": null,
-      "divergence": null,
-      "note": "HestiaRE-native (#389); per-user rootless Docker"
-    },
-    {
       "path": "docker/systemd/delegate.conf",
       "source_type": "eigenbau",
       "upstream_path": null,

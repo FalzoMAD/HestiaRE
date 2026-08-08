@@ -36,7 +36,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 DOCKER_KEYRING='/usr/share/keyrings/docker-keyring.gpg'
 DOCKER_LIST='/etc/apt/sources.list.d/docker.list'
-DOCKER_PREF='/etc/apt/preferences.d/hestia-docker.pref'
 DOCKER_DELEGATE='/etc/systemd/system/user@.service.d/hestia-delegate.conf'
 
 #----------------------------------------------------------#
@@ -94,7 +93,6 @@ chmod a+r "$DOCKER_KEYRING"
 arch="$(dpkg --print-architecture 2> /dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 printf 'deb [arch=%s signed-by=%s] https://download.docker.com/linux/%s %s stable\n' \
 	"$arch" "$DOCKER_KEYRING" "$os_id" "$os_codename" > "$DOCKER_LIST"
-install -m 644 "$HESTIA/share/docker/docker.pref" "$DOCKER_PREF"
 
 apt-get -qq update > /dev/null 2>&1
 
@@ -129,8 +127,13 @@ systemctl daemon-reload
 
 # hidepid hides the pids runc needs to have its container scope started; the companion
 # has to be in the exemption group for that. Re-asserted here so the group exists before
-# the first customer is enabled (#565).
-proc_hardening_apply || true
+# the first customer is enabled (#565). Guarded on the function so a helper.sh predating
+# it degrades quietly instead of printing a command-not-found mid-install.
+if command -v proc_hardening_apply > /dev/null 2>&1; then
+	proc_hardening_apply || true
+else
+	echo "Warning: proc_hardening_apply unavailable - ensure group procvis exists before enabling a customer." >&2
+fi
 
 set_install_component ADDON_DOCKER true
 
