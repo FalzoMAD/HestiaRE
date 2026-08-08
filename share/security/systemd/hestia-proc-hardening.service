@@ -1,28 +1,31 @@
 #=========================================================================#
 # HestiaRE - /proc hardening (hidepid)                                    #
 #                                                                         #
-# Template: %opts% is substituted by proc_hardening_apply (func/helper.sh).#
+# Installed verbatim by proc_hardening_apply (func/helper.sh).            #
 # DO NOT MODIFY THE INSTALLED COPY - it is regenerated.                   #
 #=========================================================================#
 #
-# hidepid keeps one panel user from seeing another's processes. This file is the
-# design rationale for the whole mechanism; the shell side only implements it.
+# Keeps a panel user from seeing other users' processes, container processes of
+# other customers included - that is what it is for.
 #
-# Why a unit and not /etc/fstab: systemd-fstab-generator skips the API filesystems,
-# so a "proc /proc proc ..." line there produces no mount unit and is ignored at
-# boot. Verified: the generator emits -.mount, boot.mount and media-cdrom0.mount
-# from an fstab carrying that line, never proc.mount. It would look correct and do
-# nothing. A unit also keeps us out of a file whose layout differs per host.
+# Unit, not fstab: systemd-fstab-generator skips the API filesystems, so a
+#   "proc /proc proc ..." line there yields no mount unit and is ignored at boot.
+# Unit, not cron: a @reboot job runs after the services it protects.
+# gid= exemption: with pids hidden, runc cannot start its container scope and
+#   rootless Docker fails (moby#45014). Without it, `docker run` is broken.
+# invisible, not noaccess: noaccess leaves foreign pids enumerable with their
+#   owners (156 visible vs 3, measured) and breaks rootless Docker just the same.
+# gid read per start: a value fixed at install time keeps exempting that number
+#   after the group is deleted and the id recycled.
+# gid=0 when the group is absent: mount options are sticky, so a remount that
+#   omits gid keeps the old value and a bare gid= is rejected. gid=0 is what
+#   clears it, and group 0 exempts nobody in practice.
 #
-# Why not cron: a @reboot job runs after the services it is meant to protect.
-#
-# Why the gid= exemption: systemd upstream treats hidepid on /proc as an unsupported
-# configuration. With PIDs hidden, the D-Bus credential check behind a user-scope
-# request fails and rootless container runtimes abort with "Interactive
-# authentication required" (moby#45014). Members of the group keep a full /proc.
-#
-# Why numeric: the group is created per host, so a name would resolve to a different
-# id on a restored box and exempt whoever holds it there.
+# Fail-open by design: a failure here boots normally with an unhardened /proc and
+# shows up in `systemctl --failed`. hidepid is information disclosure, not
+# privilege escalation - environ, mem, fd/ and maps stay owner-only either way -
+# so an unbootable box would be the worse trade. h-check-sys-smoke verifies the
+# live mount, since nothing else would notice.
 
 [Unit]
 Description=HestiaRE /proc hardening (hidepid)
@@ -30,13 +33,15 @@ Documentation=man:proc(5)
 DefaultDependencies=no
 After=systemd-remount-fs.service
 Before=sysinit.target
-# Containers refuse the remount; failing loudly there would be noise, not a finding.
+# Containers refuse the remount; failing there would be noise, not a finding.
 ConditionVirtualization=!container
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/mount -o remount,%opts% /proc
+# $$ is a literal $ for systemd. /etc/group is read directly because this runs
+# before sysinit.target and the exemption group is always local.
+ExecStart=/bin/sh -c 'g=$$(grep -m1 "^procvis:" /etc/group | cut -d: -f3); exec mount -o remount,nosuid,nodev,noexec,relatime,hidepid=invisible,gid=$${g:-0} /proc'
 
 [Install]
 WantedBy=sysinit.target

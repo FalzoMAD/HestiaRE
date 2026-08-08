@@ -599,6 +599,40 @@ check_web_switch_prechecks() {
 	fi
 }
 
+# check_proc_hardening - the exemption is a live mount option, so verify the running
+# state, not the config. Catches a failed unit (fail-open is silent to users) and a gid
+# that drifted off the group after a delete/recreate cycle.
+check_proc_hardening() {
+	local unit='hestia-proc-hardening.service' mounted group_gid
+	if ! systemctl list-unit-files "$unit" > /dev/null 2>&1 \
+		|| [ "$(systemctl is-enabled "$unit" 2> /dev/null)" != enabled ]; then
+		skip "/proc hardening not enabled here (container?)"
+		return
+	fi
+
+	[ "$(systemctl is-failed "$unit" 2> /dev/null)" = failed ] \
+		&& no "/proc hardening unit failed" "boot left /proc unhardened; systemctl status $unit"
+
+	if grep -q ' /proc .*hidepid=' /proc/self/mountinfo /proc/mounts 2> /dev/null; then
+		ok "/proc carries hidepid"
+	else
+		no "/proc has no hidepid" "every user can read foreign /proc/*/cmdline; systemctl start $unit"
+	fi
+
+	# A stale numeric gid would exempt whoever holds it now, which is the failure the
+	# unit resolves the group at boot to avoid - so it must not reappear.
+	mounted=$(awk '$2 == "/proc" { print $4 }' /proc/mounts | tr ',' '\n' | sed -n 's/^gid=//p')
+	group_gid=$(getent group procvis 2> /dev/null | cut -d: -f3)
+	if [ -z "$mounted" ]; then
+		[ -z "$group_gid" ] && ok "/proc exemption absent, procvis absent" \
+			|| no "/proc exemption missing while procvis exists" "gid $group_gid is not exempt; rootless Docker cannot start containers"
+	elif [ "$mounted" = "$group_gid" ]; then
+		ok "/proc exemption gid matches procvis"
+	else
+		no "/proc exemption gid $mounted is not procvis (${group_gid:-absent})" "a recycled gid silently exempts a foreign group"
+	fi
+}
+
 # check_web_model_sentinel - flag an interrupted model switch so the box reports it
 # rather than the operator discovering it at the next reboot.
 check_mesh_serve_staged() {
@@ -795,6 +829,8 @@ check_web_lock_coverage
 check_web_switch_prechecks
 check_web_model_sentinel
 check_realip_header
+# fail-open is invisible to users: verify the live mount, not the intent (#565).
+check_proc_hardening
 
 #----------------------------------------------------------#
 #                       Result                             #
