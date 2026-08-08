@@ -1045,6 +1045,15 @@
       "note": ""
     },
     {
+      "path": "h-add-user-docker",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "HestiaRE-native (#389); per-user rootless Docker"
+    },
+    {
       "path": "h-add-user-filemanager",
       "source_type": "eigenbau",
       "upstream_path": null,
@@ -3659,6 +3668,15 @@
         "measured_at": "2026-08-06"
       },
       "note": ""
+    },
+    {
+      "path": "h-delete-user-docker",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": null,
+      "divergence": null,
+      "note": "HestiaRE-native (#389); per-user rootless Docker"
     },
     {
       "path": "h-delete-user-filemanager",

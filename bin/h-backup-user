@@ -127,7 +127,9 @@ get_user_disk_usage() {
 		for xpath in $(echo "$user_exclusions" | tr ',' '\n'); do
 			fargs+=(--exclude="$xpath")
 		done
-		usage=$(du -shm "$HOMEDIR/$user" --exclude "$HOMEDIR/$user/web" --exclude "$HOMEDIR/$user/mail" --exclude "$HOMEDIR/$user/conf" "${fargs[@]}" | cut -f 1)
+		# The companion image store is excluded from the archive below, so counting it here
+		# would inflate the pre-flight space check and could refuse a backup that fits.
+		usage=$(du -shm "$HOMEDIR/$user" --exclude "$HOMEDIR/$user/web" --exclude "$HOMEDIR/$user/mail" --exclude "$HOMEDIR/$user/conf" --exclude "$HOMEDIR/$user/.companion/.local/share/docker" "${fargs[@]}" | cut -f 1)
 		u_usage=$((u_usage + usage))
 	fi
 
@@ -595,7 +597,12 @@ if [ "$USER" != '*' ]; then
 	if [ -e "$USER_DATA/backup-excludes.conf" ]; then
 		source $USER_DATA/backup-excludes.conf
 	fi
-	fargs=()
+	# Built in, not via backup-excludes.conf: that file is the customer's, and dropping
+	# this entry would silently put the whole image store back into every archive.
+	# Container images are reproduced by pulling them (#389), so archiving them buys
+	# nothing and costs gigabytes per customer. Compose files and bind-mounted payload
+	# live in the customer's own tree and are unaffected.
+	fargs=(--exclude=.companion/.local/share/docker)
 	for xpath in $(echo "$USER" | tr ',' '\n'); do
 		if [ -d "$xpath" ]; then
 			fargs+=(--exclude="$xpath"/*)
