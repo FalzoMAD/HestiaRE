@@ -50,6 +50,14 @@ companion_run() {
 		--setenv=XDG_RUNTIME_DIR="/run/user/$companion_uid" "$@"
 }
 
+# The socket FILE existing proves nothing: dockerd leaves it behind when it dies, so a
+# dead daemon looks identical to a live one. Ask the API - the same thing the customer
+# does, and the only answer that means this worked.
+docker_alive() {
+	DOCKER_HOST="unix://$companion_home/docker.sock" \
+		docker version --format '{{.Server.Version}}' > /dev/null 2>&1
+}
+
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -97,6 +105,14 @@ if [ -n "$existing" ] && [ "$existing" != "$companion" ]; then
 	echo "ERROR: companion uid $companion_uid is held by '$existing'."
 	exit "$E_EXISTS"
 fi
+# Symmetric to the uid check above: without it a foreign group on that gid only
+# surfaces as "could not create <companion>" from the useradd below, which points at
+# the wrong thing entirely.
+existing="$(getent group "$companion_uid" | cut -d: -f1)"
+if [ -n "$existing" ] && [ "$existing" != "$companion" ]; then
+	echo "ERROR: companion gid $companion_uid is held by group '$existing'."
+	exit "$E_EXISTS"
+fi
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -109,7 +125,11 @@ if ! getent passwd "$companion" > /dev/null 2>&1; then
 	# matched by that empty group entry and never reaches other:: - the companion could
 	# not even traverse into its own home.
 	getent group "$companion" > /dev/null 2>&1 \
-		|| /usr/sbin/groupadd -g "$companion_uid" "$companion"
+		|| /usr/sbin/groupadd -g "$companion_uid" "$companion" \
+		|| {
+			echo "ERROR: could not create group $companion (gid $companion_uid)"
+			exit "$E_INVALID"
+		}
 	# -K SUB_UID_COUNT=0 suppresses the range useradd hands out on its own. On Ubuntu it
 	# does, and it would sit FIRST in /etc/subuid and shift the whole mapping.
 	/usr/sbin/useradd "$companion" -u "$companion_uid" -g "$companion_uid" \
@@ -165,6 +185,22 @@ if [ "$(systemctl is-active "user@${companion_uid}.service" 2> /dev/null)" != 'a
 	exit "$E_INVALID"
 fi
 
+# Only intervene where something is actually missing. A re-run is the supported recovery
+# path, so it must not tear down a healthy daemon: restarting one that is serving
+# containers is a real outage, not a cosmetic churn. If the API answers AND the override
+# already says what it should, the daemon needs nothing from us.
+override_dir="$companion_home/.config/systemd/user/docker.service.d"
+override_want="$(sed -e "s|__RUNSOCK__|/run/user/$companion_uid/docker.sock|g" \
+	-e "s|__SOCK__|$companion_home/docker.sock|g" -e "s|__GID__|1000|g" \
+	"$HESTIA/share/docker/systemd/docker-rootless-override.conf")"
+
+if docker_alive && [ "$(cat "$override_dir/hestia.conf" 2> /dev/null)" = "$override_want" ]; then
+	echo "Docker is already enabled and running for $user."
+	$BIN/h-log-action "system" "Info" "System" "Verified rootless Docker for $user."
+	log_event "$OK" "$ARGUMENTS"
+	exit
+fi
+
 # The setuptool's exit code is NOT the verdict. Its last act is to start the daemon, and
 # that fails whenever one is already running or a stale unit came in with a restored
 # home - both ordinary here. What it is needed for is writing the unit; the override and
@@ -181,11 +217,8 @@ companion_run dockerd-rootless-setuptool.sh install > "$setup_log" 2>&1 || true
 # by way of the subgid triple. unix:// needs THREE slashes - the two-slash form parses
 # the first path element as a hostname and the daemon exits 1.
 # Placeholders are __UPPER__ rather than %x%, so substitution cannot rewrite prose.
-override_dir="$companion_home/.config/systemd/user/docker.service.d"
 mkdir -p "$override_dir"
-sed -e "s|__RUNSOCK__|/run/user/$companion_uid/docker.sock|g" \
-	-e "s|__SOCK__|$companion_home/docker.sock|g" -e "s|__GID__|1000|g" \
-	"$HESTIA/share/docker/systemd/docker-rootless-override.conf" > "$override_dir/hestia.conf"
+printf '%s\n' "$override_want" > "$override_dir/hestia.conf"
 chown -R "$companion":"$gid" "$companion_home/.config"
 
 install -m 644 "$HESTIA/share/docker/profile.d-hestia-docker.sh" /etc/profile.d/hestia-docker.sh
@@ -203,13 +236,6 @@ companion_run systemctl --user daemon-reload > /dev/null 2>&1
 companion_run systemctl --user reset-failed docker > /dev/null 2>&1
 companion_run systemctl --user enable docker > /dev/null 2>&1
 companion_run systemctl --user restart docker > /dev/null 2>&1
-# The socket FILE existing proves nothing: dockerd leaves it behind when it dies, so a
-# dead daemon looks identical to a live one. Ask the API instead - that is the same
-# thing the customer will do, and the only answer that means the enable worked.
-docker_alive() {
-	DOCKER_HOST="unix://$companion_home/docker.sock" \
-		docker version --format '{{.Server.Version}}' > /dev/null 2>&1
-}
 for _ in $(seq 1 60); do
 	docker_alive && break
 	sleep 1
