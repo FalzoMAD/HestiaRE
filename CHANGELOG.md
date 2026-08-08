@@ -14,6 +14,16 @@ opens above it.
 
 ### Added
 
+- **`h-check-sys-smoke` guards the identity allocator's preconditions** (#388). Not its output - panel
+  users created before the change keep their old uid by design, so their position is deliberately not
+  checked. What must hold is that `UID_MAX`/`GID_MAX` cap below the band (else a bare `useradd` can land
+  inside it and collide with an allocation), that `SUB_UID_MAX`/`SUB_GID_MAX` cover the whole computed
+  range (the shipped 600100000 would reject the companion subuid ranges of roughly 43% of usernames, and
+  only at "enable Docker", long after the account was created), and that no two panel users share a uid.
+  Verified in both directions: all four checks fail on a box without the guard rail and pass after it runs.
+
+### Added
+
 - **Panel users get their uid allocated from a dedicated band** (`func/identity.sh`). The username hash
   only picks where to start looking; the first free slot wins and is that user's uid from then on, as in
   classic HestiaCP. A taken slot is not an error - it reprobes. Customers occupy the odd thousands

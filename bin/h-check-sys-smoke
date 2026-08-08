@@ -599,6 +599,51 @@ check_web_switch_prechecks() {
 	fi
 }
 
+# check_identity_band - the allocator's preconditions, not its output. Panel users
+# created before #388 keep their old uid by design, so their position is NOT checked;
+# what must hold is that nothing can wander into the band and that the subordinate
+# ranges the companion needs are actually permitted.
+check_identity_band() {
+	local defs='/etc/login.defs' band_start=11000 v dupes
+	if [ ! -f "$defs" ]; then
+		skip "login.defs absent - identity band guard not checkable"
+		return
+	fi
+
+	for key in UID_MAX GID_MAX; do
+		v=$(awk -v k="$key" '$1 == k { print $2; exit }' "$defs")
+		if [ -n "$v" ] && [ "$v" -lt "$band_start" ] 2> /dev/null; then
+			ok "$key caps below the panel band"
+		else
+			no "$key is ${v:-unset}, not below $band_start" "a bare useradd can land inside the band and collide with an allocation"
+		fi
+	done
+
+	# The shipped default (600100000) sits below the highest range the formula produces,
+	# which would reject the companion subuid ranges of roughly 43% of usernames - and
+	# only at "enable Docker", long after the account was made.
+	for key in SUB_UID_MAX SUB_GID_MAX; do
+		v=$(awk -v k="$key" '$1 == k { print $2; exit }' "$defs")
+		if [ -n "$v" ] && [ "$v" -ge 1048675999 ] 2> /dev/null; then
+			ok "$key covers the whole subordinate range"
+		else
+			no "$key is ${v:-unset}, below the highest computed range end" "companion subuid ranges would be rejected later (#389)"
+		fi
+	done
+
+	# Two panel users on one uid is corruption, not a legacy artefact.
+	dupes=$(for u in "$CONF_DIR"/users/*/; do
+		u=$(basename "$u")
+		[ "$u" = '*' ] && continue
+		id -u "$u" 2> /dev/null
+	done | sort | uniq -d | wc -l)
+	if [ "$dupes" -eq 0 ]; then
+		ok "no two panel users share a uid"
+	else
+		no "$dupes uid(s) shared by more than one panel user" "ownership cannot be separated; check /etc/passwd"
+	fi
+}
+
 # check_proc_hardening - the exemption is a live mount option, so verify the running
 # state, not the config. Catches a failed unit (fail-open is silent to users) and a gid
 # that drifted off the group after a delete/recreate cycle.
@@ -831,6 +876,8 @@ check_web_model_sentinel
 check_realip_header
 # fail-open is invisible to users: verify the live mount, not the intent (#565).
 check_proc_hardening
+# #388: guard the allocator's preconditions, since a regression only shows up much later.
+check_identity_band
 
 #----------------------------------------------------------#
 #                       Result                             #
