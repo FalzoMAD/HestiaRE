@@ -192,15 +192,31 @@ install -m 644 "$HESTIA/share/docker/profile.d-hestia-docker.sh" /etc/profile.d/
 
 # restart, not enable --now: the setuptool already started the daemon, so on an
 # already-running unit --now is a no-op and it would keep the pre-override ExecStart.
+#
+# reset-failed first, and it is not cosmetic. A restored home arrives with the unit
+# already enabled AND with the override from the previous host, whose runtime socket
+# path carries the old companion uid. The user manager starts that on linger, before we
+# get to rewrite it, dockerd cannot bind the path and dies - repeatedly, until systemd's
+# start rate limiter latches. Without clearing it, the restart below is refused and the
+# customer ends up with a correct override and a dead daemon.
 companion_run systemctl --user daemon-reload > /dev/null 2>&1
+companion_run systemctl --user reset-failed docker > /dev/null 2>&1
 companion_run systemctl --user enable docker > /dev/null 2>&1
 companion_run systemctl --user restart docker > /dev/null 2>&1
+# The socket FILE existing proves nothing: dockerd leaves it behind when it dies, so a
+# dead daemon looks identical to a live one. Ask the API instead - that is the same
+# thing the customer will do, and the only answer that means the enable worked.
+docker_alive() {
+	DOCKER_HOST="unix://$companion_home/docker.sock" \
+		docker version --format '{{.Server.Version}}' > /dev/null 2>&1
+}
 for _ in $(seq 1 60); do
-	[ -S "$companion_home/docker.sock" ] && break
+	docker_alive && break
 	sleep 1
 done
-if [ ! -S "$companion_home/docker.sock" ]; then
-	echo "ERROR: the companion daemon did not expose $companion_home/docker.sock"
+if ! docker_alive; then
+	echo "ERROR: the companion daemon at $companion_home/docker.sock does not answer"
+	echo "       unit: $(companion_run systemctl --user is-active docker 2>&1 | tail -1)"
 	echo "       rootless setup output: $setup_log"
 	exit "$E_INVALID"
 fi
