@@ -5,20 +5,19 @@
 # example: h-add-user-docker john
 #
 # Creates the customer's companion and starts their own rootless daemon (#389).
-# Idempotent - re-running heals a partial enable.
 #
 # Two accounts, one trust domain. The companion is container uid 0 and runs the daemon;
-# the customer is container uid 1000, which is what stock images expect, so upstream
-# compose files work unmodified. Mapping the customer to container 0 instead - the
-# earlier design - fails on any image that refuses to run as root.
+# the customer is container uid 1000, the id stock images expect, so upstream compose
+# files work unmodified. The customer never touches the companion account - they reach
+# the daemon through a group-owned socket in ~/.companion, and socket access is full
+# daemon control, which is why only their own group gets it.
 #
-# The customer never touches the companion account: they reach the daemon through a
-# group-owned socket in ~/.companion. Socket access is full daemon control, which is
-# fine inside one trust domain and is why only the owning customer's group gets it.
+# The companion home sits INSIDE the customer home so both travel as one backup unit,
+# and is created there directly: relocating later breaks the absolute enable symlinks
+# the rootless setup writes.
 #
-# The companion home lives INSIDE the customer home so both travel as one backup unit.
-# It is created there directly: relocating afterwards breaks the absolute enable
-# symlinks the rootless setup writes.
+# Re-runnable in both directions: a partial enable heals, a healthy one is left alone
+# (see the guard before the restart block).
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -38,21 +37,17 @@ source $HESTIA/func/helper.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
-# Run something in the companion's user context. NOT su: it creates no login session, so
-# XDG_RUNTIME_DIR and the user bus are missing and systemctl --user cannot reach the
-# manager. systemd-run builds a real session regardless of the account's login shell,
-# which also means a nologin companion works.
-# HOME and PATH are passed explicitly - systemd-run --machine starts from a bare
-# environment, and dockerd-rootless-setuptool.sh refuses outright without HOME.
+# NOT su: no login session means no user bus, so systemctl --user cannot reach the
+# manager. systemd-run builds one whatever the login shell is, and starts from a bare
+# environment - the rootless setuptool refuses without HOME.
 companion_run() {
 	systemd-run --machine="${companion}@" --user --pipe --wait --quiet \
 		--setenv=HOME="$companion_home" --setenv=PATH=/usr/bin:/bin:/usr/sbin:/sbin \
 		--setenv=XDG_RUNTIME_DIR="/run/user/$companion_uid" "$@"
 }
 
-# The socket FILE existing proves nothing: dockerd leaves it behind when it dies, so a
-# dead daemon looks identical to a live one. Ask the API - the same thing the customer
-# does, and the only answer that means this worked.
+# Not [ -S ] on the socket file: dockerd leaves that behind when it dies, so a dead
+# daemon looks identical to a live one.
 docker_alive() {
 	DOCKER_HOST="unix://$companion_home/docker.sock" \
 		docker version --format '{{.Server.Version}}' > /dev/null 2>&1
@@ -105,9 +100,8 @@ if [ -n "$existing" ] && [ "$existing" != "$companion" ]; then
 	echo "ERROR: companion uid $companion_uid is held by '$existing'."
 	exit "$E_EXISTS"
 fi
-# Symmetric to the uid check above: without it a foreign group on that gid only
-# surfaces as "could not create <companion>" from the useradd below, which points at
-# the wrong thing entirely.
+# Symmetric to the uid check: a foreign group would otherwise only surface as "could not
+# create <companion>" from the useradd.
 existing="$(getent group "$companion_uid" | cut -d: -f1)"
 if [ -n "$existing" ] && [ "$existing" != "$companion" ]; then
 	echo "ERROR: companion gid $companion_uid is held by group '$existing'."
@@ -120,18 +114,17 @@ fi
 
 if ! getent passwd "$companion" > /dev/null 2>&1; then
 	echo "Creating companion $companion (uid $companion_uid)..."
-	# Its OWN private group, not the customer's. h-add-user leaves the customer home at
-	# group::--- with other::--x, so an account whose primary group is the customer's is
-	# matched by that empty group entry and never reaches other:: - the companion could
-	# not even traverse into its own home.
+	# Its OWN group: the customer home is group::--- with other::--x, so an account in that
+	# group is caught by the empty entry and never reaches other:: - it could not even
+	# traverse into its own home.
 	getent group "$companion" > /dev/null 2>&1 \
 		|| /usr/sbin/groupadd -g "$companion_uid" "$companion" \
 		|| {
 			echo "ERROR: could not create group $companion (gid $companion_uid)"
 			exit "$E_INVALID"
 		}
-	# -K SUB_UID_COUNT=0 suppresses the range useradd hands out on its own. On Ubuntu it
-	# does, and it would sit FIRST in /etc/subuid and shift the whole mapping.
+	# SUB_UID_COUNT=0 suppresses the range useradd assigns on Ubuntu, which would sit
+	# FIRST in /etc/subuid and shift the whole mapping.
 	/usr/sbin/useradd "$companion" -u "$companion_uid" -g "$companion_uid" \
 		-K UID_MAX="$IDENTITY_BAND_END" -K SUB_UID_COUNT=0 -K SUB_GID_COUNT=0 \
 		-d "$companion_home" -m -s /usr/sbin/nologin \
@@ -142,16 +135,14 @@ if ! getent passwd "$companion" > /dev/null 2>&1; then
 		}
 fi
 
-# The DIRECTORY carries the customer's group at 0710: they traverse to the socket but
-# cannot list, and it all stays one backup unit. That is separate from the companion's
-# own primary group above.
+# The DIRECTORY carries the customer's group at 0710: traverse to the socket, no listing.
 mkdir -p "$companion_home"
 chown "$companion":"$gid" "$companion_home"
 chmod 0710 "$companion_home"
 
-# Order is semantic - newuidmap consumes the lines in file order, so these three produce
-# container 1-999, container 1000 = the customer, container 1001-65536. Rewritten from
-# scratch rather than appended to, so a re-run cannot stack a second set.
+# Order is semantic: newuidmap consumes the lines in file order, giving container
+# 1-999, container 1000 = the customer, container 1001-65536. Deleted before appending
+# so a re-run cannot stack a second set.
 echo "Writing subordinate id ranges..."
 for f in /etc/subuid /etc/subgid; do
 	sed -i "/^${companion}:/d" "$f"
@@ -167,8 +158,7 @@ done
 	printf '%s:%s:64536\n' "$companion" "$((sub_base + 999))"
 } >> /etc/subgid
 
-# runc cannot start a container scope while hidepid hides the pids; the companion runs
-# the daemon, so it is the account that needs the exemption (#565).
+# hidepid hides the pids runc needs for its container scope; the companion runs it (#565).
 if command -v proc_visible_add > /dev/null 2>&1; then
 	proc_visible_add "$companion" > /dev/null 2>&1 || true
 fi
@@ -185,10 +175,8 @@ if [ "$(systemctl is-active "user@${companion_uid}.service" 2> /dev/null)" != 'a
 	exit "$E_INVALID"
 fi
 
-# Only intervene where something is actually missing. A re-run is the supported recovery
-# path, so it must not tear down a healthy daemon: restarting one that is serving
-# containers is a real outage, not a cosmetic churn. If the API answers AND the override
-# already says what it should, the daemon needs nothing from us.
+# Only intervene where something is missing. A re-run is the supported recovery path, so
+# it must not restart a daemon that is serving containers - that is a real outage.
 override_dir="$companion_home/.config/systemd/user/docker.service.d"
 override_want="$(sed -e "s|__RUNSOCK__|/run/user/$companion_uid/docker.sock|g" \
 	-e "s|__SOCK__|$companion_home/docker.sock|g" -e "s|__GID__|1000|g" \
@@ -201,37 +189,26 @@ if docker_alive && [ "$(cat "$override_dir/hestia.conf" 2> /dev/null)" = "$overr
 	exit
 fi
 
-# The setuptool's exit code is NOT the verdict. Its last act is to start the daemon, and
-# that fails whenever one is already running or a stale unit came in with a restored
-# home - both ordinary here. What it is needed for is writing the unit; the override and
-# restart below are ours regardless, so the socket further down is the real test.
+# Exit code is NOT the verdict: its last act is starting the daemon, which fails when
+# one already runs or a stale unit arrived with a restored home. It writes the unit; the
+# liveness probe below decides.
 echo "Installing the rootless daemon..."
 setup_log="$(mktemp -t hestia-docker-setup.XXXXXX)"
 companion_run dockerd-rootless-setuptool.sh install > "$setup_log" 2>&1 || true
 
-# BOTH sockets: the per-session one the daemon defaults to, plus a group-owned one in
-# the companion home that the customer reaches without touching the companion account.
-# Replacing ExecStart drops the default, so it has to be restated.
-# --group is NUMERIC: dockerd resolves a group NAME inside its own namespace, where it
-# would land on a filler-range gid outside; namespace gid 1000 is the customer's group
-# by way of the subgid triple. unix:// needs THREE slashes - the two-slash form parses
-# the first path element as a hostname and the daemon exits 1.
-# Placeholders are __UPPER__ rather than %x%, so substitution cannot rewrite prose.
+# Both sockets and the numeric group: see the template header. Placeholders are __UPPER__
+# so substitution cannot rewrite the prose around them.
 mkdir -p "$override_dir"
 printf '%s\n' "$override_want" > "$override_dir/hestia.conf"
 chown -R "$companion":"$gid" "$companion_home/.config"
 
 install -m 644 "$HESTIA/share/docker/profile.d-hestia-docker.sh" /etc/profile.d/hestia-docker.sh
 
-# restart, not enable --now: the setuptool already started the daemon, so on an
-# already-running unit --now is a no-op and it would keep the pre-override ExecStart.
-#
-# reset-failed first, and it is not cosmetic. A restored home arrives with the unit
-# already enabled AND with the override from the previous host, whose runtime socket
-# path carries the old companion uid. The user manager starts that on linger, before we
-# get to rewrite it, dockerd cannot bind the path and dies - repeatedly, until systemd's
-# start rate limiter latches. Without clearing it, the restart below is refused and the
-# customer ends up with a correct override and a dead daemon.
+# restart, not enable --now: on a running unit --now is a no-op and the daemon keeps the
+# pre-override ExecStart. reset-failed is not cosmetic either - a restored home brings
+# the unit enabled plus the previous host's override, whose socket path carries the old
+# companion uid, so linger starts it, dockerd dies binding it, and the rate limiter
+# latches; the restart would then be refused outright.
 companion_run systemctl --user daemon-reload > /dev/null 2>&1
 companion_run systemctl --user reset-failed docker > /dev/null 2>&1
 companion_run systemctl --user enable docker > /dev/null 2>&1

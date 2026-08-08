@@ -4,14 +4,12 @@
 #
 # example: h-delete-user-docker john
 #
-# Counterpart to h-add-user-docker: stops the customer's daemon and removes the
-# companion, its subordinate id ranges and its home. Idempotent.
+# Counterpart to h-add-user-docker: stops the daemon and removes the companion, its
+# subordinate ranges and its home. Idempotent. Running containers go with the session.
 #
-# Running containers are stopped - the companion's session goes with it.
-#
-# The companion home IS removed. Leaving it would put files owned by a freed uid inside
-# the customer home, and that uid becomes available again; images are reproduced by
-# pulling them, and payload lives in the customer's own tree, not here.
+# The home IS removed: leaving it would put files owned by a freed uid inside the
+# customer home, and that uid becomes available again. Images are pulled again, and
+# payload lives in the customer's own tree.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -58,8 +56,8 @@ fi
 
 companion_uid="$(id -u "$companion")"
 
-# Order matters: userdel refuses while the account still owns processes, and it fails
-# quietly enough that a later re-enable would silently reuse the old account.
+# Order matters: userdel refuses while the account owns processes, and fails quietly
+# enough that a later re-enable would silently reuse the old account.
 echo "Stopping the companion's daemon..."
 loginctl disable-linger "$companion" > /dev/null 2>&1
 loginctl terminate-user "$companion" > /dev/null 2>&1
@@ -80,8 +78,7 @@ getent group "$companion" > /dev/null 2>&1 && /usr/sbin/groupdel "$companion" > 
 sed -i "/^${companion}:/d" /etc/subuid /etc/subgid 2> /dev/null
 rm -rf "$companion_home"
 
-# /etc/profile.d/hestia-docker.sh stays: it is guarded on the socket, so it is inert for
-# a customer without one, and other customers may still have Docker enabled.
+# profile.d stays: guarded on the socket, so inert here, and others may still use it.
 
 echo "Docker is disabled for $user."
 
