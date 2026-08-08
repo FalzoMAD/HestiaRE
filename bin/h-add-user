@@ -87,10 +87,9 @@ fi
 shell=$(grep -w "$shell_conf" /etc/shells | head -n1)
 
 # Adding user
-# Deterministic identity, no probing - rationale in func/identity.sh (#388).
-identity_conflict="$(identity_assert_free "$user")" \
-	|| check_result "$E_EXISTS" "$identity_conflict"
-user_uid="$(identity_uid "$user")"
+# Allocated from the panel band, not derived - see func/identity.sh (#388).
+read -r user_uid _ < <(identity_allocate "$user")
+[ -n "$user_uid" ] || check_result "$E_LIMIT" "no free uid slot in the panel band for '$user'"
 
 # Explicit, not useradd -U: -U would take the next free gid instead of mirroring uid.
 /usr/sbin/groupadd -g "$user_uid" "$user"
@@ -192,9 +191,6 @@ chmod 660 $USER_DATA/backup.conf \
 	$USER_DATA/mail.conf \
 	$USER_DATA/db.conf \
 	$USER_DATA/cron.conf
-
-# Verification artefact; the restore recomputes rather than trusting it.
-identity_write_conf "$user" "$USER_DATA"
 
 # Updating queue pipes
 echo "$BIN/h-update-user-disk $user" >> $CONF_DIR/queue/disk.pipe

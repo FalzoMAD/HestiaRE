@@ -228,12 +228,6 @@ if [ -e "$USER_DATA/backup-excludes.conf" ]; then
 	cp -r $USER_DATA/backup-excludes.conf $tmpdir/hestia/
 fi
 
-# Verification only (#388); an archive without it still restores by recomputation.
-if [ -e "$USER_DATA/identity.conf" ]; then
-	echo -e "$(date "+%F %T") identity.conf" | tee -a $BACKUP/$user.log
-	cp -r $USER_DATA/identity.conf $tmpdir/hestia/
-fi
-
 # Backup PAM
 mkdir $tmpdir/pam
 echo -e "$(date "+%F %T") pam" | tee -a $BACKUP/$user.log
