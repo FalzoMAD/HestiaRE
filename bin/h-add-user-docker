@@ -21,8 +21,8 @@
 # (see the guard before the restart block).
 #
 # BACKUP_SCOPE picks what h-backup-user keeps of the Docker data root: 'volumes' (default) or
-# 'full'. Only those two are sound - anything in between splits overlay2 from the metadata in
-# image/overlay2 and restores a store referencing layers that are not there.
+# 'full'. Only those two are sound - anything in between separates the layer store from the metadata
+# indexing it and restores a store referencing layers that are not there.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

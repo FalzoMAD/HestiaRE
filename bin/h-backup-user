@@ -31,15 +31,16 @@ source_conf "$HESTIA/conf/hestia.conf"
 DOCKER_ROOT_REL='.companion/.local/share/docker'
 # Children a Docker data root is known to have. Only used to tell "expected" from "new" in the
 # report below; an unlisted one is still excluded.
-DOCKER_ROOT_KNOWN=' buildkit containers engine-id image network overlay2 plugins runtimes swarm tmp trust volumes '
+DOCKER_ROOT_KNOWN=' buildkit containerd containers engine-id image network overlay2 plugins rootfs runtimes swarm tmp trust volumes '
 
 # Docker data-root exclusions for the customer's chosen scope, emitted relative to the user home so
 # the pre-flight du and the tar below cannot drift apart (#389).
 #
-# Only two boundaries are sound. overlay2/ holds the image layers AND the writable container layers,
-# while image/overlay2/ holds the metadata pointing at them - split those and the restore yields a
-# store referencing layers that are not there. So: volumes/ alone, which Docker refills on the next
-# compose up, or the whole root. Nothing in between.
+# Only two boundaries are sound. The layer store and the metadata that indexes it are separate
+# directories, and which ones they are depends on the storage driver and Docker version - on 29.x
+# with overlayfs the layers sit under containerd/, on older overlay2 setups under overlay2/. Keep one
+# without the other and the restore yields a store referencing layers that are not there. So:
+# volumes/ alone, which Docker refills on the next compose up, or the whole root. Nothing between.
 #
 # Absent or empty resolves to 'volumes'. That is the normal state, not an edge case: user.conf gains
 # the key only on a rebuild or restore, so most existing customers will not have it for a while.
