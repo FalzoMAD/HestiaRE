@@ -334,6 +334,15 @@ check_fail2ban_roundcube_injection() {
 	fi
 }
 
+# WEBMAIL_SYSTEM used to be written before the install ran, so a failed download left the config claiming a
+# webmail that was never unpacked (#573). The listener check catches that too, but only as an ambiguous 404
+# - this names the cause.
+check_webmail_payload() {
+	local wm="$1" f="$2"
+	[ -s "$f" ] && { ok "$wm payload installed"; return; }
+	no "$wm claimed by WEBMAIL_SYSTEM but not installed" "missing $f"
+}
+
 # Purely regex on the access log, so a filter edit or log-format drift silently stops matching a real probe
 # or starts matching benign traffic. Both cases replayed through the DEPLOYED filter; the benign ones pin
 # the decisions - a single ../ is not an exploit, a 403 is not an authprobe.
@@ -775,10 +784,12 @@ fi
 # adminer/webmail: no own daemon — served by a caddy FPM pool, so check the socket
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
+	check_webmail_payload roundcube /etc/roundcube/config.inc.php
 	check_socket /run/hestia-webmail-rc.sock "roundcube FPM"
 	check_http "http://127.0.0.1:8090/" "roundcube internal listener"
 fi
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'snappymail'; then
+	check_webmail_payload snappymail /etc/snappymail/data/VERSION
 	check_socket /run/hestia-webmail-sm.sock "snappymail FPM"
 	check_http "http://127.0.0.1:8091/" "snappymail internal listener"
 fi
