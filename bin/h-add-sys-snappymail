@@ -4,13 +4,11 @@
 #
 # This function installs the SnappyMail webmail client.
 #
-# Source is the GitHub release for the version pinned in share/manifest.json, not the
-# project's own host: snappymail.eu went dark in Aug 2026 (ICMP alive, TCP silently
-# dropped) and the old unbounded wget turned that into a 45-minute hang (#573). A pinned
-# version is also the only one we can verify - "latest" is unpinnable by definition.
+# Source is the GitHub release for the version pinned in share/manifest.json: a pinned
+# version is the only one we can verify, and the project's own host has proven unreliable.
 #
-# The tarball is fetched and checked BEFORE anything is removed, so an unreachable source
-# leaves an existing installation intact instead of destroying it on the way down.
+# Fetched and verified before anything is removed - an unreachable source must not take an
+# existing installation down with it.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -44,8 +42,7 @@ SM_LOG="/var/log/snappymail"
 sm_fetch() {
 	local dest="$1"
 	wget "$SM_URL" --timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" || return 1
-	# wget -O leaves a 0-byte file behind on failure, and that file used to pass the
-	# [ -f ] check and take the whole install down silently (#573).
+	# wget -O leaves a 0-byte file behind on failure, which a plain [ -f ] check accepts.
 	[ -s "$dest" ] || return 1
 	gzip -t "$dest" 2> /dev/null || return 1
 }
@@ -128,9 +125,8 @@ if [ "$UPDATE" == "no" ]; then
 	echo "Admin Panel key: admin_$suffix" >> ~/.snappymail
 
 	tar -xzf ${SM_INSTALL_DIR}/${SM_FILE}
-	# No set -e here, so an unpacked-but-empty tree used to run the whole rest of this
-	# script and exit 0, leaving a dangling data symlink and a WEBMAIL_SYSTEM that claimed
-	# an install nobody had (#573). Stop at the first thing that proves the tree is real.
+	# No set -e here: an empty tree would otherwise run the rest of this script to exit 0,
+	# leaving a dangling data symlink and a WEBMAIL_SYSTEM claiming an install nobody had.
 	if [ ! -s ./data/VERSION ]; then
 		echo "ERROR: SnappyMail archive did not unpack (no data/VERSION). Installation aborted."
 		exit 2
