@@ -19,6 +19,8 @@ source $HESTIA/func/main.sh
 source $HESTIA/func/firewall.sh
 # shellcheck source=/usr/local/hestia/func/fail2ban.sh
 source $HESTIA/func/fail2ban.sh
+# shellcheck source=/usr/local/hestia/func/syshealth.sh
+source $HESTIA/func/syshealth.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_* flags), if present
@@ -608,6 +610,34 @@ check_web_switch_prechecks() {
 	fi
 }
 
+# check_key_registries - conf/defaults/*.conf must exist and match the key sets compiled into
+# func/syshealth.sh. A registry that is missing, stale or duplicated makes the repair functions
+# skip exactly the keys they exist to add, and does it silently (#559) - which is the whole reason
+# this guard is here rather than a comment.
+check_key_registries() {
+	local sys want have missing='' drift='' dupes=''
+	if ! declare -F syshealth_known_keys > /dev/null 2>&1; then
+		skip "syshealth_known_keys unavailable - key registries not checkable"
+		return
+	fi
+	for sys in web mail mail_accounts user cron db ip system; do
+		want="$(syshealth_known_keys "$sys" | tr ' ' '\n' | sed '/^$/d')"
+		if [ ! -f "$HESTIA/conf/defaults/$sys.conf" ]; then
+			missing="$missing $sys"
+			continue
+		fi
+		have="$(sed '/^$/d' "$HESTIA/conf/defaults/$sys.conf")"
+		[ "$have" = "$want" ] || drift="$drift $sys"
+		[ -z "$(echo "$have" | sort | uniq -d)" ] || dupes="$dupes $sys"
+	done
+	if [ -n "$missing$drift$dupes" ]; then
+		no "key registries out of sync" \
+			"missing:${missing:- none} drift:${drift:- none} duplicates:${dupes:- none}"
+	else
+		ok "key registries match the compiled key sets"
+	fi
+}
+
 # check_identity_band - the allocator's preconditions, not its output. Panel users
 # created before #388 keep their old uid by design, so their position is NOT checked;
 # what must hold is that nothing can wander into the band and that the subordinate
@@ -888,6 +918,7 @@ check_realip_header
 # fail-open is invisible to users: verify the live mount, not the intent (#565).
 check_proc_hardening
 # #388: guard the allocator's preconditions, since a regression only shows up much later.
+check_key_registries
 check_identity_band
 
 #----------------------------------------------------------#
