@@ -48,17 +48,27 @@ docker_backup_excludes() {
 	local e name
 	[ "$(get_user_value '$DOCKER_BACKUP')" = 'full' ] && return 0
 	if [ ! -d "$HOMEDIR/$user/$DOCKER_ROOT_REL" ]; then
+		# Docker not started yet for this customer. Excluded anyway: the data root can appear
+		# between this pre-flight and the tar below, and an unexcluded one would then be archived
+		# whole - the exact bug this scope exists to prevent.
 		echo "$DOCKER_ROOT_REL"
 		return 0
 	fi
 	# Enumerate what is dropped rather than what is kept, so the archive cannot quietly grow when
 	# Docker adds a directory. The flip side is that customer data at a new location would vanish
 	# from backups unnoticed - see docker_backup_unknown, which makes the omission visible.
-	for e in "$HOMEDIR/$user/$DOCKER_ROOT_REL"/*; do
-		[ -e "$e" ] || continue
-		name="${e##*/}"
-		[ "$name" = 'volumes' ] || echo "$DOCKER_ROOT_REL/$name"
-	done
+	#
+	# dotglob, because the plain glob skips dotted entries: a hidden data-root child would be
+	# neither excluded nor reported, and the archive would grow silently - which is precisely what
+	# the enumeration is here to rule out.
+	(
+		shopt -s dotglob
+		for e in "$HOMEDIR/$user/$DOCKER_ROOT_REL"/*; do
+			[ -e "$e" ] || continue
+			name="${e##*/}"
+			[ "$name" = 'volumes' ] || echo "$DOCKER_ROOT_REL/$name"
+		done
+	)
 }
 
 # Data-root children we do not know about, so a Docker layout change shows up in the backup log
@@ -67,11 +77,15 @@ docker_backup_unknown() {
 	local e name
 	[ "$(get_user_value '$DOCKER_BACKUP')" = 'full' ] && return 0
 	[ -d "$HOMEDIR/$user/$DOCKER_ROOT_REL" ] || return 0
-	for e in "$HOMEDIR/$user/$DOCKER_ROOT_REL"/*; do
-		[ -e "$e" ] || continue
-		name="${e##*/}"
-		[[ "$DOCKER_ROOT_KNOWN" == *" $name "* ]] || echo "$name"
-	done
+	# Same dotglob reasoning as above, and the same glob, so the two functions stay in step.
+	(
+		shopt -s dotglob
+		for e in "$HOMEDIR/$user/$DOCKER_ROOT_REL"/*; do
+			[ -e "$e" ] || continue
+			name="${e##*/}"
+			[[ "$DOCKER_ROOT_KNOWN" == *" $name "* ]] || echo "$name"
+		done
+	)
 }
 
 # Return Disk Usage

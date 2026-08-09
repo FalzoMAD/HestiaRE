@@ -130,7 +130,10 @@ fi
 # TIME= rather than appended, so the key never lands on the last line.
 if [ -n "$backup_scope" ] || ! grep -q "^DOCKER_BACKUP='" "$USER_DATA/user.conf" 2> /dev/null; then
 	scope="${backup_scope:-$(get_user_value '$DOCKER_BACKUP')}"
-	scope="${scope:-volumes}"
+	# Normalise, do not just default: the argument is validated above, but a value carried over from
+	# user.conf is not, and a hand-edited one would otherwise be written back unchecked. h-backup-user
+	# treats anything but 'full' as 'volumes', so this keeps the file saying what actually happens.
+	[ "$scope" = 'full' ] || scope='volumes'
 	if grep -q "^DOCKER_BACKUP='" "$USER_DATA/user.conf" 2> /dev/null; then
 		update_user_value "$user" '$DOCKER_BACKUP' "$scope"
 	else
