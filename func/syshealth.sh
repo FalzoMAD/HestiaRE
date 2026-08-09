@@ -6,12 +6,38 @@
 #                                                                           #
 #===========================================================================#
 
+# Regenerate one key registry from the list compiled into this file.
+#
+# Two holes it closes. conf/defaults/*.conf is written at install time, so on a box installed before
+# a key was added the registry is stale and a repair reading it skips exactly the key it exists to
+# add. And when the file is missing entirely, the fallback below used to call write_kv_config_file
+# with whatever $known_keys happened to hold - empty at that point - which wrote an EMPTY registry
+# and made it permanent, silently reducing every later repair to a no-op.
+#
+# Each format function ends with `unset system`, so callers set $system AFTER this, never before.
+#
+# Never reports failure. The registry dir is root-owned and every caller runs as root, so a failed
+# write means something is wrong elsewhere - and the useful reaction is to carry on with the keys
+# already on disk, not to abort a domain add. A non-zero return here would do exactly that in any
+# caller running under `set -e`.
+syshealth_refresh_registry() {
+	case "$1" in
+		web) syshealth_update_web_config_format ;;
+		mail) syshealth_update_mail_config_format ;;
+		mail_accounts) syshealth_update_mail_account_config_format ;;
+		user | cron) syshealth_update_user_config_format ;;
+		db) syshealth_update_db_config_format ;;
+		ip) syshealth_update_ip_config_format ;;
+		system) syshealth_update_system_config_format ;;
+	esac
+}
+
 # Read known configuration keys from $HESTIA/conf/defaults/$system.conf
 function read_kv_config_file() {
 	local system=$1
 
 	if [ ! -f "$HESTIA/conf/defaults/$system.conf" ]; then
-		write_kv_config_file $system
+		syshealth_refresh_registry "$system"
 	fi
 	while read -r str; do
 		echo "$str"
@@ -26,15 +52,24 @@ function write_kv_config_file() {
 		mkdir "$HESTIA/conf/defaults/"
 	fi
 
-	# Remove previous known good configuration
-	if [ -f "$HESTIA/conf/defaults/$system.conf" ]; then
-		rm -f $HESTIA/conf/defaults/$system.conf
-	fi
+	# Only on drift. The repairs call this on every domain and every mail account, so writing
+	# unconditionally would mean one temp file plus rename per object in a rebuild loop.
+	local tmp want conf="$HESTIA/conf/defaults/$system.conf"
+	want=$(printf '%s\n' $known_keys)
+	# An empty set is never legitimate - every subsystem has keys. Persisting one would turn every
+	# later repair into a no-op, and the smoke guard would compare it against the same empty source
+	# and agree. Leave whatever is on disk instead.
+	[ -n "$want" ] || return 0
+	[ -f "$conf" ] && [ "$(cat "$conf")" = "$want" ] && return 0
 
-	touch $HESTIA/conf/defaults/$system.conf
-	for key in $known_keys; do
-		echo $key >> $HESTIA/conf/defaults/$system.conf
-	done
+	# Written to a temp file and moved into place. The old delete-then-append left a window in
+	# which the registry was missing or half written, and a repair reading it there would silently
+	# use a truncated key list - the same class of quiet wrongness this file is being fixed for.
+	# rename(2) within one directory is atomic, so a reader sees either the old list or the new one.
+	tmp=$(mktemp "$HESTIA/conf/defaults/.$system.conf.XXXXXX") || return 0
+	printf '%s\n' "$want" > "$tmp"
+	chmod 664 "$tmp"
+	mv -f "$tmp" "$conf" || rm -f "$tmp"
 }
 
 # Sanitize configuration input
@@ -46,13 +81,35 @@ function sanitize_config_file() {
 	done
 }
 
+# The key sets, in one place. The format functions below write them to the registry and the
+# smoke guard compares the registry against them, so there is one list per subsystem rather
+# than a copy per consumer.
+#
+# Unknown subsystem is an error, not an empty list. Both callers would otherwise treat the empty
+# answer as valid: the writer would persist an empty registry, and the guard would compare it
+# against the same empty reference and pass. A ninth subsystem added without a branch here has to
+# fail loudly, not vacuously agree with itself.
+syshealth_known_keys() {
+	case "$1" in
+		web) echo "DOMAIN IP IP6 CUSTOM_DOCROOT CUSTOM_PHPROOT FASTCGI_CACHE FASTCGI_DURATION ALIAS TPL SSL SSL_FORCE SSL_HSTS SSL_HOME LETSENCRYPT FTP_USER FTP_MD5 FTP_PATH BACKEND PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT U_DISK U_BANDWIDTH REDIRECT REDIRECT_CODE AUTH_USER AUTH_HASH DIR_LIST SUSPENDED TIME DATE" ;;
+		mail) echo "DOMAIN ANTIVIRUS ANTISPAM DKIM WEBMAIL SSL LETSENCRYPT CATCHALL ACCOUNTS RATE_LIMIT REJECT U_DISK SUSPENDED TIME DATE" ;;
+		mail_accounts) echo "ACCOUNT ALIAS AUTOREPLY FWD FWD_ONLY MD5 QUOTA RATE_LIMIT U_DISK SUSPENDED TIME DATE" ;;
+		user) echo "NAME PACKAGE CONTACT CRON_REPORTS MD5 RKEY TWOFA QRCODE PHPCLI ROLE SUSPENDED SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON IP_AVAIL IP_OWNED U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DKIM U_MAIL_ACCOUNTS U_MAIL_DOMAINS U_MAIL_SSL U_DATABASES U_CRON_JOBS U_BACKUPS LANGUAGE THEME NOTIFICATIONS PREF_UI_SORT FILE_MANAGER DOCKER_BACKUP TIME DATE" ;;
+		cron) echo "JOB MIN HOUR DAY MONTH WDAY CMD SUSPENDED TIME DATE" ;;
+		db) echo "DB DBUSER MD5 HOST TYPE CHARSET U_DISK SUSPENDED TIME DATE" ;;
+		system) echo "ANTISPAM_SYSTEM ANTIVIRUS_SYSTEM APP_NAME BACKEND_PORT BACKUP_GZIP BACKUP_INCREMENTAL BACKUP_MODE BACKUP_SYSTEM BLOCKLIST_INTERVAL CRON_SYSTEM DB_ADMINER_ALIAS DB_PMA_ALIAS DB_SYSTEM DEBUG_MODE DEMO_MODE DISABLE_IP_CHECK DISK_QUOTA DOMAINDIR_WRITABLE ENFORCE_SUBDOMAIN_OWNERSHIP FILE_MANAGER FILE_MANAGER_PORT FIREWALL_EXTENSION FIREWALL_SYSTEM FROM_EMAIL FROM_NAME FTP_SYSTEM HIDE_DOCS IMAP_SYSTEM INACTIVE_SESSION_TIMEOUT LANGUAGE LOGIN_STYLE MAIL_SYSTEM PHPMYADMIN_KEY PLUGIN_APP_INSTALLER POLICY_BACKUP_SUSPENDED_USERS POLICY_CSRF_STRICTNESS POLICY_SPAM_CUSTOMER_TUNING POLICY_SPAM_REJECT_SCORE_MAX POLICY_SPAM_REJECT_SCORE_MIN POLICY_SPAM_SCORE_MAX POLICY_SPAM_SCORE_MIN POLICY_SYNC_ERROR_DOCUMENTS POLICY_SYNC_SKELETON POLICY_SYSTEM_ENABLE_BACON POLICY_SYSTEM_HIDE_SERVICES POLICY_SYSTEM_PASSWORD_RESET POLICY_SYSTEM_PROTECTED_ADMIN POLICY_USER_CHANGE_THEME POLICY_USER_DELETE_LOGS POLICY_USER_EDIT_DETAILS POLICY_USER_EDIT_WEB_TEMPLATES POLICY_USER_VIEW_LOGS POLICY_USER_VIEW_SUSPENDED PROXY_PORT PROXY_SSL_PORT PROXY_SYSTEM RELEASE_BRANCH RESOURCES_LIMIT ROOT_USER SERVER_SMTP_ADDR SERVER_SMTP_HOST SERVER_SMTP_PASSWD SERVER_SMTP_PORT SERVER_SMTP_SECURITY SERVER_SMTP_USER SIEVE_SYSTEM STATS_SYSTEM SUBJECT_EMAIL THEME TITLE UPDATE_HOSTNAME_SSL UPGRADE_SEND_EMAIL UPGRADE_SEND_EMAIL_LOG USE_SERVER_SMTP VERSION WEB_BACKEND WEBMAIL_ALIAS WEBMAIL_SYSTEM WEB_PORT WEB_RGROUPS WEB_SSL WEB_SSL_PORT WEB_SYSTEM" ;;
+		ip) echo "OWNER STATUS NAME U_SYS_USERS U_WEB_DOMAINS INTERFACE NETMASK NAT TIME DATE" ;;
+		*) return 1 ;;
+	esac
+}
+
 # Update list of known keys for web.conf files
 function syshealth_update_web_config_format() {
 
 	# WEB DOMAINS
 	# Create array of known keys in configuration file
 	system="web"
-	known_keys="DOMAIN IP IP6 CUSTOM_DOCROOT CUSTOM_PHPROOT FASTCGI_CACHE FASTCGI_DURATION ALIAS TPL SSL SSL_FORCE SSL_HSTS SSL_HOME LETSENCRYPT FTP_USER FTP_MD5 FTP_PATH BACKEND PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT REDIRECT REDIRECT_CODE AUTH_USER AUTH_HASH DIR_LIST SUSPENDED TIME DATE"
+	known_keys=$(syshealth_known_keys web)
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -64,7 +121,7 @@ function syshealth_update_mail_config_format() {
 	# MAIL DOMAINS
 	# Create array of known keys in configuration file
 	system="mail"
-	known_keys="DOMAIN ANTIVIRUS ANTISPAM DKIM WEBMAIL SSL LETSENCRYPT CATCHALL ACCOUNTS RATE_LIMIT REJECT U_DISK SUSPENDED TIME DATE"
+	known_keys=$(syshealth_known_keys mail)
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -73,7 +130,7 @@ function syshealth_update_mail_config_format() {
 function syshealth_update_mail_account_config_format() {
 	# MAIL ACCOUNTS
 	system="mail_accounts"
-	known_keys="ACCOUNT ALIAS AUTOREPLY FWD FWD_ONLY MD5 QUOTA RATE_LIMIT U_DISK SUSPENDED TIME DATE"
+	known_keys=$(syshealth_known_keys mail_accounts)
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -85,7 +142,7 @@ function syshealth_update_user_config_format() {
 	# USER CONFIGURATION
 	# Create array of known keys in configuration file
 	system="user"
-	known_keys="NAME PACKAGE CONTACT CRON_REPORTS MD5 RKEY TWOFA QRCODE PHPCLI ROLE SUSPENDED SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON IP_AVAIL IP_OWNED U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DKIM U_MAIL_DKIM U_MAIL_ACCOUNTS U_MAIL_DOMAINS U_MAIL_SSL U_DATABASES U_CRON_JOBS U_BACKUPS LANGUAGE THEME NOTIFICATIONS PREF_UI_SORT FILE_MANAGER TIME DATE"
+	known_keys=$(syshealth_known_keys user)
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -93,7 +150,7 @@ function syshealth_update_user_config_format() {
 	# CRON JOB CONFIGURATION
 	# Create array of known keys in configuration file
 	system="cron"
-	known_keys="JOB MIN HOUR DAY MONTH WDAY CMD SUSPENDED TIME DATE"
+	known_keys=$(syshealth_known_keys cron)
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -105,7 +162,7 @@ function syshealth_update_db_config_format() {
 	# DATABASE CONFIGURATION
 	# Create array of known keys in configuration file
 	system="db"
-	known_keys="DB DBUSER MD5 HOST TYPE CHARSET U_DISK SUSPENDED TIME DATE"
+	known_keys=$(syshealth_known_keys db)
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -117,7 +174,7 @@ function syshealth_update_ip_config_format() {
 	# IP ADDRESS
 	# Create array of known keys in configuration file
 	system="ip"
-	known_keys="OWNER STATUS NAME U_SYS_USERS U_WEB_DOMAINS INTERFACE NETMASK NAT TIME DATE"
+	known_keys=$(syshealth_known_keys ip)
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -125,19 +182,47 @@ function syshealth_update_ip_config_format() {
 
 # Repair web domain configuration
 function syshealth_repair_web_config() {
+	syshealth_refresh_registry 'web'
 	system="web"
 	sanitize_config_file "$system"
 	get_domain_values 'web'
 	prev="DOMAIN"
 	for key in $known_keys; do
-		if [ -z "$key" ]; then
+		# "${!key}", not "$key": the loop variable holds the key NAME and is never empty, so the
+		# check was constant-false and this function repaired nothing since it was written (#559).
+		# The indirect expansion asks what was meant - is that key absent from the record?
+		if [ -z "${!key}" ]; then
 			add_object_key 'web' 'DOMAIN' "$domain" "$key" "$prev"
 		fi
 		prev=$key
 	done
 }
 
+# Bring a user.conf up to the current key set. Sibling of the web/mail repairs, which user.conf
+# never had - so a key added to the list above reached existing customers only if someone happened
+# to rebuild or restore them (#559). update_user_value is no help there: it rewrites an existing
+# line and does nothing at all when the key is absent.
+#
+# Not add_object_key: that one edits a single-line record in place, while user.conf is one key per
+# line. Inserted before TIME= rather than appended, so the key never sits on the last line - a record
+# without a TIME= line gains nothing, the known limit of this shape (#433).
+syshealth_repair_user_config() {
+	local key
+	[ -f "$USER_DATA/user.conf" ] || return 0
+	syshealth_refresh_registry 'user'
+	sanitize_config_file 'user'
+	for key in $(read_kv_config_file 'user'); do
+		grep -q "^${key}='" "$USER_DATA/user.conf" && continue
+		sed -i "/^TIME=/i ${key}=''" "$USER_DATA/user.conf"
+	done
+	# Sourced last, not before the loop: sanitize_config_file clears the keys from the environment,
+	# so re-reading first would load the pre-repair state and leave every key inserted below unset as
+	# a shell variable. Callers testing ${KEY+x} would then get the opposite of what the file says.
+	source_conf "$USER_DATA/user.conf"
+}
+
 function syshealth_repair_mail_config() {
+	syshealth_refresh_registry 'mail'
 	system="mail"
 	sanitize_config_file "$system"
 	get_domain_values 'mail'
@@ -151,6 +236,7 @@ function syshealth_repair_mail_config() {
 }
 
 function syshealth_repair_mail_account_config() {
+	syshealth_refresh_registry 'mail_accounts'
 	system="mail_accounts"
 	sanitize_config_file "$system"
 	get_object_values "mail/$domain" 'ACCOUNT' "$account"
@@ -173,7 +259,7 @@ function syshealth_update_system_config_format() {
 	# SYSTEM CONFIGURATION
 	# Create array of known keys in configuration file
 	system="system"
-	known_keys="ANTISPAM_SYSTEM ANTIVIRUS_SYSTEM APP_NAME BACKEND_PORT BACKUP_GZIP BACKUP_INCREMENTAL BACKUP_MODE BACKUP_SYSTEM BLOCKLIST_INTERVAL CRON_SYSTEM DB_ADMINER_ALIAS DB_PMA_ALIAS DB_SYSTEM DEBUG_MODE DEMO_MODE DISABLE_IP_CHECK DISK_QUOTA DOMAINDIR_WRITABLE ENFORCE_SUBDOMAIN_OWNERSHIP FILE_MANAGER FILE_MANAGER_PORT FIREWALL_EXTENSION FIREWALL_SYSTEM FROM_EMAIL FROM_NAME FTP_SYSTEM HIDE_DOCS IMAP_SYSTEM INACTIVE_SESSION_TIMEOUT LANGUAGE LOGIN_STYLE MAIL_SYSTEM PHPMYADMIN_KEY PLUGIN_APP_INSTALLER POLICY_BACKUP_SUSPENDED_USERS POLICY_CSRF_STRICTNESS POLICY_SPAM_CUSTOMER_TUNING POLICY_SPAM_REJECT_SCORE_MAX POLICY_SPAM_REJECT_SCORE_MIN POLICY_SPAM_SCORE_MAX POLICY_SPAM_SCORE_MIN POLICY_SYNC_ERROR_DOCUMENTS POLICY_SYNC_SKELETON POLICY_SYSTEM_ENABLE_BACON POLICY_SYSTEM_HIDE_SERVICES POLICY_SYSTEM_PASSWORD_RESET POLICY_SYSTEM_PROTECTED_ADMIN POLICY_USER_CHANGE_THEME POLICY_USER_DELETE_LOGS POLICY_USER_EDIT_DETAILS POLICY_USER_EDIT_WEB_TEMPLATES POLICY_USER_VIEW_LOGS POLICY_USER_VIEW_SUSPENDED PROXY_PORT PROXY_SSL_PORT PROXY_SYSTEM RELEASE_BRANCH RESOURCES_LIMIT ROOT_USER SERVER_SMTP_ADDR SERVER_SMTP_HOST SERVER_SMTP_PASSWD SERVER_SMTP_PORT SERVER_SMTP_SECURITY SERVER_SMTP_USER SIEVE_SYSTEM STATS_SYSTEM SUBJECT_EMAIL THEME TITLE UPDATE_HOSTNAME_SSL UPGRADE_SEND_EMAIL UPGRADE_SEND_EMAIL_LOG USE_SERVER_SMTP VERSION WEB_BACKEND WEBMAIL_ALIAS WEBMAIL_SYSTEM WEB_PORT WEB_RGROUPS WEB_SSL WEB_SSL_PORT WEB_SYSTEM"
+	known_keys=$(syshealth_known_keys system)
 	write_kv_config_file
 	unset system
 	unset known_keys
