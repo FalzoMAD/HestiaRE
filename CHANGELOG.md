@@ -116,6 +116,19 @@ opens above it.
 
 ### Fixed
 
+- **A dead SnappyMail mirror produced a green install with no webmail** (#573). The download came from the
+  project's own host, which went dark in August 2026 - ICMP alive, TCP silently dropped. Three of our own
+  gaps turned that outage into something worse than an outage: an unbounded `wget` (20 tries at a 900s
+  read timeout) hung the installer for roughly 45 minutes, and because the script carries no `set -e`, the
+  0-byte file `wget -O` leaves behind ran the whole rest of it to `exit 0` - dangling symlink, database
+  created, `WEBMAIL_SYSTEM` claiming an application that had never been unpacked.
+
+  SnappyMail now comes from the GitHub release for the version `share/manifest.json` already pinned (the
+  value was read but never used for the URL), the fetch is bounded, and the archive is verified and
+  unpacked before anything is removed - so an unreachable source no longer destroys a working install on
+  the way down. `WEBMAIL_SYSTEM` is written on success rather than up front, and the smoke check names the
+  cause instead of reporting an ambiguous 404.
+
 - **The per-chain ban verdict was missing on the live-attach path.** `fw_jail_verdict` was wired into the
   full re-render but not into `fw_jail_attach`, which hardcoded `reject` for both families. fail2ban's
   `actionstart` reaches exactly that path, so on a fresh install every jail rule - `WEBSCAN` included -
