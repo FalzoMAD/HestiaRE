@@ -163,6 +163,22 @@ function check_error($return_var) {
 	}
 }
 
+// Run a CLI command that prints JSON and always hand back an array.
+//
+// A failed call leaves $output empty, and json_decode("") is null - which behaves like an
+// array until something insists on a real one: in_array(x, null) is a TypeError, and on the
+// login page that means a white screen instead of a form (#575). Callers get an array either
+// way and pick their own fallback.
+function cli_json($cmd) {
+	$output = [];
+	exec(HESTIA_CMD . $cmd, $output, $return_var);
+	if ($return_var !== 0) {
+		return [];
+	}
+	$data = json_decode(implode("", $output), true);
+	return is_array($data) ? $data : [];
+}
+
 function check_return_code($return_var, $output) {
 	if ($return_var != 0) {
 		$error = implode("<br>", $output);

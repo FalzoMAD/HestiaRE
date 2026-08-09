@@ -24,9 +24,10 @@ if (isset($_SESSION["user"])) {
 		if (verify_csrf($_GET)) {
 			$v_user = quoteshellarg($_GET["loginas"]);
 			$v_impersonator = quoteshellarg($_SESSION["user"]);
-			exec(HESTIA_CMD . "h-list-user " . $v_user . " json", $output, $return_var);
-			if ($return_var == 0) {
-				$data = json_decode(implode("", $output), true);
+			$data = cli_json("h-list-user " . $v_user . " json");
+			// Non-empty, not just "the call worked": impersonating with no target would leave
+			// look unset and drop privilege to nothing.
+			if (!empty($data)) {
 				reset($data);
 				$_SESSION["look"] = key($data);
 				// Drop to the impersonated user's effective role so admin-only gates
@@ -84,20 +85,21 @@ if (isset($_SESSION["user"])) {
 			],
 		);
 
-		exec(HESTIA_CMD . "h-list-user " . $v_user . " json", $output, $return_var);
-		$data = json_decode(implode("", $output), true);
-		unset($output);
+		$data = cli_json("h-list-user " . $v_user . " json");
+		$pkg = $data[$user_plain] ?? [];
 
-		// Determine package features and land user at the first available page
-		if ($data[$user_plain]["WEB_DOMAINS"] !== "0") {
+		// Determine package features and land user at the first available page. Defaulting to
+		// "0" matters: an absent value used to compare unequal to "0" and send everyone to the
+		// web list, whatever their package held.
+		if (($pkg["WEB_DOMAINS"] ?? "0") !== "0") {
 			header("Location: /list/web/");
-		} elseif ($data[$user_plain]["MAIL_DOMAINS"] !== "0") {
+		} elseif (($pkg["MAIL_DOMAINS"] ?? "0") !== "0") {
 			header("Location: /list/mail/");
-		} elseif ($data[$user_plain]["DATABASES"] !== "0") {
+		} elseif (($pkg["DATABASES"] ?? "0") !== "0") {
 			header("Location: /list/db/");
-		} elseif ($data[$user_plain]["CRON_JOBS"] !== "0") {
+		} elseif (($pkg["CRON_JOBS"] ?? "0") !== "0") {
 			header("Location: /list/cron/");
-		} elseif ($data[$user_plain]["BACKUPS"] !== "0") {
+		} elseif (($pkg["BACKUPS"] ?? "0") !== "0") {
 			header("Location: /list/backup/");
 		} else {
 			header("Location: /error/");
@@ -143,6 +145,12 @@ function authenticate_user($user, $password, $twofa = "") {
 				$error = _("Invalid username or password");
 			}
 			return $error;
+		} elseif (empty($pam[$user])) {
+			// rc 0 but nothing parseable: without it $method stays unset, no branch below builds a
+			// hash, and an empty one goes to h-check-user-hash. It rejects, so this is about saying
+			// so here rather than relying on the CLI to catch it.
+			sleep(2);
+			return _("Invalid username or password");
 		} else {
 			$salt = $pam[$user]["SALT"];
 			$method = $pam[$user]["METHOD"];
@@ -215,9 +223,15 @@ function authenticate_user($user, $password, $twofa = "") {
 				return $error;
 			} else {
 				// Get user specific parameters
-				exec(HESTIA_CMD . "h-list-user " . $v_user . " json", $output, $return_var);
-				$data = json_decode(implode("", $output), true);
-				unset($output);
+				$data = cli_json("h-list-user " . $v_user . " json");
+				// Fail closed. The password is already verified here, and everything below reads
+				// $data to decide: LOGIN_DISABLED, the IP allowlist and TWOFA. An empty $data made
+				// all three compare false, so one failed CLI call let a disabled account in past
+				// its allowlist and its second factor.
+				if (empty($data[$user])) {
+					sleep(2);
+					return _("Invalid username or password");
+				}
 				if ($data[$user]["LOGIN_DISABLED"] === "yes") {
 					sleep(2);
 					$error = _("Invalid username or password");
@@ -358,11 +372,10 @@ function authenticate_user($user, $password, $twofa = "") {
 					? $data[$user]["PREF_UI_SORT"]
 					: "name";
 
-				// Define language
-				$output = "";
-				exec(HESTIA_CMD . "h-list-sys-languages json", $output, $return_var);
-				$languages = json_decode(implode("", $output), true);
-				$_SESSION["language"] = in_array($data[$v_user]["LANGUAGE"], $languages)
+				// Define language. $data is keyed by the plain username - the shell-quoted $v_user
+				// never matched, so every login silently fell back to "en".
+				$languages = cli_json("h-list-sys-languages json");
+				$_SESSION["language"] = in_array($data[$user]["LANGUAGE"] ?? "", $languages)
 					? $data[$user]["LANGUAGE"]
 					: "en";
 
@@ -435,16 +448,12 @@ if (
 // Check system configuration
 load_hestia_config();
 
-// Detect language
+// Detect language. Nothing here may be fatal: this runs before the form is rendered, so a
+// failing CLI call would deny the login page entirely rather than cost a translation.
 if (empty($_SESSION["language"])) {
-	$output = "";
-	exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
-	$config = json_decode(implode("", $output), true);
-	$lang = $config["config"]["LANGUAGE"];
-
-	$output = "";
-	exec(HESTIA_CMD . "h-list-sys-languages json", $output, $return_var);
-	$languages = json_decode(implode("", $output), true);
+	$config = cli_json("h-list-sys-config json");
+	$lang = $config["config"]["LANGUAGE"] ?? "";
+	$languages = cli_json("h-list-sys-languages json");
 	$_SESSION["language"] = in_array($lang, $languages) ? $lang : "en";
 }
 

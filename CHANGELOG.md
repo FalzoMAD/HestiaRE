@@ -116,6 +116,63 @@ opens above it.
 
 ### Fixed
 
+- **Docker backups dropped named volumes** (#389). The exclusion that keeps container images out of a
+  customer archive covered the whole Docker data root - and `volumes/` sits inside it, which is where a
+  stock compose file puts its database. Reproduced: the volume content was on disk and the archive
+  carried zero entries under `.local/share/docker`.
+
+  What is kept is now a per-customer choice, made when Docker is enabled: `volumes` (the default) or
+  `full`. Only those two boundaries are sound - the layer store and the metadata indexing it are
+  separate directories, so keeping one without the other restores a store referencing layers that are
+  not there. A missing or empty value resolves to `volumes`, which is the normal state rather than an
+  edge case. One helper feeds both the pre-flight space check and the archive, since two hand-kept
+  lists would drift into a check that refuses the wrong backup. A data-root directory the code does not
+  recognise is still excluded, but reported in the backup log, so a future Docker layout change cannot
+  quietly repeat this bug.
+
+- **Two config repairs never ran** (#559). `syshealth_repair_web_config` tested `[ -z "$key" ]`, but the
+  loop variable holds the key *name* and is never empty - so the condition was constant-false and the
+  function had repaired nothing since it was written, while its mail siblings used `[ -z "${!key}" ]`
+  and worked. Records therefore kept an old schema indefinitely, and any code expecting a newer key saw
+  an empty value with no hint why.
+
+  `user.conf` was worse off: it had no repair function at all. A key added to the known set reached
+  existing customers only if someone happened to rebuild or restore them, and `update_user_value` is no
+  help there - it rewrites an existing line and does nothing at all when the key is absent, silently.
+  Both are fixed, and the user repair refreshes the key registry before reading it, because that file is
+  written at install time and would otherwise be stale exactly where a newly added key matters.
+
+- **A failing CLI call took the login page down, and let the post-password gates pass** (#575). The panel
+  ran `exec()` and fed the result straight to `json_decode()`, then dereferenced it. `$return_var` was
+  collected everywhere and evaluated almost nowhere. On a failed call the decode yields `null`, which
+  behaves like an array until something insists on a real one: `in_array(x, null)` is a TypeError, so the
+  login page answered **HTTP 500 with an empty body** - no form, no way in. Observed during a fresh
+  install, where the panel is reachable before the sudo rules are final.
+
+  Worse on the authenticated path: after the password was already verified, `LOGIN_DISABLED`, the IP
+  allowlist and `TWOFA` were all read from that same result. An empty one made all three compare false,
+  so a single failed CLI call would have let a disabled account in past its allowlist and its second
+  factor. That path now fails closed.
+
+  Both unauthenticated entry points (`login`, `reset`) go through a shared `cli_json()` helper that always
+  returns an array; callers pick their own fallback. Also fixed alongside: the login language lookup read
+  `$data[$v_user]` - the shell-quoted name, which never matched a key - so every login silently fell back
+  to English; and an absent package value used to compare unequal to `"0"`, landing every user on the web
+  list whatever their package held.
+
+- **A dead SnappyMail mirror produced a green install with no webmail** (#573). The download came from the
+  project's own host, which went dark in August 2026 - ICMP alive, TCP silently dropped. Three of our own
+  gaps turned that outage into something worse than an outage: an unbounded `wget` (20 tries at a 900s
+  read timeout) hung the installer for roughly 45 minutes, and because the script carries no `set -e`, the
+  0-byte file `wget -O` leaves behind ran the whole rest of it to `exit 0` - dangling symlink, database
+  created, `WEBMAIL_SYSTEM` claiming an application that had never been unpacked.
+
+  SnappyMail now comes from the GitHub release for the version `share/manifest.json` already pinned (the
+  value was read but never used for the URL), the fetch is bounded, and the archive is verified and
+  unpacked before anything is removed - so an unreachable source no longer destroys a working install on
+  the way down. `WEBMAIL_SYSTEM` is written on success rather than up front, and the smoke check names the
+  cause instead of reporting an ambiguous 404.
+
 - **The per-chain ban verdict was missing on the live-attach path.** `fw_jail_verdict` was wired into the
   full re-render but not into `fw_jail_attach`, which hardcoded `reject` for both families. fail2ban's
   `actionstart` reaches exactly that path, so on a fresh install every jail rule - `WEBSCAN` included -
