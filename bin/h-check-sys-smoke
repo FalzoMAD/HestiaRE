@@ -620,8 +620,16 @@ check_key_registries() {
 		skip "syshealth_known_keys unavailable - key registries not checkable"
 		return
 	fi
+	local unknown=''
 	for sys in web mail mail_accounts user cron db ip system; do
-		want="$(syshealth_known_keys "$sys" | tr ' ' '\n' | sed '/^$/d')"
+		# An empty reference must not pass as agreement: the writer feeds from the same function, so
+		# a subsystem with no branch would write an empty registry that then matches its own empty
+		# source. Caught here rather than reported as PASS on eight empty files.
+		if ! want="$(syshealth_known_keys "$sys")" || [ -z "$want" ]; then
+			unknown="$unknown $sys"
+			continue
+		fi
+		want="$(echo "$want" | tr ' ' '\n' | sed '/^$/d')"
 		if [ ! -f "$HESTIA/conf/defaults/$sys.conf" ]; then
 			missing="$missing $sys"
 			continue
@@ -630,9 +638,9 @@ check_key_registries() {
 		[ "$have" = "$want" ] || drift="$drift $sys"
 		[ -z "$(echo "$have" | sort | uniq -d)" ] || dupes="$dupes $sys"
 	done
-	if [ -n "$missing$drift$dupes" ]; then
+	if [ -n "$missing$drift$dupes$unknown" ]; then
 		no "key registries out of sync" \
-			"missing:${missing:- none} drift:${drift:- none} duplicates:${dupes:- none}"
+			"missing:${missing:- none} drift:${drift:- none} duplicates:${dupes:- none} no-key-set:${unknown:- none}"
 	else
 		ok "key registries match the compiled key sets"
 	fi

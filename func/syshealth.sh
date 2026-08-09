@@ -56,6 +56,10 @@ function write_kv_config_file() {
 	# unconditionally would mean one temp file plus rename per object in a rebuild loop.
 	local tmp want conf="$HESTIA/conf/defaults/$system.conf"
 	want=$(printf '%s\n' $known_keys)
+	# An empty set is never legitimate - every subsystem has keys. Persisting one would turn every
+	# later repair into a no-op, and the smoke guard would compare it against the same empty source
+	# and agree. Leave whatever is on disk instead.
+	[ -n "$want" ] || return 0
 	[ -f "$conf" ] && [ "$(cat "$conf")" = "$want" ] && return 0
 
 	# Written to a temp file and moved into place. The old delete-then-append left a window in
@@ -80,6 +84,11 @@ function sanitize_config_file() {
 # The key sets, in one place. The format functions below write them to the registry and the
 # smoke guard compares the registry against them, so there is one list per subsystem rather
 # than a copy per consumer.
+#
+# Unknown subsystem is an error, not an empty list. Both callers would otherwise treat the empty
+# answer as valid: the writer would persist an empty registry, and the guard would compare it
+# against the same empty reference and pass. A ninth subsystem added without a branch here has to
+# fail loudly, not vacuously agree with itself.
 syshealth_known_keys() {
 	case "$1" in
 		web) echo "DOMAIN IP IP6 CUSTOM_DOCROOT CUSTOM_PHPROOT FASTCGI_CACHE FASTCGI_DURATION ALIAS TPL SSL SSL_FORCE SSL_HSTS SSL_HOME LETSENCRYPT FTP_USER FTP_MD5 FTP_PATH BACKEND PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT U_DISK U_BANDWIDTH REDIRECT REDIRECT_CODE AUTH_USER AUTH_HASH DIR_LIST SUSPENDED TIME DATE" ;;
@@ -90,6 +99,7 @@ syshealth_known_keys() {
 		db) echo "DB DBUSER MD5 HOST TYPE CHARSET U_DISK SUSPENDED TIME DATE" ;;
 		system) echo "ANTISPAM_SYSTEM ANTIVIRUS_SYSTEM APP_NAME BACKEND_PORT BACKUP_GZIP BACKUP_INCREMENTAL BACKUP_MODE BACKUP_SYSTEM BLOCKLIST_INTERVAL CRON_SYSTEM DB_ADMINER_ALIAS DB_PMA_ALIAS DB_SYSTEM DEBUG_MODE DEMO_MODE DISABLE_IP_CHECK DISK_QUOTA DOMAINDIR_WRITABLE ENFORCE_SUBDOMAIN_OWNERSHIP FILE_MANAGER FILE_MANAGER_PORT FIREWALL_EXTENSION FIREWALL_SYSTEM FROM_EMAIL FROM_NAME FTP_SYSTEM HIDE_DOCS IMAP_SYSTEM INACTIVE_SESSION_TIMEOUT LANGUAGE LOGIN_STYLE MAIL_SYSTEM PHPMYADMIN_KEY PLUGIN_APP_INSTALLER POLICY_BACKUP_SUSPENDED_USERS POLICY_CSRF_STRICTNESS POLICY_SPAM_CUSTOMER_TUNING POLICY_SPAM_REJECT_SCORE_MAX POLICY_SPAM_REJECT_SCORE_MIN POLICY_SPAM_SCORE_MAX POLICY_SPAM_SCORE_MIN POLICY_SYNC_ERROR_DOCUMENTS POLICY_SYNC_SKELETON POLICY_SYSTEM_ENABLE_BACON POLICY_SYSTEM_HIDE_SERVICES POLICY_SYSTEM_PASSWORD_RESET POLICY_SYSTEM_PROTECTED_ADMIN POLICY_USER_CHANGE_THEME POLICY_USER_DELETE_LOGS POLICY_USER_EDIT_DETAILS POLICY_USER_EDIT_WEB_TEMPLATES POLICY_USER_VIEW_LOGS POLICY_USER_VIEW_SUSPENDED PROXY_PORT PROXY_SSL_PORT PROXY_SYSTEM RELEASE_BRANCH RESOURCES_LIMIT ROOT_USER SERVER_SMTP_ADDR SERVER_SMTP_HOST SERVER_SMTP_PASSWD SERVER_SMTP_PORT SERVER_SMTP_SECURITY SERVER_SMTP_USER SIEVE_SYSTEM STATS_SYSTEM SUBJECT_EMAIL THEME TITLE UPDATE_HOSTNAME_SSL UPGRADE_SEND_EMAIL UPGRADE_SEND_EMAIL_LOG USE_SERVER_SMTP VERSION WEB_BACKEND WEBMAIL_ALIAS WEBMAIL_SYSTEM WEB_PORT WEB_RGROUPS WEB_SSL WEB_SSL_PORT WEB_SYSTEM" ;;
 		ip) echo "OWNER STATUS NAME U_SYS_USERS U_WEB_DOMAINS INTERFACE NETMASK NAT TIME DATE" ;;
+		*) return 1 ;;
 	esac
 }
 
