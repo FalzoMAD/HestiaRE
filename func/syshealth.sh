@@ -15,6 +15,11 @@
 # and made it permanent, silently reducing every later repair to a no-op.
 #
 # Each format function ends with `unset system`, so callers set $system AFTER this, never before.
+#
+# Never reports failure. The registry dir is root-owned and every caller runs as root, so a failed
+# write means something is wrong elsewhere - and the useful reaction is to carry on with the keys
+# already on disk, not to abort a domain add. A non-zero return here would do exactly that in any
+# caller running under `set -e`.
 syshealth_refresh_registry() {
 	case "$1" in
 		web) syshealth_update_web_config_format ;;
@@ -46,17 +51,20 @@ function write_kv_config_file() {
 		mkdir "$HESTIA/conf/defaults/"
 	fi
 
+	# Only on drift. The repairs call this on every domain and every mail account, so writing
+	# unconditionally would mean one temp file plus rename per object in a rebuild loop.
+	local tmp want conf="$HESTIA/conf/defaults/$system.conf"
+	want=$(printf '%s\n' $known_keys)
+	[ -f "$conf" ] && [ "$(cat "$conf")" = "$want" ] && return 0
+
 	# Written to a temp file and moved into place. The old delete-then-append left a window in
 	# which the registry was missing or half written, and a repair reading it there would silently
 	# use a truncated key list - the same class of quiet wrongness this file is being fixed for.
 	# rename(2) within one directory is atomic, so a reader sees either the old list or the new one.
-	local tmp
-	tmp=$(mktemp "$HESTIA/conf/defaults/.$system.conf.XXXXXX") || return 1
-	for key in $known_keys; do
-		echo $key >> "$tmp"
-	done
+	tmp=$(mktemp "$HESTIA/conf/defaults/.$system.conf.XXXXXX") || return 0
+	printf '%s\n' "$want" > "$tmp"
 	chmod 664 "$tmp"
-	mv -f "$tmp" "$HESTIA/conf/defaults/$system.conf"
+	mv -f "$tmp" "$conf" || rm -f "$tmp"
 }
 
 # Sanitize configuration input
