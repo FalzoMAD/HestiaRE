@@ -1,8 +1,9 @@
 #!/bin/bash
 # info: enable rootless Docker for a user
-# options: USER
+# options: USER [BACKUP_SCOPE]
 #
 # example: h-add-user-docker john
+# example: h-add-user-docker john full
 #
 # Creates the customer's companion and starts their own rootless daemon (#389).
 #
@@ -18,12 +19,17 @@
 #
 # Re-runnable in both directions: a partial enable heals, a healthy one is left alone
 # (see the guard before the restart block).
+#
+# BACKUP_SCOPE picks what h-backup-user keeps of the Docker data root: 'volumes' (default) or
+# 'full'. Only those two are sound - anything in between splits overlay2 from the metadata in
+# image/overlay2 and restores a store referencing layers that are not there.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
 #----------------------------------------------------------#
 
 user=$1
+backup_scope=$2
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -57,8 +63,12 @@ docker_alive() {
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '1' "$#" 'USER'
+check_args '1' "$#" 'USER [BACKUP_SCOPE]'
 is_format_valid 'user'
+if [ -n "$backup_scope" ] && [ "$backup_scope" != 'volumes' ] && [ "$backup_scope" != 'full' ]; then
+	echo "ERROR: BACKUP_SCOPE must be 'volumes' or 'full', got '$backup_scope'."
+	exit "$E_INVALID"
+fi
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 
@@ -111,6 +121,23 @@ fi
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
+
+# Before the health guard below, which exits early on a healthy customer: putting this after it
+# would make the scope unchangeable for exactly the customers that are already running.
+#
+# update_user_value alone is not enough - it rewrites an existing line and does nothing at all when
+# the key is absent, which is the normal state until a rebuild seeds it (#559). Inserted before
+# TIME= rather than appended, so the key never lands on the last line.
+if [ -n "$backup_scope" ] || ! grep -q "^DOCKER_BACKUP='" "$USER_DATA/user.conf" 2> /dev/null; then
+	scope="${backup_scope:-$(get_user_value '$DOCKER_BACKUP')}"
+	scope="${scope:-volumes}"
+	if grep -q "^DOCKER_BACKUP='" "$USER_DATA/user.conf" 2> /dev/null; then
+		update_user_value "$user" '$DOCKER_BACKUP' "$scope"
+	else
+		sed -i "/^TIME=/i DOCKER_BACKUP='$scope'" "$USER_DATA/user.conf"
+	fi
+	echo "Backup scope: $scope"
+fi
 
 if ! getent passwd "$companion" > /dev/null 2>&1; then
 	echo "Creating companion $companion (uid $companion_uid)..."
