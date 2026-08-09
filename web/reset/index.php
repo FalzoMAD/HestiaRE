@@ -22,15 +22,15 @@ if (!empty($_POST["user"]) && empty($_POST["code"])) {
 	$v_user = quoteshellarg($_POST["user"]);
 	$user = $_POST["user"];
 	$email = $_POST["email"];
-	$cmd = "/usr/bin/sudo /usr/local/hestia/bin/h-list-user";
-	exec($cmd . " " . $v_user . " json", $output, $return_var);
-	if ($return_var == 0) {
-		$data = json_decode(implode("", $output), true);
-		unset($output);
+	$data = cli_json("h-list-user " . $v_user . " json");
+	if (!empty($data[$user])) {
+		$output = "";
 		exec(HESTIA_CMD . "h-get-user-value " . $v_user . " RKEYEXP", $output, $return_var);
 		$rkeyexp = json_decode(implode("", $output), true);
 		if ($rkeyexp === null || $rkeyexp < time() - 1) {
-			if ($email == $data[$user]["CONTACT"]) {
+			// Strict, and both sides non-empty: a loose compare against a missing CONTACT made an
+			// empty submitted address match, which is the one comparison here that gates a reset.
+			if ($email !== "" && $email === ($data[$user]["CONTACT"] ?? "")) {
 				$rkey = substr(password_hash("", PASSWORD_DEFAULT), 8, 12);
 				$hash = password_hash($rkey, PASSWORD_DEFAULT);
 				$v_rkey = tempnam("/tmp", "vst");
@@ -164,12 +164,11 @@ if (!empty($_POST["user"]) && !empty($_POST["code"]) && !empty($_POST["password"
 	if ($_POST["password"] == $_POST["password_confirm"]) {
 		$v_user = quoteshellarg($_POST["user"]);
 		$user = $_POST["user"];
-		exec(HESTIA_CMD . "h-list-user " . $v_user . " json", $output, $return_var);
-		if ($return_var == 0) {
-			$data = json_decode(implode("", $output), true);
-			$rkey = $data[$user]["RKEY"];
-			if (password_verify($_POST["code"], $rkey)) {
-				unset($output);
+		$data = cli_json("h-list-user " . $v_user . " json");
+		if (!empty($data[$user])) {
+			$rkey = $data[$user]["RKEY"] ?? "";
+			if ($rkey !== "" && password_verify($_POST["code"], $rkey)) {
+				$output = "";
 				exec(HESTIA_CMD . "h-get-user-value " . $v_user . " RKEYEXP", $output, $return_var);
 				if ($output[0] > time() - 900) {
 					$v_password = tempnam("/tmp", "vst");
