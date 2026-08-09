@@ -3,6 +3,12 @@
 # options: [MODE]
 #
 # This function installs the SnappyMail webmail client.
+#
+# Source is the GitHub release for the version pinned in share/manifest.json: a pinned
+# version is the only one we can verify, and the project's own host has proven unreliable.
+#
+# Fetched and verified before anything is removed - an unreachable source must not take an
+# existing installation down with it.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -20,19 +26,26 @@ sm_v=$(manifest_get '.software_versions.snappymail')
 
 MODE=$1
 UPDATE="no"
-# Version and Download paths
-# Version to be moved to upgrade script
-SM_FILE="snappymail-latest.tar.gz"
+SM_FILE="snappymail-${sm_v}.tar.gz"
 # For removal of folder
 SM_EXTRACT_MAIN="snappymail"
 
-# Downloading full version
-SM_URL="https://snappymail.eu/repository/latest.tar.gz"
+SM_URL="https://github.com/the-djmaze/snappymail/releases/download/v${sm_v}/snappymail-${sm_v}.tar.gz"
 
 # Folder paths
 SM_INSTALL_DIR="/var/lib/snappymail"
 SM_CONFIG_DIR="/etc/snappymail"
 SM_LOG="/var/log/snappymail"
+
+# Bounded on purpose: wget's defaults are 20 tries at a 900s read timeout, so a host that
+# drops SYNs costs ~45 minutes before the first error surfaces.
+sm_fetch() {
+	local dest="$1"
+	wget "$SM_URL" --timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" || return 1
+	# wget -O leaves a 0-byte file behind on failure, which a plain [ -f ] check accepts.
+	[ -s "$dest" ] || return 1
+	gzip -t "$dest" 2> /dev/null || return 1
+}
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -59,6 +72,12 @@ if [ -z "$(echo "$DB_SYSTEM" | grep -w 'mysql')" ]; then
 	exit 2
 fi
 
+# Without it the release URL would resolve to .../download/v/snappymail-.tar.gz and 404.
+if [ -z "$sm_v" ]; then
+	echo "ERROR: no SnappyMail version pinned in share/manifest.json. Installation aborted"
+	exit 2
+fi
+
 # Get current version
 if [ -f "/var/lib/snappymail/data/VERSION" ]; then
 	version=$(cat $SM_INSTALL_DIR/data/VERSION)
@@ -78,6 +97,15 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 if [ "$UPDATE" == "no" ]; then
+	# Fetched before the removals below: a dead source must not cost the running install.
+	sm_tmp="$(mktemp -t snappymail.XXXXXX.tar.gz)"
+	if ! sm_fetch "$sm_tmp"; then
+		rm -f "$sm_tmp"
+		echo "ERROR: could not download SnappyMail $sm_v from $SM_URL"
+		echo "       Installation aborted - nothing was changed."
+		exit 2
+	fi
+
 	rm -f -r $SM_INSTALL_DIR
 	rm -f -r $SM_CONFIG_DIR
 
@@ -85,12 +113,7 @@ if [ "$UPDATE" == "no" ]; then
 	mkdir $SM_CONFIG_DIR
 
 	cd "$SM_INSTALL_DIR"
-	[ ! -f "${SM_INSTALL_DIR}/${SM_FILE}" ] && wget "$SM_URL" --retry-connrefused --quiet -O "${SM_INSTALL_DIR}/${SM_FILE}"
-
-	if [ ! -f "${SM_INSTALL_DIR}/${SM_FILE}" ]; then
-		echo "ERROR: Download failed, installation aborted."
-		exit 2
-	fi
+	mv "$sm_tmp" "${SM_INSTALL_DIR}/${SM_FILE}"
 
 	key=$(openssl rand -hex 4)
 	suffix=$(openssl rand -hex 4)
@@ -102,7 +125,12 @@ if [ "$UPDATE" == "no" ]; then
 	echo "Admin Panel key: admin_$suffix" >> ~/.snappymail
 
 	tar -xzf ${SM_INSTALL_DIR}/${SM_FILE}
-	# Get current version
+	# No set -e here: an empty tree would otherwise run the rest of this script to exit 0,
+	# leaving a dangling data symlink and a WEBMAIL_SYSTEM claiming an install nobody had.
+	if [ ! -s ./data/VERSION ]; then
+		echo "ERROR: SnappyMail archive did not unpack (no data/VERSION). Installation aborted."
+		exit 2
+	fi
 	version=$(cat ./data/VERSION)
 
 	mv ./data $SM_CONFIG_DIR/
@@ -170,16 +198,17 @@ if [ "$UPDATE" == "no" ]; then
 	fi
 
 else
-	[ ! -f "${SM_INSTALL_DIR}/${SM_FILE}" ] && wget "$SM_URL" --quiet -O "${SM_INSTALL_DIR}/${SM_FILE}"
-	if [ ! -f "${SM_INSTALL_DIR}/${SM_FILE}" ]; then
-		echo "ERROR: Download failed, installation aborted."
+	if [ ! -s "${SM_INSTALL_DIR}/${SM_FILE}" ] && ! sm_fetch "${SM_INSTALL_DIR}/${SM_FILE}"; then
+		rm -f "${SM_INSTALL_DIR}/${SM_FILE}"
+		echo "ERROR: could not download SnappyMail $sm_v from $SM_URL"
+		echo "       Update aborted - the installed version is untouched."
 		exit 2
 	fi
 
 	version=$(cat $SM_INSTALL_DIR/data/VERSION)
 	cd $SM_INSTALL_DIR
 	mkdir -p /tmp/snappy/
-	tar -xzf snappymail-latest.tar.gz -C /tmp/snappy/
+	tar -xzf "$SM_FILE" -C /tmp/snappy/
 	version_source=$(cat /tmp/snappy/data/VERSION)
 	# check the version in the tarball in case hestia hasn't updated yet
 	if [ "$version" != "$version_source" ]; then
