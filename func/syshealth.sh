@@ -85,7 +85,7 @@ function syshealth_update_user_config_format() {
 	# USER CONFIGURATION
 	# Create array of known keys in configuration file
 	system="user"
-	known_keys="NAME PACKAGE CONTACT CRON_REPORTS MD5 RKEY TWOFA QRCODE PHPCLI ROLE SUSPENDED SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON IP_AVAIL IP_OWNED U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DKIM U_MAIL_DKIM U_MAIL_ACCOUNTS U_MAIL_DOMAINS U_MAIL_SSL U_DATABASES U_CRON_JOBS U_BACKUPS LANGUAGE THEME NOTIFICATIONS PREF_UI_SORT FILE_MANAGER TIME DATE"
+	known_keys="NAME PACKAGE CONTACT CRON_REPORTS MD5 RKEY TWOFA QRCODE PHPCLI ROLE SUSPENDED SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON IP_AVAIL IP_OWNED U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DKIM U_MAIL_DKIM U_MAIL_ACCOUNTS U_MAIL_DOMAINS U_MAIL_SSL U_DATABASES U_CRON_JOBS U_BACKUPS LANGUAGE THEME NOTIFICATIONS PREF_UI_SORT FILE_MANAGER DOCKER_BACKUP TIME DATE"
 	write_kv_config_file
 	unset system
 	unset known_keys
@@ -130,10 +130,35 @@ function syshealth_repair_web_config() {
 	get_domain_values 'web'
 	prev="DOMAIN"
 	for key in $known_keys; do
-		if [ -z "$key" ]; then
+		# "${!key}", not "$key": the loop variable holds the key NAME and is never empty, so the
+		# check was constant-false and this function repaired nothing since it was written (#559).
+		# The indirect expansion asks what was meant - is that key absent from the record?
+		if [ -z "${!key}" ]; then
 			add_object_key 'web' 'DOMAIN' "$domain" "$key" "$prev"
 		fi
 		prev=$key
+	done
+}
+
+# Bring a user.conf up to the current key set. Sibling of the web/mail repairs, which user.conf
+# never had - so a key added to the list above reached existing customers only if someone happened
+# to rebuild or restore them (#559). update_user_value is no help there: it rewrites an existing
+# line and does nothing at all when the key is absent.
+#
+# Not add_object_key: that one edits a single-line record in place, while user.conf is one key per
+# line. Inserted before TIME= rather than appended, so the key never sits on the last line.
+syshealth_repair_user_config() {
+	local key
+	[ -f "$USER_DATA/user.conf" ] || return 0
+	# Refresh the registry first. conf/defaults/user.conf is written at install time, so on a box
+	# installed before a key was added it is stale - and reading it would skip exactly the key this
+	# function exists to add, silently.
+	syshealth_update_user_config_format
+	sanitize_config_file 'user'
+	source_conf "$USER_DATA/user.conf"
+	for key in $(read_kv_config_file 'user'); do
+		grep -q "^${key}='" "$USER_DATA/user.conf" && continue
+		sed -i "/^TIME=/i ${key}=''" "$USER_DATA/user.conf"
 	done
 }
 

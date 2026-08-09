@@ -68,6 +68,10 @@ rebuild_user_conf() {
 	if [ -z "${FILE_MANAGER+x}" ]; then
 		sed -i "/RATE_LIMIT/a FILE_MANAGER=''" $USER_DATA/user.conf
 	fi
+	# Generic sweep after the seeds above, which set real defaults rather than empty ones. Until
+	# #559 user.conf had no repair at all, so a key added to the known set reached existing
+	# customers only by chance.
+	syshealth_repair_user_config
 	# Run template trigger
 	if [ -x "$HESTIA/packages/$PACKAGE.sh" ]; then
 		$HESTIA/packages/$PACKAGE.sh "$user" "$CONTACT" "$NAME"
