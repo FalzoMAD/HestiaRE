@@ -116,6 +116,24 @@ opens above it.
 
 ### Fixed
 
+- **A failing CLI call took the login page down, and let the post-password gates pass** (#575). The panel
+  ran `exec()` and fed the result straight to `json_decode()`, then dereferenced it. `$return_var` was
+  collected everywhere and evaluated almost nowhere. On a failed call the decode yields `null`, which
+  behaves like an array until something insists on a real one: `in_array(x, null)` is a TypeError, so the
+  login page answered **HTTP 500 with an empty body** - no form, no way in. Observed during a fresh
+  install, where the panel is reachable before the sudo rules are final.
+
+  Worse on the authenticated path: after the password was already verified, `LOGIN_DISABLED`, the IP
+  allowlist and `TWOFA` were all read from that same result. An empty one made all three compare false,
+  so a single failed CLI call would have let a disabled account in past its allowlist and its second
+  factor. That path now fails closed.
+
+  Both unauthenticated entry points (`login`, `reset`) go through a shared `cli_json()` helper that always
+  returns an array; callers pick their own fallback. Also fixed alongside: the login language lookup read
+  `$data[$v_user]` - the shell-quoted name, which never matched a key - so every login silently fell back
+  to English; and an absent package value used to compare unequal to `"0"`, landing every user on the web
+  list whatever their package held.
+
 - **A dead SnappyMail mirror produced a green install with no webmail** (#573). The download came from the
   project's own host, which went dark in August 2026 - ICMP alive, TCP silently dropped. Three of our own
   gaps turned that outage into something worse than an outage: an unbounded `wget` (20 tries at a 900s
