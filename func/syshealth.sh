@@ -26,15 +26,17 @@ function write_kv_config_file() {
 		mkdir "$HESTIA/conf/defaults/"
 	fi
 
-	# Remove previous known good configuration
-	if [ -f "$HESTIA/conf/defaults/$system.conf" ]; then
-		rm -f $HESTIA/conf/defaults/$system.conf
-	fi
-
-	touch $HESTIA/conf/defaults/$system.conf
+	# Written to a temp file and moved into place. The old delete-then-append left a window in
+	# which the registry was missing or half written, and a repair reading it there would silently
+	# use a truncated key list - the same class of quiet wrongness this file is being fixed for.
+	# rename(2) within one directory is atomic, so a reader sees either the old list or the new one.
+	local tmp
+	tmp=$(mktemp "$HESTIA/conf/defaults/.$system.conf.XXXXXX") || return 1
 	for key in $known_keys; do
-		echo $key >> $HESTIA/conf/defaults/$system.conf
+		echo $key >> "$tmp"
 	done
+	chmod 664 "$tmp"
+	mv -f "$tmp" "$HESTIA/conf/defaults/$system.conf"
 }
 
 # Sanitize configuration input
@@ -125,6 +127,11 @@ function syshealth_update_ip_config_format() {
 
 # Repair web domain configuration
 function syshealth_repair_web_config() {
+	# Refresh the registry first, for the same reason as the user sibling: conf/defaults/web.conf is
+	# written at install time, so on a box installed before a key was added it is stale and the
+	# repair would skip exactly that key. Cheap and safe now that the write is atomic.
+	# It ends with `unset system`, so $system is set after it, not before.
+	syshealth_update_web_config_format
 	system="web"
 	sanitize_config_file "$system"
 	get_domain_values 'web'
