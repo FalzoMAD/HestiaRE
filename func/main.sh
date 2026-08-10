@@ -674,6 +674,40 @@ add_object_key() {
 	fi
 }
 
+# Remove a domain's cache-zone line from a shared nginx pool file. Literal match on the
+# full keys_zone prefix: a dot in the domain is a regex wildcard, so a.b.com would take
+# aXb.com's zone with it - and a vhost still referencing the zone breaks nginx -t box-wide.
+remove_pool_zone() {
+	local conf="$1" domain="$2"
+	[ -e "$conf" ] || return 0
+	grep -vF "keys_zone=${domain}:" "$conf" > "$conf.tmp" || true
+	mv -f "$conf.tmp" "$conf"
+}
+
+# Literal line removal for the account-keyed mail files: any widening of the localpart
+# charset would silently under-escape a sed pattern. index()==1 anchors at line start.
+# Owner/mode are copied onto the rewrite - passwd is dovecot:mail, and a root:root rewrite
+# would cut dovecot off from auth.
+remove_line_by_prefix() {
+	local file="$1" prefix="$2"
+	[ -e "$file" ] || return 0
+	awk -v p="$prefix" 'index($0, p) != 1' "$file" > "$file.tmp"
+	chown --reference="$file" "$file.tmp" 2> /dev/null
+	chmod --reference="$file" "$file.tmp" 2> /dev/null
+	mv -f "$file.tmp" "$file"
+}
+
+# Same, keyed by the whole line (fwd_only holds one bare account per line, so a prefix
+# match on john.doe would also take john.doex).
+remove_exact_line() {
+	local file="$1" line="$2"
+	[ -e "$file" ] || return 0
+	awk -v p="$line" '$0 != p' "$file" > "$file.tmp"
+	chown --reference="$file" "$file.tmp" 2> /dev/null
+	chmod --reference="$file" "$file.tmp" 2> /dev/null
+	mv -f "$file.tmp" "$file"
+}
+
 # Search objects
 search_objects() {
 	OLD_IFS="$IFS"

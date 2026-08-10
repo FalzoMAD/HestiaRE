@@ -51,7 +51,7 @@ check_hestia_demo_mode
 
 # Deleting account from fwd_only
 if [[ "$MAIL_SYSTEM" =~ exim ]]; then
-	sed -i "/^$account$/d" $HOMEDIR/$user/conf/mail/$domain/fwd_only
+	remove_exact_line $HOMEDIR/$user/conf/mail/$domain/fwd_only "$account"
 fi
 
 #----------------------------------------------------------#

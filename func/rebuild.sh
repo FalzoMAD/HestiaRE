@@ -712,16 +712,16 @@ rebuild_mail_domain_conf() {
 			user_rate_limit=$(get_object_value 'mail' 'DOMAIN' "$domain" '$RATE_LIMIT')
 			if [ -n "$RATE_LIMIT" ]; then
 				#user value
-				sed -i "/^$account@$domain_idn:/ d" $HOMEDIR/$user/conf/mail/$domain/limits
+				remove_line_by_prefix $HOMEDIR/$user/conf/mail/$domain/limits "$account@$domain_idn:"
 				echo "$account@$domain_idn:$RATE_LIMIT" >> $HOMEDIR/$user/conf/mail/$domain/limits
 			elif [ -n "$user_rate_limit" ]; then
 				#revert to account value
-				sed -i "/^$account@$domain_idn:/ d" $HOMEDIR/$user/conf/mail/$domain/limits
+				remove_line_by_prefix $HOMEDIR/$user/conf/mail/$domain/limits "$account@$domain_idn:"
 				echo "$account@$domain_idn:$user_rate_limit" >> $HOMEDIR/$user/conf/mail/$domain/limits
 			else
 				#revert to system value
 				system=$(cat /etc/exim4/limit.conf)
-				sed -i "/^$account@$domain_idn:/ d" $HOMEDIR/$user/conf/mail/$domain/limits
+				remove_line_by_prefix $HOMEDIR/$user/conf/mail/$domain/limits "$account@$domain_idn:"
 				echo "$account@$domain_idn:$system" >> $HOMEDIR/$user/conf/mail/$domain/limits
 			fi
 		fi
@@ -744,9 +744,11 @@ rebuild_mail_domain_conf() {
 
 	# Add missing SSL configuration flags to existing domains
 	# for per-domain SSL migration
-	sslcheck=$(grep "DOMAIN='$domain'" $USER_DATA/mail.conf | grep SSL)
+	# -F + full DOMAIN='..' anchor: a wildcard dot would find aXb.com's flags and skip its
+	# own, and an unanchored pattern could match inside another record's CATCHALL value
+	sslcheck=$(grep -F "DOMAIN='$domain'" $USER_DATA/mail.conf | grep SSL)
 	if [ -z "$sslcheck" ]; then
-		sed -i "s|$domain'|$domain' SSL='no' LETSENCRYPT='no'|g" $USER_DATA/mail.conf
+		sed -i "s|DOMAIN='${domain//./\\.}'|DOMAIN='$domain' SSL='no' LETSENCRYPT='no'|" $USER_DATA/mail.conf
 	fi
 
 	# Remove and recreate SSL configuration

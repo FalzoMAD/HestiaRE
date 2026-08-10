@@ -255,6 +255,16 @@ add_web_config() {
 		fi
 	fi
 
+	# A missing template would become a 0-byte vhost that apache2 -t accepts, silently
+	# falling through to the box default vhost. Warn + skip, not check_result: an exit
+	# would abort a rebuild loop mid-way over one broken record.
+	if [ ! -f "${WEBTPL_LOCATION}/$2" ]; then
+		echo "Error: web template ${WEBTPL_LOCATION}/$2 doesn't exist - $domain vhost not written" >&2
+		# Tallied for the rebuild summary - the stderr line alone drowns in a nightly run
+		web_config_skipped=$((${web_config_skipped:-0} + 1))
+		return "$E_NOTEXIST"
+	fi
+
 	# Note: Removing or renaming template variables will lead to broken custom templates.
 	#   -If possible custom templates should be automatically upgraded to use the new format
 	#   -Alternatively a depreciation period with proper notifications should be considered
