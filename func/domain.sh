@@ -36,8 +36,11 @@ web_template_file() {
 # Side effects: cache = turn the proxy cache switch on, - = none.
 map_legacy_template() {
 	case "$2" in
-		# the caching template became h-add-web-domain-cache
-		caching) echo "default cache" ;;
+		# the caching template became h-add-web-domain-cache. It only ever existed as a
+		# proxy template, so a TPL='caching' left over from a model switch maps to default
+		# WITHOUT the effect - claiming it outside the proxy role would promise a switch
+		# that h-add-web-domain-cache then refuses for lack of a proxy.
+		caching) [ "$1" = 'proxy' ] && echo "default cache" || echo "default -" ;;
 		# hosting differed from default only by a chmod trigger from the mod_php era;
 		# phpcgi/phpfcgid/www-data are mod_php-era apache variants
 		hosting | phpcgi | phpfcgid | www-data) echo "default -" ;;
@@ -179,7 +182,6 @@ prepare_web_backend() {
 
 	pool=$(find -L /etc/php/ -name "$domain.conf" -exec dirname {} \;)
 	# Check if multiple-PHP installed
-	regex="socket-(\d+)_(\d+)"
 	if [[ $backend_template =~ ^.*PHP-([0-9])\_([0-9])$ ]]; then
 		backend_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
 		pool=$(find -L /etc/php/$backend_version -type d \( -name "pool.d" -o -name "*fpm.d" \))
@@ -305,11 +307,11 @@ prepare_web_domain_values() {
 	if [ "$SUSPENDED" = 'yes' ]; then
 		docroot="$SHARETPL/suspend/pages/admin"
 		sdocroot="$docroot"
-		WEBTPL_OVERRIDE="$HESTIA/share/web/suspend/admin"
+		WEBTPL_OVERRIDE="$SHARETPL/suspend/admin"
 	elif [ "$OFFLINE" = 'yes' ]; then
-		docroot="$HESTIA/share/web/suspend/pages/offline"
+		docroot="$SHARETPL/suspend/pages/offline"
 		sdocroot="$docroot"
-		WEBTPL_OVERRIDE="$HESTIA/share/web/suspend/offline"
+		WEBTPL_OVERRIDE="$SHARETPL/suspend/offline"
 	fi
 	if [ -n "$WEBTPL_OVERRIDE" ]; then
 		TPL="$WEB_SYSTEM"
@@ -1006,29 +1008,29 @@ is_base_domain_owner() {
 #           Process "http2" directive for NGINX            #
 #----------------------------------------------------------#
 
+# Rewrites by line number, never by matching the line's own text: a listen line contains
+# [::] for IPv6, which is a character class in a sed pattern, so the line never matched
+# itself and IPv6 vhosts silently kept the deprecated per-listener http2.
 process_http2_directive() {
 	if [ -e /etc/nginx/conf.d/http2-directive.conf ]; then
-		while IFS= read -r old_param; do
-			new_param="$(echo "$old_param" | sed 's/\shttp2//')"
-			sed -i "s/$old_param/$new_param/" "$1"
-		done < <(grep -E "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1")
+		while IFS= read -r lnr; do
+			sed -i "${lnr}s/[[:space:]]http2//" "$1"
+		done < <(grep -nE "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1" | cut -f1 -d:)
 	else
 		if version_ge "$(nginx -v 2>&1 | cut -d'/' -f2)" "1.25.1"; then
 			echo "http2 on;" > /etc/nginx/conf.d/http2-directive.conf
 
-			while IFS= read -r old_param; do
-				new_param="$(echo "$old_param" | sed 's/\shttp2//')"
-				sed -i "s/$old_param/$new_param/" "$1"
-			done < <(grep -E "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1")
+			while IFS= read -r lnr; do
+				sed -i "${lnr}s/[[:space:]]http2//" "$1"
+			done < <(grep -nE "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1" | cut -f1 -d:)
 		else
 			listen_ssl="$(grep -E "listen.*\s\bssl\b\s*.*;" "$1")"
 			listen_http2="$(grep -E "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1")"
 
 			if [ -n "$listen_ssl" ] && [ -z "$listen_http2" ]; then
-				while IFS= read -r old_param; do
-					new_param="$(echo "$old_param" | sed 's/\sssl/ ssl http2/')"
-					sed -i "s/$old_param/$new_param/" "$1"
-				done < <(grep -E "listen.*\s\bssl\b\s*.*;" "$1")
+				while IFS= read -r lnr; do
+					sed -i "${lnr}s/[[:space:]]ssl/ ssl http2/" "$1"
+				done < <(grep -nE "listen.*\s\bssl\b\s*.*;" "$1" | cut -f1 -d:)
 			fi
 		fi
 	fi
