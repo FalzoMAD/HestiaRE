@@ -674,6 +674,17 @@ add_object_key() {
 	fi
 }
 
+# Remove a domain's cache-zone line from a shared nginx pool file (#583).
+# Literal match on the full keys_zone prefix - the domain must never act as a regex here:
+# a dot is a wildcard, so a.b.com would also take aXb.com's zone with it, and with a vhost
+# still referencing the zone, nginx -t fails box-wide from then on.
+remove_pool_zone() {
+	local conf="$1" domain="$2"
+	[ -e "$conf" ] || return 0
+	grep -vF "keys_zone=${domain}:" "$conf" > "$conf.tmp" || true
+	mv -f "$conf.tmp" "$conf"
+}
+
 # Search objects
 search_objects() {
 	OLD_IFS="$IFS"

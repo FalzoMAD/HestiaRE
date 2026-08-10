@@ -86,8 +86,9 @@ if [ "$FASTCGI_CACHE" = "yes" ]; then
 	$BIN/h-delete-fastcgi-cache "$user" "$domain"
 fi
 
-# Deleting domain from web.conf
-sed -i "/DOMAIN='$domain'/ d" "$USER_DATA/web.conf"
+# Deleting domain from web.conf. Dots escaped: as a wildcard, deleting a.b.com would
+# also drop the user's aXb.com record (#583)
+sed -i "/DOMAIN='${domain//./\\.}'/ d" "$USER_DATA/web.conf"
 
 # Deleting proxy
 if [ -n "$PROXY_SYSTEM" ]; then
@@ -95,14 +96,12 @@ if [ -n "$PROXY_SYSTEM" ]; then
 	if [ "$SSL" = 'yes' ]; then
 		del_web_config "$PROXY_SYSTEM" "$PROXY.stpl"
 	fi
-	if [ -e "/etc/$PROXY_SYSTEM/conf.d/01_caching_pool.conf" ]; then
-		sed -i "/=$domain:/d" "/etc/$PROXY_SYSTEM/conf.d/01_caching_pool.conf"
-	fi
+	remove_pool_zone "/etc/$PROXY_SYSTEM/conf.d/01_caching_pool.conf" "$domain"
 fi
 
 # Deleting web stats
 if [ -n "$STATS" ] && [ "$STATS" != 'no' ]; then
-	sed -i "/ $domain$/d" $CONF_DIR/queue/webstats.pipe
+	sed -i "/ ${domain//./\\.}$/d" $CONF_DIR/queue/webstats.pipe
 	rm -f $HOMEDIR/$user/conf/web/$domain/$STATS.conf
 	rm -f /etc/awstats/$STATS.$domain.conf
 fi
