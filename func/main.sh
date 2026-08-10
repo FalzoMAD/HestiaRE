@@ -642,8 +642,7 @@ get_object_values() {
 
 # Update object value
 update_object_value() {
-	# All helpers local: the escaped $old below used to leak into the CALLER's $old -
-	# h-change-web-domain-ip then fed ips/10\.5\.5\.12 to decrease_ip_value as a PATH
+	# all helpers local: the escaped $old must never leak into a caller's $old
 	local row lnr object varname old new
 	row=$(grep -nF "$2='$3'" "$(_object_conf "$1")")
 	lnr=$(echo $row | cut -f 1 -d ':')

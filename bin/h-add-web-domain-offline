@@ -4,10 +4,8 @@
 #
 # example: h-add-web-domain-offline admin acme.com
 #
-# Serves a static "temporarily offline" page with HTTP 503 in every web model - 503, not
-# 403/404, so search engines treat it as transient and keep the ranking. Admin suspension
-# (h-suspend-web-domain) outranks this switch while both are set. Counterpart:
-# h-delete-web-domain-offline.
+# Serves a static "temporarily offline" page with HTTP 503 in every web model - 503 so
+# search engines treat it as transient. Admin suspension outranks this switch.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -55,7 +53,7 @@ if [ -z "$OFFLINE" ]; then
 fi
 update_object_value 'web' 'DOMAIN' "$domain" '$OFFLINE' 'yes'
 
-# The rebuild picks the offline templates up from the flag
+# rendering lives in prepare_web_domain_values; the rebuild applies it
 $BIN/h-rebuild-web-domain "$user" "$domain" 'no'
 
 #----------------------------------------------------------#

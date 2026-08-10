@@ -357,8 +357,7 @@ rebuild_web_domain_conf() {
 		$BIN/h-delete-fastcgi-cache $user $domain
 		$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
 	fi
-	# Gated on the proxy role: after a switch to a proxyless model the flag stays recorded
-	# (and springs back on the way back), but the add command would refuse
+	# gated on the proxy role: in a proxyless model the flag stays recorded but inert
 	if [ "$PROXY_CACHE" = 'yes' ] && [ "$PROXY_SYSTEM" = 'nginx' ]; then
 		$BIN/h-delete-web-domain-cache $user $domain
 		$BIN/h-add-web-domain-cache $user $domain "$PROXY_CACHE_DURATION"

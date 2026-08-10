@@ -74,8 +74,7 @@ if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
 	fi
 fi
 
-# Check for webmail - only when a mail domain of this name actually exists, or the
-# rebuild errors out on every web-only domain
+# Check for webmail (only when a mail domain of this name exists)
 if [ -n "$IMAP_SYSTEM" ] && grep -qF "DOMAIN='$domain'" "$USER_DATA/mail.conf" 2> /dev/null; then
 	$BIN/h-rebuild-mail-domain "$user" "$domain"
 fi

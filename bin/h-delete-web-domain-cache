@@ -4,9 +4,7 @@
 #
 # example: h-delete-web-domain-cache user domain.tld
 #
-# Counterpart to h-add-web-domain-cache: removes the fragment, the per-domain zone file and
-# the cached data. Plain rm - the zone has its own file, nothing is pattern-matched out of a
-# shared pool.
+# Counterpart to h-add-web-domain-cache: removes fragment, zone file and cached data.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

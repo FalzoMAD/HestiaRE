@@ -221,13 +221,11 @@ prepare_web_domain_values() {
 		sdocroot="$docroot"
 	fi
 
-	# Suspend/offline render from share/, independent of the selectable template tree - the
-	# tree has no apache 'suspended', which used to yield a 0-byte vhost. Admin suspension
-	# outranks the customer switch, and unsuspending returns to the customer's offline state,
-	# not to online - deliberate, not evaluation order: an admin action must not silently
-	# clear a customer's choice. TPL/PROXY become the share-file basenames for this render
-	# only; nothing is written back to web.conf. Reset first: this runs once per domain in a
-	# rebuild loop, and a stale override would render the NEXT domain suspended too.
+	# Suspend/offline render from share/ so every model shares one path (the selectable
+	# tree has no apache variant). Admin suspension outranks the customer switch, and
+	# unsuspending returns to the customer's offline state - an admin action must not
+	# clear a customer's choice. TPL/PROXY are overridden for this render only. Reset per
+	# domain, or a rebuild loop would render the NEXT domain suspended too.
 	WEBTPL_OVERRIDE=''
 	if [ "$SUSPENDED" = 'yes' ]; then
 		docroot="$HESTIA/templates/web/suspend"
@@ -271,9 +269,8 @@ add_web_config() {
 		WEBTPL_LOCATION="$WEBTPL_OVERRIDE"
 	fi
 
-	# A missing template would become a 0-byte vhost that apache2 -t accepts, silently
-	# falling through to the box default vhost. Warn + skip, not check_result: an exit
-	# would abort a rebuild loop mid-way over one broken record.
+	# A missing template would become a 0-byte vhost that apache2 -t accepts. Warn +
+	# skip, not check_result: an exit would abort a rebuild loop over one broken record.
 	if [ ! -f "${WEBTPL_LOCATION}/$2" ]; then
 		echo "Error: web template ${WEBTPL_LOCATION}/$2 doesn't exist - $domain vhost not written" >&2
 		# Tallied for the rebuild summary - the stderr line alone drowns in a nightly run

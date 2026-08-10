@@ -52,7 +52,7 @@ if [ -z "$OFFLINE" ]; then
 fi
 update_object_value 'web' 'DOMAIN' "$domain" '$OFFLINE' 'no'
 
-# The rebuild restores the regular vhost from the domain's own template values
+# the rebuild restores the regular vhost
 $BIN/h-rebuild-web-domain "$user" "$domain" 'no'
 
 #----------------------------------------------------------#
