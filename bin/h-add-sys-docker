@@ -135,6 +135,8 @@ for u in docker.service docker.socket; do
 	fi
 done
 
+docker_drop_orphan_bridge
+
 # No cgroup delegation drop-in: systemd already ships user@.service with
 # `Delegate=pids memory cpu` (verified down to systemd 252), which is what --memory,
 # --cpus and `docker stats` need. Adding cpuset/io on the template would widen every

@@ -329,6 +329,30 @@ PROC_HARDENING_UNIT='hestia-proc-hardening.service'
 
 proc_visible_gid() { getent group "$PROC_VISIBLE_GROUP" 2> /dev/null | cut -d: -f3; }
 
+# Remove the docker0 bridge the rootful daemon leaves behind (#579).
+#
+# `apt-get install docker-ce` starts the rootful daemon - systemd enables and starts the unit as
+# part of the package install - and it creates docker0 before h-add-sys-docker gets to disable it
+# again. The bridge then stays: empty, `down`, and holding 172.17.0.0/16.
+#
+# It is not merely untidy. `ip route get 172.17.0.2` answers `dev docker0 src 172.17.0.1`, so a
+# route to a rootless container's address looks like it exists while the packets go nowhere - the
+# containers live in their own netns with no path from the host. That costs real time in exactly
+# the area where per-user Docker is debugged.
+#
+# Only when empty. A host where someone deliberately runs rootful Docker has interfaces enslaved to
+# the bridge, and removing it there would cut live containers off.
+docker_drop_orphan_bridge() {
+	ip -o link show docker0 > /dev/null 2>&1 || return 0
+	if [ "$(ip -o link show master docker0 2> /dev/null | wc -l)" -gt 0 ]; then
+		echo "Note: docker0 has attached interfaces - left alone (rootful Docker in use?)." >&2
+		return 0
+	fi
+	ip link delete docker0 > /dev/null 2>&1 \
+		&& echo "Removed the orphaned docker0 bridge (left by the packaged rootful daemon)."
+	return 0
+}
+
 # Re-runnable: proc_visible_add plus a re-run is how "enable Docker" wires a companion
 # in. Returns 0 when hidepid is not applicable (container), so 0 does not imply the
 # unit is installed.

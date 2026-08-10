@@ -116,6 +116,23 @@ opens above it.
 
 ### Fixed
 
+- **The packaged rootful daemon left a docker0 bridge behind** (#579). `apt-get install docker-ce` starts
+  the rootful daemon as part of the package install, and it creates `docker0` before `h-add-sys-docker`
+  disables it again - so the bridge stayed: empty, `down`, and holding 172.17.0.0/16. Reproduced on all
+  four targets after a fresh v0.14.3 install, so it was a property of the install rather than a test
+  artefact.
+
+  It is more than untidy. `ip route get 172.17.0.2` answered `dev docker0 src 172.17.0.1`, so a route to a
+  rootless container's address looked like it existed while the packets went nowhere - the containers live
+  in their companion's own network namespace, which the host has no path into. That costs real time in
+  exactly the area where per-user Docker gets debugged.
+
+  Both `h-add-sys-docker` and `h-delete-sys-docker` now remove it, but only when no interface is enslaved
+  to it - a host deliberately running rootful Docker keeps its bridge and its containers. A smoke guard
+  covers the invariant, and skips rather than fails where the bridge is genuinely in use. Verified that
+  rootless containers are unaffected: own namespace, published port bound and answering, egress intact.
+
+
 - **Docker backups dropped named volumes** (#389). The exclusion that keeps container images out of a
   customer archive covered the whole Docker data root - and `volumes/` sits inside it, which is where a
   stock compose file puts its database. Reproduced: the volume content was on disk and the archive

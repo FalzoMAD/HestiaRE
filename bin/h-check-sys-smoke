@@ -610,6 +610,24 @@ check_web_switch_prechecks() {
 	fi
 }
 
+# check_docker_bridge - with per-user rootless Docker there must be no docker0 on the host. The
+# packaged rootful daemon starts once during apt and leaves one behind (#579), which claims
+# 172.17.0.0/16 and answers `ip route get` for container addresses it cannot actually reach.
+check_docker_bridge() {
+	local attached
+	if ! ip -o link show docker0 > /dev/null 2>&1; then
+		ok "no host docker0 bridge (containers live in the companions' netns)"
+		return
+	fi
+	attached=$(ip -o link show master docker0 2> /dev/null | wc -l)
+	if [ "$attached" -gt 0 ]; then
+		skip "docker0 present with $attached attached interface(s) - rootful Docker in use, not ours"
+	else
+		no "orphaned docker0 bridge on the host" \
+			"empty and down, but claims 172.17.0.0/16 and makes ip route get answer for unreachable container IPs"
+	fi
+}
+
 # check_key_registries - conf/defaults/*.conf must exist and match the key sets compiled into
 # func/syshealth.sh. A registry that is missing, stale or duplicated makes the repair functions
 # skip exactly the keys they exist to add, and does it silently (#559) - which is the whole reason
@@ -926,6 +944,7 @@ check_realip_header
 # fail-open is invisible to users: verify the live mount, not the intent (#565).
 check_proc_hardening
 # #388: guard the allocator's preconditions, since a regression only shows up much later.
+is_on "${COMPONENT_ADDON_DOCKER:-}" && check_docker_bridge
 check_key_registries
 check_identity_band
 
