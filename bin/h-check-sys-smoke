@@ -681,26 +681,38 @@ check_vhost_nonempty() {
 		no "$miss empty vhost config(s)" "$first"
 	fi
 }
-# check_object_counters - derived U_* counters must match the counted objects. The $old
-# leak showed how they drift: increase ran, decrease died, U_WEB_DOMAINS crept up by one
-# per failed save - invisible without recounting.
+# check_object_counters - the record-derived U_* counters against a recount, using the
+# same derivation rules as h-update-user-counters. Not covered, deliberately: U_DISK*/
+# U_BANDWIDTH (measured, not derivable from records), U_USERS and the SUSPENDED_* mirrors.
 check_object_counters() {
-	local u ud key f stored real drift=0 first="" checked=0 ipf ip
+	local u ud stored drift=0 first="" checked=0 ipf ip real
+	_ctr() {
+		stored=$(grep -o "${1}='[0-9]*'" "$ud/user.conf" 2> /dev/null | head -1 | tr -dc 0-9)
+		[ -n "$stored" ] || return 0
+		checked=$((checked + 1))
+		if [ "$stored" != "$2" ]; then
+			drift=$((drift + 1))
+			[ -z "$first" ] && first="$u $1 stored=$stored counted=$2"
+		fi
+	}
+	# grep -c prints its count even at rc 1 (zero matches) - a fallback echo would
+	# double the output
+	_cnt() {
+		[ -f "$2" ] || { echo 0; return; }
+		grep -c "$1" "$2" || true
+	}
 	for u in $("$BIN/h-list-users" list 2> /dev/null); do
 		ud="$CONF_DIR/users/$u"
-		for pair in U_WEB_DOMAINS:web.conf U_MAIL_DOMAINS:mail.conf U_DATABASES:db.conf U_CRON_JOBS:cron.conf; do
-			key=${pair%%:*}
-			f=${pair#*:}
-			stored=$(grep -o "${key}='[0-9]*'" "$ud/user.conf" 2> /dev/null | head -1 | tr -dc 0-9)
-			[ -n "$stored" ] || continue
-			real=0
-			[ -f "$ud/$f" ] && real=$(grep -c . "$ud/$f")
-			checked=$((checked + 1))
-			if [ "$stored" != "$real" ]; then
-				drift=$((drift + 1))
-				[ -z "$first" ] && first="$u $key stored=$stored counted=$real"
-			fi
-		done
+		_ctr U_WEB_DOMAINS "$(_cnt . "$ud/web.conf")"
+		_ctr U_WEB_SSL "$(_cnt "SSL='yes'" "$ud/web.conf")"
+		_ctr U_WEB_ALIASES "$(grep -o "ALIAS='[^']*'" "$ud/web.conf" 2> /dev/null \
+			| awk -F"'" '{ if ($2 != "") s += split($2, a, ",") } END { print s + 0 }')"
+		_ctr U_MAIL_DOMAINS "$(_cnt . "$ud/mail.conf")"
+		_ctr U_MAIL_DKIM "$(_cnt "DKIM='yes'" "$ud/mail.conf")"
+		_ctr U_MAIL_ACCOUNTS "$(cat "$ud"/mail/*.conf 2> /dev/null | grep -c "ACCOUNT='" || true)"
+		_ctr U_DATABASES "$(_cnt . "$ud/db.conf")"
+		_ctr U_CRON_JOBS "$(_cnt . "$ud/cron.conf")"
+		_ctr U_BACKUPS "$(_cnt . "$ud/backup.conf")"
 	done
 	for ipf in "$CONF_DIR/ips"/*; do
 		[ -f "$ipf" ] || continue
