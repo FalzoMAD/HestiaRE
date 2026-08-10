@@ -223,7 +223,9 @@ prepare_web_domain_values() {
 
 	# Suspend/offline render from share/, independent of the selectable template tree - the
 	# tree has no apache 'suspended', which used to yield a 0-byte vhost. Admin suspension
-	# outranks the customer switch. TPL/PROXY become the share-file basenames for this render
+	# outranks the customer switch, and unsuspending returns to the customer's offline state,
+	# not to online - deliberate, not evaluation order: an admin action must not silently
+	# clear a customer's choice. TPL/PROXY become the share-file basenames for this render
 	# only; nothing is written back to web.conf. Reset first: this runs once per domain in a
 	# rebuild loop, and a stale override would render the NEXT domain suspended too.
 	WEBTPL_OVERRIDE=''
@@ -398,7 +400,8 @@ replace_web_config() {
 	fi
 
 	if [ -e "$conf" ]; then
-		sed -i "s|$old|$new|g" $conf
+		# dots escaped: the old IP is a sed pattern here
+		sed -i "s|${old//./\\.}|$new|g" $conf
 	fi
 }
 
