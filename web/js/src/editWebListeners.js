@@ -49,18 +49,19 @@ export default function handleEditWebListeners() {
 		});
 	}
 
-	// Listen to "Advanced Options -> Proxy Template" select menu to
-	// show "Purge Nginx Cache" button if "caching" selected
-	const proxyTemplateSelect = document.querySelector('.js-proxy-template-select');
+	// Show the "Purge Nginx Cache" button while either cache switch is on
 	const clearCacheButton = document.querySelector('.js-clear-cache-button');
-	if (proxyTemplateSelect && clearCacheButton) {
-		proxyTemplateSelect.addEventListener('change', () => {
-			// NOTE: Match "caching" and "caching-*" values
-			if (proxyTemplateSelect.value === 'caching' || proxyTemplateSelect.value.match(/^caching-/)) {
+	const cacheChecks = ['#v_nginx_cache_check', '#v_proxy_cache_check']
+		.map((sel) => document.querySelector(sel))
+		.filter(Boolean);
+	if (clearCacheButton && cacheChecks.length) {
+		const syncCacheButton = () => {
+			if (cacheChecks.some((c) => c.checked)) {
 				clearCacheButton.classList.remove('u-hidden');
 			} else {
 				clearCacheButton.classList.add('u-hidden');
 			}
-		});
+		};
+		cacheChecks.forEach((c) => c.addEventListener('change', syncCacheButton));
 	}
 }
