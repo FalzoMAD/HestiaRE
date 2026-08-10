@@ -63,8 +63,8 @@ rm -f "$HOMEDIR/$user/conf/web/$domain/$STATS.conf"
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Deleting pipe command
-sed -i "/ $domain$/d" $CONF_DIR/queue/webstats.pipe
+# Deleting pipe command. Dots escaped: a.b.com must not take aXb.com's entry (#583)
+sed -i "/ ${domain//./\\.}$/d" $CONF_DIR/queue/webstats.pipe
 
 # Update config
 update_object_value 'web' 'DOMAIN' "$domain" '$STATS' ''
