@@ -179,7 +179,7 @@ domain: ${domain}
 $BIN/h-add-letsencrypt-user $user
 if [ "$?" -ne 0 ]; then
 	touch $CONF_DIR/queue/letsencrypt.pipe
-	# Dots escaped here and below: a.b.com must not take aXb.com's queue entry (#583)
+	# Dots escaped here and below - a.b.com must not take aXb.com's queue entry
 	sed -i "/ ${domain//./\\.} /d" $CONF_DIR/queue/letsencrypt.pipe
 	send_notice "LETSENCRYPT" "Account registration failed ($user)"
 	check_result "$E_CONNECT" "LE account registration ($user)" > /dev/null

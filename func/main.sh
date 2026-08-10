@@ -674,10 +674,9 @@ add_object_key() {
 	fi
 }
 
-# Remove a domain's cache-zone line from a shared nginx pool file (#583).
-# Literal match on the full keys_zone prefix - the domain must never act as a regex here:
-# a dot is a wildcard, so a.b.com would also take aXb.com's zone with it, and with a vhost
-# still referencing the zone, nginx -t fails box-wide from then on.
+# Remove a domain's cache-zone line from a shared nginx pool file. Literal match on the
+# full keys_zone prefix: a dot in the domain is a regex wildcard, so a.b.com would take
+# aXb.com's zone with it - and a vhost still referencing the zone breaks nginx -t box-wide.
 remove_pool_zone() {
 	local conf="$1" domain="$2"
 	[ -e "$conf" ] || return 0
@@ -685,12 +684,10 @@ remove_pool_zone() {
 	mv -f "$conf.tmp" "$conf"
 }
 
-# Literal line removal for the account-keyed mail files (#583). A literal comparison
-# rather than an escaped sed pattern: is_localpart_format_valid admits [alnum]._- today,
-# where the dot is the lone metacharacter - but the day it admits e.g. '+', any
-# escape-the-dot approach under-escapes silently. index()==1 anchors at line start.
-# Owner and mode are copied onto the rewrite: passwd is dovecot:mail, and a root:root
-# rewrite would cut dovecot off from auth.
+# Literal line removal for the account-keyed mail files: any widening of the localpart
+# charset would silently under-escape a sed pattern. index()==1 anchors at line start.
+# Owner/mode are copied onto the rewrite - passwd is dovecot:mail, and a root:root rewrite
+# would cut dovecot off from auth.
 remove_line_by_prefix() {
 	local file="$1" prefix="$2"
 	[ -e "$file" ] || return 0

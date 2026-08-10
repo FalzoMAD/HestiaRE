@@ -79,8 +79,7 @@ fi
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Delete domain config. Dots escaped: as a wildcard, deleting a.b.com would also drop
-# the user's aXb.com record (#583)
+# Delete domain config - dots escaped, or a.b.com also drops the aXb.com record
 sed -i "/DOMAIN='${domain//./\\.}'/ d" $USER_DATA/mail.conf
 rm -f $USER_DATA/mail/$domain.conf
 rm -f $USER_DATA/mail/$domain.pem

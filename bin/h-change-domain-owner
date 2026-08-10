@@ -114,8 +114,7 @@ if [ -n "$web_data" ]; then
 		web_data=$(echo "$web_data" | sed "s/$old_str/$new_str/")
 	fi
 
-	# Move config. Dots escaped: as a wildcard, moving a.b.com would also drop the
-	# old owner's aXb.com record (#583)
+	# Move config - dots escaped, or moving a.b.com also drops the old owner's aXb.com record
 	sed -i "/DOMAIN='${domain//./\\.}'/d" $CONF_DIR/users/$owner/web.conf
 	echo "$web_data" >> $CONF_DIR/users/$user/web.conf
 
@@ -157,7 +156,7 @@ if [ -n "$mail_data" ]; then
 		mkdir -p $HOMEDIR/$user/conf/mail/$domain/
 	fi
 
-	# Move config (dots escaped, see the web.conf move above)
+	# Move config (dots escaped, as above)
 	sed -i "/DOMAIN='${domain//./\\.}'/d" $CONF_DIR/users/$owner/mail.conf
 	mail_data=$(echo "$mail_data" | sed "s/SUSPENDED='no'/SUSPENDED='yes'/")
 	echo "$mail_data" >> $CONF_DIR/users/$user/mail.conf

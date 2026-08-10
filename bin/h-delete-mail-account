@@ -51,8 +51,7 @@ check_hestia_demo_mode
 if [[ "$MAIL_SYSTEM" =~ exim ]]; then
 	aliases=$(get_object_value "mail/$domain" 'ACCOUNT' "$account" '$ALIAS')
 	for al in ${aliases//,/ }; do
-		# Literal comparisons, not sed patterns: deleting john.doe must not take
-		# johnXdoe's lines (#583)
+		# Literal comparisons, not sed patterns - deleting john.doe must not take johnXdoe's lines
 		remove_line_by_prefix $HOMEDIR/$user/conf/mail/$domain/aliases "$al@$domain_idn:$account"
 	done
 

@@ -86,8 +86,7 @@ if [ "$FASTCGI_CACHE" = "yes" ]; then
 	$BIN/h-delete-fastcgi-cache "$user" "$domain"
 fi
 
-# Deleting domain from web.conf. Dots escaped: as a wildcard, deleting a.b.com would
-# also drop the user's aXb.com record (#583)
+# Deleting domain from web.conf - dots escaped, or a.b.com also drops the aXb.com record
 sed -i "/DOMAIN='${domain//./\\.}'/ d" "$USER_DATA/web.conf"
 
 # Deleting proxy

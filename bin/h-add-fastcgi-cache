@@ -84,8 +84,8 @@ str="fastcgi_cache_path /var/cache/nginx/micro/$domain levels=1:2"
 str="$str keys_zone=$domain:10m max_size=512m inactive=30m use_temp_path=off;"
 conf='/etc/nginx/conf.d/fastcgi_cache_pool.conf'
 if [ -f "$conf" ]; then
-	# -F: with the dot as a wildcard, a.b.com would "find" aXb.com's zone and skip its own
-	# append - the vhost then references a zone that does not exist and nginx -t fails (#583)
+	# -F: with the dot as a wildcard, a.b.com would "find" aXb.com's zone, skip its own
+	# append, and leave the vhost referencing a zone that does not exist
 	if [ -z "$(grep -F "keys_zone=${domain}:" $conf)" ]; then
 		echo "$str" >> $conf
 	fi

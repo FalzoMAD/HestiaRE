@@ -744,9 +744,8 @@ rebuild_mail_domain_conf() {
 
 	# Add missing SSL configuration flags to existing domains
 	# for per-domain SSL migration
-	# -F and the full DOMAIN='..' anchor: with the dot as a wildcard, a.b.com would "find"
-	# aXb.com's SSL flags and skip its own - and the old unanchored "$domain'" pattern also
-	# matched inside other fields, e.g. a CATCHALL='info@a.b.com' of another record (#583)
+	# -F + full DOMAIN='..' anchor: a wildcard dot would find aXb.com's flags and skip its
+	# own, and an unanchored pattern could match inside another record's CATCHALL value
 	sslcheck=$(grep -F "DOMAIN='$domain'" $USER_DATA/mail.conf | grep SSL)
 	if [ -z "$sslcheck" ]; then
 		sed -i "s|DOMAIN='${domain//./\\.}'|DOMAIN='$domain' SSL='no' LETSENCRYPT='no'|" $USER_DATA/mail.conf

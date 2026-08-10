@@ -255,15 +255,12 @@ add_web_config() {
 		fi
 	fi
 
-	# A missing template must fail loudly: cat|sed below would write a 0-byte vhost that
-	# apache2 -t accepts, and the domain silently falls through to the box default vhost
-	# (found via TPL='suspended' on apache-only, #586). A warning + skip, not check_result:
-	# an exit here would abort a rebuild loop mid-way and leave the remaining domains
-	# without their rebuild over one broken record.
+	# A missing template would become a 0-byte vhost that apache2 -t accepts, silently
+	# falling through to the box default vhost. Warn + skip, not check_result: an exit
+	# would abort a rebuild loop mid-way over one broken record.
 	if [ ! -f "${WEBTPL_LOCATION}/$2" ]; then
 		echo "Error: web template ${WEBTPL_LOCATION}/$2 doesn't exist - $domain vhost not written" >&2
-		# Tallied so a rebuild loop can print a closing summary: the stderr line above is
-		# easily lost in a nightly run's output.
+		# Tallied for the rebuild summary - the stderr line alone drowns in a nightly run
 		web_config_skipped=$((${web_config_skipped:-0} + 1))
 		return "$E_NOTEXIST"
 	fi

@@ -41,12 +41,9 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
-# The default web PHP version is tracked solely by update-alternatives and read by
-# multiphp_default_version, so it must switch BEFORE the rebuild loop: the rebuild
-# recreates every default-domain pool against it. Set at the end (as until #585), the
-# whole stock was rebuilt on the OLD version and the switch only took effect on the
-# next unrelated rebuild. No shared www pool to re-home - every domain has its own
-# per-domain pool, so switching needs only rebuild + backend restart (#397).
+# update-alternatives must switch BEFORE the rebuild loop: the rebuild reads the default
+# via multiphp_default_version and recreates every default-domain pool against it. No
+# shared www pool to re-home - each domain has its own pool, so rebuild + restart suffice.
 update-alternatives --set php /usr/bin/php$version
 
 for user in $("$BIN/h-list-users" list); do

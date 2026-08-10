@@ -120,9 +120,8 @@ for domain in $($BIN/h-list-web-domains $user plain | cut -f 1); do
 	rebuild_web_domain_conf
 done
 
-# Closing balance, not exit code: web-model.sh treats a nonzero rebuild as switch failure,
-# so one broken record must not veto a model switch - but it must not vanish into a
-# nightly log either (#583)
+# Balance line, not exit code: web-model.sh treats a nonzero rebuild as switch failure,
+# and one broken record must not veto a model switch
 if [ "${web_config_skipped:-0}" -gt 0 ]; then
 	echo "Warning: $web_config_skipped vhost config(s) skipped over missing templates (see errors above)."
 fi
