@@ -58,12 +58,9 @@ fi
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-if [ -z "$PROXY_CACHE" ]; then
-	add_object_key "web" 'DOMAIN' "$domain" 'PROXY_CACHE' 'ALIAS'
-fi
-if [ -z "$PROXY_CACHE_DURATION" ]; then
-	add_object_key "web" 'DOMAIN' "$domain" 'PROXY_CACHE_DURATION' 'ALIAS'
-fi
+# add_object_key is idempotent on key presence, so no value guard needed
+add_object_key "web" 'DOMAIN' "$domain" 'PROXY_CACHE' 'ALIAS'
+add_object_key "web" 'DOMAIN' "$domain" 'PROXY_CACHE_DURATION' 'ALIAS'
 
 update_object_value 'web' 'DOMAIN' "$domain" '$PROXY_CACHE' 'no'
 update_object_value 'web' 'DOMAIN' "$domain" '$PROXY_CACHE_DURATION' '0s'
