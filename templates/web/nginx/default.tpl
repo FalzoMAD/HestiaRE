@@ -21,6 +21,9 @@ server {
 	location / {
 		proxy_pass http://%ip%:%web_port%;
 
+		# per-domain fragments (a location / block cannot be replaced by a later include)
+		include %home%/%user%/conf/web/%domain%/nginx.location.d/*.conf;
+
 		location ~* ^.+\.(%proxy_extensions%)$ {
 			try_files  $uri @fallback;
 

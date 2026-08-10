@@ -628,6 +628,111 @@ check_docker_bridge() {
 	fi
 }
 
+
+# check_web_cache_zones - a cache flag whose zone is gone breaks nginx -t box-wide: the
+# vhost references a zone nginx never loaded.
+check_web_cache_zones() {
+	local u d line miss=0 first="" checked=0
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		[ -f "$CONF_DIR/users/$u/web.conf" ] || continue
+		while IFS= read -r line; do
+			d=$(sed -n "s/.*DOMAIN='\([^']*\)'.*/\1/p" <<< "$line")
+			[ -n "$d" ] || continue
+			# Same role gating as the rebuild reapply: after a switch to a proxyless model the
+			# flag stays recorded (inert) and MUST NOT count as a missing zone
+			if [[ "$line" == *"PROXY_CACHE='yes'"* ]] && [ "$PROXY_SYSTEM" = 'nginx' ]; then
+				checked=$((checked + 1))
+				if [ ! -f "/etc/nginx/conf.d/cache-zone.$d.conf" ]; then
+					miss=$((miss + 1))
+					[ -z "$first" ] && first="proxy zone missing: $u/$d"
+				fi
+			fi
+			if [[ "$line" == *"FASTCGI_CACHE='yes'"* ]] && [ "$WEB_SYSTEM" = 'nginx' ]; then
+				checked=$((checked + 1))
+				if ! grep -qF "keys_zone=$d:" /etc/nginx/conf.d/fastcgi_cache_pool.conf 2> /dev/null; then
+					miss=$((miss + 1))
+					[ -z "$first" ] && first="fastcgi zone missing: $u/$d"
+				fi
+			fi
+		done < "$CONF_DIR/users/$u/web.conf"
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "cache zones match their flags ($checked flag(s))"
+	else
+		no "$miss cache zone(s) missing for enabled flags" "$first"
+	fi
+}
+
+# check_vhost_nonempty - a 0-byte vhost passes apache2 -t and the domain silently falls
+# through to the box default vhost.
+check_vhost_nonempty() {
+	local f n=0 miss=0 first=""
+	for f in "/etc/$WEB_SYSTEM/conf.d/domains"/*.conf "/etc/${PROXY_SYSTEM:-none}/conf.d/domains"/*.conf; do
+		[ -e "$f" ] || continue
+		n=$((n + 1))
+		if [ ! -s "$f" ]; then
+			miss=$((miss + 1))
+			[ -z "$first" ] && first="$f is empty"
+		fi
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "no empty vhost configs ($n checked)"
+	else
+		no "$miss empty vhost config(s)" "$first"
+	fi
+}
+# check_object_counters - the record-derived U_* counters against a recount, using the
+# same derivation rules as h-update-user-counters. Not covered, deliberately: U_DISK*/
+# U_BANDWIDTH (measured, not derivable from records), U_USERS and the SUSPENDED_* mirrors.
+check_object_counters() {
+	local u ud stored drift=0 first="" checked=0 ipf ip real
+	_ctr() {
+		stored=$(grep -o "${1}='[0-9]*'" "$ud/user.conf" 2> /dev/null | head -1 | tr -dc 0-9)
+		[ -n "$stored" ] || return 0
+		checked=$((checked + 1))
+		if [ "$stored" != "$2" ]; then
+			drift=$((drift + 1))
+			[ -z "$first" ] && first="$u $1 stored=$stored counted=$2"
+		fi
+	}
+	# grep -c prints its count even at rc 1 (zero matches) - a fallback echo would
+	# double the output
+	_cnt() {
+		[ -f "$2" ] || { echo 0; return; }
+		grep -c "$1" "$2" || true
+	}
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		ud="$CONF_DIR/users/$u"
+		_ctr U_WEB_DOMAINS "$(_cnt . "$ud/web.conf")"
+		_ctr U_WEB_SSL "$(_cnt "SSL='yes'" "$ud/web.conf")"
+		_ctr U_WEB_ALIASES "$(grep -o "ALIAS='[^']*'" "$ud/web.conf" 2> /dev/null \
+			| awk -F"'" '{ if ($2 != "") s += split($2, a, ",") } END { print s + 0 }')"
+		_ctr U_MAIL_DOMAINS "$(_cnt . "$ud/mail.conf")"
+		_ctr U_MAIL_DKIM "$(_cnt "DKIM='yes'" "$ud/mail.conf")"
+		_ctr U_MAIL_ACCOUNTS "$(cat "$ud"/mail/*.conf 2> /dev/null | grep -c "ACCOUNT='" || true)"
+		_ctr U_DATABASES "$(_cnt . "$ud/db.conf")"
+		_ctr U_CRON_JOBS "$(_cnt . "$ud/cron.conf")"
+		_ctr U_BACKUPS "$(_cnt . "$ud/backup.conf")"
+	done
+	for ipf in "$CONF_DIR/ips"/*; do
+		[ -f "$ipf" ] || continue
+		ip=$(basename "$ipf")
+		stored=$(grep -o "U_WEB_DOMAINS='[0-9]*'" "$ipf" 2> /dev/null | head -1 | tr -dc 0-9)
+		[ -n "$stored" ] || continue
+		real=$(grep -hF "IP='$ip'" "$CONF_DIR/users"/*/web.conf 2> /dev/null | grep -c .)
+		checked=$((checked + 1))
+		if [ "$stored" != "$real" ]; then
+			drift=$((drift + 1))
+			[ -z "$first" ] && first="ip $ip U_WEB_DOMAINS stored=$stored counted=$real"
+		fi
+	done
+	if [ "$drift" -eq 0 ]; then
+		ok "object counters match the counted objects ($checked checked)"
+	else
+		no "$drift counter(s) drifted from their objects" "$first"
+	fi
+}
+
 # check_key_registries - conf/defaults/*.conf must exist and match the key sets compiled into
 # func/syshealth.sh. A registry that is missing, stale or duplicated makes the repair functions
 # skip exactly the keys they exist to add, and does it silently (#559) - which is the whole reason
@@ -936,6 +1041,11 @@ check_v_symlinks_resolve
 check_info_headers
 # a policy fragment (crowdsec Layer A, bot rate limiting) missing from one template is a silent bypass.
 check_policy_fragment_coverage
+# a cache flag without its zone (or a 0-byte vhost) fails silently until the next reload.
+if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
+	check_web_cache_zones
+fi
+check_vhost_nonempty
 # #120: the model-switch freeze + pre-check coverage cannot rot; a crash is surfaced.
 check_web_lock_coverage
 check_web_switch_prechecks
@@ -945,6 +1055,8 @@ check_realip_header
 check_proc_hardening
 # #388: guard the allocator's preconditions, since a regression only shows up much later.
 is_on "${COMPONENT_ADDON_DOCKER:-}" && check_docker_bridge
+# derived counters drift silently when an increase/decrease pair dies half way.
+check_object_counters
 check_key_registries
 check_identity_band
 

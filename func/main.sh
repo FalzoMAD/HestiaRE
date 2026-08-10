@@ -642,11 +642,13 @@ get_object_values() {
 
 # Update object value
 update_object_value() {
+	# all helpers local: the escaped $old must never leak into a caller's $old
+	local row lnr object varname old new
 	row=$(grep -nF "$2='$3'" "$(_object_conf "$1")")
 	lnr=$(echo $row | cut -f 1 -d ':')
 	object=$(echo $row | sed "s/^$lnr://")
 	parse_object_kv_list "$object"
-	local varname="${4#\$}"
+	varname="${4#\$}"
 	old="${!varname}"
 	# the old value is used as a sed BRE pattern: every metacharacter must be
 	# escaped or values like '[SPAM]' silently never match (bracket expression)
@@ -659,6 +661,7 @@ update_object_value() {
 
 # Add object key
 add_object_key() {
+	local row lnr object varname old
 	row=$(grep -n "$2='$3'" "$(_object_conf "$1")")
 	lnr=$(echo "$row" | cut -f 1 -d ':')
 	object=$(echo "$row" | sed "s/^$lnr://")

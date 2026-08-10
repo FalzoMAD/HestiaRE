@@ -7,7 +7,7 @@
 			</a>
 		</div>
 		<div class="toolbar-buttons">
-			<a href="/delete/web/cache/?<?= tohtml(http_build_query(["domain" => $v_domain, "token" => $_SESSION['token']])) ?>" class="button button-secondary js-clear-cache-button <?php if (!($v_nginx_cache == 'yes' || (($v_proxy_template == 'caching' || is_int(strpos($v_proxy_template, 'caching-'))) && $_SESSION['PROXY_SYSTEM'] == 'nginx'))) { echo "u-hidden"; } ?>">
+			<a href="/delete/web/cache/?<?= tohtml(http_build_query(["domain" => $v_domain, "token" => $_SESSION['token']])) ?>" class="button button-secondary js-clear-cache-button <?php if (!($v_nginx_cache == 'yes' || $v_proxy_cache == 'yes')) { echo "u-hidden"; } ?>">
 				<i class="fas fa-trash icon-red"></i><?= tohtml( _("Purge NGINX Cache")) ?>
 			</a>
 <button type="submit" class="button" form="main-form">
@@ -28,6 +28,7 @@
 			"showCertificates" => !($v_letsencrypt == "yes" || $v_letsencrypt == "on"),
 			"showAdvanced" => false,
 			"nginxCacheEnabled" => $v_nginx_cache == "yes",
+			"proxyCacheEnabled" => $v_proxy_cache == "yes",
 			"proxySupportEnabled" => !empty($v_proxy),
 			"customDocumentRootEnabled" => !empty($v_custom_doc_root),
 		];
@@ -73,6 +74,28 @@
 					?>
 				</select>
 			</div>
+			<div class="form-check u-mb10">
+				<input class="form-check-input" type="checkbox" name="v_offline_check" id="v_offline_check" <?php if ($v_offline == "yes") echo "checked"; ?>>
+				<label for="v_offline_check">
+					<?= tohtml( _("Take website temporarily offline (visitors see a maintenance page, HTTP 503)")) ?>
+				</label>
+			</div>
+			<?php if (!empty($_SESSION["PROXY_SYSTEM"]) && $_SESSION["PROXY_SYSTEM"] == "nginx") { ?>
+				<div class="form-check u-mb10">
+					<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") echo "checked"; ?>>
+					<label for="v_proxy_cache_check">
+						<?= tohtml( _("Enable proxy cache")) ?>
+					</label>
+				</div>
+				<div x-cloak x-show="proxyCacheEnabled" id="v_proxy_duration" class="u-pl30">
+					<div class="u-mb10">
+						<label for="v_proxy_cache_duration" class="form-label">
+							<?= tohtml( _("Cache Duration")) ?> <span class="optional">(<?= tohtml( _("For example")) ?>: 30s, 10m or 1d)</span>
+						</label>
+						<input type="text" class="form-control" name="v_proxy_cache_duration" id="v_proxy_cache_duration" value="<?= tohtml(trim($v_proxy_cache_duration, "'")) ?>">
+					</div>
+				</div>
+			<?php } ?>
 			<div class="u-mb10">
 				<label for="v_stats" class="form-label"><?= tohtml( _("Web Statistics")) ?></label>
 				<select class="form-select js-stats-select" name="v_stats" id="v_stats">

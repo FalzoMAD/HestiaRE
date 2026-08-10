@@ -38,12 +38,9 @@ is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'web' 'DOMAIN' "$domain"
 is_object_unsuspended 'web' 'DOMAIN' "$domain"
 
-if ! [[ "$duration" =~ ^[0-9].*[s|m|d]$ ]]; then
-	echo "Invalid duration"
-	exit 2
-fi
-
-if [[ "$duration" =~ ^[0].*[s|m|d]$ ]]; then
+# Anchored and no wildcard: the value goes verbatim into the fastcgi_cache fragment in
+# the vhost, so anything but <digits><unit> is an injection (same class as the proxy cache)
+if ! [[ "$duration" =~ ^[1-9][0-9]*[smd]$ ]]; then
 	echo "Invalid duration"
 	exit 2
 fi

@@ -221,14 +221,24 @@ prepare_web_domain_values() {
 		sdocroot="$docroot"
 	fi
 
+	# Suspend/offline render from share/ so every model shares one path (the selectable
+	# tree has no apache variant). Admin suspension outranks the customer switch, and
+	# unsuspending returns to the customer's offline state - an admin action must not
+	# clear a customer's choice. TPL/PROXY are overridden for this render only. Reset per
+	# domain, or a rebuild loop would render the NEXT domain suspended too.
+	WEBTPL_OVERRIDE=''
 	if [ "$SUSPENDED" = 'yes' ]; then
 		docroot="$HESTIA/templates/web/suspend"
-		sdocroot="$HESTIA/templates/web/suspend"
-		if [ "$PROXY_SYSTEM" == "nginx" ]; then
-			PROXY="suspended"
-		else
-			TPL="suspended"
-		fi
+		sdocroot="$docroot"
+		WEBTPL_OVERRIDE="$HESTIA/share/web/suspend/admin"
+	elif [ "$OFFLINE" = 'yes' ]; then
+		docroot="$HESTIA/share/web/suspend/pages/offline"
+		sdocroot="$docroot"
+		WEBTPL_OVERRIDE="$HESTIA/share/web/suspend/offline"
+	fi
+	if [ -n "$WEBTPL_OVERRIDE" ]; then
+		TPL="$WEB_SYSTEM"
+		[ -n "$PROXY_SYSTEM" ] && PROXY="proxy"
 	fi
 }
 
@@ -255,9 +265,12 @@ add_web_config() {
 		fi
 	fi
 
-	# A missing template would become a 0-byte vhost that apache2 -t accepts, silently
-	# falling through to the box default vhost. Warn + skip, not check_result: an exit
-	# would abort a rebuild loop mid-way over one broken record.
+	if [ -n "$WEBTPL_OVERRIDE" ]; then
+		WEBTPL_LOCATION="$WEBTPL_OVERRIDE"
+	fi
+
+	# A missing template would become a 0-byte vhost that apache2 -t accepts. Warn +
+	# skip, not check_result: an exit would abort a rebuild loop over one broken record.
 	if [ ! -f "${WEBTPL_LOCATION}/$2" ]; then
 		echo "Error: web template ${WEBTPL_LOCATION}/$2 doesn't exist - $domain vhost not written" >&2
 		# Tallied for the rebuild summary - the stderr line alone drowns in a nightly run
@@ -384,7 +397,8 @@ replace_web_config() {
 	fi
 
 	if [ -e "$conf" ]; then
-		sed -i "s|$old|$new|g" $conf
+		# dots escaped: the old IP is a sed pattern here
+		sed -i "s|${old//./\\.}|$new|g" $conf
 	fi
 }
 

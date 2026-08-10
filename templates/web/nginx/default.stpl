@@ -33,6 +33,9 @@ server {
 		proxy_ssl_name $host;
 		proxy_pass https://%ip%:%web_ssl_port%;
 
+		# same fragment dir as the plain vhost: one file drives http and https
+		include %home%/%user%/conf/web/%domain%/nginx.location.d/*.conf;
+
 		location ~* ^.+\.(%proxy_extensions%)$ {
 			try_files  $uri @fallback;
 
