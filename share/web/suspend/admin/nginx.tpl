@@ -1,7 +1,6 @@
 #=========================================================================#
-# Default Web Domain Template                                             #
-# DO NOT MODIFY THIS FILE! CHANGES WILL BE LOST WHEN REBUILDING DOMAINS   #
-# https://hestiacp.com/docs/server-administration/web-templates.html      #
+# Rendered for suspended domains in place of the selected template (all web    
+# models share this path); not user-selectable, not a customization point.
 #=========================================================================#
 
 server {
@@ -17,7 +16,7 @@ server {
 
 	include %home%/%user%/conf/web/%domain%/nginx.forcessl.conf*;
 
-	location ~ /\.(?!well-known\/|file) {
+	location ~ /\.(?!well-known\/) {
 		deny all;
 		return 404;
 	}
@@ -27,13 +26,8 @@ server {
 
 		location ~* ^.+\.(jpeg|jpg|png|webp|gif|bmp|ico|svg|css|js)$ {
 			expires max;
-			fastcgi_hide_header "Set-Cookie";
 		}
 	}
 
-	location /error/ {
-		alias %home%/%user%/web/%domain%/document_errors/;
-	}
-
-	include %home%/%user%/conf/web/%domain%/nginx.conf_*;
+	include %home%/%user%/conf/web/%domain%/nginx.conf_lets*;
 }

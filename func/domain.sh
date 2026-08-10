@@ -221,14 +221,24 @@ prepare_web_domain_values() {
 		sdocroot="$docroot"
 	fi
 
+	# Suspend/offline render from share/, independent of the selectable template tree - the
+	# tree has no apache 'suspended', which used to yield a 0-byte vhost. Admin suspension
+	# outranks the customer switch. TPL/PROXY become the share-file basenames for this render
+	# only; nothing is written back to web.conf. Reset first: this runs once per domain in a
+	# rebuild loop, and a stale override would render the NEXT domain suspended too.
+	WEBTPL_OVERRIDE=''
 	if [ "$SUSPENDED" = 'yes' ]; then
 		docroot="$HESTIA/templates/web/suspend"
-		sdocroot="$HESTIA/templates/web/suspend"
-		if [ "$PROXY_SYSTEM" == "nginx" ]; then
-			PROXY="suspended"
-		else
-			TPL="suspended"
-		fi
+		sdocroot="$docroot"
+		WEBTPL_OVERRIDE="$HESTIA/share/web/suspend/admin"
+	elif [ "$OFFLINE" = 'yes' ]; then
+		docroot="$HESTIA/share/web/suspend/pages/offline"
+		sdocroot="$docroot"
+		WEBTPL_OVERRIDE="$HESTIA/share/web/suspend/offline"
+	fi
+	if [ -n "$WEBTPL_OVERRIDE" ]; then
+		TPL="$WEB_SYSTEM"
+		[ -n "$PROXY_SYSTEM" ] && PROXY="proxy"
 	fi
 }
 
@@ -253,6 +263,10 @@ add_web_config() {
 			# check for backend specific template
 			WEBTPL_LOCATION="$WEBTPL/$1/$WEB_BACKEND"
 		fi
+	fi
+
+	if [ -n "$WEBTPL_OVERRIDE" ]; then
+		WEBTPL_LOCATION="$WEBTPL_OVERRIDE"
 	fi
 
 	# A missing template would become a 0-byte vhost that apache2 -t accepts, silently
