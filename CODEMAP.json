@@ -751,6 +751,19 @@
       "smoke_guards": "bin/h-check-sys-smoke (check_web_lock_coverage, check_web_switch_prechecks, check_web_model_sentinel)",
       "no_symlink": "new h-* commands, no v-* symlink",
       "upstream_ref": "hestiare-native"
+    },
+    "web_switches": {
+      "description": "Per-domain switches replacing selectable templates (#219): admin suspension + customer offline render from share/web/suspend/{admin,offline}/ (nginx/proxy/apache2 tpl+stpl, all three web models share one path via WEBTPL_OVERRIDE in prepare_web_domain_values); proxy caching writes a fragment into the domain's nginx.location.d/ (read inside location / of the default proxy vhost) plus one zone file per domain under /etc/nginx/conf.d/cache-zone.<domain>.conf.",
+      "commands": [
+        "bin/h-add-web-domain-offline",
+        "bin/h-delete-web-domain-offline",
+        "bin/h-add-web-domain-cache",
+        "bin/h-delete-web-domain-cache"
+      ],
+      "render": "func/domain.sh prepare_web_domain_values + add_web_config (WEBTPL_OVERRIDE, missing-template guard with skip tally)",
+      "flags": "web.conf OFFLINE / PROXY_CACHE / PROXY_CACHE_DURATION - registered in syshealth_known_keys web and carried through both restore field lists",
+      "guards": "h-check-sys-smoke: check_web_cache_zones (flag without zone), check_vhost_nonempty (0-byte vhost)",
+      "panel": "web/edit/web/ - offline checkbox in the main form, proxy-cache block next to the FastCGI one (PROXY_SYSTEM=nginx only)"
     }
   },
   "service_matrix": {
