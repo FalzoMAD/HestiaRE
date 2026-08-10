@@ -19,6 +19,8 @@ source $HESTIA/func/main.sh
 source $HESTIA/func/firewall.sh
 # shellcheck source=/usr/local/hestia/func/fail2ban.sh
 source $HESTIA/func/fail2ban.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
 # shellcheck source=/usr/local/hestia/func/syshealth.sh
 source $HESTIA/func/syshealth.sh
 # load config file
@@ -681,6 +683,44 @@ check_vhost_nonempty() {
 		no "$miss empty vhost config(s)" "$first"
 	fi
 }
+# check_web_templates_resolvable - a record pointing at a template that no longer exists
+# renders nothing. add_web_config now refuses instead of writing an empty vhost, so the
+# damage is visible - but only on the next rebuild, which may be weeks away.
+check_web_templates_resolvable() {
+	local u line d tpl proxy backend miss=0 first="" checked=0
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		[ -f "$CONF_DIR/users/$u/web.conf" ] || continue
+		while IFS= read -r line; do
+			d=$(sed -n "s/.*DOMAIN='\([^']*\)'.*/\1/p" <<< "$line")
+			[ -n "$d" ] || continue
+			tpl=$(sed -n "s/.*[^_]TPL='\([^']*\)'.*/\1/p" <<< "$line")
+			proxy=$(sed -n "s/.* PROXY='\([^']*\)'.*/\1/p" <<< "$line")
+			backend=$(sed -n "s/.* BACKEND='\([^']*\)'.*/\1/p" <<< "$line")
+			checked=$((checked + 1))
+			if [ -n "$WEB_SYSTEM" ] && [ -n "$tpl" ] \
+				&& [ ! -f "$(web_template_file "$WEB_SYSTEM" "$tpl" 'tpl')" ]; then
+				miss=$((miss + 1))
+				[ -z "$first" ] && first="$u/$d TPL='$tpl'"
+			fi
+			if [ -n "$PROXY_SYSTEM" ] && [ -n "$proxy" ] \
+				&& [ ! -f "$(web_template_file "$PROXY_SYSTEM" "$proxy" 'tpl')" ]; then
+				miss=$((miss + 1))
+				[ -z "$first" ] && first="$u/$d PROXY='$proxy'"
+			fi
+			if [ -n "$WEB_BACKEND" ] && [ -n "$backend" ] \
+				&& [ ! -f "$WEBTPL/$WEB_BACKEND/$backend.tpl" ]; then
+				miss=$((miss + 1))
+				[ -z "$first" ] && first="$u/$d BACKEND='$backend'"
+			fi
+		done < "$CONF_DIR/users/$u/web.conf"
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "every web record resolves to a template ($checked domain(s))"
+	else
+		no "$miss web record value(s) point at a missing template" "$first"
+	fi
+}
+
 # check_object_counters - the record-derived U_* counters against a recount, using the
 # same derivation rules as h-update-user-counters. Not covered, deliberately: U_DISK*/
 # U_BANDWIDTH (measured, not derivable from records), U_USERS and the SUSPENDED_* mirrors.
@@ -1055,6 +1095,8 @@ check_realip_header
 check_proc_hardening
 # #388: guard the allocator's preconditions, since a regression only shows up much later.
 is_on "${COMPONENT_ADDON_DOCKER:-}" && check_docker_bridge
+# a record pointing at a removed template only shows up on the next rebuild.
+check_web_templates_resolvable
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_key_registries

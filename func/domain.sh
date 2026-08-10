@@ -10,11 +10,71 @@
 #                        WEB                               #
 #----------------------------------------------------------#
 
+# Where a template file resolves to. Single source for the validators AND add_web_config:
+# a validator that resolves differently than the renderer either rejects a template that
+# would render, or passes one that then writes an empty vhost.
+web_template_file() {
+	local system="$1" name="$2" ext="$3" loc="$WEBTPL/$1"
+	if [ "$system" != "$PROXY_SYSTEM" ] && [ -n "$WEB_BACKEND" ] \
+		&& [ -f "$loc/$WEB_BACKEND/$name.$ext" ]; then
+		loc="$loc/$WEB_BACKEND"
+	fi
+	echo "$loc/$name.$ext"
+}
+
+# Legacy template values mapped onto what replaced them. Echoes "<name> <side-effect>"
+# and returns 0 for a KNOWN legacy value, 1 for anything else - the distinction is what
+# lets a CLI caller still reject a typo while accepting a value that simply aged out.
+# Side effects: cache = turn the proxy cache switch on, - = none.
+map_legacy_template() {
+	case "$2" in
+		# the caching template became h-add-web-domain-cache
+		caching) echo "default cache" ;;
+		# hosting differed from default only by a chmod trigger from the mod_php era;
+		# phpcgi/phpfcgid/www-data are mod_php-era apache variants
+		hosting | phpcgi | phpfcgid | www-data) echo "default -" ;;
+		# suspension is driven by the SUSPENDED flag now, never by a template value
+		suspended) echo "default -" ;;
+		# a per-version FPM pool template whose version is no longer installed
+		PHP-[0-9]_[0-9] | *-PHP-[0-9]_[0-9]) echo "default -" ;;
+		*) return 1 ;;
+	esac
+}
+
+# Accept a template value on the way in: resolvable values pass through, the rest are
+# mapped and reported on stderr. Echoes "<name> <side-effect>" on one line - the caller
+# splits it with read, so this stays usable inside $(), where an assignment to a global
+# would be lost. Never silent: a reset nobody sees is how a customer loses a feature.
+accept_web_template() {
+	local role="$1" value="$2" strict="$3" file mapped effect
+	case "$role" in
+		web) file=$(web_template_file "$WEB_SYSTEM" "$value" 'tpl') ;;
+		proxy) file=$(web_template_file "$PROXY_SYSTEM" "$value" 'tpl') ;;
+		backend) file="$WEBTPL/$WEB_BACKEND/$value.tpl" ;;
+	esac
+	if [ -n "$value" ] && [ -f "$file" ]; then
+		echo "$value -"
+		return 0
+	fi
+	if read -r mapped effect <<< "$(map_legacy_template "$role" "$value")" && [ -n "$mapped" ]; then
+		echo "Warning: $role template '$value' was replaced, using '$mapped'." >&2
+		echo "$mapped $effect"
+		return 0
+	fi
+	# Unknown, not merely aged out. A restore cannot abort a whole archive over one
+	# record, so it falls back; a caller that asked for this by name gets the error.
+	if [ "$strict" = 'strict' ]; then
+		return 1
+	fi
+	echo "Warning: $role template '$value' is not available, using 'default'." >&2
+	echo "default -"
+}
+
 # Web template check
 is_web_template_valid() {
 	if [ -n "$WEB_SYSTEM" ]; then
-		tpl="$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND/$1.tpl"
-		stpl="$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND/$1.stpl"
+		tpl=$(web_template_file "$WEB_SYSTEM" "$1" 'tpl')
+		stpl=$(web_template_file "$WEB_SYSTEM" "$1" 'stpl')
 		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
 			check_result "$E_NOTEXIST" "$1 web template doesn't exist"
 		fi
@@ -24,8 +84,8 @@ is_web_template_valid() {
 # Proxy template check
 is_proxy_template_valid() {
 	if [ -n "$PROXY_SYSTEM" ]; then
-		tpl="$WEBTPL/$PROXY_SYSTEM/$1.tpl"
-		stpl="$WEBTPL/$PROXY_SYSTEM/$1.stpl"
+		tpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'tpl')
+		stpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'stpl')
 		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
 			check_result "$E_NOTEXIST" "$1 proxy template doesn't exist"
 		fi
@@ -257,13 +317,7 @@ add_web_config() {
 	domain_idn=$domain
 	format_domain_idn
 
-	WEBTPL_LOCATION="$WEBTPL/$1"
-	if [ "$1" != "$PROXY_SYSTEM" ] && [ -n "$WEB_BACKEND" ] && [ -d "$WEBTPL_LOCATION/$WEB_BACKEND" ]; then
-		if [ -f "$WEBTPL_LOCATION/$WEB_BACKEND/$2" ]; then
-			# check for backend specific template
-			WEBTPL_LOCATION="$WEBTPL/$1/$WEB_BACKEND"
-		fi
-	fi
+	WEBTPL_LOCATION=$(dirname "$(web_template_file "$1" "${2%.*}" "${2##*.}")")
 
 	if [ -n "$WEBTPL_OVERRIDE" ]; then
 		WEBTPL_LOCATION="$WEBTPL_OVERRIDE"

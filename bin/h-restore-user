@@ -285,27 +285,11 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				IP=$ip
 			fi
 
-			# Checking web template (warn visibly - a silent reset hides a real config
-			# change, e.g. a template missing under the target web model, #120)
-			check_tpl=$(is_web_template_valid $TPL)
-			if [ -n "$check_tpl" ]; then
-				echo "Warning!: web template '$TPL' is not available; $domain reset to 'default'."
-				TPL='default'
-			fi
-
-			# Checking proxy template
-			check_proxy_tpl=$(is_proxy_template_valid $PROXY)
-			if [ -n "$check_proxy_tpl" ]; then
-				echo "Warning!: proxy template '$PROXY' is not available; $domain reset to 'default'."
-				PROXY='default'
-			fi
-
-			# Checking backend template
-			check_backend_tpl=$(is_backend_template_valid $BACKEND)
-			if [ -n "$check_backend_tpl" ]; then
-				echo "Warning!: backend template '$BACKEND' is not available; $domain reset to 'default'."
-				BACKEND='default'
-			fi
+			# Templates through the legacy mapping: an archive can carry values this model
+			# has no file for (foreign install, other web model, removed template)
+			read -r TPL _ <<< "$(accept_web_template 'web' "$TPL")"
+			read -r PROXY restore_proxy_effect <<< "$(accept_web_template 'proxy' "$PROXY")"
+			read -r BACKEND _ <<< "$(accept_web_template 'backend' "$BACKEND")"
 
 			if [ -n "$CUSTOM_DOCROOT" ]; then
 				CUSTOM_DOCROOT=$(echo "$CUSTOM_DOCROOT" | sed -e "s|/home/${old_user}/web/|/home/${user}/web/|g")
@@ -352,6 +336,12 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			str="$str U_DISK='$U_DISK' U_BANDWIDTH='0' OFFLINE='$OFFLINE' SUSPENDED='no'"
 			str="$str TIME='$(date +%T)' DATE='$(date +%F)'"
 			echo $str >> $USER_DATA/web.conf
+
+			# The old caching template is a switch now: carry the intent over, or the
+			# domain comes back on plain default and the customer loses their cache
+			if [ "$restore_proxy_effect" = 'cache' ] && [ "$PROXY_SYSTEM" = 'nginx' ]; then
+				$BIN/h-add-web-domain-cache "$user" "$domain" > /dev/null 2>&1
+			fi
 
 			# Rebuilding backend
 			if [ -n "$WEB_BACKEND" ]; then
