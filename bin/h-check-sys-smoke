@@ -754,12 +754,18 @@ check_object_counters() {
 		_ctr U_CRON_JOBS "$(_cnt . "$ud/cron.conf")"
 		_ctr U_BACKUPS "$(_cnt . "$ud/backup.conf")"
 	done
+	# Records store the ADDRESS THE DOMAIN ANSWERS ON, which behind NAT is the public
+	# one, while the ip file is named after the local address - so both count here, or
+	# the recount is 0 on every NAT'd box and the guard "corrects" healthy counters
+	local nat
 	for ipf in "$CONF_DIR/ips"/*; do
 		[ -f "$ipf" ] || continue
 		ip=$(basename "$ipf")
+		nat=$(grep -o "NAT='[^']*'" "$ipf" 2> /dev/null | head -1 | cut -d"'" -f2)
 		stored=$(grep -o "U_WEB_DOMAINS='[0-9]*'" "$ipf" 2> /dev/null | head -1 | tr -dc 0-9)
 		[ -n "$stored" ] || continue
-		real=$(grep -hF "IP='$ip'" "$CONF_DIR/users"/*/web.conf 2> /dev/null | grep -c .)
+		real=$(grep -hoF -e "IP='$ip'" ${nat:+-e "IP='$nat'"} \
+			"$CONF_DIR/users"/*/web.conf 2> /dev/null | grep -c .)
 		checked=$((checked + 1))
 		if [ "$stored" != "$real" ]; then
 			drift=$((drift + 1))
