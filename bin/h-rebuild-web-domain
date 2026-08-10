@@ -98,6 +98,11 @@ fi
 
 rebuild_web_domain_conf
 
+# Closing balance (see h-rebuild-web-domains): visible in the last line, not the exit code
+if [ "${web_config_skipped:-0}" -gt 0 ]; then
+	echo "Warning: $web_config_skipped vhost config(s) skipped over missing templates (see errors above)."
+fi
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#

@@ -685,6 +685,32 @@ remove_pool_zone() {
 	mv -f "$conf.tmp" "$conf"
 }
 
+# Literal line removal for the account-keyed mail files (#583). A literal comparison
+# rather than an escaped sed pattern: is_localpart_format_valid admits [alnum]._- today,
+# where the dot is the lone metacharacter - but the day it admits e.g. '+', any
+# escape-the-dot approach under-escapes silently. index()==1 anchors at line start.
+# Owner and mode are copied onto the rewrite: passwd is dovecot:mail, and a root:root
+# rewrite would cut dovecot off from auth.
+remove_line_by_prefix() {
+	local file="$1" prefix="$2"
+	[ -e "$file" ] || return 0
+	awk -v p="$prefix" 'index($0, p) != 1' "$file" > "$file.tmp"
+	chown --reference="$file" "$file.tmp" 2> /dev/null
+	chmod --reference="$file" "$file.tmp" 2> /dev/null
+	mv -f "$file.tmp" "$file"
+}
+
+# Same, keyed by the whole line (fwd_only holds one bare account per line, so a prefix
+# match on john.doe would also take john.doex).
+remove_exact_line() {
+	local file="$1" line="$2"
+	[ -e "$file" ] || return 0
+	awk -v p="$line" '$0 != p' "$file" > "$file.tmp"
+	chown --reference="$file" "$file.tmp" 2> /dev/null
+	chmod --reference="$file" "$file.tmp" 2> /dev/null
+	mv -f "$file.tmp" "$file"
+}
+
 # Search objects
 search_objects() {
 	OLD_IFS="$IFS"

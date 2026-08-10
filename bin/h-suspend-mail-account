@@ -57,7 +57,7 @@ if [[ "$MAIL_SYSTEM" =~ exim ]]; then
 	if [ "$quota" = 'unlimited' ]; then
 		quota=0
 	fi
-	sed -i "/^${account//./\\.}:/d" "$HOMEDIR/$user/conf/mail/$domain/passwd"
+	remove_line_by_prefix "$HOMEDIR/$user/conf/mail/$domain/passwd" "$account:"
 	str="$account:SUSPENDED:$user:mail::$HOMEDIR/$user::userdb_quota_rule=*:storage=${quota}M"
 	echo "$str" >> "$HOMEDIR/$user/conf/mail/$domain/passwd"
 fi

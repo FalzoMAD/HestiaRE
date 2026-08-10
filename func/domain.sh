@@ -262,6 +262,9 @@ add_web_config() {
 	# without their rebuild over one broken record.
 	if [ ! -f "${WEBTPL_LOCATION}/$2" ]; then
 		echo "Error: web template ${WEBTPL_LOCATION}/$2 doesn't exist - $domain vhost not written" >&2
+		# Tallied so a rebuild loop can print a closing summary: the stderr line above is
+		# easily lost in a nightly run's output.
+		web_config_skipped=$((${web_config_skipped:-0} + 1))
 		return "$E_NOTEXIST"
 	fi
 

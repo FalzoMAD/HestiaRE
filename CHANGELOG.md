@@ -130,11 +130,15 @@ opens above it.
   The sweep for the same shape found the destructive write side beyond the pool files: record
   deletes and renames in `web.conf`/`mail.conf` (delete, rename, owner change), the webstats and
   letsencrypt queues, and every per-account edit of the mail files - `is_localpart_format_valid`
-  allows dots, so deleting `john.doe` also matched `johnXdoe`'s lines. All patterns now escape
-  the dots; `rebuild.sh`'s SSL-flag migration additionally anchors on the full `DOMAIN='..'`
-  field, since its old pattern could also match inside another record's `CATCHALL` value. The
-  read side (`grep` without `-F` in the object accessors) is deliberately not in this round -
-  it has the blast radius of every command and gets its own issue.
+  allows dots, so deleting `john.doe` also matched `johnXdoe`'s lines. Domain-side patterns
+  escape the dot (the only metacharacter a valid domain can carry); the account side switches
+  to literal comparison outright (`remove_line_by_prefix`/`remove_exact_line`, ownership- and
+  mode-preserving since `passwd` is dovecot:mail), so a later widening of the localpart charset
+  cannot silently under-escape. `rebuild.sh`'s SSL-flag migration additionally anchors on the
+  full `DOMAIN='..'` field, since its old pattern could also match inside another record's
+  `CATCHALL` value. The read side (`grep` without `-F` in the object accessors) is deliberately
+  not in this round - it has the blast radius of every command and is filed as #594; closing
+  #583 does not close the class.
 
 - **`h-change-sys-php` took effect one round late - and rebuilt the whole stock on the OLD
   version** (#585). The command rebuilt all domains first and switched `update-alternatives`
@@ -150,7 +154,9 @@ opens above it.
   empty vhost that `apache2 -t` accepts, and the domain fell through to the box default vhost
   with the hostname certificate. It now warns on stderr and skips the write instead - a
   visible error, and deliberately not a hard abort, which would kill a rebuild loop over one
-  broken record.
+  broken record. The rebuild commands print a closing tally of skipped vhosts so the case
+  survives a nightly run's log; the exit code stays untouched, because the web-model switch
+  treats a nonzero rebuild as switch failure and one broken record must not veto it.
 
 - **The packaged rootful daemon left a docker0 bridge behind** (#579). `apt-get install docker-ce` starts
   the rootful daemon as part of the package install, and it creates `docker0` before `h-add-sys-docker`
