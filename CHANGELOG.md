@@ -14,6 +14,33 @@ opens above it.
 
 ### Added
 
+- **Suspension renders from `share/` in every web model, plus a customer offline switch**
+  (#586, #219 Phase 1). Suspending a domain used to pick a `suspended` template from the
+  selectable tree - which apache never had, so on apache-only the vhost came out empty
+  (`apache2 -t` green) and the domain silently served the box default page, over TLS even with
+  the hostname certificate. `prepare_web_domain_values` now overrides the template *location*
+  (`share/web/suspend/admin|offline`, with nginx/proxy/apache2 variants), so all three models
+  share one rendering path and none of it is user-selectable. New
+  `h-add/delete-web-domain-offline` gives customers a "temporarily offline" switch that answers
+  **503** - transient for search engines - with its own maintenance page, while admin
+  suspension keeps the 200 suspend page and outranks it. The `OFFLINE` flag is registered,
+  restore-safe and exposed in the panel.
+
+- **Proxy caching is a switch now, not a template** (#587, #219 Phase 2). The old `caching`
+  proxy template cloned the whole vhost for one feature and kept its zone in a shared pool
+  file (the #583 breakage surface). The default proxy vhost instead gains a generic
+  `include .../nginx.location.d/*.conf` **inside `location /`** - the one block a later
+  include cannot replace, since a second `location /` is a hard nginx error - and
+  `h-add/delete-web-domain-cache` drops the cache directives there as a fragment, with the
+  zone as **one file per domain** under `conf.d/` (loaded before the vhosts by include order).
+  Removal is a plain `rm`; no pattern ever touches another domain's zone again. Flags
+  `PROXY_CACHE`/`PROXY_CACHE_DURATION` follow the FastCGI precedent end to end: registry,
+  restore field lists, rebuild reapply (gated on the proxy role), model-switch precheck,
+  delete/rename cleanup, panel checkbox and purge button. The `caching` and `hosting`
+  templates are gone - `hosting`'s only remaining difference to `default` was a chmod
+  trigger from the mod_php era. Two new smoke guards: every enabled cache flag has its
+  zone, and no rendered vhost is 0 bytes.
+
 - **Rootless Docker per customer** (#389). Each Docker-enabled customer gets a *companion* account one
   uid block below their own, which runs their private rootless daemon as container uid 0 while the
   customer maps to container uid 1000 - the id stock images expect, so upstream compose files work
