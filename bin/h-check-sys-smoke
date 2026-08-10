@@ -681,6 +681,46 @@ check_vhost_nonempty() {
 		no "$miss empty vhost config(s)" "$first"
 	fi
 }
+# check_object_counters - derived U_* counters must match the counted objects. The $old
+# leak showed how they drift: increase ran, decrease died, U_WEB_DOMAINS crept up by one
+# per failed save - invisible without recounting.
+check_object_counters() {
+	local u ud key f stored real drift=0 first="" checked=0 ipf ip
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		ud="$CONF_DIR/users/$u"
+		for pair in U_WEB_DOMAINS:web.conf U_MAIL_DOMAINS:mail.conf U_DATABASES:db.conf U_CRON_JOBS:cron.conf; do
+			key=${pair%%:*}
+			f=${pair#*:}
+			stored=$(grep -o "${key}='[0-9]*'" "$ud/user.conf" 2> /dev/null | head -1 | tr -dc 0-9)
+			[ -n "$stored" ] || continue
+			real=0
+			[ -f "$ud/$f" ] && real=$(grep -c . "$ud/$f")
+			checked=$((checked + 1))
+			if [ "$stored" != "$real" ]; then
+				drift=$((drift + 1))
+				[ -z "$first" ] && first="$u $key stored=$stored counted=$real"
+			fi
+		done
+	done
+	for ipf in "$CONF_DIR/ips"/*; do
+		[ -f "$ipf" ] || continue
+		ip=$(basename "$ipf")
+		stored=$(grep -o "U_WEB_DOMAINS='[0-9]*'" "$ipf" 2> /dev/null | head -1 | tr -dc 0-9)
+		[ -n "$stored" ] || continue
+		real=$(grep -hF "IP='$ip'" "$CONF_DIR/users"/*/web.conf 2> /dev/null | grep -c .)
+		checked=$((checked + 1))
+		if [ "$stored" != "$real" ]; then
+			drift=$((drift + 1))
+			[ -z "$first" ] && first="ip $ip U_WEB_DOMAINS stored=$stored counted=$real"
+		fi
+	done
+	if [ "$drift" -eq 0 ]; then
+		ok "object counters match the counted objects ($checked checked)"
+	else
+		no "$drift counter(s) drifted from their objects" "$first"
+	fi
+}
+
 # check_key_registries - conf/defaults/*.conf must exist and match the key sets compiled into
 # func/syshealth.sh. A registry that is missing, stale or duplicated makes the repair functions
 # skip exactly the keys they exist to add, and does it silently (#559) - which is the whole reason
@@ -1003,6 +1043,8 @@ check_realip_header
 check_proc_hardening
 # #388: guard the allocator's preconditions, since a regression only shows up much later.
 is_on "${COMPONENT_ADDON_DOCKER:-}" && check_docker_bridge
+# derived counters drift silently when an increase/decrease pair dies half way.
+check_object_counters
 check_key_registries
 check_identity_band
 
