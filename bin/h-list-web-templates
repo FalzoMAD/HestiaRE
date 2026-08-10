@@ -65,9 +65,12 @@ csv_list() {
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Parsing templates
-templates=$(ls -v $WEBTPL/$WEB_SYSTEM/$WEB_BACKEND/)
-templates=$(echo "$templates" | grep '\.tpl' | sed 's/\.tpl$//')
+# Parsing templates. Only the selectable tree - a model whose vhost template lives in
+# share/ (apache) offers no choice, and an empty list is the honest answer
+templates=''
+if [ -d "$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND" ]; then
+	templates=$(ls -v "$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND/" | grep '\.tpl' | sed 's/\.tpl$//')
+fi
 
 # Listing data
 case $format in

@@ -13,12 +13,17 @@
 # Where a template file resolves to. Single source for the validators AND add_web_config:
 # a validator that resolves differently than the renderer either rejects a template that
 # would render, or passes one that then writes an empty vhost.
+#
+# Search order: backend subdir (never for the proxy role, which has no backend), then the
+# selectable tree, then share/ - which holds the templates nobody picks and nobody edits.
+# The last hit is echoed when none exist, so the caller reports a real path.
 web_template_file() {
-	local system="$1" name="$2" ext="$3" loc="$WEBTPL/$1"
-	if [ "$system" != "$PROXY_SYSTEM" ] && [ -n "$WEB_BACKEND" ] \
-		&& [ -f "$loc/$WEB_BACKEND/$name.$ext" ]; then
-		loc="$loc/$WEB_BACKEND"
-	fi
+	local system="$1" name="$2" ext="$3" loc
+	for loc in "$WEBTPL/$system/$WEB_BACKEND" "$WEBTPL/$system" "$HESTIA/share/web/$system"; do
+		[ "$loc" = "$WEBTPL/$system/$WEB_BACKEND" ] \
+			&& { [ "$system" = "$PROXY_SYSTEM" ] || [ -z "$WEB_BACKEND" ]; } && continue
+		[ -f "$loc/$name.$ext" ] && break
+	done
 	echo "$loc/$name.$ext"
 }
 
@@ -47,6 +52,13 @@ map_legacy_template() {
 # would be lost. Never silent: a reset nobody sees is how a customer loses a feature.
 accept_web_template() {
 	local role="$1" value="$2" strict="$3" file mapped effect
+	# A role this model does not have carries no template - pass the stored value through
+	# untouched, the same gating the validators use
+	case "$role" in
+		web) [ -n "$WEB_SYSTEM" ] || { echo "$value -"; return 0; } ;;
+		proxy) [ -n "$PROXY_SYSTEM" ] || { echo "$value -"; return 0; } ;;
+		backend) [ -n "$WEB_BACKEND" ] || { echo "$value -"; return 0; } ;;
+	esac
 	case "$role" in
 		web) file=$(web_template_file "$WEB_SYSTEM" "$value" 'tpl') ;;
 		proxy) file=$(web_template_file "$PROXY_SYSTEM" "$value" 'tpl') ;;
