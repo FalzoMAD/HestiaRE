@@ -116,6 +116,42 @@ opens above it.
 
 ### Fixed
 
+- **A domain name acting as a regex could delete another customer's cache zone and break nginx
+  box-wide** (#583). Four sites removed lines from shared nginx pool files with the domain
+  unescaped in a sed pattern - and the dot is a wildcard there, so deleting `a.b.com` also took
+  `aXb.com`'s `proxy_cache_path` line. With a vhost still referencing the zone, every
+  `nginx -t` fails from then on, for every customer. Two of the sites ran unconditionally on
+  every domain delete or rename, so the trigger was not "a customer uses caching" but "a
+  customer deletes any domain". All four now rewrite by literal match on the full
+  `keys_zone=<domain>:` prefix (new `remove_pool_zone` helper; the `caching.sh` trigger inlines
+  it, having no includes), and `h-add-fastcgi-cache` compares fixed-string so a cross-match can
+  no longer suppress a zone append.
+
+  The sweep for the same shape found the destructive write side beyond the pool files: record
+  deletes and renames in `web.conf`/`mail.conf` (delete, rename, owner change), the webstats and
+  letsencrypt queues, and every per-account edit of the mail files - `is_localpart_format_valid`
+  allows dots, so deleting `john.doe` also matched `johnXdoe`'s lines. All patterns now escape
+  the dots; `rebuild.sh`'s SSL-flag migration additionally anchors on the full `DOMAIN='..'`
+  field, since its old pattern could also match inside another record's `CATCHALL` value. The
+  read side (`grep` without `-F` in the object accessors) is deliberately not in this round -
+  it has the blast radius of every command and gets its own issue.
+
+- **`h-change-sys-php` took effect one round late - and rebuilt the whole stock on the OLD
+  version** (#585). The command rebuilt all domains first and switched `update-alternatives`
+  last, so the rebuild still read the old default; the switch only materialised on the next
+  unrelated rebuild. Measured: after `h-change-sys-php 8.2` on a 8.4 box, pool and vhost socket
+  stayed at 8.4 until something else triggered a rebuild. The switch now happens before the
+  loop, which also makes the "reload current version first" restart actually target the new
+  version.
+
+- **A missing web template wrote a silent 0-byte vhost** (#586, guard brought forward).
+  `add_web_config` piped `cat template | sed` without checking the template exists - on
+  apache-only, suspending a domain (`TPL='suspended'`, which has no apache template) produced an
+  empty vhost that `apache2 -t` accepts, and the domain fell through to the box default vhost
+  with the hostname certificate. It now warns on stderr and skips the write instead - a
+  visible error, and deliberately not a hard abort, which would kill a rebuild loop over one
+  broken record.
+
 - **The packaged rootful daemon left a docker0 bridge behind** (#579). `apt-get install docker-ce` starts
   the rootful daemon as part of the package install, and it creates `docker0` before `h-add-sys-docker`
   disables it again - so the bridge stayed: empty, `down`, and holding 172.17.0.0/16. Reproduced on all
