@@ -69,7 +69,12 @@ csv_list() {
 # share/ (apache) offers no choice, and an empty list is the honest answer
 templates=''
 if [ -z "$PROXY_SYSTEM" ] && [ -d "$WEBTPL/$WEB_SYSTEM" ]; then
-	templates=$(ls -v "$WEBTPL/$WEB_SYSTEM/" | grep '\.tpl' | sed 's/\.tpl$//')
+	for tpl_file in "$WEBTPL/$WEB_SYSTEM"/*.tpl; do
+		[ -e "$tpl_file" ] || continue
+		tpl_name=$(basename "$tpl_file" .tpl)
+		templates="${templates:+$templates$'\n'}$tpl_name"
+	done
+	templates=$(printf '%s\n' "$templates" | sort -V)
 fi
 
 # Listing data
