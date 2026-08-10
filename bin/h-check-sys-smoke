@@ -638,14 +638,16 @@ check_web_cache_zones() {
 		while IFS= read -r line; do
 			d=$(sed -n "s/.*DOMAIN='\([^']*\)'.*/\1/p" <<< "$line")
 			[ -n "$d" ] || continue
-			if [[ "$line" == *"PROXY_CACHE='yes'"* ]]; then
+			# Same role gating as the rebuild reapply: after a switch to a proxyless model the
+			# flag stays recorded (inert) and MUST NOT count as a missing zone
+			if [[ "$line" == *"PROXY_CACHE='yes'"* ]] && [ "$PROXY_SYSTEM" = 'nginx' ]; then
 				checked=$((checked + 1))
 				if [ ! -f "/etc/nginx/conf.d/cache-zone.$d.conf" ]; then
 					miss=$((miss + 1))
 					[ -z "$first" ] && first="proxy zone missing: $u/$d"
 				fi
 			fi
-			if [[ "$line" == *"FASTCGI_CACHE='yes'"* ]]; then
+			if [[ "$line" == *"FASTCGI_CACHE='yes'"* ]] && [ "$WEB_SYSTEM" = 'nginx' ]; then
 				checked=$((checked + 1))
 				if ! grep -qF "keys_zone=$d:" /etc/nginx/conf.d/fastcgi_cache_pool.conf 2> /dev/null; then
 					miss=$((miss + 1))
