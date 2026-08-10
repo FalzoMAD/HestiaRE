@@ -1,0 +1,71 @@
+#!/bin/bash
+# info: bring web domain back online (customer switch)
+# options: USER DOMAIN [RESTART]
+#
+# example: h-delete-web-domain-offline admin acme.com
+#
+# Counterpart to h-add-web-domain-offline: restores the domain's regular vhost.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+restart=${3-no}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Load domain data
+parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+
+if [ -z "$OFFLINE" ]; then
+	add_object_key "web" 'DOMAIN' "$domain" 'OFFLINE' 'SUSPENDED'
+fi
+update_object_value 'web' 'DOMAIN' "$domain" '$OFFLINE' 'no'
+
+# The rebuild restores the regular vhost from the domain's own template values
+$BIN/h-rebuild-web-domain "$user" "$domain" 'no'
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Restarting web server
+$BIN/h-restart-web "$restart"
+check_result $? "Web restart failed" > /dev/null
+
+$BIN/h-restart-proxy "$restart"
+check_result $? "Proxy restart failed" > /dev/null
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Web" "Website brought back online (Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

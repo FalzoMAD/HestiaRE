@@ -1,0 +1,74 @@
+#!/bin/bash
+# info: take web domain temporarily offline (customer switch)
+# options: USER DOMAIN [RESTART]
+#
+# example: h-add-web-domain-offline admin acme.com
+#
+# Serves a static "temporarily offline" page with HTTP 503 in every web model - 503, not
+# 403/404, so search engines treat it as transient and keep the ranking. Admin suspension
+# (h-suspend-web-domain) outranks this switch while both are set. Counterpart:
+# h-delete-web-domain-offline.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+restart=${3-no}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Load domain data
+parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+
+if [ -z "$OFFLINE" ]; then
+	add_object_key "web" 'DOMAIN' "$domain" 'OFFLINE' 'SUSPENDED'
+fi
+update_object_value 'web' 'DOMAIN' "$domain" '$OFFLINE' 'yes'
+
+# The rebuild picks the offline templates up from the flag
+$BIN/h-rebuild-web-domain "$user" "$domain" 'no'
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Restarting web server
+$BIN/h-restart-web "$restart"
+check_result $? "Web restart failed" > /dev/null
+
+$BIN/h-restart-proxy "$restart"
+check_result $? "Proxy restart failed" > /dev/null
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Web" "Website taken offline (Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit
