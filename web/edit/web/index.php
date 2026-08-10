@@ -363,67 +363,6 @@ if (!empty($_POST["save"])) {
 			$restart_web = "yes";
 		}
 
-		// Enable/Disable proxy cache
-		if (empty($_POST["v_proxy_cache_check"])) {
-			$_POST["v_proxy_cache_check"] = "";
-		}
-		if (
-			(!empty($_SESSION["PROXY_SYSTEM"]) &&
-				$_SESSION["PROXY_SYSTEM"] == "nginx") &&
-			($v_proxy_cache_check != $_POST["v_proxy_cache_check"] ||
-				($_POST["v_proxy_cache_check"] == "on" &&
-					$v_proxy_cache_duration != $_POST["v_proxy_cache_duration"])) &&
-			empty($_SESSION["error_msg"])
-		) {
-			if ($_POST["v_proxy_cache_check"] == "on") {
-				if (empty($_POST["v_proxy_cache_duration"])) {
-					$_POST["v_proxy_cache_duration"] = "5m";
-				}
-				exec(
-					HESTIA_CMD .
-						"h-add-web-domain-cache " .
-						$user .
-						" " .
-						quoteshellarg($v_domain) .
-						" " .
-						quoteshellarg($_POST["v_proxy_cache_duration"]),
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
-			} else {
-				exec(
-					HESTIA_CMD . "h-delete-web-domain-cache " . $user . " " . quoteshellarg($v_domain),
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
-			}
-			$restart_web = "yes";
-		}
-
-		// Take the website offline / back online (customer switch, serves 503)
-		if (empty($_POST["v_offline_check"])) {
-			$_POST["v_offline_check"] = "";
-		}
-		$v_offline_check = $v_offline == "yes" ? "on" : "";
-		if ($v_offline_check != $_POST["v_offline_check"] && empty($_SESSION["error_msg"])) {
-			$offline_cmd =
-				$_POST["v_offline_check"] == "on"
-					? "h-add-web-domain-offline"
-					: "h-delete-web-domain-offline";
-			exec(
-				HESTIA_CMD . $offline_cmd . " " . $user . " " . quoteshellarg($v_domain),
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			$restart_web = "yes";
-		}
-
 		// Delete proxy support
 		if (
 			!empty($_SESSION["PROXY_SYSTEM"]) &&
@@ -520,6 +459,68 @@ if (!empty($_POST["save"])) {
 			$restart_proxy = "yes";
 		}
 	}
+
+	// Enable/Disable proxy cache
+	if (empty($_POST["v_proxy_cache_check"])) {
+		$_POST["v_proxy_cache_check"] = "";
+	}
+	if (
+		(!empty($_SESSION["PROXY_SYSTEM"]) &&
+			$_SESSION["PROXY_SYSTEM"] == "nginx") &&
+		($v_proxy_cache_check != $_POST["v_proxy_cache_check"] ||
+			($_POST["v_proxy_cache_check"] == "on" &&
+				$v_proxy_cache_duration != $_POST["v_proxy_cache_duration"])) &&
+		empty($_SESSION["error_msg"])
+	) {
+		if ($_POST["v_proxy_cache_check"] == "on") {
+			if (empty($_POST["v_proxy_cache_duration"])) {
+				$_POST["v_proxy_cache_duration"] = "5m";
+			}
+			exec(
+				HESTIA_CMD .
+					"h-add-web-domain-cache " .
+					$user .
+					" " .
+					quoteshellarg($v_domain) .
+					" " .
+					quoteshellarg($_POST["v_proxy_cache_duration"]),
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+		} else {
+			exec(
+				HESTIA_CMD . "h-delete-web-domain-cache " . $user . " " . quoteshellarg($v_domain),
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+		}
+		$restart_web = "yes";
+	}
+
+	// Take the website offline / back online (customer switch, serves 503)
+	if (empty($_POST["v_offline_check"])) {
+		$_POST["v_offline_check"] = "";
+	}
+	$v_offline_check = $v_offline == "yes" ? "on" : "";
+	if ($v_offline_check != $_POST["v_offline_check"] && empty($_SESSION["error_msg"])) {
+		$offline_cmd =
+			$_POST["v_offline_check"] == "on"
+				? "h-add-web-domain-offline"
+				: "h-delete-web-domain-offline";
+		exec(
+			HESTIA_CMD . $offline_cmd . " " . $user . " " . quoteshellarg($v_domain),
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		unset($output);
+		$restart_web = "yes";
+	}
+
 	// Change aliases
 	if (empty($_SESSION["error_msg"])) {
 		$waliases = preg_replace("/\n/", " ", $_POST["v_aliases"]);

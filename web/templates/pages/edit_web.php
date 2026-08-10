@@ -80,6 +80,22 @@
 					<?= tohtml( _("Take website temporarily offline (visitors see a maintenance page, HTTP 503)")) ?>
 				</label>
 			</div>
+			<?php if (!empty($_SESSION["PROXY_SYSTEM"]) && $_SESSION["PROXY_SYSTEM"] == "nginx") { ?>
+				<div class="form-check u-mb10">
+					<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") echo "checked"; ?>>
+					<label for="v_proxy_cache_check">
+						<?= tohtml( _("Enable proxy cache")) ?>
+					</label>
+				</div>
+				<div x-cloak x-show="proxyCacheEnabled" id="v_proxy_duration" class="u-pl30">
+					<div class="u-mb10">
+						<label for="v_proxy_cache_duration" class="form-label">
+							<?= tohtml( _("Cache Duration")) ?> <span class="optional">(<?= tohtml( _("For example")) ?>: 30s, 10m or 1d)</span>
+						</label>
+						<input type="text" class="form-control" name="v_proxy_cache_duration" id="v_proxy_cache_duration" value="<?= tohtml(trim($v_proxy_cache_duration, "'")) ?>">
+					</div>
+				</div>
+			<?php } ?>
 			<div class="u-mb10">
 				<label for="v_stats" class="form-label"><?= tohtml( _("Web Statistics")) ?></label>
 				<select class="form-select js-stats-select" name="v_stats" id="v_stats">
@@ -335,22 +351,6 @@
 									<?= tohtml( _("Cache Duration")) ?> <span class="optional">(<?= tohtml( _("For example")) ?>: 30s, 10m or 1d)</span>
 								</label>
 								<input type="text" class="form-control" name="v_nginx_cache_duration" id="v_nginx_cache_duration" value="<?= tohtml(trim($v_nginx_cache_duration, "'")) ?>">
-							</div>
-						</div>
-					<?php } ?>
-					<?php if (!empty($_SESSION["PROXY_SYSTEM"]) && $_SESSION["PROXY_SYSTEM"] == "nginx") { ?>
-						<div class="form-check u-mb10">
-							<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") echo "checked"; ?>>
-							<label for="v_proxy_cache_check">
-								<?= tohtml( _("Enable proxy cache")) ?>
-							</label>
-						</div>
-						<div x-cloak x-show="proxyCacheEnabled" id="v_proxy_duration" class="u-pl30">
-							<div class="u-mb10">
-								<label for="v_proxy_cache_duration" class="form-label">
-									<?= tohtml( _("Cache Duration")) ?> <span class="optional">(<?= tohtml( _("For example")) ?>: 30s, 10m or 1d)</span>
-								</label>
-								<input type="text" class="form-control" name="v_proxy_cache_duration" id="v_proxy_cache_duration" value="<?= tohtml(trim($v_proxy_cache_duration, "'")) ?>">
 							</div>
 						</div>
 					<?php } ?>
