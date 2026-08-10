@@ -255,6 +255,16 @@ add_web_config() {
 		fi
 	fi
 
+	# A missing template must fail loudly: cat|sed below would write a 0-byte vhost that
+	# apache2 -t accepts, and the domain silently falls through to the box default vhost
+	# (found via TPL='suspended' on apache-only, #586). A warning + skip, not check_result:
+	# an exit here would abort a rebuild loop mid-way and leave the remaining domains
+	# without their rebuild over one broken record.
+	if [ ! -f "${WEBTPL_LOCATION}/$2" ]; then
+		echo "Error: web template ${WEBTPL_LOCATION}/$2 doesn't exist - $domain vhost not written" >&2
+		return "$E_NOTEXIST"
+	fi
+
 	# Note: Removing or renaming template variables will lead to broken custom templates.
 	#   -If possible custom templates should be automatically upgraded to use the new format
 	#   -Alternatively a depreciation period with proper notifications should be considered
