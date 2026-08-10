@@ -1927,21 +1927,25 @@ web_lock_acquire() {
 		return 1
 	fi
 	export HESTIA_WEB_LOCK_HELD=1
+	# Who owns it, so the release can check instead of relying on which variable happens
+	# not to be exported.
+	export HESTIA_WEB_LOCK_PID=$$
 	return 0
 }
 
 # Release the freeze early (otherwise it drops on process exit).
 #
-# The export asymmetry above is what makes the reentrancy safe, and it is easy to "tidy
-# up" into a bug: HESTIA_WEB_LOCK_HELD is exported so a child command skips acquiring,
-# while WEB_LOCK_FD is NOT - so this bails out in the child and never runs flock -u on
-# a descriptor the parent still holds. Exporting WEB_LOCK_FD would let a child release
-# the parent's lock mid-operation. Measured: a child that calls this leaves the lock held.
+# Only the process that acquired it may release it. A child command inherits the lock as
+# held (that is the point of the reentrancy) and would otherwise be able to unlock the
+# parent mid-operation - the parent then finishes writing records and restarting services
+# unprotected. This used to hold only because WEB_LOCK_FD happens not to be exported,
+# which is a guard nobody would recognise as one and an unrelated cleanup could remove.
 web_lock_release() {
+	[ "${HESTIA_WEB_LOCK_PID:-}" = "$$" ] || return 0
 	[ -n "${WEB_LOCK_FD:-}" ] || return 0
 	flock -u "$WEB_LOCK_FD" 2> /dev/null
 	exec {WEB_LOCK_FD}>&- 2> /dev/null
-	unset WEB_LOCK_FD HESTIA_WEB_LOCK_HELD
+	unset WEB_LOCK_FD HESTIA_WEB_LOCK_HELD HESTIA_WEB_LOCK_PID
 }
 
 
