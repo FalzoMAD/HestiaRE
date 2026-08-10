@@ -628,6 +628,57 @@ check_docker_bridge() {
 	fi
 }
 
+
+# check_web_cache_zones - a cache flag whose zone is gone breaks nginx -t box-wide: the
+# vhost references a zone nginx never loaded.
+check_web_cache_zones() {
+	local u d line miss=0 first="" checked=0
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		[ -f "$CONF_DIR/users/$u/web.conf" ] || continue
+		while IFS= read -r line; do
+			d=$(sed -n "s/.*DOMAIN='\([^']*\)'.*/\1/p" <<< "$line")
+			[ -n "$d" ] || continue
+			if [[ "$line" == *"PROXY_CACHE='yes'"* ]]; then
+				checked=$((checked + 1))
+				if [ ! -f "/etc/nginx/conf.d/cache-zone.$d.conf" ]; then
+					miss=$((miss + 1))
+					[ -z "$first" ] && first="proxy zone missing: $u/$d"
+				fi
+			fi
+			if [[ "$line" == *"FASTCGI_CACHE='yes'"* ]]; then
+				checked=$((checked + 1))
+				if ! grep -qF "keys_zone=$d:" /etc/nginx/conf.d/fastcgi_cache_pool.conf 2> /dev/null; then
+					miss=$((miss + 1))
+					[ -z "$first" ] && first="fastcgi zone missing: $u/$d"
+				fi
+			fi
+		done < "$CONF_DIR/users/$u/web.conf"
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "cache zones match their flags ($checked flag(s))"
+	else
+		no "$miss cache zone(s) missing for enabled flags" "$first"
+	fi
+}
+
+# check_vhost_nonempty - a 0-byte vhost passes apache2 -t and the domain silently falls
+# through to the box default vhost.
+check_vhost_nonempty() {
+	local f n=0 miss=0 first=""
+	for f in "/etc/$WEB_SYSTEM/conf.d/domains"/*.conf "/etc/${PROXY_SYSTEM:-none}/conf.d/domains"/*.conf; do
+		[ -e "$f" ] || continue
+		n=$((n + 1))
+		if [ ! -s "$f" ]; then
+			miss=$((miss + 1))
+			[ -z "$first" ] && first="$f is empty"
+		fi
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "no empty vhost configs ($n checked)"
+	else
+		no "$miss empty vhost config(s)" "$first"
+	fi
+}
 # check_key_registries - conf/defaults/*.conf must exist and match the key sets compiled into
 # func/syshealth.sh. A registry that is missing, stale or duplicated makes the repair functions
 # skip exactly the keys they exist to add, and does it silently (#559) - which is the whole reason
@@ -936,6 +987,11 @@ check_v_symlinks_resolve
 check_info_headers
 # a policy fragment (crowdsec Layer A, bot rate limiting) missing from one template is a silent bypass.
 check_policy_fragment_coverage
+# a cache flag without its zone (or a 0-byte vhost) fails silently until the next reload.
+if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
+	check_web_cache_zones
+fi
+check_vhost_nonempty
 # #120: the model-switch freeze + pre-check coverage cannot rot; a crash is surfaced.
 check_web_lock_coverage
 check_web_switch_prechecks

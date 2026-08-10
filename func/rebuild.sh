@@ -357,6 +357,12 @@ rebuild_web_domain_conf() {
 		$BIN/h-delete-fastcgi-cache $user $domain
 		$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
 	fi
+	# Gated on the proxy role: after a switch to a proxyless model the flag stays recorded
+	# (and springs back on the way back), but the add command would refuse
+	if [ "$PROXY_CACHE" = 'yes' ] && [ "$PROXY_SYSTEM" = 'nginx' ]; then
+		$BIN/h-delete-web-domain-cache $user $domain
+		$BIN/h-add-web-domain-cache $user $domain "$PROXY_CACHE_DURATION"
+	fi
 
 	# Re-render the per-domain fragments from the domain flags (both self-guard + write nothing
 	# when unset): CrowdSec Layer A (ban -> 403, nginx-only) + the server-native Layer-B bot

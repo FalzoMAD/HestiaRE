@@ -1,7 +1,4 @@
-#=========================================================================#
-# Rendered for offline domains in place of the selected template (all web    
-# models share this path); not user-selectable, not a customization point.
-#=========================================================================#
+# Rendered for offline domains in every web model - not user-selectable
 
 server {
 	listen      %ip%:%proxy_port%;

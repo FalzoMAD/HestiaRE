@@ -1,7 +1,4 @@
-#=========================================================================#
-# Rendered for offline domains in place of the selected template (all web    
-# models share this path); not user-selectable, not a customization point.
-#=========================================================================#
+# Rendered for offline domains in every web model - not user-selectable
 
 <VirtualHost %ip%:%web_port%>
 
@@ -18,13 +15,12 @@
 
     ErrorDocument 503 /offline/index.html
     Alias /offline/ %docroot%/
-    # 503 for every path except the error body itself (subrequests map again)
     RedirectMatch 503 ^/(?!offline/|\.well-known/)
 
     <Directory %docroot%>
         AllowOverride All
         Options -Indexes
-        # The page dir lives under $HESTIA, outside the granted /home paths
+        # page dir is outside the granted /home paths
         Require all granted
     </Directory>
 

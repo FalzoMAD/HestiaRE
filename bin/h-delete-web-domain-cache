@@ -1,0 +1,80 @@
+#!/bin/bash
+# info: Disable nginx proxy cache for a domain
+# options: USER DOMAIN [RESTART]
+#
+# example: h-delete-web-domain-cache user domain.tld
+#
+# Counterpart to h-add-web-domain-cache: removes the fragment, the per-domain zone file and
+# the cached data. Plain rm - the zone has its own file, nothing is pattern-matched out of a
+# shared pool.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+restart=${3-no}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Load domain data
+parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+
+rm -f "$HOMEDIR/$user/conf/web/$domain/nginx.location.d/proxy_cache.conf"
+rmdir "$HOMEDIR/$user/conf/web/$domain/nginx.location.d" 2> /dev/null
+
+rm -f "/etc/nginx/conf.d/cache-zone.$domain.conf"
+
+if [ -d "/var/cache/nginx/$domain" ]; then
+	rm -rf "/var/cache/nginx/$domain"
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+if [ -z "$PROXY_CACHE" ]; then
+	add_object_key "web" 'DOMAIN' "$domain" 'PROXY_CACHE' 'ALIAS'
+fi
+if [ -z "$PROXY_CACHE_DURATION" ]; then
+	add_object_key "web" 'DOMAIN' "$domain" 'PROXY_CACHE_DURATION' 'ALIAS'
+fi
+
+update_object_value 'web' 'DOMAIN' "$domain" '$PROXY_CACHE' 'no'
+update_object_value 'web' 'DOMAIN' "$domain" '$PROXY_CACHE_DURATION' '0s'
+
+# Restarting proxy server
+$BIN/h-restart-proxy "$restart"
+check_result $? "Proxy restart failed" > /dev/null
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Web" "Proxy cache disabled (Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

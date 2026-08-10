@@ -1,7 +1,4 @@
-#=========================================================================#
-# Rendered for suspended domains in place of the selected template (all web    
-# models share this path); not user-selectable, not a customization point.
-#=========================================================================#
+# Rendered for suspended domains in every web model - not user-selectable
 
 server {
 	listen      %ip%:%web_port%;

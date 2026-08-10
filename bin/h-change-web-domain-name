@@ -116,7 +116,9 @@ if [ -n "$PROXY_SYSTEM" ]; then
 	if [ "$SSL" = 'yes' ]; then
 		del_web_config "$PROXY_SYSTEM" "$PROXY.stpl"
 	fi
-	remove_pool_zone "/etc/$PROXY_SYSTEM/conf.d/01_caching_pool.conf" "$domain"
+	# Zone and cached data are keyed by the old name; the closing rebuild recreates both
+	rm -f "/etc/$PROXY_SYSTEM/conf.d/cache-zone.$domain.conf"
+	rm -rf "/var/cache/nginx/$domain"
 fi
 
 # Delete backend
