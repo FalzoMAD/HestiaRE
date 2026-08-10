@@ -48,13 +48,14 @@ check_hestia_demo_mode
 # shellcheck disable=SC2046  # word splitting carries the record into KEY='v' tokens
 parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
 
-if [ -z "$OFFLINE" ]; then
-	add_object_key "web" 'DOMAIN' "$domain" 'OFFLINE' 'SUSPENDED'
-fi
+# add_object_key is idempotent on key presence, so no value guard needed
+add_object_key "web" 'DOMAIN' "$domain" 'OFFLINE' 'SUSPENDED'
 update_object_value 'web' 'DOMAIN' "$domain" '$OFFLINE' 'yes'
 
-# rendering lives in prepare_web_domain_values; the rebuild applies it
+# rendering lives in prepare_web_domain_values; the rebuild applies it. Checked, or a
+# failed rebuild leaves the flag set, logs $OK, and the domain is neither on nor offline
 $BIN/h-rebuild-web-domain "$user" "$domain" 'no'
+check_result $? "Web rebuild failed" > /dev/null
 
 #----------------------------------------------------------#
 #                       Hestia                             #
