@@ -12,6 +12,47 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **The template tree holds only what somebody chooses** (#219 phases 3-5, #588/#589/#590).
+  `templates/` is down to `nginx/` (the nginx-only vhost selection) and `php/` (FPM pool
+  profiles); everything nobody picks moved to `share/` - the apache vhost, the both-model
+  proxy vhost, the suspend/offline pages, the domain skeleton, awstats, the unassigned page
+  and the mail bodies. The six remaining apache templates went entirely: both apache models
+  already rendered the php-fpm variant, so `hosting` (mpm_itk `AssignUserID`, mod_ruid2
+  `RUidGid`), `www-data`, `phpcgi` and `phpfcgid` were unreachable mod_php-era leftovers,
+  and their trigger scripts fired from templates nothing could select.
+
+  Two rules make the flatter tree work. **The role picks the directory, not the service
+  name**: in the both model nginx is the proxy and renders `share/web/nginx/default.tpl`,
+  while in nginx-only the same service is the web role and renders
+  `templates/nginx/default.tpl` - two different files with the same name, so
+  `web_template_file` decides once for validators and renderer alike. And **`PHPTPL` is its
+  own anchor** rather than `$WEBTPL/$WEB_BACKEND`, because `WEB_BACKEND` is a config value
+  and a directory named after it cannot be renamed without renaming the value everywhere it
+  is compared.
+
+  Render output was verified byte-identical on all four VMs across all three web models,
+  before and after.
+
+- **Templates are validated the same way they are rendered, and legacy values are mapped**
+  (#588). `is_web_template_valid` looked only in the backend subdirectory while
+  `add_web_config` falls back to the system directory, so a template that renders fine was
+  rejected on the way in. Both now resolve through one function. Every write - CLI, restore
+  and package - passes through `accept_web_template`, which maps a known aged-out value
+  (`caching`, `hosting`, `phpcgi`, `phpfcgid`, `www-data`, `suspended`, an orphaned
+  `PHP-X_Y`) onto its replacement and carries the side effect with it: a restored domain
+  that used the `caching` template comes back with the cache switch on instead of silently
+  losing the feature. The two callers differ on purpose - a restore cannot abort an archive
+  over one record and falls back, while a CLI caller that names a template still gets an
+  error for a typo. New guard `check_web_templates_resolvable` walks the records with the
+  renderer's own resolution, since a value pointing at a removed template otherwise
+  surfaces only on the next rebuild.
+
+  The archive stops carrying its `template/` copies. Neither HestiaRE nor HestiaCP ever
+  read them back, and they were the only place the template layout was baked into the
+  backup format.
+
 ### Added
 
 - **Suspension renders from `share/` in every web model, plus a customer offline switch**

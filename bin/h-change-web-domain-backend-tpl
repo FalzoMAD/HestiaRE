@@ -76,7 +76,7 @@ for port in $ports; do
 done
 
 # Changing backend config
-cat $WEBTPL/$WEB_BACKEND/$template.tpl \
+cat $PHPTPL/$template.tpl \
 	| sed -e "s|%backend_port%|$backend_port|" \
 		-e "s|%user%|$user|g" \
 		-e "s|%domain%|$domain|g" \

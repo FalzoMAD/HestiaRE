@@ -131,7 +131,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			cp $HOMEDIR/$user/conf/web/$domain.$WEB_SYSTEM.conf* conf/
 		else
 			# legacy format: all domain configs in single file
-			tpl_file="$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND/$TPL.tpl"
+			tpl_file=$(web_template_file "$WEB_SYSTEM" "$TPL" 'tpl')
 			conf="$HOMEDIR/$user/conf/web/$WEB_SYSTEM.conf"
 			get_web_config_lines "$tpl_file" "$conf"
 			sed -n "$top_line,$bottom_line p" $conf > conf/$WEB_SYSTEM.conf
@@ -145,7 +145,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 				cp $HOMEDIR/$user/conf/web/$domain.$WEB_SYSTEM.ssl.conf* conf/
 			else
 				# legacy format: all domain configs in single file
-				tpl_file="$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND/$TPL.stpl"
+				tpl_file=$(web_template_file "$WEB_SYSTEM" "$TPL" 'stpl')
 				conf="$HOMEDIR/$user/conf/web/s$WEB_SYSTEM.conf"
 				get_web_config_lines "$tpl_file" "$conf"
 				sed -n "$top_line,$bottom_line p" $conf > conf/s$WEB_SYSTEM.conf
@@ -160,7 +160,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 				cp $HOMEDIR/$user/conf/web/$domain.$PROXY_SYSTEM.conf* conf/
 			else
 				# legacy format: all domain configs in single file
-				tpl_file="$WEBTPL/$PROXY_SYSTEM/$PROXY.tpl"
+				tpl_file=$(web_template_file "$PROXY_SYSTEM" "$PROXY" 'tpl')
 				conf="$HOMEDIR/$user/conf/web/$PROXY_SYSTEM.conf"
 				get_web_config_lines "$tpl_file" "$conf"
 				sed -n "$top_line,$bottom_line p" $conf > conf/$PROXY_SYSTEM.conf
@@ -175,7 +175,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 				cp $HOMEDIR/$user/conf/web/$domain.$PROXY_SYSTEM.ssl.conf* conf/
 			else
 				# legacy format: all domain configs in single file
-				tpl_file="$WEBTPL/$PROXY_SYSTEM/$PROXY.stpl"
+				tpl_file=$(web_template_file "$PROXY_SYSTEM" "$PROXY" 'stpl')
 				conf="$HOMEDIR/$user/conf/web/s$PROXY_SYSTEM.conf"
 				get_web_config_lines "$tpl_file" "$conf"
 				sed -n "$top_line,$bottom_line p" $conf > conf/s$PROXY_SYSTEM.conf
@@ -185,22 +185,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		domain_conf=$(grep "DOMAIN='$domain'" $conf)
 		parse_object_kv_list_non_eval domain_conf
 
-		mkdir -p -p template/$WEB_SYSTEM/
-		mkdir -p template/php-fpm/
-
-		if [ $WEB_BACKEND == 'php-fpm' ]; then
-			cp $HESTIA/templates/web/$WEB_SYSTEM/php-fpm/$TPL.tpl template/$WEB_SYSTEM/
-			cp $HESTIA/templates/web/$WEB_SYSTEM/php-fpm/$TPL.stpl template/$WEB_SYSTEM/
-			cp $HESTIA/templates/web/php-fpm/$BACKEND.tpl template/php-fpm/
-		else
-			cp $HESTIA/templates/web/$WEB_SYSTEM/$TPL.tpl template/$WEB_SYSTEM/
-			cp $HESTIA/templates/web/$WEB_SYSTEM/$TPL.stpl template/$WEB_SYSTEM/
-		fi
-		if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
-			mkdir -p template/$PROXY_SYSTEM
-			cp $HESTIA/templates/web/$PROXY_SYSTEM/$PROXY.tpl template/$PROXY_SYSTEM/
-			cp $HESTIA/templates/web/$PROXY_SYSTEM/$PROXY.stpl template/$PROXY_SYSTEM/
-		fi
+		# No template/ copy in the archive (see h-backup-user)
 
 		# Backup ssl certificates
 		if [ "$SSL" = 'yes' ]; then

@@ -29,21 +29,21 @@ source_conf "$HESTIA/conf/hestia.conf"
 is_format_valid 'restart'
 
 # Detect whether the awstats template already has the geoip LoadPlugin enabled
-awstats_patch=$(cat $HESTIA/templates/web/awstats/awstats.tpl | grep "LoadPlugin=\"geoip GEOIP_STANDARD /usr/share/GeoIP/GeoIP.dat\"")
+awstats_patch=$(cat $SHARETPL/awstats/awstats.tpl | grep "LoadPlugin=\"geoip GEOIP_STANDARD /usr/share/GeoIP/GeoIP.dat\"")
 
-# Web templates ship at $HESTIA/templates/web (delivered by the tarball) — there
+# Web templates ship at $HESTIA/templates (delivered by the tarball) - there
 # is no separate install source to copy from. Only the per-PHP-version FPM pool
 # templates are generated here for the versions currently installed.
 versions_list=$(ls -d /etc/php/*)
 for php_ver in $versions_list; do
 	version=$(echo $php_ver | sed 's/.*\///')
 	[ ! -d "/etc/php/$version/fpm/pool.d/" ] && continue
-	cp -f $HESTIA/share/php-fpm/multiphp.tpl ${WEBTPL}/php-fpm/PHP-${version/\./_}.tpl
+	cp -f $HESTIA/share/php-fpm/multiphp.tpl ${PHPTPL}/PHP-${version/\./_}.tpl
 done
 
 if [ -n "$awstats_patch" ]; then
 	# restore LoadPlugin variable
-	echo "LoadPlugin=\"geoip GEOIP_STANDARD /usr/share/GeoIP/GeoIP.dat\"" >> $HESTIA/templates/web/awstats/awstats.tpl
+	echo "LoadPlugin=\"geoip GEOIP_STANDARD /usr/share/GeoIP/GeoIP.dat\"" >> $SHARETPL/awstats/awstats.tpl
 fi
 
 # Rebuilding web domains

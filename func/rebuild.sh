@@ -281,7 +281,7 @@ rebuild_web_domain_conf() {
 	if [ ! -d "$HOMEDIR/$user/web/$domain/document_errors" ]; then
 		$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/document_errors"
 		# Propagating html skeleton
-		user_exec cp -r "$WEBTPL/skel/document_errors/" "$HOMEDIR/$user/web/$domain/"
+		user_exec cp -r "$SHARETPL/skel/document_errors/" "$HOMEDIR/$user/web/$domain/"
 	fi
 	$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/cgi-bin"
 	$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/private"
@@ -391,7 +391,7 @@ rebuild_web_domain_conf() {
 	if [ -n "$STATS" ]; then
 		domain_idn=$domain
 		format_domain_idn
-		cat $WEBTPL/$STATS/$STATS.tpl \
+		cat $SHARETPL/$STATS/$STATS.tpl \
 			| sed -e "s|%ip%|$local_ip|g" \
 				-e "s|%web_system%|$WEB_SYSTEM|g" \
 				-e "s|%domain_idn%|$domain_idn|g" \

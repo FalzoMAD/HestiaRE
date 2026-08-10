@@ -393,8 +393,8 @@ install_web() {
 		"$HESTIA" > /etc/cron.daily/php-session-cleanup
 	chmod 755 /etc/cron.daily/php-session-cleanup
 	mkdir -p /var/www/html /var/www/document_errors
-	cp -rf "$HESTIA/templates/web/unassigned/index.html" /var/www/html/
-	cp -rf "$HESTIA/templates/web/skel/document_errors/"* /var/www/document_errors/
+	cp -rf "$HESTIA/share/web/unassigned/index.html" /var/www/html/
+	cp -rf "$HESTIA/share/web/skel/document_errors/"* /var/www/document_errors/
 	mkdir -p /etc/logrotate.d/httpd-prerotate
 	cp -f "$HESTIA/share/apache2/httpd-prerotate/"* /etc/logrotate.d/httpd-prerotate/ 2>/dev/null || true
 	rm -f /etc/cron.d/awstats

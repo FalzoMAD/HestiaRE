@@ -53,7 +53,7 @@ if [ -n "$panel_php" ] && [ "$version" = "$panel_php" ]; then
 fi
 
 # Remove backend template
-[ -f $HESTIA/templates/web/php-fpm/PHP-${version/\./_}.tpl ] && rm -f $HESTIA/templates/web/php-fpm/PHP-${version/\./_}.tpl
+[ -f $PHPTPL/PHP-${version/\./_}.tpl ] && rm -f $PHPTPL/PHP-${version/\./_}.tpl
 
 # Check if php version exists
 version_check=$($BIN/h-list-sys-php plain | grep "$version")

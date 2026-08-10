@@ -516,28 +516,29 @@ check_v_symlinks_resolve() {
 # Feature fragments (ssl/hsts/forcessl/fastcgi_cache) are NOT checked - they belong only to the
 # templates implementing them. Scope = templates carrying %domain%, so the per-IP catch-all is skipped.
 check_policy_fragment_coverage() {
-	local root sys frag f miss=0 first="" checked=0 tpl_root
-	# share/ counts too: a template moved out of the selectable tree must not drop out
-	# of coverage - that would turn the guard green by shrinking what it looks at
-	for root in "$HESTIA/templates/web" "$HESTIA/share/web"; do
-	tpl_root="$root"
-	for sys in nginx apache2; do
-		[ -d "$tpl_root/$sys" ] || continue
-		case "$sys" in
-			nginx) set -- nginx.crowdsec.conf nginx.botlimit.conf ;;
-			apache2) set -- botlimit.apache2.conf ;;
-		esac
-		while read -r f; do
-			[ -n "$f" ] || continue
-			checked=$((checked + 1))
-			for frag in "$@"; do
-				grep -q "$frag" "$f" && continue
-				miss=$((miss + 1))
-				[ -z "$first" ] && first="${f#"$tpl_root/"} lacks $frag"
-			done
-		done < <(grep -rl '%domain%' "$tpl_root/$sys" 2> /dev/null)
-	done
-	done
+	local f frag miss=0 first="" checked=0
+	# By file, not by service directory: a vhost template can live anywhere under the two
+	# roots (share/web/suspend/ does), and scanning fixed subdirs would quietly skip it.
+	# The pool templates under templates/php carry %domain% but are not vhosts.
+	while read -r f; do
+		[ -n "$f" ] || continue
+		# Decided by content: a vhost declares either a VirtualHost or a server block.
+		# Keying on the path would break the moment a directory is renamed - which is
+		# exactly what just happened - and silently shrink the guard.
+		if grep -q '^[[:space:]]*<VirtualHost' "$f"; then
+			set -- botlimit.apache2.conf
+		elif grep -qE '^[[:space:]]*server[[:space:]]*\{' "$f"; then
+			set -- nginx.crowdsec.conf nginx.botlimit.conf
+		else
+			continue
+		fi
+		checked=$((checked + 1))
+		for frag in "$@"; do
+			grep -q "$frag" "$f" && continue
+			miss=$((miss + 1))
+			[ -z "$first" ] && first="${f#"$HESTIA/"} lacks $frag"
+		done
+	done < <(grep -rl '%domain%' "$WEBTPL" "$SHARETPL" 2> /dev/null | grep -E '\.(tpl|stpl)$')
 	if [ "$miss" -eq 0 ]; then
 		ok "policy fragment includes complete ($checked domain templates)"
 	else
@@ -713,7 +714,7 @@ check_web_templates_resolvable() {
 				[ -z "$first" ] && first="$u/$d PROXY='$proxy'"
 			fi
 			if [ -n "$WEB_BACKEND" ] && [ -n "$backend" ] \
-				&& [ ! -f "$WEBTPL/$WEB_BACKEND/$backend.tpl" ]; then
+				&& [ ! -f "$PHPTPL/$backend.tpl" ]; then
 				miss=$((miss + 1))
 				[ -z "$first" ] && first="$u/$d BACKEND='$backend'"
 			fi

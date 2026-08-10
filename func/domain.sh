@@ -14,14 +14,17 @@
 # a validator that resolves differently than the renderer either rejects a template that
 # would render, or passes one that then writes an empty vhost.
 #
-# Search order: backend subdir (never for the proxy role, which has no backend), then the
-# selectable tree, then share/ - which holds the templates nobody picks and nobody edits.
-# The last hit is echoed when none exist, so the caller reports a real path.
+# The ROLE picks the directory, not the service name: in the both model nginx serves as
+# the proxy and renders share/web/nginx/, while in nginx-only the same service is the web
+# role and renders the selectable templates/nginx/. Both files are called default and are
+# not interchangeable, so keying on the name alone would render the wrong one.
 web_template_file() {
 	local system="$1" name="$2" ext="$3" loc
-	for loc in "$WEBTPL/$system/$WEB_BACKEND" "$WEBTPL/$system" "$HESTIA/share/web/$system"; do
-		[ "$loc" = "$WEBTPL/$system/$WEB_BACKEND" ] \
-			&& { [ "$system" = "$PROXY_SYSTEM" ] || [ -z "$WEB_BACKEND" ]; } && continue
+	if [ -n "$PROXY_SYSTEM" ] && [ "$system" = "$PROXY_SYSTEM" ]; then
+		echo "$SHARETPL/$system/$name.$ext"
+		return
+	fi
+	for loc in "$WEBTPL/$system" "$SHARETPL/$system"; do
 		[ -f "$loc/$name.$ext" ] && break
 	done
 	echo "$loc/$name.$ext"
@@ -62,7 +65,7 @@ accept_web_template() {
 	case "$role" in
 		web) file=$(web_template_file "$WEB_SYSTEM" "$value" 'tpl') ;;
 		proxy) file=$(web_template_file "$PROXY_SYSTEM" "$value" 'tpl') ;;
-		backend) file="$WEBTPL/$WEB_BACKEND/$value.tpl" ;;
+		backend) file="$PHPTPL/$value.tpl" ;;
 	esac
 	if [ -n "$value" ] && [ -f "$file" ]; then
 		echo "$value -"
@@ -107,7 +110,7 @@ is_proxy_template_valid() {
 # Backend template check
 is_backend_template_valid() {
 	if [ -n "$WEB_BACKEND" ]; then
-		if [ ! -e "$WEBTPL/$WEB_BACKEND/$1.tpl" ]; then
+		if [ ! -e "$PHPTPL/$1.tpl" ]; then
 			check_result "$E_NOTEXIST" "$1 backend template doesn't exist"
 		fi
 	fi
@@ -300,7 +303,7 @@ prepare_web_domain_values() {
 	# domain, or a rebuild loop would render the NEXT domain suspended too.
 	WEBTPL_OVERRIDE=''
 	if [ "$SUSPENDED" = 'yes' ]; then
-		docroot="$HESTIA/templates/web/suspend"
+		docroot="$SHARETPL/suspend/pages/admin"
 		sdocroot="$docroot"
 		WEBTPL_OVERRIDE="$HESTIA/share/web/suspend/admin"
 	elif [ "$OFFLINE" = 'yes' ]; then

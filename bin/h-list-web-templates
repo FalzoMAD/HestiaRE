@@ -68,8 +68,8 @@ csv_list() {
 # Parsing templates. Only the selectable tree - a model whose vhost template lives in
 # share/ (apache) offers no choice, and an empty list is the honest answer
 templates=''
-if [ -d "$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND" ]; then
-	templates=$(ls -v "$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND/" | grep '\.tpl' | sed 's/\.tpl$//')
+if [ -z "$PROXY_SYSTEM" ] && [ -d "$WEBTPL/$WEB_SYSTEM" ]; then
+	templates=$(ls -v "$WEBTPL/$WEB_SYSTEM/" | grep '\.tpl' | sed 's/\.tpl$//')
 fi
 
 # Listing data

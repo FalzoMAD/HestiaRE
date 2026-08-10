@@ -55,7 +55,13 @@ HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 # CLI helpers run through the hestia-php wrapper (panel PHP version indirection)
 HESTIA_PHP="$HESTIA/bin/hestia-php"
 USER_DATA=$CONF_DIR/users/$user
-WEBTPL=$HESTIA/templates/web
+# Selectable vhost templates (the customer picks these), the non-selectable ones served
+# from share/, and the FPM pool profiles. PHPTPL is its own anchor rather than
+# $WEBTPL/$WEB_BACKEND: WEB_BACKEND is a config VALUE, and tying a directory name to it
+# means renaming the directory would have to rename the value everywhere it is compared.
+WEBTPL=$HESTIA/templates
+SHARETPL=$HESTIA/share/web
+PHPTPL=$HESTIA/templates/php
 # webmail templates live per app at $HESTIA/share/$WEB_SYSTEM/webmail/ (no MAILTPL var)
 DNSTPL=$HESTIA/templates/dns
 RRD=$HESTIA/web/rrd
