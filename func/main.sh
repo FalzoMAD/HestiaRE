@@ -1931,6 +1931,12 @@ web_lock_acquire() {
 }
 
 # Release the freeze early (otherwise it drops on process exit).
+#
+# The export asymmetry above is what makes the reentrancy safe, and it is easy to "tidy
+# up" into a bug: HESTIA_WEB_LOCK_HELD is exported so a child command skips acquiring,
+# while WEB_LOCK_FD is NOT - so this bails out in the child and never runs flock -u on
+# a descriptor the parent still holds. Exporting WEB_LOCK_FD would let a child release
+# the parent's lock mid-operation. Measured: a child that calls this leaves the lock held.
 web_lock_release() {
 	[ -n "${WEB_LOCK_FD:-}" ] || return 0
 	flock -u "$WEB_LOCK_FD" 2> /dev/null
