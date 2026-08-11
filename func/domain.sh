@@ -177,28 +177,23 @@ is_web_alias_new() {
 
 # Prepare web backend
 prepare_web_backend() {
-	# Accept first function argument as backend template otherwise fallback to $template global variable
+	# The version is its own field (PHP_VERSION) since #591; BACKEND carries only the
+	# pool profile. Take the version from the first argument when it is a legacy PHP-X_Y
+	# (an old record met mid-rebuild), then from PHP_VERSION, then the system default.
 	local backend_template=${1:-$template}
-
-	pool=$(find -L /etc/php/ -name "$domain.conf" -exec dirname {} \;)
-	# Check if multiple-PHP installed
-	if [[ $backend_template =~ ^.*PHP-([0-9])\_([0-9])$ ]]; then
+	if [[ $backend_template =~ ^.*PHP-([0-9]+)\_([0-9]+)$ ]]; then
 		backend_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-		pool=$(find -L /etc/php/$backend_version -type d \( -name "pool.d" -o -name "*fpm.d" \))
+	elif [ -n "$PHP_VERSION" ] && [ "$PHP_VERSION" != 'none' ]; then
+		backend_version="$PHP_VERSION"
 	else
 		backend_version=$(multiphp_default_version)
-		if [ -z "$pool" ] || [ -z "$BACKEND" ]; then
-			pool=$(find -L /etc/php/$backend_version -type d \( -name "pool.d" -o -name "*fpm.d" \))
-		fi
 	fi
+	pool=$(find -L /etc/php/$backend_version -type d \( -name "pool.d" -o -name "*fpm.d" \))
 
 	if [ ! -e "$pool" ]; then
 		check_result $E_NOTEXIST "php-fpm pool doesn't exist"
 	fi
 	backend_type="$domain"
-	if [ "$WEB_BACKEND_POOL" = 'user' ]; then
-		backend_type="$user"
-	fi
 	if [ -e "$pool/$backend_type.conf" ]; then
 		backend_lsnr=$(grep "listen =" $pool/$backend_type.conf)
 		backend_lsnr=$(echo "$backend_lsnr" | cut -f 2 -d = | sed "s/ //")

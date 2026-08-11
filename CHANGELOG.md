@@ -14,6 +14,21 @@ opens above it.
 
 ### Changed
 
+- **The PHP version is its own web.conf field, and the pool template becomes a named profile**
+  (#591, #219 Phase 6, closes #550). A domain's version used to be either implied (`BACKEND=default`
+  followed the system default) or hidden inside the backend value (`BACKEND=PHP-8_3`), so a record
+  never stated the version it actually ran. Now `PHP_VERSION` carries the version and `BACKEND`
+  carries only the pool profile - `default` (ondemand, 8 children, unchanged), `ondemand` (lean, 4
+  children) and `high` (dynamic, up to 24). The per-version `PHP-X_Y.tpl` files stop being generated
+  and `socket.tpl` / `no-php.tpl` are retired; an update sweeps them from an existing box.
+
+  Existing records migrate on their next rebuild: the version is read from the **pool the vhost
+  actually points at** (`find -L /etc/php/`), not from `multiphp_default_version`, because after any
+  system-default change the two diverge until a rebuild catches up - reading the default would rewrite
+  a domain onto a version it was never on. Verified against a deliberately drifted box (a `default`
+  domain on 8.4 while the system default was 8.2 migrated to 8.4, not 8.2), on both nginx-only and
+  apache-only. The dead `WEB_BACKEND_POOL` per-user-pool mode and its five branches go with it.
+
 - **The template tree holds only what somebody chooses** (#219 phases 3-5, #588/#589/#590).
   `templates/` is down to `nginx/` (the nginx-only vhost selection) and `php/` (FPM pool
   profiles); everything nobody picks moved to `share/` - the apache vhost, the both-model
