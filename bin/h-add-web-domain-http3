@@ -1,0 +1,111 @@
+#!/bin/bash
+# info: enable HTTP/3 (QUIC) for a domain
+# options: USER DOMAIN [RESTART] [QUIET]
+#
+# example: h-add-web-domain-http3 admin acme.com
+#
+# This function enables HTTP/3 on the nginx front. It needs SSL and an http_v3-capable nginx;
+# deb12/ub24 ship an OS nginx without it, so the switch is refused there (nginx stays valid). UDP/443
+# (the QUIC port) is open in the standard firewall rule set, so http3 works wherever it is enabled.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+domain_idn=$2
+restart="$3"
+quiet="$4"
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# shellcheck source=/usr/local/hestia/func/ip.sh
+source $HESTIA/func/ip.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+# Additional argument formatting
+format_domain
+format_domain_idn
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [RESTART] [QUIET]'
+is_format_valid 'user' 'domain' 'restart'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Load domain data
+# grep -F: the domain is a literal, not a regex, so a.b.com cannot match aXb.com (#594) - and here
+# the record supplies SSL, IP and HTTP3, i.e. both gates and the fragment's IP
+# shellcheck disable=SC2046  # word splitting carries the record into KEY='v' tokens
+parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+
+# http3 is a TLS transport, so it needs the SSL vhost to exist
+if [ "$SSL" != 'yes' ]; then
+	check_result "$E_NOTEXIST" "SSL is not enabled - HTTP/3 needs a TLS vhost"
+fi
+
+# http3 lives on the nginx front (proxy in the both model, else the standalone nginx web system);
+# apache has no OS http3, so an apache-only domain has no front to carry it
+if [ "$PROXY_SYSTEM" != 'nginx' ] && [ "$WEB_SYSTEM" != 'nginx' ]; then
+	check_result "$E_NOTEXIST" "HTTP/3 needs an nginx front (nginx-only or both model)"
+fi
+
+# the OS nginx on deb12/ub24 is built without http_v3 - a quic listen would fail nginx -t and take
+# the whole reload down, so gate on the actual build rather than assume the capability
+if ! nginx_has_http3; then
+	check_result "$E_NOTEXIST" "the installed nginx has no HTTP/3 (http_v3) support"
+fi
+
+# Write the quic fragment under the domain's front IP. UDP/443 (the QUIC port) is opened by the
+# standard firewall seed, not here - a seed rule is rebuilt from state on every firewall rebuild,
+# where an imperative open would be silently dropped and h3 would fall back to h2 unnoticed (#613).
+local_ip=$(get_real_ip "$IP")
+add_web_http3_config "$local_ip"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+if [ -z "$HTTP3" ]; then
+	add_object_key "web" 'DOMAIN' "$domain" 'HTTP3' 'SSL_HOME'
+fi
+update_object_value 'web' 'DOMAIN' "$domain" '$HTTP3' 'yes'
+
+# Restart only the service that carries the quic fragment - the nginx front. In the both model
+# that is the proxy (apache backend never sees the listen); nginx-only carries it on the web side.
+if [ "$PROXY_SYSTEM" = 'nginx' ]; then
+	$BIN/h-restart-proxy "$restart"
+	check_result $? "Proxy restart failed" > /dev/null
+else
+	$BIN/h-restart-web "$restart"
+	check_result $? "Web restart failed" > /dev/null
+fi
+
+# Logging
+if [ "$quiet" != "yes" ]; then
+	$BIN/h-log-action "$user" "Info" "Web" "HTTP/3 enabled (Domain: $domain)."
+fi
+log_event "$OK" "$ARGUMENTS"
+
+exit

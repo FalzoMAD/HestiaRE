@@ -354,6 +354,11 @@ rebuild_web_domain_conf() {
 		$BIN/h-delete-web-domain-ssl-hsts $user $domain no yes
 		$BIN/h-add-web-domain-ssl-hsts $user $domain no yes
 	fi
+
+	# http3 is capability-gated, so it reconciles silently from the HTTP3 field rather than via a
+	# delete+add of the loudly-refusing command (#613): the fragment appears only where nginx can
+	# serve it, and is dropped where it cannot, without erroring per domain in a batch rebuild
+	apply_web_http3_config
 	if [ "$FASTCGI_CACHE" = 'yes' ]; then
 		$BIN/h-delete-fastcgi-cache $user $domain
 		$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"

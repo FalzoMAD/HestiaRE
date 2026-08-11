@@ -28,6 +28,11 @@ source_conf "$HESTIA/conf/hestia.conf"
 CROWDSEC=''
 [ -f "$CONF_DIR/firewall/crowdsec.conf" ] && CROWDSEC='yes'
 
+# nginx HTTP/3 build capability, exposed so the panel only offers the per-domain http3 switch where
+# it works (#613) - the deb12/ub24 OS nginx has no http_v3 and a quic listen would fail nginx -t.
+WEB_HTTP3=''
+command -v nginx > /dev/null 2>&1 && nginx -V 2>&1 | grep -q -- '--with-http_v3_module' && WEB_HTTP3='yes'
+
 # JSON list function
 json_list() {
 	echo '{
@@ -113,6 +118,7 @@ json_list() {
 			"WEB_RGROUPS": "'$WEB_RGROUPS'",
 			"WEB_SSL": "'$WEB_SSL'",
 			"WEB_SSL_PORT": "'$WEB_SSL_PORT'",
+			"WEB_HTTP3": "'$WEB_HTTP3'",
 			"WEB_SYSTEM": "'$WEB_SYSTEM'"
 		}
 	}'

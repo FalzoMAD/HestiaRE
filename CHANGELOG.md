@@ -12,6 +12,28 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **HTTP/3 (QUIC) is a per-domain switch, gated on the nginx build** (#613, part of #219). http3 used
+  to exist only as three `wordpress*-http3` template variants - a duplicate per template, and only for
+  the WordPress family. It is orthogonal to the template, so it becomes a per-domain switch
+  (`h-add-web-domain-http3` / `h-delete-web-domain-http3`, and a checkbox in the SSL section) that
+  works on **any** template: the quic listen and `Alt-Svc` header go into an include fragment every
+  merged SSL block already globs, so no template or renderer changes are needed. It needs SSL and an
+  nginx front (nginx-only or both model). The switch is **offered and applied only where nginx is built
+  `--with-http_v3_module`** - the Debian 12 and Ubuntu 24.04 OS nginx is not, and a quic listen fails
+  `nginx -t` there. This also fixes a latent bug: the old `-http3` templates carried that quic listen
+  and already broke `nginx -t` on those two targets. Restore honours an archived switch or maps a
+  `-http3` template to its base plus the switch, but drops the quic fragment when the target nginx
+  cannot do http3, so a cross-restore degrades cleanly. The three `-http3` templates are removed.
+  The `HTTP3` field is authoritative (intent, kept across restore and host moves) and the quic
+  fragment is reconciled from it through the capability gate on **every rebuild**, so the file can
+  never outrun the box; a smoke guard flags a quic fragment on a box whose nginx lacks http_v3
+  (e.g. after an nginx package change). **UDP/443** (the QUIC port) is open in the standard firewall
+  rule set, without which the advertised h3 endpoint is silently dropped and clients fall back to
+  HTTP/2. It ships as a seed rule, not opened per switch, so it survives a firewall rebuild rather
+  than being dropped the way an imperative open would be.
+
 ### Changed
 
 - **Web vhost templates are one file, and a domain has one vhost config** (#593, #219 Phase 8).
