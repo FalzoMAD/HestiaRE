@@ -41,7 +41,7 @@ if [[ ! $version =~ ^[0-9]+\.[0-9]+ ]]; then
 fi
 
 # Check if php version already exists
-if [ -f "$php_fpm" ] && [ -f "$HESTIA/templates/web/php-fpm/PHP-${version/\./_}.tpl" ]; then
+if [ -f "$php_fpm" ] && [ -f "$PHPTPL/PHP-${version/\./_}.tpl" ]; then
 	echo "ERROR: Specified PHP version is already installed."
 	exit "$E_INVALID"
 fi
@@ -148,7 +148,7 @@ sed -i "s/;opcache.max_accelerated_files=10000/opcache.max_accelerated_files=100
 
 # Install backend template
 cp -f $HESTIA/share/php-fpm/multiphp.tpl \
-	$HESTIA/templates/web/php-fpm/PHP-${version/\./_}.tpl
+	$PHPTPL/PHP-${version/\./_}.tpl
 
 #----------------------------------------------------------#
 #                       Hestia                             #

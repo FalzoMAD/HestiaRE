@@ -104,7 +104,7 @@ build_awstats() {
 	done
 
 	# Creating index page
-	cat $WEBTPL/awstats/index.tpl | sed "s/%month%/$month/g" > $dir/index.html
+	cat $SHARETPL/awstats/index.tpl | sed "s/%month%/$month/g" > $dir/index.html
 
 	# Creating navigation page
 	months=$(find $dir -type d | sed -e "s%$dir/%%g" -e "s%$dir%%g" \
@@ -128,7 +128,7 @@ build_awstats() {
 		esac
 		select_m="$select_m<option value=$link>$month $year<\/option>\n"
 	done
-	cat $WEBTPL/awstats/nav.tpl | sed "s/%select_month%/$select_m/" > $dir/nav.html
+	cat $SHARETPL/awstats/nav.tpl | sed "s/%select_month%/$select_m/" > $dir/nav.html
 }
 
 # Switching on statistics type

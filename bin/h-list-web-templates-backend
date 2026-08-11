@@ -67,7 +67,7 @@ csv_list() {
 
 # Parsing backend templates
 if [ -n "$WEB_BACKEND" ]; then
-	templates=$(ls -t $WEBTPL/$WEB_BACKEND \
+	templates=$(ls -t $PHPTPL \
 		| cut -f1 -d . \
 		| grep -v proxy_ip \
 		| sort -u)

@@ -195,7 +195,7 @@ rebuild_ip_web_config() {
 			-e "s/%web_port%/$WEB_PORT/g" \
 			-e "s/%proxy_port%/$PROXY_PORT/g" \
 			-e "s/%proxy_ssl_port%/$PROXY_SSL_PORT/g" \
-			"$WEBTPL/$PROXY_SYSTEM/proxy_ip.tpl" > "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
+			"$SHARETPL/$PROXY_SYSTEM/proxy_ip.tpl" > "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 
 		process_http2_directive "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 	fi

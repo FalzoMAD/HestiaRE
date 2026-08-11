@@ -19,6 +19,8 @@ source $HESTIA/func/main.sh
 source $HESTIA/func/firewall.sh
 # shellcheck source=/usr/local/hestia/func/fail2ban.sh
 source $HESTIA/func/fail2ban.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
 # shellcheck source=/usr/local/hestia/func/syshealth.sh
 source $HESTIA/func/syshealth.sh
 # load config file
@@ -514,23 +516,29 @@ check_v_symlinks_resolve() {
 # Feature fragments (ssl/hsts/forcessl/fastcgi_cache) are NOT checked - they belong only to the
 # templates implementing them. Scope = templates carrying %domain%, so the per-IP catch-all is skipped.
 check_policy_fragment_coverage() {
-	local tpl_root="$HESTIA/templates/web" sys frag f miss=0 first="" checked=0
-	for sys in nginx apache2; do
-		[ -d "$tpl_root/$sys" ] || continue
-		case "$sys" in
-			nginx) set -- nginx.crowdsec.conf nginx.botlimit.conf ;;
-			apache2) set -- botlimit.apache2.conf ;;
-		esac
-		while read -r f; do
-			[ -n "$f" ] || continue
-			checked=$((checked + 1))
-			for frag in "$@"; do
-				grep -q "$frag" "$f" && continue
-				miss=$((miss + 1))
-				[ -z "$first" ] && first="${f#"$tpl_root/"} lacks $frag"
-			done
-		done < <(grep -rl '%domain%' "$tpl_root/$sys" 2> /dev/null)
-	done
+	local f frag miss=0 first="" checked=0
+	# By file, not by service directory: a vhost template can live anywhere under the two
+	# roots (share/web/suspend/ does), and scanning fixed subdirs would quietly skip it.
+	# The pool templates under templates/php carry %domain% but are not vhosts.
+	while read -r f; do
+		[ -n "$f" ] || continue
+		# Decided by content: a vhost declares either a VirtualHost or a server block.
+		# Keying on the path would break the moment a directory is renamed - which is
+		# exactly what just happened - and silently shrink the guard.
+		if grep -q '^[[:space:]]*<VirtualHost' "$f"; then
+			set -- botlimit.apache2.conf
+		elif grep -qE '^[[:space:]]*server[[:space:]]*\{' "$f"; then
+			set -- nginx.crowdsec.conf nginx.botlimit.conf
+		else
+			continue
+		fi
+		checked=$((checked + 1))
+		for frag in "$@"; do
+			grep -q "$frag" "$f" && continue
+			miss=$((miss + 1))
+			[ -z "$first" ] && first="${f#"$HESTIA/"} lacks $frag"
+		done
+	done < <(grep -rl '%domain%' "$WEBTPL" "$SHARETPL" 2> /dev/null | grep -E '\.(tpl|stpl)$')
 	if [ "$miss" -eq 0 ]; then
 		ok "policy fragment includes complete ($checked domain templates)"
 	else
@@ -681,6 +689,44 @@ check_vhost_nonempty() {
 		no "$miss empty vhost config(s)" "$first"
 	fi
 }
+# check_web_templates_resolvable - a record pointing at a template that no longer exists
+# renders nothing. add_web_config now refuses instead of writing an empty vhost, so the
+# damage is visible - but only on the next rebuild, which may be weeks away.
+check_web_templates_resolvable() {
+	local u line d tpl proxy backend miss=0 first="" checked=0
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		[ -f "$CONF_DIR/users/$u/web.conf" ] || continue
+		while IFS= read -r line; do
+			d=$(sed -n "s/.*DOMAIN='\([^']*\)'.*/\1/p" <<< "$line")
+			[ -n "$d" ] || continue
+			tpl=$(sed -n "s/.*[^_]TPL='\([^']*\)'.*/\1/p" <<< "$line")
+			proxy=$(sed -n "s/.* PROXY='\([^']*\)'.*/\1/p" <<< "$line")
+			backend=$(sed -n "s/.* BACKEND='\([^']*\)'.*/\1/p" <<< "$line")
+			checked=$((checked + 1))
+			if [ -n "$WEB_SYSTEM" ] && [ -n "$tpl" ] \
+				&& [ ! -f "$(web_template_file "$WEB_SYSTEM" "$tpl" 'tpl')" ]; then
+				miss=$((miss + 1))
+				[ -z "$first" ] && first="$u/$d TPL='$tpl'"
+			fi
+			if [ -n "$PROXY_SYSTEM" ] && [ -n "$proxy" ] \
+				&& [ ! -f "$(web_template_file "$PROXY_SYSTEM" "$proxy" 'tpl')" ]; then
+				miss=$((miss + 1))
+				[ -z "$first" ] && first="$u/$d PROXY='$proxy'"
+			fi
+			if [ -n "$WEB_BACKEND" ] && [ -n "$backend" ] \
+				&& [ ! -f "$PHPTPL/$backend.tpl" ]; then
+				miss=$((miss + 1))
+				[ -z "$first" ] && first="$u/$d BACKEND='$backend'"
+			fi
+		done < "$CONF_DIR/users/$u/web.conf"
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "every web record resolves to a template ($checked domain(s))"
+	else
+		no "$miss web record value(s) point at a missing template" "$first"
+	fi
+}
+
 # check_object_counters - the record-derived U_* counters against a recount, using the
 # same derivation rules as h-update-user-counters. Not covered, deliberately: U_DISK*/
 # U_BANDWIDTH (measured, not derivable from records), U_USERS and the SUSPENDED_* mirrors.
@@ -714,12 +760,18 @@ check_object_counters() {
 		_ctr U_CRON_JOBS "$(_cnt . "$ud/cron.conf")"
 		_ctr U_BACKUPS "$(_cnt . "$ud/backup.conf")"
 	done
+	# Records store the ADDRESS THE DOMAIN ANSWERS ON, which behind NAT is the public
+	# one, while the ip file is named after the local address - so both count here, or
+	# the recount is 0 on every NAT'd box and the guard "corrects" healthy counters
+	local nat
 	for ipf in "$CONF_DIR/ips"/*; do
 		[ -f "$ipf" ] || continue
 		ip=$(basename "$ipf")
+		nat=$(grep -o "NAT='[^']*'" "$ipf" 2> /dev/null | head -1 | cut -d"'" -f2)
 		stored=$(grep -o "U_WEB_DOMAINS='[0-9]*'" "$ipf" 2> /dev/null | head -1 | tr -dc 0-9)
 		[ -n "$stored" ] || continue
-		real=$(grep -hF "IP='$ip'" "$CONF_DIR/users"/*/web.conf 2> /dev/null | grep -c .)
+		real=$(grep -hoF -e "IP='$ip'" ${nat:+-e "IP='$nat'"} \
+			"$CONF_DIR/users"/*/web.conf 2> /dev/null | grep -c .)
 		checked=$((checked + 1))
 		if [ "$stored" != "$real" ]; then
 			drift=$((drift + 1))
@@ -1055,6 +1107,8 @@ check_realip_header
 check_proc_hardening
 # #388: guard the allocator's preconditions, since a regression only shows up much later.
 is_on "${COMPONENT_ADDON_DOCKER:-}" && check_docker_bridge
+# a record pointing at a removed template only shows up on the next rebuild.
+check_web_templates_resolvable
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_key_registries
