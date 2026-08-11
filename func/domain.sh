@@ -72,7 +72,11 @@ accept_web_template() {
 		proxy) file=$(web_template_file "$PROXY_SYSTEM" "$value" 'tpl') ;;
 		backend) file="$PHPTPL/$value.tpl" ;;
 	esac
-	if [ -n "$value" ] && [ -f "$file" ]; then
+	# A template name from an archive is untrusted input: it is joined into a path and the file
+	# is cat'd into the domain's vhost (add_web_config). Require a plain name so a value with path
+	# segments cannot escape the template dir and read an arbitrary .tpl. Anything else is mapped
+	# or defaulted below, same as an aged-out value.
+	if [ -n "$value" ] && [[ "$value" =~ ^[a-zA-Z0-9._-]+$ ]] && [ -f "$file" ]; then
 		echo "$value -"
 		return 0
 	fi
