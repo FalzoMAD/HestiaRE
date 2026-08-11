@@ -18,9 +18,10 @@ opens above it.
   (#591, #219 Phase 6, closes #550). A domain's version used to be either implied (`BACKEND=default`
   followed the system default) or hidden inside the backend value (`BACKEND=PHP-8_3`), so a record
   never stated the version it actually ran. Now `PHP_VERSION` carries the version and `BACKEND`
-  carries only the pool profile - `default` (ondemand, 8 children, unchanged), `ondemand` (lean, 4
-  children) and `high` (dynamic, up to 24). The per-version `PHP-X_Y.tpl` files stop being generated
-  and `socket.tpl` / `no-php.tpl` are retired; an update sweeps them from an existing box.
+  carries only the pool profile - `default` (ondemand, 8 children, unchanged), `small` (ondemand, 4
+  children) and `high` (dynamic, up to 24); the set is derived from the shipped templates, so a custom
+  profile survives a backup round-trip. The per-version `PHP-X_Y.tpl` files stop being generated and
+  `socket.tpl` / `no-php.tpl` are retired; an update sweeps them from an existing box.
 
   Existing records migrate on their next rebuild: the version is read from the **pool the vhost
   actually points at** (`find -L /etc/php/`), not from `multiphp_default_version`, because after any

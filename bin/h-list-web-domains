@@ -54,7 +54,6 @@ json_list() {
         "AUTH_USER": "'$AUTH_USER'",
         "BACKEND": "'$BACKEND'",
         "PHP_VERSION": "'$PHP_VERSION'",
-        "PHP_PROFILE": "'$PHP_PROFILE'",
         "PROXY": "'$PROXY'",
         "PROXY_EXT": "'$PROXY_EXT'",
         "SUSPENDED": "'$SUSPENDED'",

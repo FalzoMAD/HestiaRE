@@ -1,4 +1,4 @@
-; HestiaRE pool profile: ondemand (lean). Fewer workers than default - many small sites per box.
+; HestiaRE pool profile: small (lean). Fewer workers than default - many small sites per box.
 ;#=========================================================================#
 ;# DO NOT MODIFY THIS FILE! CHANGES WILL BE LOST WHEN REBUILDING DOMAINS   #
 ;#=========================================================================#

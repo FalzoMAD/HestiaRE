@@ -32,7 +32,7 @@ is_format_valid 'restart'
 awstats_patch=$(cat $SHARETPL/awstats/awstats.tpl | grep "LoadPlugin=\"geoip GEOIP_STANDARD /usr/share/GeoIP/GeoIP.dat\"")
 
 # Web templates ship at $HESTIA/templates (delivered by the tarball). The FPM pool
-# profiles (default, ondemand, high) are static files now; the version is a web.conf
+# profiles (default, small, high) are static files now; the version is a web.conf
 # field, not baked into a per-version template. Sweep the pre-#591 artefacts an upgrade
 # still carries: the generated PHP-X_Y pool templates and the retired socket / no-php.
 for stale in "$PHPTPL"/PHP-[0-9]*_[0-9]*.tpl "$PHPTPL/socket.tpl" "$PHPTPL/no-php.tpl"; do

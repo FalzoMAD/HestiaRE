@@ -48,6 +48,8 @@ map_legacy_template() {
 		suspended) echo "default -" ;;
 		# a per-version FPM pool template whose version is no longer installed
 		PHP-[0-9]_[0-9] | *-PHP-[0-9]_[0-9]) echo "default -" ;;
+		# no-php is a version now (PHP_VERSION='none'), not a template; the profile is just default
+		no-php) echo "default -" ;;
 		*) return 1 ;;
 	esac
 }
@@ -173,6 +175,20 @@ is_web_alias_new() {
 	if [ $? -ne 0 ]; then
 		check_result "$E_EXISTS" "Web alias $1 exists"
 	fi
+}
+
+# The PHP version a domain actually runs, derived once for both the migration and the backup
+# so they never disagree (#591). Authoritative source is the socket the vhost points at - that
+# is what serves - falling back to the pool file's directory. A stray pool of an older version
+# then cannot win a find-order race. Empty when neither is present.
+web_domain_pool_version() {
+	local dom="$1" ver=''
+	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom}\.sock" "$HOMEDIR/$user/conf/web/$dom/" 2> /dev/null \
+		| head -1 | grep -oE '[0-9]+\.[0-9]+')
+	if [ -z "$ver" ]; then
+		ver=$(find -L /etc/php/ -name "$dom.conf" -printf '%h\n' 2> /dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+')
+	fi
+	echo "$ver"
 }
 
 # Prepare web backend

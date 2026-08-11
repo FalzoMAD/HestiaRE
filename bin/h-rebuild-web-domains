@@ -101,8 +101,7 @@ done
 if [ -n "$WEB_BACKEND" ]; then
 	for domain in $($BIN/h-list-web-domains $user plain | cut -f 1); do
 		[ -n "$(get_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION')" ] && continue
-		pool_dir=$(find -L /etc/php/ -name "$domain.conf" -printf '%h\n' 2> /dev/null | head -1)
-		derived=$(echo "$pool_dir" | grep -oE '/etc/php/[0-9]+\.[0-9]+/' | grep -oE '[0-9]+\.[0-9]+')
+		derived=$(web_domain_pool_version "$domain")
 		[ -z "$derived" ] && derived=$(multiphp_default_version)
 		add_object_key 'web' 'DOMAIN' "$domain" 'PHP_VERSION' 'BACKEND'
 		case "$(get_object_value 'web' 'DOMAIN' "$domain" '$BACKEND')" in
