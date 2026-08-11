@@ -378,18 +378,16 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			sed -n "$top_line,$bottom_line p" $conf > conf/$WEB_SYSTEM.conf
 		fi
 
-		# Backup ssl vhost
+		# Backup ssl vhost. A merged template (#593) keeps the SSL server block in the .conf
+		# archived above, so there is no separate .ssl.conf - only its SSL include fragments are
+		# copied here. A legacy pair still ships a standalone .ssl.conf.
 		if [ "$SSL" = 'yes' ]; then
 			if [ -e "$HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.ssl.conf" ]; then
 				cp $HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.ssl.conf* conf/
 			elif [ -e "$HOMEDIR/$user/conf/web/$domain.$WEB_SYSTEM.ssl.conf" ]; then
 				cp $HOMEDIR/$user/conf/web/$domain.$WEB_SYSTEM.ssl.conf* conf/
 			else
-				# legacy format: all domain configs in single file
-				tpl_file=$(web_template_file "$WEB_SYSTEM" "$TPL" 'stpl')
-				conf="$HOMEDIR/$user/conf/web/s$WEB_SYSTEM.conf"
-				get_web_config_lines "$tpl_file" "$conf"
-				sed -n "$top_line,$bottom_line p" $conf > conf/s$WEB_SYSTEM.conf
+				cp $HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.ssl.conf_* conf/ 2> /dev/null || true
 			fi
 		fi
 
@@ -408,18 +406,14 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			fi
 		fi
 
-		# Backup ssl proxy config
+		# Backup ssl proxy config - merged template keeps the SSL block in the .conf (#593)
 		if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ] && [ "$SSL" = 'yes' ]; then
 			if [ -e "$HOMEDIR/$user/conf/web/$domain/$PROXY_SYSTEM.ssl.conf" ]; then
 				cp $HOMEDIR/$user/conf/web/$domain/$PROXY_SYSTEM.ssl.conf* conf/
 			elif [ -e "$HOMEDIR/$user/conf/web/$domain.$PROXY_SYSTEM.ssl.conf" ]; then
 				cp $HOMEDIR/$user/conf/web/$domain.$PROXY_SYSTEM.ssl.conf* conf/
 			else
-				# legacy format: all domain configs in single file
-				tpl_file=$(web_template_file "$PROXY_SYSTEM" "$PROXY" 'stpl')
-				conf="$HOMEDIR/$user/conf/web/s$PROXY_SYSTEM.conf"
-				get_web_config_lines "$tpl_file" "$conf"
-				sed -n "$top_line,$bottom_line p" $conf > conf/s$PROXY_SYSTEM.conf
+				cp $HOMEDIR/$user/conf/web/$domain/$PROXY_SYSTEM.ssl.conf_* conf/ 2> /dev/null || true
 			fi
 		fi
 
