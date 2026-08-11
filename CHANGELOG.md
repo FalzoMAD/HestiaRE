@@ -184,6 +184,17 @@ opens above it.
 
 ### Fixed
 
+- **The dummy FPM pool leaked into the isolated panel master with a raw placeholder socket**
+  (#604). `h-rebuild-web-domains` seeded the fallback pool by globbing `/etc/php/*`, which on
+  HestiaRE catches `/etc/php/hestia` - the isolated panel FPM, not a customer version - so the
+  panel master ran a stray `www-data` pool listening on a literal `php%backend_version%-fpm-dummy.sock`.
+  Two compounding faults, both inherited from upstream but only reachable here because our panel
+  PHP lives under `/etc/php/`: the glob (now `h-list-sys-php plain`, which already excludes
+  `hestia`) and a stale `s/9999/` substitution that never matched the template's `%backend_version%`
+  (aligned in `h-rebuild-web-domains` and `h-restart-web-backend` with the two install-path call
+  sites). Present on every fresh install; no vhost routed to the socket, but it widened what the
+  isolated panel master ran.
+
 - **A domain name acting as a regex could delete another customer's cache zone and break nginx
   box-wide** (#583). Four sites removed lines from shared nginx pool files with the domain
   unescaped in a sed pattern - and the dot is a wildcard there, so deleting `a.b.com` also took
