@@ -408,6 +408,15 @@ add_web_config() {
 	local web_tpl_merged=0
 	web_template_is_merged "${WEBTPL_LOCATION}/$2" && web_tpl_merged=1
 
+	# %docker_ip% is read from the OWNER record here, not from a sourced variable: the rebuild path
+	# never sources user.conf, so a sourced value would render on create and come up EMPTY on every
+	# rebuild - proxy_pass http://:port, the silent #456 class (#566 plan N1).
+	# %front_port%/%front_ssl_port% (in the sed list below) resolve to the public listener of the
+	# active model - proxy when present, else web - so ONE docker template serves nginx-only and
+	# both; apache-only carries no PROXY_* keys at all, hence :- not just empty-value fallback.
+	local web_docker_ip=''
+	web_docker_ip=$(get_user_value '$DOCKER_IP')
+
 	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
 	if [ "$web_tpl_merged" = 0 ] && [[ "$2" =~ stpl$ ]]; then
 		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
@@ -443,6 +452,10 @@ add_web_config() {
 			-e "s|%proxy_system%|$PROXY_SYSTEM|g" \
 			-e "s|%proxy_port%|$PROXY_PORT|g" \
 			-e "s|%proxy_ssl_port%|$PROXY_SSL_PORT|g" \
+			-e "s|%front_port%|${PROXY_PORT:-$WEB_PORT}|g" \
+			-e "s|%front_ssl_port%|${PROXY_SSL_PORT:-$WEB_SSL_PORT}|g" \
+			-e "s|%docker_port%|$DOCKER_PORT|g" \
+			-e "s|%docker_ip%|$web_docker_ip|g" \
 			-e "s/%proxy_extentions%/${PROXY_EXT//,/|}/g" \
 			-e "s/%proxy_extensions%/${PROXY_EXT//,/|}/g" \
 			-e "s|%user%|$user|g" \
