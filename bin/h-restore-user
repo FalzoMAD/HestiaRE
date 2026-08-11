@@ -275,7 +275,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		echo -e "$(date "+%F %T") $domain" | tee -a $tmpdir/restore.log
 
 		# Cleanup previous domain keys
-		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME SSL_FORCE SSL_HSTS LETSENCRYPT FTP_USER FTP_MD5 FTP_PATH BACKEND PHP_VERSION PHP_PROFILE PROXY PROXY_EXT PROXY_CACHE PROXY_CACHE_DURATION FASTCGI_CACHE FASTCGI_DURATION REDIRECT REDIRECT_CODE STATS STATS_USER STATS_CRYPT U_DISK OFFLINE CUSTOM_DOCROOT CUSTOM_PHPROOT
+		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME SSL_FORCE SSL_HSTS HTTP3 LETSENCRYPT FTP_USER FTP_MD5 FTP_PATH BACKEND PHP_VERSION PHP_PROFILE PROXY PROXY_EXT PROXY_CACHE PROXY_CACHE_DURATION FASTCGI_CACHE FASTCGI_DURATION REDIRECT REDIRECT_CODE STATS STATS_USER STATS_CRYPT U_DISK OFFLINE CUSTOM_DOCROOT CUSTOM_PHPROOT restore_web_effect restore_proxy_effect
 
 		# Checking domain existence
 		check_config=$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
@@ -327,7 +327,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 
 			# Templates through the legacy mapping: an archive can carry values this model
 			# has no file for (foreign install, other web model, removed template)
-			read -r TPL _ <<< "$(accept_web_template 'web' "$TPL")"
+			read -r TPL restore_web_effect <<< "$(accept_web_template 'web' "$TPL")"
 			read -r PROXY restore_proxy_effect <<< "$(accept_web_template 'proxy' "$PROXY")"
 			# BACKEND in the archive is the HestiaCP-compat PHP-<ver>; the native fields carry the
 			# exact HestiaRE state. Prefer them; else derive the version from the compat value and
@@ -392,7 +392,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			str="$str FASTCGI_CACHE='$FASTCGI_CACHE' FASTCGI_DURATION='$FASTCGI_DURATION'"
 			str="$str PROXY_CACHE='$PROXY_CACHE' PROXY_CACHE_DURATION='$PROXY_CACHE_DURATION'"
 			str="$str TPL='$TPL' SSL='$SSL' SSL_HOME='$SSL_HOME' SSL_HSTS='$SSL_HSTS'"
-			str="$str SSL_FORCE='$SSL_FORCE' LETSENCRYPT='$LETSENCRYPT' FTP_USER='$FTP_USER'"
+			str="$str SSL_FORCE='$SSL_FORCE' HTTP3='$HTTP3' LETSENCRYPT='$LETSENCRYPT' FTP_USER='$FTP_USER'"
 			str="$str FTP_MD5='$FTP_MD5' FTP_PATH='$FTP_PATH'"
 			str="$str BACKEND='$BACKEND' PHP_VERSION='$PHP_VERSION' PROXY='$PROXY'"
 			str="$str PROXY_EXT='$PROXY_EXT' STATS='$STATS'"
@@ -432,6 +432,19 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 
 		# Rebuilding vhost to prevent user overwrite default config changes not ideal
 		rebuild_web_domain_conf
+
+		# HTTP/3 (#613): honour an archived switch or a mapped -http3 template, but only where the
+		# target nginx has http_v3 - else drop the quic fragment so nginx -t stays green when an
+		# http3 domain is restored onto a box (deb12/ub24) whose nginx cannot do it. Re-emitting
+		# also fixes the IP if the restore relocated the domain.
+		if { [ "$HTTP3" = 'yes' ] || [ "$restore_web_effect" = 'http3' ] || [ "$restore_proxy_effect" = 'http3' ]; } \
+			&& { [ "$PROXY_SYSTEM" = 'nginx' ] || [ "$WEB_SYSTEM" = 'nginx' ]; } && nginx_has_http3; then
+			add_web_http3_config "$(get_real_ip "$IP")"
+			update_object_value 'web' 'DOMAIN' "$domain" '$HTTP3' 'yes'
+		else
+			del_web_http3_config
+			update_object_value 'web' 'DOMAIN' "$domain" '$HTTP3' 'no'
+		fi
 
 		# Restoring web domain data
 		if [ -d "$HOMEDIR/$user/web/$domain/public_html" ]; then

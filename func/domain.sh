@@ -50,6 +50,12 @@ map_legacy_template() {
 		PHP-[0-9]_[0-9] | *-PHP-[0-9]_[0-9]) echo "default -" ;;
 		# no-php is a version now (PHP_VERSION='none'), not a template; the profile is just default
 		no-php) echo "default -" ;;
+		# http3 is a per-domain switch now (#613), not a template variant: map the three former
+		# -http3 templates to their base and signal the switch via the effect channel. Literal
+		# arms (not a suffix strip) keep the echoed name known-good - it is joined into a path.
+		wordpress-http3) echo "wordpress http3" ;;
+		wordpress-disable-xmlrpc-http3) echo "wordpress-disable-xmlrpc http3" ;;
+		wordpress_mu_subdir-http3) echo "wordpress_mu_subdir http3" ;;
 		*) return 1 ;;
 	esac
 }
@@ -588,6 +594,37 @@ del_web_config() {
 			rm -f "/etc/$PROXY_SYSTEM/conf.d/domains/$cn"
 		fi
 	done
+}
+
+# HTTP/3 (#613). http3 rides on a 'quic' listen added to the nginx-front SSL block via an include
+# fragment (nginx.ssl.conf_http3) that every merged template already globs - so it lights up on ANY
+# template, no per-template -http3 variant, no renderer change. Only where an nginx front exists and
+# its build carries http_v3 (the deb12/ub24 OS-nginx does not); the switch commands gate on that.
+# Plain 'quic' on every domain, no reuseport: nginx accepts many quic listens on one ip:port, and
+# the reuseport perf-opt would need one-per-ip bookkeeping a decoupled fragment must not own.
+nginx_has_http3() {
+	command -v nginx > /dev/null 2>&1 && nginx -V 2>&1 | grep -q -- '--with-http_v3_module'
+}
+
+# the nginx front is the proxy in the both model, else the standalone nginx web system
+web_http3_front_ssl_port() {
+	if [ "$PROXY_SYSTEM" = 'nginx' ]; then echo "$PROXY_SSL_PORT"; else echo "$WEB_SSL_PORT"; fi
+}
+
+# write the quic fragment for the current domain; $1 is the resolved front IP (get_real_ip)
+add_web_http3_config() {
+	local ip="$1" port frag
+	port=$(web_http3_front_ssl_port)
+	frag="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_http3"
+	# single quotes keep $server_port literal for nginx; the listen line carries the only %-formats
+	printf 'listen      %s:%s quic;\n' "$ip" "$port" > "$frag"
+	printf 'add_header Alt-Svc '\''h3=":$server_port"; ma=86400'\'';\n' >> "$frag"
+	chown root:"$user" "$frag"
+	chmod 640 "$frag"
+}
+
+del_web_http3_config() {
+	rm -f "$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_http3"
 }
 
 # SSL certificate verification

@@ -1,0 +1,81 @@
+#!/bin/bash
+# info: disable HTTP/3 (QUIC) for a domain
+# options: USER DOMAIN [RESTART] [QUIET]
+#
+# example: h-delete-web-domain-http3 admin acme.com
+#
+# This function disables HTTP/3 by removing the quic listen fragment from the domain's vhost.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+domain_idn=$2
+restart="$3"
+quiet="$4"
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+# Additional argument formatting
+format_domain
+format_domain_idn
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_object_valid 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Load domain data
+# shellcheck disable=SC2046  # word splitting carries the record into KEY='v' tokens
+parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+
+# Remove the quic fragment
+del_web_http3_config
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+if [ -z "$HTTP3" ]; then
+	add_object_key "web" 'DOMAIN' "$domain" 'HTTP3' 'SSL_HOME'
+fi
+update_object_value 'web' 'DOMAIN' "$domain" '$HTTP3' 'no'
+
+# Restart web server
+$BIN/h-restart-web "$restart"
+check_result $? "Web restart failed" > /dev/null
+
+# Restart proxy
+$BIN/h-restart-proxy "$restart"
+check_result $? "Proxy restart failed" > /dev/null
+
+# Logging
+if [ "$quiet" != "yes" ]; then
+	$BIN/h-log-action "$user" "Info" "Web" "HTTP/3 disabled (Domain: $domain)."
+fi
+log_event "$OK" "$ARGUMENTS"
+
+exit
