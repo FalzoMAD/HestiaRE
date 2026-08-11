@@ -295,6 +295,11 @@ prepare_web_domain_values() {
 	group="$user"
 	docroot="$HOMEDIR/$user/web/$domain/public_html"
 	sdocroot="$docroot"
+	# SSL_HOME='single' gives the https vhost its own docroot. Still reachable, not a dead read:
+	# it is set when SSL is enabled (h-add-web-domain-ssl's optional arg) or carried in by a
+	# restore. The panel offers no control (it always sends 'same') and the post-hoc change
+	# command was dropped in #593 - so 'single' can be chosen at enable time or honoured from an
+	# archive, but no longer flipped afterward.
 	if [ "$SSL_HOME" = 'single' ]; then
 		sdocroot="$HOMEDIR/$user/web/$domain/public_shtml"
 		$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/public_shtml"
