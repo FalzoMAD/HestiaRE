@@ -348,7 +348,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		if [ -n "$WEB_BACKEND" ]; then
 			bkp_ver="$PHP_VERSION"
 			if [ -z "$bkp_ver" ]; then
-				bkp_ver=$(web_domain_pool_version "$domain")
+				bkp_ver=$(web_domain_pool_version "$domain" "$user")
 				[ -z "$bkp_ver" ] && bkp_ver=$(multiphp_default_version)
 			fi
 			# Valid profiles are the shipped pool templates, custom ones included; anything else

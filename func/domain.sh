@@ -94,11 +94,17 @@ accept_web_template() {
 	echo "default -"
 }
 
-# Web template check
-# A merged web template (#593) carries both server blocks and this marker line; a legacy pair
-# template does not and still ships its .stpl partner. Single source for the marker string.
+# The one marker string separating a merged web template (#593, both server blocks in one file)
+# from a legacy pair (#=HESTIARE-SSL-VHOST=# present vs absent). Renderer and validators both read
+# this constant so they cannot drift - the same validator/renderer divergence Phase 3 closed for
+# template lookup.
+WEB_TPL_SSL_MARKER='#=HESTIARE-SSL-VHOST=#'
+
+# Web template check. A legacy pair (no marker) is not a migration leftover to sunset: mail
+# templates ship as pairs by design, so format detection is a permanent capability. Custom pair
+# templates are also accepted - pre-v1 there are none to migrate.
 web_template_is_merged() {
-	grep -qxF '#=HESTIARE-SSL-VHOST=#' "$1" 2> /dev/null
+	grep -qxF "$WEB_TPL_SSL_MARKER" "$1" 2> /dev/null
 }
 is_web_template_valid() {
 	if [ -n "$WEB_SYSTEM" ]; then
@@ -198,10 +204,13 @@ is_web_alias_new() {
 # is what serves - falling back to the pool file's directory. A stray pool of an older version
 # then cannot win a find-order race. Empty when neither is present.
 web_domain_pool_version() {
-	local dom="$1" ver='' dom_re
+	# user is an explicit arg (default: the caller's global) so a multi-user sweep reads the
+	# right home instead of silently falling back to the pool-dir find (#593 review). This is a
+	# shared source for migration and backup, so it must not depend on an ambient $user.
+	local dom="$1" usr="${2:-$user}" ver='' dom_re
 	# the domain is scoped to its own conf dir, but its dots are still regex here - escape them
 	dom_re=$(sed 's/[.]/\\./g' <<< "$dom")
-	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom_re}\.sock" "$HOMEDIR/$user/conf/web/$dom/" 2> /dev/null \
+	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom_re}\.sock" "$HOMEDIR/$usr/conf/web/$dom/" 2> /dev/null \
 		| head -1 | grep -oE '[0-9]+\.[0-9]+')
 	if [ -z "$ver" ]; then
 		ver=$(find -L /etc/php/ -name "$dom.conf" -printf '%h\n' 2> /dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+')
@@ -385,9 +394,8 @@ add_web_config() {
 	# and renders ONE vhost file: the HTTP block always, the SSL block only when SSL is on (a
 	# listen 443 without a cert fails -t). A legacy pair template (no marker, e.g. mail) keeps the
 	# old behaviour - this .tpl/.stpl renders its own .conf/.ssl.conf.
-	local web_tpl_marker='#=HESTIARE-SSL-VHOST=#'
 	local web_tpl_merged=0
-	grep -qxF "$web_tpl_marker" "${WEBTPL_LOCATION}/$2" && web_tpl_merged=1
+	web_template_is_merged "${WEBTPL_LOCATION}/$2" && web_tpl_merged=1
 
 	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
 	if [ "$web_tpl_merged" = 0 ] && [[ "$2" =~ stpl$ ]]; then
@@ -401,9 +409,9 @@ add_web_config() {
 	{
 		if [ "$web_tpl_merged" = 1 ]; then
 			if [ "$SSL" = 'yes' ]; then
-				sed "/^${web_tpl_marker}\$/d" "${WEBTPL_LOCATION}/$2"
+				sed "/^${WEB_TPL_SSL_MARKER}\$/d" "${WEBTPL_LOCATION}/$2"
 			else
-				sed "/^${web_tpl_marker}\$/,\$d" "${WEBTPL_LOCATION}/$2"
+				sed "/^${WEB_TPL_SSL_MARKER}\$/,\$d" "${WEBTPL_LOCATION}/$2"
 			fi
 		else
 			cat "${WEBTPL_LOCATION}/$2"
@@ -444,7 +452,10 @@ add_web_config() {
 	chmod 640 $conf
 
 	if [ "$web_tpl_merged" = 1 ]; then
-		# One vhost file holds both server blocks; drop any stale separate .ssl.conf symlink
+		# One vhost file holds both server blocks; drop any stale separate .ssl.conf symlink.
+		# The *.$domain.org* custom-config migration the pair branches below still run is
+		# deliberately skipped here: it predates the per-domain conf dir, so a box new enough
+		# to carry a merged template has no such stragglers to move.
 		rm -f /etc/$1/conf.d/domains/$domain.conf /etc/$1/conf.d/domains/$domain.ssl.conf
 		ln -s $conf /etc/$1/conf.d/domains/$domain.conf
 	elif [[ "$2" =~ stpl$ ]]; then
@@ -521,10 +532,12 @@ get_web_config_lines() {
 
 # Replace web config
 replace_web_config() {
+	# Only the IP change calls this now, always on the .tpl: one merged .conf holds both server
+	# blocks and both carry the same IP, so a single value-replace covers them (#593). No
+	# .ssl.conf branch - a merged template has none, and a value-replace could not tell two
+	# blocks apart once their values coincide (any such toggle re-renders instead, cf. add/delete
+	# -web-domain-ssl).
 	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
-	if [[ "$2" =~ stpl$ ]]; then
-		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
-	fi
 
 	if [ -e "$conf" ]; then
 		# dots escaped: the old IP is a sed pattern here

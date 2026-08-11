@@ -2417,22 +2417,6 @@
       "note": ""
     },
     {
-      "path": "h-change-web-domain-sslhome",
-      "source_type": "derived",
-      "upstream_path": "bin/v-change-web-domain-sslhome",
-      "upstream_ref": "ca19b9f",
-      "last_reconciled": "2026-08-06",
-      "divergence": {
-        "upstream_lines": 104,
-        "our_lines": 105,
-        "added": 6,
-        "removed": 5,
-        "pct": 5,
-        "measured_at": "2026-08-06"
-      },
-      "note": ""
-    },
-    {
       "path": "h-change-web-domain-stats",
       "source_type": "derived",
       "upstream_path": "bin/v-change-web-domain-stats",

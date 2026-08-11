@@ -14,6 +14,19 @@ opens above it.
 
 ### Changed
 
+- **Web vhost templates are one file, and a domain has one vhost config** (#593, #219 Phase 8).
+  The `.tpl` (HTTP) / `.stpl` (SSL) pair is gone: a template now carries both server blocks split
+  by a marker line, and renders **one** `<system>.conf` per domain - the HTTP block always, the SSL
+  block only when SSL is on. This kills the "fixed in the .tpl, forgotten in the .stpl" divergence
+  class at the source; there is no runtime split or generation. `add_web_config` detects the format
+  from the marker, so legacy pair templates (mail) keep working unchanged. Restore stays format
+  agnostic: it discards every archived vhost `.conf` and re-renders from the current template, so a
+  HestiaCP two-file backup restores as one merged vhost automatically - the backup format stays
+  bidirectional. Verified on all four VMs across nginx-only, apache-only and both models (full
+  lifecycle + serving, byte-equivalent output, backup round-trip). `h-change-web-domain-sslhome` is
+  removed with its `v-*` symlink: it had no panel path (the separate SSL docroot is not exposed) and
+  a text-replace could not tell the two blocks apart once they share a file.
+
 - **The PHP version is its own web.conf field, and the pool template becomes a named profile**
   (#591, #219 Phase 6, closes #550). A domain's version used to be either implied (`BACKEND=default`
   followed the system default) or hidden inside the backend value (`BACKEND=PHP-8_3`), so a record
