@@ -392,6 +392,23 @@ add_web_config() {
 		WEBTPL_LOCATION="$WEBTPL_OVERRIDE"
 	fi
 
+	# A docker domain (#566/#592): the FRONT renders from templates/docker/<system>/$DOCKER.tpl and
+	# the both-model apache backend is not rendered at all - the container IS the backend, so a
+	# backend vhost would only shadow it. Centralised here so every caller (add, rebuild, the SSL
+	# toggle, alias changes) behaves the same without knowing about docker; TPL/PROXY stay whatever
+	# they were, which is what makes a web-model switch survivable (#592). The suspend/offline
+	# override above outranks: an admin suspension page shows on a docker domain too.
+	if [ -n "$DOCKER" ] && [ -z "$WEBTPL_OVERRIDE" ]; then
+		if [ -n "$PROXY_SYSTEM" ] && [ "$1" = "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != "$PROXY_SYSTEM" ]; then
+			# reconcile away a stale backend vhost from the pre-docker life of the domain
+			rm -f "$HOMEDIR/$user/conf/web/$domain/$1.conf" "$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf" \
+				"/etc/$1/conf.d/domains/$domain.conf" "/etc/$1/conf.d/domains/$domain.ssl.conf"
+			return 0
+		fi
+		WEBTPL_LOCATION="$WEBTPL/docker/$1"
+		set -- "$1" "$DOCKER.tpl"
+	fi
+
 	# A missing template would become a 0-byte vhost that apache2 -t accepts. Warn +
 	# skip, not check_result: an exit would abort a rebuild loop over one broken record.
 	if [ ! -f "${WEBTPL_LOCATION}/$2" ]; then
@@ -416,6 +433,10 @@ add_web_config() {
 	# both; apache-only carries no PROXY_* keys at all, hence :- not just empty-value fallback.
 	local web_docker_ip=''
 	web_docker_ip=$(get_user_value '$DOCKER_IP')
+	# the domain picks its octet inside the customer /24; empty means the daemon-default .1
+	if [ -n "$web_docker_ip" ] && [ -n "$DOCKER_OCTET" ]; then
+		web_docker_ip="${web_docker_ip%.*}.$DOCKER_OCTET"
+	fi
 
 	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
 	if [ "$web_tpl_merged" = 0 ] && [[ "$2" =~ stpl$ ]]; then

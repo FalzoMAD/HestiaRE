@@ -1,0 +1,66 @@
+#!/bin/bash
+# info: turn a docker proxy domain back into a normal web domain
+# options: USER DOMAIN [RESTART]
+#
+# example: h-delete-web-domain-docker john app.acme.com
+#
+# Clears the docker fields and rebuilds: the domain returns to its stored TPL/PROXY templates
+# (they were never touched) and its FPM pool comes back through the regular backend reconcile.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+domain_idn=$2
+restart="$3"
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+# Additional argument formatting
+format_domain
+format_domain_idn
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_object_valid 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+update_object_value 'web' 'DOMAIN' "$domain" '$DOCKER' ''
+update_object_value 'web' 'DOMAIN' "$domain" '$DOCKER_PORT' ''
+update_object_value 'web' 'DOMAIN' "$domain" '$DOCKER_OCTET' ''
+
+$BIN/h-rebuild-web-domain "$user" "$domain" "$restart"
+check_result $? "rebuild failed" > /dev/null
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Web" "Docker proxy disabled (Domain: $domain)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

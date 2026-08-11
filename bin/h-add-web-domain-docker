@@ -1,0 +1,117 @@
+#!/bin/bash
+# info: turn a web domain into a docker proxy domain
+# options: USER DOMAIN PORT [OCTET] [TEMPLATE] [RESTART]
+#
+# example: h-add-web-domain-docker john app.acme.com 3000
+# example: h-add-web-domain-docker john app.acme.com 3000 7
+#
+# The domain's front (nginx, or apache itself in the apache-only model) proxies everything to the
+# customer's container at <customer /24>.<octet>:<port> - no backend vhost, no FPM pool, WebSockets
+# included. Needs docker enabled for the user (h-add-user-docker). TPL/PROXY stay untouched, which
+# is what lets a web-model switch keep the docker choice (#592).
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+domain_idn=$2
+docker_port=$3
+docker_octet=${4-1}
+template=${5-default}
+restart="$6"
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+# Additional argument formatting
+format_domain
+format_domain_idn
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '3' "$#" 'USER DOMAIN PORT [OCTET] [TEMPLATE] [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+# The customer /24 exists only after h-add-user-docker
+docker_net="$(get_user_value '$DOCKER_IP')"
+if [ -z "$docker_net" ]; then
+	check_result "$E_NOTEXIST" "docker is not enabled for $user (run h-add-user-docker first)"
+fi
+docker_net="${docker_net%.*}"
+
+# Rootless cannot bind below 1024, so anything lower can never work
+if ! [[ "$docker_port" =~ ^[0-9]+$ ]] || [ "$docker_port" -lt 1024 ] || [ "$docker_port" -gt 65535 ]; then
+	check_result "$E_INVALID" "PORT must be 1024-65535 (a rootless daemon cannot bind below 1024)"
+fi
+if ! [[ "$docker_octet" =~ ^[0-9]+$ ]] || [ "$docker_octet" -lt 1 ] || [ "$docker_octet" -gt 254 ]; then
+	check_result "$E_INVALID" "OCTET must be 1-254 (the last octet inside the customer's /24)"
+fi
+
+# The template is joined into a path and cat'd into the vhost - require a plain name
+front="${PROXY_SYSTEM:-$WEB_SYSTEM}"
+if ! [[ "$template" =~ ^[A-Za-z0-9._-]+$ ]] || [ ! -f "$WEBTPL/docker/$front/$template.tpl" ]; then
+	check_result "$E_NOTEXIST" "docker template '$template' doesn't exist for $front"
+fi
+
+# A wildcard listener (panel :8083, managesieve :4190, future addons) blocks the port even on the
+# customer address - the container would sit in 'created' and never start, with no usable error.
+# Checked live rather than hard-coded so later wildcard binders are covered too (measured, N4).
+if ss -ltnH 2> /dev/null | awk '{print $4}' | grep -qE "^(0\.0\.0\.0|\*|\[::\]):${docker_port}$"; then
+	check_result "$E_EXISTS" "port $docker_port is held by a wildcard listener on this host - a container could not bind it"
+fi
+
+# One target, one domain: a second NAME for the same app is an alias, not a second domain
+dup=$(grep -F "DOCKER_PORT='$docker_port'" "$USER_DATA/web.conf" 2> /dev/null \
+	| grep -F "DOCKER_OCTET='$docker_octet'" | grep "DOCKER='[^']" | grep -vF "DOMAIN='$domain'" | head -1)
+if [ -n "$dup" ]; then
+	dup_domain=$(sed -n "s/.*DOMAIN='\([^']*\)'.*/\1/p" <<< "$dup")
+	check_result "$E_EXISTS" "target $docker_net.$docker_octet:$docker_port is already proxied by $dup_domain"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# The three fields carry the whole docker state; render and pool reconcile off them centrally
+# (add_web_config / h-add-web-domain-backend), so one rebuild flips everything
+for key in DOCKER DOCKER_PORT DOCKER_OCTET; do
+	if ! grep -F "DOMAIN='$domain'" "$USER_DATA/web.conf" | grep -q " $key="; then
+		add_object_key "web" 'DOMAIN' "$domain" "$key" 'SSL_HOME'
+	fi
+done
+update_object_value 'web' 'DOMAIN' "$domain" '$DOCKER' "$template"
+update_object_value 'web' 'DOMAIN' "$domain" '$DOCKER_PORT' "$docker_port"
+update_object_value 'web' 'DOMAIN' "$domain" '$DOCKER_OCTET' "$docker_octet"
+
+$BIN/h-rebuild-web-domain "$user" "$domain" "$restart"
+check_result $? "rebuild failed" > /dev/null
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Web" "Docker proxy enabled (Domain: $domain, Target: $docker_net.$docker_octet:$docker_port)."
+log_event "$OK" "$ARGUMENTS"
+
+exit
