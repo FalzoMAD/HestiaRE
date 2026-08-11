@@ -1,0 +1,91 @@
+#!/bin/bash
+# info: change web domain php version
+# options: USER DOMAIN VERSION [RESTART]
+#
+# example: h-change-web-domain-php admin acme.com 8.3
+#
+# This function changes the PHP version a web domain runs on. The version is its own
+# field since #591; the pool profile (BACKEND) is left untouched.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+version=$3
+restart=$4
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/domain.sh
+source $HESTIA/func/domain.sh
+# shellcheck source=/usr/local/hestia/func/ip.sh
+source $HESTIA/func/ip.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+web_lock_acquire || exit 1
+
+# Additional argument formatting
+format_domain
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '3' "$#" 'USER DOMAIN VERSION [RESTART]'
+is_format_valid 'user' 'domain' 'restart'
+is_system_enabled "$WEB_BACKEND" 'WEB_BACKEND'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+# The version must be installed; 'none' is the explicit "no pool" value
+if [ "$version" != 'none' ]; then
+	case " $($BIN/h-list-sys-php plain | tr '\n' ' ') " in
+		*" $version "*) : ;;
+		*) check_result "$E_NOTEXIST" "PHP version $version is not installed" ;;
+	esac
+fi
+get_domain_values 'web'
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+old_version="$PHP_VERSION"
+[ -z "$old_version" ] && old_version=$(multiphp_default_version)
+if [ "$version" = "$old_version" ]; then
+	exit
+fi
+
+# Write the new version, then rebuild the single domain: h-rebuild-web-domain deletes the
+# old pool (delete_web_backend matches by name across all versions), renders the new one at
+# this version and re-renders the vhost with the new fastcgi socket.
+add_object_key 'web' 'DOMAIN' "$domain" 'PHP_VERSION' 'BACKEND'
+update_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION' "$version"
+
+$BIN/h-rebuild-web-domain "$user" "$domain" "$restart"
+check_result $? "Rebuild failed" > /dev/null
+
+# The old version's master still holds the now-removed pool's socket until it reloads
+# ('none' has no master to restart)
+if [ "$version" != "$old_version" ] && [ "$old_version" != 'none' ]; then
+	$BIN/h-restart-web-backend "$restart" "$old_version"
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "$user" "Info" "Web" "PHP version changed (Domain: $domain, Version: $version)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

@@ -181,9 +181,18 @@ prepare_web_backend() {
 	# pool profile. Take the version from the first argument when it is a legacy PHP-X_Y
 	# (an old record met mid-rebuild), then from PHP_VERSION, then the system default.
 	local backend_template=${1:-$template}
+	backend_type="$domain"
+	# 'none' means no pool (#591). Keep a deterministic socket path so the vhost stays valid -
+	# it points at a socket that will not exist, the legacy no-php behaviour: static is served,
+	# a PHP request gets a 502 rather than a broken nginx config.
+	if [ "$PHP_VERSION" = 'none' ]; then
+		backend_version=$(multiphp_default_version)
+		backend_lsnr="unix:/run/php/php${backend_version}-fpm-${domain}.sock"
+		return
+	fi
 	if [[ $backend_template =~ ^.*PHP-([0-9]+)\_([0-9]+)$ ]]; then
 		backend_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-	elif [ -n "$PHP_VERSION" ] && [ "$PHP_VERSION" != 'none' ]; then
+	elif [ -n "$PHP_VERSION" ]; then
 		backend_version="$PHP_VERSION"
 	else
 		backend_version=$(multiphp_default_version)
@@ -193,7 +202,6 @@ prepare_web_backend() {
 	if [ ! -e "$pool" ]; then
 		check_result $E_NOTEXIST "php-fpm pool doesn't exist"
 	fi
-	backend_type="$domain"
 	if [ -e "$pool/$backend_type.conf" ]; then
 		backend_lsnr=$(grep "listen =" $pool/$backend_type.conf)
 		backend_lsnr=$(echo "$backend_lsnr" | cut -f 2 -d = | sed "s/ //")
