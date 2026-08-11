@@ -96,6 +96,9 @@ for wm_port in 8090 8091; do
 	fw_restrict_local_port "$wm_port" "$(fw_local_allowed_uids)"
 done
 
+# Docker customer /24s: separation between local users, webserver allowed (#566)
+fw_restrict_docker_nets
+
 # Whitelist, evaluated before any ban match so it can rescue a locked-out admin
 fw_accept_excludes
 

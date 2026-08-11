@@ -306,6 +306,12 @@ rm -f "$setup_log"
 
 echo "Docker is enabled for $user."
 
+# The /24 separation rule is rendered from the user records (#566) - re-render so it follows
+# enable/disable immediately instead of waiting for the next unrelated firewall update
+if [ -n "$FIREWALL_SYSTEM" ]; then
+	$BIN/h-update-firewall > /dev/null 2>&1
+fi
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#

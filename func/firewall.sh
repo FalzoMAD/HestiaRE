@@ -344,6 +344,27 @@ fw_local_allowed_uids() {
 	fi
 }
 
+# Per-customer docker /24 separation (#566). Host-local addressing has no owner: every shell user
+# reaches every customer's containers, only the connecting uid tells them apart (measured). One
+# rule per customer over the whole /24. The webserver is in the allowlist BY DESIGN - without it
+# the separation cuts off exactly the proxy path this exists for. Derived from the user records on
+# every render, so it survives a full firewall rebuild the way an imperative rule would not (#613).
+fw_restrict_docker_nets() {
+	local uconf u net uid cuid web uids
+	web="$(id -u www-data 2> /dev/null)"
+	for uconf in "$CONF_DIR"/users/*/user.conf; do
+		[ -f "$uconf" ] || continue
+		net=$(grep -o "^DOCKER_IP='[^']*'" "$uconf" | cut -d"'" -f2)
+		[ -n "$net" ] || continue
+		u=$(basename "$(dirname "$uconf")")
+		uid=$(id -u "$u" 2> /dev/null) || continue
+		# the companion runs the daemon and rootlesskit, which does the actual binding
+		cuid=$(id -u "${u}-docker" 2> /dev/null)
+		uids="0, $uid${cuid:+, $cuid}${web:+, $web}"
+		fw_sec local "		ip daddr ${net%.*}.0/24 meta skuid != { $uids } reject"
+	done
+}
+
 # fw_rule <action> <protocol> <port> <source> [type] [conntrack_ftp] - one rules.conf record. Two iptables
 # carry-overs kept: 0.0.0.0/0 renders no qualifier, and `type` mirrors $TYPE which nothing sets, so the FTP
 # conntrack branch never fires and custom PassivePorts get neither range.
