@@ -29,8 +29,10 @@ opens above it.
   The `HTTP3` field is authoritative (intent, kept across restore and host moves) and the quic
   fragment is reconciled from it through the capability gate on **every rebuild**, so the file can
   never outrun the box; a smoke guard flags a quic fragment on a box whose nginx lacks http_v3
-  (e.g. after an nginx package change). Enabling the switch opens **UDP/443** when the firewall is
-  active - the QUIC port, without which the advertised h3 endpoint is silently dropped.
+  (e.g. after an nginx package change). **UDP/443** (the QUIC port) is open in the standard firewall
+  rule set, without which the advertised h3 endpoint is silently dropped and clients fall back to
+  HTTP/2. It ships as a seed rule, not opened per switch, so it survives a firewall rebuild rather
+  than being dropped the way an imperative open would be.
 
 ### Changed
 
