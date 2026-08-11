@@ -14,6 +14,25 @@ opens above it.
 
 ### Added
 
+- **Docker domain publishing: a customer domain fronts their container** (#566, with the #592 panel
+  shape; stage 3 of the docker series). Every docker customer gets their own loopback **/24** from
+  127.20.0.0/16 at enable time; `DOCKER_IP` is its `.1` and the companion daemon's default bind
+  (daemon.json with both keys), so a plain tutorial compose file publishes on the customer address
+  with **no address in it**. The other octets belong to the customer for multi-app setups; each
+  domain picks its octet and port. Three new fields on the web record (`DOCKER` = docker template
+  name, `DOCKER_PORT`, `DOCKER_OCTET`) carry the whole state - `TPL`/`PROXY` are never touched, so
+  a web-model switch keeps the docker choice structurally. When `DOCKER` is set, the front renders
+  from `templates/docker/<system>/` (merged files, WebSockets through, full include set so LE/
+  CrowdSec/botlimit attach; the apache variant defuses both LE traps), the both-model apache
+  backend vhost is not rendered and the domain has no FPM pool and no PHP selector. Separation
+  between local users is one rendered nft rule per customer /24 with the webserver allowlisted,
+  derived from the user records so it survives firewall rebuilds. `h-add-web-domain-docker`
+  validates port (1024+, rootless), octet, duplicate targets and live wildcard listeners (the
+  container would silently never start). Panel: Docker-Proxy checkbox for docker customers with
+  `<net>._` octet + port entry, template/PHP selectors hidden while active. Verified on all three
+  web models against a real container, including serve-through, rebuild persistence, restore
+  round-trip and the LE challenge mechanics on both web systems.
+
 - **HTTP/3 (QUIC) is a per-domain switch, gated on the nginx build** (#613, part of #219). http3 used
   to exist only as three `wordpress*-http3` template variants - a duplicate per template, and only for
   the WordPress family. It is orthogonal to the template, so it becomes a per-domain switch

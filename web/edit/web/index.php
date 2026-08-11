@@ -41,6 +41,22 @@ unset($output);
 $v_ip = $data[$v_domain]["IP"];
 $v_template = $data[$v_domain]["TPL"];
 
+// Docker publishing (#566/#592): the owner's /24 gates the whole section; the domain carries
+// which app it fronts (octet inside the /24 + port)
+exec(HESTIA_CMD . "h-list-user " . $user . " json", $output, $return_var);
+$owner_info = json_decode(implode("", $output), true);
+unset($output);
+$v_docker_net = "";
+if (!empty($owner_info[$user]["DOCKER_IP"])) {
+	$v_docker_net = preg_replace('/\.\d+$/', "", $owner_info[$user]["DOCKER_IP"]);
+}
+$v_docker = $data[$v_domain]["DOCKER"] ?? "";
+$v_docker_port = $data[$v_domain]["DOCKER_PORT"] ?? "";
+$v_docker_octet = $data[$v_domain]["DOCKER_OCTET"] ?? "";
+if ($v_docker_octet == "") {
+	$v_docker_octet = "1";
+}
+
 // Bot rate limiting (Layer B): the domain stores a compact "fam:level,fam:level" field; the family
 // table is server-wide. Customers pick their own levels (an admin can do it for them while
 // impersonating); only the table itself stays admin-only.
@@ -1058,6 +1074,51 @@ if (!empty($_POST["save"])) {
 		$v_http3 = "no";
 		$restart_web = "yes";
 		$restart_proxy = "yes";
+	}
+
+	// Docker proxy (#566/#592): enable or retarget re-runs the add command (it updates the
+	// fields and rebuilds); the command itself validates port, octet, duplicates and wildcards
+	if (!empty($v_docker_net) && empty($_SESSION["error_msg"])) {
+		$post_docker_port = preg_replace("/\D/", "", $_POST["v_docker_port"] ?? "");
+		$post_docker_octet = preg_replace("/\D/", "", $_POST["v_docker_octet"] ?? "1");
+		if (
+			!empty($_POST["v_docker"]) &&
+			(empty($v_docker) || $post_docker_port != $v_docker_port || $post_docker_octet != $v_docker_octet)
+		) {
+			exec(
+				HESTIA_CMD .
+					"h-add-web-domain-docker " .
+					$user .
+					" " .
+					quoteshellarg($v_domain) .
+					" " .
+					quoteshellarg($post_docker_port) .
+					" " .
+					quoteshellarg($post_docker_octet),
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			if (empty($_SESSION["error_msg"])) {
+				$v_docker = "default";
+				$v_docker_port = $post_docker_port;
+				$v_docker_octet = $post_docker_octet;
+				$restart_web = "yes";
+				$restart_proxy = "yes";
+			}
+		} elseif (empty($_POST["v_docker"]) && !empty($v_docker)) {
+			exec(
+				HESTIA_CMD . "h-delete-web-domain-docker " . $user . " " . quoteshellarg($v_domain),
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			$v_docker = "";
+			$restart_web = "yes";
+			$restart_proxy = "yes";
+		}
 	}
 
 	// One command per changed family, each deferring the restart. Safe for customers: $user is the
