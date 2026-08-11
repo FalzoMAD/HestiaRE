@@ -343,7 +343,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 					fi
 				fi
 				# Valid profiles are the shipped pool templates (custom ones included); default otherwise
-				if [ -n "$PHP_PROFILE" ] && [ -f "$PHPTPL/$PHP_PROFILE.tpl" ]; then BACKEND="$PHP_PROFILE"; else BACKEND='default'; fi
+				if [[ "$PHP_PROFILE" =~ ^[a-zA-Z0-9_-]+$ ]] && [ -f "$PHPTPL/$PHP_PROFILE.tpl" ]; then BACKEND="$PHP_PROFILE"; else BACKEND='default'; fi
 				# Preflight approved a fallback for a version this host lacks
 				if [ "$RESTORE_PHP_FALLBACK" = 'yes' ] && [ "$PHP_VERSION" != 'none' ]; then
 					case " $($BIN/h-list-sys-php plain | tr '\n' ' ') " in

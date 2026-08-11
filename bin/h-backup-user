@@ -354,7 +354,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			fi
 			# Valid profiles are the shipped pool templates, custom ones included; anything else
 			# defaults (the profile is a HestiaRE concept, absent on a foreign box)
-			if [ -f "$PHPTPL/$BACKEND.tpl" ]; then bkp_profile="$BACKEND"; else bkp_profile='default'; fi
+			if [[ "$BACKEND" =~ ^[a-zA-Z0-9_-]+$ ]] && [ -f "$PHPTPL/$BACKEND.tpl" ]; then bkp_profile="$BACKEND"; else bkp_profile='default'; fi
 			if [ "$bkp_ver" = 'none' ]; then bkp_backend='no-php'; else bkp_backend="PHP-${bkp_ver//./_}"; fi
 			# Ensure the two native keys exist on the line, then set all three
 			grep -q " PHP_VERSION='" hestia/web.conf || sed -i "s| BACKEND='| PHP_VERSION='' BACKEND='|" hestia/web.conf

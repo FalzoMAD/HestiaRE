@@ -182,8 +182,10 @@ is_web_alias_new() {
 # is what serves - falling back to the pool file's directory. A stray pool of an older version
 # then cannot win a find-order race. Empty when neither is present.
 web_domain_pool_version() {
-	local dom="$1" ver=''
-	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom}\.sock" "$HOMEDIR/$user/conf/web/$dom/" 2> /dev/null \
+	local dom="$1" ver='' dom_re
+	# the domain is scoped to its own conf dir, but its dots are still regex here - escape them
+	dom_re=$(sed 's/[.]/\\./g' <<< "$dom")
+	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom_re}\.sock" "$HOMEDIR/$user/conf/web/$dom/" 2> /dev/null \
 		| head -1 | grep -oE '[0-9]+\.[0-9]+')
 	if [ -z "$ver" ]; then
 		ver=$(find -L /etc/php/ -name "$dom.conf" -printf '%h\n' 2> /dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+')
