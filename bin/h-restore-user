@@ -230,6 +230,36 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		domains=$(echo "$backup_domains" | egrep -x -f $tmpdir/selected.txt)
 	fi
 
+	# PHP version preflight (#591): the archive names the version each web domain must run. A host
+	# missing that version would abort mid-restore (no pool dir) or land the domain on the wrong
+	# version. Report before the first write; substitute the system default only on an explicit
+	# choice (RESTORE_PHP_FALLBACK=yes, or a yes at the interactive prompt), never silently.
+	if [ -n "$WEB_BACKEND" ]; then
+		php_installed=" $($BIN/h-list-sys-php plain | tr '\n' ' ')"
+		php_missing=''
+		for pf_dom in $domains; do
+			pf_rec=$(tar -xf "$BACKUP/$backup" -O "./web/$pf_dom/$backup_system/web.conf" 2> /dev/null)
+			pf_ver=$(sed -n "s/.*PHP_VERSION='\([^']*\)'.*/\1/p" <<< "$pf_rec")
+			[ -z "$pf_ver" ] && pf_ver=$(sed -n "s/.*BACKEND='PHP-\([0-9]*\)_\([0-9]*\)'.*/\1.\2/p" <<< "$pf_rec")
+			{ [ -z "$pf_ver" ] || [ "$pf_ver" = 'none' ]; } && continue
+			[[ "$php_installed" == *" $pf_ver "* ]] || php_missing="$php_missing $pf_ver"
+		done
+		php_missing=$(echo "$php_missing" | tr ' ' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ')
+		if [ -n "$php_missing" ]; then
+			msg="archived PHP version(s) not installed on this host: ${php_missing% }"
+			if [ "$RESTORE_PHP_FALLBACK" = 'yes' ]; then
+				echo "Warning: $msg - using the system default ($(multiphp_default_version))." | tee -a "$tmpdir/restore.log"
+			elif [ -t 0 ]; then
+				read -r -p "$msg. Restore mapping them to the system default ($(multiphp_default_version))? [y/N] " pf_ans
+				[ "$pf_ans" = 'y' ] || [ "$pf_ans" = 'Y' ] || { rm -rf "$tmpdir"; check_result "$E_NOTEXIST" "$msg"; }
+				RESTORE_PHP_FALLBACK='yes'
+			else
+				rm -rf "$tmpdir"
+				check_result "$E_NOTEXIST" "$msg (install them, or re-run with RESTORE_PHP_FALLBACK=yes)"
+			fi
+		fi
+	fi
+
 	# Restoring web domain
 	for domain in $domains; do
 		echo -e "$(date "+%F %T") $domain" | tee -a $tmpdir/restore.log
@@ -303,6 +333,13 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 					fi
 				fi
 				case "$PHP_PROFILE" in default | ondemand | high) BACKEND="$PHP_PROFILE" ;; *) BACKEND='default' ;; esac
+				# Preflight approved a fallback for a version this host lacks
+				if [ "$RESTORE_PHP_FALLBACK" = 'yes' ] && [ "$PHP_VERSION" != 'none' ]; then
+					case " $($BIN/h-list-sys-php plain | tr '\n' ' ') " in
+						*" $PHP_VERSION "*) : ;;
+						*) PHP_VERSION=$(multiphp_default_version) ;;
+					esac
+				fi
 			else
 				read -r BACKEND _ <<< "$(accept_web_template 'backend' "$BACKEND")"
 			fi

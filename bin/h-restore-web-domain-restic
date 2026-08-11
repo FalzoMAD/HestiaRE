@@ -139,6 +139,21 @@ for domain in "${domains[@]}"; do
 					fi
 				fi
 				case "$PHP_PROFILE" in default | ondemand | high) BACKEND="$PHP_PROFILE" ;; *) BACKEND='default' ;; esac
+				# Version preflight: abort if this host lacks the archived version, unless a
+				# fallback to the system default was explicitly requested (#591)
+				if [ "$PHP_VERSION" != 'none' ]; then
+					case " $($BIN/h-list-sys-php plain | tr '\n' ' ') " in
+						*" $PHP_VERSION "*) : ;;
+						*)
+							if [ "$RESTORE_PHP_FALLBACK" = 'yes' ]; then
+								echo "Warning: archived PHP version $PHP_VERSION not installed, using the system default ($(multiphp_default_version))."
+								PHP_VERSION=$(multiphp_default_version)
+							else
+								check_result "$E_NOTEXIST" "archived PHP version $PHP_VERSION not installed (install it, or re-run with RESTORE_PHP_FALLBACK=yes)"
+							fi
+							;;
+					esac
+				fi
 			else
 				read -r BACKEND _ <<< "$(accept_web_template 'backend' "$BACKEND")"
 			fi
