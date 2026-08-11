@@ -75,9 +75,8 @@ fi
 # first-run legacy domain does not needlessly restart the default version's master.
 old_version=$(web_domain_pool_version "$domain")
 
-# Write the new version, then rebuild the single domain: h-rebuild-web-domain deletes the
-# old pool (delete_web_backend matches by name across all versions), renders the new one at
-# this version and re-renders the vhost with the new fastcgi socket.
+# Write the field, then rebuild this one domain: the pool moves to the new version and the
+# vhost picks up the new fastcgi socket.
 add_object_key 'web' 'DOMAIN' "$domain" 'PHP_VERSION' 'BACKEND'
 update_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION' "$version"
 

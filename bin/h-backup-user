@@ -340,8 +340,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 
 		# Backup web.conf. The archive carries three fields for two facts, on purpose (#591):
 		# BACKEND is rewritten to the HestiaCP-readable PHP-<ver> so a foreign restore keeps the
-		# version, while the native PHP_VERSION / PHP_PROFILE preserve the exact HestiaRE state
-		# for our own round-trip. get_domain_values (above) set the live globals.
+		# version, while the native PHP_VERSION / PHP_PROFILE preserve the exact HestiaRE state.
 		cd $tmpdir/web/$domain/
 		conf="$USER_DATA/web.conf"
 		# -F: the domain's dots are literal, not regex - else a.b.com's record could match aXb.com
