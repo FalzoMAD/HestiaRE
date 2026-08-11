@@ -285,8 +285,9 @@ if (!empty($_POST["save"])) {
 		$_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] == "yes" ||
 		$_SESSION["userContext"] === "admin"
 	) {
-		// Change template
-		if ($v_template != $_POST["v_template"] && empty($_SESSION["error_msg"])) {
+		// Change template - only when the selector was shown and submitted; on apache-web models
+		// it is hidden (renders from share/), so an absent field must not reset TPL to empty
+		if (isset($_POST["v_template"]) && $v_template != $_POST["v_template"] && empty($_SESSION["error_msg"])) {
 			exec(
 				HESTIA_CMD .
 					"h-change-web-domain-tpl " .
