@@ -94,13 +94,28 @@ accept_web_template() {
 	echo "default -"
 }
 
-# Web template check
+# The one marker string separating a merged web template (#593, both server blocks in one file)
+# from a legacy pair (#=HESTIARE-SSL-VHOST=# present vs absent). Renderer and validators both read
+# this constant so they cannot drift - the same validator/renderer divergence Phase 3 closed for
+# template lookup.
+WEB_TPL_SSL_MARKER='#=HESTIARE-SSL-VHOST=#'
+
+# Web template check. A legacy pair (no marker) is not a migration leftover to sunset: mail
+# templates ship as pairs by design, so format detection is a permanent capability. Custom pair
+# templates are also accepted - pre-v1 there are none to migrate.
+web_template_is_merged() {
+	grep -qxF "$WEB_TPL_SSL_MARKER" "$1" 2> /dev/null
+}
 is_web_template_valid() {
 	if [ -n "$WEB_SYSTEM" ]; then
 		tpl=$(web_template_file "$WEB_SYSTEM" "$1" 'tpl')
-		stpl=$(web_template_file "$WEB_SYSTEM" "$1" 'stpl')
-		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
+		if [ ! -e "$tpl" ]; then
 			check_result "$E_NOTEXIST" "$1 web template doesn't exist"
+		fi
+		# a merged template holds the SSL block itself; a legacy pair still needs its .stpl
+		if ! web_template_is_merged "$tpl"; then
+			stpl=$(web_template_file "$WEB_SYSTEM" "$1" 'stpl')
+			[ -e "$stpl" ] || check_result "$E_NOTEXIST" "$1 web template doesn't exist"
 		fi
 	fi
 }
@@ -109,9 +124,12 @@ is_web_template_valid() {
 is_proxy_template_valid() {
 	if [ -n "$PROXY_SYSTEM" ]; then
 		tpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'tpl')
-		stpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'stpl')
-		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
+		if [ ! -e "$tpl" ]; then
 			check_result "$E_NOTEXIST" "$1 proxy template doesn't exist"
+		fi
+		if ! web_template_is_merged "$tpl"; then
+			stpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'stpl')
+			[ -e "$stpl" ] || check_result "$E_NOTEXIST" "$1 proxy template doesn't exist"
 		fi
 	fi
 }
@@ -186,10 +204,13 @@ is_web_alias_new() {
 # is what serves - falling back to the pool file's directory. A stray pool of an older version
 # then cannot win a find-order race. Empty when neither is present.
 web_domain_pool_version() {
-	local dom="$1" ver='' dom_re
+	# user is an explicit arg (default: the caller's global) so a multi-user sweep reads the
+	# right home instead of silently falling back to the pool-dir find (#593 review). This is a
+	# shared source for migration and backup, so it must not depend on an ambient $user.
+	local dom="$1" usr="${2:-$user}" ver='' dom_re
 	# the domain is scoped to its own conf dir, but its dots are still regex here - escape them
 	dom_re=$(sed 's/[.]/\\./g' <<< "$dom")
-	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom_re}\.sock" "$HOMEDIR/$user/conf/web/$dom/" 2> /dev/null \
+	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom_re}\.sock" "$HOMEDIR/$usr/conf/web/$dom/" 2> /dev/null \
 		| head -1 | grep -oE '[0-9]+\.[0-9]+')
 	if [ -z "$ver" ]; then
 		ver=$(find -L /etc/php/ -name "$dom.conf" -printf '%h\n' 2> /dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+')
@@ -274,6 +295,11 @@ prepare_web_domain_values() {
 	group="$user"
 	docroot="$HOMEDIR/$user/web/$domain/public_html"
 	sdocroot="$docroot"
+	# SSL_HOME='single' gives the https vhost its own docroot. Still reachable, not a dead read:
+	# it is set when SSL is enabled (h-add-web-domain-ssl's optional arg) or carried in by a
+	# restore. The panel offers no control (it always sends 'same') and the post-hoc change
+	# command was dropped in #593 - so 'single' can be chosen at enable time or honoured from an
+	# archive, but no longer flipped afterward.
 	if [ "$SSL_HOME" = 'single' ]; then
 		sdocroot="$HOMEDIR/$user/web/$domain/public_shtml"
 		$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/public_shtml"
@@ -351,11 +377,6 @@ add_web_config() {
 		mkdir -p "$HOMEDIR/$user/conf/web/$domain/"
 	fi
 
-	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
-	if [[ "$2" =~ stpl$ ]]; then
-		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
-	fi
-
 	domain_idn=$domain
 	format_domain_idn
 
@@ -374,11 +395,33 @@ add_web_config() {
 		return "$E_NOTEXIST"
 	fi
 
+	# A merged template (#593) carries the HTTP server block, a marker line, then the SSL block,
+	# and renders ONE vhost file: the HTTP block always, the SSL block only when SSL is on (a
+	# listen 443 without a cert fails -t). A legacy pair template (no marker, e.g. mail) keeps the
+	# old behaviour - this .tpl/.stpl renders its own .conf/.ssl.conf.
+	local web_tpl_merged=0
+	web_template_is_merged "${WEBTPL_LOCATION}/$2" && web_tpl_merged=1
+
+	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
+	if [ "$web_tpl_merged" = 0 ] && [[ "$2" =~ stpl$ ]]; then
+		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
+	fi
+
 	# Note: Removing or renaming template variables will lead to broken custom templates.
 	#   -If possible custom templates should be automatically upgraded to use the new format
 	#   -Alternatively a depreciation period with proper notifications should be considered
 
-	cat "${WEBTPL_LOCATION}/$2" \
+	{
+		if [ "$web_tpl_merged" = 1 ]; then
+			if [ "$SSL" = 'yes' ]; then
+				sed "/^${WEB_TPL_SSL_MARKER}\$/d" "${WEBTPL_LOCATION}/$2"
+			else
+				sed "/^${WEB_TPL_SSL_MARKER}\$/,\$d" "${WEBTPL_LOCATION}/$2"
+			fi
+		else
+			cat "${WEBTPL_LOCATION}/$2"
+		fi
+	} \
 		| sed -e "s|%ip%|$local_ip|g" \
 			-e "s|%domain%|$domain|g" \
 			-e "s|%domain_idn%|$domain_idn|g" \
@@ -413,7 +456,14 @@ add_web_config() {
 	chown root:$user $conf
 	chmod 640 $conf
 
-	if [[ "$2" =~ stpl$ ]]; then
+	if [ "$web_tpl_merged" = 1 ]; then
+		# One vhost file holds both server blocks; drop any stale separate .ssl.conf symlink.
+		# The *.$domain.org* custom-config migration the pair branches below still run is
+		# deliberately skipped here: it predates the per-domain conf dir, so a box new enough
+		# to carry a merged template has no such stragglers to move.
+		rm -f /etc/$1/conf.d/domains/$domain.conf /etc/$1/conf.d/domains/$domain.ssl.conf
+		ln -s $conf /etc/$1/conf.d/domains/$domain.conf
+	elif [[ "$2" =~ stpl$ ]]; then
 		rm -f /etc/$1/conf.d/domains/$domain.ssl.conf
 		ln -s $conf /etc/$1/conf.d/domains/$domain.ssl.conf
 
@@ -487,10 +537,12 @@ get_web_config_lines() {
 
 # Replace web config
 replace_web_config() {
+	# Only the IP change calls this now, always on the .tpl: one merged .conf holds both server
+	# blocks and both carry the same IP, so a single value-replace covers them (#593). No
+	# .ssl.conf branch - a merged template has none, and a value-replace could not tell two
+	# blocks apart once their values coincide (any such toggle re-renders instead, cf. add/delete
+	# -web-domain-ssl).
 	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
-	if [[ "$2" =~ stpl$ ]]; then
-		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
-	fi
 
 	if [ -e "$conf" ]; then
 		# dots escaped: the old IP is a sed pattern here
@@ -500,11 +552,15 @@ replace_web_config() {
 
 # Delete web configuration
 del_web_config() {
-	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
-	local confname="$domain.conf"
+	# The list of output files this call clears. A .stpl call clears only the SSL vhost (legacy
+	# pair); a .tpl call clears the plain vhost AND the SSL one - a merged template (#593) keeps
+	# both server blocks in one .conf, and even for a legacy pair the SSL file is removed by its
+	# own .stpl call, so clearing it here too is harmless.
+	local confnames="$domain.conf $domain.ssl.conf"
+	local conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
 	if [[ "$2" =~ stpl$ ]]; then
 		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
-		confname="$domain.ssl.conf"
+		confnames="$domain.ssl.conf"
 	fi
 
 	# Clean up legacy configuration files
@@ -521,13 +577,17 @@ del_web_config() {
 
 	# Remove domain configuration files and clean up symbolic links
 	rm -f "$conf"
+	[[ "$2" =~ stpl$ ]] || rm -f "$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
 
-	if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" = "$1" ]; then
-		rm -f "/etc/$WEB_SYSTEM/conf.d/domains/$confname"
-	fi
-	if [ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" = "$1" ]; then
-		rm -f "/etc/$PROXY_SYSTEM/conf.d/domains/$confname"
-	fi
+	local cn
+	for cn in $confnames; do
+		if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" = "$1" ]; then
+			rm -f "/etc/$WEB_SYSTEM/conf.d/domains/$cn"
+		fi
+		if [ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" = "$1" ]; then
+			rm -f "/etc/$PROXY_SYSTEM/conf.d/domains/$cn"
+		fi
+	done
 }
 
 # SSL certificate verification

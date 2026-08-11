@@ -101,7 +101,7 @@ done
 if [ -n "$WEB_BACKEND" ]; then
 	for domain in $($BIN/h-list-web-domains $user plain | cut -f 1); do
 		[ -n "$(get_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION')" ] && continue
-		derived=$(web_domain_pool_version "$domain")
+		derived=$(web_domain_pool_version "$domain" "$user")
 		[ -z "$derived" ] && derived=$(multiphp_default_version)
 		add_object_key 'web' 'DOMAIN' "$domain" 'PHP_VERSION' 'BACKEND'
 		case "$(get_object_value 'web' 'DOMAIN' "$domain" '$BACKEND')" in

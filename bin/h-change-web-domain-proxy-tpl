@@ -69,9 +69,6 @@ local_ip=$(get_real_ip "$IP")
 
 # Delete old vhost
 del_web_config "$PROXY_SYSTEM" "$PROXY.tpl"
-if [ "$SSL" = 'yes' ]; then
-	del_web_config "$PROXY_SYSTEM" "$PROXY.stpl"
-fi
 
 # Add new vhost
 PROXY="$template"
@@ -79,9 +76,6 @@ PROXY_EXT="$extentions"
 
 prepare_web_domain_values
 add_web_config "$PROXY_SYSTEM" "$PROXY.tpl"
-if [ "$SSL" = 'yes' ]; then
-	add_web_config "$PROXY_SYSTEM" "$PROXY.stpl"
-fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #

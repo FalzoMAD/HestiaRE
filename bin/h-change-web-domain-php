@@ -73,7 +73,7 @@ fi
 # The version the domain actually runs right now, before the rebuild moves the pool - this is
 # what still holds the old socket. Restart derives from it, not from a guessed default, so a
 # first-run legacy domain does not needlessly restart the default version's master.
-old_version=$(web_domain_pool_version "$domain")
+old_version=$(web_domain_pool_version "$domain" "$user")
 
 # Write the field, then rebuild this one domain: the pool moves to the new version and the
 # vhost picks up the new fastcgi socket.

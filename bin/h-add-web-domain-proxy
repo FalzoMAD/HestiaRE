@@ -70,11 +70,6 @@ local_ip=$(get_real_ip "$IP")
 PROXY_EXT="$extentions"
 add_web_config "$PROXY_SYSTEM" "$template.tpl"
 
-# Adding proxy for ssl
-if [ "$SSL" = 'yes' ]; then
-	add_web_config "$PROXY_SYSTEM" "$template.stpl"
-fi
-
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
