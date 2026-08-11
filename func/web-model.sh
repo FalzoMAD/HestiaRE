@@ -195,7 +195,7 @@ rebuild_ip_web_config() {
 			-e "s/%web_port%/$WEB_PORT/g" \
 			-e "s/%proxy_port%/$PROXY_PORT/g" \
 			-e "s/%proxy_ssl_port%/$PROXY_SSL_PORT/g" \
-			"$WEBTPL/$PROXY_SYSTEM/proxy_ip.tpl" > "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
+			"$SHARETPL/$PROXY_SYSTEM/proxy_ip.tpl" > "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 
 		process_http2_directive "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 	fi
@@ -836,6 +836,8 @@ web_precheck_delete_nginx() {
 		# so a ^-anchored grep never matches - scope to this domain's line, then test the key.
 		grep -F "DOMAIN='$d'" "$CONF_DIR/users/$u/web.conf" 2> /dev/null | grep -q "FASTCGI_CACHE='yes'" \
 			&& findings+=("fastcgi-cache-inert:$u/$d")
+		grep -F "DOMAIN='$d'" "$CONF_DIR/users/$u/web.conf" 2> /dev/null | grep -q "PROXY_CACHE='yes'" \
+			&& findings+=("proxy-cache-inert:$u/$d")
 	done < <(web_domain_dirs)
 	echo "Note: removing nginx also disables mod_remoteip (apache serves :80 directly)." >&2
 	if [ ${#findings[@]} -gt 0 ]; then

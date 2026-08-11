@@ -50,7 +50,11 @@ is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'web' 'DOMAIN' "$domain"
 is_object_unsuspended 'web' 'DOMAIN' "$domain"
 is_object_value_exist 'web' 'DOMAIN' "$domain" '$PROXY'
-is_proxy_template_valid $template
+# Legacy values are mapped rather than rejected; a typo still errors out
+if ! tpl_accepted=$(accept_web_template 'proxy' "$template" strict); then
+	is_proxy_template_valid $template
+fi
+read -r template tpl_effect <<< "$tpl_accepted"
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
@@ -86,6 +90,11 @@ fi
 # Updating config
 update_object_value 'web' 'DOMAIN' "$domain" '$PROXY' "$PROXY"
 update_object_value 'web' 'DOMAIN' "$domain" '$PROXY_EXT' "$extentions"
+
+# 'caching' is the cache switch now, so honour the intent behind the old value
+if [ "$tpl_effect" = 'cache' ]; then
+	$BIN/h-add-web-domain-cache "$user" "$domain"
+fi
 
 # Restarting proxy
 $BIN/h-restart-proxy "$restart"

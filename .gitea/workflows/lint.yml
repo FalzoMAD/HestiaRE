@@ -24,6 +24,7 @@ jobs:
       - name: Lint changed shell
         env:
           SRC_REPO_PATH: ${{ secrets.SRC_REPO_PATH }}
+          REPO_SLUG: ${{ github.repository }}
           BASE_REF: ${{ github.base_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -39,10 +40,25 @@ jobs:
 
           workdir="$(mktemp -d -p /tmp lint.XXXXXX)"
           trap 'rm -rf "$workdir"' EXIT
+          # Resolve the bare repo on this host. The configured path wins; if it is gone the
+          # root is reused with the CURRENT owner/repo, because renaming an owner makes Gitea
+          # MOVE the directory - the secret then points at a path that no longer exists while
+          # every other reference (ssh, api, remotes) silently follows the rename.
+          src="$SRC_REPO_PATH"
+          if [ ! -d "$src" ]; then
+            src="${SRC_REPO_PATH%/*/*}/$(echo "$REPO_SLUG" | tr '[:upper:]' '[:lower:]').git"
+            echo "Note: SRC_REPO_PATH does not exist; using $src (derived from $REPO_SLUG)."
+          fi
+          if [ ! -e "$src/HEAD" ]; then
+            echo "No bare repository at '$src'."
+            echo "Set the SRC_REPO_PATH secret to the repo's path on this host"
+            echo "(<gitea-data>/gitea-repositories/<owner>/<repo>.git, all lowercase)."
+            exit 1
+          fi
           # Local clone, no network and no credentials - same mechanism mirror-on-release uses.
           # Not --shared: that makes the clone borrow the source's object store, which is a needless
           # hazard for a throwaway checkout.
-          git clone --quiet "file://${SRC_REPO_PATH}" "$workdir/repo"
+          git clone --quiet "file://${src}" "$workdir/repo"
           cd "$workdir/repo"
           git checkout --quiet --detach "${HEAD_SHA:-HEAD}"
           .gitea/tools/lint-shell.sh --base "origin/${BASE_REF:-dev}"

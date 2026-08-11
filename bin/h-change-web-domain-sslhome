@@ -75,7 +75,7 @@ esac
 if [ "$SSL_HOME" = 'single' ] && [ ! -d "$HOMEDIR/$user/web/$domain/public_shtml" ]; then
 	mkdir $HOMEDIR/$user/web/$domain/public_shtml
 	chown $user:$user $HOMEDIR/$user/web/$domain/public_shtml
-	user_exec cp $WEBTPL/skel/public_html/* "$HOMEDIR/$user/web/$domain/public_shtml" > /dev/null 2>&1
+	user_exec cp $SHARETPL/skel/public_html/* "$HOMEDIR/$user/web/$domain/public_shtml" > /dev/null 2>&1
 	for file in $(find "$HOMEDIR/$user/web/$domain/public_shtml" -type f); do
 		sed -i "s/%domain%/$domain/g" $file
 	done

@@ -43,15 +43,24 @@ check_hestia_demo_mode
 
 case $type in
 	WEB)
-		is_web_template_valid "$template"
+		if ! tpl_accepted=$(accept_web_template 'web' "$template" strict); then
+			is_web_template_valid "$template"
+		fi
+		read -r template _ <<< "$tpl_accepted"
 		update_user_value "$user" '$WEB_TEMPLATE' "$template"
 		;;
 	PROXY)
-		is_proxy_template_valid "$template"
+		if ! tpl_accepted=$(accept_web_template 'proxy' "$template" strict); then
+			is_proxy_template_valid "$template"
+		fi
+		read -r template _ <<< "$tpl_accepted"
 		update_user_value "$user" '$PROXY_TEMPLATE' "$template"
 		;;
 	BACKEND)
-		is_backend_template_valid "$template"
+		if ! tpl_accepted=$(accept_web_template 'backend' "$template" strict); then
+			is_backend_template_valid "$template"
+		fi
+		read -r template _ <<< "$tpl_accepted"
 		update_user_value "$user" '$BACKEND_TEMPLATE' "$template"
 		;;
 	DNS)

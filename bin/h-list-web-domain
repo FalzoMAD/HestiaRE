@@ -49,10 +49,13 @@ json_list() {
         "PROXY_EXT": "'$PROXY_EXT'",
         "FASTCGI_CACHE": "'$FASTCGI_CACHE'",
         "FASTCGI_DURATION": "'$FASTCGI_DURATION'",
+        "PROXY_CACHE": "'$PROXY_CACHE'",
+        "PROXY_CACHE_DURATION": "'$PROXY_CACHE_DURATION'",
         "REDIRECT": "'$REDIRECT'",
         "REDIRECT_CODE": "'$REDIRECT_CODE'",
         "CUSTOM_DOCROOT": "'$CUSTOM_DOCROOT'",
         "BOTLIMIT": "'$BOTLIMIT'",
+        "OFFLINE": "'$OFFLINE'",
         "SUSPENDED": "'$SUSPENDED'",
         "TIME": "'$TIME'",
         "DATE": "'$DATE'"
@@ -95,6 +98,13 @@ shell_list() {
 	if [ "$FASTCGI_CACHE" = "yes" ]; then
 		echo "FASTCGI_CACHE:    $FASTCGI_CACHE"
 		echo "FASTCGI_DURATION: $FASTCGI_DURATION"
+	fi
+	if [ "$PROXY_CACHE" = "yes" ]; then
+		echo "PROXY_CACHE:      $PROXY_CACHE"
+		echo "PROXY_CACHE_DURATION: $PROXY_CACHE_DURATION"
+	fi
+	if [ "$OFFLINE" = "yes" ]; then
+		echo "OFFLINE:          $OFFLINE"
 	fi
 	if [ -n "$REDIRECT" ]; then
 		echo "REDIRECT:         $REDIRECT"

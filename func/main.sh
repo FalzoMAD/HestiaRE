@@ -55,7 +55,13 @@ HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 # CLI helpers run through the hestia-php wrapper (panel PHP version indirection)
 HESTIA_PHP="$HESTIA/bin/hestia-php"
 USER_DATA=$CONF_DIR/users/$user
-WEBTPL=$HESTIA/templates/web
+# Selectable vhost templates (the customer picks these), the non-selectable ones served
+# from share/, and the FPM pool profiles. PHPTPL is its own anchor rather than
+# $WEBTPL/$WEB_BACKEND: WEB_BACKEND is a config VALUE, and tying a directory name to it
+# means renaming the directory would have to rename the value everywhere it is compared.
+WEBTPL=$HESTIA/templates
+SHARETPL=$HESTIA/share/web
+PHPTPL=$HESTIA/templates/php
 # webmail templates live per app at $HESTIA/share/$WEB_SYSTEM/webmail/ (no MAILTPL var)
 DNSTPL=$HESTIA/templates/dns
 RRD=$HESTIA/web/rrd
@@ -642,11 +648,13 @@ get_object_values() {
 
 # Update object value
 update_object_value() {
+	# all helpers local: the escaped $old must never leak into a caller's $old
+	local row lnr object varname old new
 	row=$(grep -nF "$2='$3'" "$(_object_conf "$1")")
 	lnr=$(echo $row | cut -f 1 -d ':')
 	object=$(echo $row | sed "s/^$lnr://")
 	parse_object_kv_list "$object"
-	local varname="${4#\$}"
+	varname="${4#\$}"
 	old="${!varname}"
 	# the old value is used as a sed BRE pattern: every metacharacter must be
 	# escaped or values like '[SPAM]' silently never match (bracket expression)
@@ -659,6 +667,7 @@ update_object_value() {
 
 # Add object key
 add_object_key() {
+	local row lnr object varname old
 	row=$(grep -n "$2='$3'" "$(_object_conf "$1")")
 	lnr=$(echo "$row" | cut -f 1 -d ':')
 	object=$(echo "$row" | sed "s/^$lnr://")
@@ -672,6 +681,40 @@ add_object_key() {
 		old="${!varname}"
 		sed -i "$lnr s/$5='/$4='' $5='/" "$(_object_conf "$1")"
 	fi
+}
+
+# Remove a domain's cache-zone line from a shared nginx pool file. Literal match on the
+# full keys_zone prefix: a dot in the domain is a regex wildcard, so a.b.com would take
+# aXb.com's zone with it - and a vhost still referencing the zone breaks nginx -t box-wide.
+remove_pool_zone() {
+	local conf="$1" domain="$2"
+	[ -e "$conf" ] || return 0
+	grep -vF "keys_zone=${domain}:" "$conf" > "$conf.tmp" || true
+	mv -f "$conf.tmp" "$conf"
+}
+
+# Literal line removal for the account-keyed mail files: any widening of the localpart
+# charset would silently under-escape a sed pattern. index()==1 anchors at line start.
+# Owner/mode are copied onto the rewrite - passwd is dovecot:mail, and a root:root rewrite
+# would cut dovecot off from auth.
+remove_line_by_prefix() {
+	local file="$1" prefix="$2"
+	[ -e "$file" ] || return 0
+	awk -v p="$prefix" 'index($0, p) != 1' "$file" > "$file.tmp"
+	chown --reference="$file" "$file.tmp" 2> /dev/null
+	chmod --reference="$file" "$file.tmp" 2> /dev/null
+	mv -f "$file.tmp" "$file"
+}
+
+# Same, keyed by the whole line (fwd_only holds one bare account per line, so a prefix
+# match on john.doe would also take john.doex).
+remove_exact_line() {
+	local file="$1" line="$2"
+	[ -e "$file" ] || return 0
+	awk -v p="$line" '$0 != p' "$file" > "$file.tmp"
+	chown --reference="$file" "$file.tmp" 2> /dev/null
+	chmod --reference="$file" "$file.tmp" 2> /dev/null
+	mv -f "$file.tmp" "$file"
 }
 
 # Search objects
@@ -1884,15 +1927,25 @@ web_lock_acquire() {
 		return 1
 	fi
 	export HESTIA_WEB_LOCK_HELD=1
+	# Who owns it, so the release can check instead of relying on which variable happens
+	# not to be exported.
+	export HESTIA_WEB_LOCK_PID=$$
 	return 0
 }
 
 # Release the freeze early (otherwise it drops on process exit).
+#
+# Only the process that acquired it may release it. A child command inherits the lock as
+# held (that is the point of the reentrancy) and would otherwise be able to unlock the
+# parent mid-operation - the parent then finishes writing records and restarting services
+# unprotected. This used to hold only because WEB_LOCK_FD happens not to be exported,
+# which is a guard nobody would recognise as one and an unrelated cleanup could remove.
 web_lock_release() {
+	[ "${HESTIA_WEB_LOCK_PID:-}" = "$$" ] || return 0
 	[ -n "${WEB_LOCK_FD:-}" ] || return 0
 	flock -u "$WEB_LOCK_FD" 2> /dev/null
 	exec {WEB_LOCK_FD}>&- 2> /dev/null
-	unset WEB_LOCK_FD HESTIA_WEB_LOCK_HELD
+	unset WEB_LOCK_FD HESTIA_WEB_LOCK_HELD HESTIA_WEB_LOCK_PID
 }
 
 

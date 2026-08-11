@@ -369,6 +369,33 @@ The `$HESTIA/data/` tree is **fully dissolved**. `install/` (build-time tree) wa
 into `share/` (shipped runtime assets) + `templates/` (`WEBTPL`) + `packages/` (#119,
 #150); `HESTIA_INSTALL_DIR`/`HESTIA_COMMON_DIR` no longer exist.
 
+### Template tree: selectable vs shipped (#219)
+
+`templates/` holds **only what somebody chooses**, everything else moved to `share/`:
+
+| Path | Anchor | Contents |
+|---|---|---|
+| `templates/nginx/` | `$WEBTPL/nginx` | the nginx-only vhost selection (wordpress, laravel, …) |
+| `templates/php/` | `$PHPTPL` | FPM pool profiles, incl. the generated `PHP-X_Y` |
+| `share/web/nginx/` | `$SHARETPL/nginx` | the both-model proxy vhost + `proxy_ip` |
+| `share/web/apache2/` | `$SHARETPL/apache2` | the apache vhost (both models render it) |
+| `share/web/suspend/` | `$SHARETPL/suspend` | admin suspension + customer offline, per role |
+| `share/web/{skel,awstats,unassigned}/`, `share/email/` | | assets, never selectable |
+
+Two consequences worth knowing before touching this:
+
+- **The role picks the directory, not the service name.** In the both model nginx is the
+  proxy and renders `share/web/nginx/default.tpl`; in nginx-only the same service is the
+  web role and renders `templates/nginx/default.tpl`. Both files are called `default` and
+  are not interchangeable - `web_template_file` in `func/domain.sh` is the only place that
+  decides, and validators and renderer both go through it.
+- **`PHPTPL` is its own anchor**, not `$WEBTPL/$WEB_BACKEND`. `WEB_BACKEND` is a config
+  VALUE (`php-fpm`); deriving a directory name from it would mean renaming the directory
+  forces renaming the value everywhere it is compared.
+
+Upstream keeps one flat `templates/web/<service>/<backend>/` tree with every variant
+selectable, including the mod_php-era apache ones.
+
 **Why.** Separate mutable instance state from the git-managed code tree so a tarball
 extraction into `/usr/local/hestia` never clobbers config or user data. The install
 root stays `/usr/local/hestia`; the only per-command change was

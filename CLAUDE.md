@@ -208,6 +208,23 @@ Verify empirically on a VM afterwards — including the failure path, not just t
 Anything that survived only by luck (a fallback that happened to be right, a check that never ran)
 is a finding: fix it or record it, do not leave it silent.
 
+### Guard review: how can the reference set shrink unnoticed?
+
+Ask this of **every new or edited guard**, before it ships. A guard compares something against a
+reference set; if that set can quietly become smaller, the guard goes green by looking at less —
+which is worse than no guard, because it is trusted. Four cases have already occurred:
+
+- an **empty key set** persisted as the registry, so every later repair agreed with nothing
+- **`grep -c`** printing its count at exit 1, so a fallback `echo 0` doubled the output and `0 != 0`
+- two **hard-wired service directories**, so moving a template out of them dropped it from coverage
+- a recount keyed on the **local IP** while the records store the NAT address, so it counted 0 on
+  every NAT'd box — and "correcting" a healthy counter to that 0 is real damage
+
+Concretely: derive the set from the data (find the files, read the key list) rather than listing it;
+prefer deciding by content over deciding by path, since a rename silently changes a path; and make
+an empty or zero reference set fail rather than pass. State in the guard's comment what it does
+**not** cover, so a three-quarter guard is not mistaken for a whole one.
+
 ### Fresh-install verification (installer / firewall / fail2ban changes)
 
 Any change to `h-install-hestia`, `func/fail2ban.sh`, the firewall renderer, or the service configs they

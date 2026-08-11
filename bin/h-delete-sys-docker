@@ -24,6 +24,8 @@ force=${1-no}
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/helper.sh
+source $HESTIA/func/helper.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -69,6 +71,10 @@ apt-get -qq update > /dev/null 2>&1
 rm -f "$DOCKER_DELEGATE"
 rmdir "$(dirname "$DOCKER_DELEGATE")" 2> /dev/null || true
 systemctl daemon-reload
+
+# The purge above does not take the bridge with it, so a removed addon would otherwise leave
+# 172.17.0.0/16 claimed on a host that has no Docker at all.
+docker_drop_orphan_bridge
 
 # procvis stays: it is the /proc hardening exemption group (#565), not ours to remove.
 

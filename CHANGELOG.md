@@ -12,7 +12,75 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **The template tree holds only what somebody chooses** (#219 phases 3-5, #588/#589/#590).
+  `templates/` is down to `nginx/` (the nginx-only vhost selection) and `php/` (FPM pool
+  profiles); everything nobody picks moved to `share/` - the apache vhost, the both-model
+  proxy vhost, the suspend/offline pages, the domain skeleton, awstats, the unassigned page
+  and the mail bodies. The six remaining apache templates went entirely: both apache models
+  already rendered the php-fpm variant, so `hosting` (mpm_itk `AssignUserID`, mod_ruid2
+  `RUidGid`), `www-data`, `phpcgi` and `phpfcgid` were unreachable mod_php-era leftovers,
+  and their trigger scripts fired from templates nothing could select.
+
+  Two rules make the flatter tree work. **The role picks the directory, not the service
+  name**: in the both model nginx is the proxy and renders `share/web/nginx/default.tpl`,
+  while in nginx-only the same service is the web role and renders
+  `templates/nginx/default.tpl` - two different files with the same name, so
+  `web_template_file` decides once for validators and renderer alike. And **`PHPTPL` is its
+  own anchor** rather than `$WEBTPL/$WEB_BACKEND`, because `WEB_BACKEND` is a config value
+  and a directory named after it cannot be renamed without renaming the value everywhere it
+  is compared.
+
+  Render output was verified byte-identical on all four VMs across all three web models,
+  before and after.
+
+- **Templates are validated the same way they are rendered, and legacy values are mapped**
+  (#588). `is_web_template_valid` looked only in the backend subdirectory while
+  `add_web_config` falls back to the system directory, so a template that renders fine was
+  rejected on the way in. Both now resolve through one function. Every write - CLI, restore
+  and package - passes through `accept_web_template`, which maps a known aged-out value
+  (`caching`, `hosting`, `phpcgi`, `phpfcgid`, `www-data`, `suspended`, an orphaned
+  `PHP-X_Y`) onto its replacement and carries the side effect with it: a restored domain
+  that used the `caching` template comes back with the cache switch on instead of silently
+  losing the feature. The two callers differ on purpose - a restore cannot abort an archive
+  over one record and falls back, while a CLI caller that names a template still gets an
+  error for a typo. New guard `check_web_templates_resolvable` walks the records with the
+  renderer's own resolution, since a value pointing at a removed template otherwise
+  surfaces only on the next rebuild.
+
+  The archive stops carrying its `template/` copies. Neither HestiaRE nor HestiaCP ever
+  read them back, and they were the only place the template layout was baked into the
+  backup format.
+
 ### Added
+
+- **Suspension renders from `share/` in every web model, plus a customer offline switch**
+  (#586, #219 Phase 1). Suspending a domain used to pick a `suspended` template from the
+  selectable tree - which apache never had, so on apache-only the vhost came out empty
+  (`apache2 -t` green) and the domain silently served the box default page, over TLS even with
+  the hostname certificate. `prepare_web_domain_values` now overrides the template *location*
+  (`share/web/suspend/admin|offline`, with nginx/proxy/apache2 variants), so all three models
+  share one rendering path and none of it is user-selectable. New
+  `h-add/delete-web-domain-offline` gives customers a "temporarily offline" switch that answers
+  **503** - transient for search engines - with its own maintenance page, while admin
+  suspension keeps the 200 suspend page and outranks it. The `OFFLINE` flag is registered,
+  restore-safe and exposed in the panel.
+
+- **Proxy caching is a switch now, not a template** (#587, #219 Phase 2). The old `caching`
+  proxy template cloned the whole vhost for one feature and kept its zone in a shared pool
+  file (the #583 breakage surface). The default proxy vhost instead gains a generic
+  `include .../nginx.location.d/*.conf` **inside `location /`** - the one block a later
+  include cannot replace, since a second `location /` is a hard nginx error - and
+  `h-add/delete-web-domain-cache` drops the cache directives there as a fragment, with the
+  zone as **one file per domain** under `conf.d/` (loaded before the vhosts by include order).
+  Removal is a plain `rm`; no pattern ever touches another domain's zone again. Flags
+  `PROXY_CACHE`/`PROXY_CACHE_DURATION` follow the FastCGI precedent end to end: registry,
+  restore field lists, rebuild reapply (gated on the proxy role), model-switch precheck,
+  delete/rename cleanup, panel checkbox and purge button. The `caching` and `hosting`
+  templates are gone - `hosting`'s only remaining difference to `default` was a chmod
+  trigger from the mod_php era. Two new smoke guards: every enabled cache flag has its
+  zone, and no rendered vhost is 0 bytes.
 
 - **Rootless Docker per customer** (#389). Each Docker-enabled customer gets a *companion* account one
   uid block below their own, which runs their private rootless daemon as container uid 0 while the
@@ -115,6 +183,65 @@ opens above it.
   carries `(<branch> @ <sha>)`, and `UPSTREAM_BRANCH=` overrides it on purpose.
 
 ### Fixed
+
+- **A domain name acting as a regex could delete another customer's cache zone and break nginx
+  box-wide** (#583). Four sites removed lines from shared nginx pool files with the domain
+  unescaped in a sed pattern - and the dot is a wildcard there, so deleting `a.b.com` also took
+  `aXb.com`'s `proxy_cache_path` line. With a vhost still referencing the zone, every
+  `nginx -t` fails from then on, for every customer. Two of the sites ran unconditionally on
+  every domain delete or rename, so the trigger was not "a customer uses caching" but "a
+  customer deletes any domain". All four now rewrite by literal match on the full
+  `keys_zone=<domain>:` prefix (new `remove_pool_zone` helper; the `caching.sh` trigger inlines
+  it, having no includes), and `h-add-fastcgi-cache` compares fixed-string so a cross-match can
+  no longer suppress a zone append.
+
+  The sweep for the same shape found the destructive write side beyond the pool files: record
+  deletes and renames in `web.conf`/`mail.conf` (delete, rename, owner change), the webstats and
+  letsencrypt queues, and every per-account edit of the mail files - `is_localpart_format_valid`
+  allows dots, so deleting `john.doe` also matched `johnXdoe`'s lines. Domain-side patterns
+  escape the dot (the only metacharacter a valid domain can carry); the account side switches
+  to literal comparison outright (`remove_line_by_prefix`/`remove_exact_line`, ownership- and
+  mode-preserving since `passwd` is dovecot:mail), so a later widening of the localpart charset
+  cannot silently under-escape. `rebuild.sh`'s SSL-flag migration additionally anchors on the
+  full `DOMAIN='..'` field, since its old pattern could also match inside another record's
+  `CATCHALL` value. The read side (`grep` without `-F` in the object accessors) is deliberately
+  not in this round - it has the blast radius of every command and is filed as #594; closing
+  #583 does not close the class.
+
+- **`h-change-sys-php` took effect one round late - and rebuilt the whole stock on the OLD
+  version** (#585). The command rebuilt all domains first and switched `update-alternatives`
+  last, so the rebuild still read the old default; the switch only materialised on the next
+  unrelated rebuild. Measured: after `h-change-sys-php 8.2` on a 8.4 box, pool and vhost socket
+  stayed at 8.4 until something else triggered a rebuild. The switch now happens before the
+  loop, which also makes the "reload current version first" restart actually target the new
+  version.
+
+- **A missing web template wrote a silent 0-byte vhost** (#586, guard brought forward).
+  `add_web_config` piped `cat template | sed` without checking the template exists - on
+  apache-only, suspending a domain (`TPL='suspended'`, which has no apache template) produced an
+  empty vhost that `apache2 -t` accepts, and the domain fell through to the box default vhost
+  with the hostname certificate. It now warns on stderr and skips the write instead - a
+  visible error, and deliberately not a hard abort, which would kill a rebuild loop over one
+  broken record. The rebuild commands print a closing tally of skipped vhosts so the case
+  survives a nightly run's log; the exit code stays untouched, because the web-model switch
+  treats a nonzero rebuild as switch failure and one broken record must not veto it.
+
+- **The packaged rootful daemon left a docker0 bridge behind** (#579). `apt-get install docker-ce` starts
+  the rootful daemon as part of the package install, and it creates `docker0` before `h-add-sys-docker`
+  disables it again - so the bridge stayed: empty, `down`, and holding 172.17.0.0/16. Reproduced on all
+  four targets after a fresh v0.14.3 install, so it was a property of the install rather than a test
+  artefact.
+
+  It is more than untidy. `ip route get 172.17.0.2` answered `dev docker0 src 172.17.0.1`, so a route to a
+  rootless container's address looked like it existed while the packets went nowhere - the containers live
+  in their companion's own network namespace, which the host has no path into. That costs real time in
+  exactly the area where per-user Docker gets debugged.
+
+  Both `h-add-sys-docker` and `h-delete-sys-docker` now remove it, but only when no interface is enslaved
+  to it - a host deliberately running rootful Docker keeps its bridge and its containers. A smoke guard
+  covers the invariant, and skips rather than fails where the bridge is genuinely in use. Verified that
+  rootless containers are unaffected: own namespace, published port bound and answering, egress intact.
+
 
 - **Docker backups dropped named volumes** (#389). The exclusion that keeps container images out of a
   customer archive covered the whole Docker data root - and `volumes/` sits inside it, which is where a

@@ -10,11 +10,89 @@
 #                        WEB                               #
 #----------------------------------------------------------#
 
+# Where a template file resolves to. Single source for the validators AND add_web_config:
+# a validator that resolves differently than the renderer either rejects a template that
+# would render, or passes one that then writes an empty vhost.
+#
+# The ROLE picks the directory, not the service name: in the both model nginx serves as
+# the proxy and renders share/web/nginx/, while in nginx-only the same service is the web
+# role and renders the selectable templates/nginx/. Both files are called default and are
+# not interchangeable, so keying on the name alone would render the wrong one.
+web_template_file() {
+	local system="$1" name="$2" ext="$3" loc
+	if [ -n "$PROXY_SYSTEM" ] && [ "$system" = "$PROXY_SYSTEM" ]; then
+		echo "$SHARETPL/$system/$name.$ext"
+		return
+	fi
+	for loc in "$WEBTPL/$system" "$SHARETPL/$system"; do
+		[ -f "$loc/$name.$ext" ] && break
+	done
+	echo "$loc/$name.$ext"
+}
+
+# Legacy template values mapped onto what replaced them. Echoes "<name> <side-effect>"
+# and returns 0 for a KNOWN legacy value, 1 for anything else - the distinction is what
+# lets a CLI caller still reject a typo while accepting a value that simply aged out.
+# Side effects: cache = turn the proxy cache switch on, - = none.
+map_legacy_template() {
+	case "$2" in
+		# the caching template became h-add-web-domain-cache. It only ever existed as a
+		# proxy template, so a TPL='caching' left over from a model switch maps to default
+		# WITHOUT the effect - claiming it outside the proxy role would promise a switch
+		# that h-add-web-domain-cache then refuses for lack of a proxy.
+		caching) [ "$1" = 'proxy' ] && echo "default cache" || echo "default -" ;;
+		# hosting differed from default only by a chmod trigger from the mod_php era;
+		# phpcgi/phpfcgid/www-data are mod_php-era apache variants
+		hosting | phpcgi | phpfcgid | www-data) echo "default -" ;;
+		# suspension is driven by the SUSPENDED flag now, never by a template value
+		suspended) echo "default -" ;;
+		# a per-version FPM pool template whose version is no longer installed
+		PHP-[0-9]_[0-9] | *-PHP-[0-9]_[0-9]) echo "default -" ;;
+		*) return 1 ;;
+	esac
+}
+
+# Accept a template value on the way in: resolvable values pass through, the rest are
+# mapped and reported on stderr. Echoes "<name> <side-effect>" on one line - the caller
+# splits it with read, so this stays usable inside $(), where an assignment to a global
+# would be lost. Never silent: a reset nobody sees is how a customer loses a feature.
+accept_web_template() {
+	local role="$1" value="$2" strict="$3" file mapped effect
+	# A role this model does not have carries no template - pass the stored value through
+	# untouched, the same gating the validators use
+	case "$role" in
+		web) [ -n "$WEB_SYSTEM" ] || { echo "$value -"; return 0; } ;;
+		proxy) [ -n "$PROXY_SYSTEM" ] || { echo "$value -"; return 0; } ;;
+		backend) [ -n "$WEB_BACKEND" ] || { echo "$value -"; return 0; } ;;
+	esac
+	case "$role" in
+		web) file=$(web_template_file "$WEB_SYSTEM" "$value" 'tpl') ;;
+		proxy) file=$(web_template_file "$PROXY_SYSTEM" "$value" 'tpl') ;;
+		backend) file="$PHPTPL/$value.tpl" ;;
+	esac
+	if [ -n "$value" ] && [ -f "$file" ]; then
+		echo "$value -"
+		return 0
+	fi
+	if read -r mapped effect <<< "$(map_legacy_template "$role" "$value")" && [ -n "$mapped" ]; then
+		echo "Warning: $role template '$value' was replaced, using '$mapped'." >&2
+		echo "$mapped $effect"
+		return 0
+	fi
+	# Unknown, not merely aged out. A restore cannot abort a whole archive over one
+	# record, so it falls back; a caller that asked for this by name gets the error.
+	if [ "$strict" = 'strict' ]; then
+		return 1
+	fi
+	echo "Warning: $role template '$value' is not available, using 'default'." >&2
+	echo "default -"
+}
+
 # Web template check
 is_web_template_valid() {
 	if [ -n "$WEB_SYSTEM" ]; then
-		tpl="$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND/$1.tpl"
-		stpl="$WEBTPL/$WEB_SYSTEM/$WEB_BACKEND/$1.stpl"
+		tpl=$(web_template_file "$WEB_SYSTEM" "$1" 'tpl')
+		stpl=$(web_template_file "$WEB_SYSTEM" "$1" 'stpl')
 		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
 			check_result "$E_NOTEXIST" "$1 web template doesn't exist"
 		fi
@@ -24,8 +102,8 @@ is_web_template_valid() {
 # Proxy template check
 is_proxy_template_valid() {
 	if [ -n "$PROXY_SYSTEM" ]; then
-		tpl="$WEBTPL/$PROXY_SYSTEM/$1.tpl"
-		stpl="$WEBTPL/$PROXY_SYSTEM/$1.stpl"
+		tpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'tpl')
+		stpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'stpl')
 		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
 			check_result "$E_NOTEXIST" "$1 proxy template doesn't exist"
 		fi
@@ -35,7 +113,7 @@ is_proxy_template_valid() {
 # Backend template check
 is_backend_template_valid() {
 	if [ -n "$WEB_BACKEND" ]; then
-		if [ ! -e "$WEBTPL/$WEB_BACKEND/$1.tpl" ]; then
+		if [ ! -e "$PHPTPL/$1.tpl" ]; then
 			check_result "$E_NOTEXIST" "$1 backend template doesn't exist"
 		fi
 	fi
@@ -104,7 +182,6 @@ prepare_web_backend() {
 
 	pool=$(find -L /etc/php/ -name "$domain.conf" -exec dirname {} \;)
 	# Check if multiple-PHP installed
-	regex="socket-(\d+)_(\d+)"
 	if [[ $backend_template =~ ^.*PHP-([0-9])\_([0-9])$ ]]; then
 		backend_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
 		pool=$(find -L /etc/php/$backend_version -type d \( -name "pool.d" -o -name "*fpm.d" \))
@@ -221,14 +298,24 @@ prepare_web_domain_values() {
 		sdocroot="$docroot"
 	fi
 
+	# Suspend/offline render from share/ so every model shares one path (the selectable
+	# tree has no apache variant). Admin suspension outranks the customer switch, and
+	# unsuspending returns to the customer's offline state - an admin action must not
+	# clear a customer's choice. TPL/PROXY are overridden for this render only. Reset per
+	# domain, or a rebuild loop would render the NEXT domain suspended too.
+	WEBTPL_OVERRIDE=''
 	if [ "$SUSPENDED" = 'yes' ]; then
-		docroot="$HESTIA/templates/web/suspend"
-		sdocroot="$HESTIA/templates/web/suspend"
-		if [ "$PROXY_SYSTEM" == "nginx" ]; then
-			PROXY="suspended"
-		else
-			TPL="suspended"
-		fi
+		docroot="$SHARETPL/suspend/pages/admin"
+		sdocroot="$docroot"
+		WEBTPL_OVERRIDE="$SHARETPL/suspend/admin"
+	elif [ "$OFFLINE" = 'yes' ]; then
+		docroot="$SHARETPL/suspend/pages/offline"
+		sdocroot="$docroot"
+		WEBTPL_OVERRIDE="$SHARETPL/suspend/offline"
+	fi
+	if [ -n "$WEBTPL_OVERRIDE" ]; then
+		TPL="$WEB_SYSTEM"
+		[ -n "$PROXY_SYSTEM" ] && PROXY="proxy"
 	fi
 }
 
@@ -247,12 +334,19 @@ add_web_config() {
 	domain_idn=$domain
 	format_domain_idn
 
-	WEBTPL_LOCATION="$WEBTPL/$1"
-	if [ "$1" != "$PROXY_SYSTEM" ] && [ -n "$WEB_BACKEND" ] && [ -d "$WEBTPL_LOCATION/$WEB_BACKEND" ]; then
-		if [ -f "$WEBTPL_LOCATION/$WEB_BACKEND/$2" ]; then
-			# check for backend specific template
-			WEBTPL_LOCATION="$WEBTPL/$1/$WEB_BACKEND"
-		fi
+	WEBTPL_LOCATION=$(dirname "$(web_template_file "$1" "${2%.*}" "${2##*.}")")
+
+	if [ -n "$WEBTPL_OVERRIDE" ]; then
+		WEBTPL_LOCATION="$WEBTPL_OVERRIDE"
+	fi
+
+	# A missing template would become a 0-byte vhost that apache2 -t accepts. Warn +
+	# skip, not check_result: an exit would abort a rebuild loop over one broken record.
+	if [ ! -f "${WEBTPL_LOCATION}/$2" ]; then
+		echo "Error: web template ${WEBTPL_LOCATION}/$2 doesn't exist - $domain vhost not written" >&2
+		# Tallied for the rebuild summary - the stderr line alone drowns in a nightly run
+		web_config_skipped=$((${web_config_skipped:-0} + 1))
+		return "$E_NOTEXIST"
 	fi
 
 	# Note: Removing or renaming template variables will lead to broken custom templates.
@@ -374,7 +468,8 @@ replace_web_config() {
 	fi
 
 	if [ -e "$conf" ]; then
-		sed -i "s|$old|$new|g" $conf
+		# dots escaped: the old IP is a sed pattern here
+		sed -i "s|${old//./\\.}|$new|g" $conf
 	fi
 }
 
@@ -913,29 +1008,29 @@ is_base_domain_owner() {
 #           Process "http2" directive for NGINX            #
 #----------------------------------------------------------#
 
+# Rewrites by line number, never by matching the line's own text: a listen line contains
+# [::] for IPv6, which is a character class in a sed pattern, so the line never matched
+# itself and IPv6 vhosts silently kept the deprecated per-listener http2.
 process_http2_directive() {
 	if [ -e /etc/nginx/conf.d/http2-directive.conf ]; then
-		while IFS= read -r old_param; do
-			new_param="$(echo "$old_param" | sed 's/\shttp2//')"
-			sed -i "s/$old_param/$new_param/" "$1"
-		done < <(grep -E "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1")
+		while IFS= read -r lnr; do
+			sed -i "${lnr}s/[[:space:]]http2//" "$1"
+		done < <(grep -nE "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1" | cut -f1 -d:)
 	else
 		if version_ge "$(nginx -v 2>&1 | cut -d'/' -f2)" "1.25.1"; then
 			echo "http2 on;" > /etc/nginx/conf.d/http2-directive.conf
 
-			while IFS= read -r old_param; do
-				new_param="$(echo "$old_param" | sed 's/\shttp2//')"
-				sed -i "s/$old_param/$new_param/" "$1"
-			done < <(grep -E "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1")
+			while IFS= read -r lnr; do
+				sed -i "${lnr}s/[[:space:]]http2//" "$1"
+			done < <(grep -nE "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1" | cut -f1 -d:)
 		else
 			listen_ssl="$(grep -E "listen.*\s\bssl\b\s*.*;" "$1")"
 			listen_http2="$(grep -E "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1")"
 
 			if [ -n "$listen_ssl" ] && [ -z "$listen_http2" ]; then
-				while IFS= read -r old_param; do
-					new_param="$(echo "$old_param" | sed 's/\sssl/ ssl http2/')"
-					sed -i "s/$old_param/$new_param/" "$1"
-				done < <(grep -E "listen.*\s\bssl\b\s*.*;" "$1")
+				while IFS= read -r lnr; do
+					sed -i "${lnr}s/[[:space:]]ssl/ ssl http2/" "$1"
+				done < <(grep -nE "listen.*\s\bssl\b\s*.*;" "$1" | cut -f1 -d:)
 			fi
 		fi
 	fi

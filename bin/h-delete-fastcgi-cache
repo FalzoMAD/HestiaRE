@@ -52,7 +52,7 @@ fi
 
 conf='/etc/nginx/conf.d/fastcgi_cache_pool.conf'
 if [ -f "$conf" ]; then
-	sed -i "/ keys_zone=$domain/d" $conf
+	remove_pool_zone "$conf" "$domain"
 	if [ ! -s "$conf" ]; then
 		rm -rf $conf
 	fi

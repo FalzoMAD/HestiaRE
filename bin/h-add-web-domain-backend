@@ -37,7 +37,11 @@ check_args '2' "$#" 'USER DOMAIN [TEMPLATE] [RESTART]'
 is_format_valid 'user' 'domain' 'restart'
 is_system_enabled "$WEB_BACKEND" 'WEB_BACKEND'
 is_object_valid 'user' 'USER' "$user"
-is_backend_template_valid "$template"
+# Legacy values are mapped rather than rejected; a typo still errors out
+if ! tpl_accepted=$(accept_web_template 'backend' "$template" strict); then
+	is_backend_template_valid "$template"
+fi
+read -r template tpl_effect <<< "$tpl_accepted"
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
@@ -65,7 +69,7 @@ for port in $ports; do
 done
 
 # Adding backend config
-cat $WEBTPL/$WEB_BACKEND/$template.tpl \
+cat $PHPTPL/$template.tpl \
 	| sed -e "s|%backend_port%|$backend_port|" \
 		-e "s|%user%|$user|g" \
 		-e "s|%domain%|$domain|g" \

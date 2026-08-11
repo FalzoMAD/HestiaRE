@@ -38,12 +38,9 @@ is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'web' 'DOMAIN' "$domain"
 is_object_unsuspended 'web' 'DOMAIN' "$domain"
 
-if ! [[ "$duration" =~ ^[0-9].*[s|m|d]$ ]]; then
-	echo "Invalid duration"
-	exit 2
-fi
-
-if [[ "$duration" =~ ^[0].*[s|m|d]$ ]]; then
+# Anchored and no wildcard: the value goes verbatim into the fastcgi_cache fragment in
+# the vhost, so anything but <digits><unit> is an injection (same class as the proxy cache)
+if ! [[ "$duration" =~ ^[1-9][0-9]*[smd]$ ]]; then
 	echo "Invalid duration"
 	exit 2
 fi
@@ -84,7 +81,9 @@ str="fastcgi_cache_path /var/cache/nginx/micro/$domain levels=1:2"
 str="$str keys_zone=$domain:10m max_size=512m inactive=30m use_temp_path=off;"
 conf='/etc/nginx/conf.d/fastcgi_cache_pool.conf'
 if [ -f "$conf" ]; then
-	if [ -z "$(grep "=${domain}:" $conf)" ]; then
+	# -F: with the dot as a wildcard, a.b.com would "find" aXb.com's zone, skip its own
+	# append, and leave the vhost referencing a zone that does not exist
+	if [ -z "$(grep -F "keys_zone=${domain}:" $conf)" ]; then
 		echo "$str" >> $conf
 	fi
 else

@@ -281,7 +281,7 @@ rebuild_web_domain_conf() {
 	if [ ! -d "$HOMEDIR/$user/web/$domain/document_errors" ]; then
 		$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/document_errors"
 		# Propagating html skeleton
-		user_exec cp -r "$WEBTPL/skel/document_errors/" "$HOMEDIR/$user/web/$domain/"
+		user_exec cp -r "$SHARETPL/skel/document_errors/" "$HOMEDIR/$user/web/$domain/"
 	fi
 	$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/cgi-bin"
 	$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/private"
@@ -357,6 +357,11 @@ rebuild_web_domain_conf() {
 		$BIN/h-delete-fastcgi-cache $user $domain
 		$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
 	fi
+	# gated on the proxy role: in a proxyless model the flag stays recorded but inert
+	if [ "$PROXY_CACHE" = 'yes' ] && [ "$PROXY_SYSTEM" = 'nginx' ]; then
+		$BIN/h-delete-web-domain-cache $user $domain
+		$BIN/h-add-web-domain-cache $user $domain "$PROXY_CACHE_DURATION"
+	fi
 
 	# Re-render the per-domain fragments from the domain flags (both self-guard + write nothing
 	# when unset): CrowdSec Layer A (ban -> 403, nginx-only) + the server-native Layer-B bot
@@ -386,7 +391,7 @@ rebuild_web_domain_conf() {
 	if [ -n "$STATS" ]; then
 		domain_idn=$domain
 		format_domain_idn
-		cat $WEBTPL/$STATS/$STATS.tpl \
+		cat $SHARETPL/$STATS/$STATS.tpl \
 			| sed -e "s|%ip%|$local_ip|g" \
 				-e "s|%web_system%|$WEB_SYSTEM|g" \
 				-e "s|%domain_idn%|$domain_idn|g" \
@@ -712,16 +717,16 @@ rebuild_mail_domain_conf() {
 			user_rate_limit=$(get_object_value 'mail' 'DOMAIN' "$domain" '$RATE_LIMIT')
 			if [ -n "$RATE_LIMIT" ]; then
 				#user value
-				sed -i "/^$account@$domain_idn:/ d" $HOMEDIR/$user/conf/mail/$domain/limits
+				remove_line_by_prefix $HOMEDIR/$user/conf/mail/$domain/limits "$account@$domain_idn:"
 				echo "$account@$domain_idn:$RATE_LIMIT" >> $HOMEDIR/$user/conf/mail/$domain/limits
 			elif [ -n "$user_rate_limit" ]; then
 				#revert to account value
-				sed -i "/^$account@$domain_idn:/ d" $HOMEDIR/$user/conf/mail/$domain/limits
+				remove_line_by_prefix $HOMEDIR/$user/conf/mail/$domain/limits "$account@$domain_idn:"
 				echo "$account@$domain_idn:$user_rate_limit" >> $HOMEDIR/$user/conf/mail/$domain/limits
 			else
 				#revert to system value
 				system=$(cat /etc/exim4/limit.conf)
-				sed -i "/^$account@$domain_idn:/ d" $HOMEDIR/$user/conf/mail/$domain/limits
+				remove_line_by_prefix $HOMEDIR/$user/conf/mail/$domain/limits "$account@$domain_idn:"
 				echo "$account@$domain_idn:$system" >> $HOMEDIR/$user/conf/mail/$domain/limits
 			fi
 		fi
@@ -744,9 +749,11 @@ rebuild_mail_domain_conf() {
 
 	# Add missing SSL configuration flags to existing domains
 	# for per-domain SSL migration
-	sslcheck=$(grep "DOMAIN='$domain'" $USER_DATA/mail.conf | grep SSL)
+	# -F + full DOMAIN='..' anchor: a wildcard dot would find aXb.com's flags and skip its
+	# own, and an unanchored pattern could match inside another record's CATCHALL value
+	sslcheck=$(grep -F "DOMAIN='$domain'" $USER_DATA/mail.conf | grep SSL)
 	if [ -z "$sslcheck" ]; then
-		sed -i "s|$domain'|$domain' SSL='no' LETSENCRYPT='no'|g" $USER_DATA/mail.conf
+		sed -i "s|DOMAIN='${domain//./\\.}'|DOMAIN='$domain' SSL='no' LETSENCRYPT='no'|" $USER_DATA/mail.conf
 	fi
 
 	# Remove and recreate SSL configuration
