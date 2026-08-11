@@ -31,14 +31,12 @@ is_format_valid 'restart'
 # Detect whether the awstats template already has the geoip LoadPlugin enabled
 awstats_patch=$(cat $SHARETPL/awstats/awstats.tpl | grep "LoadPlugin=\"geoip GEOIP_STANDARD /usr/share/GeoIP/GeoIP.dat\"")
 
-# Web templates ship at $HESTIA/templates (delivered by the tarball) - there
-# is no separate install source to copy from. Only the per-PHP-version FPM pool
-# templates are generated here for the versions currently installed.
-versions_list=$(ls -d /etc/php/*)
-for php_ver in $versions_list; do
-	version=$(echo $php_ver | sed 's/.*\///')
-	[ ! -d "/etc/php/$version/fpm/pool.d/" ] && continue
-	cp -f $HESTIA/share/php-fpm/multiphp.tpl ${PHPTPL}/PHP-${version/\./_}.tpl
+# Web templates ship at $HESTIA/templates (delivered by the tarball). The FPM pool
+# profiles (default, ondemand, high) are static files now; the version is a web.conf
+# field, not baked into a per-version template. Sweep the pre-#591 artefacts an upgrade
+# still carries: the generated PHP-X_Y pool templates and the retired socket / no-php.
+for stale in "$PHPTPL"/PHP-[0-9]*_[0-9]*.tpl "$PHPTPL/socket.tpl" "$PHPTPL/no-php.tpl"; do
+	[ -e "$stale" ] && rm -f "$stale"
 done
 
 if [ -n "$awstats_patch" ]; then
