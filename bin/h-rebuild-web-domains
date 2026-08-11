@@ -82,29 +82,43 @@ if [ -n "$PROXY_SYSTEM" ]; then
 	fi
 fi
 
-# Create dummy php-fpm configs if missing
-for php_folder in /etc/php/*; do
-	[ ! -d "${php_folder}/fpm/pool.d/" ] && continue
-
-	v_php="$(basename $php_folder)"
+# Create dummy php-fpm configs if missing. Enumerate via h-list-sys-php, which
+# skips the isolated panel pool (/etc/php/hestia); a bare /etc/php/* glob seeds a
+# stray www-data pool into the panel master with an unsubstituted socket name.
+for v_php in $($BIN/h-list-sys-php plain); do
+	[ -d "/etc/php/${v_php}/fpm/pool.d/" ] || continue
 	if [ ! -f "/etc/php/${v_php}/fpm/pool.d/dummy.conf" ]; then
 		cp -f "$HESTIA/share/php-fpm/dummy.conf" "/etc/php/${v_php}/fpm/pool.d/"
-		sed -i "s/9999/99${v_php//./}/g" "/etc/php/${v_php}/fpm/pool.d/dummy.conf"
+		sed -i "s/%backend_version%/${v_php}/g" "/etc/php/${v_php}/fpm/pool.d/dummy.conf"
 	fi
 done
 
+# Migrate pre-#591 records to the explicit PHP_VERSION field, before the pools below are
+# deleted and rebuilt. The version used to be implied (BACKEND=default -> system default) or
+# encoded in BACKEND (PHP-8_x); read the one the vhost actually runs from its pool directory,
+# then collapse the legacy BACKEND to the plain pool profile. Idempotent: a record that already
+# carries PHP_VERSION is skipped.
+if [ -n "$WEB_BACKEND" ]; then
+	for domain in $($BIN/h-list-web-domains $user plain | cut -f 1); do
+		[ -n "$(get_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION')" ] && continue
+		derived=$(web_domain_pool_version "$domain")
+		[ -z "$derived" ] && derived=$(multiphp_default_version)
+		add_object_key 'web' 'DOMAIN' "$domain" 'PHP_VERSION' 'BACKEND'
+		case "$(get_object_value 'web' 'DOMAIN' "$domain" '$BACKEND')" in
+			no-php) derived='none' ;;&
+			no-php | *PHP-[0-9]*_[0-9]*) update_object_value 'web' 'DOMAIN' "$domain" '$BACKEND' 'default' ;;
+		esac
+		update_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION' "$derived"
+	done
+fi
+
 # Deleting backend configs
 if [ -n "$WEB_BACKEND" ]; then
-	if [ "$WEB_BACKEND_POOL" = 'user' ]; then
+	for domain in $($BIN/h-list-web-domains $user plain | cut -f 1); do
+		get_domain_values 'web'
 		prepare_web_backend
 		delete_web_backend
-	else
-		for domain in $($BIN/h-list-web-domains $user plain | cut -f 1); do
-			template=$(get_object_value 'web' 'DOMAIN' "$domain" '$BACKEND')
-			prepare_web_backend
-			delete_web_backend
-		done
-	fi
+	done
 fi
 
 # Starting rebuild loop for each web domain

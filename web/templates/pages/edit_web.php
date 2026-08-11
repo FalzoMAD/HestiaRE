@@ -318,23 +318,27 @@
 			</div>
 			<div x-cloak x-show="showAdvanced">
 				<?php if ($_SESSION["userContext"] === "admin" || ($_SESSION["userContext"] === "user" && $_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] === "yes")) { ?>
-					<div class="u-mb10">
-						<label for="v_template" class="form-label">
-							<?= tohtml( _("Web Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_SYSTEM"])) ?></span>
-						</label>
-						<select class="form-select" name="v_template" id="v_template">
-							<?php
-								foreach ($templates as $key => $value) {
-									echo "\t\t\t\t<option value=\"".htmlentities($value)."\"";
-									$svalue = "'".$value."'";
-									if ((!empty($v_template)) && ( $value == $v_template ) || ($svalue == $v_template)){
-										echo ' selected' ;
+					<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
+						// share/ and the list is empty, so hide it instead of an empty dropdown (#219/#591) ?>
+					<?php if (is_array($templates) && count($templates)) { ?>
+						<div class="u-mb10">
+							<label for="v_template" class="form-label">
+								<?= tohtml( _("Web Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_SYSTEM"])) ?></span>
+							</label>
+							<select class="form-select" name="v_template" id="v_template">
+								<?php
+									foreach ($templates as $key => $value) {
+										echo "\t\t\t\t<option value=\"".htmlentities($value)."\"";
+										$svalue = "'".$value."'";
+										if ((!empty($v_template)) && ( $value == $v_template ) || ($svalue == $v_template)){
+											echo ' selected' ;
+										}
+										echo ">".htmlentities($value)."</option>\n";
 									}
-									echo ">".htmlentities($value)."</option>\n";
-								}
-							?>
-						</select>
-					</div>
+								?>
+							</select>
+						</div>
+					<?php } ?>
 					<?php if ($_SESSION["WEB_SYSTEM"] == "nginx") { ?>
 						<div class="form-check u-mb10">
 							<input x-model="nginxCacheEnabled" class="form-check-input" type="checkbox" name="v_nginx_cache_check" id="v_nginx_cache_check">
@@ -357,7 +361,7 @@
 					<?php if (!empty($_SESSION["WEB_BACKEND"])) { ?>
 						<div class="u-mb10">
 								<label for="v_backend_template" class="form-label">
-									<?= tohtml( _("Backend Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
+									<?= tohtml( _("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
 								</label>
 							<select class="form-select" name="v_backend_template" id="v_backend_template">
 								<?php
@@ -372,6 +376,22 @@
 										}
 										echo ">".tohtml($value)."</option>\n";
 									}
+								?>
+							</select>
+						</div>
+						<div class="u-mb10">
+								<label for="v_php_version" class="form-label"><?= tohtml( _("PHP Version")) ?></label>
+							<select class="form-select" name="v_php_version" id="v_php_version">
+								<?php
+									$v_cur_php = trim($v_php_version, "'");
+									foreach (($php_versions ?: []) as $value) {
+										echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
+										if ($v_cur_php == $value) {
+											echo ' selected';
+										}
+										echo ">PHP " . tohtml($value) . "</option>\n";
+									}
+									echo "\t\t\t\t<option value=\"none\"" . ($v_cur_php == 'none' ? ' selected' : '') . ">" . tohtml( _("None (no PHP)")) . "</option>\n";
 								?>
 							</select>
 						</div>

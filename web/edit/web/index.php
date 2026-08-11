@@ -94,6 +94,7 @@ if (empty($v_letsencrypt)) {
 }
 $v_ssl_home = $data[$v_domain]["SSL_HOME"] ?? "";
 $v_backend_template = $data[$v_domain]["BACKEND"] ?? "";
+$v_php_version = $data[$v_domain]["PHP_VERSION"] ?? "";
 $v_nginx_cache = $data[$v_domain]["FASTCGI_CACHE"] ?? "";
 $v_nginx_cache_duration = $data[$v_domain]["FASTCGI_DURATION"] ?? "";
 $v_nginx_cache_check = "";
@@ -199,10 +200,15 @@ exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
 $templates = json_decode(implode("", $output), true);
 unset($output);
 
-// List backend templates
+// List backend templates (pool profiles) and installed PHP versions - the version is its
+// own field since #591, so it is offered as a separate control
 if (!empty($_SESSION["WEB_BACKEND"])) {
 	exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
 	$backend_templates = json_decode(implode("", $output), true);
+	unset($output);
+
+	exec(HESTIA_CMD . "h-list-sys-php json", $output, $return_var);
+	$php_versions = json_decode(implode("", $output), true);
 	unset($output);
 }
 
@@ -279,8 +285,9 @@ if (!empty($_POST["save"])) {
 		$_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] == "yes" ||
 		$_SESSION["userContext"] === "admin"
 	) {
-		// Change template
-		if ($v_template != $_POST["v_template"] && empty($_SESSION["error_msg"])) {
+		// Change template - only when the selector was shown and submitted; on apache-web models
+		// it is hidden (renders from share/), so an absent field must not reset TPL to empty
+		if (isset($_POST["v_template"]) && $v_template != $_POST["v_template"] && empty($_SESSION["error_msg"])) {
 			exec(
 				HESTIA_CMD .
 					"h-change-web-domain-tpl " .
@@ -313,6 +320,29 @@ if (!empty($_POST["save"])) {
 					quoteshellarg($v_domain) .
 					" " .
 					quoteshellarg($v_backend_template),
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+		}
+
+		// Change PHP version (its own field since #591)
+		if (
+			!empty($_SESSION["WEB_BACKEND"]) &&
+			isset($_POST["v_php_version"]) &&
+			$v_php_version != $_POST["v_php_version"] &&
+			empty($_SESSION["error_msg"])
+		) {
+			$v_php_version = $_POST["v_php_version"];
+			exec(
+				HESTIA_CMD .
+					"h-change-web-domain-php " .
+					$user .
+					" " .
+					quoteshellarg($v_domain) .
+					" " .
+					quoteshellarg($v_php_version),
 				$output,
 				$return_var,
 			);

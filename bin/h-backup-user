@@ -338,10 +338,32 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		format_domain_idn
 		get_domain_values 'web'
 
-		# Backup web.conf
+		# Backup web.conf. The archive carries three fields for two facts, on purpose (#591):
+		# BACKEND is rewritten to the HestiaCP-readable PHP-<ver> so a foreign restore keeps the
+		# version, while the native PHP_VERSION / PHP_PROFILE preserve the exact HestiaRE state.
 		cd $tmpdir/web/$domain/
 		conf="$USER_DATA/web.conf"
-		grep "DOMAIN='$domain'" $conf > hestia/web.conf
+		# -F: the domain's dots are literal, not regex - else a.b.com's record could match aXb.com
+		grep -F "DOMAIN='$domain'" $conf > hestia/web.conf
+		if [ -n "$WEB_BACKEND" ]; then
+			bkp_ver="$PHP_VERSION"
+			if [ -z "$bkp_ver" ]; then
+				bkp_ver=$(web_domain_pool_version "$domain")
+				[ -z "$bkp_ver" ] && bkp_ver=$(multiphp_default_version)
+			fi
+			# Valid profiles are the shipped pool templates, custom ones included; anything else
+			# defaults (the profile is a HestiaRE concept, absent on a foreign box)
+			if [[ "$BACKEND" =~ ^[a-zA-Z0-9_-]+$ ]] && [ -f "$PHPTPL/$BACKEND.tpl" ]; then bkp_profile="$BACKEND"; else bkp_profile='default'; fi
+			if [ "$bkp_ver" = 'none' ]; then bkp_backend='no-php'; else bkp_backend="PHP-${bkp_ver//./_}"; fi
+			# Ensure the two native keys exist on the line, then set all three
+			grep -q " PHP_VERSION='" hestia/web.conf || sed -i "s| BACKEND='| PHP_VERSION='' BACKEND='|" hestia/web.conf
+			grep -q " PHP_PROFILE='" hestia/web.conf || sed -i "s| BACKEND='| PHP_PROFILE='' BACKEND='|" hestia/web.conf
+			sed -i \
+				-e "s| BACKEND='[^']*'| BACKEND='$bkp_backend'|" \
+				-e "s| PHP_VERSION='[^']*'| PHP_VERSION='$bkp_ver'|" \
+				-e "s| PHP_PROFILE='[^']*'| PHP_PROFILE='$bkp_profile'|" \
+				hestia/web.conf
+		fi
 
 		# Backup vhost config
 		if [ -e "$HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.conf" ]; then

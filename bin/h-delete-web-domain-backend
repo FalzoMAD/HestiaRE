@@ -60,17 +60,6 @@ fi
 
 # Defining backend type
 backend_type="$domain"
-if [ "$WEB_BACKEND_POOL" = 'user' ]; then
-	backend_type="$user"
-fi
-
-# Checking last webdomain
-if [ "$WEB_BACKEND_POOL" = 'user' ]; then
-	domains=$(search_objects 'web' 'SUSPENDED' "no" 'DOMAIN' | wc -l)
-	if [ "$backend_type" = "$user" ] && [ "$domains" -gt 1 ]; then
-		exit
-	fi
-fi
 
 # Deleting backend
 delete_web_backend
@@ -79,9 +68,9 @@ delete_web_backend
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Detect prev version
-if [[ $BACKEND =~ ^.*PHP-([0-9])\_([0-9])$ ]]; then
-	version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+# Restart the version this domain actually ran (its own field), else the system default
+if [ -n "$PHP_VERSION" ] && [ "$PHP_VERSION" != 'none' ]; then
+	version="$PHP_VERSION"
 else
 	version=$(multiphp_default_version)
 fi

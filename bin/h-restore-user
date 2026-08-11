@@ -230,15 +230,55 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		domains=$(echo "$backup_domains" | egrep -x -f $tmpdir/selected.txt)
 	fi
 
+	# PHP version preflight (#591): the archive names the version each web domain must run. A host
+	# missing that version would abort mid-restore (no pool dir) or land the domain on the wrong
+	# version. Report before the first write; substitute the system default only on an explicit
+	# choice (RESTORE_PHP_FALLBACK=yes, or a yes at the interactive prompt), never silently. The pool
+	# PROFILE is deliberately not preflighted: an unknown profile falls back to default gracefully
+	# (cosmetic pool tuning), whereas a missing interpreter is fatal.
+	if [ -n "$WEB_BACKEND" ]; then
+		php_installed=" $($BIN/h-list-sys-php plain | tr '\n' ' ')"
+		php_missing=''
+		# One tar pass for every record, not one per domain - the archive is zstd, so per-domain
+		# extraction would decompress it N times before the restore even starts.
+		tar -xf "$BACKUP/$backup" -C "$tmpdir" --wildcards "./web/*/$backup_system/web.conf" 2> /dev/null
+		for pf_dom in $domains; do
+			pf_rec=$(cat "$tmpdir/web/$pf_dom/$backup_system/web.conf" 2> /dev/null)
+			pf_ver=$(sed -n "s/.*PHP_VERSION='\([^']*\)'.*/\1/p" <<< "$pf_rec")
+			[ -z "$pf_ver" ] && pf_ver=$(sed -n "s/.*BACKEND='PHP-\([0-9]*\)_\([0-9]*\)'.*/\1.\2/p" <<< "$pf_rec")
+			{ [ -z "$pf_ver" ] || [ "$pf_ver" = 'none' ]; } && continue
+			[[ "$php_installed" == *" $pf_ver "* ]] || php_missing="$php_missing $pf_ver"
+		done
+		php_missing=$(echo "$php_missing" | tr ' ' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ')
+		if [ -n "$php_missing" ]; then
+			msg="archived PHP version(s) not installed on this host: ${php_missing% }"
+			if [ "$RESTORE_PHP_FALLBACK" = 'yes' ]; then
+				echo "Warning: $msg - using the system default ($(multiphp_default_version))." | tee -a "$tmpdir/restore.log"
+			elif [ -t 0 ]; then
+				read -r -p "$msg. Restore mapping them to the system default ($(multiphp_default_version))? [y/N] " pf_ans
+				if [ "$pf_ans" != 'y' ] && [ "$pf_ans" != 'Y' ]; then
+					rm -rf "$tmpdir"
+					sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+					check_result "$E_NOTEXIST" "$msg"
+				fi
+				RESTORE_PHP_FALLBACK='yes'
+			else
+				rm -rf "$tmpdir"
+				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				check_result "$E_NOTEXIST" "$msg (install them, or re-run with RESTORE_PHP_FALLBACK=yes)"
+			fi
+		fi
+	fi
+
 	# Restoring web domain
 	for domain in $domains; do
 		echo -e "$(date "+%F %T") $domain" | tee -a $tmpdir/restore.log
 
 		# Cleanup previous domain keys
-		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME LETSENCRYPT FTP_USER FTP_MD5 BACKEND PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT U_DISK CUSTOM_DOCROOT CUSTOM_PHPROOT
+		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME SSL_FORCE SSL_HSTS LETSENCRYPT FTP_USER FTP_MD5 FTP_PATH BACKEND PHP_VERSION PHP_PROFILE PROXY PROXY_EXT PROXY_CACHE PROXY_CACHE_DURATION FASTCGI_CACHE FASTCGI_DURATION REDIRECT REDIRECT_CODE STATS STATS_USER STATS_CRYPT U_DISK OFFLINE CUSTOM_DOCROOT CUSTOM_PHPROOT
 
 		# Checking domain existence
-		check_config=$(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+		check_config=$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
 		if [ -z "$check_config" ]; then
 			check_new=$(is_domain_new 'web' $domain)
 			if [ -n "$check_new" ]; then
@@ -289,7 +329,31 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			# has no file for (foreign install, other web model, removed template)
 			read -r TPL _ <<< "$(accept_web_template 'web' "$TPL")"
 			read -r PROXY restore_proxy_effect <<< "$(accept_web_template 'proxy' "$PROXY")"
-			read -r BACKEND _ <<< "$(accept_web_template 'backend' "$BACKEND")"
+			# BACKEND in the archive is the HestiaCP-compat PHP-<ver>; the native fields carry the
+			# exact HestiaRE state. Prefer them; else derive the version from the compat value and
+			# default the profile. BACKEND (live) is the pool profile again (#591).
+			if [ -n "$WEB_BACKEND" ]; then
+				if [ -z "$PHP_VERSION" ]; then
+					if [[ "$BACKEND" =~ PHP-([0-9]+)_([0-9]+) ]]; then
+						PHP_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+					elif [ "$BACKEND" = 'no-php' ]; then
+						PHP_VERSION='none'
+					else
+						PHP_VERSION=$(multiphp_default_version)
+					fi
+				fi
+				# Valid profiles are the shipped pool templates (custom ones included); default otherwise
+				if [[ "$PHP_PROFILE" =~ ^[a-zA-Z0-9_-]+$ ]] && [ -f "$PHPTPL/$PHP_PROFILE.tpl" ]; then BACKEND="$PHP_PROFILE"; else BACKEND='default'; fi
+				# Preflight approved a fallback for a version this host lacks
+				if [ "$RESTORE_PHP_FALLBACK" = 'yes' ] && [ "$PHP_VERSION" != 'none' ]; then
+					case " $($BIN/h-list-sys-php plain | tr '\n' ' ') " in
+						*" $PHP_VERSION "*) : ;;
+						*) PHP_VERSION=$(multiphp_default_version) ;;
+					esac
+				fi
+			else
+				read -r BACKEND _ <<< "$(accept_web_template 'backend' "$BACKEND")"
+			fi
 
 			if [ -n "$CUSTOM_DOCROOT" ]; then
 				CUSTOM_DOCROOT=$(echo "$CUSTOM_DOCROOT" | sed -e "s|/home/${old_user}/web/|/home/${user}/web/|g")
@@ -330,7 +394,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			str="$str TPL='$TPL' SSL='$SSL' SSL_HOME='$SSL_HOME' SSL_HSTS='$SSL_HSTS'"
 			str="$str SSL_FORCE='$SSL_FORCE' LETSENCRYPT='$LETSENCRYPT' FTP_USER='$FTP_USER'"
 			str="$str FTP_MD5='$FTP_MD5' FTP_PATH='$FTP_PATH'"
-			str="$str BACKEND='$BACKEND' PROXY='$PROXY'"
+			str="$str BACKEND='$BACKEND' PHP_VERSION='$PHP_VERSION' PROXY='$PROXY'"
 			str="$str PROXY_EXT='$PROXY_EXT' STATS='$STATS'"
 			str="$str STATS_USER='$STATS_USER' STATS_CRYPT='$STATS_CRYPT'"
 			str="$str U_DISK='$U_DISK' U_BANDWIDTH='0' OFFLINE='$OFFLINE' SUSPENDED='no'"
@@ -450,7 +514,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		echo -e "$(date "+%F %T") $domain" | tee -a $tmpdir/restore.log
 
 		# Checking domain existence
-		check_config=$(grep "DOMAIN='$domain'" $USER_DATA/mail.conf)
+		check_config=$(grep -F "DOMAIN='$domain'" $USER_DATA/mail.conf)
 		if [ -z "$check_config" ]; then
 			check_new=$(is_domain_new 'mail' $domain)
 			if [ -n "$check_new" ]; then
@@ -485,7 +549,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		fi
 
 		# Restore SSL
-		check_config=$(grep "DOMAIN='$domain'" $USER_DATA/mail.conf | grep -o "SSL='yes'")
+		check_config=$(grep -F "DOMAIN='$domain'" $USER_DATA/mail.conf | grep -o "SSL='yes'")
 		if [ -n "$check_config" ]; then
 			if [ ! -e "$CONF_DIR/users/$user/ssl/" ]; then
 				mkdir -p $CONF_DIR/users/$user/ssl/
