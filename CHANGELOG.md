@@ -14,6 +14,32 @@ opens above it.
 
 ### Changed
 
+- **The PHP version is its own web.conf field, and the pool template becomes a named profile**
+  (#591, #219 Phase 6, closes #550). A domain's version used to be either implied (`BACKEND=default`
+  followed the system default) or hidden inside the backend value (`BACKEND=PHP-8_3`), so a record
+  never stated the version it actually ran. Now `PHP_VERSION` carries the version and `BACKEND`
+  carries only the pool profile - `default` (ondemand, 8 children, unchanged), `small` (ondemand, 4
+  children) and `high` (dynamic, up to 24); the set is derived from the shipped templates, so a custom
+  profile survives a backup round-trip. The per-version `PHP-X_Y.tpl` files stop being generated and
+  `socket.tpl` / `no-php.tpl` are retired; an update sweeps them from an existing box.
+
+  Existing records migrate on their next rebuild: the version is read from the **pool the vhost
+  actually points at** (`find -L /etc/php/`), not from `multiphp_default_version`, because after any
+  system-default change the two diverge until a rebuild catches up - reading the default would rewrite
+  a domain onto a version it was never on. Verified against a deliberately drifted box (a `default`
+  domain on 8.4 while the system default was 8.2 migrated to 8.4, not 8.2), on both nginx-only and
+  apache-only. The dead `WEB_BACKEND_POOL` per-user-pool mode and its five branches go with it.
+
+  The backup format stays bidirectional. The archive carries three fields for two facts on purpose:
+  `BACKEND` is rewritten to the HestiaCP-readable `PHP-<ver>` so a foreign restore keeps the version,
+  while native `PHP_VERSION` / `PHP_PROFILE` preserve the exact HestiaRE state. Both restore paths add
+  the two native keys to their fixed field list (a key absent there is dropped silently) and prefer
+  them, deriving the version from `BACKEND` only for a foreign or pre-#591 archive. A domain backed up
+  at 8.2 restores as 8.2 on a host whose default is 8.4. Before the first write a **preflight** checks
+  the archived versions against the installed ones and aborts with the list if any is missing;
+  `RESTORE_PHP_FALLBACK=yes` (or a yes at the interactive prompt) maps them to the system default -
+  never silently.
+
 - **The template tree holds only what somebody chooses** (#219 phases 3-5, #588/#589/#590).
   `templates/` is down to `nginx/` (the nginx-only vhost selection) and `php/` (FPM pool
   profiles); everything nobody picks moved to `share/` - the apache vhost, the both-model

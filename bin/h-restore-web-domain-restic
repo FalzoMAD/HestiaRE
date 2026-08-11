@@ -80,10 +80,10 @@ requested=",$(
 for domain in "${domains[@]}"; do
 	if [[ "$web" = '*' || "$requested" == *",${domain},"* ]]; then
 		# Cleanup previous domain keys
-		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME LETSENCRYPT FTP_USER FTP_MD5 BACKEND PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT U_DISK CUSTOM_DOCROOT CUSTOM_PHPROOT
+		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME SSL_FORCE SSL_HSTS LETSENCRYPT FTP_USER FTP_MD5 FTP_PATH BACKEND PHP_VERSION PHP_PROFILE PROXY PROXY_EXT PROXY_CACHE PROXY_CACHE_DURATION FASTCGI_CACHE FASTCGI_DURATION REDIRECT REDIRECT_CODE STATS STATS_USER STATS_CRYPT U_DISK OFFLINE CUSTOM_DOCROOT CUSTOM_PHPROOT
 
 		# Checking domain existence
-		check_config=$(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+		check_config=$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
 		if [ -z "$check_config" ]; then
 			check_new=$(is_domain_new 'web' $domain)
 			if [ "$check_new" = 'yes' ]; then
@@ -127,7 +127,37 @@ for domain in "${domains[@]}"; do
 			# Templates through the legacy mapping (see h-restore-user)
 			read -r TPL _ <<< "$(accept_web_template 'web' "$TPL")"
 			read -r PROXY restore_proxy_effect <<< "$(accept_web_template 'proxy' "$PROXY")"
-			read -r BACKEND _ <<< "$(accept_web_template 'backend' "$BACKEND")"
+			# Native PHP_VERSION/PHP_PROFILE win; else derive from the compat BACKEND (see h-restore-user)
+			if [ -n "$WEB_BACKEND" ]; then
+				if [ -z "$PHP_VERSION" ]; then
+					if [[ "$BACKEND" =~ PHP-([0-9]+)_([0-9]+) ]]; then
+						PHP_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+					elif [ "$BACKEND" = 'no-php' ]; then
+						PHP_VERSION='none'
+					else
+						PHP_VERSION=$(multiphp_default_version)
+					fi
+				fi
+				# Valid profiles are the shipped pool templates (custom ones included); default otherwise
+				if [[ "$PHP_PROFILE" =~ ^[a-zA-Z0-9_-]+$ ]] && [ -f "$PHPTPL/$PHP_PROFILE.tpl" ]; then BACKEND="$PHP_PROFILE"; else BACKEND='default'; fi
+				# Version preflight: abort if this host lacks the archived version, unless a
+				# fallback to the system default was explicitly requested (#591)
+				if [ "$PHP_VERSION" != 'none' ]; then
+					case " $($BIN/h-list-sys-php plain | tr '\n' ' ') " in
+						*" $PHP_VERSION "*) : ;;
+						*)
+							if [ "$RESTORE_PHP_FALLBACK" = 'yes' ]; then
+								echo "Warning: archived PHP version $PHP_VERSION not installed, using the system default ($(multiphp_default_version))."
+								PHP_VERSION=$(multiphp_default_version)
+							else
+								check_result "$E_NOTEXIST" "archived PHP version $PHP_VERSION not installed (install it, or re-run with RESTORE_PHP_FALLBACK=yes)"
+							fi
+							;;
+					esac
+				fi
+			else
+				read -r BACKEND _ <<< "$(accept_web_template 'backend' "$BACKEND")"
+			fi
 
 			if [ -n "$CUSTOM_DOCROOT" ]; then
 				CUSTOM_DOCROOT=$(echo "$CUSTOM_DOCROOT" | sed -e "s|/home/${old_user}/web/|/home/${user}/web/")
@@ -167,7 +197,7 @@ for domain in "${domains[@]}"; do
 			str="$str TPL='$TPL' SSL='$SSL' SSL_HOME='$SSL_HOME' SSL_HSTS='$SSL_HSTS'"
 			str="$str SSL_FORCE='$SSL_FORCE' LETSENCRYPT='$LETSENCRYPT' FTP_USER='$FTP_USER'"
 			str="$str FTP_MD5='$FTP_MD5' FTP_PATH='$FTP_PATH'"
-			str="$str BACKEND='$BACKEND' PROXY='$PROXY'"
+			str="$str BACKEND='$BACKEND' PHP_VERSION='$PHP_VERSION' PROXY='$PROXY'"
 			str="$str PROXY_EXT='$PROXY_EXT' STATS='$STATS'"
 			str="$str STATS_USER='$STATS_USER' STATS_CRYPT='$STATS_CRYPT'"
 			str="$str U_DISK='$U_DISK' U_BANDWIDTH='0' OFFLINE='$OFFLINE' SUSPENDED='no'"

@@ -162,6 +162,10 @@ if [ -n "$WEB_BACKEND" ]; then
 	# Effect discarded on purpose: only the proxy role can yield one (see map_legacy_template)
 	read -r BACKEND_TEMPLATE _ <<< "$(accept_web_template 'backend' "$BACKEND_TEMPLATE")"
 	export BACKEND="$BACKEND_TEMPLATE"
+	# The version is its own field now; a fresh domain takes the system default. The pool
+	# is rendered at the same version (prepare_web_backend falls to it while the record
+	# does not yet exist), so field and pool agree.
+	PHP_VERSION=$(multiphp_default_version)
 	$BIN/h-add-web-domain-backend "$user" "$domain" "$BACKEND_TEMPLATE" "$restart"
 	check_result $? "Backend error" > /dev/null
 fi
@@ -256,7 +260,7 @@ date=$(echo "$time_n_date" | cut -f 2 -d \ )
 # Adding domain in web.conf
 echo "DOMAIN='$domain' IP='$ip' IP6='' CUSTOM_DOCROOT='' ALIAS='$ALIAS' TPL='$WEB_TEMPLATE'\
  SSL='no' SSL_FORCE='no' SSL_HOME='same' LETSENCRYPT='no' FTP_USER='' FTP_MD5=''\
- BACKEND='$BACKEND_TEMPLATE' PROXY='$PROXY_TEMPLATE' PROXY_EXT='$PROXY_EXT'\
+ BACKEND='$BACKEND_TEMPLATE' PHP_VERSION='$PHP_VERSION' PROXY='$PROXY_TEMPLATE' PROXY_EXT='$PROXY_EXT'\
  STATS='' STATS_USER='' STATS_CRYPT='' U_DISK='0' U_BANDWIDTH='0'\
  SUSPENDED='no' TIME='$time' DATE='$date'" >> $USER_DATA/web.conf
 

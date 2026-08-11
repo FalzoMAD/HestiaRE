@@ -582,18 +582,14 @@ function backendtpl_with_webdomains() {
 		$domains = json_decode(implode("", $output), true);
 		unset($output);
 		foreach ($domains as $domain => $domain_details) {
-			if (!empty($domain_details["BACKEND"])) {
-				$backend = $domain_details["BACKEND"];
-				$backend_list[$backend][$user][] = $domain;
-
-				// Also count custom backend template names like YOURNAME-PHP-8_4 under PHP-8_4
-				if (preg_match('/(PHP-\d+_\d+)$/', $backend, $m)) {
-					// Avoid duplicates when backend already is the base template
-					if ($backend !== $m[1]) {
-						$backend_list[$m[1]][$user][] = $domain;
-					}
-				}
+			// The version is its own field now (#591); group by it under the PHP-X_Y key the
+			// server page looks up. 'none' domains run no PHP and are not counted.
+			$ver = $domain_details["PHP_VERSION"] ?? "";
+			if ($ver === "" || $ver === "none") {
+				continue;
 			}
+			$key = "PHP-" . str_replace(".", "_", $ver);
+			$backend_list[$key][$user][] = $domain;
 		}
 	}
 	return $backend_list;

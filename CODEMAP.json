@@ -451,7 +451,7 @@
       "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. Install logic: Makefile (removed) → Justfile #102 → pure-bash bin/h-install-hestia + func/wizard.sh + func/helper.sh in Issue #112 (just removed). See make_release component.",
       "web_templates": {
         "nginx": "templates/nginx/ - the nginx-only selection ($WEBTPL/nginx)",
-        "php": "templates/php/ - FPM pool profiles ($PHPTPL, incl. generated PHP-X_Y)",
+        "php": "templates/php/ - FPM pool profiles ($PHPTPL): default/ondemand/high (#591). The version is its own web.conf field PHP_VERSION now, not encoded in a template - BACKEND holds only the profile, prepare_web_backend reads PHP_VERSION for the version. Per-domain via h-change-web-domain-php ('none' = no pool). Backup carries a HestiaCP-compat BACKEND='PHP-<ver>' plus native PHP_VERSION/PHP_PROFILE; restore prefers native, preflight aborts on a missing version unless RESTORE_PHP_FALLBACK=yes. Pre-#591 socket.tpl/no-php.tpl and generated PHP-X_Y are swept by h-update-web-templates.",
         "shipped": "share/web/{nginx,apache2,suspend,skel,awstats,unassigned}/ + share/email/ ($SHARETPL) - rendered or copied, never selectable",
         "resolution": "func/domain.sh web_template_file - the ROLE picks the directory (proxy -> share/web/<system>/, web -> templates/<system>/ then share/); single source for validators and add_web_config"
       },

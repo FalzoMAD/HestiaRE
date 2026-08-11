@@ -48,6 +48,8 @@ map_legacy_template() {
 		suspended) echo "default -" ;;
 		# a per-version FPM pool template whose version is no longer installed
 		PHP-[0-9]_[0-9] | *-PHP-[0-9]_[0-9]) echo "default -" ;;
+		# no-php is a version now (PHP_VERSION='none'), not a template; the profile is just default
+		no-php) echo "default -" ;;
 		*) return 1 ;;
 	esac
 }
@@ -70,7 +72,11 @@ accept_web_template() {
 		proxy) file=$(web_template_file "$PROXY_SYSTEM" "$value" 'tpl') ;;
 		backend) file="$PHPTPL/$value.tpl" ;;
 	esac
-	if [ -n "$value" ] && [ -f "$file" ]; then
+	# A template name from an archive is untrusted input: it is joined into a path and the file
+	# is cat'd into the domain's vhost (add_web_config). Require a plain name so a value with path
+	# segments cannot escape the template dir and read an arbitrary .tpl. Anything else is mapped
+	# or defaulted below, same as an aged-out value.
+	if [ -n "$value" ] && [[ "$value" =~ ^[a-zA-Z0-9._-]+$ ]] && [ -f "$file" ]; then
 		echo "$value -"
 		return 0
 	fi
@@ -175,29 +181,48 @@ is_web_alias_new() {
 	fi
 }
 
+# The PHP version a domain actually runs, derived once for both the migration and the backup
+# so they never disagree (#591). Authoritative source is the socket the vhost points at - that
+# is what serves - falling back to the pool file's directory. A stray pool of an older version
+# then cannot win a find-order race. Empty when neither is present.
+web_domain_pool_version() {
+	local dom="$1" ver='' dom_re
+	# the domain is scoped to its own conf dir, but its dots are still regex here - escape them
+	dom_re=$(sed 's/[.]/\\./g' <<< "$dom")
+	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom_re}\.sock" "$HOMEDIR/$user/conf/web/$dom/" 2> /dev/null \
+		| head -1 | grep -oE '[0-9]+\.[0-9]+')
+	if [ -z "$ver" ]; then
+		ver=$(find -L /etc/php/ -name "$dom.conf" -printf '%h\n' 2> /dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+')
+	fi
+	echo "$ver"
+}
+
 # Prepare web backend
 prepare_web_backend() {
-	# Accept first function argument as backend template otherwise fallback to $template global variable
+	# The version is its own field (PHP_VERSION) since #591; BACKEND carries only the
+	# pool profile. Take the version from the first argument when it is a legacy PHP-X_Y
+	# (an old record met mid-rebuild), then from PHP_VERSION, then the system default.
 	local backend_template=${1:-$template}
-
-	pool=$(find -L /etc/php/ -name "$domain.conf" -exec dirname {} \;)
-	# Check if multiple-PHP installed
-	if [[ $backend_template =~ ^.*PHP-([0-9])\_([0-9])$ ]]; then
+	backend_type="$domain"
+	# 'none' means no pool (#591). Keep a deterministic socket path so the vhost stays valid -
+	# it points at a socket that will not exist, the legacy no-php behaviour: static is served,
+	# a PHP request gets a 502 rather than a broken nginx config.
+	if [ "$PHP_VERSION" = 'none' ]; then
+		backend_version=$(multiphp_default_version)
+		backend_lsnr="unix:/run/php/php${backend_version}-fpm-${domain}.sock"
+		return
+	fi
+	if [[ $backend_template =~ ^.*PHP-([0-9]+)\_([0-9]+)$ ]]; then
 		backend_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-		pool=$(find -L /etc/php/$backend_version -type d \( -name "pool.d" -o -name "*fpm.d" \))
+	elif [ -n "$PHP_VERSION" ]; then
+		backend_version="$PHP_VERSION"
 	else
 		backend_version=$(multiphp_default_version)
-		if [ -z "$pool" ] || [ -z "$BACKEND" ]; then
-			pool=$(find -L /etc/php/$backend_version -type d \( -name "pool.d" -o -name "*fpm.d" \))
-		fi
 	fi
+	pool=$(find -L /etc/php/$backend_version -type d \( -name "pool.d" -o -name "*fpm.d" \))
 
 	if [ ! -e "$pool" ]; then
 		check_result $E_NOTEXIST "php-fpm pool doesn't exist"
-	fi
-	backend_type="$domain"
-	if [ "$WEB_BACKEND_POOL" = 'user' ]; then
-		backend_type="$user"
 	fi
 	if [ -e "$pool/$backend_type.conf" ]; then
 		backend_lsnr=$(grep "listen =" $pool/$backend_type.conf)

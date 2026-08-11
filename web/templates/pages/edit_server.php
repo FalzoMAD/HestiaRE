@@ -323,14 +323,6 @@
 							</a>
 						</p>
 					<?php } ?>
-					<?php if (!empty($_SESSION["WEB_BACKEND_POOL"])) { ?>
-						<p>
-							<?= tohtml( _("Backend Pool Mode")) ?>:
-							<span class="u-ml5">
-								<?= tohtml($_SESSION["WEB_BACKEND_POOL"]) ?>
-							</span>
-						</p>
-					<?php } ?>
 					<?php if (count($v_php_versions)) { ?>
 						<div class="u-mt15">
 							<p class="u-mb10">

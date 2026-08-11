@@ -357,7 +357,7 @@
 					<?php if (!empty($_SESSION["WEB_BACKEND"])) { ?>
 						<div class="u-mb10">
 								<label for="v_backend_template" class="form-label">
-									<?= tohtml( _("Backend Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
+									<?= tohtml( _("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
 								</label>
 							<select class="form-select" name="v_backend_template" id="v_backend_template">
 								<?php
@@ -372,6 +372,22 @@
 										}
 										echo ">".tohtml($value)."</option>\n";
 									}
+								?>
+							</select>
+						</div>
+						<div class="u-mb10">
+								<label for="v_php_version" class="form-label"><?= tohtml( _("PHP Version")) ?></label>
+							<select class="form-select" name="v_php_version" id="v_php_version">
+								<?php
+									$v_cur_php = trim($v_php_version, "'");
+									foreach (($php_versions ?: []) as $value) {
+										echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
+										if ($v_cur_php == $value) {
+											echo ' selected';
+										}
+										echo ">PHP " . tohtml($value) . "</option>\n";
+									}
+									echo "\t\t\t\t<option value=\"none\"" . ($v_cur_php == 'none' ? ' selected' : '') . ">" . tohtml( _("None (no PHP)")) . "</option>\n";
 								?>
 							</select>
 						</div>
