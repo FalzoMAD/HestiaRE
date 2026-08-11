@@ -5,7 +5,9 @@
 # example: h-add-web-domain-http3 admin acme.com
 #
 # This function enables HTTP/3 on the nginx front. It needs SSL and an http_v3-capable nginx;
-# deb12/ub24 ship an OS nginx without it, so the switch is refused there (nginx stays valid).
+# deb12/ub24 ship an OS nginx without it, so the switch is refused there (nginx stays valid). When
+# the firewall is active it also opens UDP/443 once - without it the advertised h3 endpoint is
+# dropped and clients silently fall back to HTTP/2.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -39,7 +41,7 @@ format_domain_idn
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '2' "$#" 'USER DOMAIN [RESTART]'
+check_args '2' "$#" 'USER DOMAIN [RESTART] [QUIET]'
 is_format_valid 'user' 'domain' 'restart'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
@@ -54,8 +56,10 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Load domain data
+# grep -F: the domain is a literal, not a regex, so a.b.com cannot match aXb.com (#594) - and here
+# the record supplies SSL, IP and HTTP3, i.e. both gates and the fragment's IP
 # shellcheck disable=SC2046  # word splitting carries the record into KEY='v' tokens
-parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
 
 # http3 is a TLS transport, so it needs the SSL vhost to exist
 if [ "$SSL" != 'yes' ]; then
@@ -78,6 +82,16 @@ fi
 local_ip=$(get_real_ip "$IP")
 add_web_http3_config "$local_ip"
 
+# QUIC needs UDP/443 open, or the advertised h3 endpoint is silently dropped and clients fall back
+# to HTTP/2 - http3 would look enabled but carry no traffic (#613). Open the front's SSL port for UDP
+# once, idempotently, and only when the firewall is active. Left in place on disable (harmless, and
+# another domain may still use it); the seed ruleset opens only TCP 80,443.
+h3_port=$(web_http3_front_ssl_port)
+if [ -n "$FIREWALL_SYSTEM" ] \
+	&& ! grep -q "PROTOCOL='UDP' PORT='$h3_port'" "$CONF_DIR/firewall/rules.conf" 2> /dev/null; then
+	$BIN/h-add-firewall-rule ACCEPT '0.0.0.0/0' "$h3_port" UDP 'HTTP3' > /dev/null
+fi
+
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
@@ -87,13 +101,15 @@ if [ -z "$HTTP3" ]; then
 fi
 update_object_value 'web' 'DOMAIN' "$domain" '$HTTP3' 'yes'
 
-# Restart web server
-$BIN/h-restart-web "$restart"
-check_result $? "Web restart failed" > /dev/null
-
-# Restart proxy
-$BIN/h-restart-proxy "$restart"
-check_result $? "Proxy restart failed" > /dev/null
+# Restart only the service that carries the quic fragment - the nginx front. In the both model
+# that is the proxy (apache backend never sees the listen); nginx-only carries it on the web side.
+if [ "$PROXY_SYSTEM" = 'nginx' ]; then
+	$BIN/h-restart-proxy "$restart"
+	check_result $? "Proxy restart failed" > /dev/null
+else
+	$BIN/h-restart-web "$restart"
+	check_result $? "Web restart failed" > /dev/null
+fi
 
 # Logging
 if [ "$quiet" != "yes" ]; then

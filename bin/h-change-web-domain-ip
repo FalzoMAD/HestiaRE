@@ -70,8 +70,8 @@ if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
 fi
 
 # The HTTP/3 quic listen carries the IP, and its fragment is not a .conf so replace_web_config
-# skips it (#613) - re-emit it under the new address
-if [ "$HTTP3" = 'yes' ]; then
+# skips it (#613) - re-emit it under the new address, through the same capability gate
+if [ "$HTTP3" = 'yes' ] && nginx_has_http3; then
 	add_web_http3_config "$new"
 fi
 

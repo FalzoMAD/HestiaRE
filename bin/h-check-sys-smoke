@@ -671,6 +671,34 @@ check_web_cache_zones() {
 	fi
 }
 
+# check_web_http3_orphan - a quic listen fragment (nginx.ssl.conf_http3, #613) on a box whose nginx
+# lacks http_v3 fails nginx -t box-wide. The switch is capability-gated at write and the rebuild
+# reconciles it off, so one surviving here means the nginx package changed under a live install, or
+# a fragment was placed out of band. A recorded HTTP3='yes' WITHOUT a fragment is fine and NOT
+# flagged - that is intent kept for a later move onto a capable host.
+check_web_http3_orphan() {
+	local u frag d stray=0 first="" checked=0
+	# where nginx can do http3 a fragment is correct, so there is nothing to police
+	if nginx_has_http3; then
+		ok "http3 fragments match the nginx build (http_v3 present)"
+		return
+	fi
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		for frag in "$HOMEDIR/$u"/conf/web/*/nginx.ssl.conf_http3; do
+			[ -f "$frag" ] || continue
+			checked=$((checked + 1))
+			stray=$((stray + 1))
+			d=$(basename "$(dirname "$frag")")
+			[ -z "$first" ] && first="quic fragment on a box without http_v3: $u/$d"
+		done
+	done
+	if [ "$stray" -eq 0 ]; then
+		ok "no quic fragment on a box whose nginx lacks http_v3"
+	else
+		no "$stray quic fragment(s) on a box whose nginx has no http_v3" "$first"
+	fi
+}
+
 # check_vhost_nonempty - a 0-byte vhost passes apache2 -t and the domain silently falls
 # through to the box default vhost.
 check_vhost_nonempty() {
@@ -1098,6 +1126,7 @@ if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
 	check_web_cache_zones
 fi
 check_vhost_nonempty
+check_web_http3_orphan
 # #120: the model-switch freeze + pre-check coverage cannot rot; a crash is surfaced.
 check_web_lock_coverage
 check_web_switch_prechecks

@@ -26,6 +26,11 @@ opens above it.
   and already broke `nginx -t` on those two targets. Restore honours an archived switch or maps a
   `-http3` template to its base plus the switch, but drops the quic fragment when the target nginx
   cannot do http3, so a cross-restore degrades cleanly. The three `-http3` templates are removed.
+  The `HTTP3` field is authoritative (intent, kept across restore and host moves) and the quic
+  fragment is reconciled from it through the capability gate on **every rebuild**, so the file can
+  never outrun the box; a smoke guard flags a quic fragment on a box whose nginx lacks http_v3
+  (e.g. after an nginx package change). Enabling the switch opens **UDP/443** when the firewall is
+  active - the QUIC port, without which the advertised h3 endpoint is silently dropped.
 
 ### Changed
 

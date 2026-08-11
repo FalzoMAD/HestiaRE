@@ -627,6 +627,22 @@ del_web_http3_config() {
 	rm -f "$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_http3"
 }
 
+# Reconcile the quic fragment with the HTTP3 field through the same gate, on every rebuild. The
+# field is intent (authoritative, preserved across restore and host moves); the fragment is intent
+# AND capability. So a domain that lands on a box without http_v3 keeps HTTP3='yes' but grows no
+# listen, and picks http3 back up when it later rebuilds on a capable box - the field never lies,
+# the file never outruns the box. Silent (no check_result): a batch rebuild must not error once per
+# unsupported domain, and h-check-sys-smoke guards that no quic fragment outlives the capability.
+apply_web_http3_config() {
+	if [ "$HTTP3" = 'yes' ] \
+		&& { [ "$PROXY_SYSTEM" = 'nginx' ] || [ "$WEB_SYSTEM" = 'nginx' ]; } \
+		&& nginx_has_http3; then
+		add_web_http3_config "$(get_real_ip "$IP")"
+	else
+		del_web_http3_config
+	fi
+}
+
 # SSL certificate verification
 is_web_domain_cert_valid() {
 	if [ ! -e "$ssl_dir/$domain.crt" ]; then

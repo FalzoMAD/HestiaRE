@@ -188,6 +188,11 @@ for domain in "${domains[@]}"; do
 				fi
 			fi
 
+			# A mapped -http3 template becomes the http3 switch; capability is reconciled at rebuild
+			if [ "$restore_web_effect" = 'http3' ] || [ "$restore_proxy_effect" = 'http3' ]; then
+				HTTP3='yes'
+			fi
+
 			# Merging web.conf keys
 			str="DOMAIN='$domain' IP='$IP' IP6='$IP6' ALIAS='$ALIAS'"
 			str="$str CUSTOM_DOCROOT='$CUSTOM_DOCROOT' CUSTOM_PHPROOT='$CUSTOM_PHPROOT'"

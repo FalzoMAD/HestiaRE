@@ -385,6 +385,12 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				fi
 			fi
 
+			# A mapped -http3 template (accept_web_template effect) becomes the http3 switch on
+			# the record; whether it renders a quic listen is reconciled at rebuild by capability
+			if [ "$restore_web_effect" = 'http3' ] || [ "$restore_proxy_effect" = 'http3' ]; then
+				HTTP3='yes'
+			fi
+
 			# Merging web.conf keys
 			str="DOMAIN='$domain' IP='$IP' IP6='$IP6' ALIAS='$ALIAS'"
 			str="$str CUSTOM_DOCROOT='$CUSTOM_DOCROOT' CUSTOM_PHPROOT='$CUSTOM_PHPROOT'"
@@ -431,20 +437,8 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		done
 
 		# Rebuilding vhost to prevent user overwrite default config changes not ideal
+		# (rebuild reconciles the http3 quic fragment from the HTTP3 field through the gate, #613)
 		rebuild_web_domain_conf
-
-		# HTTP/3 (#613): honour an archived switch or a mapped -http3 template, but only where the
-		# target nginx has http_v3 - else drop the quic fragment so nginx -t stays green when an
-		# http3 domain is restored onto a box (deb12/ub24) whose nginx cannot do it. Re-emitting
-		# also fixes the IP if the restore relocated the domain.
-		if { [ "$HTTP3" = 'yes' ] || [ "$restore_web_effect" = 'http3' ] || [ "$restore_proxy_effect" = 'http3' ]; } \
-			&& { [ "$PROXY_SYSTEM" = 'nginx' ] || [ "$WEB_SYSTEM" = 'nginx' ]; } && nginx_has_http3; then
-			add_web_http3_config "$(get_real_ip "$IP")"
-			update_object_value 'web' 'DOMAIN' "$domain" '$HTTP3' 'yes'
-		else
-			del_web_http3_config
-			update_object_value 'web' 'DOMAIN' "$domain" '$HTTP3' 'no'
-		fi
 
 		# Restoring web domain data
 		if [ -d "$HOMEDIR/$user/web/$domain/public_html" ]; then
