@@ -351,11 +351,6 @@ add_web_config() {
 		mkdir -p "$HOMEDIR/$user/conf/web/$domain/"
 	fi
 
-	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
-	if [[ "$2" =~ stpl$ ]]; then
-		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
-	fi
-
 	domain_idn=$domain
 	format_domain_idn
 
@@ -374,11 +369,34 @@ add_web_config() {
 		return "$E_NOTEXIST"
 	fi
 
+	# A merged template (#593) carries the HTTP server block, a marker line, then the SSL block,
+	# and renders ONE vhost file: the HTTP block always, the SSL block only when SSL is on (a
+	# listen 443 without a cert fails -t). A legacy pair template (no marker, e.g. mail) keeps the
+	# old behaviour - this .tpl/.stpl renders its own .conf/.ssl.conf.
+	local web_tpl_marker='#=HESTIARE-SSL-VHOST=#'
+	local web_tpl_merged=0
+	grep -qxF "$web_tpl_marker" "${WEBTPL_LOCATION}/$2" && web_tpl_merged=1
+
+	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
+	if [ "$web_tpl_merged" = 0 ] && [[ "$2" =~ stpl$ ]]; then
+		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
+	fi
+
 	# Note: Removing or renaming template variables will lead to broken custom templates.
 	#   -If possible custom templates should be automatically upgraded to use the new format
 	#   -Alternatively a depreciation period with proper notifications should be considered
 
-	cat "${WEBTPL_LOCATION}/$2" \
+	{
+		if [ "$web_tpl_merged" = 1 ]; then
+			if [ "$SSL" = 'yes' ]; then
+				sed "/^${web_tpl_marker}\$/d" "${WEBTPL_LOCATION}/$2"
+			else
+				sed "/^${web_tpl_marker}\$/,\$d" "${WEBTPL_LOCATION}/$2"
+			fi
+		else
+			cat "${WEBTPL_LOCATION}/$2"
+		fi
+	} \
 		| sed -e "s|%ip%|$local_ip|g" \
 			-e "s|%domain%|$domain|g" \
 			-e "s|%domain_idn%|$domain_idn|g" \
@@ -413,7 +431,11 @@ add_web_config() {
 	chown root:$user $conf
 	chmod 640 $conf
 
-	if [[ "$2" =~ stpl$ ]]; then
+	if [ "$web_tpl_merged" = 1 ]; then
+		# One vhost file holds both server blocks; drop any stale separate .ssl.conf symlink
+		rm -f /etc/$1/conf.d/domains/$domain.conf /etc/$1/conf.d/domains/$domain.ssl.conf
+		ln -s $conf /etc/$1/conf.d/domains/$domain.conf
+	elif [[ "$2" =~ stpl$ ]]; then
 		rm -f /etc/$1/conf.d/domains/$domain.ssl.conf
 		ln -s $conf /etc/$1/conf.d/domains/$domain.ssl.conf
 
@@ -500,11 +522,15 @@ replace_web_config() {
 
 # Delete web configuration
 del_web_config() {
-	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
-	local confname="$domain.conf"
+	# The list of output files this call clears. A .stpl call clears only the SSL vhost (legacy
+	# pair); a .tpl call clears the plain vhost AND the SSL one - a merged template (#593) keeps
+	# both server blocks in one .conf, and even for a legacy pair the SSL file is removed by its
+	# own .stpl call, so clearing it here too is harmless.
+	local confnames="$domain.conf $domain.ssl.conf"
+	local conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
 	if [[ "$2" =~ stpl$ ]]; then
 		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
-		confname="$domain.ssl.conf"
+		confnames="$domain.ssl.conf"
 	fi
 
 	# Clean up legacy configuration files
@@ -521,13 +547,17 @@ del_web_config() {
 
 	# Remove domain configuration files and clean up symbolic links
 	rm -f "$conf"
+	[[ "$2" =~ stpl$ ]] || rm -f "$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
 
-	if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" = "$1" ]; then
-		rm -f "/etc/$WEB_SYSTEM/conf.d/domains/$confname"
-	fi
-	if [ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" = "$1" ]; then
-		rm -f "/etc/$PROXY_SYSTEM/conf.d/domains/$confname"
-	fi
+	local cn
+	for cn in $confnames; do
+		if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" = "$1" ]; then
+			rm -f "/etc/$WEB_SYSTEM/conf.d/domains/$cn"
+		fi
+		if [ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" = "$1" ]; then
+			rm -f "/etc/$PROXY_SYSTEM/conf.d/domains/$cn"
+		fi
+	done
 }
 
 # SSL certificate verification

@@ -330,7 +330,8 @@ rebuild_web_domain_conf() {
 		if [ ! -d "$ssl_file_dir" ]; then
 			mkdir -p $ssl_file_dir
 		fi
-		add_web_config "$WEB_SYSTEM" "$TPL.stpl"
+		# SSL vhost comes from the merged template's SSL block, rendered by the .tpl call above
+		# when SSL='yes' (#593) - no separate .stpl render
 		cp -f $USER_DATA/ssl/$domain.crt \
 			$HOMEDIR/$user/conf/web/$domain/ssl/$domain.crt
 		cp -f $USER_DATA/ssl/$domain.key \
@@ -377,14 +378,10 @@ rebuild_web_domain_conf() {
 		$BIN/h-change-web-domain-dirlist $user $domain on no yes
 	fi
 
-	# Adding proxy configuration
+	# Adding proxy configuration (merged template renders both blocks into one .conf, #593)
 	if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
 		conf="$HOMEDIR/$user/conf/web/$domain/$PROXY_SYSTEM.conf"
 		add_web_config "$PROXY_SYSTEM" "$PROXY.tpl"
-		if [ "$SSL" = 'yes' ]; then
-			conf="$HOMEDIR/$user/conf/web/$domain/$PROXY_SYSTEM.ssl.conf"
-			add_web_config "$PROXY_SYSTEM" "$PROXY.stpl"
-		fi
 	fi
 
 	# Adding web stats parser
