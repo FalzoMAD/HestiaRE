@@ -209,6 +209,18 @@
 						</a>
 					</label>
 				</div>
+				<?php if (
+					$_SESSION["WEB_HTTP3"] == "yes"
+					&& ($_SESSION["WEB_SYSTEM"] == "nginx"
+						|| (!empty($_SESSION["PROXY_SYSTEM"]) && $_SESSION["PROXY_SYSTEM"] == "nginx"))
+				) { ?>
+				<div class="form-check u-mb20">
+					<input class="form-check-input" type="checkbox" name="v_http3" id="v_http3" <?php if ($v_http3 == 'yes') echo 'checked' ?>>
+					<label for="v_http3">
+						<?= tohtml( _("Enable HTTP/3 (QUIC)")) ?>
+					</label>
+				</div>
+				<?php } ?>
 				<div x-cloak x-show="showCertificates" class="js-ssl-details">
 					<div class="u-mb10">
 						<label for="ssl_crt" class="form-label">
