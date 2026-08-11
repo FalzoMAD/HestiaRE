@@ -54,7 +54,12 @@ if (empty($backend_templates)) {
 }
 
 $backends_active = backendtpl_with_webdomains();
-$v_php_versions = array_map(function ($php_version) use ($backend_templates, $backends_active) {
+// Installed PHP versions: the pool template is a profile now (#591), so a version is
+// "installed" when the interpreter is, not when a PHP-X_Y template exists.
+exec(HESTIA_CMD . "h-list-sys-php plain", $output, $return_var);
+$installed_php = array_map("trim", $output);
+unset($output);
+$v_php_versions = array_map(function ($php_version) use ($installed_php, $backends_active) {
 	// Mark installed php versions
 
 	if (stripos($php_version, "php") !== 0) {
@@ -70,27 +75,21 @@ $v_php_versions = array_map(function ($php_version) use ($backend_templates, $ba
 		"protected" => false,
 	];
 
-	if (in_array($phpinfo->tpl, $backend_templates)) {
+	if (in_array($phpinfo->version, $installed_php)) {
 		$phpinfo->installed = true;
 	}
 
 	if (array_key_exists($phpinfo->tpl, $backends_active)) {
-		// Prevent used php version to be removed
+		// Prevent a version in use from being removed
 		if ($phpinfo->installed) {
 			$phpinfo->protected = true;
 		}
 		$phpinfo->usedby = $backends_active[$phpinfo->tpl];
 	}
 
-	if ($phpinfo->name == DEFAULT_PHP_VERSION) {
-		// Prevent default php version to be removed
-		if ($phpinfo->installed) {
-			$phpinfo->protected = true;
-		}
-
-		if (!empty($backends_active["default"])) {
-			$phpinfo->usedby = array_merge_recursive($phpinfo->usedby, $backends_active["default"]);
-		}
+	if ($phpinfo->name == DEFAULT_PHP_VERSION && $phpinfo->installed) {
+		// Prevent the system default version from being removed
+		$phpinfo->protected = true;
 	}
 
 	return $phpinfo;

@@ -144,10 +144,9 @@ if [ -n "$SUSPENDED" ]; then
 	fi
 fi
 
-# Detect php version
-
-if [[ $BACKEND =~ ^.*PHP-([0-9])\_([0-9])$ ]]; then
-	version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+# Restart the version this domain ran (its own field), else the system default
+if [ -n "$PHP_VERSION" ] && [ "$PHP_VERSION" != 'none' ]; then
+	version="$PHP_VERSION"
 else
 	version=$(multiphp_default_version)
 fi
