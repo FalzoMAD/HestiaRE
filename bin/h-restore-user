@@ -235,7 +235,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		echo -e "$(date "+%F %T") $domain" | tee -a $tmpdir/restore.log
 
 		# Cleanup previous domain keys
-		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME LETSENCRYPT FTP_USER FTP_MD5 BACKEND PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT U_DISK CUSTOM_DOCROOT CUSTOM_PHPROOT
+		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME LETSENCRYPT FTP_USER FTP_MD5 BACKEND PHP_VERSION PHP_PROFILE PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT U_DISK CUSTOM_DOCROOT CUSTOM_PHPROOT
 
 		# Checking domain existence
 		check_config=$(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
@@ -289,7 +289,23 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			# has no file for (foreign install, other web model, removed template)
 			read -r TPL _ <<< "$(accept_web_template 'web' "$TPL")"
 			read -r PROXY restore_proxy_effect <<< "$(accept_web_template 'proxy' "$PROXY")"
-			read -r BACKEND _ <<< "$(accept_web_template 'backend' "$BACKEND")"
+			# BACKEND in the archive is the HestiaCP-compat PHP-<ver>; the native fields carry the
+			# exact HestiaRE state. Prefer them; else derive the version from the compat value and
+			# default the profile. BACKEND (live) is the pool profile again (#591).
+			if [ -n "$WEB_BACKEND" ]; then
+				if [ -z "$PHP_VERSION" ]; then
+					if [[ "$BACKEND" =~ PHP-([0-9]+)_([0-9]+) ]]; then
+						PHP_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+					elif [ "$BACKEND" = 'no-php' ]; then
+						PHP_VERSION='none'
+					else
+						PHP_VERSION=$(multiphp_default_version)
+					fi
+				fi
+				case "$PHP_PROFILE" in default | ondemand | high) BACKEND="$PHP_PROFILE" ;; *) BACKEND='default' ;; esac
+			else
+				read -r BACKEND _ <<< "$(accept_web_template 'backend' "$BACKEND")"
+			fi
 
 			if [ -n "$CUSTOM_DOCROOT" ]; then
 				CUSTOM_DOCROOT=$(echo "$CUSTOM_DOCROOT" | sed -e "s|/home/${old_user}/web/|/home/${user}/web/|g")
@@ -330,7 +346,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			str="$str TPL='$TPL' SSL='$SSL' SSL_HOME='$SSL_HOME' SSL_HSTS='$SSL_HSTS'"
 			str="$str SSL_FORCE='$SSL_FORCE' LETSENCRYPT='$LETSENCRYPT' FTP_USER='$FTP_USER'"
 			str="$str FTP_MD5='$FTP_MD5' FTP_PATH='$FTP_PATH'"
-			str="$str BACKEND='$BACKEND' PROXY='$PROXY'"
+			str="$str BACKEND='$BACKEND' PHP_VERSION='$PHP_VERSION' PHP_PROFILE='' PROXY='$PROXY'"
 			str="$str PROXY_EXT='$PROXY_EXT' STATS='$STATS'"
 			str="$str STATS_USER='$STATS_USER' STATS_CRYPT='$STATS_CRYPT'"
 			str="$str U_DISK='$U_DISK' U_BANDWIDTH='0' OFFLINE='$OFFLINE' SUSPENDED='no'"
