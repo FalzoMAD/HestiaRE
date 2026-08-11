@@ -95,12 +95,21 @@ accept_web_template() {
 }
 
 # Web template check
+# A merged web template (#593) carries both server blocks and this marker line; a legacy pair
+# template does not and still ships its .stpl partner. Single source for the marker string.
+web_template_is_merged() {
+	grep -qxF '#=HESTIARE-SSL-VHOST=#' "$1" 2> /dev/null
+}
 is_web_template_valid() {
 	if [ -n "$WEB_SYSTEM" ]; then
 		tpl=$(web_template_file "$WEB_SYSTEM" "$1" 'tpl')
-		stpl=$(web_template_file "$WEB_SYSTEM" "$1" 'stpl')
-		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
+		if [ ! -e "$tpl" ]; then
 			check_result "$E_NOTEXIST" "$1 web template doesn't exist"
+		fi
+		# a merged template holds the SSL block itself; a legacy pair still needs its .stpl
+		if ! web_template_is_merged "$tpl"; then
+			stpl=$(web_template_file "$WEB_SYSTEM" "$1" 'stpl')
+			[ -e "$stpl" ] || check_result "$E_NOTEXIST" "$1 web template doesn't exist"
 		fi
 	fi
 }
@@ -109,9 +118,12 @@ is_web_template_valid() {
 is_proxy_template_valid() {
 	if [ -n "$PROXY_SYSTEM" ]; then
 		tpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'tpl')
-		stpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'stpl')
-		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
+		if [ ! -e "$tpl" ]; then
 			check_result "$E_NOTEXIST" "$1 proxy template doesn't exist"
+		fi
+		if ! web_template_is_merged "$tpl"; then
+			stpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'stpl')
+			[ -e "$stpl" ] || check_result "$E_NOTEXIST" "$1 proxy template doesn't exist"
 		fi
 	fi
 }
