@@ -12,11 +12,27 @@ jobs:
         env:
           PUSH_TOKEN:   ${{ secrets.PUSH_TOKEN }}
           SRC_REPO_PATH: ${{ secrets.SRC_REPO_PATH }}
+          REPO_SLUG: ${{ github.repository }}
         run: |
           set -euo pipefail
           workdir="$(mktemp -d -p /tmp mirror.XXXXXX)"
           trap 'rm -rf "$workdir"' EXIT
-          git clone --mirror "file://${SRC_REPO_PATH}" "$workdir/repo.git"
+          # Resolve the bare repo on this host. The configured path wins; if it is gone the
+          # root is reused with the CURRENT owner/repo, because renaming an owner makes Gitea
+          # MOVE the directory - the secret then points at a path that no longer exists while
+          # every other reference (ssh, api, remotes) silently follows the rename.
+          src="$SRC_REPO_PATH"
+          if [ ! -d "$src" ]; then
+            src="${SRC_REPO_PATH%/*/*}/$(echo "$REPO_SLUG" | tr '[:upper:]' '[:lower:]').git"
+            echo "Note: SRC_REPO_PATH does not exist; using $src (derived from $REPO_SLUG)."
+          fi
+          if [ ! -e "$src/HEAD" ]; then
+            echo "No bare repository at '$src'."
+            echo "Set the SRC_REPO_PATH secret to the repo's path on this host"
+            echo "(<gitea-data>/gitea-repositories/<owner>/<repo>.git, all lowercase)."
+            exit 1
+          fi
+          git clone --mirror "file://${src}" "$workdir/repo.git"
           cd "$workdir/repo.git"
           git push --prune \
             "https://x-access-token:${PUSH_TOKEN}@github.com/FalzoMAD/HestiaRE.git" \
