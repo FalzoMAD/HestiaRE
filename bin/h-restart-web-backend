@@ -71,7 +71,7 @@ if [ -z "$version" ]; then
 		v_php="php$version-fpm"
 		if [ ! -f "/etc/php/${version}/fpm/pool.d/dummy.conf" ]; then
 			cp -f "$HESTIA/share/php-fpm/dummy.conf" "/etc/php/${version}/fpm/pool.d/"
-			sed -i "s/9999/99${version//./}/g" "/etc/php/${version}/fpm/pool.d/dummy.conf"
+			sed -i "s/%backend_version%/${version}/g" "/etc/php/${version}/fpm/pool.d/dummy.conf"
 		fi
 
 		$BIN/h-restart-service "$v_php" "$restart"
