@@ -262,8 +262,23 @@ opens above it.
   "HestiaCP snapshot <today>" - only a version string deep in the tree gave it away. The subject now
   carries `(<branch> @ <sha>)`, and `UPSTREAM_BRANCH=` overrides it on purpose.
 
+### Added
+
+- **A docker domain picks its template in the panel** (#592, closing #219 Phase 7). Docker templates
+  live per front system under `templates/docker/`, and `h-list-web-templates-docker` lists exactly the
+  set the renderer would use. The select appears in the docker block once there is more than one
+  template - a custom template shows up there and, as intended, never in the general template list.
+
 ### Fixed
 
+- **Saving a docker domain from the panel failed with a 500 and dropped the proxy** (#592). Every POST
+  family whose control the docker branch hides was still read unconditionally: the pool template
+  reached `quoteshellarg(null)` and killed the whole save, and the proxy checkbox - absent because
+  nothing rendered it - read as "customer switched the proxy off", so `PROXY` would have been deleted
+  on every save. All of them gate on the domain's docker state now, the same way the view does.
+- **A user whose only domain is a docker domain could not be backed up** (#592). On the both model
+  there is no backend vhost by design, so the backup fell through to the legacy single-file lookup and
+  aborted with `can't parse config .../apache2.conf` - taking the whole user backup with it.
 - **A user named after a service died at `groupadd` instead of being refused** (#625). `h-add-user`
   checked `/etc/passwd` and a MariaDB name list, but never `/etc/group` - and the group is created
   as the mirror of the user, so `docker` (group present, user not) failed with `group creation

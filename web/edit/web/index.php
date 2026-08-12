@@ -261,6 +261,14 @@ if (!empty($_SESSION["PROXY_SYSTEM"])) {
 	unset($output);
 }
 
+// List docker templates - only a docker customer can pick one
+$docker_templates = [];
+if (!empty($v_docker_net)) {
+	exec(HESTIA_CMD . "h-list-web-templates-docker json", $output, $return_var);
+	$docker_templates = json_decode(implode("", $output), true) ?: [];
+	unset($output);
+}
+
 // List web stat engines
 exec(HESTIA_CMD . "h-list-web-stats json", $output, $return_var);
 $stats = json_decode(implode("", $output), true);
@@ -350,9 +358,11 @@ if (!empty($_POST["save"])) {
 			$restart_web = "yes";
 		}
 
-		// Change backend template
+		// Change backend template - absent for a docker domain (no pool at all), and reading the
+		// key raw was a fatal, not a warning: quoteshellarg(null) killed the whole save
 		if (
 			!empty($_SESSION["WEB_BACKEND"]) &&
+			isset($_POST["v_backend_template"]) &&
 			$v_backend_template != $_POST["v_backend_template"] &&
 			empty($_SESSION["error_msg"])
 		) {
@@ -403,12 +413,14 @@ if (!empty($_POST["save"])) {
 	if (empty($v_nginx_cache_duration)) {
 		$v_nginx_cache_duration = "";
 	}
+	// Same absent-control rule as the proxy family: a docker domain has no fastcgi cache selector
 	if (
-		($_SESSION["WEB_SYSTEM"] == "nginx" &&
+		empty($v_docker) &&
+		(($_SESSION["WEB_SYSTEM"] == "nginx" &&
 			$v_nginx_cache_check != $_POST["v_nginx_cache_check"]) ||
-		($v_nginx_cache_duration != $_POST["v_nginx_cache_duration"] &&
+		($v_nginx_cache_duration != ($_POST["v_nginx_cache_duration"] ?? "") &&
 			($_POST["v_nginx_cache"] = "yes") &&
-			empty($_SESSION["error_msg"]))
+			empty($_SESSION["error_msg"])))
 	) {
 		if ($_POST["v_nginx_cache_check"] == "on") {
 			if (empty($_POST["v_nginx_cache_duration"])) {
@@ -439,8 +451,11 @@ if (!empty($_POST["save"])) {
 		$restart_web = "yes";
 	}
 
-	// Delete proxy support
+	// Proxy support, template and extensions. All three gate on empty($v_docker) like the view
+	// does: for a docker domain nothing here is rendered, so an absent checkbox is not an unchecked
+	// one - it used to read as "customer switched the proxy off" and dropped PROXY on every save.
 	if (
+		empty($v_docker) &&
 		!empty($_SESSION["PROXY_SYSTEM"]) &&
 		!empty($v_proxy) &&
 		empty($_POST["v_proxy"]) &&
@@ -464,6 +479,7 @@ if (!empty($_POST["save"])) {
 
 	// Change proxy template / Update extension list
 	if (
+		empty($v_docker) &&
 		!empty($_SESSION["PROXY_SYSTEM"]) &&
 		!empty($v_proxy) &&
 		!empty($_POST["v_proxy"]) &&
@@ -506,6 +522,7 @@ if (!empty($_POST["save"])) {
 
 	// Add proxy support
 	if (
+		empty($v_docker) &&
 		!empty($_SESSION["PROXY_SYSTEM"]) &&
 		empty($v_proxy) &&
 		!empty($_POST["v_proxy"]) &&
@@ -1114,9 +1131,16 @@ if (!empty($_POST["save"])) {
 	if (!empty($v_docker_net) && empty($_SESSION["error_msg"])) {
 		$post_docker_port = preg_replace("/\D/", "", $_POST["v_docker_port"] ?? "");
 		$post_docker_octet = preg_replace("/\D/", "", $_POST["v_docker_octet"] ?? "1");
+		// Absent select (single template, or none offered) keeps what the domain has
+		$post_docker_tpl = !empty($_POST["v_docker_template"])
+			? $_POST["v_docker_template"]
+			: ($v_docker ?: "default");
 		if (
 			!empty($_POST["v_docker"]) &&
-			(empty($v_docker) || $post_docker_port != $v_docker_port || $post_docker_octet != $v_docker_octet)
+			(empty($v_docker) ||
+				$post_docker_port != $v_docker_port ||
+				$post_docker_octet != $v_docker_octet ||
+				$post_docker_tpl != $v_docker)
 		) {
 			exec(
 				HESTIA_CMD .
@@ -1127,14 +1151,16 @@ if (!empty($_POST["save"])) {
 					" " .
 					quoteshellarg($post_docker_port) .
 					" " .
-					quoteshellarg($post_docker_octet),
+					quoteshellarg($post_docker_octet) .
+					" " .
+					quoteshellarg($post_docker_tpl),
 				$output,
 				$return_var,
 			);
 			check_return_code($return_var, $output);
 			unset($output);
 			if (empty($_SESSION["error_msg"])) {
-				$v_docker = "default";
+				$v_docker = $post_docker_tpl;
 				$v_docker_port = $post_docker_port;
 				$v_docker_octet = $post_docker_octet;
 				$restart_web = "yes";
