@@ -45,14 +45,10 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Load domain data
-parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
 
-# Check for Apache/Nginx or Nginx/PHP-FPM configuration
-if [ -z $PROXY_SYSTEM ]; then
-	hstsconf="$HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.hsts.conf"
-else
-	hstsconf="$HOMEDIR/$user/conf/web/$domain/$PROXY_SYSTEM.hsts.conf"
-fi
+# Same resolution as the add side, or the file removed is not the file written
+hstsconf="$HOMEDIR/$user/conf/web/$domain/${PROXY_SYSTEM:-$WEB_SYSTEM}.hsts.conf"
 
 rm -f $hstsconf
 

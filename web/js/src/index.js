@@ -4,6 +4,7 @@ import handleAutoTrimInputs from './autoTrimInputs.js';
 import handleClipboardCopy from './clipboardCopy.js';
 import handleConfirmAction from './confirmAction.js';
 import handleCopyCreds from './copyCreds.js';
+import handleDockerDisableGuard from './dockerDisableGuard.js';
 import handleCronGenerator from './cronGenerator.js';
 import handleDatabaseHints from './databaseHints.js';
 import handleDiscardAllMail from './discardAllMail.js';
@@ -36,6 +37,7 @@ function initListeners() {
 	handleClipboardCopy();
 	handleCronGenerator();
 	handleDiscardAllMail();
+	handleDockerDisableGuard();
 	handleDocRootHint();
 	handleEditWebListeners();
 	handleFormSubmit();

@@ -71,7 +71,7 @@ requested=",$(
 
 for db in "${databases[@]}"; do
 	if [[ "$database" = '*' || "$requested" == *",${db},"* ]]; then
-		check_config=$(grep "DB='$db'" $USER_DATA/db.conf)
+		check_config=$(grep -F "DB='$db'" $USER_DATA/db.conf)
 		if [ -z "$check_config" ]; then
 			restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" --json dump "$snapshot" "/home/$user/backup/db/$db/hestia/db.conf" > "$tmpdir/db.conf"
 			if [ "$?" -ne 0 ]; then
@@ -84,7 +84,7 @@ for db in "${databases[@]}"; do
 			str="$str SUSPENDED='no' TIME='$(date +%T)' DATE='$(date +%F)'"
 			echo "$str" >> $USER_DATA/db.conf
 		else
-			parse_object_kv_list $(grep "DB='$db'" $USER_DATA/db.conf)
+			parse_object_kv_list $(grep -F "DB='$db'" $USER_DATA/db.conf)
 		fi
 
 		# Download databse

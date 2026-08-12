@@ -180,7 +180,7 @@ is_object_valid 'web' 'DOMAIN' "$domain"
 #----------------------------------------------------------#
 
 # Parsing domain
-parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
 
 if [ -n "$CUSTOM_DOCROOT" ]; then
 	DOCROOT="$CUSTOM_DOCROOT"

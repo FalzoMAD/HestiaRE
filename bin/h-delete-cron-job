@@ -40,7 +40,7 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
-suspended=$(grep "JOB='$job'" $USER_DATA/cron.conf | grep "SUSPENDED='yes'")
+suspended=$(grep -F "JOB='$job'" $USER_DATA/cron.conf | grep "SUSPENDED='yes'")
 # Deleting job
 sed -i "/JOB='$job' /d" $USER_DATA/cron.conf
 

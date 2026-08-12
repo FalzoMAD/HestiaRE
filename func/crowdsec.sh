@@ -249,7 +249,7 @@ crowdsec_render_domain_fragment() {
 	fi
 
 	local rec cs
-	rec=$(grep -m1 "DOMAIN='$domain'" "$CONF_DIR/users/$user/web.conf" 2> /dev/null)
+	rec=$(grep -m1 -F "DOMAIN='$domain'" "$CONF_DIR/users/$user/web.conf" 2> /dev/null)
 	[ -n "$rec" ] || return 0
 	cs=$(sed -n "s/.*CROWDSEC='\([^']*\)'.*/\1/p" <<< "$rec")
 

@@ -72,7 +72,7 @@ for user in $("$BIN/h-list-users" list); do
 			aliases=$(echo "$aliases" | sed -e ':a;N;$!ba;s/\n/,/g')
 
 			# Parsing domain
-			parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+			parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
 
 			# Split aliases into array
 			IFS=',' read -r -a ALIASES <<< "$ALIAS"

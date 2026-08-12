@@ -270,7 +270,15 @@ if (!empty($_POST["save"])) {
 		($v_docker_eligible || !empty($v_docker_ip))
 	) {
 		$v_docker_new = empty($_POST["v_docker"]) ? "no" : "yes";
-		if ($v_docker_new !== (empty($v_docker_ip) ? "no" : "yes")) {
+		// Turning it off deletes the customer's containers, images and volumes and cannot be undone
+		// by re-checking the box, so the name has to be typed. Enforced here, not only in the
+		// dialog: an unchecked box must never carry that away as a side effect of another save.
+		if ($v_docker_new === "no" && !empty($v_docker_ip) && ($_POST["v_docker_confirm"] ?? "") !== $v_username) {
+			$_SESSION["error_msg"] = sprintf(
+				_("Disabling Docker deletes the containers, images and volumes of %s. Confirm by typing the user name."),
+				$v_username,
+			);
+		} elseif ($v_docker_new !== (empty($v_docker_ip) ? "no" : "yes")) {
 			$docker_cmd = $v_docker_new === "yes" ? "h-add-user-docker " : "h-delete-user-docker ";
 			exec(HESTIA_CMD . $docker_cmd . quoteshellarg($v_username), $output, $return_var);
 			check_return_code($return_var, $output);

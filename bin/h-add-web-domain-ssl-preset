@@ -44,7 +44,7 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Load domain data
-parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
 
 if [ "$ssl" = "yes" ]; then
 	if [ -z "$SSL_FORCE" ]; then

@@ -69,6 +69,12 @@ export function createConfirmationDialog({
 	message = 'Are you sure?',
 	targetUrl,
 	spinner = false,
+	// Irreversible operations take a typed confirmation: the button stays disabled until this
+	// word is typed. onConfirm runs instead of navigating, for the ones that live in a form.
+	confirmWord = '',
+	confirmLabel = '',
+	onConfirm = null,
+	onCancel = null,
 }) {
 	// Create the dialog
 	const dialog = document.createElement('dialog');
@@ -88,6 +94,21 @@ export function createConfirmationDialog({
 	messageElement.classList.add('modal-message');
 	dialog.append(messageElement);
 
+	// The word to type, never interpolated into markup - textContent, so the value cannot carry
+	// anything but text no matter where it came from.
+	let wordInput = null;
+	if (confirmWord) {
+		const label = document.createElement('p');
+		label.classList.add('modal-message');
+		label.textContent = confirmLabel || confirmWord;
+		dialog.append(label);
+		wordInput = document.createElement('input');
+		wordInput.type = 'text';
+		wordInput.classList.add('form-control');
+		wordInput.setAttribute('autocomplete', 'off');
+		dialog.append(wordInput);
+	}
+
 	// Create and insert the options
 	const optionsElement = document.createElement('div');
 	optionsElement.classList.add('modal-options');
@@ -96,20 +117,33 @@ export function createConfirmationDialog({
 	confirmButton.type = 'submit';
 	confirmButton.classList.add('button');
 	confirmButton.textContent = 'OK';
+	if (wordInput) {
+		confirmButton.classList.add('button-danger');
+		confirmButton.disabled = true;
+		// trimmed: a trailing space is a typo, not a refusal to confirm
+		wordInput.addEventListener('input', () => {
+			confirmButton.disabled = wordInput.value.trim() !== confirmWord;
+		});
+	}
 	optionsElement.append(confirmButton);
 
 	const cancelButton = document.createElement('button');
 	cancelButton.type = 'button';
 	cancelButton.classList.add('button', 'button-secondary', 'u-ml5');
 	cancelButton.textContent = 'Cancel';
-	if (targetUrl) {
+	if (targetUrl || onConfirm) {
 		optionsElement.append(cancelButton);
 	}
 
 	dialog.append(optionsElement);
 
 	// Define named functions to handle the event listeners
+	let confirmed = false;
 	const handleConfirm = () => {
+		if (wordInput && wordInput.value.trim() !== confirmWord) {
+			return;
+		}
+		confirmed = true;
 		if (targetUrl) {
 			if (spinner) {
 				showSpinner();
@@ -121,7 +155,15 @@ export function createConfirmationDialog({
 	};
 
 	const handleCancel = () => handleClose();
+	// close covers the button AND Escape, which fires close without touching any button - that is
+	// where a cancel path invented per dialog leaves the page half-switched.
 	const handleClose = () => {
+		if (!confirmed && typeof onCancel === 'function') {
+			onCancel();
+		}
+		if (confirmed && typeof onConfirm === 'function') {
+			onConfirm();
+		}
 		confirmButton.removeEventListener('click', handleConfirm);
 		cancelButton.removeEventListener('click', handleCancel);
 		dialog.removeEventListener('close', handleClose);

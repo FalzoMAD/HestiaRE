@@ -14,6 +14,45 @@ opens above it.
 
 ### Added
 
+- **Disabling Docker for a customer asks for their name** (#632). The checkbox was too light a gesture
+  for what runs behind it: the companion goes, and with it every container, image and volume, while
+  re-checking the box only creates an empty companion. The dialog spells out what is lost and enables
+  its button on an exact match; the server refuses the disable without the confirmation field either
+  way, so an unchecked box cannot carry the deletion away as a side effect of saving something else.
+
+### Fixed
+
+- **HSTS was a silent no-op on an apache front** (#638). `h-add-web-domain-ssl-hsts` reported success
+  and set `SSL_HSTS='yes'`, but wrote nginx syntax whatever the front was, and no apache template
+  included the fragment - so the switch was on, the record said yes, and no browser was ever told.
+  The two defects covered each other: adding only the include would have fed `add_header` to apache
+  and broken `configtest` for the whole box. The fragment now carries the directive of the front that
+  reads it, both apache templates include it inside the SSL vhost, and the delete side resolves the
+  same path. A smoke guard catches the state that was invisible: a domain claiming HSTS whose
+  fragment is missing or written for the other server.
+- **Object reads matched a domain as a regular expression** (#594). The dot in a domain is a wildcard,
+  so with `a.b.com` and `aXb.com` on one box - which the creation guard allows - a read on one could
+  return the other's record, `is_object_valid` could confirm a domain that does not exist, and
+  `add_object_key` could write into the wrong record. Nine accessors in `func/main.sh` and 54 call
+  sites now match literally. `search_objects` deliberately stays a regex (its value is a flag and
+  `*` means "any"), which is written above it. The backup exclusion parsers needed more than a flag:
+  they mix a literal name with an intentional `*`, and matched by prefix - so an exclusion for
+  `aXb.com` also excluded `a.b.com` from the archive. They compare by index now.
+- **An alias belonging to another customer was never refused** (#601). `is_web_alias_new` compared
+  `"$user"` with `"$user"` - the loop had overwritten the caller's `$user` with the owner read from
+  the file path. Only the `type == web` half of the check survived, so a mail domain could take an
+  alias that already belonged to somebody else (`web` and `mail` are the two types that reach it). Rewritten to mirror `is_web_domain_new`, which had
+  the shape right, and measured on two customers before and after.
+- **Five inherited leftovers around domain creation** (#601): two `CUSTOM_DOCROOT` branches that could
+  never be reached (the record is authoritative - the writer resolves and containment-checks the path),
+  counters that were increased before the record was written, a `chown` with an unset argument, a
+  `find | xargs chmod` without `-print0`, and two checks that concluded from stdout or from a
+  comparison that a stray space made always true.
+- **The ip domain counter went one under the truth per backup-restore cycle** (#599). The restore
+  writes the record directly, so nothing increments - but it recounts at the end, and that recount was
+  blind to records holding a NAT'd box's public address. With the recount fixed, the cycle balances:
+  measured 5 / 6 / 5 / 6 / 5 across add, delete, restore, delete with the counter guard green.
+
 - **Docker resources are capped per customer** (#619). Packages carry a `DOCKER_LIMIT` preset -
   `unlimited` / `low` / `medium` / `high` - which lands on the **companion's** systemd slice, where the
   daemon and every one of that customer's containers actually live (measured: a container's cgroup is

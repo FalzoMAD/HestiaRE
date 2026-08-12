@@ -51,7 +51,7 @@ check_hestia_demo_mode
 echo "Moving $domain from $owner to $user, please wait..."
 
 # WEB domain
-web_data=$(grep "DOMAIN='$domain'" $CONF_DIR/users/$owner/web.conf)
+web_data=$(grep -F "DOMAIN='$domain'" $CONF_DIR/users/$owner/web.conf)
 if [ -n "$web_data" ]; then
 	echo "[*] Moving web domain..."
 	$BIN/h-suspend-web-domain "$owner" "$domain" >> /dev/null 2>&1
@@ -144,7 +144,7 @@ if [ -n "$web_data" ]; then
 fi
 
 # MAIL domain
-mail_data=$(grep "DOMAIN='$domain'" $CONF_DIR/users/$owner/mail.conf)
+mail_data=$(grep -F "DOMAIN='$domain'" $CONF_DIR/users/$owner/mail.conf)
 if [ -n "$mail_data" ]; then
 	$BIN/h-suspend-mail-domain "$owner" "$domain" >> /dev/null 2>&1
 	echo "[*] Moving mail domain and accounts..."
