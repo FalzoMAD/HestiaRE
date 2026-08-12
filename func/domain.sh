@@ -30,6 +30,13 @@ web_template_file() {
 	echo "$loc/$name.$ext"
 }
 
+# Single source for the docker template path (#566): h-add-web-domain-docker validates and
+# add_web_config renders through this one resolution - two hand-built paths for the same file
+# is the validator/renderer divergence web_template_file closed in phase 3.
+web_docker_template_file() {
+	echo "$WEBTPL/docker/$1/$2.tpl"
+}
+
 # Legacy template values mapped onto what replaced them. Echoes "<name> <side-effect>"
 # and returns 0 for a KNOWN legacy value, 1 for anything else - the distinction is what
 # lets a CLI caller still reject a typo while accepting a value that simply aged out.
@@ -405,18 +412,19 @@ add_web_config() {
 				"/etc/$1/conf.d/domains/$domain.conf" "/etc/$1/conf.d/domains/$domain.ssl.conf"
 			return 0
 		fi
-		WEBTPL_LOCATION="$WEBTPL/docker/$1"
 		# The field keeps the chosen NAME across a web-model switch, but templates/docker/ is per
 		# system and a custom nginx docker template has no apache twin. Fall back to this system's
 		# default rather than skip the render - a docker domain without a front is an outage - and
 		# switching back restores the custom template, since the field never changed. TPL/PROXY go
 		# through accept_web_template for this; DOCKER deliberately stays this simple.
-		if [ ! -f "$WEBTPL_LOCATION/$DOCKER.tpl" ] && [ -f "$WEBTPL_LOCATION/default.tpl" ]; then
+		local web_docker_tpl
+		web_docker_tpl=$(web_docker_template_file "$1" "$DOCKER")
+		if [ ! -f "$web_docker_tpl" ] && [ -f "$(web_docker_template_file "$1" default)" ]; then
 			echo "Warning: docker template '$DOCKER' has no $1 variant - rendering default for $domain" >&2
-			set -- "$1" "default.tpl"
-		else
-			set -- "$1" "$DOCKER.tpl"
+			web_docker_tpl=$(web_docker_template_file "$1" default)
 		fi
+		WEBTPL_LOCATION=$(dirname "$web_docker_tpl")
+		set -- "$1" "$(basename "$web_docker_tpl")"
 	fi
 
 	# A missing template would become a 0-byte vhost that apache2 -t accepts. Warn +

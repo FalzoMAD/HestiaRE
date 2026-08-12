@@ -17,7 +17,6 @@
 # Argument definition
 user=$1
 domain=$2
-domain_idn=$2
 docker_port=$3
 docker_octet=${4-1}
 template=${5-default}
@@ -36,7 +35,6 @@ web_lock_acquire || exit 1
 
 # Additional argument formatting
 format_domain
-format_domain_idn
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -44,6 +42,7 @@ format_domain_idn
 
 check_args '3' "$#" 'USER DOMAIN PORT [OCTET] [TEMPLATE] [RESTART]'
 is_format_valid 'user' 'domain' 'restart'
+is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'web' 'DOMAIN' "$domain"
@@ -69,7 +68,7 @@ fi
 
 # The template is joined into a path and cat'd into the vhost - require a plain name
 front="${PROXY_SYSTEM:-$WEB_SYSTEM}"
-if ! [[ "$template" =~ ^[A-Za-z0-9._-]+$ ]] || [ ! -f "$WEBTPL/docker/$front/$template.tpl" ]; then
+if ! [[ "$template" =~ ^[A-Za-z0-9._-]+$ ]] || [ ! -f "$(web_docker_template_file "$front" "$template")" ]; then
 	check_result "$E_NOTEXIST" "docker template '$template' doesn't exist for $front"
 fi
 
@@ -78,6 +77,20 @@ fi
 # Checked live rather than hard-coded so later wildcard binders are covered too (measured, N4).
 if ss -ltnH 2> /dev/null | awk '{print $4}' | grep -qE "^(0\.0\.0\.0|\*|\[::\]):${docker_port}$"; then
 	check_result "$E_EXISTS" "port $docker_port is held by a wildcard listener on this host - a container could not bind it"
+fi
+
+# Wildcards are one grab; the exact target can be held directly too. The customer's OWN container
+# there is the normal flow (app first, then domain) - only a foreign holder is refused, the same
+# silent-bind-failure class. rootlesskit holds published sockets under the companion uid; a root
+# daemon shows uid 0.
+target="$docker_net.$docker_octet:$docker_port"
+holder=$(ss -ltnHe 2> /dev/null | awk -v a="$target" '$4 == a' | head -1)
+if [ -n "$holder" ]; then
+	holder_uid=$(grep -o 'uid:[0-9]*' <<< "$holder" | head -1 | cut -d: -f2)
+	companion_uid=$(id -u "${user}-docker" 2> /dev/null)
+	if [ "${holder_uid:-0}" != "$companion_uid" ]; then
+		check_result "$E_EXISTS" "$target is already held by another process (uid ${holder_uid:-0}) - the container could not bind it"
+	fi
 fi
 
 # One target, one domain: a second NAME for the same app is an alias, not a second domain
@@ -94,10 +107,9 @@ fi
 
 # The three fields carry the whole docker state; render and pool reconcile off them centrally
 # (add_web_config / h-add-web-domain-backend), so one rebuild flips everything
+# add_object_key is idempotent on key presence (cache-command precedent) - call unconditionally
 for key in DOCKER DOCKER_PORT DOCKER_OCTET; do
-	if ! grep -F "DOMAIN='$domain'" "$USER_DATA/web.conf" | grep -q " $key="; then
-		add_object_key "web" 'DOMAIN' "$domain" "$key" 'SSL_HOME'
-	fi
+	add_object_key "web" 'DOMAIN' "$domain" "$key" 'SSL_HOME'
 done
 update_object_value 'web' 'DOMAIN' "$domain" '$DOCKER' "$template"
 update_object_value 'web' 'DOMAIN' "$domain" '$DOCKER_PORT' "$docker_port"
