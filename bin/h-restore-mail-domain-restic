@@ -83,7 +83,7 @@ fi
 for domain in "${domains[@]}"; do
 	if [[ "$mail" = '*' || "$requested" == *",${domain},"* ]]; then
 		# Checking domain existance
-		check_config=$(grep "DOMAIN='$domain'" $USER_DATA/mail.conf)
+		check_config=$(grep -F "DOMAIN='$domain'" $USER_DATA/mail.conf)
 		if [ -z "$check_config" ]; then
 			check_new=$(is_domain_new 'mail' $domain)
 			if [ "$check_new" = 'yes' ]; then
@@ -113,7 +113,7 @@ for domain in "${domains[@]}"; do
 		fi
 
 		# Restore SSL
-		check_config=$(grep "DOMAIN='$domain'" $USER_DATA/mail.conf | grep -o "SSL='yes'")
+		check_config=$(grep -F "DOMAIN='$domain'" $USER_DATA/mail.conf | grep -o "SSL='yes'")
 		if [ -n "$check_config" ]; then
 			if [ ! -e "$CONF_DIR/users/$user/ssl/" ]; then
 				mkdir -p $CONF_DIR/users/$user/ssl/

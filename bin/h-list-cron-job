@@ -83,7 +83,7 @@ is_object_valid 'user' 'USER' "$user"
 conf=$USER_DATA/cron.conf
 
 # Checking job id
-cron_line=$(grep "JOB='$job'" $conf)
+cron_line=$(grep -F "JOB='$job'" $conf)
 if [ -z "$cron_line" ]; then
 	check_result "$E_NOTEXIST" "cron job $job doesn't exist"
 fi

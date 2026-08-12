@@ -119,7 +119,7 @@ is_object_valid 'web' 'DOMAIN' "$domain"
 #----------------------------------------------------------#
 
 # Load domain data
-parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
 
 # Parsing domain SSL certificate
 if [ -e "$USER_DATA/ssl/$domain.crt" ]; then

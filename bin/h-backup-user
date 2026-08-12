@@ -114,15 +114,15 @@ get_user_disk_usage() {
 			| awk -F "DOMAIN='" '{print $2}' | cut -f 1 -d \')
 
 		for domain in $domains; do
-			exclusion=$(echo -e "$web_exclusions" | tr ',' '\n' | grep "^$domain\|\*$")
+			exclusion=$(echo -e "$web_exclusions" | tr ',' '\n' | awk -v d="$domain" 'index($0, d) == 1 || /\*$/')
 			if [ -z "$exclusion" ]; then
 				# Defining home directory
 				home_dir="$HOMEDIR/$user/web/$domain/"
-				exclusion=$(echo -e "$web_exclusions" | tr ',' '\n' | grep "^$domain\|\*:")
+				exclusion=$(echo -e "$web_exclusions" | tr ',' '\n' | awk -v d="$domain" 'index($0, d) == 1 || /\*:/')
 				fargs=()
 
 				if [ -n "$exclusion" ]; then
-					xdirs=$(echo -e "$exclusion" | tr ':' '\n' | grep -v "$domain\|\*")
+					xdirs=$(echo -e "$exclusion" | tr ':' '\n' | awk -v d="$domain" 'index($0, d) == 0 && index($0, "*") == 0')
 					for xpath in $xdirs; do
 						fargs+=(--exclude="$xpath")
 					done
@@ -143,14 +143,14 @@ get_user_disk_usage() {
 			| awk -F "DOMAIN='" '{print $2}' | cut -f 1 -d \')
 
 		for domain in $domains; do
-			check_exl=$(echo "$mail_exclusions" | tr ',' '\n' | grep "^$domain$")
+			check_exl=$(echo "$mail_exclusions" | tr ',' '\n' | grep -Fx -- "$domain")
 			if [ -f "$USER_DATA/mail/$domain.conf" ] && [ -z "$check_exl" ]; then
 				accounts=$(grep 'ACCOUNT=' "$USER_DATA/mail/$domain.conf" \
 					| awk -F "ACCOUNT='" '{print $2}' | cut -f 1 -d \')
 
 				for account in $accounts; do
 					home_dir=$HOMEDIR/$user/mail/$domain/$account
-					exclusion=$(echo "$mail_exclusions" | tr ',' '\n' | grep "$domain:")
+					exclusion=$(echo "$mail_exclusions" | tr ',' '\n' | awk -v d="$domain:" 'index($0, d) > 0')
 					exclusion=$(echo "$exclusion" | tr ':' '\n' | grep -E "^$account|\*")
 
 					if [ -z "$exclusion" ] && [ -e "$home_dir" ]; then
@@ -167,7 +167,7 @@ get_user_disk_usage() {
 		databases=$(grep 'DB=' "$USER_DATA/db.conf" \
 			| awk -F "DB='" '{print $2}' | cut -f 1 -d \')
 		for database in $databases; do
-			exclusion=$(echo "$db_exclusions" | tr ',' '\n' | grep "^$database$")
+			exclusion=$(echo "$db_exclusions" | tr ',' '\n' | grep -Fx -- "$database")
 			if [ -z "$exclusion" ]; then
 				# Get database values
 				get_database_values
@@ -315,7 +315,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 	# Parsing domain exclusions
 	conf="$USER_DATA/web.conf"
 	for domain in $(search_objects 'web' 'SUSPENDED' "*" 'DOMAIN'); do
-		exclusion=$(echo -e "$WEB" | tr ',' '\n' | grep "^$domain$\|^\*$")
+		exclusion=$(echo -e "$WEB" | tr ',' '\n' | awk -v d="$domain" '$0 == d || $0 == "*"')
 		if [ -z "$exclusion" ]; then
 			web_list="$web_list $domain"
 		else
@@ -418,7 +418,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			fi
 		fi
 
-		domain_conf=$(grep "DOMAIN='$domain'" $conf)
+		domain_conf=$(grep -F "DOMAIN='$domain'" $conf)
 		parse_object_kv_list_non_eval domain_conf
 
 		# No template/ copy in the archive: neither HestiaRE nor HestiaCP reads it back on
@@ -435,7 +435,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		cd $HOMEDIR/$user/web/$domain
 
 		# Define exclude arguments
-		exclusion=$(echo -e "$WEB" | tr ',' '\n' | grep "^$domain\|\*:")
+		exclusion=$(echo -e "$WEB" | tr ',' '\n' | awk -v d="$domain" 'index($0, d) == 1 || /\*:/')
 		set -f
 		fargs=()
 		fargs+=(--exclude='./logs/*')
@@ -484,7 +484,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 	# Parsing domain exclusions
 	conf="$USER_DATA/mail.conf"
 	for domain in $(search_objects 'mail' 'SUSPENDED' "*" 'DOMAIN'); do
-		check_exl=$(echo "$MAIL" | tr ',' '\n' | grep "^$domain$")
+		check_exl=$(echo "$MAIL" | tr ',' '\n' | grep -Fx -- "$domain")
 		if [ -z "$check_exl" ]; then
 			mail_list="$mail_list $domain"
 		else
@@ -511,7 +511,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 
 		# Backup mail.conf
 		conf="$USER_DATA/mail.conf"
-		grep "DOMAIN='$domain'" $conf > hestia/mail.conf
+		grep -F "DOMAIN='$domain'" $conf > hestia/mail.conf
 		cp $USER_DATA/mail/$domain.* hestia/
 		if [ -n "$(ls $USER_DATA/mail/ | grep *@$domain)" ]; then
 			cp $USER_DATA/mail/*@$domain.* hestia/
@@ -521,7 +521,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 		cd $HOMEDIR/$user/mail/$domain_idn
 		accounts=()
 		for account in *; do
-			exclusion=$(echo "$MAIL" | tr ',' '\n' | grep "$domain:")
+			exclusion=$(echo "$MAIL" | tr ',' '\n' | awk -v d="$domain:" 'index($0, d) > 0')
 			exclusion=$(echo "$exclusion" | tr ':' '\n' | grep -E "^$account|\*")
 
 			# Checking exclusions
@@ -557,7 +557,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 
 	# Parsing database exclusions
 	for database in $(search_objects 'db' 'SUSPENDED' "*" 'DB'); do
-		exclusion=$(echo "$DB" | tr ',' '\n' | grep "^$database$")
+		exclusion=$(echo "$DB" | tr ',' '\n' | grep -Fx -- "$database")
 		if [ -z "$exclusion" ]; then
 			db_list="$db_list $database"
 		else
@@ -579,7 +579,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 		mkdir -p $tmpdir/db/$database/hestia
 
 		cd $tmpdir/db/$database/
-		grep "DB='$database'" $conf > hestia/db.conf
+		grep -F "DB='$database'" $conf > hestia/db.conf
 
 		dump="$tmpdir/db/$database/$database.$TYPE.sql"
 		if [ "$BACKUP_MODE" = 'zstd' ]; then

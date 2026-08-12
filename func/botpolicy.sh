@@ -140,7 +140,7 @@ botpolicy_render_domain_fragment() {
 	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
 
 	local rec bl
-	rec=$(grep -m1 "DOMAIN='$domain'" "$CONF_DIR/users/$user/web.conf" 2> /dev/null)
+	rec=$(grep -m1 -F "DOMAIN='$domain'" "$CONF_DIR/users/$user/web.conf" 2> /dev/null)
 	[ -n "$rec" ] || return 0
 	bl=$(sed -n "s/.*BOTLIMIT='\([^']*\)'.*/\1/p" <<< "$rec")
 

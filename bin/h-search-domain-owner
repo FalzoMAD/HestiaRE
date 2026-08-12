@@ -47,7 +47,7 @@ esac
 # Extract the user from the matching path ($CONF_DIR/users/<user>/<type>.conf)
 # instead of a fixed cut field — the field position broke when the user data
 # moved from $HESTIA/data/users to /etc/hestia/users (#148).
-owner=$(grep -H "DOMAIN='$domain'" $conf | head -n 1 | sed -e "s|^$CONF_DIR/users/||" -e "s|/.*||")
+owner=$(grep  -HF "DOMAIN='$domain'" $conf | head -n 1 | sed -e "s|^$CONF_DIR/users/||" -e "s|/.*||")
 if [ -z "$owner" ]; then
 	exit "$E_NOTEXIST"
 fi

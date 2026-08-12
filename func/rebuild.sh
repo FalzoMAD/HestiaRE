@@ -684,7 +684,7 @@ rebuild_mail_domain_conf() {
 	fi
 	for account in $accounts; do
 		((++accs))
-		object=$(grep "ACCOUNT='$account'" $USER_DATA/mail/$domain.conf)
+		object=$(grep -F "ACCOUNT='$account'" $USER_DATA/mail/$domain.conf)
 		FWD_ONLY='no'
 		parse_object_kv_list "$object"
 		if [ "$SUSPENDED" = 'yes' ]; then

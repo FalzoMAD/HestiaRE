@@ -766,7 +766,7 @@ is_mail_domain_new() {
 
 # Checking mail account existence
 is_mail_new() {
-	check_acc=$(grep "ACCOUNT='$1'" $USER_DATA/mail/$domain.conf)
+	check_acc=$(grep -F "ACCOUNT='$1'" $USER_DATA/mail/$domain.conf)
 	if [ -n "$check_acc" ]; then
 		check_result "$E_EXISTS" "mail account $1 already exists"
 	fi
@@ -1076,7 +1076,7 @@ is_domain_new() {
 
 # Get domain variables
 get_domain_values() {
-	parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/$1.conf)
+	parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/$1.conf)
 }
 
 #----------------------------------------------------------#
