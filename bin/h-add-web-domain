@@ -61,15 +61,14 @@ if [ "$aliases" != "none" ]; then
 	is_package_full 'WEB_ALIASES'
 fi
 
-if [ "$($BIN/h-list-web-domain $user $domain_utf plain | cut -f 1) " != "$domain" ]; then
-	is_domain_new 'web' "$domain_utf,$aliases"
-fi
-if [ "$($BIN/h-list-web-domain $user $domain_idn plain | cut -f 1) " != "$domain" ]; then
-	is_domain_new 'web' "$domain_idn,$aliases"
-else
-	is_domain_new 'web' "$domain,$aliases"
-fi
-if [ -z "$(is_ip_format_valid $domain)" ]; then
+# Both spellings, unconditionally. The listing comparison these used to hang on could not be
+# false - a stray space inside the quotes - so the guard always ran; that is kept, without
+# the appearance of a condition.
+is_domain_new 'web' "$domain_utf,$aliases"
+is_domain_new 'web' "$domain_idn,$aliases"
+# by exit code, not by output: the validator only prints on failure, so reading its output
+# inverts the check the moment it writes to stderr instead
+if (is_ip_format_valid "$domain") > /dev/null 2>&1; then
 	echo "Error: Invalid domain format. IP address detected as input."
 	exit 1
 fi
@@ -130,13 +129,13 @@ done
 
 # Changing file owner & permission
 chown -R $user:$user $HOMEDIR/$user/web/$domain
-chown root:$user /var/log/$WEB_SYSTEM/domains/$domain.* $conf
+chown root:$user /var/log/$WEB_SYSTEM/domains/$domain.*
 chmod 640 /var/log/$WEB_SYSTEM/domains/$domain.*
 user_exec chmod 751 $HOMEDIR/$user/web/$domain/*
 user_exec chmod 551 $HOMEDIR/$user/web/$domain/stats $HOMEDIR/$user/web/$domain/logs
 # Apply 755 to directories and 644 to files
-find $HOMEDIR/$user/web/$domain/public_html -type d | xargs chmod 755
-find $HOMEDIR/$user/web/$domain/public_html -type f | xargs chmod 644
+find $HOMEDIR/$user/web/$domain/public_html -type d -exec chmod 755 {} +
+find $HOMEDIR/$user/web/$domain/public_html -type f -exec chmod 644 {} +
 
 # domain folder permissions: DOMAINDIR_WRITABLE: default-val:no source:hestia.conf
 DOMAINDIR_MODE=551
@@ -247,11 +246,6 @@ fi
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Increasing counters
-increase_ip_value "$local_ip"
-increase_user_value "$user" '$U_WEB_DOMAINS'
-increase_user_value "$user" '$U_WEB_ALIASES' "$alias_number"
-
 # Generating timestamp
 time_n_date=$(date +'%T %F')
 time=$(echo "$time_n_date" | cut -f 1 -d \ )
@@ -265,6 +259,12 @@ echo "DOMAIN='$domain' IP='$ip' IP6='' CUSTOM_DOCROOT='' ALIAS='$ALIAS' TPL='$WE
  SUSPENDED='no' TIME='$time' DATE='$date'" >> $USER_DATA/web.conf
 
 syshealth_repair_web_config
+
+# Counters after the record, not before: an abort between the two used to leave the box counting
+# a domain that does not exist (#601).
+increase_ip_value "$local_ip"
+increase_user_value "$user" '$U_WEB_DOMAINS'
+increase_user_value "$user" '$U_WEB_ALIASES' "$alias_number"
 
 # A package still carrying the old caching template means the cache switch. Output kept
 # and the result checked: discarding both is how the mapping promises a feature the
