@@ -50,6 +50,7 @@ json_list() {
         "CRON_JOBS": "'$CRON_JOBS'",
         "DISK_QUOTA": "'$DISK_QUOTA'",
         "CPU_QUOTA": "'$CPU_QUOTA'",
+        "DOCKER_LIMIT": "'$DOCKER_LIMIT'",
         "CPU_QUOTA_PERIOD": "'$CPU_QUOTA_PERIOD'",
         "MEMORY_LIMIT": "'$MEMORY_LIMIT'",
         "SWAP_LIMIT": "'$SWAP_LIMIT'",

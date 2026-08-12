@@ -38,6 +38,8 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # shellcheck source=/usr/local/hestia/func/identity.sh
 source $HESTIA/func/identity.sh
+# shellcheck source=/usr/local/hestia/func/docker.sh
+source $HESTIA/func/docker.sh
 # shellcheck source=/usr/local/hestia/func/helper.sh
 source $HESTIA/func/helper.sh
 # load config file
@@ -319,6 +321,9 @@ if ! docker_alive; then
 	exit "$E_INVALID"
 fi
 rm -f "$setup_log"
+
+# The slice exists only once the manager runs, so the cap goes on here rather than at package time
+docker_slice_apply "$user" "$(get_user_value '$DOCKER_LIMIT')"
 
 echo "Docker is enabled for $user."
 

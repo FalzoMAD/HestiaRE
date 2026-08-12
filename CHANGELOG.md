@@ -14,6 +14,16 @@ opens above it.
 
 ### Added
 
+- **Docker resources are capped per customer** (#619). Packages carry a `DOCKER_LIMIT` preset -
+  `unlimited` / `low` / `medium` / `high` - which lands on the **companion's** systemd slice, where the
+  daemon and every one of that customer's containers actually live (measured: a container's cgroup is
+  `user-<companion>.slice/user@.../docker-<id>.scope`). The presets map 1:1 onto native systemd syntax
+  (`MemoryMax=25%`, `CPUQuota=100%` = one core, `TasksMax`), so no arithmetic and nothing to recompute
+  when the box changes. The cap is enforced against the customer's own daemon, so no compose file can
+  talk its way out, and it is deliberately **not** gated on the box-wide `RESOURCES_LIMIT` toggle - that
+  is off by default, and a preset that silently does nothing is worse than no preset. Container **count**
+  is still not a limit: a customer can put anything into one container, so the resource cap is the only
+  boundary that holds.
 - **Docker per customer is a switch in the panel, coupled to unjailed SSH** (#618). Edit-user carries an
   admin-only Docker checkbox next to the File Manager one, driven by `h-add-user-docker` /
   `h-delete-user-docker`; when it is on, the label shows the customer's `/24` and says plainly that
@@ -289,6 +299,10 @@ opens above it.
 - **A user whose only domain is a docker domain could not be backed up** (#592). On the both model
   there is no backend vhost by design, so the backup fell through to the legacy single-file lookup and
   aborted with `can't parse config .../apache2.conf` - taking the whole user backup with it.
+- **No package could be saved from the panel** (found while building #619). `h-add-user-package`
+  validated `DNS_DOMAINS` / `DNS_RECORDS` unconditionally, but HestiaRE has no DNS server (bind9 is
+  out), so the package form neither renders nor posts them - every save died with `invalid DNS_DOMAINS
+  format`. An empty value is the honest state of the box now; a set one is still validated.
 - **A user named after a service died at `groupadd` instead of being refused** (#625). `h-add-user`
   checked `/etc/passwd` and a MariaDB name list, but never `/etc/group` - and the group is created
   as the mirror of the user, so `docker` (group present, user not) failed with `group creation

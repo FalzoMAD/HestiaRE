@@ -99,6 +99,7 @@ DISK_QUOTA='$DISK_QUOTA'
 CPU_QUOTA='$CPU_QUOTA'
 CPU_QUOTA_PERIOD='$CPU_QUOTA_PERIOD'
 MEMORY_LIMIT='$MEMORY_LIMIT'
+DOCKER_LIMIT='$DOCKER_LIMIT'
 SWAP_LIMIT='$SWAP_LIMIT'
 BANDWIDTH='$BANDWIDTH'
 NS='$NS'
@@ -192,6 +193,11 @@ fi
 if [ "$RESOURCES_LIMIT" = 'yes' ]; then
 	$BIN/h-update-user-cgroup "$user"
 fi
+
+# The docker cap is applied whatever RESOURCES_LIMIT says: it exists only for docker customers,
+# and the toggle is off by default - a preset that silently does nothing is worse than none.
+source $HESTIA/func/docker.sh
+docker_slice_apply "$user" "$(get_user_value '$DOCKER_LIMIT')"
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#

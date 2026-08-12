@@ -21,3 +21,40 @@ companion_stop() {
 	pkill -KILL -u "$companion_uid" > /dev/null 2>&1
 	return 0
 }
+
+# Preset -> systemd properties for a companion slice. Percentages are native systemd syntax
+# (of physical RAM, and 100% CPUQuota is one core), so a package value maps 1:1 with no maths.
+# Empty output means "no cap" - the caller clears the properties then.
+# Usage: docker_slice_properties <unlimited|low|medium|high>
+docker_slice_properties() {
+	case "$1" in
+		low) echo "MemoryMax=10% CPUQuota=50% TasksMax=512" ;;
+		medium) echo "MemoryMax=25% CPUQuota=100% TasksMax=1024" ;;
+		high) echo "MemoryMax=50% CPUQuota=200% TasksMax=2048" ;;
+		*) echo "" ;;
+	esac
+}
+
+# Cap the companion slice, which is where the daemon AND every container of that customer live -
+# their own user slice never sees them. Enforced against the customer's own daemon, so no compose
+# file can talk its way out. A missing companion is not an error: docker is simply not enabled.
+# Usage: docker_slice_apply <user> <preset>
+docker_slice_apply() {
+	local user="$1" preset="${2:-unlimited}" companion_uid slice props prop
+	companion_uid="$(id -u "${user}-docker" 2> /dev/null)" || return 0
+	[ -n "$companion_uid" ] || return 0
+	slice="user-${companion_uid}.slice"
+
+	props="$(docker_slice_properties "$preset")"
+	if [ -z "$props" ]; then
+		systemctl set-property "$slice" MemoryMax= CPUQuota= TasksMax= > /dev/null 2>&1
+		return 0
+	fi
+	# shellcheck disable=SC2086  # each property is its own argument on purpose
+	systemctl set-property "$slice" $props > /dev/null 2>&1
+	for prop in $props; do
+		[ "$(systemctl show "$slice" -p "${prop%%=*}" --value 2> /dev/null)" = 'infinity' ] \
+			&& echo "Warning: ${prop%%=*} did not take on $slice" >&2
+	done
+	return 0
+}
