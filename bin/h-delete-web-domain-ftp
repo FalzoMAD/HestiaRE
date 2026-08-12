@@ -14,7 +14,9 @@
 user=$1
 domain=$2
 domain_idn=$2
-ftp_user=$3
+# Accounts are stored as <owner>_<name>. Take either form: add used to prefix while delete and
+# the change-* commands wanted the stored name, so the name that worked there failed here.
+if [[ "$3" == "${1}_"* ]]; then ftp_user="$3"; else ftp_user="${1}_${3}"; fi
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -70,7 +72,9 @@ fi
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Rebuilding FTP variables
+# Rebuilding FTP variables. ftp_user is reused as the remaining list below, so keep the account
+# name for the log line.
+ftp_account="$ftp_user"
 position=$(echo $FTP_USER | tr ':' '\n' | grep -n '' | grep ":$ftp_user$" \
 	| cut -f 1 -d:)
 ftp_user=$(echo $FTP_USER | tr ':' '\n' | grep -n '' | grep -v "^$position:" \
@@ -86,7 +90,7 @@ update_object_value 'web' 'DOMAIN' "$domain" '$FTP_MD5' "$ftp_md5"
 update_object_value 'web' 'DOMAIN' "$domain" '$FTP_PATH' "$ftp_path"
 
 # Logging
-$BIN/h-log-action "$user" "Info" "Web" "Deleted FTP account (User: ${3}, Domain: $domain)."
+$BIN/h-log-action "$user" "Info" "Web" "Deleted FTP account (User: $ftp_account, Domain: $domain)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

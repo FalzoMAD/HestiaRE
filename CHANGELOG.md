@@ -271,6 +271,11 @@ opens above it.
   optional components create free even before they are installed: a name that passes today must not
   become a collision after an `h-add-sys-*` run. The `<user>-docker` companion namespace is reserved
   the same way. FTP sub-accounts need none of this - the command prefixes them with the owner.
+- **FTP account commands disagreed about the account name** (found alongside #625). `h-add-web-domain-ftp`
+  prefixed the name with the owner, while delete and the two change commands wanted the stored
+  `<owner>_<name>` - so the name that just worked for the add failed for everything else. All four take
+  either form now. The panel was unaffected: it already passed the short name to add and the full one
+  to the rest.
 - **The proxy template selector was offered where there is nothing to choose** (#626). In the both
   model the proxy is the nginx front and ships exactly one template; the variety lives in the web
   templates of an nginx-only box. The select now renders only when there is more than one template
