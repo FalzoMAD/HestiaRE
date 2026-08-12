@@ -27,6 +27,7 @@ json_list() {
     "'$USER'": {
         "NAME": "'$NAME'",
         "PACKAGE": "'$PACKAGE'",
+        "DOCKER_IP": "'$DOCKER_IP'",
         "WEB_TEMPLATE": "'$WEB_TEMPLATE'",
         "BACKEND_TEMPLATE": "'$BACKEND_TEMPLATE'",
         "PROXY_TEMPLATE": "'$PROXY_TEMPLATE'",

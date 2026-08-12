@@ -142,6 +142,40 @@ if [ -n "$backup_scope" ] || ! grep -q "^DOCKER_BACKUP='" "$USER_DATA/user.conf"
 	echo "Backup scope: $scope"
 fi
 
+# One loopback /24 per customer: .1 is the daemon default bind, so a plain compose file needs no
+# address; the domain picks its octet per app. Keep a restored /24 when free, else first-free.
+docker_ip="$(get_user_value '$DOCKER_IP')"
+if [ -n "$docker_ip" ]; then
+	docker_net="${docker_ip%.*}"
+	holder=$(grep -l "DOCKER_IP='$docker_net\." "$CONF_DIR"/users/*/user.conf 2> /dev/null \
+		| grep -Fxv "$USER_DATA/user.conf" | head -1)
+	if [ -n "$holder" ]; then
+		echo "Docker net $docker_net.0/24 is held by $(basename "$(dirname "$holder")") - allocating a new one."
+		docker_ip=''
+	fi
+fi
+if [ -z "$docker_ip" ]; then
+	# one /24 base per line; -x so 127.20.1 cannot shadow 127.20.10
+	used=$(grep -ho "DOCKER_IP='[^']*'" "$CONF_DIR"/users/*/user.conf 2> /dev/null \
+		| cut -d"'" -f2 | sed 's/\.[0-9]*$//')
+	for i in $(seq 0 254); do
+		grep -qxF "127.20.$i" <<< "$used" || {
+			docker_ip="127.20.$i.1"
+			break
+		}
+	done
+	[ -n "$docker_ip" ] || {
+		echo "ERROR: no free docker /24 left under 127.20.0.0/16"
+		exit "$E_LIMIT"
+	}
+fi
+if grep -q "^DOCKER_IP='" "$USER_DATA/user.conf" 2> /dev/null; then
+	update_user_value "$user" '$DOCKER_IP' "$docker_ip"
+else
+	sed -i "/^TIME=/i DOCKER_IP='$docker_ip'" "$USER_DATA/user.conf"
+fi
+echo "Docker address: $docker_ip"
+
 if ! getent passwd "$companion" > /dev/null 2>&1; then
 	echo "Creating companion $companion (uid $companion_uid)..."
 	# Its OWN group: the customer home is group::--- with other::--x, so an account in that
@@ -212,7 +246,13 @@ override_want="$(sed -e "s|__RUNSOCK__|/run/user/$companion_uid/docker.sock|g" \
 	-e "s|__SOCK__|$companion_home/docker.sock|g" -e "s|__GID__|1000|g" \
 	"$HESTIA/share/docker/systemd/docker-rootless-override.conf")"
 
-if docker_alive && [ "$(cat "$override_dir/hestia.conf" 2> /dev/null)" = "$override_want" ]; then
+# BOTH keys: "ip" covers only the default bridge and compose creates a project net per stack;
+# default-network-opts extends the bind to every new bridge net (measured).
+daemon_json="$companion_home/.config/docker/daemon.json"
+daemon_json_want="$(printf '{\n  "ip": "%s",\n  "default-network-opts": {\n    "bridge": {\n      "com.docker.network.bridge.host_binding_ipv4": "%s"\n    }\n  }\n}' "$docker_ip" "$docker_ip")"
+
+if docker_alive && [ "$(cat "$override_dir/hestia.conf" 2> /dev/null)" = "$override_want" ] \
+	&& [ "$(cat "$daemon_json" 2> /dev/null)" = "$daemon_json_want" ]; then
 	echo "Docker is already enabled and running for $user."
 	$BIN/h-log-action "system" "Info" "System" "Verified rootless Docker for $user."
 	log_event "$OK" "$ARGUMENTS"
@@ -230,6 +270,10 @@ companion_run dockerd-rootless-setuptool.sh install > "$setup_log" 2>&1 || true
 # so substitution cannot rewrite the prose around them.
 mkdir -p "$override_dir"
 printf '%s\n' "$override_want" > "$override_dir/hestia.conf"
+
+# The daemon reads it at start; the restart below picks up an address change
+mkdir -p "$companion_home/.config/docker"
+printf '%s\n' "$daemon_json_want" > "$daemon_json"
 chown -R "$companion":"$gid" "$companion_home/.config"
 
 install -m 644 "$HESTIA/share/docker/profile.d-hestia-docker.sh" /etc/profile.d/hestia-docker.sh
@@ -256,6 +300,11 @@ fi
 rm -f "$setup_log"
 
 echo "Docker is enabled for $user."
+
+# The /24 separation rule renders from the user records; follow enable/disable immediately
+if [ -n "$FIREWALL_SYSTEM" ]; then
+	$BIN/h-update-firewall > /dev/null 2>&1
+fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #

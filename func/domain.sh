@@ -30,6 +30,12 @@ web_template_file() {
 	echo "$loc/$name.$ext"
 }
 
+# Single source for the docker template path: the command validates and add_web_config renders
+# through the same resolution.
+web_docker_template_file() {
+	echo "$WEBTPL/docker/$1/$2.tpl"
+}
+
 # Legacy template values mapped onto what replaced them. Echoes "<name> <side-effect>"
 # and returns 0 for a KNOWN legacy value, 1 for anything else - the distinction is what
 # lets a CLI caller still reject a typo while accepting a value that simply aged out.
@@ -50,6 +56,12 @@ map_legacy_template() {
 		PHP-[0-9]_[0-9] | *-PHP-[0-9]_[0-9]) echo "default -" ;;
 		# no-php is a version now (PHP_VERSION='none'), not a template; the profile is just default
 		no-php) echo "default -" ;;
+		# http3 is a per-domain switch now (#613), not a template variant: map the three former
+		# -http3 templates to their base and signal the switch via the effect channel. Literal
+		# arms (not a suffix strip) keep the echoed name known-good - it is joined into a path.
+		wordpress-http3) echo "wordpress http3" ;;
+		wordpress-disable-xmlrpc-http3) echo "wordpress-disable-xmlrpc http3" ;;
+		wordpress_mu_subdir-http3) echo "wordpress_mu_subdir http3" ;;
 		*) return 1 ;;
 	esac
 }
@@ -94,13 +106,28 @@ accept_web_template() {
 	echo "default -"
 }
 
-# Web template check
+# The one marker string separating a merged web template (#593, both server blocks in one file)
+# from a legacy pair (#=HESTIARE-SSL-VHOST=# present vs absent). Renderer and validators both read
+# this constant so they cannot drift - the same validator/renderer divergence Phase 3 closed for
+# template lookup.
+WEB_TPL_SSL_MARKER='#=HESTIARE-SSL-VHOST=#'
+
+# Web template check. A legacy pair (no marker) is not a migration leftover to sunset: mail
+# templates ship as pairs by design, so format detection is a permanent capability. Custom pair
+# templates are also accepted - pre-v1 there are none to migrate.
+web_template_is_merged() {
+	grep -qxF "$WEB_TPL_SSL_MARKER" "$1" 2> /dev/null
+}
 is_web_template_valid() {
 	if [ -n "$WEB_SYSTEM" ]; then
 		tpl=$(web_template_file "$WEB_SYSTEM" "$1" 'tpl')
-		stpl=$(web_template_file "$WEB_SYSTEM" "$1" 'stpl')
-		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
+		if [ ! -e "$tpl" ]; then
 			check_result "$E_NOTEXIST" "$1 web template doesn't exist"
+		fi
+		# a merged template holds the SSL block itself; a legacy pair still needs its .stpl
+		if ! web_template_is_merged "$tpl"; then
+			stpl=$(web_template_file "$WEB_SYSTEM" "$1" 'stpl')
+			[ -e "$stpl" ] || check_result "$E_NOTEXIST" "$1 web template doesn't exist"
 		fi
 	fi
 }
@@ -109,9 +136,12 @@ is_web_template_valid() {
 is_proxy_template_valid() {
 	if [ -n "$PROXY_SYSTEM" ]; then
 		tpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'tpl')
-		stpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'stpl')
-		if [ ! -e "$tpl" ] || [ ! -e "$stpl" ]; then
+		if [ ! -e "$tpl" ]; then
 			check_result "$E_NOTEXIST" "$1 proxy template doesn't exist"
+		fi
+		if ! web_template_is_merged "$tpl"; then
+			stpl=$(web_template_file "$PROXY_SYSTEM" "$1" 'stpl')
+			[ -e "$stpl" ] || check_result "$E_NOTEXIST" "$1 proxy template doesn't exist"
 		fi
 	fi
 }
@@ -186,10 +216,13 @@ is_web_alias_new() {
 # is what serves - falling back to the pool file's directory. A stray pool of an older version
 # then cannot win a find-order race. Empty when neither is present.
 web_domain_pool_version() {
-	local dom="$1" ver='' dom_re
+	# user is an explicit arg (default: the caller's global) so a multi-user sweep reads the
+	# right home instead of silently falling back to the pool-dir find (#593 review). This is a
+	# shared source for migration and backup, so it must not depend on an ambient $user.
+	local dom="$1" usr="${2:-$user}" ver='' dom_re
 	# the domain is scoped to its own conf dir, but its dots are still regex here - escape them
 	dom_re=$(sed 's/[.]/\\./g' <<< "$dom")
-	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom_re}\.sock" "$HOMEDIR/$user/conf/web/$dom/" 2> /dev/null \
+	ver=$(grep -rhoE "php[0-9]+\.[0-9]+-fpm-${dom_re}\.sock" "$HOMEDIR/$usr/conf/web/$dom/" 2> /dev/null \
 		| head -1 | grep -oE '[0-9]+\.[0-9]+')
 	if [ -z "$ver" ]; then
 		ver=$(find -L /etc/php/ -name "$dom.conf" -printf '%h\n' 2> /dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+')
@@ -274,6 +307,11 @@ prepare_web_domain_values() {
 	group="$user"
 	docroot="$HOMEDIR/$user/web/$domain/public_html"
 	sdocroot="$docroot"
+	# SSL_HOME='single' gives the https vhost its own docroot. Still reachable, not a dead read:
+	# it is set when SSL is enabled (h-add-web-domain-ssl's optional arg) or carried in by a
+	# restore. The panel offers no control (it always sends 'same') and the post-hoc change
+	# command was dropped in #593 - so 'single' can be chosen at enable time or honoured from an
+	# archive, but no longer flipped afterward.
 	if [ "$SSL_HOME" = 'single' ]; then
 		sdocroot="$HOMEDIR/$user/web/$domain/public_shtml"
 		$BIN/h-add-fs-directory "$user" "$HOMEDIR/$user/web/$domain/public_shtml"
@@ -351,11 +389,6 @@ add_web_config() {
 		mkdir -p "$HOMEDIR/$user/conf/web/$domain/"
 	fi
 
-	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
-	if [[ "$2" =~ stpl$ ]]; then
-		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
-	fi
-
 	domain_idn=$domain
 	format_domain_idn
 
@@ -363,6 +396,27 @@ add_web_config() {
 
 	if [ -n "$WEBTPL_OVERRIDE" ]; then
 		WEBTPL_LOCATION="$WEBTPL_OVERRIDE"
+	fi
+
+	# Docker domain: the front renders from templates/docker/, a backend vhost would only shadow
+	# the container. TPL/PROXY stay untouched so a model switch survives; suspend override wins.
+	if [ -n "$DOCKER" ] && [ -z "$WEBTPL_OVERRIDE" ]; then
+		if [ -n "$PROXY_SYSTEM" ] && [ "$1" = "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != "$PROXY_SYSTEM" ]; then
+			# reconcile away a stale backend vhost from the pre-docker life of the domain
+			rm -f "$HOMEDIR/$user/conf/web/$domain/$1.conf" "$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf" \
+				"/etc/$1/conf.d/domains/$domain.conf" "/etc/$1/conf.d/domains/$domain.ssl.conf"
+			return 0
+		fi
+		# Per-system dir: after a model switch a custom template may have no variant here. Render
+		# default instead of skipping (no front = outage); the field keeps the name.
+		local web_docker_tpl
+		web_docker_tpl=$(web_docker_template_file "$1" "$DOCKER")
+		if [ ! -f "$web_docker_tpl" ] && [ -f "$(web_docker_template_file "$1" default)" ]; then
+			echo "Warning: docker template '$DOCKER' has no $1 variant - rendering default for $domain" >&2
+			web_docker_tpl=$(web_docker_template_file "$1" default)
+		fi
+		WEBTPL_LOCATION=$(dirname "$web_docker_tpl")
+		set -- "$1" "$(basename "$web_docker_tpl")"
 	fi
 
 	# A missing template would become a 0-byte vhost that apache2 -t accepts. Warn +
@@ -374,11 +428,42 @@ add_web_config() {
 		return "$E_NOTEXIST"
 	fi
 
+	# A merged template (#593) carries the HTTP server block, a marker line, then the SSL block,
+	# and renders ONE vhost file: the HTTP block always, the SSL block only when SSL is on (a
+	# listen 443 without a cert fails -t). A legacy pair template (no marker, e.g. mail) keeps the
+	# old behaviour - this .tpl/.stpl renders its own .conf/.ssl.conf.
+	local web_tpl_merged=0
+	web_template_is_merged "${WEBTPL_LOCATION}/$2" && web_tpl_merged=1
+
+	# From the owner record, not a sourced var: the rebuild path never sources user.conf and would
+	# render it empty. front_port = the model's public listener (apache-only has no PROXY_* keys).
+	local web_docker_ip=''
+	web_docker_ip=$(get_user_value '$DOCKER_IP')
+	# the domain picks its octet inside the customer /24; empty means the daemon-default .1
+	if [ -n "$web_docker_ip" ] && [ -n "$DOCKER_OCTET" ]; then
+		web_docker_ip="${web_docker_ip%.*}.$DOCKER_OCTET"
+	fi
+
+	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
+	if [ "$web_tpl_merged" = 0 ] && [[ "$2" =~ stpl$ ]]; then
+		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
+	fi
+
 	# Note: Removing or renaming template variables will lead to broken custom templates.
 	#   -If possible custom templates should be automatically upgraded to use the new format
 	#   -Alternatively a depreciation period with proper notifications should be considered
 
-	cat "${WEBTPL_LOCATION}/$2" \
+	{
+		if [ "$web_tpl_merged" = 1 ]; then
+			if [ "$SSL" = 'yes' ]; then
+				sed "/^${WEB_TPL_SSL_MARKER}\$/d" "${WEBTPL_LOCATION}/$2"
+			else
+				sed "/^${WEB_TPL_SSL_MARKER}\$/,\$d" "${WEBTPL_LOCATION}/$2"
+			fi
+		else
+			cat "${WEBTPL_LOCATION}/$2"
+		fi
+	} \
 		| sed -e "s|%ip%|$local_ip|g" \
 			-e "s|%domain%|$domain|g" \
 			-e "s|%domain_idn%|$domain_idn|g" \
@@ -394,6 +479,10 @@ add_web_config() {
 			-e "s|%proxy_system%|$PROXY_SYSTEM|g" \
 			-e "s|%proxy_port%|$PROXY_PORT|g" \
 			-e "s|%proxy_ssl_port%|$PROXY_SSL_PORT|g" \
+			-e "s|%front_port%|${PROXY_PORT:-$WEB_PORT}|g" \
+			-e "s|%front_ssl_port%|${PROXY_SSL_PORT:-$WEB_SSL_PORT}|g" \
+			-e "s|%docker_port%|$DOCKER_PORT|g" \
+			-e "s|%docker_ip%|$web_docker_ip|g" \
 			-e "s/%proxy_extentions%/${PROXY_EXT//,/|}/g" \
 			-e "s/%proxy_extensions%/${PROXY_EXT//,/|}/g" \
 			-e "s|%user%|$user|g" \
@@ -413,7 +502,14 @@ add_web_config() {
 	chown root:$user $conf
 	chmod 640 $conf
 
-	if [[ "$2" =~ stpl$ ]]; then
+	if [ "$web_tpl_merged" = 1 ]; then
+		# One vhost file holds both server blocks; drop any stale separate .ssl.conf symlink.
+		# The *.$domain.org* custom-config migration the pair branches below still run is
+		# deliberately skipped here: it predates the per-domain conf dir, so a box new enough
+		# to carry a merged template has no such stragglers to move.
+		rm -f /etc/$1/conf.d/domains/$domain.conf /etc/$1/conf.d/domains/$domain.ssl.conf
+		ln -s $conf /etc/$1/conf.d/domains/$domain.conf
+	elif [[ "$2" =~ stpl$ ]]; then
 		rm -f /etc/$1/conf.d/domains/$domain.ssl.conf
 		ln -s $conf /etc/$1/conf.d/domains/$domain.ssl.conf
 
@@ -487,10 +583,12 @@ get_web_config_lines() {
 
 # Replace web config
 replace_web_config() {
+	# Only the IP change calls this now, always on the .tpl: one merged .conf holds both server
+	# blocks and both carry the same IP, so a single value-replace covers them (#593). No
+	# .ssl.conf branch - a merged template has none, and a value-replace could not tell two
+	# blocks apart once their values coincide (any such toggle re-renders instead, cf. add/delete
+	# -web-domain-ssl).
 	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
-	if [[ "$2" =~ stpl$ ]]; then
-		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
-	fi
 
 	if [ -e "$conf" ]; then
 		# dots escaped: the old IP is a sed pattern here
@@ -500,11 +598,15 @@ replace_web_config() {
 
 # Delete web configuration
 del_web_config() {
-	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
-	local confname="$domain.conf"
+	# The list of output files this call clears. A .stpl call clears only the SSL vhost (legacy
+	# pair); a .tpl call clears the plain vhost AND the SSL one - a merged template (#593) keeps
+	# both server blocks in one .conf, and even for a legacy pair the SSL file is removed by its
+	# own .stpl call, so clearing it here too is harmless.
+	local confnames="$domain.conf $domain.ssl.conf"
+	local conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
 	if [[ "$2" =~ stpl$ ]]; then
 		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
-		confname="$domain.ssl.conf"
+		confnames="$domain.ssl.conf"
 	fi
 
 	# Clean up legacy configuration files
@@ -521,12 +623,63 @@ del_web_config() {
 
 	# Remove domain configuration files and clean up symbolic links
 	rm -f "$conf"
+	[[ "$2" =~ stpl$ ]] || rm -f "$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
 
-	if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" = "$1" ]; then
-		rm -f "/etc/$WEB_SYSTEM/conf.d/domains/$confname"
-	fi
-	if [ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" = "$1" ]; then
-		rm -f "/etc/$PROXY_SYSTEM/conf.d/domains/$confname"
+	local cn
+	for cn in $confnames; do
+		if [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" = "$1" ]; then
+			rm -f "/etc/$WEB_SYSTEM/conf.d/domains/$cn"
+		fi
+		if [ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" = "$1" ]; then
+			rm -f "/etc/$PROXY_SYSTEM/conf.d/domains/$cn"
+		fi
+	done
+}
+
+# HTTP/3 (#613). http3 rides on a 'quic' listen added to the nginx-front SSL block via an include
+# fragment (nginx.ssl.conf_http3) that every merged template already globs - so it lights up on ANY
+# template, no per-template -http3 variant, no renderer change. Only where an nginx front exists and
+# its build carries http_v3 (the deb12/ub24 OS-nginx does not); the switch commands gate on that.
+# Plain 'quic' on every domain, no reuseport: nginx accepts many quic listens on one ip:port, and
+# the reuseport perf-opt would need one-per-ip bookkeeping a decoupled fragment must not own.
+nginx_has_http3() {
+	command -v nginx > /dev/null 2>&1 && nginx -V 2>&1 | grep -q -- '--with-http_v3_module'
+}
+
+# the nginx front is the proxy in the both model, else the standalone nginx web system
+web_http3_front_ssl_port() {
+	if [ "$PROXY_SYSTEM" = 'nginx' ]; then echo "$PROXY_SSL_PORT"; else echo "$WEB_SSL_PORT"; fi
+}
+
+# write the quic fragment for the current domain; $1 is the resolved front IP (get_real_ip)
+add_web_http3_config() {
+	local ip="$1" port frag
+	port=$(web_http3_front_ssl_port)
+	frag="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_http3"
+	# single quotes keep $server_port literal for nginx; the listen line carries the only %-formats
+	printf 'listen      %s:%s quic;\n' "$ip" "$port" > "$frag"
+	printf 'add_header Alt-Svc '\''h3=":$server_port"; ma=86400'\'';\n' >> "$frag"
+	chown root:"$user" "$frag"
+	chmod 640 "$frag"
+}
+
+del_web_http3_config() {
+	rm -f "$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_http3"
+}
+
+# Reconcile the quic fragment with the HTTP3 field through the same gate, on every rebuild. The
+# field is intent (authoritative, preserved across restore and host moves); the fragment is intent
+# AND capability. So a domain that lands on a box without http_v3 keeps HTTP3='yes' but grows no
+# listen, and picks http3 back up when it later rebuilds on a capable box - the field never lies,
+# the file never outruns the box. Silent (no check_result): a batch rebuild must not error once per
+# unsupported domain, and h-check-sys-smoke guards that no quic fragment outlives the capability.
+apply_web_http3_config() {
+	if [ "$HTTP3" = 'yes' ] \
+		&& { [ "$PROXY_SYSTEM" = 'nginx' ] || [ "$WEB_SYSTEM" = 'nginx' ]; } \
+		&& nginx_has_http3; then
+		add_web_http3_config "$(get_real_ip "$IP")"
+	else
+		del_web_http3_config
 	fi
 }
 

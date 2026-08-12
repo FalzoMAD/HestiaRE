@@ -12,7 +12,61 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **Docker domain publishing: a customer domain fronts their container** (#566, with the #592 panel
+  shape; stage 3 of the docker series). Every docker customer gets their own loopback **/24** from
+  127.20.0.0/16 at enable time; `DOCKER_IP` is its `.1` and the companion daemon's default bind
+  (daemon.json with both keys), so a plain tutorial compose file publishes on the customer address
+  with **no address in it**. The other octets belong to the customer for multi-app setups; each
+  domain picks its octet and port. Three new fields on the web record (`DOCKER` = docker template
+  name, `DOCKER_PORT`, `DOCKER_OCTET`) carry the whole state - `TPL`/`PROXY` are never touched, so
+  a web-model switch keeps the docker choice structurally. When `DOCKER` is set, the front renders
+  from `templates/docker/<system>/` (merged files, WebSockets through, full include set so LE/
+  CrowdSec/botlimit attach; the apache variant defuses both LE traps), the both-model apache
+  backend vhost is not rendered and the domain has no FPM pool and no PHP selector. Separation
+  between local users is one rendered nft rule per customer /24 with the webserver allowlisted,
+  derived from the user records so it survives firewall rebuilds. `h-add-web-domain-docker`
+  validates port (1024+, rootless), octet, duplicate targets and live wildcard listeners (the
+  container would silently never start). Panel: Docker-Proxy checkbox for docker customers with
+  `<net>._` octet + port entry, template/PHP selectors hidden while active. Verified on all three
+  web models against a real container, including serve-through, rebuild persistence, restore
+  round-trip and the LE challenge mechanics on both web systems.
+
+- **HTTP/3 (QUIC) is a per-domain switch, gated on the nginx build** (#613, part of #219). http3 used
+  to exist only as three `wordpress*-http3` template variants - a duplicate per template, and only for
+  the WordPress family. It is orthogonal to the template, so it becomes a per-domain switch
+  (`h-add-web-domain-http3` / `h-delete-web-domain-http3`, and a checkbox in the SSL section) that
+  works on **any** template: the quic listen and `Alt-Svc` header go into an include fragment every
+  merged SSL block already globs, so no template or renderer changes are needed. It needs SSL and an
+  nginx front (nginx-only or both model). The switch is **offered and applied only where nginx is built
+  `--with-http_v3_module`** - the Debian 12 and Ubuntu 24.04 OS nginx is not, and a quic listen fails
+  `nginx -t` there. This also fixes a latent bug: the old `-http3` templates carried that quic listen
+  and already broke `nginx -t` on those two targets. Restore honours an archived switch or maps a
+  `-http3` template to its base plus the switch, but drops the quic fragment when the target nginx
+  cannot do http3, so a cross-restore degrades cleanly. The three `-http3` templates are removed.
+  The `HTTP3` field is authoritative (intent, kept across restore and host moves) and the quic
+  fragment is reconciled from it through the capability gate on **every rebuild**, so the file can
+  never outrun the box; a smoke guard flags a quic fragment on a box whose nginx lacks http_v3
+  (e.g. after an nginx package change). **UDP/443** (the QUIC port) is open in the standard firewall
+  rule set, without which the advertised h3 endpoint is silently dropped and clients fall back to
+  HTTP/2. It ships as a seed rule, not opened per switch, so it survives a firewall rebuild rather
+  than being dropped the way an imperative open would be.
+
 ### Changed
+
+- **Web vhost templates are one file, and a domain has one vhost config** (#593, #219 Phase 8).
+  The `.tpl` (HTTP) / `.stpl` (SSL) pair is gone: a template now carries both server blocks split
+  by a marker line, and renders **one** `<system>.conf` per domain - the HTTP block always, the SSL
+  block only when SSL is on. This kills the "fixed in the .tpl, forgotten in the .stpl" divergence
+  class at the source; there is no runtime split or generation. `add_web_config` detects the format
+  from the marker, so legacy pair templates (mail) keep working unchanged. Restore stays format
+  agnostic: it discards every archived vhost `.conf` and re-renders from the current template, so a
+  HestiaCP two-file backup restores as one merged vhost automatically - the backup format stays
+  bidirectional. Verified on all four VMs across nginx-only, apache-only and both models (full
+  lifecycle + serving, byte-equivalent output, backup round-trip). `h-change-web-domain-sslhome` is
+  removed with its `v-*` symlink: it had no panel path (the separate SSL docroot is not exposed) and
+  a text-replace could not tell the two blocks apart once they share a file.
 
 - **The PHP version is its own web.conf field, and the pool template becomes a named profile**
   (#591, #219 Phase 6, closes #550). A domain's version used to be either implied (`BACKEND=default`

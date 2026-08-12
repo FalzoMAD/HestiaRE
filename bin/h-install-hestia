@@ -280,6 +280,7 @@ install_web() {
 	cp -f "$HESTIA/share/nginx/nginx.conf" /etc/nginx/
 	cp -f "$HESTIA/share/nginx/status.conf" /etc/nginx/conf.d/
 	cp -f "$HESTIA/share/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
+	cp -f "$HESTIA/share/nginx/websocket-upgrade.conf" /etc/nginx/conf.d/
 	cp -f "$HESTIA/share/nginx/agents.conf" /etc/nginx/conf.d/
 	cp -f "$HESTIA/share/nginx/cloudflare.inc" /etc/nginx/conf.d/
 	# phpMyAdmin is delivered by Panel-Caddy now, not an nginx alias
