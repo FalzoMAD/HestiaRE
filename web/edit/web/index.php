@@ -235,6 +235,17 @@ exec(HESTIA_CMD . "h-list-user-ips " . $user . " json", $output, $return_var);
 $ips = json_decode(implode("", $output), true);
 unset($output);
 
+// A record written by the CLI holds the public address (get_user_ip substitutes NAT), the IP list
+// is keyed by the local one. Unmatched, the select preselects nothing and the save rewrites the IP.
+if (!isset($ips[$v_ip])) {
+	foreach ($ips as $ip_local => $ip_meta) {
+		if (($ip_meta["NAT"] ?? "") === $v_ip) {
+			$v_ip = $ip_local;
+			break;
+		}
+	}
+}
+
 $v_ip_public = empty($ips[$v_ip]["NAT"]) ? $v_ip : $ips[$v_ip]["NAT"];
 
 // List web templates
