@@ -264,6 +264,15 @@ opens above it.
 
 ### Fixed
 
+- **Every fresh install aborted in the PHP stage (v0.14.6 regression)** (#620). The `already
+  installed` guard in `h-add-web-php` used to require both the fpm binary and a per-version pool
+  profile; when the profile stopped being written, the guard was left on the binary alone - and the
+  panel version is apt-installed before the multi-PHP loop reaches it, so the reference version
+  aborted and took the installer with it. The abort is gone: `h-add-web-php` is idempotent, which
+  is what all three callers want anyway (the installer deliberately re-runs the panel version to
+  give it the full extension set; the panel page and `h-change-sys-panel-php` check installedness
+  themselves). Since a re-run is now reachable on a live box, it clears only the distro `www.conf`
+  instead of the whole pool directory, so customer pools survive it.
 - **The dummy FPM pool leaked into the isolated panel master with a raw placeholder socket**
   (#604). `h-rebuild-web-domains` seeded the fallback pool by globbing `/etc/php/*`, which on
   HestiaRE catches `/etc/php/hestia` - the isolated panel FPM, not a customer version - so the
