@@ -365,12 +365,13 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 				hestia/web.conf
 		fi
 
-		# Backup vhost config
+		# Backup vhost config. A docker domain has no backend vhost where the front is the proxy,
+		# so the legacy lookup would abort the whole backup on a config that cannot exist.
 		if [ -e "$HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.conf" ]; then
 			cp $HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.conf* conf/
 		elif [ -e "$HOMEDIR/$user/conf/web/$domain.$WEB_SYSTEM.conf" ]; then
 			cp $HOMEDIR/$user/conf/web/$domain.$WEB_SYSTEM.conf* conf/
-		else
+		elif [ -z "$DOCKER" ]; then
 			# legacy format: all domain configs in single file
 			tpl_file=$(web_template_file "$WEB_SYSTEM" "$TPL" 'tpl')
 			conf="$HOMEDIR/$user/conf/web/$WEB_SYSTEM.conf"

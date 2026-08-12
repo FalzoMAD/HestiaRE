@@ -1,0 +1,97 @@
+#!/bin/bash
+# info: list docker proxy templates
+# options: [FORMAT]
+#
+# example: h-list-web-templates-docker
+#
+# Templates a docker domain can pick: what exists for this box's front system. The renderer picks
+# per front too, so the list matches what a choice would actually render.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+format=${1-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/func/main.sh
+source $HESTIA/func/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# JSON list function
+json_list() {
+	objects=$(echo "$templates" | wc -w)
+	i=1
+	echo '['
+	for template in $templates; do
+		if [ "$i" -lt "$objects" ]; then
+			echo -e "\t\"$template\","
+		else
+			echo -e "\t\"$template\""
+		fi
+		((++i))
+	done
+	echo "]"
+}
+
+# SHELL list function
+shell_list() {
+	echo "TEMPLATE"
+	echo "--------"
+	for template in $templates; do
+		echo "$template"
+	done
+}
+
+# PLAIN list function
+plain_list() {
+	for template in $templates; do
+		echo "$template"
+	done
+}
+
+# CSV list function
+csv_list() {
+	echo "TEMPLATE"
+	for template in $templates; do
+		echo "$template"
+	done
+}
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# The public front renders the docker vhost: nginx wherever it proxies, else the web server itself
+templates=''
+docker_front="${PROXY_SYSTEM:-$WEB_SYSTEM}"
+if [ -n "$docker_front" ] && [ -d "$WEBTPL/docker/$docker_front" ]; then
+	declare -a tpl_names=()
+	for tpl_file in "$WEBTPL/docker/$docker_front"/*.tpl; do
+		[ -e "$tpl_file" ] || continue
+		tpl_names+=("$(basename "$tpl_file" .tpl)")
+	done
+	[ ${#tpl_names[@]} -eq 0 ] || templates=$(printf '%s\n' "${tpl_names[@]}" | sort -V)
+fi
+
+# Listing data
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	csv) csv_list ;;
+	shell) shell_list ;;
+	*)
+		echo "Error: unknown format $format (json, plain, csv, shell)" >&2
+		exit "$E_INVALID"
+		;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

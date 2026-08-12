@@ -55,6 +55,18 @@ everything Caddy proxies for apps are `caddy`, and anything touching a customer'
 runs as that customer.** Ownership mismatches against this table are the source of
 several past bugs (#234, #441).
 
+**Consequence for panel PHP: it cannot see inside `/home/<customer>`.** Upstream ships
+`setfacl -m "g:hestia-users:---"` on every customer home, and HestiaRE puts the panel
+account into that group (`bin/h-install-hestia`), which upstream does not do for its own
+panel user - only for `hestiamail`. So the deny entry applies here and every PHP
+filesystem call on a customer path fails: `realpath()` returns `false`, and `is_dir()`,
+`file_exists()`, `scandir()` return false or nothing, each reading like "does not exist".
+That is the intended boundary, not a defect - the panel asks an `h-*` command over sudo
+instead. But inherited upstream code does not know it: `realpath()` on `CUSTOM_DOCROOT`
+was silently false, so the form showed empty fields and every save reset a customer's
+custom document root. **Never stat a customer path from panel PHP; take the value from
+the record or from a command.**
+
 ---
 
 ## 1. Panel webserver: bundled `hestia-nginx` -> OS-repo Caddy

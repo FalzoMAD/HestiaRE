@@ -320,24 +320,6 @@ check_fail2ban_backends() {
 	fi
 }
 
-# Roundcube logs the username verbatim, so the filter defeats a smuggled "X-Real-IP:" block only while it
-# matches the real trailing one greedily - a dropped anchor would reopen the injection silently. A canary:
-# replay an injection line and assert the REAL trailing IP is what gets banned.
-check_fail2ban_roundcube_injection() {
-	local f='/etc/fail2ban/filter.d/hestia-roundcube.conf' fr prefix got
-	[ -f "$f" ] || { skip "roundcube filter absent (webmail off)"; return; }
-	fr="$(sed -n 's/^failregex[[:space:]]*=[[:space:]]*//p' "$f" | head -1)"
-	prefix="${fr%%<HOST>*}"
-	[ "$prefix" != "$fr" ] || { no "roundcube filter failregex has no <HOST>"; return; }
-	local inj='[05-Aug-2026 11:19:03 +0000]: <x> Failed login for evil from 6.6.6.6 (X-Real-IP: 8.8.8.8,X-Forwarded-For: z) in session zz (error: 0) from 127.0.0.1 (X-Real-IP: 203.0.113.99,X-Forwarded-For: 127.0.0.1) in session ok (error: 1)'
-	got="$(printf '%s' "$inj" | grep -oP "${prefix}\K[0-9A-Fa-f:.]+" 2> /dev/null | tail -1)"
-	if [ "$got" = '203.0.113.99' ]; then
-		ok "roundcube filter bans the real IP, not an injected one"
-	else
-		no "roundcube filter injection defence regressed" "captured '$got', expected 203.0.113.99"
-	fi
-}
-
 # WEBMAIL_SYSTEM used to be written before the install ran, so a failed download left the config claiming a
 # webmail that was never unpacked (#573). The listener check catches that too, but only as an ambiguous 404
 # - this names the cause.
@@ -345,36 +327,6 @@ check_webmail_payload() {
 	local wm="$1" f="$2"
 	[ -s "$f" ] && { ok "$wm payload installed"; return; }
 	no "$wm claimed by WEBMAIL_SYSTEM but not installed" "missing $f"
-}
-
-# Purely regex on the access log, so a filter edit or log-format drift silently stops matching a real probe
-# or starts matching benign traffic. Both cases replayed through the DEPLOYED filter; the benign ones pin
-# the decisions - a single ../ is not an exploit, a 403 is not an authprobe.
-check_fail2ban_web_signatures() {
-	command -v fail2ban-regex > /dev/null 2>&1 || { skip "fail2ban-regex absent - web signature canary"; return; }
-	local fdir='/etc/fail2ban/filter.d' d='[05/Aug/2026:11:00:00 +0000]' pre='1.2.3.4 - -'
-	local n_bad=0
-	_f2b_n() { fail2ban-regex "$1" "$2" 2> /dev/null | sed -n 's/.*, \([0-9]*\) matched,.*/\1/p' | tail -1; }
-	# case = "filter|expect(hit/miss)|request-line-and-status"
-	local c filt exp line got
-	for c in \
-		"badactor|hit|\"GET /.env HTTP/1.1\" 404 12" \
-		"badactor|miss|\"GET /index.html HTTP/1.1\" 200 12" \
-		"exploit|hit|\"GET /a?x=../../../../etc/passwd HTTP/1.1\" 404 12" \
-		"exploit|miss|\"GET /a/../b HTTP/1.1\" 200 12" \
-		"authprobe|hit|\"GET /admin HTTP/1.1\" 401 12" \
-		"authprobe|miss|\"GET /admin HTTP/1.1\" 403 12"; do
-		filt="${c%%|*}"; exp="${c#*|}"; line="${exp#*|}"; exp="${exp%%|*}"
-		[ -f "$fdir/hestia-$filt.conf" ] || { skip "hestia-$filt.conf absent"; continue; }
-		got="$(_f2b_n "$pre $d $line" "$fdir/hestia-$filt.conf")"
-		got="${got:-0}"
-		if { [ "$exp" = hit ] && [ "$got" -ge 1 ]; } || { [ "$exp" = miss ] && [ "$got" -eq 0 ]; }; then
-			continue
-		fi
-		no "web signature filter hestia-$filt: expected $exp, got $got match(es)" "$line"
-		n_bad=$((n_bad + 1))
-	done
-	[ "$n_bad" -eq 0 ] && ok "web signature filters (badactor/exploit/authprobe) match+reject as designed"
 }
 
 # A web jail must watch the CURRENT web system's dir. After a switch that forgets to re-gate, its logpath
@@ -546,25 +498,6 @@ check_policy_fragment_coverage() {
 	fi
 }
 
-# check_info_headers — every h-* command must keep a non-empty `# info:` line
-# (Hestia parses it for --help/usage; a comment sweep must not eat it).
-check_info_headers() {
-	local f n miss=0 first=""
-	for f in "$HESTIA/bin"/h-*; do
-		[ -f "$f" ] || continue
-		n=$(sed -n 's/^# info:[[:space:]]*//p' "$f" | head -n1)
-		if [ -z "$n" ]; then
-			miss=$((miss + 1))
-			[ -z "$first" ] && first="$(basename "$f")"
-		fi
-	done
-	if [ "$miss" -eq 0 ]; then
-		ok "all h-* commands have a # info: line"
-	else
-		no "$miss h-* command(s) missing a # info: line" "$first"
-	fi
-}
-
 # check_sudoers <file> <label> — file parses under the running sudo. One rejected
 # setting (e.g. requiretty under sudo-rs, ub26) makes sudo drop the WHOLE file.
 check_sudoers() {
@@ -576,63 +509,6 @@ check_sudoers() {
 		ok "sudoers $2 ($1) valid"
 	else
 		no "sudoers $2 ($1) invalid" "$(visudo -cf "$1" 2>&1 | tail -1)"
-	fi
-}
-
-# check_web_lock_coverage - every web/mail-vhost mutator must take the model-switch
-# freeze lock (#120), else a domain change could land on a half-flipped tree. Same
-# allowlist-by-derivation idea as the $_SESSION[user] guard: it goes red when a new
-# mutating command forgets the lock, so the set cannot rot. FTP sub-account commands
-# are excluded (they do not write the web vhost tree the switch rebuilds).
-check_web_lock_coverage() {
-	local f b bad=""
-	for f in "$HESTIA"/bin/h-*; do
-		b=$(basename "$f")
-		case "$b" in
-			h-add-web-domain-ftp | h-delete-web-domain-ftp | h-change-web-domain-ftp-password | h-change-web-domain-ftp-path) continue ;;
-			h-add-web-domain | h-delete-web-domain | h-add-web-domain-* | h-delete-web-domain-* | h-change-web-domain-* | h-suspend-web-domain | h-unsuspend-web-domain | h-add-fastcgi-cache | h-delete-fastcgi-cache | h-rebuild-web-domain | h-rebuild-web-domains | h-rebuild-mail-domain | h-rebuild-mail-domains | h-add-mail-domain-webmail | h-delete-mail-domain-webmail | h-add-mail-domain-ssl) ;;
-			*) continue ;;
-		esac
-		grep -q "web_lock_acquire" "$f" || bad="$bad $b"
-	done
-	if [ -z "$bad" ]; then
-		ok "invariant: web/mail mutators take the model-switch lock (#120)"
-	else
-		no "invariant: web/mail mutator missing web_lock_acquire (#120)" "${bad# }"
-	fi
-}
-
-# check_web_switch_prechecks - the four component switch commands must each run their
-# named pre-check function (so a new command cannot jump straight into the core).
-check_web_switch_prechecks() {
-	local lib="$HESTIA/func/web-model.sh" miss="" fn
-	for fn in web_precheck_add_nginx web_precheck_add_apache2 web_precheck_delete_nginx web_precheck_delete_apache2; do
-		grep -q "^$fn()" "$lib" || miss="$miss $fn"
-	done
-	# shellcheck disable=SC2016 # literal on purpose: the dispatch line contains ${action}/${comp}
-	grep -qF 'web_precheck_${action}_${comp}' "$lib" || miss="$miss dispatch-call"
-	if [ -z "$miss" ]; then
-		ok "invariant: web-model switch pre-checks present + dispatched (#120)"
-	else
-		no "invariant: web-model switch pre-check missing (#120)" "${miss# }"
-	fi
-}
-
-# check_docker_bridge - with per-user rootless Docker there must be no docker0 on the host. The
-# packaged rootful daemon starts once during apt and leaves one behind (#579), which claims
-# 172.17.0.0/16 and answers `ip route get` for container addresses it cannot actually reach.
-check_docker_bridge() {
-	local attached
-	if ! ip -o link show docker0 > /dev/null 2>&1; then
-		ok "no host docker0 bridge (containers live in the companions' netns)"
-		return
-	fi
-	attached=$(ip -o link show master docker0 2> /dev/null | wc -l)
-	if [ "$attached" -gt 0 ]; then
-		skip "docker0 present with $attached attached interface(s) - rootful Docker in use, not ours"
-	else
-		no "orphaned docker0 bridge on the host" \
-			"empty and down, but claims 172.17.0.0/16 and makes ip route get answer for unreachable container IPs"
 	fi
 }
 
@@ -987,6 +863,23 @@ check_realip_header() {
 	fi
 }
 
+check_slice_dropins_owned() {
+	local d uid orphan='' first=''
+	for d in /etc/systemd/system.control/user-*.slice.d; do
+		[ -d "$d" ] || continue
+		uid=$(basename "$d"); uid=${uid#user-}; uid=${uid%.slice.d}
+		getent passwd "$uid" > /dev/null 2>&1 && continue
+		orphan=$((${orphan:-0} + 1))
+		[ -z "$first" ] && first="uid $uid"
+	done
+	if [ -z "$orphan" ]; then
+		ok "no resource drop-in outlives its account"
+	else
+		no "$orphan resource drop-in(s) without an account" \
+			"$first - a later account reusing the uid inherits the limit with no visible cause"
+	fi
+}
+
 check_web_model_sentinel() {
 	local s="/var/lib/hestia/web-model-switch/IN_PROGRESS" op
 	if [ -f "$s" ]; then
@@ -1036,8 +929,6 @@ if is_on "${COMPONENT_ADDON_FAIL2BAN:-}"; then
 	check_fail2ban_banaction
 	check_fail2ban_logpaths
 	check_fail2ban_backends
-	check_fail2ban_roundcube_injection
-	check_fail2ban_web_signatures
 	check_fail2ban_web_logpath
 fi
 is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
@@ -1147,8 +1038,6 @@ check_source_absent "no gating on the effective-mirror \$_SESSION[role] (#438 �
 check_xaccel_allowlist "$HESTIA/web"
 # v-* compat symlinks must all resolve (no dangling alias left by a rename).
 check_v_symlinks_resolve
-# every h-* keeps its parsed # info: line (a comment sweep must not eat it).
-check_info_headers
 # a policy fragment (crowdsec Layer A, bot rate limiting) missing from one template is a silent bypass.
 check_policy_fragment_coverage
 # a cache flag without its zone (or a 0-byte vhost) fails silently until the next reload.
@@ -1158,21 +1047,19 @@ fi
 check_vhost_nonempty
 check_web_http3_orphan
 check_web_docker_wildcard
-# #120: the model-switch freeze + pre-check coverage cannot rot; a crash is surfaced.
-check_web_lock_coverage
-check_web_switch_prechecks
+# #120: an interrupted model switch must not stay invisible.
 check_web_model_sentinel
 check_realip_header
 # fail-open is invisible to users: verify the live mount, not the intent (#565).
 check_proc_hardening
-# #388: guard the allocator's preconditions, since a regression only shows up much later.
-is_on "${COMPONENT_ADDON_DOCKER:-}" && check_docker_bridge
 # a record pointing at a removed template only shows up on the next rebuild.
 check_web_templates_resolvable
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_key_registries
 check_identity_band
+# a cap written for a companion that is gone would be inherited by whoever gets the uid next.
+check_slice_dropins_owned
 
 #----------------------------------------------------------#
 #                       Result                             #

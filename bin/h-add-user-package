@@ -31,12 +31,6 @@ is_package_consistent() {
 	if [ "$WEB_ALIASES" != 'unlimited' ]; then
 		is_int_format_valid "$WEB_ALIASES" 'WEB_ALIASES'
 	fi
-	if [ "$DNS_DOMAINS" != 'unlimited' ]; then
-		is_int_format_valid "$DNS_DOMAINS" 'DNS_DOMAINS'
-	fi
-	if [ "$DNS_RECORDS" != 'unlimited' ]; then
-		is_int_format_valid "$DNS_RECORDS" 'DNS_RECORDS'
-	fi
 	if [ "$MAIL_DOMAINS" != 'unlimited' ]; then
 		is_int_format_valid "$MAIL_DOMAINS" 'MAIL_DOMAINS'
 	fi
@@ -61,6 +55,12 @@ is_package_consistent() {
 	if [ "$CPU_QUOTA_PERIOD" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
 		is_valid_cpu_quota_period "$CPU_QUOTA_PERIOD" 'CPU_QUOTA_PERIOD'
 	fi
+	# The docker cap is a preset, not a size: the mapping to systemd properties lives in
+	# docker_slice_properties, so a package can only carry a name it knows.
+	case "${DOCKER_LIMIT:-unlimited}" in
+		unlimited | low | medium | high) ;;
+		*) check_result "$E_INVALID" "DOCKER_LIMIT must be unlimited, low, medium or high" ;;
+	esac
 	if [ "$MEMORY_LIMIT" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
 		is_valid_memory_size "$MEMORY_LIMIT" 'MEMORY_LIMIT'
 	fi
@@ -80,9 +80,6 @@ is_package_consistent() {
 	fi
 	if [ -n "$PROXY_TEMPLATE" ]; then
 		is_proxy_template_valid "$PROXY_TEMPLATE"
-	fi
-	if [ -n "$DNS_TEMPLATE" ]; then
-		is_dns_template_valid "$DNS_TEMPLATE"
 	fi
 	if [ -n "$NS" ]; then
 		IFS=',' read -r -a nameservers <<< "$NS"
@@ -131,11 +128,8 @@ SHELL=$(basename $SHELL)
 echo "WEB_TEMPLATE='$WEB_TEMPLATE'
 PROXY_TEMPLATE='$PROXY_TEMPLATE'
 BACKEND_TEMPLATE='$BACKEND_TEMPLATE'
-DNS_TEMPLATE='$DNS_TEMPLATE'
 WEB_DOMAINS='$WEB_DOMAINS'
 WEB_ALIASES='$WEB_ALIASES'
-DNS_DOMAINS='$DNS_DOMAINS'
-DNS_RECORDS='$DNS_RECORDS'
 MAIL_DOMAINS='$MAIL_DOMAINS'
 MAIL_ACCOUNTS='$MAIL_ACCOUNTS'
 RATE_LIMIT='$RATE_LIMIT'
@@ -146,8 +140,8 @@ CPU_QUOTA='$CPU_QUOTA'
 CPU_QUOTA_PERIOD='$CPU_QUOTA_PERIOD'
 MEMORY_LIMIT='$MEMORY_LIMIT'
 SWAP_LIMIT='$SWAP_LIMIT'
+DOCKER_LIMIT='$DOCKER_LIMIT'
 BANDWIDTH='$BANDWIDTH'
-NS='$NS'
 SHELL='$SHELL'
 BACKUPS='$BACKUPS'
 BACKUPS_INCREMENTAL='$BACKUPS_INCREMENTAL'

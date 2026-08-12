@@ -18,6 +18,8 @@ user=$1
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/docker.sh
+source $HESTIA/func/docker.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -63,6 +65,10 @@ if [ "$memory_limit" != 'unlimited' ]; then
 else
 	systemctl set-property "$user_slice" MemoryHigh=
 fi
+
+# The customer's own slice never sees their containers - those live in the companion's, so the
+# docker cap is applied there from the same record read.
+docker_slice_apply "$user" "$(get_user_value '$DOCKER_LIMIT')"
 
 # Set memory swap limits:
 if [ "$swap_limit" != 'unlimited' ]; then

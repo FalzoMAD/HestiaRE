@@ -14,6 +14,26 @@ opens above it.
 
 ### Added
 
+- **Docker resources are capped per customer** (#619). Packages carry a `DOCKER_LIMIT` preset -
+  `unlimited` / `low` / `medium` / `high` - which lands on the **companion's** systemd slice, where the
+  daemon and every one of that customer's containers actually live (measured: a container's cgroup is
+  `user-<companion>.slice/user@.../docker-<id>.scope`). The presets map 1:1 onto native systemd syntax
+  (`MemoryMax=25%`, `CPUQuota=100%` = one core, `TasksMax`), so no arithmetic and nothing to recompute
+  when the box changes. The cap is enforced against the customer's own daemon, so no compose file can
+  talk its way out, and it is deliberately **not** gated on the box-wide `RESOURCES_LIMIT` toggle - that
+  is off by default, and a preset that silently does nothing is worse than no preset. Container **count**
+  is still not a limit: a customer can put anything into one container, so the resource cap is the only
+  boundary that holds.
+- **Docker per customer is a switch in the panel, coupled to unjailed SSH** (#618). Edit-user carries an
+  admin-only Docker checkbox next to the File Manager one, driven by `h-add-user-docker` /
+  `h-delete-user-docker`; when it is on, the label shows the customer's `/24` and says plainly that
+  turning it off removes the containers and their volumes. It only appears once the addon is installed
+  (`DOCKER_SYSTEM` in `hestia.conf`, new, exposed through `h-list-sys-config`). Docker requires a real
+  login shell and an unjailed account - compose files and the docker CLI need a shell, and the jail is
+  not measured for either - enforced in `h-add-user-docker`, not only in the view, because the panel is
+  not the only caller. A customer who already has Docker keeps the switch whatever their shell says, so
+  it can still be turned off.
+
 - **Docker domain publishing: a customer domain fronts their container** (#566, with the #592 panel
   shape; stage 3 of the docker series). Every docker customer gets their own loopback **/24** from
   127.20.0.0/16 at enable time; `DOCKER_IP` is its `.1` and the companion daemon's default bind
@@ -262,8 +282,64 @@ opens above it.
   "HestiaCP snapshot <today>" - only a version string deep in the tree gave it away. The subject now
   carries `(<branch> @ <sha>)`, and `UPSTREAM_BRANCH=` overrides it on purpose.
 
+### Added
+
+- **A docker domain picks its template in the panel** (#592, closing #219 Phase 7). Docker templates
+  live per front system under `templates/docker/`, and `h-list-web-templates-docker` lists exactly the
+  set the renderer would use. The select appears in the docker block once there is more than one
+  template - a custom template shows up there and, as intended, never in the general template list.
+
+### Removed
+
+- **The DNS leftovers in packages and user records are gone** (#619). A local DNS server is
+  permanently out of scope, so `DNS_TEMPLATE`, `DNS_DOMAINS`, `DNS_RECORDS`, the `NS` field and the
+  `U_DNS_*` counters no longer exist in packages, user records, or any listing format - they described
+  a subsystem that cannot be installed. `h-list-user-ns` went with them (it read the `NS` field and had
+  no callers), together with its `v-*` alias, and `h-change-user-template` lost its `DNS` branch, whose
+  validator `is_dns_template_valid` was never defined in the first place - it would have failed on use.
+  `SUSPENDED_DNS` stays for now: it belongs to the suspension flag set, not to packages.
+
 ### Fixed
 
+- **Saving a docker domain from the panel failed with a 500 and dropped the proxy** (#592). Every POST
+  family whose control the docker branch hides was still read unconditionally: the pool template
+  reached `quoteshellarg(null)` and killed the whole save, and the proxy checkbox - absent because
+  nothing rendered it - read as "customer switched the proxy off", so `PROXY` would have been deleted
+  on every save. All of them gate on the domain's docker state now, the same way the view does.
+- **A user whose only domain is a docker domain could not be backed up** (#592). On the both model
+  there is no backend vhost by design, so the backup fell through to the legacy single-file lookup and
+  aborted with `can't parse config .../apache2.conf` - taking the whole user backup with it.
+- **No package could be saved from the panel** (found while building #619). `h-add-user-package`
+  validated `DNS_DOMAINS` / `DNS_RECORDS` unconditionally, but HestiaRE has no DNS server (bind9 is
+  out), so the package form neither renders nor posts them - every save died with `invalid DNS_DOMAINS
+  format`, visible only in the log.
+- **A user named after a service died at `groupadd` instead of being refused** (#625). `h-add-user`
+  checked `/etc/passwd` and a MariaDB name list, but never `/etc/group` - and the group is created
+  as the mirror of the user, so `docker` (group present, user not) failed with `group creation
+  failed` and no reason. Both databases are checked now, and a curated list keeps the accounts our
+  optional components create free even before they are installed: a name that passes today must not
+  become a collision after an `h-add-sys-*` run. The `<user>-docker` companion namespace is reserved
+  the same way. FTP sub-accounts need none of this - the command prefixes them with the owner.
+- **FTP account commands disagreed about the account name** (found alongside #625). `h-add-web-domain-ftp`
+  prefixed the name with the owner, while delete and the two change commands wanted the stored
+  `<owner>_<name>` - so the name that just worked for the add failed for everything else. All four take
+  either form now. The panel was unaffected: it already passed the short name to add and the full one
+  to the rest.
+- **The proxy template selector was offered where there is nothing to choose** (#626). In the both
+  model the proxy is the nginx front and ships exactly one template; the variety lives in the web
+  templates of an nginx-only box. The select now renders only when there is more than one template
+  (content, not model name, so a custom proxy template brings it back), on the domain and package
+  pages alike. The domain POST path also stopped reading `v_proxy_template` unconditionally, which
+  made every save look like a template change and restarted the proxy.
+- **Every fresh install aborted in the PHP stage (v0.14.6 regression)** (#620). The `already
+  installed` guard in `h-add-web-php` used to require both the fpm binary and a per-version pool
+  profile; when the profile stopped being written, the guard was left on the binary alone - and the
+  panel version is apt-installed before the multi-PHP loop reaches it, so the reference version
+  aborted and took the installer with it. The abort is gone: `h-add-web-php` is idempotent, which
+  is what all three callers want anyway (the installer deliberately re-runs the panel version to
+  give it the full extension set; the panel page and `h-change-sys-panel-php` check installedness
+  themselves). Since a re-run is now reachable on a live box, it clears only the distro `www.conf`
+  instead of the whole pool directory, so customer pools survive it.
 - **The dummy FPM pool leaked into the isolated panel master with a raw placeholder socket**
   (#604). `h-rebuild-web-domains` seeded the fallback pool by globbing `/etc/php/*`, which on
   HestiaRE catches `/etc/php/hestia` - the isolated panel FPM, not a customer version - so the
@@ -710,8 +786,6 @@ with fail2ban as a removable addon and IPv4/IPv6 parity throughout.
   decision rather than a number (#551).
 - **CODEMAP's firewall and fail2ban entries are current again** (#496); the firewall entry still gave
   `FIREWALL_SYSTEM` its pre-swap value - the exact staleness that let the panel destroy a ruleset.
-
-### Removed
 
 - **The mysqld jail** (#496). 3306 is not in the shipped ruleset, so MariaDB is reachable only from
   loopback and the box itself - both of which `h-add-firewall-ban` refuses to ban, so the jail could only

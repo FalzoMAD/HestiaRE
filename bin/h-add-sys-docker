@@ -150,6 +150,9 @@ else
 	echo "Warning: proc_hardening_apply unavailable - ensure group procvis exists before enabling a customer." >&2
 fi
 
+# The panel only learns about an addon through hestia.conf (FILE_MANAGER_PORT precedent):
+# without it the per-customer switch in edit-user has nothing to gate on.
+$BIN/h-change-sys-config-value 'DOCKER_SYSTEM' 'docker'
 set_install_component ADDON_DOCKER true
 
 echo "Docker is now installed. Enable it per customer to create their companion."

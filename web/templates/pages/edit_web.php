@@ -337,10 +337,29 @@
 				</label>
 				<div class="u-flex u-align-center">
 					<span class="u-mr5"><?= tohtml($v_docker_net) ?>.</span>
-					<input type="text" class="form-control" name="v_docker_octet" id="v_docker_octet" size="3" maxlength="3" style="width: 5em;" value="<?= tohtml($v_docker_octet) ?>">
+					<input type="number" min="1" max="254" step="1" class="form-control" name="v_docker_octet" id="v_docker_octet" size="3" maxlength="3" style="width: 6em;" value="<?= tohtml($v_docker_octet) ?>">
 					<span class="u-ml5 u-mr5">:</span>
-					<input type="text" class="form-control" name="v_docker_port" id="v_docker_port" size="5" maxlength="5" style="width: 7em;" value="<?= tohtml($v_docker_port) ?>">
+					<input type="number" min="1024" max="65535" step="1" class="form-control" name="v_docker_port" id="v_docker_port" size="5" maxlength="5" style="width: 8em;" value="<?= tohtml($v_docker_port) ?>">
 				</div>
+				<?php # app shapes differ in proxy mode, headers, websockets - the list is admin-curated,
+					# so the customer picks it; one entry is no choice
+					if (count($docker_templates ?? []) > 1) { ?>
+				<div class="u-mt10">
+					<label for="v_docker_template" class="form-label"><?= tohtml( _("Docker Template")) ?></label>
+					<select class="form-select" name="v_docker_template" id="v_docker_template">
+						<?php
+							$v_cur_docker_tpl = $v_docker ?: "default";
+							foreach ($docker_templates as $value) {
+								echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
+								if ($v_cur_docker_tpl == $value) {
+									echo ' selected';
+								}
+								echo ">" . tohtml($value) . "</option>\n";
+							}
+						?>
+					</select>
+				</div>
+				<?php } ?>
 			</div>
 			<?php } ?>
 			<div class="u-mt15 u-mb20">
@@ -449,7 +468,9 @@
 							</div>
 						</div>
 						<div x-cloak x-show="proxySupportEnabled" id="proxytable">
-							<?php if (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") { ?>
+							<?php # nothing to choose is not a choice: the both model ships one proxy template, the
+								# variety lives in the web templates of an nginx-only box
+								if ((($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") && count($proxy_templates ?? []) > 1) { ?>
 							<div class="u-mb10">
 								<label for="v_proxy_template" class="form-label"><?= tohtml( _("Proxy Template")) ?></label>
 								<select class="form-select js-proxy-template-select" name="v_proxy_template" id="v_proxy_template">

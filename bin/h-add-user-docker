@@ -38,6 +38,8 @@ source /etc/hestia/hestia.env
 source $HESTIA/func/main.sh
 # shellcheck source=/usr/local/hestia/func/identity.sh
 source $HESTIA/func/identity.sh
+# shellcheck source=/usr/local/hestia/func/docker.sh
+source $HESTIA/func/docker.sh
 # shellcheck source=/usr/local/hestia/func/helper.sh
 source $HESTIA/func/helper.sh
 # load config file
@@ -85,6 +87,21 @@ command -v dockerd-rootless.sh > /dev/null 2>&1 \
 		exit "$E_NOTEXIST"
 	}
 
+# Docker needs a real shell (compose files, the docker CLI) and the jail is not measured for
+# it - so the decision is unjailed SSH or no docker, and the check is here rather than only in
+# the panel, because the panel is not the only caller.
+user_shell="$(getent passwd "$user" | cut -f 7 -d :)"
+case "$user_shell" in
+	*nologin | *false | *rssh | *jailbash | '')
+		echo "ERROR: docker needs an unjailed login shell, $user has '${user_shell:-none}'."
+		exit "$E_INVALID"
+		;;
+esac
+if id -nG "$user" 2> /dev/null | tr ' ' '\n' | grep -qx 'sftp-jailed'; then
+	echo "ERROR: $user is in the sftp jail - docker needs an unjailed account."
+	exit "$E_INVALID"
+fi
+
 uid="$(id -u "$user" 2> /dev/null)"
 gid="$(id -g "$user" 2> /dev/null)"
 [ -n "$uid" ] || {
@@ -101,6 +118,12 @@ k="$(identity_k_from_uid "$uid")" \
 		exit "$E_INVALID"
 	}
 companion="${user}-docker"
+# Group names cap at 32 on every target and the companion needs its own group, so a customer name
+# over 25 characters would only fail deep inside groupadd, with the account already created.
+[ ${#companion} -le 32 ] || {
+	echo "ERROR: user name '$user' is too long for docker - the companion '$companion' exceeds 32 characters."
+	exit "$E_INVALID"
+}
 companion_uid=$((uid - IDENTITY_BLOCK))
 sub_base="$(identity_sub_base_from_k "$k")"
 companion_home="$HOMEDIR/$user/.companion"
@@ -298,6 +321,9 @@ if ! docker_alive; then
 	exit "$E_INVALID"
 fi
 rm -f "$setup_log"
+
+# The slice exists only once the manager runs, so the cap goes on here rather than at package time
+docker_slice_apply "$user" "$(get_user_value '$DOCKER_LIMIT')"
 
 echo "Docker is enabled for $user."
 

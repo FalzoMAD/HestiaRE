@@ -200,6 +200,12 @@ whole tree**, `bin/` + `func/` + `web/` + `share/` + `install.sh`, not just the 
   panel's firewall row then fell through to `systemctl` and **destroyed the live ruleset**.
 - **A validator or guard**: hardening one makes previously-dead checks fire. Find the callers that were
   silently passing before, and fix them in the same PR rather than exempting them.
+- **`h-install-hestia` is a first-class caller of `h-*`** (deliberately — one code path, never an
+  installer copy that drifts). So every guard must also make sense at **install time**, against a
+  half-built box: the state it rejects may be exactly what an earlier install stage just produced.
+  `h-add-web-php`'s "already installed" abort keyed on the fpm binary, but the panel PHP is installed
+  before the multi-PHP loop re-runs it for the full extension set — every fresh install on all four
+  targets died there. Existence checks belong in the update path; a fresh install starts empty.
 
 Prefer a **static sweep over sampling**: run the check against every call site, not a handful of
 commands that happen to come to mind. Sampling is what let those five commands through the first time.

@@ -35,19 +35,15 @@ source $HESTIA/func/identity.sh
 source_conf "$HESTIA/conf/hestia.conf"
 
 is_user_free() {
-	# these names may cause issues with MariaDB/MySQL database names and should be reserved:
-	# sudo has been added due to Privilege escalation as sudo group has always sudo permission
-	reserved_names=("aria" "aria_log" "mysql" "mysql_upgrade" "ib" "ib_buffer" "ddl" "ddl_recovery" "performance" "sudo")
-	for value in "${reserved_names[@]}"; do
-		if [ "${user,,}" = "$value" ]; then
-			check_result "$E_INVALID" "The user name '$user' is reserved and cannot be used. List of reserved names: ${reserved_names[*]}"
-			return
-		fi
-	done
+	is_login_name_reserved "$user"
 
-	check_sysuser=$(cut -f 1 -d : /etc/passwd | grep "^$user$")
-	if [ -n "$check_sysuser" ] || [ -e "$USER_DATA" ]; then
+	# The group is created as the mirror of the user, so a taken group name kills the add at
+	# groupadd with no reason given - both databases have to be free, not just passwd.
+	if getent passwd "$user" > /dev/null 2>&1 || [ -e "$USER_DATA" ]; then
 		check_result "$E_EXISTS" "user $user exists"
+	fi
+	if getent group "$user" > /dev/null 2>&1; then
+		check_result "$E_EXISTS" "group $user exists"
 	fi
 }
 
@@ -235,7 +231,6 @@ ROLE='user'
 SUSPENDED='no'
 SUSPENDED_USERS='0'
 SUSPENDED_WEB='0'
-SUSPENDED_DNS='0'
 SUSPENDED_MAIL='0'
 SUSPENDED_DB='0'
 SUSPENDED_CRON='0'
@@ -251,8 +246,6 @@ U_BANDWIDTH='0'
 U_WEB_DOMAINS='0'
 U_WEB_SSL='0'
 U_WEB_ALIASES='0'
-U_DNS_DOMAINS='0'
-U_DNS_RECORDS='0'
 U_MAIL_DOMAINS='0'
 U_MAIL_DKIM='0'
 U_MAIL_ACCOUNTS='0'

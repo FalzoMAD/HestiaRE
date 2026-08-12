@@ -78,6 +78,7 @@ docker_drop_orphan_bridge
 
 # procvis stays: it is the /proc hardening exemption group (#565), not ours to remove.
 
+$BIN/h-change-sys-config-value 'DOCKER_SYSTEM' ''
 set_install_component ADDON_DOCKER false
 
 echo "Docker has been removed."

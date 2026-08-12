@@ -129,8 +129,10 @@
 							</select>
 						</div>
 							<?php } ?>
-					<?php if (!empty($_SESSION['PROXY_SYSTEM'])) {
-						echo ""; ?>
+					<?php # one template is not a choice: carry the value, drop the control
+						if (!empty($_SESSION['PROXY_SYSTEM']) && count($proxy_templates ?? []) < 2) { ?>
+						<input type="hidden" name="v_proxy_template" value="<?= tohtml(trim($v_proxy_template ?? "", "'") ?: ($proxy_templates[0] ?? 'default')) ?>">
+					<?php } elseif (!empty($_SESSION['PROXY_SYSTEM'])) { ?>
 						<div class="u-mb10">
 								<label for="v_proxy_template" class="form-label">
 									<?= tohtml( _("Proxy Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["PROXY_SYSTEM"])) ?></span>
@@ -293,6 +295,42 @@
 								</button>
 							</div>
 							<small class="form-text text-muted"><?= tohtml( _("Takes a swap size in bytes. If the value is suffixed with K, M, G or T, the specified swap size is parsed as Kilobytes, Megabytes, Gigabytes, or Terabytes (with the base 1024), respectively")) ?></small>
+						</div>
+					</div>
+
+				</details>
+			<?php } ?>
+			<?php # the addon, not RESOURCES_LIMIT, decides this one: the companion cap is per docker
+				# customer and the box-wide toggle is off by default
+				if (!empty($_SESSION["DOCKER_SYSTEM"])) { ?>
+				<details class="collapse" id="docker-options">
+					<summary class="collapse-header">
+						<?= tohtml( _("DOCKER")) ?>
+					</summary>
+					<div class="collapse-content">
+						<div class="u-mb10">
+							<label for="v_docker_limit" class="form-label">
+								<?= tohtml( _("Resource cap")) ?>
+							</label>
+							<select class="form-select" name="v_docker_limit" id="v_docker_limit">
+								<?php
+									$docker_presets = [
+										"unlimited" => _("Unlimited"),
+										"low" => "low (10% RAM, 50% CPU, 512 tasks)",
+										"medium" => "medium (25% RAM, 100% CPU, 1024 tasks)",
+										"high" => "high (50% RAM, 200% CPU, 2048 tasks)",
+									];
+									$cur_docker_limit = trim($v_docker_limit ?? "", "'") ?: "unlimited";
+									foreach ($docker_presets as $key => $label) {
+										echo "\t\t\t\t<option value=\"" . tohtml($key) . "\"";
+										if ($cur_docker_limit == $key) {
+											echo " selected";
+										}
+										echo ">" . tohtml($label) . "</option>\n";
+									}
+								?>
+							</select>
+							<small class="form-text text-muted"><?= tohtml( _("Caps the customer's Docker companion - the daemon and all of their containers together. Percentages are of the host: 100% CPU is one core.")) ?></small>
 						</div>
 					</div>
 				</details>
