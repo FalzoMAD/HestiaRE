@@ -40,8 +40,9 @@ if [[ ! $version =~ ^[0-9]+\.[0-9]+ ]]; then
 	exit "$E_INVALID"
 fi
 
-# Check if php version already exists
-if [ -f "$php_fpm" ] && [ -f "$PHPTPL/PHP-${version/\./_}.tpl" ]; then
+# Check if php version already exists. Artefact-based on the fpm binary alone: the per-version
+# pool profile it used to also require is retired (#591) and no longer written (#620).
+if [ -f "$php_fpm" ]; then
 	echo "ERROR: Specified PHP version is already installed."
 	exit "$E_INVALID"
 fi
@@ -146,9 +147,9 @@ sed -i "s/;opcache.enable=1/opcache.enable=1/g" /etc/php/$version/fpm/php.ini
 sed -i "s/;opcache.memory_consumption=128/opcache.memory_consumption=512/g" /etc/php/$version/fpm/php.ini
 sed -i "s/;opcache.max_accelerated_files=10000/opcache.max_accelerated_files=100000/g" /etc/php/$version/fpm/php.ini
 
-# Install backend template
-cp -f $HESTIA/share/php-fpm/multiphp.tpl \
-	$PHPTPL/PHP-${version/\./_}.tpl
+# No per-version pool profile anymore (#591/#620): the version is the PHP_VERSION field, the
+# profile set is default/small/high. Sweep a stale one so a reinstall heals the selector too.
+rm -f "$PHPTPL/PHP-${version/\./_}.tpl"
 
 #----------------------------------------------------------#
 #                       Hestia                             #
