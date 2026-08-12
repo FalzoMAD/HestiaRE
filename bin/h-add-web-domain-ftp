@@ -14,7 +14,9 @@
 user=$1
 domain=$2
 domain_idn=$2
-ftp_user=${1}_${3}
+# Accounts are stored as <owner>_<name>. Take either form: add used to prefix while delete and
+# the change-* commands wanted the stored name, so the name that worked here failed there.
+if [[ "$3" == "${1}_"* ]]; then ftp_user="$3"; else ftp_user="${1}_${3}"; fi
 password=$4
 HIDE=4
 ftp_path=$5
@@ -122,7 +124,8 @@ manage_sshd_allowusers add "$ftp_user"
 # Transforming absolute path to relative
 ftp_path_r=$(echo $ftp_path_a | sed "s%$HOMEDIR/$user/web/$domain%%")
 
-# Concatenating ftp variables
+# Concatenating ftp variables. ftp_user becomes the stored list here, so keep the account name.
+ftp_account="$ftp_user"
 if [ ! -z "$FTP_USER" ]; then
 	ftp_user="$FTP_USER:$ftp_user"
 	ftp_md5="$FTP_MD5:$ftp_md5"
@@ -138,7 +141,7 @@ update_object_value 'web' 'DOMAIN' "$domain" '$FTP_MD5' "$ftp_md5"
 update_object_value 'web' 'DOMAIN' "$domain" '$FTP_PATH' "$ftp_path"
 
 # Logging
-$BIN/h-log-action "$user" "Info" "Web" "Added new FTP account (Name: ${1}_${3}@$domain)."
+$BIN/h-log-action "$user" "Info" "Web" "Added new FTP account (Name: $ftp_account@$domain)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

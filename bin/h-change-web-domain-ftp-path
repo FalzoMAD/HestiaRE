@@ -14,7 +14,9 @@
 user=$1
 domain=$2
 domain_idn=$2
-ftp_user=$3
+# Accounts are stored as <owner>_<name>. Take either form: add used to prefix while delete and
+# the change-* commands wanted the stored name, so the name that worked there failed here.
+if [[ "$3" == "${1}_"* ]]; then ftp_user="$3"; else ftp_user="${1}_${3}"; fi
 ftp_path=$4
 
 # Includes

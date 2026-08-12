@@ -129,8 +129,10 @@
 							</select>
 						</div>
 							<?php } ?>
-					<?php if (!empty($_SESSION['PROXY_SYSTEM'])) {
-						echo ""; ?>
+					<?php # one template is not a choice: carry the value, drop the control
+						if (!empty($_SESSION['PROXY_SYSTEM']) && count($proxy_templates ?? []) < 2) { ?>
+						<input type="hidden" name="v_proxy_template" value="<?= tohtml(trim($v_proxy_template ?? "", "'") ?: ($proxy_templates[0] ?? 'default')) ?>">
+					<?php } elseif (!empty($_SESSION['PROXY_SYSTEM'])) { ?>
 						<div class="u-mb10">
 								<label for="v_proxy_template" class="form-label">
 									<?= tohtml( _("Proxy Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["PROXY_SYSTEM"])) ?></span>

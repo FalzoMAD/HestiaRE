@@ -8,6 +8,25 @@ $TAB = "WEB";
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
+// The certificate fields the page carries. Refreshed at four points (initial load, cert upload,
+// LE issue, SSL enable) - as four copies, a new field meant four edits and three chances to miss one.
+function web_ssl_vars(string $user, string $domain): array {
+	exec(
+		HESTIA_CMD . "h-list-web-domain-ssl " . $user . " " . quoteshellarg($domain) . " json",
+		$output,
+		$return_var,
+	);
+	$row = (json_decode(implode("", $output), true) ?: [])[$domain] ?? [];
+	$vars = [];
+	foreach (
+		["CRT", "KEY", "CA", "SUBJECT", "ALIASES", "NOT_BEFORE", "NOT_AFTER", "SIGNATURE", "PUB_KEY", "ISSUER"]
+		as $field
+	) {
+		$vars["v_ssl_" . strtolower($field)] = $row[$field] ?? "";
+	}
+	return $vars;
+}
+
 // Check domain argument
 if (empty($_GET["domain"])) {
 	header("Location: /list/web/");
@@ -22,8 +41,8 @@ if ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) {
 
 // Get all user domains
 exec(HESTIA_CMD . "h-list-web-domains " . $user . " json", $output, $return_var);
-$user_domains = json_decode(implode("", $output), true);
-$user_domains = array_keys($user_domains);
+$all_web = json_decode(implode("", $output), true);
+$user_domains = array_keys((array) $all_web);
 unset($output);
 
 $v_domain = $_GET["domain"];
@@ -65,9 +84,6 @@ if (!empty($v_docker_net) && empty($v_docker)) {
 	if ($v_docker_port == "") {
 		$v_docker_port = "3000";
 	}
-	exec(HESTIA_CMD . "h-list-web-domains " . $user . " json", $output, $return_var);
-	$all_web = json_decode(implode("", $output), true);
-	unset($output);
 	$used_octets = [];
 	foreach ((array) $all_web as $dname => $drow) {
 		if ($dname != $v_domain && !empty($drow["DOCKER"]) && ($drow["DOCKER_OCTET"] ?? "") != "") {
@@ -108,27 +124,12 @@ $v_aliases = str_replace(",", "\n", $data[$v_domain]["ALIAS"]);
 $valiases = explode(",", $data[$v_domain]["ALIAS"]);
 
 $v_ssl = $data[$v_domain]["SSL"];
+// Outside the branch: the POST section reads all three whether or not SSL is on
+$v_ssl_forcessl = $data[$v_domain]["SSL_FORCE"] ?? "no";
+$v_ssl_hsts = $data[$v_domain]["SSL_HSTS"] ?? "no";
+$v_http3 = $data[$v_domain]["HTTP3"] ?? "no";
 if (!empty($v_ssl)) {
-	exec(
-		HESTIA_CMD . "h-list-web-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json",
-		$output,
-		$return_var,
-	);
-	$ssl_str = json_decode(implode("", $output), true);
-	unset($output);
-	$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
-	$v_ssl_key = $ssl_str[$v_domain]["KEY"];
-	$v_ssl_ca = $ssl_str[$v_domain]["CA"];
-	$v_ssl_subject = $ssl_str[$v_domain]["SUBJECT"];
-	$v_ssl_aliases = $ssl_str[$v_domain]["ALIASES"];
-	$v_ssl_not_before = $ssl_str[$v_domain]["NOT_BEFORE"];
-	$v_ssl_not_after = $ssl_str[$v_domain]["NOT_AFTER"];
-	$v_ssl_signature = $ssl_str[$v_domain]["SIGNATURE"];
-	$v_ssl_pub_key = $ssl_str[$v_domain]["PUB_KEY"];
-	$v_ssl_issuer = $ssl_str[$v_domain]["ISSUER"];
-	$v_ssl_forcessl = $data[$v_domain]["SSL_FORCE"];
-	$v_ssl_hsts = $data[$v_domain]["SSL_HSTS"];
-	$v_http3 = $data[$v_domain]["HTTP3"];
+	extract(web_ssl_vars($user, $v_domain));
 }
 $v_letsencrypt = $data[$v_domain]["LETSENCRYPT"];
 if (empty($v_letsencrypt)) {
@@ -171,14 +172,16 @@ $v_custom_doc_domain = "";
 $v_custom_doc_folder = "";
 
 if (!empty($data[$v_domain]["CUSTOM_DOCROOT"])) {
-	$v_custom_doc_root = realpath($data[$v_domain]["CUSTOM_DOCROOT"]) . DIRECTORY_SEPARATOR;
+	// Not realpath(): an ACL denies the panel user inside customer homes, so it returned false and
+	// left "/" here - the form then showed empty fields and the next save reset the docroot.
+	$v_custom_doc_root = rtrim($data[$v_domain]["CUSTOM_DOCROOT"], "/") . DIRECTORY_SEPARATOR;
 }
 
 if (
 	!empty($v_custom_doc_root) &&
 	false !==
 		preg_match(
-			"/\/home\/" . $user_plain . "\/web\/([[:alnum:]].*?)\/public_html\/([[:alnum:]].*)?/",
+			"/\/home\/" . preg_quote($user_plain, "/") . "\/web\/([[:alnum:]].*?)\/public_html\/([[:alnum:]].*)?/",
 			$v_custom_doc_root,
 			$matches,
 		)
@@ -235,6 +238,17 @@ exec(HESTIA_CMD . "h-list-user-ips " . $user . " json", $output, $return_var);
 $ips = json_decode(implode("", $output), true);
 unset($output);
 
+// A record written by the CLI holds the public address (get_user_ip substitutes NAT), the IP list
+// is keyed by the local one. Unmatched, the select preselects nothing and the save rewrites the IP.
+if (!isset($ips[$v_ip])) {
+	foreach ($ips as $ip_local => $ip_meta) {
+		if (($ip_meta["NAT"] ?? "") === $v_ip) {
+			$v_ip = $ip_local;
+			break;
+		}
+	}
+}
+
 $v_ip_public = empty($ips[$v_ip]["NAT"]) ? $v_ip : $ips[$v_ip]["NAT"];
 
 // List web templates
@@ -261,6 +275,14 @@ if (!empty($_SESSION["PROXY_SYSTEM"])) {
 	unset($output);
 }
 
+// List docker templates - only a docker customer can pick one
+$docker_templates = [];
+if (!empty($v_docker_net)) {
+	exec(HESTIA_CMD . "h-list-web-templates-docker json", $output, $return_var);
+	$docker_templates = json_decode(implode("", $output), true) ?: [];
+	unset($output);
+}
+
 // List web stat engines
 exec(HESTIA_CMD . "h-list-web-stats json", $output, $return_var);
 $stats = json_decode(implode("", $output), true);
@@ -276,14 +298,6 @@ if (!empty($_POST["save"])) {
 	verify_csrf($_POST);
 
 	// Change web domain IP
-	$v_newip = "";
-	$v_newip_public = "";
-
-	if (!empty($_POST["v_ip"])) {
-		$v_newip = $_POST["v_ip"];
-		$v_newip_public = empty($ips[$v_newip]["NAT"]) ? $v_newip : $ips[$v_newip]["NAT"];
-	}
-
 	if ($v_ip != $_POST["v_ip"] && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
@@ -350,9 +364,11 @@ if (!empty($_POST["save"])) {
 			$restart_web = "yes";
 		}
 
-		// Change backend template
+		// Change backend template - absent for a docker domain (no pool at all), and reading the
+		// key raw was a fatal, not a warning: quoteshellarg(null) killed the whole save
 		if (
 			!empty($_SESSION["WEB_BACKEND"]) &&
+			isset($_POST["v_backend_template"]) &&
 			$v_backend_template != $_POST["v_backend_template"] &&
 			empty($_SESSION["error_msg"])
 		) {
@@ -403,12 +419,13 @@ if (!empty($_POST["save"])) {
 	if (empty($v_nginx_cache_duration)) {
 		$v_nginx_cache_duration = "";
 	}
+	// Same absent-control rule as the proxy family: a docker domain has no fastcgi cache selector
 	if (
-		($_SESSION["WEB_SYSTEM"] == "nginx" &&
+		empty($v_docker) &&
+		(($_SESSION["WEB_SYSTEM"] == "nginx" &&
 			$v_nginx_cache_check != $_POST["v_nginx_cache_check"]) ||
-		($v_nginx_cache_duration != $_POST["v_nginx_cache_duration"] &&
-			($_POST["v_nginx_cache"] = "yes") &&
-			empty($_SESSION["error_msg"]))
+			($v_nginx_cache_duration != ($_POST["v_nginx_cache_duration"] ?? "") &&
+				empty($_SESSION["error_msg"])))
 	) {
 		if ($_POST["v_nginx_cache_check"] == "on") {
 			if (empty($_POST["v_nginx_cache_duration"])) {
@@ -439,8 +456,11 @@ if (!empty($_POST["save"])) {
 		$restart_web = "yes";
 	}
 
-	// Delete proxy support
+	// Proxy support, template and extensions. All three gate on empty($v_docker) like the view
+	// does: for a docker domain nothing here is rendered, so an absent checkbox is not an unchecked
+	// one - it used to read as "customer switched the proxy off" and dropped PROXY on every save.
 	if (
+		empty($v_docker) &&
 		!empty($_SESSION["PROXY_SYSTEM"]) &&
 		!empty($v_proxy) &&
 		empty($_POST["v_proxy"]) &&
@@ -464,6 +484,7 @@ if (!empty($_POST["save"])) {
 
 	// Change proxy template / Update extension list
 	if (
+		empty($v_docker) &&
 		!empty($_SESSION["PROXY_SYSTEM"]) &&
 		!empty($v_proxy) &&
 		!empty($_POST["v_proxy"]) &&
@@ -474,11 +495,15 @@ if (!empty($_POST["save"])) {
 		$ext = preg_replace("/\s+/", " ", $ext);
 		$ext = trim($ext);
 		$ext = str_replace(" ", ", ", $ext);
-		if ($v_proxy_template != $_POST["v_proxy_template"] || $v_proxy_ext != $ext) {
+		// No posted template means no template change - the select is absent for a customer and
+		// wherever there is only one to pick. Reading the key raw made every save a change.
+		$post_proxy_template =
+			$can_edit_templates && !empty($_POST["v_proxy_template"])
+				? $_POST["v_proxy_template"]
+				: $v_proxy_template;
+		if ($v_proxy_template != $post_proxy_template || $v_proxy_ext != $ext) {
 			$ext = str_replace(", ", ",", $ext);
-			if ($can_edit_templates && !empty($_POST["v_proxy_template"])) {
-				$v_proxy_template = $_POST["v_proxy_template"];
-			}
+			$v_proxy_template = $post_proxy_template;
 			exec(
 				HESTIA_CMD .
 					"h-change-web-domain-proxy-tpl " .
@@ -502,6 +527,7 @@ if (!empty($_POST["save"])) {
 
 	// Add proxy support
 	if (
+		empty($v_docker) &&
 		!empty($_SESSION["PROXY_SYSTEM"]) &&
 		empty($v_proxy) &&
 		!empty($_POST["v_proxy"]) &&
@@ -680,28 +706,7 @@ if (!empty($_POST["save"])) {
 				$restart_web = "yes";
 				$restart_proxy = "yes";
 
-				exec(
-					HESTIA_CMD .
-						"h-list-web-domain-ssl " .
-						$user .
-						" " .
-						quoteshellarg($v_domain) .
-						" json",
-					$output,
-					$return_var,
-				);
-				$ssl_str = json_decode(implode("", $output), true);
-				unset($output);
-				$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
-				$v_ssl_key = $ssl_str[$v_domain]["KEY"];
-				$v_ssl_ca = $ssl_str[$v_domain]["CA"];
-				$v_ssl_subject = $ssl_str[$v_domain]["SUBJECT"];
-				$v_ssl_aliases = $ssl_str[$v_domain]["ALIASES"];
-				$v_ssl_not_before = $ssl_str[$v_domain]["NOT_BEFORE"];
-				$v_ssl_not_after = $ssl_str[$v_domain]["NOT_AFTER"];
-				$v_ssl_signature = $ssl_str[$v_domain]["SIGNATURE"];
-				$v_ssl_pub_key = $ssl_str[$v_domain]["PUB_KEY"];
-				$v_ssl_issuer = $ssl_str[$v_domain]["ISSUER"];
+				extract(web_ssl_vars($user, $v_domain));
 			}
 		}
 
@@ -781,28 +786,7 @@ if (!empty($_POST["save"])) {
 			$restart_web = "yes";
 			$restart_proxy = "yes";
 
-			exec(
-				HESTIA_CMD .
-					"h-list-web-domain-ssl " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" json",
-				$output,
-				$return_var,
-			);
-			$ssl_str = json_decode(implode("", $output), true);
-			unset($output);
-			$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
-			$v_ssl_key = $ssl_str[$v_domain]["KEY"];
-			$v_ssl_ca = $ssl_str[$v_domain]["CA"];
-			$v_ssl_subject = $ssl_str[$v_domain]["SUBJECT"];
-			$v_ssl_aliases = $ssl_str[$v_domain]["ALIASES"];
-			$v_ssl_not_before = $ssl_str[$v_domain]["NOT_BEFORE"];
-			$v_ssl_not_after = $ssl_str[$v_domain]["NOT_AFTER"];
-			$v_ssl_signature = $ssl_str[$v_domain]["SIGNATURE"];
-			$v_ssl_pub_key = $ssl_str[$v_domain]["PUB_KEY"];
-			$v_ssl_issuer = $ssl_str[$v_domain]["ISSUER"];
+			extract(web_ssl_vars($user, $v_domain));
 
 			// Cleanup certificate tempfiles
 			if (!empty($_POST["v_ssl_crt"])) {
@@ -976,28 +960,7 @@ if (!empty($_POST["save"])) {
 			$restart_web = "yes";
 			$restart_proxy = "yes";
 
-			exec(
-				HESTIA_CMD .
-					"h-list-web-domain-ssl " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" json",
-				$output,
-				$return_var,
-			);
-			$ssl_str = json_decode(implode("", $output), true);
-			unset($output);
-			$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
-			$v_ssl_key = $ssl_str[$v_domain]["KEY"];
-			$v_ssl_ca = $ssl_str[$v_domain]["CA"];
-			$v_ssl_subject = $ssl_str[$v_domain]["SUBJECT"];
-			$v_ssl_aliases = $ssl_str[$v_domain]["ALIASES"];
-			$v_ssl_not_before = $ssl_str[$v_domain]["NOT_BEFORE"];
-			$v_ssl_not_after = $ssl_str[$v_domain]["NOT_AFTER"];
-			$v_ssl_signature = $ssl_str[$v_domain]["SIGNATURE"];
-			$v_ssl_pub_key = $ssl_str[$v_domain]["PUB_KEY"];
-			$v_ssl_issuer = $ssl_str[$v_domain]["ISSUER"];
+			extract(web_ssl_vars($user, $v_domain));
 
 			// Cleanup certificate tempfiles
 			if (!empty($_POST["v_ssl_crt"])) {
@@ -1110,9 +1073,16 @@ if (!empty($_POST["save"])) {
 	if (!empty($v_docker_net) && empty($_SESSION["error_msg"])) {
 		$post_docker_port = preg_replace("/\D/", "", $_POST["v_docker_port"] ?? "");
 		$post_docker_octet = preg_replace("/\D/", "", $_POST["v_docker_octet"] ?? "1");
+		// Absent select (single template, or none offered) keeps what the domain has
+		$post_docker_tpl = !empty($_POST["v_docker_template"])
+			? $_POST["v_docker_template"]
+			: ($v_docker ?: "default");
 		if (
 			!empty($_POST["v_docker"]) &&
-			(empty($v_docker) || $post_docker_port != $v_docker_port || $post_docker_octet != $v_docker_octet)
+			(empty($v_docker) ||
+				$post_docker_port != $v_docker_port ||
+				$post_docker_octet != $v_docker_octet ||
+				$post_docker_tpl != $v_docker)
 		) {
 			exec(
 				HESTIA_CMD .
@@ -1123,14 +1093,16 @@ if (!empty($_POST["save"])) {
 					" " .
 					quoteshellarg($post_docker_port) .
 					" " .
-					quoteshellarg($post_docker_octet),
+					quoteshellarg($post_docker_octet) .
+					" " .
+					quoteshellarg($post_docker_tpl),
 				$output,
 				$return_var,
 			);
 			check_return_code($return_var, $output);
 			unset($output);
 			if (empty($_SESSION["error_msg"])) {
-				$v_docker = "default";
+				$v_docker = $post_docker_tpl;
 				$v_docker_port = $post_docker_port;
 				$v_docker_octet = $post_docker_octet;
 				$restart_web = "yes";
@@ -1342,8 +1314,9 @@ if (!empty($_POST["save"])) {
 				continue;
 			}
 
+			// $user is shell-quoted ('bob'), so this pattern never matched and the prefix stayed
 			$v_ftp_user_data["v_ftp_user"] = preg_replace(
-				"/^" . $user . "_/i",
+				"/^" . preg_quote($user_plain, "/") . "_/i",
 				"",
 				$v_ftp_user_data["v_ftp_user"],
 			);
@@ -1354,12 +1327,15 @@ if (!empty($_POST["save"])) {
 				) {
 					$_SESSION["error_msg"] = _("Please enter a valid email address.");
 				}
+				// per account: a shared list made every later account inherit the first one's error,
+				// and $i here would shadow the key of the loop this sits in
+				$errors = [];
 				if (empty($v_ftp_user_data["v_ftp_user"])) {
 					$errors[] = "ftp user";
 				}
 				if (!empty($errors[0])) {
-					foreach ($errors as $i => $error) {
-						if ($i == 0) {
+					foreach ($errors as $err_i => $error) {
+						if ($err_i == 0) {
 							$error_msg = $error;
 						} else {
 							$error_msg = $error_msg . ", " . $error;
@@ -1397,7 +1373,6 @@ if (!empty($_POST["save"])) {
 					check_return_code($return_var, $output);
 					if (!empty($v_ftp_user_data["v_ftp_email"]) && empty($_SESSION["error_msg"])) {
 						$to = $v_ftp_user_data["v_ftp_email"];
-						$template = get_email_template("ftp_credentials", $_SESSION["language"]);
 						$hostname = get_hostname();
 						$from = !empty($_SESSION["FROM_EMAIL"])
 							? $_SESSION["FROM_EMAIL"]
@@ -1405,10 +1380,8 @@ if (!empty($_POST["save"])) {
 						$from_name = !empty($_SESSION["FROM_NAME"])
 							? $_SESSION["FROM_NAME"]
 							: $_SESSION["APP_NAME"];
-						$template = get_email_template(
-							"ftpaccount_created",
-							$data[$user]["LANGUAGE"],
-						);
+						// $data holds the domain, not the user - its LANGUAGE key was always null
+						$template = get_email_template("ftpaccount_created", $_SESSION["language"]);
 						if (!empty($template)) {
 							preg_match("/<subject>(.*?)<\/subject>/si", $template, $matches);
 							$subject = $matches[1];
@@ -1509,12 +1482,13 @@ if (!empty($_POST["save"])) {
 			}
 
 			if (!empty($_POST["v_ftp"])) {
+				$errors = [];
 				if (empty($v_ftp_user_data["v_ftp_user"])) {
 					$errors[] = _("Username");
 				}
 				if (!empty($errors[0])) {
-					foreach ($errors as $i => $error) {
-						if ($i == 0) {
+					foreach ($errors as $err_i => $error) {
+						if ($err_i == 0) {
 							$error_msg = $error;
 						} else {
 							$error_msg = $error_msg . ", " . $error;
@@ -1564,11 +1538,12 @@ if (!empty($_POST["save"])) {
 						$output,
 						$return_var,
 					);
+					check_return_code($return_var, $output);
+					unset($output);
 					unlink($v_ftp_password);
 				}
 				if (!empty($v_ftp_user_data["v_ftp_email"]) && empty($_SESSION["error_msg"])) {
 					$to = $v_ftp_user_data["v_ftp_email"];
-					$template = get_email_template("ftp_credentials", $_SESSION["language"]);
 					$hostname = get_hostname();
 					$from = !empty($_SESSION["FROM_EMAIL"])
 						? $_SESSION["FROM_EMAIL"]
@@ -1576,7 +1551,7 @@ if (!empty($_POST["save"])) {
 					$from_name = !empty($_SESSION["FROM_NAME"])
 						? $_SESSION["FROM_NAME"]
 						: $_SESSION["APP_NAME"];
-					$template = get_email_template("ftpaccount_created", $data[$user]["LANGUAGE"]);
+					$template = get_email_template("ftpaccount_created", $_SESSION["language"]);
 					if (!empty($template)) {
 						preg_match("/<subject>(.*?)<\/subject>/si", $template, $matches);
 						$subject = $matches[1];
@@ -1659,6 +1634,7 @@ if (!empty($_POST["save"])) {
 		check_return_code($return_var, $output);
 		unset($output);
 		unset($_POST["h-custom-doc-domain"], $_POST["h-custom-doc-folder"]);
+		$v_custom_doc_root = "";
 		$restart_web = "yes";
 		$restart_proxy = "yes";
 	}
@@ -1702,12 +1678,14 @@ if (!empty($_POST["save"])) {
 			);
 			check_return_code($return_var, $output);
 			unset($output);
-			$v_custom_doc_root = 1;
+			$v_custom_doc_root =
+				$v_custom_doc_root_prepath .
+				trim($_POST["h-custom-doc-domain"], "'") .
+				"/public_html" .
+				rtrim($_POST["h-custom-doc-folder"] ?? "", "/");
 		}
 		$restart_web = "yes";
 		$restart_proxy = "yes";
-	} else {
-		unset($v_custom_doc_root);
 	}
 
 	if (!empty($v_redirect) && empty($_POST["h-redirect-checkbox"])) {
@@ -1811,7 +1789,7 @@ foreach ($v_ftp_users_raw as $v_ftp_user_index => $v_ftp_user_val) {
 	}
 	$v_ftp_users[] = [
 		"is_new" => 0,
-		"v_ftp_user" => preg_replace("/^" . $user_plain . "_/", "", $v_ftp_user_val),
+		"v_ftp_user" => preg_replace("/^" . preg_quote($user_plain, "/") . "_/", "", $v_ftp_user_val),
 		"v_ftp_password" => $v_ftp_password,
 		"v_ftp_path" => isset($v_ftp_users_paths_raw[$v_ftp_user_index])
 			? $v_ftp_users_paths_raw[$v_ftp_user_index]

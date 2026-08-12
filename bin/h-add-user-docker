@@ -101,6 +101,12 @@ k="$(identity_k_from_uid "$uid")" \
 		exit "$E_INVALID"
 	}
 companion="${user}-docker"
+# Group names cap at 32 on every target and the companion needs its own group, so a customer name
+# over 25 characters would only fail deep inside groupadd, with the account already created.
+[ ${#companion} -le 32 ] || {
+	echo "ERROR: user name '$user' is too long for docker - the companion '$companion' exceeds 32 characters."
+	exit "$E_INVALID"
+}
 companion_uid=$((uid - IDENTITY_BLOCK))
 sub_base="$(identity_sub_base_from_k "$k")"
 companion_home="$HOMEDIR/$user/.companion"
