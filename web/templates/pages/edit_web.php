@@ -395,6 +395,8 @@
 						</div>
 					<?php } ?>
 					<?php if (empty($v_docker) && !empty($_SESSION["WEB_BACKEND"])) { ?>
+						<?php // profile choice is capacity allocation - a customer would simply pick 'high' ?>
+						<?php if ($_SESSION["userContext"] === "admin" || ($_SESSION["userContext"] === "user" && $_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] === "yes")) { ?>
 						<div class="u-mb10">
 								<label for="v_backend_template" class="form-label">
 									<?= tohtml( _("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
@@ -415,6 +417,7 @@
 								?>
 							</select>
 						</div>
+						<?php } ?>
 						<div class="u-mb10">
 								<label for="v_php_version" class="form-label"><?= tohtml( _("PHP Version")) ?></label>
 							<select class="form-select" name="v_php_version" id="v_php_version">
