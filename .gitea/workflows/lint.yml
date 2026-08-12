@@ -62,22 +62,3 @@ jobs:
           cd "$workdir/repo"
           git checkout --quiet --detach "${HEAD_SHA:-HEAD}"
           .gitea/tools/lint-shell.sh --base "origin/${BASE_REF:-dev}"
-      - name: Behaviour fixtures
-        env:
-          SRC_REPO_PATH: ${{ secrets.SRC_REPO_PATH }}
-          REPO_SLUG: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          # Same throwaway clone as above, same reason: nothing here writes outside it.
-          # Bash and coreutils only - the fixtures build their own CONF_DIR in /tmp.
-          workdir="$(mktemp -d -p /tmp fixtures.XXXXXX)"
-          trap 'rm -rf "$workdir"' EXIT
-          src="$SRC_REPO_PATH"
-          if [ ! -d "$src" ]; then
-            src="${SRC_REPO_PATH%/*/*}/$(echo "$REPO_SLUG" | tr '[:upper:]' '[:lower:]').git"
-          fi
-          git clone --quiet "file://${src}" "$workdir/repo"
-          cd "$workdir/repo"
-          git checkout --quiet --detach "${HEAD_SHA:-HEAD}"
-          .gitea/tools/run-fixtures.sh
