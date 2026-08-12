@@ -8,7 +8,8 @@
 #
 # Pure bash: stages are functions in this file; shared helpers live in
 # func/helper.sh; component install logic reuses the existing h-add-sys-*
-# commands where they exist. Idempotent via $CONF_DIR/.done.* sentinels.
+# commands where they exist. Idempotent via $CONF_DIR/.done.* sentinels, each carrying the
+# fingerprint of the install.conf it ran with - re-answering the wizard re-runs the stages.
 
 set -eo pipefail
 
@@ -98,11 +99,31 @@ wcv() {
 # truthiness helper for COMPONENT_* values
 is_on() { [ "${1:-}" = "true" ] || [ "${1:-}" = "yes" ]; }
 
+# A stage is only "done" for the answers it ran with. The wizard can be re-run - a mistyped screen
+# on a tablet is enough - and a marker keyed on the stage name alone then skips work whose
+# configuration has since changed. That box had MariaDB selected on the second pass and no
+# database at all, and the failure only surfaced two stages later as "MySQL not available".
+# Usage: stage_done <name>  ->  0 when the stage ran with THIS install.conf
+stage_done() {
+	local marker="$CONF_DIR/.done.$1"
+	[ -f "$marker" ] || return 1
+	[ "$(cat "$marker" 2> /dev/null)" = "$(stage_fingerprint)" ]
+}
+
+# Usage: stage_mark <name>
+stage_mark() {
+	stage_fingerprint > "$CONF_DIR/.done.$1"
+}
+
+stage_fingerprint() {
+	sha256sum "$CONF_DIR/install.conf" 2> /dev/null | cut -f 1 -d ' '
+}
+
 # ════════════════════════════════════════════════════════════════════════════
 # Stage: base — APT repos, OS packages, system users, SSH, NTP, /proc
 # ════════════════════════════════════════════════════════════════════════════
 install_base() {
-	[ -f "$CONF_DIR/.done.base" ] && { echo "[ skip ] base already configured"; return 0; }
+	stage_done base && { echo "[ skip ] base already configured"; return 0; }
 	echo "[ * ] Configuring APT..."
 	[ -f /etc/apt/apt.conf.d/80-retries ] || echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
 	echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/90nolang
@@ -180,7 +201,7 @@ EOF
 	chmod 644 /etc/ssl/dhparam.pem
 	[ -s /etc/ssl/dhparam.pem ] || { echo "ERROR: /etc/ssl/dhparam.pem missing after base stage" >&2; exit 1; }
 
-	touch "$CONF_DIR/.done.base"
+	stage_mark base
 	echo "[ OK ] base complete"
 }
 
@@ -188,7 +209,7 @@ EOF
 # Stage: panel — Caddy + hestia-php.service
 # ════════════════════════════════════════════════════════════════════════════
 install_panel() {
-	[ -f "$CONF_DIR/.done.panel" ] && { echo "[ skip ] panel already configured"; return 0; }
+	stage_done panel && { echo "[ skip ] panel already configured"; return 0; }
 	echo "[ * ] Installing panel packages (Caddy, PHP $PHP_VER FPM)..."
 	# gd/bz2/pgsql (phpMyAdmin/Adminer) + intl/exif (webmail) installed unconditionally
 	# so the panel PHP is self-contained; wired into the isolated conf.d by hestia-php-confd
@@ -254,7 +275,7 @@ install_panel() {
 	# during package install, so `start` would be a no-op and our panel config
 	# (port 8083) would never load — caddy would keep serving :80 (#162).
 	systemctl restart caddy
-	touch "$CONF_DIR/.done.panel"
+	stage_mark panel
 	echo "[ OK ] panel complete"
 }
 
@@ -265,7 +286,7 @@ install_panel() {
 # configure_apache2 now lives in func/web-model.sh (shared with the model switch, #120)
 
 install_web() {
-	[ -f "$CONF_DIR/.done.web" ] && { echo "[ skip ] web already configured"; return 0; }
+	stage_done web && { echo "[ skip ] web already configured"; return 0; }
 	echo "[ * ] Installing web packages (nginx, PHP $PHP_VER extensions)..."
 	hestia_apt -y install \
 		nginx \
@@ -400,7 +421,7 @@ install_web() {
 	cp -f "$HESTIA/share/apache2/httpd-prerotate/"* /etc/logrotate.d/httpd-prerotate/ 2>/dev/null || true
 	rm -f /etc/cron.d/awstats
 
-	touch "$CONF_DIR/.done.web"
+	stage_mark web
 	echo "[ OK ] web complete"
 }
 
@@ -408,7 +429,7 @@ install_web() {
 # Stage: db — MariaDB (+ phpMyAdmin / PostgreSQL / Redis per components)
 # ════════════════════════════════════════════════════════════════════════════
 install_db() {
-	[ -f "$CONF_DIR/.done.db" ] && { echo "[ skip ] db already configured"; return 0; }
+	stage_done db && { echo "[ skip ] db already configured"; return 0; }
 
 	# MariaDB lifecycle lives in h-add-sys-mariadb. Hard-fail: the panel needs a DB.
 	if is_on "${COMPONENT_DB_MARIADB:-}"; then
@@ -439,7 +460,7 @@ install_db() {
 			|| echo "[ ! ] Redis install reported an issue (see $LOG)"
 	fi
 
-	touch "$CONF_DIR/.done.db"
+	stage_mark db
 	echo "[ OK ] db complete"
 }
 
@@ -447,7 +468,7 @@ install_db() {
 # Stage: mail — exim4, dovecot, rspamd, webmailer (only if mail block present)
 # ════════════════════════════════════════════════════════════════════════════
 install_mail() {
-	[ -f "$CONF_DIR/.done.mail" ] && { echo "[ skip ] mail already configured"; return 0; }
+	stage_done mail && { echo "[ skip ] mail already configured"; return 0; }
 	echo "[ * ] Installing mail packages (exim4, dovecot)..."
 	# sieve packages are not here — the sieve addon installs them when selected
 	hestia_apt -y install \
@@ -543,7 +564,7 @@ install_mail() {
 			;;
 	esac
 
-	touch "$CONF_DIR/.done.mail"
+	stage_mark mail
 	echo "[ OK ] mail complete"
 }
 
@@ -551,7 +572,7 @@ install_mail() {
 # Stage: security — fail2ban (optional), iptables, ipset, crowdsec (optional)
 # ════════════════════════════════════════════════════════════════════════════
 install_security() {
-	[ -f "$CONF_DIR/.done.security" ] && { echo "[ skip ] security already configured"; return 0; }
+	stage_done security && { echo "[ skip ] security already configured"; return 0; }
 	# nftables and nothing else: it IS the backend (func/firewall.sh renders one inet table and shells
 	# /usr/sbin/nft), and it used to arrive only as a Recommends of iptables - which Debian's base image
 	# happens to satisfy and Ubuntu's does not. iptables and ipset are gone with the old renderer: no code
@@ -610,7 +631,7 @@ install_security() {
 	# system IP setup (iptables/ipset rules) runs in the configure stage — the
 	# rules live under /etc/hestia now, not in the install tree.
 
-	touch "$CONF_DIR/.done.security"
+	stage_mark security
 	echo "[ OK ] security complete"
 }
 
@@ -618,7 +639,7 @@ install_security() {
 # Stage: addons — proftpd / docker / filemanager (per components)
 # ════════════════════════════════════════════════════════════════════════════
 install_addons() {
-	[ -f "$CONF_DIR/.done.addons" ] && { echo "[ skip ] addons already configured"; return 0; }
+	stage_done addons && { echo "[ skip ] addons already configured"; return 0; }
 	if is_on "${COMPONENT_ADDON_PROFTPD:-}"; then
 		echo "[ * ] Installing ProFTPD..."
 		"$BIN/h-add-sys-proftpd" >> "$LOG" 2>&1 || true
@@ -631,7 +652,7 @@ install_addons() {
 		echo "[ * ] Installing File Manager..."
 		"$BIN/h-add-sys-filemanager" >> "$LOG" 2>&1 || true
 	fi
-	touch "$CONF_DIR/.done.addons"
+	stage_mark addons
 	echo "[ OK ] addons complete"
 }
 
@@ -663,7 +684,7 @@ init_hestia_structure() {
 # Stage: configure — admin user, SSL, sudoers, firewall, default domain, cron
 # ════════════════════════════════════════════════════════════════════════════
 configure_hestia() {
-	[ -f "$CONF_DIR/.done.configure" ] && { echo "[ skip ] configure already done"; return 0; }
+	stage_done configure && { echo "[ skip ] configure already done"; return 0; }
 	local mail_present="no"
 	is_on "${COMPONENT_MAIL_BLOCK_PRESENT:-}" && mail_present="yes"
 
@@ -793,7 +814,7 @@ configure_hestia() {
 	[ -f /root/.bashrc ] && grep -q 'hestia.sh' /root/.bashrc \
 		|| printf 'if [ "${PATH#*/usr/local/hestia/bin*}" = "$PATH" ]; then\n    . /etc/profile.d/hestia.sh\nfi\n' >> /root/.bashrc
 
-	touch "$CONF_DIR/.done.configure"
+	stage_mark configure
 	echo "[ OK ] configure complete"
 }
 
