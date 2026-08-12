@@ -83,6 +83,7 @@
     </FilesMatch>
     SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0
 
+    IncludeOptional %home%/%user%/conf/web/%domain%/apache2.hsts.conf*
     IncludeOptional %home%/%user%/conf/web/%domain%/%web_system%.ssl.conf_*
     IncludeOptional /etc/apache2/conf.d/*.inc
 </VirtualHost>

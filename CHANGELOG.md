@@ -22,6 +22,14 @@ opens above it.
 
 ### Fixed
 
+- **HSTS was a silent no-op on an apache front** (#638). `h-add-web-domain-ssl-hsts` reported success
+  and set `SSL_HSTS='yes'`, but wrote nginx syntax whatever the front was, and no apache template
+  included the fragment - so the switch was on, the record said yes, and no browser was ever told.
+  The two defects covered each other: adding only the include would have fed `add_header` to apache
+  and broken `configtest` for the whole box. The fragment now carries the directive of the front that
+  reads it, both apache templates include it inside the SSL vhost, and the delete side resolves the
+  same path. A smoke guard catches the state that was invisible: a domain claiming HSTS whose
+  fragment is missing or written for the other server.
 - **Object reads matched a domain as a regular expression** (#594). The dot in a domain is a wildcard,
   so with `a.b.com` and `aXb.com` on one box - which the creation guard allows - a read on one could
   return the other's record, `is_object_valid` could confirm a domain that does not exist, and

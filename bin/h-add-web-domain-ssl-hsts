@@ -50,14 +50,17 @@ if [ "$SSL" != 'yes' ]; then
 	exit "$E_NOTEXIST"
 fi
 
-# Check for Apache/Nginx or Nginx/PHP-FPM configuration
-if [ -z "$PROXY_SYSTEM" ]; then
-	hstsconf="$HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.hsts.conf"
-else
-	hstsconf="$HOMEDIR/$user/conf/web/$domain/$PROXY_SYSTEM.hsts.conf"
-fi
+# The front that will read the fragment decides both its name and its syntax. Only the name used
+# to follow the front, so an apache box got an nginx directive - which no apache template included,
+# so the switch reported success and no browser was ever told (#638).
+front="${PROXY_SYSTEM:-$WEB_SYSTEM}"
+hstsconf="$HOMEDIR/$user/conf/web/$domain/$front.hsts.conf"
 
-echo 'add_header Strict-Transport-Security "max-age=31536000;" always;' > $hstsconf
+if [ "$front" = 'apache2' ]; then
+	echo 'Header always set Strict-Transport-Security "max-age=31536000;"' > $hstsconf
+else
+	echo 'add_header Strict-Transport-Security "max-age=31536000;" always;' > $hstsconf
+fi
 
 chown root:$user $hstsconf
 chmod 640 $hstsconf
