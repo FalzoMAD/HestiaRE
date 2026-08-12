@@ -406,7 +406,17 @@ add_web_config() {
 			return 0
 		fi
 		WEBTPL_LOCATION="$WEBTPL/docker/$1"
-		set -- "$1" "$DOCKER.tpl"
+		# The field keeps the chosen NAME across a web-model switch, but templates/docker/ is per
+		# system and a custom nginx docker template has no apache twin. Fall back to this system's
+		# default rather than skip the render - a docker domain without a front is an outage - and
+		# switching back restores the custom template, since the field never changed. TPL/PROXY go
+		# through accept_web_template for this; DOCKER deliberately stays this simple.
+		if [ ! -f "$WEBTPL_LOCATION/$DOCKER.tpl" ] && [ -f "$WEBTPL_LOCATION/default.tpl" ]; then
+			echo "Warning: docker template '$DOCKER' has no $1 variant - rendering default for $domain" >&2
+			set -- "$1" "default.tpl"
+		else
+			set -- "$1" "$DOCKER.tpl"
+		fi
 	fi
 
 	# A missing template would become a 0-byte vhost that apache2 -t accepts. Warn +

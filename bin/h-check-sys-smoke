@@ -699,6 +699,36 @@ check_web_http3_orphan() {
 	fi
 }
 
+# check_web_docker_wildcard - the add-command's wildcard check is a snapshot: a customer can bind
+# 0.0.0.0 tomorrow, or an addon can take a new wildcard port. The docker domain then keeps its
+# port, the customer bind silently fails and the outage shows at the NEIGHBOUR, not the causer
+# (measured, #566). This is the standing counterpart: no wildcard listener may hold a port a
+# docker domain proxies to.
+check_web_docker_wildcard() {
+	local u line d port hit=0 first="" checked=0 wildcards
+	wildcards=$(ss -ltnH 2> /dev/null | awk '{print $4}' \
+		| grep -E '^(0\.0\.0\.0|\*|\[::\]):' | grep -oE '[0-9]+$' | sort -u)
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		[ -f "$CONF_DIR/users/$u/web.conf" ] || continue
+		while IFS= read -r line; do
+			grep -q "DOCKER='[^']" <<< "$line" || continue
+			port=$(sed -n "s/.*DOCKER_PORT='\([^']*\)'.*/\1/p" <<< "$line")
+			[ -n "$port" ] || continue
+			checked=$((checked + 1))
+			if grep -qxF "$port" <<< "$wildcards"; then
+				hit=$((hit + 1))
+				d=$(sed -n "s/.*DOMAIN='\([^']*\)'.*/\1/p" <<< "$line")
+				[ -z "$first" ] && first="wildcard listener holds docker port $port ($u/$d)"
+			fi
+		done < "$CONF_DIR/users/$u/web.conf"
+	done
+	if [ "$hit" -eq 0 ]; then
+		ok "no wildcard listener on a docker domain port ($checked checked)"
+	else
+		no "$hit docker domain port(s) held by a wildcard listener" "$first"
+	fi
+}
+
 # check_vhost_nonempty - a 0-byte vhost passes apache2 -t and the domain silently falls
 # through to the box default vhost.
 check_vhost_nonempty() {
@@ -1127,6 +1157,7 @@ if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
 fi
 check_vhost_nonempty
 check_web_http3_orphan
+check_web_docker_wildcard
 # #120: the model-switch freeze + pre-check coverage cannot rot; a crash is surfaced.
 check_web_lock_coverage
 check_web_switch_prechecks
