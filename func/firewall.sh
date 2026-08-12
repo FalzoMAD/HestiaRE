@@ -344,11 +344,8 @@ fw_local_allowed_uids() {
 	fi
 }
 
-# Per-customer docker /24 separation (#566). Host-local addressing has no owner: every shell user
-# reaches every customer's containers, only the connecting uid tells them apart (measured). One
-# rule per customer over the whole /24. The webserver is in the allowlist BY DESIGN - without it
-# the separation cuts off exactly the proxy path this exists for. Derived from the user records on
-# every render, so it survives a full firewall rebuild the way an imperative rule would not (#613).
+# Every local user reaches every customer's containers (host-local has no owner): one rule per
+# /24, derived from the user records each render. The webserver allowlist keeps the proxy path.
 fw_restrict_docker_nets() {
 	local uconf u net uid cuid web uids
 	web="$(id -u www-data 2> /dev/null)"

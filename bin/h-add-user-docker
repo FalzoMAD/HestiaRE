@@ -142,10 +142,8 @@ if [ -n "$backup_scope" ] || ! grep -q "^DOCKER_BACKUP='" "$USER_DATA/user.conf"
 	echo "Backup scope: $scope"
 fi
 
-# One loopback /24 per customer (#566): DOCKER_IP is its .1 and the daemon's default bind, so a
-# plain compose file publishes there with no address in it. The other octets are the customer's
-# for multi-app setups (all of 127/8 binds on lo unconfigured); the domain picks its octet in the
-# panel. A restored /24 is kept when still free; otherwise first-free third octet.
+# One loopback /24 per customer: .1 is the daemon default bind, so a plain compose file needs no
+# address; the domain picks its octet per app. Keep a restored /24 when free, else first-free.
 docker_ip="$(get_user_value '$DOCKER_IP')"
 if [ -n "$docker_ip" ]; then
 	docker_net="${docker_ip%.*}"
@@ -248,9 +246,8 @@ override_want="$(sed -e "s|__RUNSOCK__|/run/user/$companion_uid/docker.sock|g" \
 	-e "s|__SOCK__|$companion_home/docker.sock|g" -e "s|__GID__|1000|g" \
 	"$HESTIA/share/docker/systemd/docker-rootless-override.conf")"
 
-# BOTH keys, not just "ip": "ip" covers only the default bridge, and compose creates a project
-# network per stack that escapes it - default-network-opts extends the bind address to every newly
-# created bridge net (measured, docs: docker-netzwerk-messung.md part 2).
+# BOTH keys: "ip" covers only the default bridge and compose creates a project net per stack;
+# default-network-opts extends the bind to every new bridge net (measured).
 daemon_json="$companion_home/.config/docker/daemon.json"
 daemon_json_want="$(printf '{\n  "ip": "%s",\n  "default-network-opts": {\n    "bridge": {\n      "com.docker.network.bridge.host_binding_ipv4": "%s"\n    }\n  }\n}' "$docker_ip" "$docker_ip")"
 
@@ -304,8 +301,7 @@ rm -f "$setup_log"
 
 echo "Docker is enabled for $user."
 
-# The /24 separation rule is rendered from the user records (#566) - re-render so it follows
-# enable/disable immediately instead of waiting for the next unrelated firewall update
+# The /24 separation rule renders from the user records; follow enable/disable immediately
 if [ -n "$FIREWALL_SYSTEM" ]; then
 	$BIN/h-update-firewall > /dev/null 2>&1
 fi

@@ -78,17 +78,15 @@ getent group "$companion" > /dev/null 2>&1 && /usr/sbin/groupdel "$companion" > 
 sed -i "/^${companion}:/d" /etc/subuid /etc/subgid 2> /dev/null
 rm -rf "$companion_home"
 
-# Free the loopback address: allocation is first-free over the user records, so a lingering field
-# would hold it forever (#566). A later re-enable simply allocates again - usually the same one.
-# DOCKER_BACKUP stays on purpose (a scope preference, not a held resource).
+# Free the address: a lingering field would hold it forever against the first-free allocation.
+# DOCKER_BACKUP stays (a preference, not a held resource).
 sed -i "/^DOCKER_IP='/d" "$USER_DATA/user.conf" 2> /dev/null
 
 # profile.d stays: guarded on the socket, so inert here, and others may still use it.
 
 echo "Docker is disabled for $user."
 
-# The /24 separation rule is rendered from the user records (#566) - re-render so it follows
-# enable/disable immediately instead of waiting for the next unrelated firewall update
+# The /24 separation rule renders from the user records; follow enable/disable immediately
 if [ -n "$FIREWALL_SYSTEM" ]; then
 	$BIN/h-update-firewall > /dev/null 2>&1
 fi
