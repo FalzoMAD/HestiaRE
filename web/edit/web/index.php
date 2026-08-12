@@ -323,10 +323,13 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	if (
-		$_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] == "yes" ||
-		$_SESSION["userContext"] === "admin"
-	) {
+	// Template and pool choices are capacity/stability decisions: the REAL identity gates them
+	// (an impersonating admin keeps them, #438/#566), the policy can open them to customers.
+	// PHP version and proxy extensions below stay customer-editable - view and POST agree.
+	$can_edit_templates =
+		($_SESSION["adminContext"] ?? "") === "admin" ||
+		($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") == "yes";
+	if ($can_edit_templates) {
 		// Change template - only when the selector was shown and submitted; on apache-web models
 		// it is hidden (renders from share/), so an absent field must not reset TPL to empty
 		if (isset($_POST["v_template"]) && $v_template != $_POST["v_template"] && empty($_SESSION["error_msg"])) {
@@ -369,152 +372,116 @@ if (!empty($_POST["save"])) {
 			unset($output);
 		}
 
-		// Change PHP version (its own field since #591)
-		if (
-			!empty($_SESSION["WEB_BACKEND"]) &&
-			isset($_POST["v_php_version"]) &&
-			$v_php_version != $_POST["v_php_version"] &&
-			empty($_SESSION["error_msg"])
-		) {
-			$v_php_version = $_POST["v_php_version"];
+	}
+	// Change PHP version (its own field since #591)
+	if (
+		!empty($_SESSION["WEB_BACKEND"]) &&
+		isset($_POST["v_php_version"]) &&
+		$v_php_version != $_POST["v_php_version"] &&
+		empty($_SESSION["error_msg"])
+	) {
+		$v_php_version = $_POST["v_php_version"];
+		exec(
+			HESTIA_CMD .
+				"h-change-web-domain-php " .
+				$user .
+				" " .
+				quoteshellarg($v_domain) .
+				" " .
+				quoteshellarg($v_php_version),
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		unset($output);
+	}
+
+	// Enable/Disable nginx cache
+	if (empty($_POST["v_nginx_cache_check"])) {
+		$_POST["v_nginx_cache_check"] = "";
+	}
+	if (empty($v_nginx_cache_duration)) {
+		$v_nginx_cache_duration = "";
+	}
+	if (
+		($_SESSION["WEB_SYSTEM"] == "nginx" &&
+			$v_nginx_cache_check != $_POST["v_nginx_cache_check"]) ||
+		($v_nginx_cache_duration != $_POST["v_nginx_cache_duration"] &&
+			($_POST["v_nginx_cache"] = "yes") &&
+			empty($_SESSION["error_msg"]))
+	) {
+		if ($_POST["v_nginx_cache_check"] == "on") {
+			if (empty($_POST["v_nginx_cache_duration"])) {
+				$_POST["v_nginx_cache_duration"] = "2m";
+			}
 			exec(
 				HESTIA_CMD .
-					"h-change-web-domain-php " .
+					"h-add-fastcgi-cache " .
 					$user .
 					" " .
 					quoteshellarg($v_domain) .
 					" " .
-					quoteshellarg($v_php_version),
+					quoteshellarg($_POST["v_nginx_cache_duration"]),
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+		} else {
+			exec(
+				HESTIA_CMD . "h-delete-fastcgi-cache " . $user . " " . quoteshellarg($v_domain),
 				$output,
 				$return_var,
 			);
 			check_return_code($return_var, $output);
 			unset($output);
 		}
+		$restart_web = "yes";
+	}
 
-		// Enable/Disable nginx cache
-		if (empty($_POST["v_nginx_cache_check"])) {
-			$_POST["v_nginx_cache_check"] = "";
-		}
-		if (empty($v_nginx_cache_duration)) {
-			$v_nginx_cache_duration = "";
-		}
-		if (
-			($_SESSION["WEB_SYSTEM"] == "nginx" &&
-				$v_nginx_cache_check != $_POST["v_nginx_cache_check"]) ||
-			($v_nginx_cache_duration != $_POST["v_nginx_cache_duration"] &&
-				($_POST["v_nginx_cache"] = "yes") &&
-				empty($_SESSION["error_msg"]))
-		) {
-			if ($_POST["v_nginx_cache_check"] == "on") {
-				if (empty($_POST["v_nginx_cache_duration"])) {
-					$_POST["v_nginx_cache_duration"] = "2m";
-				}
-				exec(
-					HESTIA_CMD .
-						"h-add-fastcgi-cache " .
-						$user .
-						" " .
-						quoteshellarg($v_domain) .
-						" " .
-						quoteshellarg($_POST["v_nginx_cache_duration"]),
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
-			} else {
-				exec(
-					HESTIA_CMD . "h-delete-fastcgi-cache " . $user . " " . quoteshellarg($v_domain),
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
-			}
-			$restart_web = "yes";
-		}
+	// Delete proxy support
+	if (
+		!empty($_SESSION["PROXY_SYSTEM"]) &&
+		!empty($v_proxy) &&
+		empty($_POST["v_proxy"]) &&
+		empty($_SESSION["error_msg"])
+	) {
+		exec(
+			HESTIA_CMD .
+				"h-delete-web-domain-proxy " .
+				$user .
+				" " .
+				quoteshellarg($v_domain) .
+				" 'no'",
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		unset($output);
+		unset($v_proxy);
+		$restart_web = "yes";
+	}
 
-		// Delete proxy support
-		if (
-			!empty($_SESSION["PROXY_SYSTEM"]) &&
-			!empty($v_proxy) &&
-			empty($_POST["v_proxy"]) &&
-			empty($_SESSION["error_msg"])
-		) {
-			exec(
-				HESTIA_CMD .
-					"h-delete-web-domain-proxy " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" 'no'",
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			unset($v_proxy);
-			$restart_web = "yes";
-		}
-
-		// Change proxy template / Update extension list
-		if (
-			!empty($_SESSION["PROXY_SYSTEM"]) &&
-			!empty($v_proxy) &&
-			!empty($_POST["v_proxy"]) &&
-			empty($_SESSION["error_msg"])
-		) {
-			$ext = preg_replace("/\n/", " ", $_POST["v_proxy_ext"]);
-			$ext = preg_replace("/,/", " ", $ext);
-			$ext = preg_replace("/\s+/", " ", $ext);
-			$ext = trim($ext);
-			$ext = str_replace(" ", ", ", $ext);
-			if ($v_proxy_template != $_POST["v_proxy_template"] || $v_proxy_ext != $ext) {
-				$ext = str_replace(", ", ",", $ext);
-				if (!empty($_POST["v_proxy_template"])) {
-					$v_proxy_template = $_POST["v_proxy_template"];
-				}
-				exec(
-					HESTIA_CMD .
-						"h-change-web-domain-proxy-tpl " .
-						$user .
-						" " .
-						quoteshellarg($v_domain) .
-						" " .
-						quoteshellarg($v_proxy_template) .
-						" " .
-						quoteshellarg($ext) .
-						" 'no'",
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				$v_proxy_ext = str_replace(",", ", ", $ext);
-				unset($output);
-				$restart_proxy = "yes";
-			}
-		}
-
-		// Add proxy support
-		if (
-			!empty($_SESSION["PROXY_SYSTEM"]) &&
-			empty($v_proxy) &&
-			!empty($_POST["v_proxy"]) &&
-			empty($_SESSION["error_msg"])
-		) {
-			$v_proxy_template = $_POST["v_proxy_template"];
-			if (!empty($_POST["v_proxy_ext"])) {
-				$ext = preg_replace("/\n/", " ", $_POST["v_proxy_ext"]);
-				$ext = preg_replace("/,/", " ", $ext);
-				$ext = preg_replace("/\s+/", " ", $ext);
-				$ext = trim($ext);
-				$ext = str_replace(" ", ",", $ext);
-				$v_proxy_ext = str_replace(",", ", ", $ext);
+	// Change proxy template / Update extension list
+	if (
+		!empty($_SESSION["PROXY_SYSTEM"]) &&
+		!empty($v_proxy) &&
+		!empty($_POST["v_proxy"]) &&
+		empty($_SESSION["error_msg"])
+	) {
+		$ext = preg_replace("/\n/", " ", $_POST["v_proxy_ext"]);
+		$ext = preg_replace("/,/", " ", $ext);
+		$ext = preg_replace("/\s+/", " ", $ext);
+		$ext = trim($ext);
+		$ext = str_replace(" ", ", ", $ext);
+		if ($v_proxy_template != $_POST["v_proxy_template"] || $v_proxy_ext != $ext) {
+			$ext = str_replace(", ", ",", $ext);
+			if ($can_edit_templates && !empty($_POST["v_proxy_template"])) {
+				$v_proxy_template = $_POST["v_proxy_template"];
 			}
 			exec(
 				HESTIA_CMD .
-					"h-add-web-domain-proxy " .
+					"h-change-web-domain-proxy-tpl " .
 					$user .
 					" " .
 					quoteshellarg($v_domain) .
@@ -527,9 +494,46 @@ if (!empty($_POST["save"])) {
 				$return_var,
 			);
 			check_return_code($return_var, $output);
+			$v_proxy_ext = str_replace(",", ", ", $ext);
 			unset($output);
 			$restart_proxy = "yes";
 		}
+	}
+
+	// Add proxy support
+	if (
+		!empty($_SESSION["PROXY_SYSTEM"]) &&
+		empty($v_proxy) &&
+		!empty($_POST["v_proxy"]) &&
+		empty($_SESSION["error_msg"])
+	) {
+		// template choice stays behind the real-identity gate; a customer enable gets default
+		$v_proxy_template = $can_edit_templates && !empty($_POST["v_proxy_template"]) ? $_POST["v_proxy_template"] : "default";
+		if (!empty($_POST["v_proxy_ext"])) {
+			$ext = preg_replace("/\n/", " ", $_POST["v_proxy_ext"]);
+			$ext = preg_replace("/,/", " ", $ext);
+			$ext = preg_replace("/\s+/", " ", $ext);
+			$ext = trim($ext);
+			$ext = str_replace(" ", ",", $ext);
+			$v_proxy_ext = str_replace(",", ", ", $ext);
+		}
+		exec(
+			HESTIA_CMD .
+				"h-add-web-domain-proxy " .
+				$user .
+				" " .
+				quoteshellarg($v_domain) .
+				" " .
+				quoteshellarg($v_proxy_template) .
+				" " .
+				quoteshellarg($ext) .
+				" 'no'",
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		unset($output);
+		$restart_proxy = "yes";
 	}
 
 	// Enable/Disable proxy cache
