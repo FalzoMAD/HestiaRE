@@ -4,8 +4,8 @@
 #
 # example: h-list-web-templates-docker
 #
-# Templates a docker domain can pick. They live per front system, so the list is the one the
-# renderer would actually use - a template without a variant for this front falls back to default.
+# Templates a docker domain can pick: what exists for this box's front system. The renderer picks
+# per front too, so the list matches what a choice would actually render.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -70,12 +70,12 @@ csv_list() {
 templates=''
 docker_front="${PROXY_SYSTEM:-$WEB_SYSTEM}"
 if [ -n "$docker_front" ] && [ -d "$WEBTPL/docker/$docker_front" ]; then
+	declare -a tpl_names=()
 	for tpl_file in "$WEBTPL/docker/$docker_front"/*.tpl; do
 		[ -e "$tpl_file" ] || continue
-		tpl_name=$(basename "$tpl_file" .tpl)
-		templates="${templates:+$templates$'\n'}$tpl_name"
+		tpl_names+=("$(basename "$tpl_file" .tpl)")
 	done
-	templates=$(printf '%s\n' "$templates" | sort -V)
+	[ ${#tpl_names[@]} -eq 0 ] || templates=$(printf '%s\n' "${tpl_names[@]}" | sort -V)
 fi
 
 # Listing data
@@ -84,6 +84,10 @@ case $format in
 	plain) plain_list ;;
 	csv) csv_list ;;
 	shell) shell_list ;;
+	*)
+		echo "Error: unknown format $format (json, plain, csv, shell)" >&2
+		exit "$E_INVALID"
+		;;
 esac
 
 #----------------------------------------------------------#
