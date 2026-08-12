@@ -40,6 +40,10 @@ json_list() {
         "SSL_FORCE": "'$SSL_FORCE'",
         "SSL_HSTS": "'$SSL_HSTS'",
         "SSL_HOME": "'$SSL_HOME'",
+        "HTTP3": "'$HTTP3'",
+        "DOCKER": "'$DOCKER'",
+        "DOCKER_PORT": "'$DOCKER_PORT'",
+        "DOCKER_OCTET": "'$DOCKER_OCTET'",
         "LETSENCRYPT": "'$LETSENCRYPT'",
         "FTP_USER": "'$FTP_USER'",
         "FTP_PATH": "'$FTP_PATH'",
@@ -84,6 +88,12 @@ shell_list() {
 		if [ -n "$SSL_HSTS" ]; then
 			echo "SSL_HSTS:         $SSL_HSTS"
 		fi
+	fi
+	if [ -n "$HTTP3" ]; then
+		echo "HTTP3:            $HTTP3"
+	fi
+	if [ -n "$DOCKER" ]; then
+		echo "DOCKER:           $DOCKER -> .$DOCKER_OCTET:$DOCKER_PORT"
 	fi
 	echo "TEMPLATE:         $TPL"
 	if [ -n "$WEB_BACKEND" ]; then

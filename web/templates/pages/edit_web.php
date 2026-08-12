@@ -31,6 +31,7 @@
 			"proxyCacheEnabled" => $v_proxy_cache == "yes",
 			"proxySupportEnabled" => !empty($v_proxy),
 			"customDocumentRootEnabled" => !empty($v_custom_doc_root),
+			"dockerEnabled" => !empty($v_docker),
 		];
 	?>
 
@@ -323,14 +324,37 @@
 					</div>
 				</details>
 			<?php } ?>
+			<?php if (!empty($v_docker_net)) { ?>
+			<div class="form-check u-mb10">
+				<input x-model="dockerEnabled" class="form-check-input" type="checkbox" name="v_docker" id="v_docker" <?php if (!empty($v_docker)) echo 'checked' ?>>
+				<label for="v_docker">
+					<?= tohtml( _("Docker Proxy")) ?>
+				</label>
+			</div>
+			<div x-cloak x-show="dockerEnabled" class="u-pl30 u-mb20">
+				<label for="v_docker_port" class="form-label">
+					<?= tohtml( _("Container address and port")) ?>
+				</label>
+				<div class="u-flex u-align-center">
+					<span class="u-mr5"><?= tohtml($v_docker_net) ?>.</span>
+					<input type="text" class="form-control" name="v_docker_octet" id="v_docker_octet" size="3" maxlength="3" style="width: 5em;" value="<?= tohtml($v_docker_octet) ?>">
+					<span class="u-ml5 u-mr5">:</span>
+					<input type="text" class="form-control" name="v_docker_port" id="v_docker_port" size="5" maxlength="5" style="width: 7em;" value="<?= tohtml($v_docker_port) ?>">
+				</div>
+			</div>
+			<?php } ?>
 			<div class="u-mt15 u-mb20">
 				<button x-on:click="showAdvanced = !showAdvanced" type="button" class="button button-secondary">
 					<?= tohtml( _("Advanced Options")) ?>
 				</button>
 			</div>
 			<div x-cloak x-show="showAdvanced">
-				<?php if ($_SESSION["userContext"] === "admin" || ($_SESSION["userContext"] === "user" && $_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] === "yes")) { ?>
-					<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
+				<?php if (empty($v_docker) && (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes")) { ?>
+					<?php // These policy gates protect the CUSTOMER from themselves (a pool set to high, a broken
+					// proxy template), so the REAL admin overrides them even while impersonating: adminContext
+					// is the durable identity (#438), userContext keeps scoping the data. Policy default is
+					// effectively 'no' - protective for customers, invisible to admins. ?>
+				<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
 						// share/ and the list is empty, so hide it instead of an empty dropdown (#219/#591) ?>
 					<?php if (is_array($templates) && count($templates)) { ?>
 						<div class="u-mb10">
@@ -351,7 +375,11 @@
 							</select>
 						</div>
 					<?php } ?>
-					<?php if ($_SESSION["WEB_SYSTEM"] == "nginx") { ?>
+				<?php } ?>
+				<?php // The blocks below are customer-facing (#566 review): PHP version, pool profile and
+					// proxy extensions stay editable for the user; only the template CHOICE above and the
+					// proxy template select below remain admin/policy-gated ?>
+				<?php if (empty($v_docker) && $_SESSION["WEB_SYSTEM"] == "nginx") { ?>
 						<div class="form-check u-mb10">
 							<input x-model="nginxCacheEnabled" class="form-check-input" type="checkbox" name="v_nginx_cache_check" id="v_nginx_cache_check">
 							<label for="v_nginx_cache_check">
@@ -370,7 +398,9 @@
 							</div>
 						</div>
 					<?php } ?>
-					<?php if (!empty($_SESSION["WEB_BACKEND"])) { ?>
+					<?php if (empty($v_docker) && !empty($_SESSION["WEB_BACKEND"])) { ?>
+						<?php // profile choice is capacity allocation - a customer would simply pick 'high' ?>
+						<?php if (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") { ?>
 						<div class="u-mb10">
 								<label for="v_backend_template" class="form-label">
 									<?= tohtml( _("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
@@ -391,6 +421,7 @@
 								?>
 							</select>
 						</div>
+						<?php } ?>
 						<div class="u-mb10">
 								<label for="v_php_version" class="form-label"><?= tohtml( _("PHP Version")) ?></label>
 							<select class="form-select" name="v_php_version" id="v_php_version">
@@ -408,7 +439,7 @@
 							</select>
 						</div>
 					<?php } ?>
-					<?php if (!empty($_SESSION["PROXY_SYSTEM"])) { ?>
+					<?php if (empty($v_docker) && !empty($_SESSION["PROXY_SYSTEM"])) { ?>
 						<div style="display: none;">
 							<div class="form-check u-mb10">
 								<input x-model="proxySupportEnabled" class="form-check-input" type="checkbox" name="v_proxy" id="v_proxy">
@@ -418,6 +449,7 @@
 							</div>
 						</div>
 						<div x-cloak x-show="proxySupportEnabled" id="proxytable">
+							<?php if (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") { ?>
 							<div class="u-mb10">
 								<label for="v_proxy_template" class="form-label"><?= tohtml( _("Proxy Template")) ?></label>
 								<select class="form-select js-proxy-template-select" name="v_proxy_template" id="v_proxy_template">
@@ -436,13 +468,13 @@
 									?>
 								</select>
 							</div>
+							<?php } ?>
 							<div class="u-mb10">
 								<label for="v_proxy_ext" class="form-label"><?= tohtml( _("Proxy Extensions")) ?></label>
 								<textarea class="form-control u-min-height100" name="v_proxy_ext" id="v_proxy_ext"><?php if (!empty($v_proxy_ext)) { echo tohtml(trim($v_proxy_ext, "'"));} else { echo 'jpg, jpeg, gif, png, ico, svg, css, zip, tgz, gz, rar, bz2, exe, pdf, doc, xls, ppt, txt, odt, ods, odp, odf, tar, bmp, rtf, js, mp3, avi, mpeg, flv, html, htm'; } ?></textarea>
 							</div>
 						</div>
 					<?php } ?>
-				<?php } ?>
 				<div class="form-check u-mb10">
 					<input x-model="customDocumentRootEnabled" class="form-check-input" type="checkbox" name="v_custom_doc_root_check" id="v_custom_doc_root_check">
 					<label for="v_custom_doc_root_check">

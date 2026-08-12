@@ -78,9 +78,18 @@ getent group "$companion" > /dev/null 2>&1 && /usr/sbin/groupdel "$companion" > 
 sed -i "/^${companion}:/d" /etc/subuid /etc/subgid 2> /dev/null
 rm -rf "$companion_home"
 
+# Free the address: a lingering field would hold it forever against the first-free allocation.
+# DOCKER_BACKUP stays (a preference, not a held resource).
+sed -i "/^DOCKER_IP='/d" "$USER_DATA/user.conf" 2> /dev/null
+
 # profile.d stays: guarded on the socket, so inert here, and others may still use it.
 
 echo "Docker is disabled for $user."
+
+# The /24 separation rule renders from the user records; follow enable/disable immediately
+if [ -n "$FIREWALL_SYSTEM" ]; then
+	$BIN/h-update-firewall > /dev/null 2>&1
+fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #

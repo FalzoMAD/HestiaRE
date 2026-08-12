@@ -30,6 +30,12 @@ web_template_file() {
 	echo "$loc/$name.$ext"
 }
 
+# Single source for the docker template path: the command validates and add_web_config renders
+# through the same resolution.
+web_docker_template_file() {
+	echo "$WEBTPL/docker/$1/$2.tpl"
+}
+
 # Legacy template values mapped onto what replaced them. Echoes "<name> <side-effect>"
 # and returns 0 for a KNOWN legacy value, 1 for anything else - the distinction is what
 # lets a CLI caller still reject a typo while accepting a value that simply aged out.
@@ -392,6 +398,27 @@ add_web_config() {
 		WEBTPL_LOCATION="$WEBTPL_OVERRIDE"
 	fi
 
+	# Docker domain: the front renders from templates/docker/, a backend vhost would only shadow
+	# the container. TPL/PROXY stay untouched so a model switch survives; suspend override wins.
+	if [ -n "$DOCKER" ] && [ -z "$WEBTPL_OVERRIDE" ]; then
+		if [ -n "$PROXY_SYSTEM" ] && [ "$1" = "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != "$PROXY_SYSTEM" ]; then
+			# reconcile away a stale backend vhost from the pre-docker life of the domain
+			rm -f "$HOMEDIR/$user/conf/web/$domain/$1.conf" "$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf" \
+				"/etc/$1/conf.d/domains/$domain.conf" "/etc/$1/conf.d/domains/$domain.ssl.conf"
+			return 0
+		fi
+		# Per-system dir: after a model switch a custom template may have no variant here. Render
+		# default instead of skipping (no front = outage); the field keeps the name.
+		local web_docker_tpl
+		web_docker_tpl=$(web_docker_template_file "$1" "$DOCKER")
+		if [ ! -f "$web_docker_tpl" ] && [ -f "$(web_docker_template_file "$1" default)" ]; then
+			echo "Warning: docker template '$DOCKER' has no $1 variant - rendering default for $domain" >&2
+			web_docker_tpl=$(web_docker_template_file "$1" default)
+		fi
+		WEBTPL_LOCATION=$(dirname "$web_docker_tpl")
+		set -- "$1" "$(basename "$web_docker_tpl")"
+	fi
+
 	# A missing template would become a 0-byte vhost that apache2 -t accepts. Warn +
 	# skip, not check_result: an exit would abort a rebuild loop over one broken record.
 	if [ ! -f "${WEBTPL_LOCATION}/$2" ]; then
@@ -407,6 +434,15 @@ add_web_config() {
 	# old behaviour - this .tpl/.stpl renders its own .conf/.ssl.conf.
 	local web_tpl_merged=0
 	web_template_is_merged "${WEBTPL_LOCATION}/$2" && web_tpl_merged=1
+
+	# From the owner record, not a sourced var: the rebuild path never sources user.conf and would
+	# render it empty. front_port = the model's public listener (apache-only has no PROXY_* keys).
+	local web_docker_ip=''
+	web_docker_ip=$(get_user_value '$DOCKER_IP')
+	# the domain picks its octet inside the customer /24; empty means the daemon-default .1
+	if [ -n "$web_docker_ip" ] && [ -n "$DOCKER_OCTET" ]; then
+		web_docker_ip="${web_docker_ip%.*}.$DOCKER_OCTET"
+	fi
 
 	conf="$HOMEDIR/$user/conf/web/$domain/$1.conf"
 	if [ "$web_tpl_merged" = 0 ] && [[ "$2" =~ stpl$ ]]; then
@@ -443,6 +479,10 @@ add_web_config() {
 			-e "s|%proxy_system%|$PROXY_SYSTEM|g" \
 			-e "s|%proxy_port%|$PROXY_PORT|g" \
 			-e "s|%proxy_ssl_port%|$PROXY_SSL_PORT|g" \
+			-e "s|%front_port%|${PROXY_PORT:-$WEB_PORT}|g" \
+			-e "s|%front_ssl_port%|${PROXY_SSL_PORT:-$WEB_SSL_PORT}|g" \
+			-e "s|%docker_port%|$DOCKER_PORT|g" \
+			-e "s|%docker_ip%|$web_docker_ip|g" \
 			-e "s/%proxy_extentions%/${PROXY_EXT//,/|}/g" \
 			-e "s/%proxy_extensions%/${PROXY_EXT//,/|}/g" \
 			-e "s|%user%|$user|g" \
