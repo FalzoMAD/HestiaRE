@@ -371,7 +371,11 @@
 							</select>
 						</div>
 					<?php } ?>
-					<?php if (empty($v_docker) && $_SESSION["WEB_SYSTEM"] == "nginx") { ?>
+				<?php } ?>
+				<?php // The blocks below are customer-facing (#566 review): PHP version, pool profile and
+					// proxy extensions stay editable for the user; only the template CHOICE above and the
+					// proxy template select below remain admin/policy-gated ?>
+				<?php if (empty($v_docker) && $_SESSION["WEB_SYSTEM"] == "nginx") { ?>
 						<div class="form-check u-mb10">
 							<input x-model="nginxCacheEnabled" class="form-check-input" type="checkbox" name="v_nginx_cache_check" id="v_nginx_cache_check">
 							<label for="v_nginx_cache_check">
@@ -438,6 +442,7 @@
 							</div>
 						</div>
 						<div x-cloak x-show="proxySupportEnabled" id="proxytable">
+							<?php if ($_SESSION["userContext"] === "admin" || ($_SESSION["userContext"] === "user" && $_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] === "yes")) { ?>
 							<div class="u-mb10">
 								<label for="v_proxy_template" class="form-label"><?= tohtml( _("Proxy Template")) ?></label>
 								<select class="form-select js-proxy-template-select" name="v_proxy_template" id="v_proxy_template">
@@ -456,13 +461,13 @@
 									?>
 								</select>
 							</div>
+							<?php } ?>
 							<div class="u-mb10">
 								<label for="v_proxy_ext" class="form-label"><?= tohtml( _("Proxy Extensions")) ?></label>
 								<textarea class="form-control u-min-height100" name="v_proxy_ext" id="v_proxy_ext"><?php if (!empty($v_proxy_ext)) { echo tohtml(trim($v_proxy_ext, "'"));} else { echo 'jpg, jpeg, gif, png, ico, svg, css, zip, tgz, gz, rar, bz2, exe, pdf, doc, xls, ppt, txt, odt, ods, odp, odf, tar, bmp, rtf, js, mp3, avi, mpeg, flv, html, htm'; } ?></textarea>
 							</div>
 						</div>
 					<?php } ?>
-				<?php } ?>
 				<div class="form-check u-mb10">
 					<input x-model="customDocumentRootEnabled" class="form-check-input" type="checkbox" name="v_custom_doc_root_check" id="v_custom_doc_root_check">
 					<label for="v_custom_doc_root_check">
