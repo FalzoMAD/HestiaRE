@@ -985,6 +985,34 @@ is_user_format_valid() {
 	fi
 }
 
+# Names a service account owns, or will own once its component is installed. The live databases
+# only know what is on the box today, so a curated list is the only way to keep a name free that
+# an optional component takes later. Callers still check passwd/group themselves.
+is_login_name_reserved() {
+	local name="${1,,}" label="${2:-user}" reserved r
+	reserved=(
+		# ours
+		hestia hestia-users procvis sftp-jailed
+		# always installed
+		nginx apache2 www-data caddy php mysql mariadb phpmyadmin
+		# standard profile + optional components (h-add-sys-*, h-add-user-*)
+		exim dovecot dovenull rspamd roundcube snappymail crowdsec fail2ban
+		docker containerd proftpd ftp clamav postgres postgresql redis opensearch filemanager
+		# MariaDB/MySQL database names, and sudo (that group always has sudo rights)
+		aria aria_log mysql_upgrade ib ib_buffer ddl ddl_recovery performance sudo
+	)
+	for r in "${reserved[@]}"; do
+		if [ "$name" = "$r" ]; then
+			check_result "$E_INVALID" "$label name '$1' is reserved for system use"
+		fi
+	done
+	# h-add-user-docker names the companion account <user>-docker
+	if [ "${name%-docker}" != "$name" ]; then
+		check_result "$E_INVALID" "$label name '$1' is reserved: -docker is the companion suffix"
+	fi
+	return 0
+}
+
 # Domain format validator
 is_domain_format_valid() {
 	object_name=${2-domain}
