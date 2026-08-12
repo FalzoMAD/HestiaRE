@@ -39,11 +39,8 @@ json_list() {
         "WEB_TEMPLATE": "'$WEB_TEMPLATE'",
         "BACKEND_TEMPLATE": "'$BACKEND_TEMPLATE'",
         "PROXY_TEMPLATE": "'$PROXY_TEMPLATE'",
-        "DNS_TEMPLATE": "'$DNS_TEMPLATE'",
         "WEB_DOMAINS": "'$WEB_DOMAINS'",
         "WEB_ALIASES": "'$WEB_ALIASES'",
-        "DNS_DOMAINS": "'$DNS_DOMAINS'",
-        "DNS_RECORDS": "'$DNS_RECORDS'",
         "MAIL_DOMAINS": "'$MAIL_DOMAINS'",
         "MAIL_ACCOUNTS": "'$MAIL_ACCOUNTS'",
         "DATABASES": "'$DATABASES'",
@@ -55,7 +52,6 @@ json_list() {
         "MEMORY_LIMIT": "'$MEMORY_LIMIT'",
         "SWAP_LIMIT": "'$SWAP_LIMIT'",
         "BANDWIDTH": "'$BANDWIDTH'",
-        "NS": "'$NS'",
         "SHELL": "'$SHELL'",
         "BACKUPS": "'$BACKUPS'",
         "CONTACT": "'$CONTACT'",
@@ -81,8 +77,6 @@ json_list() {
         "U_WEB_DOMAINS": "'$U_WEB_DOMAINS'",
         "U_WEB_SSL": "'$U_WEB_SSL'",
         "U_WEB_ALIASES": "'$U_WEB_ALIASES'",
-        "U_DNS_DOMAINS": "'$U_DNS_DOMAINS'",
-        "U_DNS_RECORDS": "'$U_DNS_RECORDS'",
         "U_MAIL_DOMAINS": "'$U_MAIL_DOMAINS'",
         "U_MAIL_DKIM": "'$U_MAIL_DKIM'",
         "U_MAIL_ACCOUNTS": "'$U_MAIL_ACCOUNTS'",
@@ -100,14 +94,14 @@ json_list() {
 
 # SHELL list function
 shell_list() {
-	echo "USER   ROLE   PKG   WEB   DNS   MAIL   DB   DISK   BW   SPND   DATE"
+	echo "USER   ROLE   PKG   WEB   MAIL   DB   DISK   BW   SPND   DATE"
 	echo "----   ----   ---   ---   ---   ---    --   ----   --   ----   ----"
 	while read USER; do
 		if [ ! -f "$CONF_DIR/users/$USER/user.conf" ]; then
 			continue
 		fi
 		source_conf "$CONF_DIR/users/$USER/user.conf"
-		echo -n "$USER $ROLE $PACKAGE $U_WEB_DOMAINS $U_DNS_DOMAINS $U_MAIL_DOMAINS"
+		echo -n "$USER $ROLE $PACKAGE $U_WEB_DOMAINS $U_MAIL_DOMAINS"
 		echo " $U_DATABASES $U_DISK $U_BANDWIDTH $SUSPENDED $DATE"
 	done < <(grep '@' /etc/passwd | cut -f1 -d:)
 }
@@ -120,18 +114,18 @@ plain_list() {
 		fi
 		source_conf "$CONF_DIR/users/$USER/user.conf"
 		echo -ne "$USER\t$NAME\t$PACKAGE\t$WEB_TEMPLATE\t"
-		echo -ne "$BACKEND_TEMPLATE\t$PROXY_TEMPLATE\t$DNS_TEMPLATE\t"
-		echo -ne "$WEB_DOMAINS\t$WEB_ALIASES\t$DNS_DOMAINS\t$DNS_RECORDS\t"
+		echo -ne "$BACKEND_TEMPLATE\t$PROXY_TEMPLATE\t"
+		echo -ne "$WEB_DOMAINS\t$WEB_ALIASES\t"
 		echo -ne "$MAIL_DOMAINS\t$MAIL_ACCOUNTS\t$DATABASES\t$CRON_JOBS\t"
 		echo -ne "$DISK_QUOTA\t$CPU_QUOTA\t$CPU_QUOTA_PERIOD\t$MEMORY_LIMIT\t"
-		echo -ne "$SWAP_LIMIT\t$BANDWIDTH\t$NS\t$SHELL\t$BACKUPS\t"
+		echo -ne "$SWAP_LIMIT\t$BANDWIDTH\t$SHELL\t$BACKUPS\t"
 		echo -ne "$CONTACT\t$CRON_REPORTS\t$RKEY\t$ROLE\t$SUSPENDED\t"
 		echo -ne "$SUSPENDED_USERS\t$SUSPENDED_WEB\t$SUSPENDED_DNS\t"
 		echo -ne "$SUSPENDED_MAIL\t$SUSPENDED_DB\t$SUSPENDED_CRON\t"
 		echo -ne "$IP_AVAIL\t$IP_OWNED\t$U_USERS\t$U_DISK\t$U_DISK_DIRS\t"
 		echo -ne "$U_DISK_WEB\t$U_DISK_MAIL\t$U_DISK_DB\t$U_BANDWIDTH\t"
 		echo -ne "$U_WEB_DOMAINS\t$U_WEB_SSL\t$U_WEB_ALIASES\t"
-		echo -ne "$U_DNS_DOMAINS\t$U_DNS_RECORDS\t$U_MAIL_DOMAINS\t"
+		echo -ne "$U_MAIL_DOMAINS\t"
 		echo -ne "$U_MAIL_DKIM\t$U_MAIL_ACCOUNTS\t$U_DATABASES\t"
 		echo -e "$U_CRON_JOBS\t$U_BACKUPS\t$LANGUAGE\t$TIME\t$DATE\t"
 	done < <(grep '@' /etc/passwd | cut -f1 -d:)
@@ -140,15 +134,15 @@ plain_list() {
 # CSV list function
 csv_list() {
 	echo -n "USER,NAME,PACKAGE,WEB_TEMPLATE,BACKEND_TEMPLATE,"
-	echo -n "PROXY_TEMPLATE,DNS_TEMPLATE,WEB_DOMAINS,WEB_ALIASES,"
-	echo -n "DNS_DOMAINS,DNS_RECORDS,MAIL_DOMAINS,MAIL_ACCOUNTS,"
+	echo -n "PROXY_TEMPLATE,WEB_DOMAINS,WEB_ALIASES,"
+	echo -n "MAIL_DOMAINS,MAIL_ACCOUNTS,"
 	echo -n "DATABASES,CRON_JOBS,DISK_QUOTA,CPU_QUOTA,CPU_QUOTA_PERIOD,"
-	echo -n "MEMORY_LIMIT,SWAP_LIMIT,BANDWIDTH,NS,HOME,SHELL,"
+	echo -n "MEMORY_LIMIT,SWAP_LIMIT,BANDWIDTH,HOME,SHELL,"
 	echo -n "BACKUPS,CONTACT,CRON_REPORTS,RKEY,ROLE,SUSPENDED,SUSPENDED_USERS,"
 	echo -n "SUSPENDED_WEB,SUSPENDED_DNS,SUSPENDED_MAIL,SUSPENDED_DB,"
 	echo -n "SUSPENDED_CRON,IP_AVAIL,IP_OWNED,U_USERS,U_DISK,U_DISK_DIRS,"
 	echo -n "U_DISK_WEB,U_DISK_MAIL,U_DISK_DB,U_BANDWIDTH,U_WEB_DOMAINS,"
-	echo -n "U_WEB_SSL,U_WEB_ALIASES,U_DNS_DOMAINS,U_DNS_RECORDS,"
+	echo -n "U_WEB_SSL,U_WEB_ALIASES,"
 	echo -n "U_MAIL_DOMAINS,U_MAIL_DKIM,U_MAIL_ACCOUNTS,U_DATABASES"
 	echo "U_CRON_JOBS,U_BACKUPS,LANGUAGE,TIME,DATE"
 	while read USER; do
@@ -157,17 +151,17 @@ csv_list() {
 		fi
 		source_conf "$CONF_DIR/users/$USER/user.conf"
 		echo -n "$USER,\"$NAME\",$PACKAGE,$WEB_TEMPLATE,"
-		echo -n "$BACKEND_TEMPLATE,$PROXY_TEMPLATE,$DNS_TEMPLATE,"
-		echo -n "$WEB_DOMAINS,$WEB_ALIASES,$DNS_DOMAINS,$DNS_RECORDS,"
+		echo -n "$BACKEND_TEMPLATE,$PROXY_TEMPLATE,"
+		echo -n "$WEB_DOMAINS,$WEB_ALIASES,"
 		echo -n "$MAIL_DOMAINS,$MAIL_ACCOUNTS,$DATABASES,$CRON_JOBS,"
 		echo -n "$DISK_QUOTA,$CPU_QUOTA,$CPU_QUOTA_PERIOD,$MEMORY_LIMIT,"
-		echo -n "$SWAP_LIMIT,$BANDWIDTH,\"$NS\",$HOME,$SHELL,$BACKUPS,"
+		echo -n "$SWAP_LIMIT,$BANDWIDTH,$HOME,$SHELL,$BACKUPS,"
 		echo -n "$CONTACT,$CRON_REPORTS,\"$RKEY\",$ROLE,$SUSPENDED,"
 		echo -n "$SUSPENDED_USERS,$SUSPENDED_WEB,$SUSPENDED_DNS,"
 		echo -n "$SUSPENDED_MAIL,$SUSPENDED_DB,$SUSPENDED_CRON,$IP_AVAIL,"
 		echo -n "$IP_OWNED,$U_USERS,$U_DISK,$U_DISK_DIRS,$U_DISK_WEB,"
 		echo -n "$U_DISK_MAIL,$U_DISK_DB,$U_BANDWIDTH,$U_WEB_DOMAINS,"
-		echo -n "$U_WEB_SSL,$U_WEB_ALIASES,$U_DNS_DOMAINS,$U_DNS_RECORDS,"
+		echo -n "$U_WEB_SSL,$U_WEB_ALIASES,"
 		echo -n "$U_MAIL_DOMAINS,$U_MAIL_DKIM,$U_MAIL_ACCOUNTS,$U_DATABASES,"
 		echo "$U_CRON_JOBS,$U_BACKUPS,$LANGUAGE,$TIME,$DATE"
 	done < <(grep '@' /etc/passwd | cut -f1 -d:)

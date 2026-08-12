@@ -289,6 +289,16 @@ opens above it.
   set the renderer would use. The select appears in the docker block once there is more than one
   template - a custom template shows up there and, as intended, never in the general template list.
 
+### Removed
+
+- **The DNS leftovers in packages and user records are gone** (#619). A local DNS server is
+  permanently out of scope, so `DNS_TEMPLATE`, `DNS_DOMAINS`, `DNS_RECORDS`, the `NS` field and the
+  `U_DNS_*` counters no longer exist in packages, user records, or any listing format - they described
+  a subsystem that cannot be installed. `h-list-user-ns` went with them (it read the `NS` field and had
+  no callers), together with its `v-*` alias, and `h-change-user-template` lost its `DNS` branch, whose
+  validator `is_dns_template_valid` was never defined in the first place - it would have failed on use.
+  `SUSPENDED_DNS` stays for now: it belongs to the suspension flag set, not to packages.
+
 ### Fixed
 
 - **Saving a docker domain from the panel failed with a 500 and dropped the proxy** (#592). Every POST
@@ -302,7 +312,7 @@ opens above it.
 - **No package could be saved from the panel** (found while building #619). `h-add-user-package`
   validated `DNS_DOMAINS` / `DNS_RECORDS` unconditionally, but HestiaRE has no DNS server (bind9 is
   out), so the package form neither renders nor posts them - every save died with `invalid DNS_DOMAINS
-  format`. An empty value is the honest state of the box now; a set one is still validated.
+  format`, visible only in the log.
 - **A user named after a service died at `groupadd` instead of being refused** (#625). `h-add-user`
   checked `/etc/passwd` and a MariaDB name list, but never `/etc/group` - and the group is created
   as the mirror of the user, so `docker` (group present, user not) failed with `group creation
@@ -776,8 +786,6 @@ with fail2ban as a removable addon and IPv4/IPv6 parity throughout.
   decision rather than a number (#551).
 - **CODEMAP's firewall and fail2ban entries are current again** (#496); the firewall entry still gave
   `FIREWALL_SYSTEM` its pre-swap value - the exact staleness that let the panel destroy a ruleset.
-
-### Removed
 
 - **The mysqld jail** (#496). 3306 is not in the shipped ruleset, so MariaDB is reachable only from
   loopback and the box itself - both of which `h-add-firewall-ban` refuses to ban, so the jail could only

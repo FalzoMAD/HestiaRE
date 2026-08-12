@@ -31,14 +31,6 @@ is_package_consistent() {
 	if [ "$WEB_ALIASES" != 'unlimited' ]; then
 		is_int_format_valid "$WEB_ALIASES" 'WEB_ALIASES'
 	fi
-	# No DNS server here (bind9 is out), so the panel does not render or post these - an empty
-	# value is the honest state of the box, not a malformed one.
-	if [ -n "$DNS_DOMAINS" ] && [ "$DNS_DOMAINS" != 'unlimited' ]; then
-		is_int_format_valid "$DNS_DOMAINS" 'DNS_DOMAINS'
-	fi
-	if [ -n "$DNS_RECORDS" ] && [ "$DNS_RECORDS" != 'unlimited' ]; then
-		is_int_format_valid "$DNS_RECORDS" 'DNS_RECORDS'
-	fi
 	if [ "$MAIL_DOMAINS" != 'unlimited' ]; then
 		is_int_format_valid "$MAIL_DOMAINS" 'MAIL_DOMAINS'
 	fi
@@ -89,9 +81,6 @@ is_package_consistent() {
 	if [ -n "$PROXY_TEMPLATE" ]; then
 		is_proxy_template_valid "$PROXY_TEMPLATE"
 	fi
-	if [ -n "$DNS_TEMPLATE" ]; then
-		is_dns_template_valid "$DNS_TEMPLATE"
-	fi
 	if [ -n "$NS" ]; then
 		IFS=',' read -r -a nameservers <<< "$NS"
 		i=1
@@ -139,11 +128,8 @@ SHELL=$(basename $SHELL)
 echo "WEB_TEMPLATE='$WEB_TEMPLATE'
 PROXY_TEMPLATE='$PROXY_TEMPLATE'
 BACKEND_TEMPLATE='$BACKEND_TEMPLATE'
-DNS_TEMPLATE='$DNS_TEMPLATE'
 WEB_DOMAINS='$WEB_DOMAINS'
 WEB_ALIASES='$WEB_ALIASES'
-DNS_DOMAINS='$DNS_DOMAINS'
-DNS_RECORDS='$DNS_RECORDS'
 MAIL_DOMAINS='$MAIL_DOMAINS'
 MAIL_ACCOUNTS='$MAIL_ACCOUNTS'
 RATE_LIMIT='$RATE_LIMIT'
@@ -156,7 +142,6 @@ MEMORY_LIMIT='$MEMORY_LIMIT'
 SWAP_LIMIT='$SWAP_LIMIT'
 DOCKER_LIMIT='$DOCKER_LIMIT'
 BANDWIDTH='$BANDWIDTH'
-NS='$NS'
 SHELL='$SHELL'
 BACKUPS='$BACKUPS'
 BACKUPS_INCREMENTAL='$BACKUPS_INCREMENTAL'

@@ -5421,22 +5421,6 @@
       "note": ""
     },
     {
-      "path": "h-list-user-ns",
-      "source_type": "verbatim",
-      "upstream_path": "bin/v-list-user-ns",
-      "upstream_ref": "ca19b9f",
-      "last_reconciled": "2026-08-06",
-      "divergence": {
-        "upstream_lines": 92,
-        "our_lines": 92,
-        "added": 3,
-        "removed": 3,
-        "pct": 3,
-        "measured_at": "2026-08-06"
-      },
-      "note": ""
-    },
-    {
       "path": "h-list-user-package",
       "source_type": "verbatim",
       "upstream_path": "bin/v-list-user-package",

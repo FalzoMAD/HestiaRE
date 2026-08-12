@@ -69,8 +69,6 @@ for user in $user_list; do
 	U_WEB_DOMAINS=0
 	U_WEB_SSL=0
 	U_WEB_ALIASES=0
-	U_DNS_DOMAINS=0
-	U_DNS_RECORDS=0
 	U_MAIL_DOMAINS=0
 	U_MAIL_DKIM=0
 	U_MAIL_ACCOUNTS=0
@@ -212,8 +210,6 @@ for user in $user_list; do
 	update_user_value "$user" '$U_WEB_DOMAINS' "$U_WEB_DOMAINS"
 	update_user_value "$user" '$U_WEB_SSL' "$U_WEB_SSL"
 	update_user_value "$user" '$U_WEB_ALIASES' "$U_WEB_ALIASES"
-	update_user_value "$user" '$U_DNS_DOMAINS' "$U_DNS_DOMAINS"
-	update_user_value "$user" '$U_DNS_RECORDS' "$U_DNS_RECORDS"
 	update_user_value "$user" '$U_MAIL_DOMAINS' "$U_MAIL_DOMAINS"
 	update_user_value "$user" '$U_MAIL_DKIM' "$U_MAIL_DKIM"
 	update_user_value "$user" '$U_MAIL_ACCOUNTS' "$U_MAIL_ACCOUNTS"
