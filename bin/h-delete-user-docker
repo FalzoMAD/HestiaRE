@@ -22,6 +22,8 @@ user=$1
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/func/docker.sh
+source $HESTIA/func/docker.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -56,17 +58,10 @@ fi
 
 companion_uid="$(id -u "$companion")"
 
-# Order matters: userdel refuses while the account owns processes, and fails quietly
-# enough that a later re-enable would silently reuse the old account.
+# userdel refuses while the account owns processes, and fails quietly enough that a
+# later re-enable would silently reuse the old account.
 echo "Stopping the companion's daemon..."
-loginctl disable-linger "$companion" > /dev/null 2>&1
-loginctl terminate-user "$companion" > /dev/null 2>&1
-systemctl stop "user@${companion_uid}.service" "user-runtime-dir@${companion_uid}.service" > /dev/null 2>&1
-for _ in $(seq 1 20); do
-	pgrep -u "$companion_uid" > /dev/null 2>&1 || break
-	sleep 1
-done
-pkill -KILL -u "$companion_uid" > /dev/null 2>&1
+companion_stop "$companion"
 
 echo "Removing companion $companion..."
 if ! /usr/sbin/userdel "$companion" > /dev/null 2>&1; then

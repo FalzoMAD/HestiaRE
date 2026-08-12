@@ -42,6 +42,8 @@ source $HESTIA/func/ip.sh
 source $HESTIA/func/db.sh
 # shellcheck source=/usr/local/hestia/func/rebuild.sh
 source $HESTIA/func/rebuild.sh
+# shellcheck source=/usr/local/hestia/func/docker.sh
+source $HESTIA/func/docker.sh
 # shellcheck source=/usr/local/hestia/func/syshealth.sh
 source $HESTIA/func/syshealth.sh
 # load config file
@@ -863,6 +865,27 @@ if [ "$udir" != 'no' ]; then
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
 				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
 				check_result "$E_PARSING" "$error"
+			fi
+
+			# The companion home belongs to the companion, not the customer: the customer has
+			# no write bit inside it, and a non-root tar could not restore those owners anyway.
+			# Root unpacks it, after the daemon is stopped - restoring under a live rootless
+			# daemon is what left the tree half-written on an in-place restore.
+			if [ "$user_dir" = '.companion' ]; then
+				companion_stop "${user}-docker"
+				if [ $backup_mode = 'zstd' ]; then
+					tar -I pzstd -xpf "$tmpdir/user_dir/$user_dir.tar.zst" -C "$HOMEDIR/$user"
+				else
+					tar -xpzf "$tmpdir/user_dir/$user_dir.tar.gz" -C "$HOMEDIR/$user"
+				fi
+				if [ "$?" -ne 0 ]; then
+					rm -rf $tmpdir
+					error="Can't unpack $user_dir user dir container"
+					echo "$error" | $SENDMAIL -s "$subj" $email $notify
+					sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+					check_result "$E_PARSING" "$error"
+				fi
+				continue
 			fi
 
 			chown "$user" "$tmpdir/user_dir"
