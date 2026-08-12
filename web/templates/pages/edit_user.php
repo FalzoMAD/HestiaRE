@@ -237,7 +237,8 @@
 							($v_docker_eligible || !empty($v_docker_ip))) { ?>
 						<div class="u-mb10">
 							<div class="form-check">
-								<input x-model="dockerEnabled" class="form-check-input" type="checkbox" name="v_docker" id="v_docker">
+								<input x-model="dockerEnabled" class="form-check-input" type="checkbox" name="v_docker" id="v_docker" data-docker-user="<?= tohtml($v_username) ?>">
+								<input type="hidden" name="v_docker_confirm" id="v_docker_confirm" value="">
 								<label for="v_docker">
 									<?= tohtml( _("Enable Docker")) ?>
 									<?php if (!empty($v_docker_ip)) { ?>
