@@ -399,12 +399,10 @@ add_web_config() {
 		WEBTPL_LOCATION="$WEBTPL_OVERRIDE"
 	fi
 
-	# A docker domain (#566/#592): the FRONT renders from templates/docker/<system>/$DOCKER.tpl and
-	# the both-model apache backend is not rendered at all - the container IS the backend, so a
-	# backend vhost would only shadow it. Centralised here so every caller (add, rebuild, the SSL
-	# toggle, alias changes) behaves the same without knowing about docker; TPL/PROXY stay whatever
-	# they were, which is what makes a web-model switch survivable (#592). The suspend/offline
-	# override above outranks: an admin suspension page shows on a docker domain too.
+	# Docker domain (#566/#592): the FRONT renders from templates/docker/, the both-model apache
+	# backend is not rendered at all - the container IS the backend. Centralised here so every
+	# caller (add, rebuild, ssl toggle, alias) behaves the same; TPL/PROXY stay untouched, which is
+	# what survives a web-model switch. The suspend/offline override above outranks.
 	if [ -n "$DOCKER" ] && [ -z "$WEBTPL_OVERRIDE" ]; then
 		if [ -n "$PROXY_SYSTEM" ] && [ "$1" = "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != "$PROXY_SYSTEM" ]; then
 			# reconcile away a stale backend vhost from the pre-docker life of the domain
@@ -412,11 +410,9 @@ add_web_config() {
 				"/etc/$1/conf.d/domains/$domain.conf" "/etc/$1/conf.d/domains/$domain.ssl.conf"
 			return 0
 		fi
-		# The field keeps the chosen NAME across a web-model switch, but templates/docker/ is per
-		# system and a custom nginx docker template has no apache twin. Fall back to this system's
-		# default rather than skip the render - a docker domain without a front is an outage - and
-		# switching back restores the custom template, since the field never changed. TPL/PROXY go
-		# through accept_web_template for this; DOCKER deliberately stays this simple.
+		# templates/docker/ is per system, so after a model switch a custom template may have no
+		# variant here. Render this system's default instead of skipping (no front = outage); the
+		# field keeps the name, so switching back restores the custom template.
 		local web_docker_tpl
 		web_docker_tpl=$(web_docker_template_file "$1" "$DOCKER")
 		if [ ! -f "$web_docker_tpl" ] && [ -f "$(web_docker_template_file "$1" default)" ]; then
@@ -443,12 +439,11 @@ add_web_config() {
 	local web_tpl_merged=0
 	web_template_is_merged "${WEBTPL_LOCATION}/$2" && web_tpl_merged=1
 
-	# %docker_ip% is read from the OWNER record here, not from a sourced variable: the rebuild path
-	# never sources user.conf, so a sourced value would render on create and come up EMPTY on every
-	# rebuild - proxy_pass http://:port, the silent #456 class (#566 plan N1).
-	# %front_port%/%front_ssl_port% (in the sed list below) resolve to the public listener of the
-	# active model - proxy when present, else web - so ONE docker template serves nginx-only and
-	# both; apache-only carries no PROXY_* keys at all, hence :- not just empty-value fallback.
+	# %docker_ip% comes from the OWNER record, not a sourced variable: the rebuild path never
+	# sources user.conf, so a sourced value would render empty on every rebuild (the silent #456
+	# class). %front_port%/%front_ssl_port% below resolve the model's public listener (proxy if
+	# present, else web) so one docker template serves nginx-only and both; apache-only has no
+	# PROXY_* keys at all, hence :- fallback.
 	local web_docker_ip=''
 	web_docker_ip=$(get_user_value '$DOCKER_IP')
 	# the domain picks its octet inside the customer /24; empty means the daemon-default .1
