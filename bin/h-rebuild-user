@@ -59,6 +59,10 @@ if [ "$RESOURCES_LIMIT" = 'yes' ]; then
 	$BIN/h-update-user-cgroup "$user"
 fi
 
+# not gated on RESOURCES_LIMIT - see h-change-user-package
+source $HESTIA/func/docker.sh
+docker_slice_apply "$user" "$(get_user_value '$DOCKER_LIMIT')"
+
 # Rebuild user
 rebuild_user_conf
 

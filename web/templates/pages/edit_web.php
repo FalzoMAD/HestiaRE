@@ -337,9 +337,9 @@
 				</label>
 				<div class="u-flex u-align-center">
 					<span class="u-mr5"><?= tohtml($v_docker_net) ?>.</span>
-					<input type="text" class="form-control" name="v_docker_octet" id="v_docker_octet" size="3" maxlength="3" style="width: 5em;" value="<?= tohtml($v_docker_octet) ?>">
+					<input type="number" min="1" max="254" step="1" class="form-control" name="v_docker_octet" id="v_docker_octet" size="3" maxlength="3" style="width: 6em;" value="<?= tohtml($v_docker_octet) ?>">
 					<span class="u-ml5 u-mr5">:</span>
-					<input type="text" class="form-control" name="v_docker_port" id="v_docker_port" size="5" maxlength="5" style="width: 7em;" value="<?= tohtml($v_docker_port) ?>">
+					<input type="number" min="1024" max="65535" step="1" class="form-control" name="v_docker_port" id="v_docker_port" size="5" maxlength="5" style="width: 8em;" value="<?= tohtml($v_docker_port) ?>">
 				</div>
 				<?php # app shapes differ in proxy mode, headers, websockets - the list is admin-curated,
 					# so the customer picks it; one entry is no choice

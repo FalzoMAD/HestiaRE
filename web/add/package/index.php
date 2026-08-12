@@ -131,6 +131,8 @@ if (!empty($_POST["ok"])) {
 			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_memory_limit"]) : "";
 		$v_swap_limit =
 			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_swap_limit"]) : "";
+		// a preset name, not a size - the command rejects anything else
+		$v_docker_limit = quoteshellarg($_POST["v_docker_limit"] ?? "unlimited");
 
 		$v_time = quoteshellarg(date("H:i:s"));
 		$v_date = quoteshellarg(date("Y-m-d"));
@@ -155,6 +157,7 @@ if (!empty($_POST["ok"])) {
 			$pkg .= "CPU_QUOTA_PERIOD=" . $v_cpu_quota_period . "\n";
 			$pkg .= "MEMORY_LIMIT=" . $v_memory_limit . "\n";
 			$pkg .= "SWAP_LIMIT=" . $v_swap_limit . "\n";
+			$pkg .= "DOCKER_LIMIT=" . $v_docker_limit . "\n";
 			$pkg .= "BANDWIDTH=" . $v_bandwidth . "\n";
 			$pkg .= "RATE_LIMIT=" . $v_ratelimit . "\n";
 			$pkg .= "SHELL=" . $v_shell . "\n";
@@ -265,6 +268,7 @@ if (empty($v_ratelimit)) {
 
 if (empty($v_cpu_quota)) {
 	$v_cpu_quota = "'unlimited'";
+	$v_docker_limit = "'unlimited'";
 }
 if (empty($v_cpu_quota_period)) {
 	$v_cpu_quota_period = "'unlimited'";
