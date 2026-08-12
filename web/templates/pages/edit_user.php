@@ -39,6 +39,7 @@
 			loginDisabled: <?= tohtml($v_login_disabled === "yes" ? "true" : "false") ?>,
 			useIpAllowList: <?= tohtml($v_login_use_iplist === "yes" ? "true" : "false") ?>,
 			fileManager: <?= tohtml($v_file_manager === "yes" ? "true" : "false") ?>,
+			dockerEnabled: <?= tohtml(!empty($v_docker_ip) ? "true" : "false") ?>,
 			showAdvanced: false,
 		}"
 		id="main-form"
@@ -226,6 +227,23 @@
 								<input x-model="fileManager" class="form-check-input" type="checkbox" name="v_file_manager" id="v_file_manager">
 								<label for="v_file_manager">
 									<?= tohtml( _("Enable File Manager")) ?>
+								</label>
+							</div>
+						</div>
+					<?php } ?>
+					<?php # docker needs an unjailed login shell; an enabled customer keeps the switch either
+						# way, so it can still be turned off after their shell changed
+						if (($_SESSION["adminContext"] ?? "") === "admin" && !empty($_SESSION["DOCKER_SYSTEM"]) &&
+							($v_docker_eligible || !empty($v_docker_ip))) { ?>
+						<div class="u-mb10">
+							<div class="form-check">
+								<input x-model="dockerEnabled" class="form-check-input" type="checkbox" name="v_docker" id="v_docker">
+								<label for="v_docker">
+									<?= tohtml( _("Enable Docker")) ?>
+									<?php if (!empty($v_docker_ip)) { ?>
+										<span class="optional"><?= tohtml(preg_replace('/\.\d+$/', ".0/24", $v_docker_ip)) ?></span>
+										<span class="optional"><?= tohtml( _("- turning this off removes the containers and their volumes")) ?></span>
+									<?php } ?>
 								</label>
 							</div>
 						</div>

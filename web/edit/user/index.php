@@ -72,6 +72,10 @@ $v_login_disabled = $data[$v_username]["LOGIN_DISABLED"];
 $v_login_use_iplist = $data[$v_username]["LOGIN_USE_IPLIST"];
 $v_login_allowed_ips = $data[$v_username]["LOGIN_ALLOW_IPS"];
 $v_file_manager = $data[$v_username]["FILE_MANAGER"] ?? "";
+$v_docker_ip = $data[$v_username]["DOCKER_IP"] ?? "";
+// Same rule as h-add-user-docker: compose files and the docker CLI need a real shell, and the
+// jail is not measured for it. Read before $v_shell picks up its quoted second meaning below.
+$v_docker_eligible = !in_array($v_shell, ["nologin", "false", "rssh", "jailbash"], true);
 $v_suspended = $data[$v_username]["SUSPENDED"];
 if ($v_suspended == "yes") {
 	$v_status = "suspended";
@@ -252,6 +256,32 @@ if (!empty($_POST["save"])) {
 				$v_file_manager = $v_fm_new;
 			}
 			unset($output);
+		}
+	}
+
+	// Docker access (admin only, addon installed). The commands allocate the customer's /24 and
+	// build the companion with its rootless daemon, so this is not a config value either. The
+	// switch only acts where it was rendered: an ineligible shell hides it, and an absent
+	// checkbox would otherwise read as "turn docker off".
+	if (
+		empty($_SESSION["error_msg"]) &&
+		($_SESSION["adminContext"] ?? "") === "admin" &&
+		!empty($_SESSION["DOCKER_SYSTEM"]) &&
+		($v_docker_eligible || !empty($v_docker_ip))
+	) {
+		$v_docker_new = empty($_POST["v_docker"]) ? "no" : "yes";
+		if ($v_docker_new !== (empty($v_docker_ip) ? "no" : "yes")) {
+			$docker_cmd = $v_docker_new === "yes" ? "h-add-user-docker " : "h-delete-user-docker ";
+			exec(HESTIA_CMD . $docker_cmd . quoteshellarg($v_username), $output, $return_var);
+			check_return_code($return_var, $output);
+			unset($output);
+			if (empty($_SESSION["error_msg"])) {
+				// the address is allocated by the command - ask for it rather than guess
+				exec(HESTIA_CMD . "h-list-user " . quoteshellarg($v_username) . " json", $output, $return_var);
+				$docker_row = json_decode(implode("", $output), true) ?: [];
+				$v_docker_ip = reset($docker_row)["DOCKER_IP"] ?? "";
+				unset($output);
+			}
 		}
 	}
 

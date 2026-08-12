@@ -14,6 +14,16 @@ opens above it.
 
 ### Added
 
+- **Docker per customer is a switch in the panel, coupled to unjailed SSH** (#618). Edit-user carries an
+  admin-only Docker checkbox next to the File Manager one, driven by `h-add-user-docker` /
+  `h-delete-user-docker`; when it is on, the label shows the customer's `/24` and says plainly that
+  turning it off removes the containers and their volumes. It only appears once the addon is installed
+  (`DOCKER_SYSTEM` in `hestia.conf`, new, exposed through `h-list-sys-config`). Docker requires a real
+  login shell and an unjailed account - compose files and the docker CLI need a shell, and the jail is
+  not measured for either - enforced in `h-add-user-docker`, not only in the view, because the panel is
+  not the only caller. A customer who already has Docker keeps the switch whatever their shell says, so
+  it can still be turned off.
+
 - **Docker domain publishing: a customer domain fronts their container** (#566, with the #592 panel
   shape; stage 3 of the docker series). Every docker customer gets their own loopback **/24** from
   127.20.0.0/16 at enable time; `DOCKER_IP` is its `.1` and the companion daemon's default bind

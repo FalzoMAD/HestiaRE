@@ -85,6 +85,21 @@ command -v dockerd-rootless.sh > /dev/null 2>&1 \
 		exit "$E_NOTEXIST"
 	}
 
+# Docker needs a real shell (compose files, the docker CLI) and the jail is not measured for
+# it - so the decision is unjailed SSH or no docker, and the check is here rather than only in
+# the panel, because the panel is not the only caller.
+user_shell="$(getent passwd "$user" | cut -f 7 -d :)"
+case "$user_shell" in
+	*nologin | *false | *rssh | *jailbash | '')
+		echo "ERROR: docker needs an unjailed login shell, $user has '${user_shell:-none}'."
+		exit "$E_INVALID"
+		;;
+esac
+if id -nG "$user" 2> /dev/null | tr ' ' '\n' | grep -qx 'sftp-jailed'; then
+	echo "ERROR: $user is in the sftp jail - docker needs an unjailed account."
+	exit "$E_INVALID"
+fi
+
 uid="$(id -u "$user" 2> /dev/null)"
 gid="$(id -g "$user" 2> /dev/null)"
 [ -n "$uid" ] || {
