@@ -42,13 +42,16 @@ $v_ip = $data[$v_domain]["IP"];
 $v_template = $data[$v_domain]["TPL"];
 
 // Docker publishing (#566/#592): the owner's /24 gates the whole section; the domain carries
-// which app it fronts (octet inside the /24 + port)
+// which app it fronts (octet inside the /24 + port). reset(), not [$user]: in the admin path
+// $user is already quoteshellarg'd and would miss the plain json key - the json carries
+// exactly the one requested user anyway.
 exec(HESTIA_CMD . "h-list-user " . $user . " json", $output, $return_var);
 $owner_info = json_decode(implode("", $output), true);
 unset($output);
+$owner_row = is_array($owner_info) ? reset($owner_info) : null;
 $v_docker_net = "";
-if (!empty($owner_info[$user]["DOCKER_IP"])) {
-	$v_docker_net = preg_replace('/\.\d+$/', "", $owner_info[$user]["DOCKER_IP"]);
+if (!empty($owner_row["DOCKER_IP"])) {
+	$v_docker_net = preg_replace('/\.\d+$/', "", $owner_row["DOCKER_IP"]);
 }
 $v_docker = $data[$v_domain]["DOCKER"] ?? "";
 $v_docker_port = $data[$v_domain]["DOCKER_PORT"] ?? "";
