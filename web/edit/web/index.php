@@ -56,8 +56,30 @@ if (!empty($owner_row["DOCKER_IP"])) {
 $v_docker = $data[$v_domain]["DOCKER"] ?? "";
 $v_docker_port = $data[$v_domain]["DOCKER_PORT"] ?? "";
 $v_docker_octet = $data[$v_domain]["DOCKER_OCTET"] ?? "";
-if ($v_docker_octet == "") {
+if (!empty($v_docker) && $v_docker_octet == "") {
 	$v_docker_octet = "1";
+}
+// Prefill for a fresh enable: the classic 3000, and the lowest octet none of the user's OTHER
+// docker domains already targets - the duplicate reject would bite on save otherwise
+if (!empty($v_docker_net) && empty($v_docker)) {
+	if ($v_docker_port == "") {
+		$v_docker_port = "3000";
+	}
+	exec(HESTIA_CMD . "h-list-web-domains " . $user . " json", $output, $return_var);
+	$all_web = json_decode(implode("", $output), true);
+	unset($output);
+	$used_octets = [];
+	foreach ((array) $all_web as $dname => $drow) {
+		if ($dname != $v_domain && !empty($drow["DOCKER"]) && ($drow["DOCKER_OCTET"] ?? "") != "") {
+			$used_octets[(int) $drow["DOCKER_OCTET"]] = true;
+		}
+	}
+	for ($i = 1; $i <= 254; $i++) {
+		if (empty($used_octets[$i])) {
+			$v_docker_octet = (string) $i;
+			break;
+		}
+	}
 }
 
 // Bot rate limiting (Layer B): the domain stores a compact "fam:level,fam:level" field; the family
