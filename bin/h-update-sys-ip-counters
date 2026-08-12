@@ -50,8 +50,11 @@ fi
 # Updating user stats
 for ip in $ip_list; do
 
-	# Calculate usage
-	ip_usage="$(grep -H "$ip" $CONF_DIR/users/*/web.conf)"
+	# Count both forms of the address: behind NAT a record holds the PUBLIC one while the ip
+	# file is named after the local one, so matching only the local name recounts to 0 there -
+	# and writing that back is how a healthy counter gets "corrected" to nothing.
+	nat=$(grep -o "NAT='[^']*'" "$CONF_DIR/ips/$ip" 2> /dev/null | head -1 | cut -f 2 -d \')
+	ip_usage="$(grep -H -e "IP='$ip'" ${nat:+-e "IP='$nat'"} $CONF_DIR/users/*/web.conf)"
 	web_domains="$(echo "$ip_usage" | sed '/^$/d' | wc -l)"
 	sys_users="$(echo "$ip_usage" | sed "s|^$CONF_DIR/users/||; s|/web.conf.*||" | sort -u | tr '\n' ',' | sed "s/,$//g")"
 
