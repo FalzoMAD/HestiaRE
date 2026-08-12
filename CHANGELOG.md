@@ -264,6 +264,19 @@ opens above it.
 
 ### Fixed
 
+- **A user named after a service died at `groupadd` instead of being refused** (#625). `h-add-user`
+  checked `/etc/passwd` and a MariaDB name list, but never `/etc/group` - and the group is created
+  as the mirror of the user, so `docker` (group present, user not) failed with `group creation
+  failed` and no reason. Both databases are checked now, and a curated list keeps the accounts our
+  optional components create free even before they are installed: a name that passes today must not
+  become a collision after an `h-add-sys-*` run. The `<user>-docker` companion namespace is reserved
+  the same way. FTP sub-accounts need none of this - the command prefixes them with the owner.
+- **The proxy template selector was offered where there is nothing to choose** (#626). In the both
+  model the proxy is the nginx front and ships exactly one template; the variety lives in the web
+  templates of an nginx-only box. The select now renders only when there is more than one template
+  (content, not model name, so a custom proxy template brings it back), on the domain and package
+  pages alike. The domain POST path also stopped reading `v_proxy_template` unconditionally, which
+  made every save look like a template change and restarted the proxy.
 - **Every fresh install aborted in the PHP stage (v0.14.6 regression)** (#620). The `already
   installed` guard in `h-add-web-php` used to require both the fpm binary and a per-version pool
   profile; when the profile stopped being written, the guard was left on the binary alone - and the

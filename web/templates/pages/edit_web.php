@@ -449,7 +449,9 @@
 							</div>
 						</div>
 						<div x-cloak x-show="proxySupportEnabled" id="proxytable">
-							<?php if (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") { ?>
+							<?php # nothing to choose is not a choice: the both model ships one proxy template, the
+								# variety lives in the web templates of an nginx-only box
+								if ((($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") && count($proxy_templates ?? []) > 1) { ?>
 							<div class="u-mb10">
 								<label for="v_proxy_template" class="form-label"><?= tohtml( _("Proxy Template")) ?></label>
 								<select class="form-select js-proxy-template-select" name="v_proxy_template" id="v_proxy_template">

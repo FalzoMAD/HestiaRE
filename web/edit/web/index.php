@@ -474,11 +474,15 @@ if (!empty($_POST["save"])) {
 		$ext = preg_replace("/\s+/", " ", $ext);
 		$ext = trim($ext);
 		$ext = str_replace(" ", ", ", $ext);
-		if ($v_proxy_template != $_POST["v_proxy_template"] || $v_proxy_ext != $ext) {
+		// No posted template means no template change - the select is absent for a customer and
+		// wherever there is only one to pick. Reading the key raw made every save a change.
+		$post_proxy_template =
+			$can_edit_templates && !empty($_POST["v_proxy_template"])
+				? $_POST["v_proxy_template"]
+				: $v_proxy_template;
+		if ($v_proxy_template != $post_proxy_template || $v_proxy_ext != $ext) {
 			$ext = str_replace(", ", ",", $ext);
-			if ($can_edit_templates && !empty($_POST["v_proxy_template"])) {
-				$v_proxy_template = $_POST["v_proxy_template"];
-			}
+			$v_proxy_template = $post_proxy_template;
 			exec(
 				HESTIA_CMD .
 					"h-change-web-domain-proxy-tpl " .
