@@ -32,8 +32,8 @@ opens above it.
   `aXb.com` also excluded `a.b.com` from the archive. They compare by index now.
 - **An alias belonging to another customer was never refused** (#601). `is_web_alias_new` compared
   `"$user"` with `"$user"` - the loop had overwritten the caller's `$user` with the owner read from
-  the file path. Only the `type == web` half of the check survived, so a mail or DNS object could take
-  an alias that already belonged to somebody else. Rewritten to mirror `is_web_domain_new`, which had
+  the file path. Only the `type == web` half of the check survived, so a mail domain could take an
+  alias that already belonged to somebody else (`web` and `mail` are the two types that reach it). Rewritten to mirror `is_web_domain_new`, which had
   the shape right, and measured on two customers before and after.
 - **Five inherited leftovers around domain creation** (#601): two `CUSTOM_DOCROOT` branches that could
   never be reached (the record is authoritative - the writer resolves and containment-checks the path),

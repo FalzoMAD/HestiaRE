@@ -314,15 +314,23 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 
 	# Parsing domain exclusions
 	conf="$USER_DATA/web.conf"
+	web_excluded=0
 	for domain in $(search_objects 'web' 'SUSPENDED' "*" 'DOMAIN'); do
 		exclusion=$(echo -e "$WEB" | tr ',' '\n' | awk -v d="$domain" '$0 == d || $0 == "*"')
 		if [ -z "$exclusion" ]; then
 			web_list="$web_list $domain"
 		else
+			web_excluded=$((web_excluded + 1))
 			echo "$(date "+%F %T") excluding $domain" | tee -a $BACKUP/$user.log
 		fi
 	done
 	web_list=$(echo "$web_list" | sed -e "s/  */\ /g" -e "s/^ //")
+
+	# Numbers against numbers, checked after the loop that packs them: a selection that matches
+	# the wrong domain leaves one out of the archive, and nothing says so until someone restores.
+	# The exclusion parser did exactly that for a while - a rule for aXb.com also dropped a.b.com.
+	web_records=$(grep -c "DOMAIN='" "$USER_DATA/web.conf" 2> /dev/null) || true
+	web_expected=$((${web_records:-0} - web_excluded))
 
 	i=0
 
@@ -473,6 +481,16 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user.log
 	else
 		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user.log
+	fi
+
+	# The counter-check: what the archive carries against what the records say, minus what the
+	# customer excluded on purpose. A domain missing from a backup is invisible until a restore -
+	# the exclusion parser dropped a.b.com for a rule that named aXb.com, and nothing said so.
+	web_packed=$(find "$tmpdir/web" -mindepth 1 -maxdepth 1 -type d 2> /dev/null | wc -l)
+	if [ "$web_packed" -ne "$web_expected" ]; then
+		echo -e "$(date "+%F %T") *** WARNING: archive carries $web_packed web domain(s), records say $web_expected ($web_records total, $web_excluded excluded) ***" \
+			| tee -a $BACKUP/$user.log
+		send_notice 'BACKUP' "$user backup carries $web_packed of $web_expected web domains - check the exclusions"
 	fi
 fi
 

@@ -721,8 +721,15 @@ remove_exact_line() {
 
 # Search objects
 # The only accessor that stays a regex: its search value is a flag, and h-backup-user-config
-# passes "*" on purpose to mean "any". Never call it with a domain or account as the value.
+# passes "*" on purpose to mean "any". The guard below is what keeps that from decaying into
+# "matches a domain by accident" - a comment cannot stop the next caller, a refusal can.
 search_objects() {
+	# A dot only appears in a domain or an account, never in a flag value, and as a pattern it
+	# would match any character. The wildcard is the one legitimate pattern here.
+	case "$3" in
+		'*') ;;
+		*.*) check_result "$E_INVALID" "search_objects takes flag values, not names (got '$3')" ;;
+	esac
 	OLD_IFS="$IFS"
 	IFS=$'\n'
 	if [ -f "$(_object_conf "$1")" ]; then
