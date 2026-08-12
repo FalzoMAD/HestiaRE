@@ -349,8 +349,12 @@
 				</button>
 			</div>
 			<div x-cloak x-show="showAdvanced">
-				<?php if (empty($v_docker) && ($_SESSION["userContext"] === "admin" || ($_SESSION["userContext"] === "user" && $_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] === "yes"))) { ?>
-					<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
+				<?php if (empty($v_docker) && (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes")) { ?>
+					<?php // These policy gates protect the CUSTOMER from themselves (a pool set to high, a broken
+					// proxy template), so the REAL admin overrides them even while impersonating: adminContext
+					// is the durable identity (#438), userContext keeps scoping the data. Policy default is
+					// effectively 'no' - protective for customers, invisible to admins. ?>
+				<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
 						// share/ and the list is empty, so hide it instead of an empty dropdown (#219/#591) ?>
 					<?php if (is_array($templates) && count($templates)) { ?>
 						<div class="u-mb10">
@@ -396,7 +400,7 @@
 					<?php } ?>
 					<?php if (empty($v_docker) && !empty($_SESSION["WEB_BACKEND"])) { ?>
 						<?php // profile choice is capacity allocation - a customer would simply pick 'high' ?>
-						<?php if ($_SESSION["userContext"] === "admin" || ($_SESSION["userContext"] === "user" && $_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] === "yes")) { ?>
+						<?php if (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") { ?>
 						<div class="u-mb10">
 								<label for="v_backend_template" class="form-label">
 									<?= tohtml( _("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
@@ -445,7 +449,7 @@
 							</div>
 						</div>
 						<div x-cloak x-show="proxySupportEnabled" id="proxytable">
-							<?php if ($_SESSION["userContext"] === "admin" || ($_SESSION["userContext"] === "user" && $_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] === "yes")) { ?>
+							<?php if (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") { ?>
 							<div class="u-mb10">
 								<label for="v_proxy_template" class="form-label"><?= tohtml( _("Proxy Template")) ?></label>
 								<select class="form-select js-proxy-template-select" name="v_proxy_template" id="v_proxy_template">
