@@ -48,7 +48,6 @@ for user in $user_list; do
 	# Cleaning counters
 	SUSPENDED_USERS=0
 	SUSPENDED_WEB=0
-	SUSPENDED_DNS=0
 	SUSPENDED_MAIL=0
 	SUSPENDED_DB=0
 	SUSPENDED_CRON=0
@@ -125,20 +124,6 @@ for user in $user_list; do
 		DISK=$((DISK + U_DISK_WEB))
 	fi
 
-	# Checking dns system
-	if [ -f $USER_DATA/dns.conf ]; then
-		for domain_str in $(cat $USER_DATA/dns.conf); do
-			parse_object_kv_list "$domain_str"
-			U_DNS_DOMAINS=$((U_DNS_DOMAINS + 1))
-			records=$(wc -l $USER_DATA/dns/$DOMAIN.conf | cut -f 1 -d ' ')
-			U_DNS_RECORDS=$((U_DNS_RECORDS + records))
-			if [ "$SUSPENDED" = 'yes' ]; then
-				SUSPENDED_DNS=$((SUSPENDED_DNS + 1))
-			fi
-			update_object_value 'dns' 'DOMAIN' "$DOMAIN" '$RECORDS' "$records"
-		done
-	fi
-
 	# Checking mail system
 	if [ -f $USER_DATA/mail.conf ]; then
 		for domain_str in $(cat $USER_DATA/mail.conf); do
@@ -194,7 +179,6 @@ for user in $user_list; do
 	U_BANDWIDTH=$BANDWIDTH
 	update_user_value "$user" '$SUSPENDED_USERS' "$SUSPENDED_USERS"
 	update_user_value "$user" '$SUSPENDED_WEB' "$SUSPENDED_WEB"
-	update_user_value "$user" '$SUSPENDED_DNS' "$SUSPENDED_DNS"
 	update_user_value "$user" '$SUSPENDED_MAIL' "$SUSPENDED_MAIL"
 	update_user_value "$user" '$SUSPENDED_DB' "$SUSPENDED_DB"
 	update_user_value "$user" '$SUSPENDED_CRON' "$SUSPENDED_CRON"
