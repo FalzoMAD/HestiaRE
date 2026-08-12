@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Shared companion lifecycle. The rootless daemon runs as its own account under
 # user@<uid>.service with linger, so stopping it is more than one command and the
 # order matters - callers that get it wrong leave processes holding the home.
