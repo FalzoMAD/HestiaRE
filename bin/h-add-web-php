@@ -40,12 +40,8 @@ if [[ ! $version =~ ^[0-9]+\.[0-9]+ ]]; then
 	exit "$E_INVALID"
 fi
 
-# Check if php version already exists. Artefact-based on the fpm binary alone: the per-version
-# pool profile it used to also require is retired (#591) and no longer written (#620).
-if [ -f "$php_fpm" ]; then
-	echo "ERROR: Specified PHP version is already installed."
-	exit "$E_INVALID"
-fi
+# No "already installed" abort: the panel version is apt-installed before the multi-PHP loop
+# reaches it, and that run is what gives it the full extension set. Re-running configures.
 
 # Check if php version is supported (release manifest, share/manifest.json)
 readarray -t php_supported < <(manifest_get '.software_versions.php_supported[]')
@@ -122,10 +118,10 @@ if [ "$WEB_SYSTEM" = "apache2" ]; then
 	$BIN/h-restart-web "yes"
 fi
 
-# Configure fpm
+# Configure fpm. Only the distro pool goes: a re-run on a live version must not take the
+# customer pools with it (the command is idempotent now, so that path is reachable).
 update-rc.d php$version-fpm defaults > /dev/null 2>&1
-v_tpl=${version//./}
-rm -f /etc/php/$version/fpm/pool.d/*
+rm -f /etc/php/$version/fpm/pool.d/www.conf
 cp -f $HESTIA/share/php-fpm/dummy.conf /etc/php/$version/fpm/pool.d/
 sed -i "s/%backend_version%/$version/g" /etc/php/$version/fpm/pool.d/dummy.conf
 cp -f $HESTIA/share/php-fpm/php-fpm.conf /etc/php/$version/fpm/
