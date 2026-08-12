@@ -415,7 +415,7 @@ web_model_run() {
 	web_model_uses_apache "$current" && web_model_uses_apache "$target" \
 		&& echo "  - apache2.conf + module config are rewritten from share/ (existing customizations are snapshotted, not merged)"
 	web_model_uses_nginx "$current" && ! web_model_uses_nginx "$target" \
-		&& echo "  - nginx will be stopped+disabled"
+		&& { [ "$purge" = "yes" ] && echo "  - nginx will be PURGED (/etc/nginx incl. custom includes)" || echo "  - nginx will be stopped+disabled (package kept)"; }
 	[ "$target" = "both" ] && echo "  - mod_remoteip enabled (apache trusts nginx X-Real-IP)"
 	web_model_uses_apache "$current" && [ "$target" != "both" ] \
 		&& echo "  - mod_remoteip disabled"
@@ -576,6 +576,12 @@ web_model_run() {
 	if [ "$purge" = "yes" ] && ! web_model_uses_apache "$target"; then
 		_web_apt_purge apache2 apache2-suexec-custom libapache2-mod-fcgid > /dev/null 2>&1 || true
 		rm -f /etc/logrotate.d/apache2
+	fi
+	# Same for the other side, or --purge means two different things depending on direction.
+	# Without --purge both are only stopped and disabled, which keeps the way back cheap.
+	if [ "$purge" = "yes" ] && ! web_model_uses_nginx "$target"; then
+		_web_apt_purge nginx > /dev/null 2>&1 || true
+		rm -f /etc/logrotate.d/nginx
 	fi
 
 	# Clean only now - after the target model is proven and serving. Never delete the

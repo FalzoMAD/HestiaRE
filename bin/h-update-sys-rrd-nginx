@@ -25,6 +25,12 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                       Action                             #
 #----------------------------------------------------------#
 
+# No nginx in the apache-only model - the graph would draw a flat line from a status endpoint
+# that does not exist (#639).
+if [ "$WEB_SYSTEM" != 'nginx' ] && [ "$PROXY_SYSTEM" != 'nginx' ]; then
+	exit
+fi
+
 # Switching on time period
 case $period in
 	daily)
