@@ -61,7 +61,13 @@ companion_uid="$(id -u "$companion")"
 # userdel refuses while the account owns processes, and fails quietly enough that a
 # later re-enable would silently reuse the old account.
 echo "Stopping the companion's daemon..."
-companion_stop "$companion"
+# before the account goes: the uid is how the cap is addressed
+docker_slice_clear "$user"
+companion_disable_linger "$user"
+if ! companion_stop "$user"; then
+	echo "ERROR: could not stop the companion - refusing to delete an account that still runs."
+	exit "$E_INVALID"
+fi
 
 echo "Removing companion $companion..."
 if ! /usr/sbin/userdel "$companion" > /dev/null 2>&1; then
