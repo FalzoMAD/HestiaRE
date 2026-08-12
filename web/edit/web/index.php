@@ -1071,14 +1071,24 @@ if (!empty($_POST["save"])) {
 	// Docker proxy (#566/#592): enable or retarget re-runs the add command (it updates the
 	// fields and rebuilds); the command itself validates port, octet, duplicates and wildcards
 	if (!empty($v_docker_net) && empty($_SESSION["error_msg"])) {
+		// Digits only, then the same ranges the command enforces - so a typo comes back as a
+		// sentence here instead of a command error, and nothing but a number ever reaches the shell.
 		$post_docker_port = preg_replace("/\D/", "", $_POST["v_docker_port"] ?? "");
-		$post_docker_octet = preg_replace("/\D/", "", $_POST["v_docker_octet"] ?? "1");
+		$post_docker_octet = preg_replace("/\D/", "", $_POST["v_docker_octet"] ?? "");
+		if (!empty($_POST["v_docker"])) {
+			if ($post_docker_port === "" || (int) $post_docker_port < 1024 || (int) $post_docker_port > 65535) {
+				$_SESSION["error_msg"] = _("Container port must be a number between 1024 and 65535.");
+			} elseif ($post_docker_octet === "" || (int) $post_docker_octet < 1 || (int) $post_docker_octet > 254) {
+				$_SESSION["error_msg"] = _("Container address must end in a number between 1 and 254.");
+			}
+		}
 		// Absent select (single template, or none offered) keeps what the domain has
 		$post_docker_tpl = !empty($_POST["v_docker_template"])
 			? $_POST["v_docker_template"]
 			: ($v_docker ?: "default");
 		if (
 			!empty($_POST["v_docker"]) &&
+			empty($_SESSION["error_msg"]) &&
 			(empty($v_docker) ||
 				$post_docker_port != $v_docker_port ||
 				$post_docker_octet != $v_docker_octet ||
