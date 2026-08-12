@@ -24,7 +24,7 @@
 ├── share/             Shipped install-time assets: manifest.json, panel-caddy/,
 │                      panel-php/, dovecot/, firewall/ (consumed by the installer)
 ├── packages/          Hosting plan definitions (*.pkg) — ships in tarball (#150)
-├── templates/         Web/mail vhost + php-fpm templates — ships in tarball (#150)
+├── templates/         Selectable only: nginx/ vhosts, php/ pool profiles, docker/ (#219)
 ├── .sessions/         PHP panel session files (owner: hestia)
 │                      (data/ fully dissolved — see /etc/hestia below)
 ├── func/              Shared bash function libraries
@@ -182,8 +182,9 @@ Variables set in `func/main.sh`:
 |----------|-------|
 | `HOMEDIR` | `/home` |
 | `USER_DATA` | `$CONF_DIR/users/$user` |
-| `WEBTPL` | `$HESTIA/templates/web` |
-| `DNSTPL` | `$HESTIA/templates/dns` |
+| `WEBTPL` | `$HESTIA/templates` |
+| `SHARETPL` | `$HESTIA/share/web` |
+| `PHPTPL` | `$HESTIA/templates/php` |
 | `RRD` | `$HESTIA/web/rrd` |
 | `SENDMAIL` | `$HESTIA/web/inc/mail-wrapper.php` |
 

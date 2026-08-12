@@ -12,923 +12,248 @@ opens above it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## v0.15.0 (2026-08-13)
+
+Closes the template restructuring (#219) and the Docker series (#389/#566), and takes the
+read side of the object accessors with it.
+
 ### Added
 
-- **Disabling Docker for a customer asks for their name** (#632). The checkbox was too light a gesture
-  for what runs behind it: the companion goes, and with it every container, image and volume, while
-  re-checking the box only creates an empty companion. The dialog spells out what is lost and enables
-  its button on an exact match; the server refuses the disable without the confirmation field either
-  way, so an unchecked box cannot carry the deletion away as a side effect of saving something else.
-
-### Fixed
-
-- **HSTS was a silent no-op on an apache front** (#638). `h-add-web-domain-ssl-hsts` reported success
-  and set `SSL_HSTS='yes'`, but wrote nginx syntax whatever the front was, and no apache template
-  included the fragment - so the switch was on, the record said yes, and no browser was ever told.
-  The two defects covered each other: adding only the include would have fed `add_header` to apache
-  and broken `configtest` for the whole box. The fragment now carries the directive of the front that
-  reads it, both apache templates include it inside the SSL vhost, and the delete side resolves the
-  same path. A smoke guard catches the state that was invisible: a domain claiming HSTS whose
-  fragment is missing or written for the other server.
-- **Object reads matched a domain as a regular expression** (#594). The dot in a domain is a wildcard,
-  so with `a.b.com` and `aXb.com` on one box - which the creation guard allows - a read on one could
-  return the other's record, `is_object_valid` could confirm a domain that does not exist, and
-  `add_object_key` could write into the wrong record. Nine accessors in `func/main.sh` and 54 call
-  sites now match literally. `search_objects` deliberately stays a regex (its value is a flag and
-  `*` means "any"), which is written above it. The backup exclusion parsers needed more than a flag:
-  they mix a literal name with an intentional `*`, and matched by prefix - so an exclusion for
-  `aXb.com` also excluded `a.b.com` from the archive. They compare by index now.
-- **An alias belonging to another customer was never refused** (#601). `is_web_alias_new` compared
-  `"$user"` with `"$user"` - the loop had overwritten the caller's `$user` with the owner read from
-  the file path. Only the `type == web` half of the check survived, so a mail domain could take an
-  alias that already belonged to somebody else (`web` and `mail` are the two types that reach it). Rewritten to mirror `is_web_domain_new`, which had
-  the shape right, and measured on two customers before and after.
-- **Five inherited leftovers around domain creation** (#601): two `CUSTOM_DOCROOT` branches that could
-  never be reached (the record is authoritative - the writer resolves and containment-checks the path),
-  counters that were increased before the record was written, a `chown` with an unset argument, a
-  `find | xargs chmod` without `-print0`, and two checks that concluded from stdout or from a
-  comparison that a stray space made always true.
-- **The ip domain counter went one under the truth per backup-restore cycle** (#599). The restore
-  writes the record directly, so nothing increments - but it recounts at the end, and that recount was
-  blind to records holding a NAT'd box's public address. With the recount fixed, the cycle balances:
-  measured 5 / 6 / 5 / 6 / 5 across add, delete, restore, delete with the counter guard green.
-
-- **Docker resources are capped per customer** (#619). Packages carry a `DOCKER_LIMIT` preset -
-  `unlimited` / `low` / `medium` / `high` - which lands on the **companion's** systemd slice, where the
-  daemon and every one of that customer's containers actually live (measured: a container's cgroup is
-  `user-<companion>.slice/user@.../docker-<id>.scope`). The presets map 1:1 onto native systemd syntax
-  (`MemoryMax=25%`, `CPUQuota=100%` = one core, `TasksMax`), so no arithmetic and nothing to recompute
-  when the box changes. The cap is enforced against the customer's own daemon, so no compose file can
-  talk its way out, and it is deliberately **not** gated on the box-wide `RESOURCES_LIMIT` toggle - that
-  is off by default, and a preset that silently does nothing is worse than no preset. Container **count**
-  is still not a limit: a customer can put anything into one container, so the resource cap is the only
-  boundary that holds.
-- **Docker per customer is a switch in the panel, coupled to unjailed SSH** (#618). Edit-user carries an
-  admin-only Docker checkbox next to the File Manager one, driven by `h-add-user-docker` /
-  `h-delete-user-docker`; when it is on, the label shows the customer's `/24` and says plainly that
-  turning it off removes the containers and their volumes. It only appears once the addon is installed
-  (`DOCKER_SYSTEM` in `hestia.conf`, new, exposed through `h-list-sys-config`). Docker requires a real
-  login shell and an unjailed account - compose files and the docker CLI need a shell, and the jail is
-  not measured for either - enforced in `h-add-user-docker`, not only in the view, because the panel is
-  not the only caller. A customer who already has Docker keeps the switch whatever their shell says, so
-  it can still be turned off.
-
-- **Docker domain publishing: a customer domain fronts their container** (#566, with the #592 panel
-  shape; stage 3 of the docker series). Every docker customer gets their own loopback **/24** from
-  127.20.0.0/16 at enable time; `DOCKER_IP` is its `.1` and the companion daemon's default bind
-  (daemon.json with both keys), so a plain tutorial compose file publishes on the customer address
-  with **no address in it**. The other octets belong to the customer for multi-app setups; each
-  domain picks its octet and port. Three new fields on the web record (`DOCKER` = docker template
-  name, `DOCKER_PORT`, `DOCKER_OCTET`) carry the whole state - `TPL`/`PROXY` are never touched, so
-  a web-model switch keeps the docker choice structurally. When `DOCKER` is set, the front renders
-  from `templates/docker/<system>/` (merged files, WebSockets through, full include set so LE/
-  CrowdSec/botlimit attach; the apache variant defuses both LE traps), the both-model apache
-  backend vhost is not rendered and the domain has no FPM pool and no PHP selector. Separation
-  between local users is one rendered nft rule per customer /24 with the webserver allowlisted,
-  derived from the user records so it survives firewall rebuilds. `h-add-web-domain-docker`
-  validates port (1024+, rootless), octet, duplicate targets and live wildcard listeners (the
-  container would silently never start). Panel: Docker-Proxy checkbox for docker customers with
-  `<net>._` octet + port entry, template/PHP selectors hidden while active. Verified on all three
-  web models against a real container, including serve-through, rebuild persistence, restore
-  round-trip and the LE challenge mechanics on both web systems.
-
-- **HTTP/3 (QUIC) is a per-domain switch, gated on the nginx build** (#613, part of #219). http3 used
-  to exist only as three `wordpress*-http3` template variants - a duplicate per template, and only for
-  the WordPress family. It is orthogonal to the template, so it becomes a per-domain switch
-  (`h-add-web-domain-http3` / `h-delete-web-domain-http3`, and a checkbox in the SSL section) that
-  works on **any** template: the quic listen and `Alt-Svc` header go into an include fragment every
-  merged SSL block already globs, so no template or renderer changes are needed. It needs SSL and an
-  nginx front (nginx-only or both model). The switch is **offered and applied only where nginx is built
-  `--with-http_v3_module`** - the Debian 12 and Ubuntu 24.04 OS nginx is not, and a quic listen fails
-  `nginx -t` there. This also fixes a latent bug: the old `-http3` templates carried that quic listen
-  and already broke `nginx -t` on those two targets. Restore honours an archived switch or maps a
-  `-http3` template to its base plus the switch, but drops the quic fragment when the target nginx
-  cannot do http3, so a cross-restore degrades cleanly. The three `-http3` templates are removed.
-  The `HTTP3` field is authoritative (intent, kept across restore and host moves) and the quic
-  fragment is reconciled from it through the capability gate on **every rebuild**, so the file can
-  never outrun the box; a smoke guard flags a quic fragment on a box whose nginx lacks http_v3
-  (e.g. after an nginx package change). **UDP/443** (the QUIC port) is open in the standard firewall
-  rule set, without which the advertised h3 endpoint is silently dropped and clients fall back to
-  HTTP/2. It ships as a seed rule, not opened per switch, so it survives a firewall rebuild rather
-  than being dropped the way an imperative open would be.
+- **Docker per customer, from the daemon to the domain** (#389/#566/#592/#618/#619). Each enabled
+  customer gets a *companion* account running a rootless daemon, its own loopback **/24** from
+  127.20.0.0/16 (`DOCKER_IP` = its `.1` = the daemon's default bind, so a tutorial compose file
+  publishes with no address in it), and a per-domain switch: `DOCKER` / `DOCKER_PORT` /
+  `DOCKER_OCTET` on the web record make the front proxy to the container - no backend vhost, no FPM
+  pool, no PHP selector, WebSockets through, LE and CrowdSec and bot limits still attached.
+  `TPL`/`PROXY` stay untouched, so a web-model switch keeps the choice. Templates live per front in
+  `templates/docker/<system>/` and are offered in their own menu. Separation between local users is
+  one rendered nft rule per /24 with the webserver allowlisted, derived from the records so it
+  survives a firewall rebuild. Admin switch in edit-user, gated on an unjailed login shell; turning
+  it off deletes containers, images and volumes and therefore asks for the customer's name.
+  Resource cap through the package (`DOCKER_LIMIT`: `unlimited`/`low`/`medium`/`high`) on the
+  companion's systemd slice, where the daemon and all containers live - percentages are native
+  systemd syntax and the cap is not gated on the box-wide `RESOURCES_LIMIT`.
+- **HTTP/3 (QUIC) as a per-domain switch** (#613). Was three `wordpress*-http3` template variants;
+  is now `h-add-web-domain-http3` plus an SSL-section checkbox that works on any template, through
+  an include fragment the merged SSL block already globs. Offered only where nginx is built
+  `--with-http_v3_module` (deb12 / ub24 are not - the old variants broke `nginx -t` there). UDP/443
+  is in the standard firewall seed, so the advertised endpoint is reachable after a rebuild.
+- **Suspension and the offline switch render from `share/`** (#586). Suspending used to pick a
+  template from the selectable tree, which apache never had - on apache-only the vhost came out
+  empty and the domain served the box default page. Both models render the same suspend page now,
+  and a customer-facing offline switch (`h-add-web-domain-offline`) serves a 503 maintenance page.
+- **Proxy caching is a switch** (#587), not a template variant: `h-add-web-domain-cache` with a
+  duration, on any template.
+- **Panel users get their uid from a dedicated band** (`func/identity.sh`, #388), deterministic per
+  username, with the companion block one thousand below. A smoke guard checks the preconditions -
+  `UID_MAX`/`GID_MAX` below the band, subordinate ranges wide enough, no two panel users sharing a
+  uid - because a collision only surfaces much later.
+- **DNSBL management from the CLI** (#555): `h-add-sys-mail-dnsbl` / `h-delete-sys-mail-dnsbl` /
+  `h-list-sys-mail-dnsbl`.
 
 ### Changed
 
-- **Web vhost templates are one file, and a domain has one vhost config** (#593, #219 Phase 8).
-  The `.tpl` (HTTP) / `.stpl` (SSL) pair is gone: a template now carries both server blocks split
-  by a marker line, and renders **one** `<system>.conf` per domain - the HTTP block always, the SSL
-  block only when SSL is on. This kills the "fixed in the .tpl, forgotten in the .stpl" divergence
-  class at the source; there is no runtime split or generation. `add_web_config` detects the format
-  from the marker, so legacy pair templates (mail) keep working unchanged. Restore stays format
-  agnostic: it discards every archived vhost `.conf` and re-renders from the current template, so a
-  HestiaCP two-file backup restores as one merged vhost automatically - the backup format stays
-  bidirectional. Verified on all four VMs across nginx-only, apache-only and both models (full
-  lifecycle + serving, byte-equivalent output, backup round-trip). `h-change-web-domain-sslhome` is
-  removed with its `v-*` symlink: it had no panel path (the separate SSL docroot is not exposed) and
-  a text-replace could not tell the two blocks apart once they share a file.
-
-- **The PHP version is its own web.conf field, and the pool template becomes a named profile**
-  (#591, #219 Phase 6, closes #550). A domain's version used to be either implied (`BACKEND=default`
-  followed the system default) or hidden inside the backend value (`BACKEND=PHP-8_3`), so a record
-  never stated the version it actually ran. Now `PHP_VERSION` carries the version and `BACKEND`
-  carries only the pool profile - `default` (ondemand, 8 children, unchanged), `small` (ondemand, 4
-  children) and `high` (dynamic, up to 24); the set is derived from the shipped templates, so a custom
-  profile survives a backup round-trip. The per-version `PHP-X_Y.tpl` files stop being generated and
-  `socket.tpl` / `no-php.tpl` are retired; an update sweeps them from an existing box.
-
-  Existing records migrate on their next rebuild: the version is read from the **pool the vhost
-  actually points at** (`find -L /etc/php/`), not from `multiphp_default_version`, because after any
-  system-default change the two diverge until a rebuild catches up - reading the default would rewrite
-  a domain onto a version it was never on. Verified against a deliberately drifted box (a `default`
-  domain on 8.4 while the system default was 8.2 migrated to 8.4, not 8.2), on both nginx-only and
-  apache-only. The dead `WEB_BACKEND_POOL` per-user-pool mode and its five branches go with it.
-
-  The backup format stays bidirectional. The archive carries three fields for two facts on purpose:
-  `BACKEND` is rewritten to the HestiaCP-readable `PHP-<ver>` so a foreign restore keeps the version,
-  while native `PHP_VERSION` / `PHP_PROFILE` preserve the exact HestiaRE state. Both restore paths add
-  the two native keys to their fixed field list (a key absent there is dropped silently) and prefer
-  them, deriving the version from `BACKEND` only for a foreign or pre-#591 archive. A domain backed up
-  at 8.2 restores as 8.2 on a host whose default is 8.4. Before the first write a **preflight** checks
-  the archived versions against the installed ones and aborts with the list if any is missing;
-  `RESTORE_PHP_FALLBACK=yes` (or a yes at the interactive prompt) maps them to the system default -
-  never silently.
-
-- **The template tree holds only what somebody chooses** (#219 phases 3-5, #588/#589/#590).
-  `templates/` is down to `nginx/` (the nginx-only vhost selection) and `php/` (FPM pool
-  profiles); everything nobody picks moved to `share/` - the apache vhost, the both-model
-  proxy vhost, the suspend/offline pages, the domain skeleton, awstats, the unassigned page
-  and the mail bodies. The six remaining apache templates went entirely: both apache models
-  already rendered the php-fpm variant, so `hosting` (mpm_itk `AssignUserID`, mod_ruid2
-  `RUidGid`), `www-data`, `phpcgi` and `phpfcgid` were unreachable mod_php-era leftovers,
-  and their trigger scripts fired from templates nothing could select.
-
-  Two rules make the flatter tree work. **The role picks the directory, not the service
-  name**: in the both model nginx is the proxy and renders `share/web/nginx/default.tpl`,
-  while in nginx-only the same service is the web role and renders
-  `templates/nginx/default.tpl` - two different files with the same name, so
-  `web_template_file` decides once for validators and renderer alike. And **`PHPTPL` is its
-  own anchor** rather than `$WEBTPL/$WEB_BACKEND`, because `WEB_BACKEND` is a config value
-  and a directory named after it cannot be renamed without renaming the value everywhere it
-  is compared.
-
-  Render output was verified byte-identical on all four VMs across all three web models,
-  before and after.
-
-- **Templates are validated the same way they are rendered, and legacy values are mapped**
-  (#588). `is_web_template_valid` looked only in the backend subdirectory while
-  `add_web_config` falls back to the system directory, so a template that renders fine was
-  rejected on the way in. Both now resolve through one function. Every write - CLI, restore
-  and package - passes through `accept_web_template`, which maps a known aged-out value
-  (`caching`, `hosting`, `phpcgi`, `phpfcgid`, `www-data`, `suspended`, an orphaned
-  `PHP-X_Y`) onto its replacement and carries the side effect with it: a restored domain
-  that used the `caching` template comes back with the cache switch on instead of silently
-  losing the feature. The two callers differ on purpose - a restore cannot abort an archive
-  over one record and falls back, while a CLI caller that names a template still gets an
-  error for a typo. New guard `check_web_templates_resolvable` walks the records with the
-  renderer's own resolution, since a value pointing at a removed template otherwise
-  surfaces only on the next rebuild.
-
-  The archive stops carrying its `template/` copies. Neither HestiaRE nor HestiaCP ever
-  read them back, and they were the only place the template layout was baked into the
-  backup format.
-
-### Added
-
-- **Suspension renders from `share/` in every web model, plus a customer offline switch**
-  (#586, #219 Phase 1). Suspending a domain used to pick a `suspended` template from the
-  selectable tree - which apache never had, so on apache-only the vhost came out empty
-  (`apache2 -t` green) and the domain silently served the box default page, over TLS even with
-  the hostname certificate. `prepare_web_domain_values` now overrides the template *location*
-  (`share/web/suspend/admin|offline`, with nginx/proxy/apache2 variants), so all three models
-  share one rendering path and none of it is user-selectable. New
-  `h-add/delete-web-domain-offline` gives customers a "temporarily offline" switch that answers
-  **503** - transient for search engines - with its own maintenance page, while admin
-  suspension keeps the 200 suspend page and outranks it. The `OFFLINE` flag is registered,
-  restore-safe and exposed in the panel.
-
-- **Proxy caching is a switch now, not a template** (#587, #219 Phase 2). The old `caching`
-  proxy template cloned the whole vhost for one feature and kept its zone in a shared pool
-  file (the #583 breakage surface). The default proxy vhost instead gains a generic
-  `include .../nginx.location.d/*.conf` **inside `location /`** - the one block a later
-  include cannot replace, since a second `location /` is a hard nginx error - and
-  `h-add/delete-web-domain-cache` drops the cache directives there as a fragment, with the
-  zone as **one file per domain** under `conf.d/` (loaded before the vhosts by include order).
-  Removal is a plain `rm`; no pattern ever touches another domain's zone again. Flags
-  `PROXY_CACHE`/`PROXY_CACHE_DURATION` follow the FastCGI precedent end to end: registry,
-  restore field lists, rebuild reapply (gated on the proxy role), model-switch precheck,
-  delete/rename cleanup, panel checkbox and purge button. The `caching` and `hosting`
-  templates are gone - `hosting`'s only remaining difference to `default` was a chmod
-  trigger from the mod_php era. Two new smoke guards: every enabled cache flag has its
-  zone, and no rendered vhost is 0 bytes.
-
-- **Rootless Docker per customer** (#389). Each Docker-enabled customer gets a *companion* account one
-  uid block below their own, which runs their private rootless daemon as container uid 0 while the
-  customer maps to container uid 1000 - the id stock images expect, so upstream compose files work
-  unmodified. The customer never touches the companion: they reach the daemon through a group-owned
-  socket in `~/.companion`, which lives inside their home so both travel as one backup unit. Verified
-  end-to-end: the maps inside a container come out exactly as designed, and an unmodified image running
-  as 1000 writes files owned by the customer on the host.
-
-  `h-add-user-docker` / `h-delete-user-docker` enable and disable it; `h-delete-user` takes the companion
-  with it, and `h-restore-user` re-creates it after a restore - the companion uid follows the customer's,
-  which the identity allocator (#388) reassigns freshly, so it is recomputed rather than restored.
-  Backups exclude the companion image store, since images are reproduced by pulling them; a 201 MB store
-  turned a 222 MB home into a 21 MB archive.
-
-- **Docker is installed from the official repo as a scoped addon** (`h-add-sys-docker` /
-  `h-delete-sys-docker`, #389), replacing the inline `docker.io` install. The OS route cannot deliver
-  this feature: neither Debian packages compose v2 at all, the OS `docker.io` spans 20.10 to 29.1 across
-  the four targets, and `dockerd-rootless.sh` ships only in Debian's build. The exception stays scoped -
-  the repo, keyring and pin are added by the addon and removed with it, so a box without Docker carries
-  no Docker repo. The rootful daemon is disabled (service **and** socket, else socket activation brings
-  it back), and the removal side refuses while customers still have it enabled unless forced. No cgroup
-  delegation drop-in is installed: systemd already ships `user@.service` with `Delegate=pids memory cpu`
-  on all four targets (verified down to systemd 252), which is what `--memory`, `--cpus` and
-  `docker stats` need. Adding `cpuset`/`io` on the template would have widened every customer's session,
-  Docker or not, for limits nothing asks for.
-
-  The repo is deliberately **not** pinned. The condition it was added for - stop it shadowing OS packages
-  - describes a risk that cannot occur: no OS package shares a name with it (Debian and Ubuntu carry
-  `containerd`, `docker.io`, `docker-cli`, `docker-compose`, `docker-buildx`; the repo carries
-  `containerd.io`, `docker-ce*` and the `*-plugin` variants). A pin could only have narrowed what the
-  repo offers, never bounded it: apt's allow-list form does not work - a `Package: *` pin on the origin
-  overrides any specific-package stanza regardless of order or quoting, which silently pinned `docker-ce`
-  itself to -1 and would have blocked its security updates - and a name-based deny list cannot cover
-  packages added later. `h-delete-sys-docker` still removes a pin from an earlier revision.
-
-- **`h-check-sys-smoke` guards the identity allocator's preconditions** (#388). Not its output - panel
-  users created before the change keep their old uid by design, so their position is deliberately not
-  checked. What must hold is that `UID_MAX`/`GID_MAX` cap below the band (else a bare `useradd` can land
-  inside it and collide with an allocation), that `SUB_UID_MAX`/`SUB_GID_MAX` cover the whole computed
-  range (the shipped 600100000 would reject the companion subuid ranges of roughly 43% of usernames, and
-  only at "enable Docker", long after the account was created), and that no two panel users share a uid.
-  Verified in both directions: all four checks fail on a box without the guard rail and pass after it runs.
-
-### Added
-
-- **Panel users get their uid allocated from a dedicated band** (`func/identity.sh`). The username hash
-  only picks where to start looking; the first free slot wins and is that user's uid from then on, as in
-  classic HestiaCP. A taken slot is not an error - it reprobes. Customers occupy the odd thousands
-  (11000-41999), each companion the interleaved block below (10000-40999), which reserves the second id
-  rootless Docker needs (#389).
-
-  Backups carry **no** authoritative identity and restores allocate a fresh uid rather than trying to
-  reproduce one. Portability comes from `tar` resolving ownership by **name** on extract: the account is
-  created before the unpack, so the files land on the new uid by themselves - measured, a file archived
-  under uid 5001 extracts as 5099 once the name maps there. This is also why `h-backup-user` must never
-  gain `--numeric-owner`: it pins the archived numbers and destroys exactly that property. HestiaCP
-  archives need no special path, since their sequential uids are discarded like any other. The one case
-  still needing a chown is a restore under a *different* username, where `tar` finds no local name to
-  resolve to; the inherited `old_uid`/`new_uid` re-chown already covers it.
-
-  Paired with `login_defs_guard`, which caps `UID_MAX`/`GID_MAX` below the band so a bare `useradd`
-  cannot wander into it. That also raises `SUB_UID_MAX`/`SUB_GID_MAX`: the shipped default of 600100000
-  sits *below* our highest range end (1048675999) and would have rejected the subordinate ranges of
-  roughly 43% of all usernames.
-
-### Changed
-
-- **The /proc exemption gid is resolved at every boot instead of baked in at install time.** The unit
-  carried the numeric gid that `procvis` happened to have when the installer ran. Delete and recreate that
-  group - or let anything else claim the id - and the frozen number keeps exempting whatever now holds it,
-  with nothing noticing. The unit now reads `/etc/group` in its own `ExecStart`, so the exemption is
-  always whatever this host says right now, and a missing group means `gid=0`, i.e. nobody extra. That
-  also settles the original name-vs-numeric argument: resolving per boot is exactly the behaviour a
-  restored box needs. `gid=0` is deliberate rather than omitting the option - a remount that merely leaves
-  `gid` out keeps the previous value (mount options are sticky) and `gid=` is rejected outright, so this
-  is what actually withdraws a stale exemption on a running box.
-
-- **`h-check-sys-smoke` verifies the live /proc state.** Failure of the hardening is fail-open and
-  invisible to users, so the box now checks what is actually mounted: unit not failed, hidepid present,
-  and the mounted gid still pointing at `procvis`. The last one caught a deliberately drifted gid during
-  testing.
-
-- **`/proc` hardening now lives in `/etc/fstab` instead of an `@reboot` cron job.** The old line remounted
-  `/proc` with `hidepid=2` and re-applied it from `/etc/cron.d/hestia-proc` after boot, guarded by a
-  `sleep 5`. Cron starts *after* most services, so that sleep papered over a window in which `/proc` was
-  still unhardened; systemd applies fstab options before the services come up and closes it. The new
-  `proc_hardening_apply` (`func/helper.sh`) also creates the `procvis` group and writes a **numeric**
-  `gid=` exemption - a name would resolve to a different id on a restored box and silently exempt whoever
-  holds it there. The entry is only persisted after the remount is proven to work on the running kernel,
-  so LXC still degrades to the documented skip rather than to an fstab that fails at boot, and a
-  hand-written `/proc` entry is left alone. Existing boxes are converted on upgrade. The exemption group
-  is what makes rootless container runtimes work at all under hidepid (moby#45014), so this is a
-  prerequisite for #389.
-
-- **`sync-upstream.sh` names its source branch** and archives that branch instead of whatever the mirror
-  happens to have checked out. A manual checkout in the mirror made one sync archive `1.10-beta`, which is
-  *behind* `main`, so the upstream reference moved backwards while the commit still read
-  "HestiaCP snapshot <today>" - only a version string deep in the tree gave it away. The subject now
-  carries `(<branch> @ <sha>)`, and `UPSTREAM_BRANCH=` overrides it on purpose.
-
-### Added
-
-- **A docker domain picks its template in the panel** (#592, closing #219 Phase 7). Docker templates
-  live per front system under `templates/docker/`, and `h-list-web-templates-docker` lists exactly the
-  set the renderer would use. The select appears in the docker block once there is more than one
-  template - a custom template shows up there and, as intended, never in the general template list.
+- **A template is one file, and a domain has one vhost config** (#593). The `.tpl`/`.stpl` pair is
+  gone: a template carries both server blocks split by a marker, and renders one `<system>.conf` -
+  the SSL block only when SSL is on. That removes the "fixed in the .tpl, forgotten in the .stpl"
+  divergence class. Restore discards archived vhosts and re-renders, so a HestiaCP two-file backup
+  restores as one merged vhost and the backup format stays bidirectional.
+  `h-change-web-domain-sslhome` is removed with its `v-*` symlink.
+- **The PHP version is its own field** (#591, closes #550). `PHP_VERSION` carries the version,
+  `BACKEND` only the pool profile (`default` / `small` / `high`). Existing records migrate on their
+  next rebuild, reading the version from the pool the vhost actually points at rather than from the
+  system default - the two diverge after any default change. The archive carries `BACKEND` rewritten
+  to HestiaCP's `PHP-<ver>` plus native `PHP_VERSION`/`PHP_PROFILE`; a restore prefers the native
+  pair and aborts before the first write if an archived version is not installed
+  (`RESTORE_PHP_FALLBACK=yes` maps to the default instead - never silently).
+- **`templates/` holds only what somebody chooses** (#588/#589/#590): `nginx/`, `php/`, `docker/`.
+  The apache vhost, the both-model proxy vhost, suspend/offline, skeleton, awstats and mail bodies
+  moved to `share/`. The six apache templates went entirely - both apache models already rendered
+  the php-fpm variant, so the mod_php-era variants were unreachable. Two rules keep the flat tree
+  working: the **role** picks the directory (nginx is the proxy in the both model, the web role in
+  nginx-only), and `PHPTPL` is its own anchor rather than `$WEBTPL/$WEB_BACKEND`.
+- **Templates are validated the way they are rendered, and aged-out values are mapped** (#588).
+  One resolution function for validator and renderer; every write passes through
+  `accept_web_template`, which maps a legacy value onto its replacement **with its side effect** - a
+  restored `caching` domain comes back with the cache switch on. A CLI typo still errors; a restore
+  falls back rather than abort over one record.
+- **The web model decides the install scope** (#639). apache-only means no nginx on the box at all.
+  Mail-only still gets one for the webmail vhost and ACME, because the wizard fixes that preset to
+  NGINX - an exception carried by the model. Leaving a server behind stops and disables it; `--purge`
+  removes the package, symmetrically for both servers.
+- **An install stage is only skipped for the answers it ran with** (#636). Stage markers carry the
+  fingerprint of their `install.conf`; re-answering the wizard re-runs what changed. A legacy empty
+  marker no longer counts as done.
+- **PROVENANCE recomputed for all three folders** against `upstream/hestiacp@bc3720a` (snapshot
+  2026-08-10). `DNSTPL` is gone from `func/main.sh` with the rest of the DNS leftovers, and
+  PATHS.md/STRUCTURE.md/CODEMAP carry the flattened template tree.
+- **Scanner bans drop, credential bans still reject** (#555): the verdict is per jail chain.
+- **`/proc` hardening lives in `/etc/fstab`**, not an `@reboot` cron job, and its exemption gid is
+  resolved at every boot instead of baked in at install time. A smoke guard verifies the live mount,
+  since fail-open is invisible.
 
 ### Removed
 
-- **The DNS leftovers in packages and user records are gone** (#619). A local DNS server is
-  permanently out of scope, so `DNS_TEMPLATE`, `DNS_DOMAINS`, `DNS_RECORDS`, the `NS` field and the
-  `U_DNS_*` counters no longer exist in packages, user records, or any listing format - they described
-  a subsystem that cannot be installed. `h-list-user-ns` went with them (it read the `NS` field and had
-  no callers), together with its `v-*` alias, and `h-change-user-template` lost its `DNS` branch, whose
-  validator `is_dns_template_valid` was never defined in the first place - it would have failed on use.
-  `SUSPENDED_DNS` stays for now: it belongs to the suspension flag set, not to packages.
+- **The DNS leftovers** (#619). No local DNS server is planned, so `DNS_TEMPLATE`, `DNS_DOMAINS`,
+  `DNS_RECORDS`, `NS`, `SUSPENDED_DNS` and the `U_DNS_*` counters are gone from packages, user
+  records and every listing format, together with `h-list-user-ns`. `h-add-user-package` no longer
+  validates fields the panel does not post - which is why no package could be saved from the panel.
+  The DKIM record view stays: that formats mail-stack data for somebody else's DNS.
 
 ### Fixed
 
-- **Saving a docker domain from the panel failed with a 500 and dropped the proxy** (#592). Every POST
-  family whose control the docker branch hides was still read unconditionally: the pool template
-  reached `quoteshellarg(null)` and killed the whole save, and the proxy checkbox - absent because
-  nothing rendered it - read as "customer switched the proxy off", so `PROXY` would have been deleted
-  on every save. All of them gate on the domain's docker state now, the same way the view does.
-- **A user whose only domain is a docker domain could not be backed up** (#592). On the both model
-  there is no backend vhost by design, so the backup fell through to the legacy single-file lookup and
-  aborted with `can't parse config .../apache2.conf` - taking the whole user backup with it.
-- **No package could be saved from the panel** (found while building #619). `h-add-user-package`
-  validated `DNS_DOMAINS` / `DNS_RECORDS` unconditionally, but HestiaRE has no DNS server (bind9 is
-  out), so the package form neither renders nor posts them - every save died with `invalid DNS_DOMAINS
-  format`, visible only in the log.
-- **A user named after a service died at `groupadd` instead of being refused** (#625). `h-add-user`
-  checked `/etc/passwd` and a MariaDB name list, but never `/etc/group` - and the group is created
-  as the mirror of the user, so `docker` (group present, user not) failed with `group creation
-  failed` and no reason. Both databases are checked now, and a curated list keeps the accounts our
-  optional components create free even before they are installed: a name that passes today must not
-  become a collision after an `h-add-sys-*` run. The `<user>-docker` companion namespace is reserved
-  the same way. FTP sub-accounts need none of this - the command prefixes them with the owner.
-- **FTP account commands disagreed about the account name** (found alongside #625). `h-add-web-domain-ftp`
-  prefixed the name with the owner, while delete and the two change commands wanted the stored
-  `<owner>_<name>` - so the name that just worked for the add failed for everything else. All four take
-  either form now. The panel was unaffected: it already passed the short name to add and the full one
-  to the rest.
-- **The proxy template selector was offered where there is nothing to choose** (#626). In the both
-  model the proxy is the nginx front and ships exactly one template; the variety lives in the web
-  templates of an nginx-only box. The select now renders only when there is more than one template
-  (content, not model name, so a custom proxy template brings it back), on the domain and package
-  pages alike. The domain POST path also stopped reading `v_proxy_template` unconditionally, which
-  made every save look like a template change and restarted the proxy.
-- **Every fresh install aborted in the PHP stage (v0.14.6 regression)** (#620). The `already
-  installed` guard in `h-add-web-php` used to require both the fpm binary and a per-version pool
-  profile; when the profile stopped being written, the guard was left on the binary alone - and the
-  panel version is apt-installed before the multi-PHP loop reaches it, so the reference version
-  aborted and took the installer with it. The abort is gone: `h-add-web-php` is idempotent, which
-  is what all three callers want anyway (the installer deliberately re-runs the panel version to
-  give it the full extension set; the panel page and `h-change-sys-panel-php` check installedness
-  themselves). Since a re-run is now reachable on a live box, it clears only the distro `www.conf`
-  instead of the whole pool directory, so customer pools survive it.
-- **The dummy FPM pool leaked into the isolated panel master with a raw placeholder socket**
-  (#604). `h-rebuild-web-domains` seeded the fallback pool by globbing `/etc/php/*`, which on
-  HestiaRE catches `/etc/php/hestia` - the isolated panel FPM, not a customer version - so the
-  panel master ran a stray `www-data` pool listening on a literal `php%backend_version%-fpm-dummy.sock`.
-  Two compounding faults, both inherited from upstream but only reachable here because our panel
-  PHP lives under `/etc/php/`: the glob (now `h-list-sys-php plain`, which already excludes
-  `hestia`) and a stale `s/9999/` substitution that never matched the template's `%backend_version%`
-  (aligned in `h-rebuild-web-domains` and `h-restart-web-backend` with the two install-path call
-  sites). Present on every fresh install; no vhost routed to the socket, but it widened what the
-  isolated panel master ran.
-
-- **A domain name acting as a regex could delete another customer's cache zone and break nginx
-  box-wide** (#583). Four sites removed lines from shared nginx pool files with the domain
-  unescaped in a sed pattern - and the dot is a wildcard there, so deleting `a.b.com` also took
-  `aXb.com`'s `proxy_cache_path` line. With a vhost still referencing the zone, every
-  `nginx -t` fails from then on, for every customer. Two of the sites ran unconditionally on
-  every domain delete or rename, so the trigger was not "a customer uses caching" but "a
-  customer deletes any domain". All four now rewrite by literal match on the full
-  `keys_zone=<domain>:` prefix (new `remove_pool_zone` helper; the `caching.sh` trigger inlines
-  it, having no includes), and `h-add-fastcgi-cache` compares fixed-string so a cross-match can
-  no longer suppress a zone append.
-
-  The sweep for the same shape found the destructive write side beyond the pool files: record
-  deletes and renames in `web.conf`/`mail.conf` (delete, rename, owner change), the webstats and
-  letsencrypt queues, and every per-account edit of the mail files - `is_localpart_format_valid`
-  allows dots, so deleting `john.doe` also matched `johnXdoe`'s lines. Domain-side patterns
-  escape the dot (the only metacharacter a valid domain can carry); the account side switches
-  to literal comparison outright (`remove_line_by_prefix`/`remove_exact_line`, ownership- and
-  mode-preserving since `passwd` is dovecot:mail), so a later widening of the localpart charset
-  cannot silently under-escape. `rebuild.sh`'s SSL-flag migration additionally anchors on the
-  full `DOMAIN='..'` field, since its old pattern could also match inside another record's
-  `CATCHALL` value. The read side (`grep` without `-F` in the object accessors) is deliberately
-  not in this round - it has the blast radius of every command and is filed as #594; closing
-  #583 does not close the class.
-
-- **`h-change-sys-php` took effect one round late - and rebuilt the whole stock on the OLD
-  version** (#585). The command rebuilt all domains first and switched `update-alternatives`
-  last, so the rebuild still read the old default; the switch only materialised on the next
-  unrelated rebuild. Measured: after `h-change-sys-php 8.2` on a 8.4 box, pool and vhost socket
-  stayed at 8.4 until something else triggered a rebuild. The switch now happens before the
-  loop, which also makes the "reload current version first" restart actually target the new
-  version.
-
-- **A missing web template wrote a silent 0-byte vhost** (#586, guard brought forward).
-  `add_web_config` piped `cat template | sed` without checking the template exists - on
-  apache-only, suspending a domain (`TPL='suspended'`, which has no apache template) produced an
-  empty vhost that `apache2 -t` accepts, and the domain fell through to the box default vhost
-  with the hostname certificate. It now warns on stderr and skips the write instead - a
-  visible error, and deliberately not a hard abort, which would kill a rebuild loop over one
-  broken record. The rebuild commands print a closing tally of skipped vhosts so the case
-  survives a nightly run's log; the exit code stays untouched, because the web-model switch
-  treats a nonzero rebuild as switch failure and one broken record must not veto it.
-
-- **The packaged rootful daemon left a docker0 bridge behind** (#579). `apt-get install docker-ce` starts
-  the rootful daemon as part of the package install, and it creates `docker0` before `h-add-sys-docker`
-  disables it again - so the bridge stayed: empty, `down`, and holding 172.17.0.0/16. Reproduced on all
-  four targets after a fresh v0.14.3 install, so it was a property of the install rather than a test
-  artefact.
-
-  It is more than untidy. `ip route get 172.17.0.2` answered `dev docker0 src 172.17.0.1`, so a route to a
-  rootless container's address looked like it existed while the packets went nowhere - the containers live
-  in their companion's own network namespace, which the host has no path into. That costs real time in
-  exactly the area where per-user Docker gets debugged.
-
-  Both `h-add-sys-docker` and `h-delete-sys-docker` now remove it, but only when no interface is enslaved
-  to it - a host deliberately running rootful Docker keeps its bridge and its containers. A smoke guard
-  covers the invariant, and skips rather than fails where the bridge is genuinely in use. Verified that
-  rootless containers are unaffected: own namespace, published port bound and answering, egress intact.
-
-
-- **Docker backups dropped named volumes** (#389). The exclusion that keeps container images out of a
-  customer archive covered the whole Docker data root - and `volumes/` sits inside it, which is where a
-  stock compose file puts its database. Reproduced: the volume content was on disk and the archive
-  carried zero entries under `.local/share/docker`.
-
-  What is kept is now a per-customer choice, made when Docker is enabled: `volumes` (the default) or
-  `full`. Only those two boundaries are sound - the layer store and the metadata indexing it are
-  separate directories, so keeping one without the other restores a store referencing layers that are
-  not there. A missing or empty value resolves to `volumes`, which is the normal state rather than an
-  edge case. One helper feeds both the pre-flight space check and the archive, since two hand-kept
-  lists would drift into a check that refuses the wrong backup. A data-root directory the code does not
-  recognise is still excluded, but reported in the backup log, so a future Docker layout change cannot
-  quietly repeat this bug.
-
-- **Two config repairs never ran** (#559). `syshealth_repair_web_config` tested `[ -z "$key" ]`, but the
-  loop variable holds the key *name* and is never empty - so the condition was constant-false and the
-  function had repaired nothing since it was written, while its mail siblings used `[ -z "${!key}" ]`
-  and worked. Records therefore kept an old schema indefinitely, and any code expecting a newer key saw
-  an empty value with no hint why.
-
-  `user.conf` was worse off: it had no repair function at all. A key added to the known set reached
-  existing customers only if someone happened to rebuild or restore them, and `update_user_value` is no
-  help there - it rewrites an existing line and does nothing at all when the key is absent, silently.
-  Both are fixed, and the user repair refreshes the key registry before reading it, because that file is
-  written at install time and would otherwise be stale exactly where a newly added key matters.
-
-- **A failing CLI call took the login page down, and let the post-password gates pass** (#575). The panel
-  ran `exec()` and fed the result straight to `json_decode()`, then dereferenced it. `$return_var` was
-  collected everywhere and evaluated almost nowhere. On a failed call the decode yields `null`, which
-  behaves like an array until something insists on a real one: `in_array(x, null)` is a TypeError, so the
-  login page answered **HTTP 500 with an empty body** - no form, no way in. Observed during a fresh
-  install, where the panel is reachable before the sudo rules are final.
-
-  Worse on the authenticated path: after the password was already verified, `LOGIN_DISABLED`, the IP
-  allowlist and `TWOFA` were all read from that same result. An empty one made all three compare false,
-  so a single failed CLI call would have let a disabled account in past its allowlist and its second
-  factor. That path now fails closed.
-
-  Both unauthenticated entry points (`login`, `reset`) go through a shared `cli_json()` helper that always
-  returns an array; callers pick their own fallback. Also fixed alongside: the login language lookup read
-  `$data[$v_user]` - the shell-quoted name, which never matched a key - so every login silently fell back
-  to English; and an absent package value used to compare unequal to `"0"`, landing every user on the web
-  list whatever their package held.
-
-- **A dead SnappyMail mirror produced a green install with no webmail** (#573). The download came from the
-  project's own host, which went dark in August 2026 - ICMP alive, TCP silently dropped. Three of our own
-  gaps turned that outage into something worse than an outage: an unbounded `wget` (20 tries at a 900s
-  read timeout) hung the installer for roughly 45 minutes, and because the script carries no `set -e`, the
-  0-byte file `wget -O` leaves behind ran the whole rest of it to `exit 0` - dangling symlink, database
-  created, `WEBMAIL_SYSTEM` claiming an application that had never been unpacked.
-
-  SnappyMail now comes from the GitHub release for the version `share/manifest.json` already pinned (the
-  value was read but never used for the URL), the fetch is bounded, and the archive is verified and
-  unpacked before anything is removed - so an unreachable source no longer destroys a working install on
-  the way down. `WEBMAIL_SYSTEM` is written on success rather than up front, and the smoke check names the
-  cause instead of reporting an ambiguous 404.
-
-- **The per-chain ban verdict was missing on the live-attach path.** `fw_jail_verdict` was wired into the
-  full re-render but not into `fw_jail_attach`, which hardcoded `reject` for both families. fail2ban's
-  `actionstart` reaches exactly that path, so on a fresh install every jail rule - `WEBSCAN` included -
-  came up rejecting, and only picked up its `drop` if something later forced a full re-render. Found on the
-  v0.14.1 fleet: deb12/deb13 happened to have re-rendered and showed `drop`, ub26 still carried the
-  live-attached `reject`, from identical code. The two emitters now share one verdict table.
-
-- **A deleted key in `hestia.conf` came back on the next syshealth run** (upstream #5584). The repair
-  built `hestia.conf.new` with `touch` plus `>>`, and removed it only when it had actually rewritten the
-  config - so a run that found nothing to fix left the file behind, and the next run appended into that
-  stale copy. Reproduced: delete a key, run twice, the key returns. It now truncates and removes
-  unconditionally. Matters here because `h-delete-sys-*` clears keys (`FIREWALL_EXTENSION`, the
-  `DB_SYSTEM` tokens), so a removed component could look installed again. The same hunk fixes two inert
-  patterns: `${rhs%%^\#*}` never stripped an inline comment (`^` is literal in a shell pattern) and
-  `${rhs%%*( )}` needs `extglob` - both verified before and after.
-- **A quote or backslash in a certificate field broke the SSL JSON the panel parses** (upstream #5585).
-  Only `ISSUER` was escaped, from the earlier #5524 adoption; `SUBJECT`, `ALIASES`, the validity dates,
-  `SIGNATURE` and `PUB_KEY` were interpolated raw. Applied to all three listers - mail, web and the panel
-  certificate - and verified that the escaped values round-trip unchanged through a JSON parse.
-### Added
-
-- **DNSBL management from the CLI** (#555, upstream #5464). Exim has always consulted
-  `/etc/exim4/dnsbl.conf`, but the list could only be edited by hand.
-  `h-add-sys-mail-dnsbl` / `h-delete-sys-mail-dnsbl` / `h-list-sys-mail-dnsbl` (with `v-*` aliases, since
-  upstream ships the same commands) manage it, validate the host against exim's own grammar - including
-  the `host!=127.0.0.10` result filter - and restart exim. Unlike upstream there is no shadow copy under
-  `conf/` and no revert-to-default comparison: exim reads exactly one path, and a second master would need
-  syncing both ways. Preserving admin edits across an update belongs to #206. Deletion uses `grep -vxF`,
-  so a host is matched whole and literally - removing `zen.spamhaus.org!=127.0.0.10` leaves a plain
-  `zen.spamhaus.org` entry intact, verified live.
-
-### Changed
-
-- **Scanner bans drop, credential bans still reject** (#555). The renderer gave every jail chain the same
-  `reject with icmpx type port-unreachable`. Upstream #5442 switches wholesale to `drop`; that is right for
-  scanners and wrong for anything with a login behind it, where a silent black hole hides the far more
-  common case of a phone retrying a stale mail password. The verdict is per chain now: only the
-  scanner-signature jails drop. That needed a chain split, because seven jails shared `WEB` - three pure
-  signature jails (`web-botsearch`, `web-badactor`, `web-exploit`) alongside the roundcube, SnappyMail and
-  phpMyAdmin logins. The three moved to a new `WEBSCAN` chain on the same ports; everything else, including
-  `web-authprobe` - whose own high `maxretry` exists for humans behind shared NAT - and `RECIDIVE`, keeps
-  rejecting. Rendered document verified against nft 1.1.3: both chains match 80/443, with different
-  verdicts.
-
-### Fixed
-
-- **Backup retention could delete another user's archives** (#556, upstream #4918). The retention list was
-  built with `grep "^$user\." | grep ".tar"`, so listing user `foo` also matched `foo.bar.*.tar` -
-  measured on a fixture: four files returned instead of two, including another user's backups and an
-  unrelated `.tar.gz`. Since that list drives the rotation delete, `foo` hitting its retention limit
-  removed `foo.bar`'s backups. Now anchored on the actual name shape (`user.YYYY-...tar`). New users
-  cannot contain a dot, but the general user validator allows one, so a user restored from HestiaCP can.
-  Applied to all seven affected backends - upstream fixed three, we also have sftp and rclone. The
-  Backblaze path filters server-side by prefix and is left alone: the same class may apply, but it cannot
-  be verified without an account.
-- **The services list showed database servers that are not installed** (#556). `h-add-database-host`
-  writes the type into `DB_SYSTEM` for a **remote** host too, so registering a remote PostgreSQL left a
-  permanent `postgresql - stopped` row with panel buttons for a unit that does not exist. Reproduced and
-  fixed live. The check fails open: a row is dropped only on a definite "no such unit", so an unexpected
-  `systemctl` answer can never hide a running service.
-
-- **The manual-ban chain picker offered a chain that no longer exists and hid two that do** (#555). It
-  still listed `DNS` although bind9 is gone, and omitted `RECIDIVE`. Now lists the real set including
-  `WEBSCAN`.
-
-- **Restic restored only the first domain or database of a multi-object user** (#555, upstream #4987,
-  #4986, #5100-adjacent). All three selective restore commands split a comma-separated list into a bash
-  array and then iterated `$domains` rather than `"${domains[@]}"`, which expands to element 0 alone -
-  measured: 1 of 3 domains processed, the rest silently skipped with a success exit. The mail command was
-  broken differently: it never set `IFS` at all, so the whole list stayed one element and it tried to
-  restore a domain literally named `a.de,b.de,c.de`. On top of that, web and database set `IFS=','`
-  globally and never restored it, so every later word split in those scripts collapsed to a single word -
-  which is what produced the malformed nginx configuration upstream reported. Splitting is now scoped and
-  `IFS` restored immediately, membership is tested against an explicitly joined list, and the loops
-  iterate the arrays. Verified across five selection cases per command plus a post-split word-split check.
-- **A Let's Encrypt account whose user.key no longer matched failed forever** (#555, upstream #5294).
-  `h-add-letsencrypt-user` exits early whenever `KID` is set, so a key replaced by a restore left the
-  stored modulus stale and every later issuance was signed with a key the ACME account does not know -
-  permanently, with no path back. The modulus is compared against the key on disk now and the account is
-  re-registered on a mismatch; the `le.conf` rewrite also refreshes `EXPONENT`/`MODULUS`/`THUMB` instead
-  of only `KID`, which is what left them stale in the first place.
-- **The panel's default organisation could not pass its own validator** (#555, upstream #5483). Generating
-  a self-signed certificate with the shipped defaults failed with `invalid org format :: MyCompany Inc.` -
-  `is_common_format_spaces_valid` requires an alphanumeric last character, and our validator is stricter
-  than upstream's here. Default is now `MyCompany Inc`.
-
-- **The firewall list showed rules in the reverse of the order they are evaluated** (#554/#555, upstream
-  #5080/#5466). The renderer emits by descending RULE id into one chain and nft takes the first match, so
-  the highest id wins - but the panel sorted ascending, and its up arrow lowered a rule's precedence.
-  Worse, the order depended on `userSortOrder`: one setting agreed with precedence, the other inverted it,
-  so what the arrows appeared to do changed with a display preference. A ruleset is ordered data, not a
-  sortable table, so the list is now always in evaluation order and ignores that preference. The arrows
-  are deliberately crossed against the CLI verbs - `h-move-firewall-rule` keeps upstream's meaning of
-  "up" (RULE-1) and the panel maps its visual up arrow onto it. Also fixed the move buttons themselves:
-  `$move_down_enabled` was never set on the first row, so it inherited the previous row's value, and the
-  disabled branch forced the arrow *visible* instead of hiding it - the bottom rule offered a "down" that
-  the CLI then refuses. Verified end to end: clicking up on the 80/443 rule moved it from second to first
-  in the live nft chain.
-
-- **A valid host certificate looked invalid, so Let's Encrypt reissued it on every run** (#555, upstream
-  #5397). `h-add-letsencrypt-host` validated with `openssl verify -CAfile <(openssl x509 -in $domain.ca)`,
-  and `openssl x509 -in` prints only the **first** certificate in a file. A two-link chain therefore lost
-  its root and verification failed with "unable to get issuer certificate", leaving `add_ssl=yes` so the
-  certificate was requested again - burning the duplicate-certificate rate limit for nothing. Reproduced
-  with a purpose-built two-level chain: the old form fails, passing the `.ca` file directly succeeds.
-- **`useradd` ran on every rebuild and restore even when the account existed** (#555, upstream #5557),
-  failing silently but writing a syslog line per user each time. All six callers of `rebuild_user_conf`
-  are rebuild or restore paths, so this was the normal case rather than the exception; guarded with `id`.
-- **`quotaon` warnings read as install errors** (#555, upstream #5465). It reports tmpfs it cannot stat
-  and ext4 kernel-level quota support even on success. Both are filtered now; every other line and the
-  exit status are untouched, verified against a stub that returns a non-zero status.
-
+- **Object reads matched a domain as a regular expression** (#594). The dot is a wildcard, so with
+  `a.b.com` and `aXb.com` on one box a read on one could return the other's record,
+  `is_object_valid` could confirm a domain that does not exist, and `add_object_key` could write
+  into the wrong record. Nine accessors and 54 call sites match literally now. The backup exclusion
+  parsers mix a literal name with an intentional `*` and matched by prefix - an exclusion for
+  `aXb.com` also kept `a.b.com` out of the archive; they compare by index now, and the backup
+  counts what it packed against what the records say.
+- **An alias owned by another customer was never refused** (#601). `is_web_alias_new` compared
+  `"$user"` with `"$user"` - the loop had overwritten the caller's name with the owner from the file
+  path, so only the `type == web` half of the check survived and a mail domain could take a foreign
+  alias.
+- **HSTS did nothing on an apache front** (#638). The fragment carried nginx syntax whatever the
+  front was, and no apache template included it: switch on, record `yes`, no header. Both halves
+  move together - feeding `add_header` to apache would break `configtest` for the whole box. A guard
+  catches a domain claiming HSTS whose fragment is missing or written for the other server.
+- **The ip domain counter drifted one under the truth per backup-restore cycle** (#599): the restore
+  recounts, and that recount could not see records holding a NAT'd box's public address.
+- **A user named after a service died at `groupadd`** (#625). `h-add-user` checked `/etc/passwd` but
+  never `/etc/group`, and the group is created as the mirror of the user. Both are checked now, plus
+  a curated list of accounts our components create later - a name free today must not become a
+  collision after an `h-add-sys-*` run.
+- **The FTP account commands disagreed about the name** (#625): add prefixed it with the owner while
+  delete and the change commands wanted the stored form. All four take either.
+- **A domain name acting as a regex could delete another customer's cache zone** (#583) and three
+  more unescaped `sed` patterns on the write side.
+- **A missing web template wrote a silent 0-byte vhost** (#586).
+- **`h-change-sys-php` took effect one round late** and rebuilt the stock on the old version (#585).
+- **The dummy FPM pool leaked into the isolated panel master** with a placeholder socket (#604).
+- **Two config repairs never ran** (#559), and a deleted key in `hestia.conf` came back on the next
+  syshealth run (upstream #5584).
+- **A failing CLI call took the login page down** and let the post-password gates pass (#575).
+- **A dead SnappyMail mirror produced a green install with no webmail** (#573): an unbounded
+  download in an install path is a hang, and a script without `set -e` turns a failed download into
+  a green install of nothing.
+- **Backup retention could delete another user's archives** (#556, upstream #4918), and restic
+  restored only the first domain or database of a multi-object user (#555, upstream #4987).
 - **The panel served its own includes, templates and locale data over HTTP** (#554, upstream #5446).
-  Nothing denied `/inc`, `/locale` or `/templates`, so unauthenticated requests reached them: the two
-  `web/locale/*.sh` helpers and `hestiacp.pot` were returned as source, include-only PHP was executed, and
-  `templates/includes/panel.php` rendered its markup outside any auth context. Measured impact today is
-  low - the templates emit empty scaffolding, no data and no path disclosure - but the exposure is one
-  refactor away from mattering, since any of those files gaining a `$_GET` read or assuming an
-  authenticated caller becomes reachable without a session. The panel Caddy now answers 404 for those
-  prefixes and for `*.map|log|sh|sql|bak|env`, placed first inside the existing `route` because `respond`
-  otherwise sorts after `file_server`. Unlike upstream we do not deny `/src`: their panel root has a
-  `web/src`, ours does not, so the rule would have no object. i18n is unaffected - it reads
-  `languages.json` from disk, not over HTTP.
-
-- **The Cloudflare realip fallback trusted a header the client controls** (#553). The installer rewrites
-  `cloudflare.inc` from the CF API and skips that step silently when the fetch fails, so what ships in
-  `share/nginx/` is what a box without egress ends up running - and it named the trusted *sources* but not
-  the trusted *header*. nginx then applies its own default, `X-Real-IP`, which Cloudflare does not manage
-  and forwards from the client verbatim, while `CF-Connecting-IP` is ignored outright. Measured on nginx
-  1.26.3: `X-Real-IP: 1.2.3.4` became `$remote_addr` and propagated through `proxy_set_header` into apache
-  `mod_remoteip` and the Roundcube jail, so a forged header could drive an arbitrary IP into the banlist
-  and the nft set; conversely a real visitor behind Cloudflare logged as the edge, which fail2ban would
-  eventually ban and lock everyone out behind it. The shipped file now carries
-  `real_ip_header CF-Connecting-IP;`, and `h-check-sys-smoke` asserts the directive is present so the
-  silent fallback cannot recur. The API-generated file was always correct - only the fallback was not.
-
-- **One Cloudflare range in the panel's IP validator was wrong, and it was exploitable in both directions**
-  (#553). `web/inc/cloudflare-ip.php` listed `131.0.232.0/22` where Cloudflare publishes `131.0.72.0/22` -
-  a transcription slip in the hand-maintained list that replaced the vendored validator. Traffic from the
-  real range was therefore not recognised as Cloudflare, so `get_real_user_ip()` attributed panel logins to
-  the CF edge and fail2ban would ban the edge itself, locking out everyone behind it; meanwhile the range
-  that is not Cloudflare's was trusted, letting whoever holds it forge `CF-Connecting-IP` on the login path
-  and drive an arbitrary IP into the banlist. Both lists now match the published set exactly, and the
-  header says to diff the live list rather than retype it. Found in the upstream 1.10 triage (#5273).
+- **The Cloudflare realip fallback trusted a client-controlled header** (#553), and one range in the
+  panel's IP validator was wrong in both directions.
+- **A Let's Encrypt account whose `user.key` no longer matched failed forever** (#555, upstream
+  #5294); a valid host certificate looked invalid and was reissued on every run (#555).
+- Smaller inherited ones: the services list showed uninstalled database servers (#556), the manual
+  ban chain picker offered a chain that no longer exists (#555), the firewall list showed rules in
+  reverse evaluation order (#554), `useradd` ran on every rebuild (#555, upstream #5557), `quotaon`
+  warnings read as install errors (#555, upstream #5465), a quote in a certificate field broke the
+  SSL JSON (upstream #5586), and five leftovers around domain creation (#601).
 
 ## v0.14.0 (2026-08-06)
 
-The firewall release: the last subsystem still inherited near-verbatim from HestiaCP, rebuilt on nftables,
-with fail2ban as a removable addon and IPv4/IPv6 parity throughout.
+The firewall round: one nftables table, fail2ban as a removable addon, and CrowdSec as a
+three-way model.
 
 ### Added
 
-- **The firewall renders as one nftables `inet` table** (#495, #481), landed behind a seam whose only gate
-  was byte-identical rule captures on all four targets. The rest follows from the shape rather than being
-  separate features: one `nft -f` swap leaves no instant with an open policy or empty chain, where the
-  iptables renderer set `-P INPUT ACCEPT` and flushed on **every** rule change; `nft -c` validates first,
-  so a bad ruleset is rejected instead of half-applied; jails and bans render in the same transaction as
-  the base rules, closing the window that left jails detached; persistence is the applied document,
-  reloaded by an own unit, which retires the boot hazard where one unprovisioned set made
-  `iptables-restore` reject the whole filter table and bring the box up unfiltered. A jail is a set plus
-  one rule, so the multi-port delete bug dies with the shape that caused it. ipset is replaced by native
-  sets, each rendered from a source-of-truth file so a table replace cannot lose its contents. Legacy
-  iptables teardown at cutover is mandatory: iptables here is the nft shim, so a leftover ruleset lives in
-  the same kernel backend and keeps being evaluated alongside ours.
-- **fail2ban is a removable addon** (#497) and **the model is switchable at runtime** (#498).
-  `h-change-sys-firewall-model` moves between `none` / `fail2ban` / `fail2ban+crowdsec` / `crowdsec` by
-  orchestrating the addon commands. The live model is derived from artefacts on disk, and the target's
-  components are added **before** the others are removed, so the box is never unprotected mid-switch.
-  **crowdsec-only enforcement is wired, best-effort**: the L3 feeder denies CrowdSec's auth-family
-  decisions only while fail2ban is present, so without it SSH and web brute force reach L3 at the feeder's
-  ~45s latency, connections not cut. `req-limit` stays denied in every model, so a Layer-B 429 never
-  escalates into a ban. Known gap: mail has no CrowdSec detection surface.
-- **Layer-7 jails, so the fail2ban-only model has real web coverage** (#496, #531, #515). `web-botsearch`
-  (probes for apps that are not installed), `web-badactor` (secret/config-file discovery), `web-exploit`
-  (traversal, RCE payloads, appliance paths), `web-authprobe` (repeated **401 only** - a global 403 has too
-  many benign causes), plus `roundcube-auth` and `snappymail-auth`. All read the per-domain `combined`
-  **access** log, the only uniform source: nginx writes no error entry for a 404 and apache with php-fpm
-  answers a missing `.php` with `AH01071`, so the distro's `apache-botsearch` cannot fire here at all. The
-  404 is what makes botsearch safe on shared hosting - a domain really running WordPress answers
-  `/wp-login.php` with 200. **Hard demarcation to Layer B**: signature-based only, never request rate; the
-  rate limiter owns volume and its 429s never escalate. Thresholds count per source IP across all vhosts,
-  so `web-authprobe`'s 20 is conservative, not high. Not a WAF: literal-string regex.
-- **The whitelist is a first-class object** (#495, #496). `excludes.conf` suppressed *new* bans only, which
-  left an already-banned admin locked out; it renders as an accept ahead of every ban match now, which is
-  what makes it a recovery primitive. `h-add/delete/list-firewall-exclude` and a panel page give it a
-  surface, adding an address **releases** an existing ban, and the list is mirrored into fail2ban's
-  `ignoreip` as its own file - a generated block inside a shared one cannot be safely rewritten around
-  admin edits. Not gated on `FIREWALL_EXTENSION`: it works without fail2ban, and hiding it would remove the
-  one recovery path from the UI.
-- **IPv4/IPv6 parity** (#496, #536, #545, #548). Service accepts never carried a family qualifier, so v6
-  always reached the ports the jails protect - while the sets were `ipv4_addr` and the ban command
-  validated v4, so a v6 brute force was logged, matched, then failed its `actionban` every time. A jail is
-  two sets and two rules now, bans route by family, the CrowdSec L3 feeder covers both, a rule renders in
-  its source's family, and the whitelist renders both. **Nothing presupposes a v6 stack** - the ruleset
-  loads with no v6 address and with `disable_ipv6=1`. Verified on a real dual-stack host, measured from a
-  second machine. Per-family split rules are a follow-up (#544).
-- **Panel surfaces for firewall state** (#496, #527, #482): a jail-status page reporting configured
-  **union** running jails, so a configured-but-stopped jail is visible instead of absent; the banlist lists
-  CrowdSec's local L3 decisions beside fail2ban's with unban routed per source; the bot rate-limiting table
-  got a toolbar deep-link, having been reachable but not discoverable.
-- **Curated IP blocklists** (#481) in `share/firewall/blocklists.conf`, so adding a source is a data change
-  rather than a PHP edit. `h-change-sys-blocklist-interval` sets one global refresh interval, validated as
-  a systemd time span so a typo cannot leave the timer inert.
-- **Smoke guards for the firewall datapath**, not just for a running daemon (#481, #495, #496, #520, #531,
-  #537, #542, #545, #548): INPUT defaults to DROP; the backend binary exists; the persisted ruleset parses;
-  ICMPv6 is accepted; every active rule renders and every referenced IP list is populated; no live jail
-  chain lacks a record; running jails equal configured jails in both directions; no jail bans through a
-  foreign action; every jail watches an existing file on the **current** web system; the two protection
-  layers do not overlap; and two canaries replay real attack and injection lines through the deployed
-  filters. `h-check-firewall-chain` replaces fail2ban's `actioncheck` grep of backend output, which would
-  go stale the moment the renderer changed.
-- **A CODEMAP consistency check** (#513), after the map drifted within a few PRs. Validates the JSON and
-  that every structured path resolves. Local, not CI - the runner host carries no language runtime.
+- **The firewall renders as one nftables `inet` table** (#495, #481), IPv4 and IPv6 together,
+  behind a seam that keeps the invariants when the renderer changes.
+- **fail2ban is a removable addon** (#497) and **the model is switchable at runtime** (#498):
+  fail2ban only, CrowdSec only, both, or neither.
+- **Layer-7 jails, so a fail2ban-only box has real web coverage** (#496, #515, #531).
+- **The whitelist is a first-class object** (#495, #496) - `excludes.conf` only suppressed *new*
+  bans and left existing ones in place.
+- **IPv4/IPv6 parity** (#496, #536, #545, #548): service accepts, jails, blocklists and the panel
+  rows all carry both families.
+- **Panel surfaces for firewall state** (#496, #527, #482): jail status, ban lists, manual bans.
+- **Curated IP blocklists** (#481), refreshed on a systemd timer rather than the daily cron queue.
+- **Smoke guards for the datapath** (#481, #495, #496): a running daemon is not a loaded ruleset.
+- **A CODEMAP consistency check** (#513), after the map drifted within a few PRs.
 
 ### Security
 
-- **The webmail loopback listeners are restricted to the connecting UID** (#507). Roundcube and SnappyMail
-  are plain TCP on `127.0.0.1`, so unlike the socket-based apps they had **no access control at all and any
-  local user could reach them - customers included, who have shells here**. Worse, Caddy passes a
-  client-supplied `X-Real-IP` through, so a customer could hand the app an arbitrary address and have a
-  third party banned. IP filtering cannot separate two local users, so the rule keys on the UID.
-- **`source_conf` no longer executes code smuggled into a config key** (GHSA-xffx-jj33-p2px class, #516).
-  Keys were assigned with `declare -g $lhs=...` and `$lhs` was unvalidated, so `key[$(cmd)]='x'` in any
-  parsed conf ran `cmd`. Keys are validated as plain identifiers now, checked against every writer in the
-  code. `func/ip.sh` stopped eval-ing an IP conf as bash in the same pass.
-- **The webmail vhost overwrites the client-IP headers it forwards** (#515), so a client cannot forge the
-  address a jail would ban. The **Roundcube filter is hardened against username log-injection** in the same
-  round: the username is logged verbatim, so it can smuggle a fake `X-Real-IP:` block; anchoring the
-  genuine trailer to end-of-line backtracks the greedy match to the real one.
-- **Ten panel controllers checked CSRF before the role** (#496). Both guards work, so the order changes no
-  outcome today - it decides what is left when one of them has a bug, and this series produced two such
-  bugs already.
-- **CrowdSec's credential files are 0600** (#494); the packages generate them 0644 although both carry a
-  machine password.
+- **The webmail loopback listeners are restricted to the connecting UID** (#507).
+- **`source_conf` no longer executes code smuggled into a config key** (GHSA-xffx-jj33-p2px class).
+- **The webmail vhost overwrites the client-IP headers it forwards** (#515), so a client cannot
+  spoof the address a ban is written for.
+- **Ten panel controllers checked CSRF before the role** (#496) - both guards worked, the order
+  decides which one an attacker gets to probe.
+- **CrowdSec's credential files are 0600** (#494).
 
 ### Fixed
 
-- **fail2ban had been installing a config it could not start** (#496). The installer copied `filter.d/*`
-  and `jail.local` but never `action.d/hestia.conf`, so **6 of 7 jails were dead on every target** while
-  the service reported healthy - the only live jail was the distro's `[sshd]`, banning into a ruleset we do
-  not manage. The whole tree is installed now; our jails ship as `jail.d/hestia.local` so the package's
-  file stays untouched; and the distro jail is disabled from our own config rather than by deleting a dpkg
-  conffile, which the next update would restore.
-- **The firewall broke IPv6 by dropping ICMPv6** (#534). The `inet` chain drops by default and accepted
-  only IPv4 ICMP, so NDP and PMTUD died and IPv6 stopped working entirely: `ping6` at 100% loss, gateway
-  neighbour `INCOMPLETE`. Invisible on the v4-only fleet, which is how it survived the migration. It also
-  cured a ~12s SMTP greeting, where exim's reverse-DNS was timing out against unreachable v6 resolvers.
-- **Restarting the firewall from the panel destroyed the ruleset** (#496). The service row is named after
-  `FIREWALL_SYSTEM`, which became `nftables`, but six sites still matched a hardcoded `iptables` - so the
-  row fell through to `systemctl restart nftables`, tearing down our table and loading the distro's
-  `/etc/nftables.conf`. **Changing the panel port hit the same class** (#548): the command failed on that
-  literal *after* writing the new port and *before* applying it, leaving the new panel port shut.
-- **The panel answered a plain HTTP request with a bare 400** (#547) - "Client sent an HTTP request to an
-  HTTPS server", i.e. typing the host without `https://`. The panel Caddy uses the `http_redirect` listener
-  wrapper now and answers 308 to the `https://` URL on the same port. Scoped to `:8083`: applied globally
-  it also wraps the plain-HTTP loopback webmail listeners and would 308 those.
-- **A live web-model switch left the fail2ban web jails watching the old log dir** (#537). The running
-  jails stayed on the live logs, so the box looked fine - but the **persisted** logpath is what fail2ban
-  re-globs on restart, so every box that had ever switched web models was one restart away from silent
-  Layer-7 blindness, from any cause.
-- **fail2ban and CrowdSec doubled up in the combined model** (#542): the fail2ban web jails duplicated
-  CrowdSec's http scenarios while CrowdSec kept detecting SSH brute force. Enforced in both directions at
-  every transition now - **CrowdSec owns Layer-7, fail2ban owns brute force** - and the L3 feeder timer
-  re-asserts it, so a manual `cscli hub upgrade` re-adding the ssh scenarios self-heals within a cycle.
-- **The standalone CrowdSec add/delete commands raced a web-model switch** (#528). Both depend on the
-  public web front and mutate nginx config, so a concurrent switch could flip the front between the
-  apache-only refuse check and the wiring. They take the model-switch lock now, reentrant so the callers
-  already holding it pass through.
-- **A fail2ban restart wiped the persistent banlist** (#496): `h-delete-firewall-chain` is `actionstop`
-  and deleted the records, so every stop, restart or upgrade discarded exactly the state the hestia ban
-  action exists to keep.
-- **A fresh install aborted silently in the fail2ban stage** (#520) - a grep over a whitelist a fresh box
-  does not have, under `set -eo pipefail`; plus fail2ban refusing to start on an enabled jail whose logpath
-  matches zero files, which proftpd and `web-botsearch` both hit. **And the installer duplicated config
-  keys when a stage re-ran** (#523), because `wcv` appended unconditionally. Both were visible only from a
-  genuinely fresh install, now a rule in CLAUDE.md.
-- **The installer never named `nftables`** (#548). The renderer shells `/usr/sbin/nft`, but the package
-  arrived only as a *Recommends* of `iptables` - which Debian's base image satisfies and Ubuntu's does not.
-- **CrowdSec was never installed by a fresh install** (#186): the nginx-front gate read keys `main.sh`
-  sources before the web stage writes them, so both were empty and the gate skipped the block. **The wizard
-  never asked the fleet-mesh question** (#186, #485) - a `visible_if` on a sibling of its own combined
-  screen can never be true. **And mailonly offered and default-enabled CrowdSec** (#529), which uncovered
-  that jq's `//` treats a boolean `false` as absent.
-- **`is_format_valid` failed silently when a name matched no variable** (#496) - it validates by *variable
-  name*, so a renamed argument expanded to empty and empty meant valid. Fixing it at the root exposed **ten
-  commands validating an argument they never assigned**.
-- **Dead references from removed subsystems** (#548): the Server page's DNS handler exec'd a command
-  removed with bind9; `h-refresh-sys-theme` called one that exists neither here nor upstream; a scheduled
-  cron-job restore queued a misspelled command; `h-update-sys-defaults system` described a key set 43
-  entries behind reality; a `disabled` attribute was built in a ternary whose result was never echoed.
-- Smaller: `h-delete-firewall-ipset` never refused to remove a list still in use, because `check_result $?`
-  sat inside the `then` branch (#495). The shipped "Block Malicious IPs" preset pointed into the `install/`
-  tree dissolved in #119, so it always failed (#481). Blocklist names were double-escaped in the picker
-  (#481). `h-add-firewall-chain` read the panel port from an nginx.conf Caddy had replaced (#496).
-  `h-delete-user-backup-exclusions` wiped the CRON exclusion on every delete. The roundcube logrotate entry
-  conflicted with the package's and won only by filename sort order (#508). Unbanning a CIDR never reached
-  fail2ban, a v6 own-IP would have stopped every firewall update, and v6 IP lists were accepted and blocked
-  nothing (#548).
+- **fail2ban had been installing a config it could not start** (#496), and **a fresh install
+  aborted silently in its stage** (#520).
+- **The firewall broke IPv6 by dropping ICMPv6** (#534).
+- **Restarting the firewall from the panel destroyed the ruleset** (#496): the service row fell
+  through to `systemctl restart nftables`, which loads the distro ruleset over ours.
+- **CrowdSec was never installed by a fresh install** (#186): the gate read config keys the
+  installer shell cannot see - `wcv` writes, it does not export.
+- **A live web-model switch left the fail2ban web jails watching the old log dir** (#537), and
+  **fail2ban and CrowdSec doubled up in the combined model** (#542).
+- **A fail2ban restart wiped the persistent banlist** (#496).
+- **`is_format_valid` failed silently when a name matched no variable** (#496) - it validated by
+  variable name, so a typo passed everything.
+- Smaller ones: the panel answered plain HTTP with a bare 400 (#547), the standalone CrowdSec
+  commands raced a model switch (#528), the installer never named `nftables` (#548), and dead
+  references from removed subsystems (#548).
 
 ### Changed
 
-- **`iptables` and `ipset` are no longer installed** (#548); nothing calls either binary since the renderer
-  moved to native sets. `fw_legacy_teardown` is guarded on the binary, and `docker.io` depends on iptables
-  itself.
-- **`FIREWALL_SYSTEM` reads `nftables`** (#495), since the value names the backend. Pre-v1, so no migration
-  is owed - but the rename is what let the panel destroy a live ruleset, above.
-- **Blocklists refresh on a systemd timer, not the daily cron queue** (#481) - inspectable, `Persistent`,
-  and spread across a fleet with `RandomizedDelaySec`.
-- **Adding, renaming or restoring a web domain tells fail2ban about its log** (#496); the glob is expanded
-  once at jail start, so a later domain went unwatched until the daemon next restarted.
-- **CrowdSec is one three-way model question instead of two** (#186), spanning three supported models
-  rather than four combinations. `h-change-sys-crowdsec-mode` switches at runtime (#494), including the way
-  *back* to the community blocklist, which had no implementation at all.
-- **PROVENANCE reconciled against `upstream/hestiacp@ca19b9f`** (#548): 38 files had no entry and every
-  aggregate was stale - `share/` claimed 21% weighted divergence where its own numbers give 7%.
-  `source_type` was left untouched; 60 entries disagree with the manifest's own rule, which is a labelling
-  decision rather than a number (#551).
-- **CODEMAP's firewall and fail2ban entries are current again** (#496); the firewall entry still gave
-  `FIREWALL_SYSTEM` its pre-swap value - the exact staleness that let the panel destroy a ruleset.
+- **`iptables` and `ipset` are no longer installed** (#548); nothing has called either since the
+  nftables renderer landed.
+- **`FIREWALL_SYSTEM` reads `nftables`** (#495) - the value names the backend. Pre-v1, no migration.
+- **Adding, renaming or restoring a web domain tells fail2ban about its log** (#496).
+- **CrowdSec is one three-way model question instead of two** (#186).
+- **PROVENANCE reconciled against `upstream/hestiacp@ca19b9f`** (#548).
 
-- **The mysqld jail** (#496). 3306 is not in the shipped ruleset, so MariaDB is reachable only from
-  loopback and the box itself - both of which `h-add-firewall-ban` refuses to ban, so the jail could only
-  match and then decline to act.
-- **`h-refresh-sys-theme`** and its symlink (#548): it called a command that does not exist, nothing called
-  it, and nothing here caches a theme for it to regenerate.
-- **The UA-based `web-badbots` jail** from the L7 proposal (#531) - user-agents are trivially forged.
+### Removed
+
+- **The mysqld jail** (#496) - 3306 is not in the shipped ruleset.
+- **The UA-based `web-badbots` jail** (#531) - user-agents are trivially forged.
+- **`h-refresh-sys-theme`** and its symlink (#548): it called a command that does not exist.
 
 ## v0.13.0 (2026-08-03)
 
 ### Added
 
-- **CrowdSec** (#186, #123) - an nginx-gated, removable addon in four layers, offered in the wizard only
-  where nginx is the public front. **Layer A**: an own dependency-free LuaJIT bouncer queries the local
-  LAPI per request and answers 403, rendered per web model plus a per-domain fragment. **L3**: an own
-  `cscli` -> ipset feeder on a timer fills a `hestia-crowdsec` DROP chain, so the same decisions are
-  dropped at SYN; `h-update-firewall` stays the sole writer and the chain `RETURN`s loopback + RFC1918
-  first. The OS `crowdsec-firewall-bouncer` is deliberately unused - 0.0.25 nil-panics in its ipset path,
-  verified unusable on all four targets. The feeder filters by DENYlist after an allowlist was found to
-  silently drop advisory-named web exploits. **Fleet-mesh**: peers with no central LAPI, each publishing
-  its own local web-tier bans and importing the union of its peers' as L7-only, hardened against a bad
-  peer (validation, per-peer and total caps, `hestia-mesh:<peer>` attribution). **Transport**: two boxes
-  pair over the panel port and then pull each other's list on a timer. **A pairing needs an admin on both
-  boxes** - the code is 100 bits, single-use, 15 min, dead after 5 wrong guesses, and `/mesh-pair.php` is a
-  plain 404 while none is live; the long-lived artefact is a per-peer token, TLS is pinned by SPKI recorded
-  at pairing, and secrets never ride in argv. The LAPI stays loopback-only throughout.
-  `crowdsec_apply` removes `nginx-req-limit-exceeded` on purpose: it fires on our own Layer-B 429 and
-  turned deliberate throttling into bans for good bots and shared IPs.
-- **Server-native web bot rate-limiting** (#482) - a standalone Layer-B subsystem (`func/botpolicy.sh`),
-  independent of CrowdSec and available on any web install. Bot families are throttled with native nginx
-  `limit_req` / apache `mod_qos` (429); **humans are never limited** and malicious traffic stays CrowdSec's
-  job. An admin family table (10 slots, 8 curated) carries a UA match, `lenient`/`strict` rates and an
-  enabled flag; per domain each family is `off`/`lenient`/`strict`, customer-editable. nginx keys per
-  family **per domain** so customers do not share a bucket; apache mod_qos counts per client IP. Default
-  off. Known limitation: matching is on the spoofable User-Agent.
-- **Shell lint gate** (#477), check-only, in two tiers because the tree carries ~240 inherited HestiaCP
-  warnings that are their own cleanup job: tier 1 is shellcheck at `severity=error` over the whole shell
-  surface, tier 2 at `>=warning` over the files a change touches. Both judge **regressions, not
-  inheritance** - each changed file is compared against its base version, so touching a legacy file does
-  not inherit its warnings. `.gitea/tools/lint-shell.sh` holds the logic so CI and a developer run
-  identical checks. The workflow is deliberately minimal: no actions (the runner host has no node by
-  design), a temporary clone, `contents: read`, no secrets, no installs, no writes.
+- **CrowdSec** (#186) - an nginx-gated, removable addon in four layers (local decisions, CAPI,
+  a fleet mesh, and an L3 feeder), offered in the wizard as one three-way choice.
+- **Server-native web bot rate-limiting** (#482) - `func/botpolicy.sh`, nginx `limit_req` or
+  apache `mod_qos`, independent of CrowdSec so a box without it still throttles bots.
+- **Shell lint gate** (#477), check-only, two tiers - both judging regressions rather than the
+  ~240 inherited findings.
 
 ### Security
 
-Adopts the relevant fixes from the HestiaCP 1.9.8 release (#471).
-
-- The user editor blocks a non-`ROOT_USER` admin from modifying the `ROOT_USER` account on the POST/save
-  path, not only the page render, and keys the guard on `$_SESSION["ROOT_USER"]` instead of a hardcoded
-  `admin` (HestiaCP #5547 / GHSA-c69h-jgpw-h9cj). A crafted POST could otherwise change the root account's password or
-  role. The guard fails closed when `ROOT_USER` is unset.
-- Panel notifications are HTML-sanitized before storage (HestiaCP #5548 / GHSA-3g4r-pfpf-8697). `NOTICE` renders as raw HTML
-  via Alpine `x-html` and callers interpolate into it, so the body now passes an allow-list sanitizer -
-  own and dependency-free, since HestiaRE ships no Composer. `TOPIC`/`NOTICE` also gained CR/LF and length
-  validators, and the shell `send_notice()` helper goes through the same path.
-- Restore scheduling no longer lets an argument inject into the executed restore queue
-  (GHSA-2xw3-7h62-v4gf). `h-schedule-user-restore-restic` wrote `$snapshot`/`$value` single-quoted into
-  `queue/backup.pipe`, so a `'` broke out for root RCE.
-- The admin debug panel escapes its variable output (HestiaCP #5550) - keys and string values were echoed raw (reflected XSS).
+- The user editor blocks a non-`ROOT_USER` admin from modifying the `ROOT_USER` account on the
+  POST path, not only in the view.
+- Panel notifications are HTML-sanitized before storage (upstream #5548 / GHSA-3g4r-pfpf-8697).
+- Restore scheduling no longer lets an argument inject into the executed restore queue.
+- The admin debug panel escapes its variable output (upstream #5550).
 
 ### Fixed
 
-- Installer: an optional component could end up flagged on with its package absent (#480). Component
-  installs ran `hestia_apt ... || true`, so a held apt lock - common right after first boot - failed the
-  install and the `|| true` swallowed it. Three changes, since none alone suffices: a lock timeout, masking
-  the auto-apt units for the installer's duration (restored from an `EXIT` trap, and only units it masked
-  itself), and verifying against dpkg that the package actually landed.
-- `h-list-sys-php` no longer lists the isolated panel FPM pool as a pseudo-version `hestia` (#464).
-  Consumers build `php<v>-fpm` from the list, so the stray entry produced `phphestia-fpm`, broke
-  `h-restart-web-backend` on every box and rolled back every live web-model switch at its health gate.
-- Web-model switch (#120, #466): rollback uses `reload-or-restart` instead of a hard restart, so a failure
-  before the restart stage cannot kill a server still serving its loaded config; cleanup also removes the
-  departing model's webmail vhost source, which previously left a stale conf behind.
-- Directory listing works under nginx-only (#468) - it only ever flipped apache's `Options Indexes`, so
-  `DIR_LIST='yes'` was a silent no-op. nginx gets `autoindex on;` via an include fragment.
-- `h-list-mail-domain-ssl` JSON escapes the certificate issuer (#471, HestiaCP #5524); a `"` or `\` in the issuer DN
-  produced invalid JSON.
-- Bot rate-limiting (#482): a disabled or deleted family left **dangling zone references** in the
-  per-domain fragments, so `nginx -t` failed and blocked the next reload for every domain on the box.
-  Fragments now skip families that are gone, the apply command re-renders every throttled domain before
-  testing the config, and deleting a family strips it from every domain. A new smoke guard asserts every
-  per-domain policy fragment is included by every customer-domain template - one missing include is a
-  silent bypass, not a visible failure.
-- CrowdSec (#186): re-adding no longer fails on the saved-state config. `/etc/crowdsec` is kept on delete,
-  and a dpkg conffile prompt on `config.yaml` used to EOF under `noninteractive` and leave the package
-  half-configured; both install sites now pass `--force-confdef --force-confold`.
+- An optional component could end up flagged on with its package absent (#480).
+- `h-list-sys-php` listed the isolated panel FPM pool as a pseudo-version `hestia` (#464).
+- The web-model switch rolls back with `reload-or-restart`, so a failure cannot leave the box with
+  no web server (#120, #466).
+- Directory listing works under nginx-only (#468) - it only ever flipped apache's `Options Indexes`.
+- A `"` or `\` in a certificate issuer broke the mail-SSL JSON (#471, upstream #5524).
+- A disabled bot family left dangling zone references, breaking `nginx -t` box-wide (#482).
+- Re-adding CrowdSec no longer fails on its saved state (#186).
 
 ### Changed
 
-- PROVENANCE recomputed for all three folders against `upstream/hestiacp@ca19b9f`. 74 files accumulated
-  since the last run are now listed - the CrowdSec, bot-limiting and mesh commands with their assets and
-  panel routes, all `eigenbau`. Percentages are integers again, files identical to upstream are recorded
-  as 0% rather than left unmeasured, and the two genuinely binary blobs are flagged instead of carrying a
-  meaningless churn number. Vendored paths stay out - they belong to `VENDORED.json`.
+- PROVENANCE recomputed for all three folders against `upstream/hestiacp@ca19b9f`.
 
 ### Removed
 
-- The orphaned bind9/named and vsftpd server-config views (#471). Both are permanent ground-rule removals,
-  the views were unreachable, and the vsftpd one called a command that does not exist. The stale `vsftpd`
-  branch in the FTP-account toggle went with it (`FTP_SYSTEM` is only ever `proftpd`).
-- 36 app-specific web templates (72 files) that the removed Software/App Installer had seeded. With no
-  installer to place these apps they were dead weight; the standard set stays. The list is
-  directory-driven, so panel and CLI follow automatically, and any pruned template can be re-imported
-  from `upstream/hestiacp`.
+- The orphaned bind9/named and vsftpd server-config views (#471) - both permanent ground-rule
+  removals, and the vsftpd one called a command that does not exist.
+- 36 app-specific web templates (72 files) seeded by the removed Software/App Installer.
 
 ## v0.12.0 (2026-07-30)
 
