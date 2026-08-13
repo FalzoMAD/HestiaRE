@@ -187,3 +187,41 @@ function display_title($tab)
 	$array2 = [$tab, get_hostname(), $_SERVER["REMOTE_ADDR"], $_SESSION["APP_NAME"]];
 	return str_replace($array1, $array2, $_SESSION["TITLE"]);
 }
+
+/**
+ * A control the form did not render sends no key at all. Reading it as "" turns "not offered" into
+ * "cleared", which is a silent rewrite (THEME, SHELL, DOCKER_LIMIT) or a fatal at the CLI boundary
+ * (quoteshellarg(null)).
+ *
+ * $offered is the server-side gate the view rendered on, and it is what decides - not the presence
+ * of the key, which comes from the client. Deciding on presence alone would let a POST carry a
+ * control the user was never offered, which is a policy bypass wherever a select sits behind one
+ * (POLICY_USER_CHANGE_THEME is the plain case).
+ *
+ * The gate is evaluated at write time. That is not always the state the submitted form was rendered
+ * under - a second session can flip a model switch in between - but it is server-side and cannot be
+ * forged, which a hidden witness field in the form could be.
+ */
+function post_or_keep(string $key, bool $offered, $stored)
+{
+	if (!$offered) {
+		return $stored;
+	}
+	return array_key_exists($key, $_POST) ? $_POST[$key] : $stored;
+}
+
+/**
+ * Checkboxes need the gate for a second reason: unchecked is an absent key too, so "keep" alone
+ * would make the box impossible to clear.
+ *
+ * $on and $off carry no default on purpose. The record space (yes/no) and the form space (on/"")
+ * are not the same, and a default would make the convenient call the wrong one - writing "" where
+ * the record wants "no" is the silent rewrite this whole path exists to prevent.
+ */
+function post_checkbox(string $key, bool $offered, $stored, string $on, string $off)
+{
+	if (!$offered) {
+		return $stored;
+	}
+	return empty($_POST[$key]) ? $off : $on;
+}

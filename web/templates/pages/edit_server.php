@@ -369,7 +369,7 @@
 							<?php } ?>
 						<?php } ?>
 					<?php } ?>
-					<?php if (!empty($_SESSION["WEB_BACKEND"])) { ?>
+					<?php if ($offer_backend) { ?>
 						<div class="u-mt10">
 							<label for="v_php_default_version" class="form-label">
 								<?= tohtml(_("System PHP Version")) ?>
@@ -429,7 +429,7 @@
 								</a>
 							</p>
 						<?php } ?>
-						<?php if ($_SESSION["WEBMAIL_SYSTEM"]) { ?>
+						<?php if ($offer_webmail) { ?>
 							<div class="u-mt15 u-mb10">
 								<label for="v_webmail_alias" class="form-label">
 									<?= tohtml(_("Webmail Alias")) ?>
@@ -534,7 +534,7 @@
 							</p>
 						</div>
 						<!-- MySQL / MariaDB Options-->
-						<?php if ($v_mysql == "yes") { ?>
+						<?php if ($offer_mysql) { ?>
 							<div class="u-mb20">
 								<label for="v_mysql_url" class="form-label">
 									<?= tohtml(_("phpMyAdmin Alias")) ?>
@@ -634,7 +634,7 @@
 						<?php }
 							} ?>
 						<!-- PostgreSQL Options-->
-						<?php if ($v_pgsql == "yes") { ?>
+						<?php if ($offer_pgsql) { ?>
 							<div class="u-mb10">
 								<p>
 									<?= tohtml(_("PostgreSQL Support")) ?>:
@@ -1184,7 +1184,7 @@
 						</div>
 					</details>
 
-					<?php if ($_SESSION["userContext"] === "admin" && $_SESSION["user"] === $_SESSION["ROOT_USER"]) { ?>
+					<?php if ($offer_root_policies) { ?>
 						<details class="collapse">
 							<summary class="collapse-header">
 								<?= tohtml(_("System Protection")) ?>
@@ -1320,7 +1320,7 @@
 									</option>
 								</select>
 							</div>
-							<?php if ($_SESSION["POLICY_SYSTEM_ENABLE_BACON"] === "true") { ?>
+							<?php if ($offer_preview_policies) { ?>
 								<div class="u-mb10">
 									<label for="v_policy_user_view_suspended" class="form-label">
 										<?= tohtml(_("Allow suspended users to log in with read-only access")) ?>

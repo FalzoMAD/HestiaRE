@@ -89,6 +89,14 @@ exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
 $shells = json_decode(implode("", $output), true);
 unset($output);
 
+// One gate per conditionally rendered control: rendered on it, read on it.
+// Selectability decides for the selects, not the system switch.
+$offer_web_template = !empty($web_templates);
+$offer_backend_template = !empty($backend_templates);
+$offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
+$offer_resources = $_SESSION["RESOURCES_LIMIT"] == "yes";
+$offer_docker_limit = !empty($_SESSION["DOCKER_SYSTEM"]);
+
 // Check POST request
 if (!empty($_POST["save"])) {
 	// Check token
@@ -104,15 +112,13 @@ if (!empty($_POST["save"])) {
 	// Only demanded where something is selectable. An apache web role has no selectable web
 	// template since they moved to share/, so the control is not rendered and the key never
 	// arrives - requiring it there makes the package unsaveable.
-	if (!empty($web_templates) && empty($_POST["v_web_template"])) {
+	if ($offer_web_template && empty($_POST["v_web_template"])) {
 		$errors[] = _("Web Template");
 	}
-	// Selectability decides, not the system switch: with the switch on and the list empty the
-	// form demands a field it never offers - the same dead end as the web template.
-	if (!empty($backend_templates) && empty($_POST["v_backend_template"])) {
+	if ($offer_backend_template && empty($_POST["v_backend_template"])) {
 		$errors[] = _("Backend Template");
 	}
-	if (!empty($proxy_templates) && empty($_POST["v_proxy_template"])) {
+	if ($offer_proxy_template && empty($_POST["v_proxy_template"])) {
 		$errors[] = _("Proxy Template");
 	}
 	if (empty($_POST["v_shell"])) {
@@ -152,7 +158,7 @@ if (!empty($_POST["save"])) {
 		$errors[] = _("Bandwidth");
 	}
 
-	if ($_SESSION["RESOURCES_LIMIT"] == "yes") {
+	if ($offer_resources) {
 		if (!isset($_POST["v_cpu_quota"])) {
 			$errors[] = _("CPU quota");
 		}
@@ -186,14 +192,11 @@ if (!empty($_POST["save"])) {
 		// POST name - a crafted POST walked around it. Anchor the write on the checked value.
 		$v_package = quoteshellarg($_GET["package"]);
 		$v_package_new = quoteshellarg($_POST["v_package_new"]);
-		// Keep the stored template when the form did not offer the control, rather than reading a key
-		// nobody sent: an empty select submits nothing, and quoteshellarg(null) is a fatal.
-		$v_web_template = quoteshellarg($_POST["v_web_template"] ?? $v_web_template);
-		$v_backend_template = quoteshellarg($_POST["v_backend_template"] ?? $v_backend_template);
-		$v_proxy_template = quoteshellarg($_POST["v_proxy_template"] ?? $v_proxy_template);
-		// Keep the stored shell when the control was not rendered. Falling back to a literal
-		// turned an absent control into a demotion to nologin.
-		$v_shell = quoteshellarg($_POST["v_shell"] ?? $v_shell);
+		// An empty select submits nothing; a literal fallback here demoted the shell to nologin
+		$v_web_template = quoteshellarg(post_or_keep("v_web_template", $offer_web_template, $v_web_template));
+		$v_backend_template = quoteshellarg(post_or_keep("v_backend_template", $offer_backend_template, $v_backend_template));
+		$v_proxy_template = quoteshellarg(post_or_keep("v_proxy_template", $offer_proxy_template, $v_proxy_template));
+		$v_shell = quoteshellarg(post_or_keep("v_shell", true, $v_shell));
 		$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
 		$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
 		$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
@@ -206,27 +209,13 @@ if (!empty($_POST["save"])) {
 		$v_disk_quota = quoteshellarg($_POST["v_disk_quota"]);
 		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 
-		// Same rule as the web template above: these controls are only rendered while
-		// RESOURCES_LIMIT is on, so keep what the package carries instead of writing "" - that
-		// silently dropped 'unlimited' out of the record on every save.
-		$v_cpu_quota =
-			$_SESSION["RESOURCES_LIMIT"] == "yes"
-				? quoteshellarg($_POST["v_cpu_quota"])
-				: quoteshellarg($v_cpu_quota);
-		$v_cpu_quota_period =
-			$_SESSION["RESOURCES_LIMIT"] == "yes"
-				? quoteshellarg($_POST["v_cpu_quota_period"])
-				: quoteshellarg($v_cpu_quota_period);
-		$v_memory_limit =
-			$_SESSION["RESOURCES_LIMIT"] == "yes"
-				? quoteshellarg($_POST["v_memory_limit"])
-				: quoteshellarg($v_memory_limit);
-		$v_swap_limit =
-			$_SESSION["RESOURCES_LIMIT"] == "yes"
-				? quoteshellarg($_POST["v_swap_limit"])
-				: quoteshellarg($v_swap_limit);
+		// Only rendered while RESOURCES_LIMIT is on; writing "" dropped 'unlimited' from the record
+		$v_cpu_quota = quoteshellarg(post_or_keep("v_cpu_quota", $offer_resources, $v_cpu_quota));
+		$v_cpu_quota_period = quoteshellarg(post_or_keep("v_cpu_quota_period", $offer_resources, $v_cpu_quota_period));
+		$v_memory_limit = quoteshellarg(post_or_keep("v_memory_limit", $offer_resources, $v_memory_limit));
+		$v_swap_limit = quoteshellarg(post_or_keep("v_swap_limit", $offer_resources, $v_swap_limit));
 		// a preset name, not a size - the command rejects anything else
-		$v_docker_limit = quoteshellarg($_POST["v_docker_limit"] ?? $v_docker_limit);
+		$v_docker_limit = quoteshellarg(post_or_keep("v_docker_limit", $offer_docker_limit, $v_docker_limit));
 
 		$v_time = quoteshellarg(date("H:i:s"));
 		$v_date = quoteshellarg(date("Y-m-d"));

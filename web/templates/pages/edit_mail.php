@@ -13,9 +13,6 @@ if (($v_spam_score ?? "") === "") {
 		}
 	}
 }
-$spam_tuning_allowed =
-	$_SESSION["userContext"] === "admin" ||
-	($_SESSION["POLICY_SPAM_CUSTOMER_TUNING"] ?? "yes") !== "no";
 ?>
 <!-- Begin toolbar -->
 <div class="toolbar">
@@ -60,7 +57,7 @@ $spam_tuning_allowed =
 				<input type="text" class="form-control" name="v_domain" id="v_domain" value="<?= tohtml(trim($v_domain, "'")) ?>" disabled required>
 				<input type="hidden" name="v_domain" value="<?= tohtml(trim($v_domain, "'")) ?>">
 			</div>
-			<?php if ($_SESSION["WEBMAIL_SYSTEM"]) { ?>
+			<?php if ($offer_webmail) { ?>
 				<div class="u-mb10">
 					<label for="v_webmail" class="form-label"><?= tohtml(_("Webmail Client")) ?></label>
 					<select class="form-select" name="v_webmail" id="v_webmail" tabindex="6">
@@ -90,7 +87,7 @@ $spam_tuning_allowed =
 					echo "disabled";
 				}?>>
 			</div>
-			<?php if (!empty($_SESSION["ANTISPAM_SYSTEM"])) { ?>
+			<?php if ($offer_antispam) { ?>
 				<div class="form-check u-mb10">
 					<input x-model="spamFilterEnabled" class="form-check-input" type="checkbox" name="v_antispam" id="v_antispam" <?php if ($v_antispam == 'yes') {
 						echo 'checked';
@@ -172,7 +169,7 @@ $spam_tuning_allowed =
 					</div>
 				<?php } ?>
 			<?php } ?>
-			<?php if (!empty($_SESSION["ANTIVIRUS_SYSTEM"])) { ?>
+			<?php if ($offer_antivirus) { ?>
 				<div class="form-check u-mb10">
 					<input class="form-check-input" type="checkbox" name="v_antivirus" id="v_antivirus" <?php if ($v_antivirus == 'yes') {
 						echo 'checked';

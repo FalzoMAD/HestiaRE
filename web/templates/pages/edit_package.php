@@ -96,7 +96,7 @@
 					</div>
 					<?php // No selectable web template on an apache web role - an empty required
 						 // select cannot be answered, and it submits no key at all.?>
-					<?php if (!empty($web_templates)) { ?>
+					<?php if ($offer_web_template) { ?>
 					<div class="u-mb10">
 						<label for="v_web_template" class="form-label">
 							<?= tohtml(_("Web Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_SYSTEM"])) ?></span>
@@ -114,8 +114,7 @@
 						</select>
 					</div>
 					<?php } ?>
-					<?php if (!empty($_SESSION['WEB_BACKEND'])) {
-						echo ""; ?>
+					<?php if ($offer_backend_template) { ?>
 						<div class="u-mb10">
 								<label for="v_backend_template" class="form-label">
 									<?= tohtml(_("Backend Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
@@ -134,9 +133,9 @@
 						</div>
 							<?php } ?>
 					<?php # one template is not a choice: carry the value, drop the control
-						if (!empty($_SESSION['PROXY_SYSTEM']) && count($proxy_templates ?? []) < 2) { ?>
+						if ($offer_proxy_template && count($proxy_templates ?? []) < 2) { ?>
 						<input type="hidden" name="v_proxy_template" value="<?= tohtml(trim($v_proxy_template ?? "", "'") ?: ($proxy_templates[0] ?? 'default')) ?>">
-					<?php } elseif (!empty($_SESSION['PROXY_SYSTEM'])) { ?>
+					<?php } elseif ($offer_proxy_template) { ?>
 						<div class="u-mb10">
 								<label for="v_proxy_template" class="form-label">
 									<?= tohtml(_("Proxy Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["PROXY_SYSTEM"])) ?></span>
@@ -243,7 +242,7 @@
 				</div>
 			</details>
 
-			<?php if ($_SESSION['RESOURCES_LIMIT'] == 'yes') { ?>
+			<?php if ($offer_resources) { ?>
 				<details class="collapse" id="system-resources-options">
 					<summary class="collapse-header">
 						<?= tohtml(_("System Resources")) ?>
@@ -306,7 +305,7 @@
 			<?php } ?>
 			<?php # the addon, not RESOURCES_LIMIT, decides this one: the companion cap is per docker
 				# customer and the box-wide toggle is off by default
-				if (!empty($_SESSION["DOCKER_SYSTEM"])) { ?>
+				if ($offer_docker_limit) { ?>
 				<details class="collapse" id="docker-options">
 					<summary class="collapse-header">
 						<?= tohtml(_("DOCKER")) ?>

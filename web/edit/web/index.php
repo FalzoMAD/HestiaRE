@@ -289,6 +289,27 @@ exec(HESTIA_CMD . "h-list-web-stats json", $output, $return_var);
 $stats = json_decode(implode("", $output), true);
 unset($output);
 
+// One gate per conditionally rendered control: rendered on it, read on it.
+// Template and pool choices gate on the real identity; the policy can open them to customers.
+$can_edit_templates =
+	($_SESSION["adminContext"] ?? "") === "admin" ||
+	($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") == "yes";
+$offer_docker = !empty($v_docker_net);
+$offer_docker_template = $offer_docker && count($docker_templates) > 1;
+$offer_web_template = empty($v_docker) && $can_edit_templates && is_array($templates) && count($templates) > 0;
+$offer_backend = empty($v_docker) && !empty($_SESSION["WEB_BACKEND"]);
+$offer_backend_template = $offer_backend && $can_edit_templates;
+$offer_proxy = empty($v_docker) && !empty($_SESSION["PROXY_SYSTEM"]);
+$offer_proxy_template = $offer_proxy && $can_edit_templates && count($proxy_templates ?? []) > 1;
+$offer_proxy_cache = !empty($_SESSION["PROXY_SYSTEM"]) && $_SESSION["PROXY_SYSTEM"] == "nginx";
+$offer_fastcgi_cache = empty($v_docker) && $_SESSION["WEB_SYSTEM"] == "nginx";
+$offer_http3 =
+	$_SESSION["WEB_HTTP3"] == "yes" &&
+	($_SESSION["WEB_SYSTEM"] == "nginx" ||
+		(!empty($_SESSION["PROXY_SYSTEM"]) && $_SESSION["PROXY_SYSTEM"] == "nginx"));
+$offer_botlimit = !empty($botfamilies);
+$offer_ftp = $_SESSION["FTP_SYSTEM"] == "proftpd";
+
 // Check POST request
 if (!empty($_POST["save"])) {
 	$v_domain = $_POST["v_domain"];
@@ -338,16 +359,10 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Template and pool choices are capacity/stability decisions: the REAL identity gates them
-	// (an impersonating admin keeps them, #438/#566), the policy can open them to customers.
-	// PHP version and proxy extensions below stay customer-editable - view and POST agree.
-	$can_edit_templates =
-		($_SESSION["adminContext"] ?? "") === "admin" ||
-		($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") == "yes";
 	if ($can_edit_templates) {
-		// Change template - only when the selector was shown and submitted; on apache-web models
-		// it is hidden (renders from share/), so an absent field must not reset TPL to empty
-		if (isset($_POST["v_template"]) && $v_template != $_POST["v_template"] && empty($_SESSION["error_msg"])) {
+		// Hidden on apache-web models: the vhost renders from share/, nothing to select
+		$post_template = post_or_keep("v_template", $offer_web_template, $v_template);
+		if ($offer_web_template && $v_template != $post_template && empty($_SESSION["error_msg"])) {
 			exec(
 				HESTIA_CMD .
 					"h-change-web-domain-tpl " .
@@ -355,7 +370,7 @@ if (!empty($_POST["save"])) {
 					" " .
 					quoteshellarg($v_domain) .
 					" " .
-					quoteshellarg($_POST["v_template"]) .
+					quoteshellarg($post_template) .
 					" 'no'",
 				$output,
 				$return_var,
@@ -365,15 +380,14 @@ if (!empty($_POST["save"])) {
 			$restart_web = "yes";
 		}
 
-		// Change backend template - absent for a docker domain (no pool at all), and reading the
-		// key raw was a fatal, not a warning: quoteshellarg(null) killed the whole save
+		// A docker domain has no pool at all
+		$post_backend_template = post_or_keep("v_backend_template", $offer_backend_template, $v_backend_template);
 		if (
-			!empty($_SESSION["WEB_BACKEND"]) &&
-			isset($_POST["v_backend_template"]) &&
-			$v_backend_template != $_POST["v_backend_template"] &&
+			$offer_backend_template &&
+			$v_backend_template != $post_backend_template &&
 			empty($_SESSION["error_msg"])
 		) {
-			$v_backend_template = $_POST["v_backend_template"];
+			$v_backend_template = $post_backend_template;
 			exec(
 				HESTIA_CMD .
 					"h-change-web-domain-backend-tpl " .
@@ -391,13 +405,9 @@ if (!empty($_POST["save"])) {
 
 	}
 	// Change PHP version (its own field since #591)
-	if (
-		!empty($_SESSION["WEB_BACKEND"]) &&
-		isset($_POST["v_php_version"]) &&
-		$v_php_version != $_POST["v_php_version"] &&
-		empty($_SESSION["error_msg"])
-	) {
-		$v_php_version = $_POST["v_php_version"];
+	$post_php_version = post_or_keep("v_php_version", $offer_backend, $v_php_version);
+	if ($offer_backend && $v_php_version != $post_php_version && empty($_SESSION["error_msg"])) {
+		$v_php_version = $post_php_version;
 		exec(
 			HESTIA_CMD .
 				"h-change-web-domain-php " .
@@ -413,24 +423,20 @@ if (!empty($_POST["save"])) {
 		unset($output);
 	}
 
-	// Enable/Disable nginx cache
-	if (empty($_POST["v_nginx_cache_check"])) {
-		$_POST["v_nginx_cache_check"] = "";
-	}
-	if (empty($v_nginx_cache_duration)) {
-		$v_nginx_cache_duration = "";
-	}
-	// Same absent-control rule as the proxy family: a docker domain has no fastcgi cache selector
+	// Enable/Disable nginx cache. With nothing stored the field shows a 2m default, so what is
+	// stored and what the form shows are not the same value.
+	$post_nginx_cache_check = post_checkbox("v_nginx_cache_check", $offer_fastcgi_cache, $v_nginx_cache_check, "on", "");
+	$post_nginx_cache_duration = post_or_keep("v_nginx_cache_duration", $offer_fastcgi_cache, $v_nginx_cache_duration);
 	if (
-		empty($v_docker) &&
-		(($_SESSION["WEB_SYSTEM"] == "nginx" &&
-			$v_nginx_cache_check != $_POST["v_nginx_cache_check"]) ||
-			($v_nginx_cache_duration != ($_POST["v_nginx_cache_duration"] ?? "") &&
-				empty($_SESSION["error_msg"])))
+		$offer_fastcgi_cache &&
+		($v_nginx_cache_check != $post_nginx_cache_check ||
+			($post_nginx_cache_check == "on" &&
+				$v_nginx_cache_duration != $post_nginx_cache_duration)) &&
+		empty($_SESSION["error_msg"])
 	) {
-		if ($_POST["v_nginx_cache_check"] == "on") {
-			if (empty($_POST["v_nginx_cache_duration"])) {
-				$_POST["v_nginx_cache_duration"] = "2m";
+		if ($post_nginx_cache_check == "on") {
+			if (empty($post_nginx_cache_duration)) {
+				$post_nginx_cache_duration = "2m";
 			}
 			exec(
 				HESTIA_CMD .
@@ -439,7 +445,7 @@ if (!empty($_POST["save"])) {
 					" " .
 					quoteshellarg($v_domain) .
 					" " .
-					quoteshellarg($_POST["v_nginx_cache_duration"]),
+					quoteshellarg($post_nginx_cache_duration),
 				$output,
 				$return_var,
 			);
@@ -457,16 +463,10 @@ if (!empty($_POST["save"])) {
 		$restart_web = "yes";
 	}
 
-	// Proxy support, template and extensions. All three gate on empty($v_docker) like the view
-	// does: for a docker domain nothing here is rendered, so an absent checkbox is not an unchecked
-	// one - it used to read as "customer switched the proxy off" and dropped PROXY on every save.
-	if (
-		empty($v_docker) &&
-		!empty($_SESSION["PROXY_SYSTEM"]) &&
-		!empty($v_proxy) &&
-		empty($_POST["v_proxy"]) &&
-		empty($_SESSION["error_msg"])
-	) {
+	// Proxy support, template and extensions. A docker domain renders none of it.
+	$post_proxy = post_checkbox("v_proxy", $offer_proxy, empty($v_proxy) ? "" : "on", "on", "");
+	$post_proxy_ext = post_or_keep("v_proxy_ext", $offer_proxy, $v_proxy_ext);
+	if ($offer_proxy && !empty($v_proxy) && empty($post_proxy) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-delete-web-domain-proxy " .
@@ -484,24 +484,14 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Change proxy template / Update extension list
-	if (
-		empty($v_docker) &&
-		!empty($_SESSION["PROXY_SYSTEM"]) &&
-		!empty($v_proxy) &&
-		!empty($_POST["v_proxy"]) &&
-		empty($_SESSION["error_msg"])
-	) {
-		$ext = preg_replace("/\n/", " ", $_POST["v_proxy_ext"]);
+	if ($offer_proxy && !empty($v_proxy) && !empty($post_proxy) && empty($_SESSION["error_msg"])) {
+		$ext = preg_replace("/\n/", " ", $post_proxy_ext);
 		$ext = preg_replace("/,/", " ", $ext);
 		$ext = preg_replace("/\s+/", " ", $ext);
 		$ext = trim($ext);
 		$ext = str_replace(" ", ", ", $ext);
-		// No posted template means no template change - the select is absent for a customer and
-		// wherever there is only one to pick. Reading the key raw made every save a change.
-		$post_proxy_template =
-			$can_edit_templates && !empty($_POST["v_proxy_template"])
-				? $_POST["v_proxy_template"]
-				: $v_proxy_template;
+		// Absent for a customer and wherever there is only one to pick
+		$post_proxy_template = post_or_keep("v_proxy_template", $offer_proxy_template, $v_proxy_template);
 		if ($v_proxy_template != $post_proxy_template || $v_proxy_ext != $ext) {
 			$ext = str_replace(", ", ",", $ext);
 			$v_proxy_template = $post_proxy_template;
@@ -527,17 +517,11 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Add proxy support
-	if (
-		empty($v_docker) &&
-		!empty($_SESSION["PROXY_SYSTEM"]) &&
-		empty($v_proxy) &&
-		!empty($_POST["v_proxy"]) &&
-		empty($_SESSION["error_msg"])
-	) {
+	if ($offer_proxy && empty($v_proxy) && !empty($post_proxy) && empty($_SESSION["error_msg"])) {
 		// template choice stays behind the real-identity gate; a customer enable gets default
-		$v_proxy_template = $can_edit_templates && !empty($_POST["v_proxy_template"]) ? $_POST["v_proxy_template"] : "default";
-		if (!empty($_POST["v_proxy_ext"])) {
-			$ext = preg_replace("/\n/", " ", $_POST["v_proxy_ext"]);
+		$v_proxy_template = post_or_keep("v_proxy_template", $offer_proxy_template, "default");
+		if (!empty($post_proxy_ext)) {
+			$ext = preg_replace("/\n/", " ", $post_proxy_ext);
 			$ext = preg_replace("/,/", " ", $ext);
 			$ext = preg_replace("/\s+/", " ", $ext);
 			$ext = trim($ext);
@@ -564,20 +548,18 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Enable/Disable proxy cache
-	if (empty($_POST["v_proxy_cache_check"])) {
-		$_POST["v_proxy_cache_check"] = "";
-	}
+	$post_proxy_cache_check = post_checkbox("v_proxy_cache_check", $offer_proxy_cache, $v_proxy_cache_check, "on", "");
+	$post_proxy_cache_duration = post_or_keep("v_proxy_cache_duration", $offer_proxy_cache, $v_proxy_cache_duration);
 	if (
-		(!empty($_SESSION["PROXY_SYSTEM"]) &&
-			$_SESSION["PROXY_SYSTEM"] == "nginx") &&
-		($v_proxy_cache_check != $_POST["v_proxy_cache_check"] ||
-			($_POST["v_proxy_cache_check"] == "on" &&
-				$v_proxy_cache_duration != $_POST["v_proxy_cache_duration"])) &&
+		$offer_proxy_cache &&
+		($v_proxy_cache_check != $post_proxy_cache_check ||
+			($post_proxy_cache_check == "on" &&
+				$v_proxy_cache_duration != $post_proxy_cache_duration)) &&
 		empty($_SESSION["error_msg"])
 	) {
-		if ($_POST["v_proxy_cache_check"] == "on") {
-			if (empty($_POST["v_proxy_cache_duration"])) {
-				$_POST["v_proxy_cache_duration"] = "5m";
+		if ($post_proxy_cache_check == "on") {
+			if (empty($post_proxy_cache_duration)) {
+				$post_proxy_cache_duration = "5m";
 			}
 			exec(
 				HESTIA_CMD .
@@ -586,7 +568,7 @@ if (!empty($_POST["save"])) {
 					" " .
 					quoteshellarg($v_domain) .
 					" " .
-					quoteshellarg($_POST["v_proxy_cache_duration"]),
+					quoteshellarg($post_proxy_cache_duration),
 				$output,
 				$return_var,
 			);
@@ -1009,8 +991,15 @@ if (!empty($_POST["save"])) {
 		$restart_proxy = "yes";
 	}
 
-	// Add HTTP/3 (nginx front only; the command refuses where nginx lacks http_v3)
-	if (!empty($_POST["v_http3"]) && !empty($_POST["v_ssl"]) && empty($_SESSION["error_msg"])) {
+	// Add HTTP/3 (nginx front only; the command refuses where nginx lacks http_v3). Both arms run
+	// off the difference to the stored field, so an unoffered checkbox moves nothing.
+	$post_http3 = post_checkbox("v_http3", $offer_http3, $v_http3 == "yes" ? "on" : "", "on", "");
+	if (
+		!empty($post_http3) &&
+		$v_http3 != "yes" &&
+		!empty($_POST["v_ssl"]) &&
+		empty($_SESSION["error_msg"])
+	) {
 		exec(
 			HESTIA_CMD . "h-add-web-domain-http3 " . $user . " " . quoteshellarg($v_domain),
 			$output,
@@ -1055,8 +1044,8 @@ if (!empty($_POST["save"])) {
 		$restart_proxy = "yes";
 	}
 
-	// Delete HTTP/3
-	if ($v_http3 == "yes" && empty($_POST["v_http3"]) && empty($_SESSION["error_msg"])) {
+	// Delete HTTP/3. The field is what a rebuild reconciles from, so it must survive an absent box.
+	if ($v_http3 == "yes" && empty($post_http3) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD . "h-delete-web-domain-http3 " . $user . " " . quoteshellarg($v_domain),
 			$output,
@@ -1071,12 +1060,13 @@ if (!empty($_POST["save"])) {
 
 	// Docker proxy (#566/#592): enable or retarget re-runs the add command (it updates the
 	// fields and rebuilds); the command itself validates port, octet, duplicates and wildcards
-	if (!empty($v_docker_net) && empty($_SESSION["error_msg"])) {
+	if ($offer_docker && empty($_SESSION["error_msg"])) {
+		$post_docker = post_checkbox("v_docker", $offer_docker, empty($v_docker) ? "" : "on", "on", "");
 		// Digits only, then the same ranges the command enforces - so a typo comes back as a
 		// sentence here instead of a command error, and nothing but a number ever reaches the shell.
-		$post_docker_port = preg_replace("/\D/", "", $_POST["v_docker_port"] ?? "");
-		$post_docker_octet = preg_replace("/\D/", "", $_POST["v_docker_octet"] ?? "");
-		if (!empty($_POST["v_docker"])) {
+		$post_docker_port = preg_replace("/\D/", "", post_or_keep("v_docker_port", $offer_docker, $v_docker_port));
+		$post_docker_octet = preg_replace("/\D/", "", post_or_keep("v_docker_octet", $offer_docker, $v_docker_octet));
+		if (!empty($post_docker)) {
 			if ($post_docker_port === "" || (int) $post_docker_port < 1024 || (int) $post_docker_port > 65535) {
 				$_SESSION["error_msg"] = _("Container port must be a number between 1024 and 65535.");
 			} elseif ($post_docker_octet === "" || (int) $post_docker_octet < 1 || (int) $post_docker_octet > 254) {
@@ -1084,11 +1074,9 @@ if (!empty($_POST["save"])) {
 			}
 		}
 		// Absent select (single template, or none offered) keeps what the domain has
-		$post_docker_tpl = !empty($_POST["v_docker_template"])
-			? $_POST["v_docker_template"]
-			: ($v_docker ?: "default");
+		$post_docker_tpl = post_or_keep("v_docker_template", $offer_docker_template, $v_docker ?: "default");
 		if (
-			!empty($_POST["v_docker"]) &&
+			!empty($post_docker) &&
 			empty($_SESSION["error_msg"]) &&
 			(empty($v_docker) ||
 				$post_docker_port != $v_docker_port ||
@@ -1119,7 +1107,7 @@ if (!empty($_POST["save"])) {
 				$restart_web = "yes";
 				$restart_proxy = "yes";
 			}
-		} elseif (empty($_POST["v_docker"]) && !empty($v_docker)) {
+		} elseif (empty($post_docker) && !empty($v_docker)) {
 			exec(
 				HESTIA_CMD . "h-delete-web-domain-docker " . $user . " " . quoteshellarg($v_domain),
 				$output,
@@ -1135,7 +1123,7 @@ if (!empty($_POST["save"])) {
 
 	// One command per changed family, each deferring the restart. Safe for customers: $user is the
 	// effective session user, and the CLI validates the domain against that user's own object file.
-	if (is_array($_POST["v_botlimit"] ?? null)) {
+	if ($offer_botlimit && is_array($_POST["v_botlimit"] ?? null)) {
 		foreach ($botfamilies as $bl_fam => $bl_unused) {
 			// The family name is a key from the server-side table, never from the request.
 			$bl_new = $_POST["v_botlimit"][$bl_fam] ?? "off";
@@ -1317,8 +1305,8 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Update ftp account
-	if (!empty($_POST["v_ftp_user"])) {
+	// Update ftp account. No proftpd, no section - and no way in for a hand-made POST either.
+	if ($offer_ftp && !empty($_POST["v_ftp_user"])) {
 		$v_ftp_users_updated = [];
 		foreach ($_POST["v_ftp_user"] as $i => $v_ftp_user_data) {
 			if (empty($v_ftp_user_data["v_ftp_user"])) {

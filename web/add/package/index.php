@@ -35,6 +35,14 @@ exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
 $web_templates = json_decode(implode("", $output), true);
 unset($output);
 
+// One gate per conditionally rendered control: rendered on it, read on it.
+// A new package has nothing stored, so an absent control takes the shipped default.
+$offer_web_template = !empty($web_templates);
+$offer_backend_template = !empty($_SESSION["WEB_BACKEND"]) && !empty($backend_templates);
+$offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
+$offer_resources = $_SESSION["RESOURCES_LIMIT"] == "yes";
+$offer_docker_limit = !empty($_SESSION["DOCKER_SYSTEM"]);
+
 // Check POST request
 if (!empty($_POST["ok"])) {
 	// Check token
@@ -44,24 +52,14 @@ if (!empty($_POST["ok"])) {
 	if (!isset($_POST["v_package"])) {
 		$errors[] = _("Package");
 	}
-	if (!empty($web_templates) && !isset($_POST["v_web_template"])) {
+	if ($offer_web_template && !isset($_POST["v_web_template"])) {
 		$errors[] = _("Web Template");
 	}
-	if (!empty($_SESSION["WEB_BACKEND"])) {
-		if (!empty($backend_templates) && !isset($_POST["v_backend_template"])) {
-			$errors[] = _("Backend Template");
-		}
-	} else {
-		# When modphp is enabled
-		$_POST["v_backend_template"] = "";
+	if ($offer_backend_template && !isset($_POST["v_backend_template"])) {
+		$errors[] = _("Backend Template");
 	}
-	if (!empty($_SESSION["PROXY_SYSTEM"])) {
-		if (!isset($_POST["v_proxy_template"])) {
-			$errors[] = _("Proxy Template");
-		}
-	} else {
-		# when nginx only is enabled
-		$_POST["v_proxy_template"] = "default";
+	if ($offer_proxy_template && !isset($_POST["v_proxy_template"])) {
+		$errors[] = _("Proxy Template");
 	}
 	if (!isset($_POST["v_shell"])) {
 		$errors[] = _("Shell");
@@ -100,7 +98,7 @@ if (!empty($_POST["ok"])) {
 		$errors[] = _("Rate Limit");
 	}
 
-	if ($_SESSION["RESOURCES_LIMIT"] == "yes") {
+	if ($offer_resources) {
 		if (!isset($_POST["v_cpu_quota"])) {
 			$errors[] = _("CPU quota");
 		}
@@ -127,13 +125,13 @@ if (!empty($_POST["ok"])) {
 	} else {
 		// Protect input
 		$v_package = quoteshellarg($_POST["v_package"]);
-		// Without a selectable template the control is not rendered, so fall back to the name every
-		// role resolves - a package record always carries a web template.
-		$v_web_template = quoteshellarg($_POST["v_web_template"] ?? "default");
-		// no selectable list means no control, so take the name every role resolves
-		$v_backend_template = quoteshellarg($_POST["v_backend_template"] ?? "default");
-		$v_proxy_template = quoteshellarg($_POST["v_proxy_template"] ?? "default");
-		$v_shell = quoteshellarg($_POST["v_shell"] ?? "nologin");
+		// "default" is the name every role resolves; with no backend there is no pool profile to name
+		$v_web_template = quoteshellarg(post_or_keep("v_web_template", $offer_web_template, "default"));
+		$v_backend_template = quoteshellarg(
+			post_or_keep("v_backend_template", $offer_backend_template, empty($_SESSION["WEB_BACKEND"]) ? "" : "default"),
+		);
+		$v_proxy_template = quoteshellarg(post_or_keep("v_proxy_template", $offer_proxy_template, "default"));
+		$v_shell = quoteshellarg(post_or_keep("v_shell", true, "nologin"));
 		$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
 		$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
 		$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
@@ -148,18 +146,12 @@ if (!empty($_POST["ok"])) {
 
 		// No control rendered while RESOURCES_LIMIT is off - a new package takes the shipped
 		// default rather than an empty value.
-		$v_cpu_quota =
-			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_cpu_quota"]) : "unlimited";
-		$v_cpu_quota_period =
-			$_SESSION["RESOURCES_LIMIT"] == "yes"
-				? quoteshellarg($_POST["v_cpu_quota_period"])
-				: "unlimited";
-		$v_memory_limit =
-			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_memory_limit"]) : "unlimited";
-		$v_swap_limit =
-			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_swap_limit"]) : "unlimited";
+		$v_cpu_quota = quoteshellarg(post_or_keep("v_cpu_quota", $offer_resources, "unlimited"));
+		$v_cpu_quota_period = quoteshellarg(post_or_keep("v_cpu_quota_period", $offer_resources, "unlimited"));
+		$v_memory_limit = quoteshellarg(post_or_keep("v_memory_limit", $offer_resources, "unlimited"));
+		$v_swap_limit = quoteshellarg(post_or_keep("v_swap_limit", $offer_resources, "unlimited"));
 		// a preset name, not a size - the command rejects anything else
-		$v_docker_limit = quoteshellarg($_POST["v_docker_limit"] ?? "unlimited");
+		$v_docker_limit = quoteshellarg(post_or_keep("v_docker_limit", $offer_docker_limit, "unlimited"));
 
 		$v_time = quoteshellarg(date("H:i:s"));
 		$v_date = quoteshellarg(date("Y-m-d"));

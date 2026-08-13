@@ -120,6 +120,17 @@ exec(HESTIA_CMD . "h-list-sys-php json", $output, $return_var);
 $php_versions = json_decode(implode("", $output), true);
 unset($output);
 
+// One gate per conditionally rendered control: rendered on it, read on it.
+// Docker gates on the real identity because it grants privilege, the rest on the effective one.
+$offer_admin_fields = $_SESSION["userContext"] === "admin";
+$offer_role = $offer_admin_fields && $v_username != "admin" && $_SESSION["user"] != $v_username;
+$offer_theme = ($_SESSION["POLICY_USER_CHANGE_THEME"] ?? "") !== "no";
+$offer_file_manager = $offer_admin_fields && !empty($_SESSION["FILE_MANAGER_PORT"]);
+$offer_docker =
+	($_SESSION["adminContext"] ?? "") === "admin" &&
+	!empty($_SESSION["DOCKER_SYSTEM"]) &&
+	($v_docker_eligible || !empty($v_docker_ip));
+
 // Check POST request
 if (!empty($_POST["save"])) {
 	// Check token
@@ -213,27 +224,22 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Update Control Panel login disabled status (admin only)
-	if (empty($_SESSION["error_msg"])) {
-		if (empty($_POST["v_login_disabled"])) {
-			$_POST["v_login_disabled"] = "";
-		}
-		if ($_POST["v_login_disabled"] != $v_login_disabled) {
-			if ($_POST["v_login_disabled"] == "on") {
-				$_POST["v_login_disabled"] = "yes";
-			} else {
-				$_POST["v_login_disabled"] = "no";
-			}
+	if ($offer_admin_fields && empty($_SESSION["error_msg"])) {
+		// Compared in record space: "on" never equals "yes"
+		$v_login_disabled = $v_login_disabled === "yes" ? "yes" : "no";
+		$post_login_disabled = post_checkbox("v_login_disabled", $offer_admin_fields, $v_login_disabled, "yes", "no");
+		if ($post_login_disabled != $v_login_disabled) {
 			exec(
 				HESTIA_CMD .
 					"h-change-user-config-value " .
 					quoteshellarg($v_username) .
 					" LOGIN_DISABLED " .
-					quoteshellarg($_POST["v_login_disabled"]),
+					quoteshellarg($post_login_disabled),
 				$output,
 				$return_var,
 			);
 			check_return_code($return_var, $output);
-			$data[$user]["LOGIN_DISABLED"] = $_POST["v_login_disabled"];
+			$data[$user]["LOGIN_DISABLED"] = $post_login_disabled;
 			unset($output);
 		}
 	}
@@ -243,13 +249,10 @@ if (!empty($_POST["save"])) {
 	// h-delete-sys-filemanager). The dedicated commands build/tear down the
 	// per-customer FPM pool + private-listener vhost + socket AND set the flag, so
 	// this is NOT a plain h-change-user-config-value.
-	if (
-		empty($_SESSION["error_msg"]) &&
-		$_SESSION["userContext"] === "admin" &&
-		!empty($_SESSION["FILE_MANAGER_PORT"])
-	) {
-		$v_fm_new = empty($_POST["v_file_manager"]) ? "no" : "yes";
-		if ($v_fm_new !== ($v_file_manager === "yes" ? "yes" : "no")) {
+	if ($offer_file_manager && empty($_SESSION["error_msg"])) {
+		$v_file_manager = $v_file_manager === "yes" ? "yes" : "no";
+		$v_fm_new = post_checkbox("v_file_manager", $offer_file_manager, $v_file_manager, "yes", "no");
+		if ($v_fm_new !== $v_file_manager) {
 			$fm_cmd = $v_fm_new === "yes" ? "h-add-user-filemanager " : "h-delete-user-filemanager ";
 			exec(HESTIA_CMD . $fm_cmd . quoteshellarg($v_username), $output, $return_var);
 			check_return_code($return_var, $output);
@@ -264,13 +267,8 @@ if (!empty($_POST["save"])) {
 	// build the companion with its rootless daemon, so this is not a config value either. The
 	// switch only acts where it was rendered: an ineligible shell hides it, and an absent
 	// checkbox would otherwise read as "turn docker off".
-	if (
-		empty($_SESSION["error_msg"]) &&
-		($_SESSION["adminContext"] ?? "") === "admin" &&
-		!empty($_SESSION["DOCKER_SYSTEM"]) &&
-		($v_docker_eligible || !empty($v_docker_ip))
-	) {
-		$v_docker_new = empty($_POST["v_docker"]) ? "no" : "yes";
+	if ($offer_docker && empty($_SESSION["error_msg"])) {
+		$v_docker_new = post_checkbox("v_docker", $offer_docker, empty($v_docker_ip) ? "no" : "yes", "yes", "no");
 		// Turning it off deletes the customer's containers, images and volumes and cannot be undone
 		// by re-checking the box, so the name has to be typed. Enforced here, not only in the
 		// dialog: an unchecked box must never carry that away as a side effect of another save.
@@ -343,14 +341,11 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	if ($_SESSION["userContext"] === "admin") {
+	if ($offer_admin_fields) {
 		// Change package (admin only)
-		if (
-			$v_package != $_POST["v_package"] &&
-			$_SESSION["userContext"] === "admin" &&
-			empty($_SESSION["error_msg"])
-		) {
-			$v_package = quoteshellarg($_POST["v_package"]);
+		$post_package = post_or_keep("v_package", $offer_admin_fields, $v_package);
+		if ($v_package != $post_package && empty($_SESSION["error_msg"])) {
+			$v_package = quoteshellarg($post_package);
 			exec(
 				HESTIA_CMD .
 					"h-change-user-package " .
@@ -365,12 +360,9 @@ if (!empty($_POST["save"])) {
 		}
 
 		// Change phpcli (admin only)
-		if (
-			$v_phpcli != $_POST["v_phpcli"] &&
-			$_SESSION["userContext"] === "admin" &&
-			empty($_SESSION["error_msg"])
-		) {
-			$v_phpcli = quoteshellarg($_POST["v_phpcli"]);
+		$post_phpcli = post_or_keep("v_phpcli", $offer_admin_fields, $v_phpcli);
+		if ($v_phpcli != $post_phpcli && empty($_SESSION["error_msg"])) {
+			$v_phpcli = quoteshellarg($post_phpcli);
 			exec(
 				HESTIA_CMD .
 					"h-change-user-php-cli " .
@@ -384,16 +376,16 @@ if (!empty($_POST["save"])) {
 			unset($output);
 		}
 
-		$_POST["v_role"] = $_POST["v_role"] ?? "";
-
+		// The select is absent for the admin account and for an admin editing themselves
+		$post_role = post_or_keep("v_role", $offer_role, $v_role);
 		if (
-			$v_role != $_POST["v_role"] &&
-			$_SESSION["userContext"] === "admin" &&
+			$offer_role &&
+			$v_role != $post_role &&
 			$v_username != $_SESSION["ROOT_USER"] &&
 			empty($_SESSION["error_msg"])
 		) {
-			if (!empty($_POST["v_role"])) {
-				$v_role = quoteshellarg($_POST["v_role"]);
+			if (!empty($post_role)) {
+				$v_role = quoteshellarg($post_role);
 				exec(
 					HESTIA_CMD . "h-change-user-role " . quoteshellarg($v_username) . " " . $v_role,
 					$output,
@@ -401,17 +393,14 @@ if (!empty($_POST["save"])) {
 				);
 				check_return_code($return_var, $output);
 				unset($output);
-				$v_role = $_POST["v_role"];
+				$v_role = $post_role;
 			}
 		}
 		// Change shell (admin only)
-		if (!empty($_POST["v_shell"])) {
-			if (
-				$v_shell != $_POST["v_shell"] &&
-				$_SESSION["userContext"] === "admin" &&
-				empty($_SESSION["error_msg"])
-			) {
-				$v_shell = quoteshellarg($_POST["v_shell"]);
+		$post_shell = post_or_keep("v_shell", $offer_admin_fields, $v_shell);
+		if (!empty($post_shell)) {
+			if ($v_shell != $post_shell && empty($_SESSION["error_msg"])) {
+				$v_shell = quoteshellarg($post_shell);
 
 				exec(
 					HESTIA_CMD .
@@ -489,19 +478,20 @@ if (!empty($_POST["save"])) {
 		// session of whoever is editing. An admin editing someone else carries their own theme there,
 		// so every save looked like a change and wrote one.
 		$current_theme = !empty($v_user_theme) ? $v_user_theme : ($_SESSION["THEME"] ?? "");
-		if ($_POST["v_user_theme"] != $current_theme) {
+		$post_user_theme = post_or_keep("v_user_theme", $offer_theme, $current_theme);
+		if ($offer_theme && $post_user_theme != $current_theme) {
 			exec(
 				HESTIA_CMD .
 					"h-change-user-theme " .
 					quoteshellarg($v_username) .
 					" " .
-					quoteshellarg($_POST["v_user_theme"]),
+					quoteshellarg($post_user_theme),
 				$output,
 				$return_var,
 			);
 			check_return_code($return_var, $output);
 			unset($output);
-			$v_user_theme = $_POST["v_user_theme"];
+			$v_user_theme = $post_user_theme;
 			if ($_SESSION["user"] === $v_username) {
 				unset($_SESSION["userTheme"]);
 				$_SESSION["userTheme"] = $v_user_theme;

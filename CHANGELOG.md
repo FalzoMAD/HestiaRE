@@ -14,6 +14,27 @@ opens above it.
 
 ### Changed
 
+- **A conditionally rendered control now reads through the gate that rendered it** (#649). A control
+  the form did not render sends no key, and every form carried its own idea of what that means -
+  three separate patches of the same class in one week. `post_or_keep()` and `post_checkbox()` hold
+  the rule now, and each gate is named once so the view and the POST section read the same
+  expression instead of two hand-written copies that drift. Converted across the web domain, user,
+  package, mail and server forms; a hidden witness field was rejected because it is client-supplied
+  and a forged one would claim a control the user was never offered.
+- **A customer could set a control the policy had taken away from them** (#649). With
+  `POLICY_USER_CHANGE_THEME=no` the theme select is not rendered, but the handler read the key
+  whenever a request carried one - so a hand-made POST set the theme anyway. Value controls now
+  decide on the server-side gate, not on the presence of the key, which is what the checkbox path
+  already did.
+- **The SSH key list warned on a user without keys** (#649): the command answers with nothing and
+  the template iterated a null.
+- **Two commands stopped running on every save** (#649): enabling HTTP/3 and applying a cache
+  duration now run off the difference to the stored field. That is the intended semantics, but it
+  also drops a side effect - a vhost that had drifted was quietly re-applied by any save, and only
+  an explicit rebuild does that now.
+
+### Changed
+
 - **`h-update-user-cgroup` refuses to run while `RESOURCES_LIMIT` is off** (#650). All four callers
   already gated, so the behaviour is unchanged - but the safety lived outside the command, where a
   fifth caller would inherit the trap without being told. The check is idempotent and does not
@@ -28,6 +49,15 @@ opens above it.
   formatted to match it once; vendored PHP is excluded by deriving the list from `VENDORED.json`.
 
 ### Fixed
+
+- **Three saves that wrote a field nobody touched** (#649). A web domain materialised
+  `FASTCGI_CACHE`/`FASTCGI_DURATION` on its first save on every model that does not render the
+  cache control, because with nothing stored the duration field displays a 2m default and the
+  absent key was compared against it - which also ran `h-delete-fastcgi-cache` on a box without an
+  nginx web role. A mail domain lost `ANTIVIRUS` on any plain save wherever no antivirus system is
+  installed. The phpMyAdmin alias was rewritten from an absent key on a box without a mysql host.
+- **A new package wrote its resource limits unquoted** (#649) while `RESOURCES_LIMIT` was off, so
+  four lines in the package file disagreed with the quoting of every other line in it.
 
 - **A package could not be saved from the panel on an apache web role** (#644), which is three of
   the four models. The web-template select renders empty there - the apache templates moved to
