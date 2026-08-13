@@ -1,4 +1,5 @@
 <?php
+
 $TAB = "SERVER";
 
 // Main include
@@ -10,7 +11,8 @@ if ($_SESSION["userContext"] !== "admin") {
 	exit();
 }
 
-function end_html() {
+function end_html()
+{
 	echo "</pre>\n</div>\n</main>\n";
 	include $_SERVER["DOCUMENT_ROOT"] . "/templates/includes/app-footer.php";
 	echo "</div>\n";

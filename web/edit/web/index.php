@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
@@ -10,7 +11,8 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
 // The certificate fields the page carries. Refreshed at four points (initial load, cert upload,
 // LE issue, SSL enable) - as four copies, a new field meant four edits and three chances to miss one.
-function web_ssl_vars(string $user, string $domain): array {
+function web_ssl_vars(string $user, string $domain): array
+{
 	exec(
 		HESTIA_CMD . "h-list-web-domain-ssl " . $user . " " . quoteshellarg($domain) . " json",
 		$output,
@@ -19,8 +21,7 @@ function web_ssl_vars(string $user, string $domain): array {
 	$row = (json_decode(implode("", $output), true) ?: [])[$domain] ?? [];
 	$vars = [];
 	foreach (
-		["CRT", "KEY", "CA", "SUBJECT", "ALIASES", "NOT_BEFORE", "NOT_AFTER", "SIGNATURE", "PUB_KEY", "ISSUER"]
-		as $field
+		["CRT", "KEY", "CA", "SUBJECT", "ALIASES", "NOT_BEFORE", "NOT_AFTER", "SIGNATURE", "PUB_KEY", "ISSUER"] as $field
 	) {
 		$vars["v_ssl_" . strtolower($field)] = $row[$field] ?? "";
 	}

@@ -1,4 +1,5 @@
 <?php
+
 // Forward-auth endpoint for the File Manager reverse proxy (Panel-Caddy, #419).
 // Caddy calls this for every /fm/* request; a 204 + `X-Hestia-User` lets the
 // request through to that customer's own FPM pool, anything else blocks it.

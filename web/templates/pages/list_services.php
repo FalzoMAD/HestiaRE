@@ -3,43 +3,43 @@
 	<div class="toolbar-inner">
 		<div class="toolbar-buttons">
 			<a href="/edit/server/" class="button button-secondary">
-				<i class="fas fa-gear icon-maroon"></i><?= tohtml( _("Configure")) ?>
+				<i class="fas fa-gear icon-maroon"></i><?= tohtml(_("Configure")) ?>
 			</a>
 			<!-- Bot rate limiting lives in a collapsed section of Server Settings, so it was reachable but
 			     not discoverable (#482). Deep-link straight to it; the section header still expands on click. -->
 			<a href="/edit/server/#botlimit" class="button button-secondary">
-				<i class="fas fa-robot icon-blue"></i><?= tohtml( _("Bot Rate Limiting")) ?>
+				<i class="fas fa-robot icon-blue"></i><?= tohtml(_("Bot Rate Limiting")) ?>
 			</a>
 			<a href="/list/rrd/" class="button button-secondary">
-				<i class="fas fa-chart-area icon-blue"></i><?= tohtml( _("Task Monitor")) ?>
+				<i class="fas fa-chart-area icon-blue"></i><?= tohtml(_("Task Monitor")) ?>
 			</a>
 			<?php if (!empty($_SESSION["FIREWALL_SYSTEM"]) && $_SESSION["FIREWALL_SYSTEM"] == "nftables") { ?>
 				<a href="/list/firewall/" class="button button-secondary">
-					<i class="fas fa-shield-halved icon-red"></i><?= tohtml( _("Firewall")) ?>
+					<i class="fas fa-shield-halved icon-red"></i><?= tohtml(_("Firewall")) ?>
 				</a>
 			<?php } ?>
 			<a href="/list/log/?<?= tohtml(http_build_query(["user" => 'system', "token" => $_SESSION["token"]])) ?>" class="button button-secondary">
-				<i class="fas fa-binoculars icon-orange"></i><?= tohtml( _("Logs")) ?>
+				<i class="fas fa-binoculars icon-orange"></i><?= tohtml(_("Logs")) ?>
 			</a>
 			<a
 				class="button button-secondary button-danger data-controls js-confirm-action"
 				href="/restart/system/?<?= tohtml(http_build_query(["hostname" => $sys["sysinfo"]["HOSTNAME"], "token" => $_SESSION["token"], "system_reset_token" => time()])) ?>"
-				data-confirm-title="<?= tohtml( _("Restart")) ?>"
-				data-confirm-message="<?= tohtml( _("Are you sure you want to restart the server?")) ?>"
+				data-confirm-title="<?= tohtml(_("Restart")) ?>"
+				data-confirm-message="<?= tohtml(_("Are you sure you want to restart the server?")) ?>"
 			>
-				<i class="fas fa-arrow-rotate-left icon-red"></i><?= tohtml( _("Restart")) ?>
+				<i class="fas fa-arrow-rotate-left icon-red"></i><?= tohtml(_("Restart")) ?>
 			</a>
 		</div>
 		<div class="toolbar-right">
 			<form x-data x-bind="BulkEdit" action="/bulk/service/" method="post">
 				<input type="hidden" name="token" value="<?= tohtml($_SESSION["token"]) ?>">
 				<select class="form-select" name="action">
-					<option value=""><?= tohtml( _("Apply to selected")) ?></option>
-					<option value="stop"><?= tohtml( _("Stop")) ?></option>
-					<option value="start"><?= tohtml( _("Start")) ?></option>
-					<option value="restart"><?= tohtml( _("Restart")) ?></option>
+					<option value=""><?= tohtml(_("Apply to selected")) ?></option>
+					<option value="stop"><?= tohtml(_("Stop")) ?></option>
+					<option value="start"><?= tohtml(_("Start")) ?></option>
+					<option value="restart"><?= tohtml(_("Restart")) ?></option>
 				</select>
-				<button type="submit" class="toolbar-input-submit" title="<?= tohtml( _("Apply to selected")) ?>">
+				<button type="submit" class="toolbar-input-submit" title="<?= tohtml(_("Apply to selected")) ?>">
 					<i class="fas fa-arrow-right"></i>
 				</button>
 			</form>
@@ -61,7 +61,7 @@
 					<span class="server-summary-list-label">Hestia Control Panel</span>
 					<span class="server-summary-list-value">
 						<?php if ($sys["sysinfo"]["RELEASE"] == "release") { ?>
-							<i class="fas fa-cube" title="<?= tohtml( _("Production Release")) ?>"></i>
+							<i class="fas fa-cube" title="<?= tohtml(_("Production Release")) ?>"></i>
 						<?php } else { ?>
 							<i class="fas fa-flask icon-red" title="<?= tohtml($sys["sysinfo"]["RELEASE"]) ?>"></i>
 						<?php } ?>
@@ -69,19 +69,19 @@
 					</span>
 				</li>
 				<li class="server-summary-item">
-					<span class="server-summary-list-label"><?= tohtml( _("Operating System")) ?></span>
+					<span class="server-summary-list-label"><?= tohtml(_("Operating System")) ?></span>
 					<span class="server-summary-list-value">
 						<?= tohtml($sys["sysinfo"]["OS"]) ?> <?= tohtml($sys["sysinfo"]["VERSION"]) ?> (<?= tohtml($sys["sysinfo"]["ARCH"]) ?>)
 					</span>
 				</li>
 				<li class="server-summary-item">
-					<span class="server-summary-list-label"><?= tohtml( _("Load Average")) ?> <span class="hint">(1m / 5m / 15m)</span></span>
+					<span class="server-summary-list-label"><?= tohtml(_("Load Average")) ?> <span class="hint">(1m / 5m / 15m)</span></span>
 					<span class="server-summary-list-value">
 						<?= tohtml($sys["sysinfo"]["LOADAVERAGE"]) ?>
 					</span>
 				</li>
 				<li class="server-summary-item">
-					<span class="server-summary-list-label"><?= tohtml( _("Uptime")) ?></span>
+					<span class="server-summary-list-label"><?= tohtml(_("Uptime")) ?></span>
 					<span class="server-summary-list-value">
 						<?= tohtml(humanize_time($sys["sysinfo"]["UPTIME"])) ?>
 					</span>
@@ -90,25 +90,25 @@
 		</div>
 	</div>
 
-	<h1 class="u-text-center u-hide-desktop u-pr30 u-mb20 u-pl30"><?= tohtml( _("Services")) ?></h1>
+	<h1 class="u-text-center u-hide-desktop u-pr30 u-mb20 u-pl30"><?= tohtml(_("Services")) ?></h1>
 
 	<div class="units-table js-units-container">
 		<div class="units-table-header">
 			<div class="units-table-cell">
-				<input type="checkbox" class="js-toggle-all-checkbox" title="<?= tohtml( _("Select all")) ?>">
+				<input type="checkbox" class="js-toggle-all-checkbox" title="<?= tohtml(_("Select all")) ?>">
 			</div>
-			<div class="units-table-cell"><?= tohtml( _("Service")) ?></div>
+			<div class="units-table-cell"><?= tohtml(_("Service")) ?></div>
 			<div class="units-table-cell"></div>
-			<div class="units-table-cell"><?= tohtml( _("Description")) ?></div>
-			<div class="units-table-cell u-text-center"><?= tohtml( _("Uptime")) ?></div>
-			<div class="units-table-cell u-text-center"><?= tohtml( _("CPU")) ?></div>
-			<div class="units-table-cell u-text-center"><?= tohtml( _("Memory")) ?></div>
+			<div class="units-table-cell"><?= tohtml(_("Description")) ?></div>
+			<div class="units-table-cell u-text-center"><?= tohtml(_("Uptime")) ?></div>
+			<div class="units-table-cell u-text-center"><?= tohtml(_("CPU")) ?></div>
+			<div class="units-table-cell u-text-center"><?= tohtml(_("Memory")) ?></div>
 		</div>
 
 		<!-- Begin services status list item loop -->
 		<?php
 			foreach ($data as $key => $value) {
-			++$i;
+				++$i;
 				if ($data[$key]['STATE'] == 'running') {
 					$status = 'active';
 					$action = 'stop';
@@ -124,10 +124,10 @@
 					$spnd_icon_class = 'icon-green';
 					$state_icon = 'fa-circle-minus icon-red';
 				}
-				if (in_array($key, $phpfpm)){
-					$edit_url="php";
+				if (in_array($key, $phpfpm)) {
+					$edit_url = "php";
 				} else {
-					$edit_url=$key;
+					$edit_url = $key;
 				}
 				// rspamd has no service-config page - its "edit" target is the
 				// embedded web UI page, so the name and pencil links point there.
@@ -135,23 +135,27 @@
 
 				$cpu = $data[$key]['CPU'] / 10;
 				$cpu = number_format($cpu, 1);
-				if ($cpu == '0.0')	$cpu = 0;
-			?>
-			<div class="units-table-row <?php if ($status == 'suspended') echo 'disabled'; ?> js-unit"
+				if ($cpu == '0.0') {
+					$cpu = 0;
+				}
+				?>
+			<div class="units-table-row <?php if ($status == 'suspended') {
+				echo 'disabled';
+			} ?> js-unit"
 				data-sort-name="<?= tohtml(strtolower($key)) ?>"
 				data-sort-memory="<?= tohtml($data[$key]["MEM"]) ?>"
 				data-sort-cpu="<?= tohtml($cpu) ?>"
 				data-sort-uptime="<?= tohtml($data[$key]["RTIME"]) ?>">
 				<div class="units-table-cell">
 					<div>
-						<input id="check<?= tohtml($i) ?>" class="js-unit-checkbox" type="checkbox" title="<?= tohtml( _("Select")) ?>" name="service[]" value="<?= tohtml($key) ?>">
-						<label for="check<?= tohtml($i) ?>" class="u-hide-desktop"><?= tohtml( _("Select")) ?></label>
+						<input id="check<?= tohtml($i) ?>" class="js-unit-checkbox" type="checkbox" title="<?= tohtml(_("Select")) ?>" name="service[]" value="<?= tohtml($key) ?>">
+						<label for="check<?= tohtml($i) ?>" class="u-hide-desktop"><?= tohtml(_("Select")) ?></label>
 					</div>
 				</div>
 				<div class="units-table-cell units-table-heading-cell u-text-bold">
-					<span class="u-hide-desktop"><?= tohtml( _("Service")) ?>:</span>
+					<span class="u-hide-desktop"><?= tohtml(_("Service")) ?>:</span>
 					<i class="fas <?= tohtml($state_icon) ?> u-mr5"></i>
-					<a href="<?= tohtml($edit_href) ?>" title="<?= tohtml( _("Edit")) ?>: <?= tohtml($key) ?>">
+					<a href="<?= tohtml($edit_href) ?>" title="<?= tohtml(_("Edit")) ?>: <?= tohtml($key) ?>">
 						<?= tohtml($key) ?>
 					</a>
 				</div>
@@ -161,22 +165,22 @@
 							<a
 								class="units-table-row-action-link"
 								href="<?= tohtml($edit_href) ?>"
-								title="<?= tohtml( _("Edit")) ?>"
+								title="<?= tohtml(_("Edit")) ?>"
 							>
 								<i class="fas fa-pencil icon-orange"></i>
-								<span class="u-hide-desktop"><?= tohtml( _("Edit")) ?></span>
+								<span class="u-hide-desktop"><?= tohtml(_("Edit")) ?></span>
 							</a>
 						</li>
 						<li class="units-table-row-action shortcut-s" data-key-action="js">
 							<a
 								class="units-table-row-action-link data-controls js-confirm-action"
 								href="/restart/service/?<?= tohtml(http_build_query(["srv" => $key, "token" => $_SESSION["token"]])) ?>"
-								title="<?= tohtml( _("Restart")) ?>"
-								data-confirm-title="<?= tohtml( _("Restart")) ?>"
+								title="<?= tohtml(_("Restart")) ?>"
+								data-confirm-title="<?= tohtml(_("Restart")) ?>"
 								data-confirm-message="<?= tohtml(sprintf(_("Are you sure you want to restart the %s service?"), $key)) ?>"
 							>
 								<i class="fas fa-arrow-rotate-left icon-highlight"></i>
-								<span class="u-hide-desktop"><?= tohtml( _("Restart")) ?></span>
+								<span class="u-hide-desktop"><?= tohtml(_("Restart")) ?></span>
 							</a>
 						</li>
 						<li class="units-table-row-action shortcut-delete" data-key-action="js">
@@ -185,7 +189,11 @@
 								href="/<?= tohtml($action) ?>/service/?<?= tohtml(http_build_query(["srv" => $key, "token" => $_SESSION["token"]])) ?>"
 								title="<?= tohtml($action_text) ?>"
 								data-confirm-title="<?= tohtml($action_text) ?>"
-								data-confirm-message="<?php if ($action == 'stop') { echo sprintf(_('Are you sure you want to stop the %s service?'), $key); } else { echo sprintf(_('Are you sure you want to start the %s service?'), $key); }?>"
+								data-confirm-message="<?php if ($action == 'stop') {
+									echo sprintf(_('Are you sure you want to stop the %s service?'), $key);
+								} else {
+									echo sprintf(_('Are you sure you want to start the %s service?'), $key);
+								}?>"
 							>
 								<i class="fas <?= tohtml($spnd_icon) ?> <?= tohtml($spnd_icon_class) ?>"></i>
 								<span class="u-hide-desktop"><?= tohtml($action_text) ?></span>
@@ -194,20 +202,20 @@
 					</ul>
 				</div>
 				<div class="units-table-cell">
-					<span class="u-hide-desktop u-text-bold"><?= tohtml( _("Description")) ?>:</span>
-					<?= tohtml( _($data[$key]["SYSTEM"])) ?>
+					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Description")) ?>:</span>
+					<?= tohtml(_($data[$key]["SYSTEM"])) ?>
 				</div>
 				<div class="units-table-cell u-text-bold u-text-center-desktop">
-					<span class="u-hide-desktop"><?= tohtml( _("Uptime")) ?>:</span>
+					<span class="u-hide-desktop"><?= tohtml(_("Uptime")) ?>:</span>
 					<?= tohtml(humanize_time($data[$key]["RTIME"])) ?>
 				</div>
 				<div class="units-table-cell u-text-bold u-text-center-desktop">
-					<span class="u-hide-desktop"><?= tohtml( _("CPU")) ?>:</span>
+					<span class="u-hide-desktop"><?= tohtml(_("CPU")) ?>:</span>
 					<?= tohtml($cpu) ?>
 				</div>
 				<div class="units-table-cell u-text-bold u-text-center-desktop">
-					<span class="u-hide-desktop"><?= tohtml( _("Memory")) ?>:</span>
-					<?= tohtml($data[$key]["MEM"]) ?> <?= tohtml( _("MB")) ?>
+					<span class="u-hide-desktop"><?= tohtml(_("Memory")) ?>:</span>
+					<?= tohtml($data[$key]["MEM"]) ?> <?= tohtml(_("MB")) ?>
 				</div>
 			</div>
 		<?php } ?>

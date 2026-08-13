@@ -4,17 +4,17 @@
 		<div class="toolbar-buttons">
 			<?php if ($_SESSION["userContext"] === "admin" && isset($_GET["user"]) && $_GET["user"] !== "admin") { ?>
 				<a class="button button-secondary button-back js-button-back" href="/list/key/?<?= tohtml(http_build_query(["user" => $_GET["user"]])) ?>">
-					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 				</a>
 			<?php } else { ?>
 				<a class="button button-secondary button-back js-button-back" href="/list/key/">
-					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 				</a>
 			<?php } ?>
 		</div>
 		<div class="toolbar-buttons">
 			<button type="submit" class="button" form="main-form">
-				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml( _("Save")) ?>
+				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 			</button>
 		</div>
 	</div>
@@ -28,10 +28,10 @@
 		<input type="hidden" name="ok" value="Add">
 
 		<div class="form-container">
-			<h1 class="u-mb20"><?= tohtml( _("Add SSH Key")) ?></h1>
+			<h1 class="u-mb20"><?= tohtml(_("Add SSH Key")) ?></h1>
 			<?php show_alert_message($_SESSION); ?>
 			<div>
-				<label for="v_key" class="form-label"><?= tohtml( _("SSH Key")) ?></label>
+				<label for="v_key" class="form-label"><?= tohtml(_("SSH Key")) ?></label>
 				<textarea class="form-control u-min-height300" name="v_key" id="v_key" required><?= tohtml(trim($v_key, "'")) ?></textarea>
 			</div>
 		</div>

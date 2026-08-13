@@ -1,4 +1,5 @@
 <?php
+
 // Shared streaming helper for the panel download handlers. We stream from PHP, not nginx
 // X-Accel-Redirect (#441): Caddy's file_server would run as `caddy`, which can't read the
 // customer-owned files, and granting it that read is the capability we avoid (as with the file

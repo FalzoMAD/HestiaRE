@@ -1,4 +1,5 @@
 <?php
+
 // Mint a one-time CrowdSec mesh pairing code for another box to join with. Being logged in here as
 // admin IS the local half of the authorisation - the joining box needs its own admin too.
 ob_start();

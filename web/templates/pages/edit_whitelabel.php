@@ -3,12 +3,12 @@
 	<div class="toolbar-inner">
 		<div class="toolbar-buttons">
 			<a href="/edit/server/" class="button button-secondary" id="btn-back">
-				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 			</a>
 		</div>
 		<div class="toolbar-buttons">
 			<button type="submit" class="button" form="main-form">
-				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml( _("Save")) ?>
+				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 			</button>
 		</div>
 	</div>
@@ -30,7 +30,7 @@
 
 		<div class="form-container">
 			<h1 class="u-mb20">
-				<?= tohtml( _("White Label Options")) ?>
+				<?= tohtml(_("White Label Options")) ?>
 			</h1>
 			<?php show_alert_message($_SESSION); ?>
 
@@ -38,12 +38,12 @@
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
 					<i class="fas fa-gear u-mr15"></i>
-					<?= tohtml( _("General")) ?>
+					<?= tohtml(_("General")) ?>
 				</summary>
 				<div class="box-collapse-content">
 					<div class="u-mb10">
 						<label for="v_app_name" class="form-label">
-							<?= tohtml( _("Application Name")) ?>
+							<?= tohtml(_("Application Name")) ?>
 						</label>
 						<input
 							type="text"
@@ -55,7 +55,7 @@
 					</div>
 					<div class="u-mb10">
 						<label for="v_title" class="form-label">
-							<?= tohtml( _("Title")) ?><span class="optional">(<?= tohtml( _("Supported variables")) ?>: {{appname}}, {{hostname}}, {{ip}} and {{page}} )</span>
+							<?= tohtml(_("Title")) ?><span class="optional">(<?= tohtml(_("Supported variables")) ?>: {{appname}}, {{hostname}}, {{ip}} and {{page}} )</span>
 						</label>
 						<input
 							type="text"
@@ -67,7 +67,7 @@
 					</div>
 					<div class="u-mb10">
 						<label for="v_from_name" class="form-label">
-							<?= tohtml( _("Sender Name")) ?><span class="optional">(<?= tohtml( _("Default")) ?>: <?= tohtml(trim($v_app_name, "'")) ?>)</span>
+							<?= tohtml(_("Sender Name")) ?><span class="optional">(<?= tohtml(_("Default")) ?>: <?= tohtml(trim($v_app_name, "'")) ?>)</span>
 						</label>
 						<input
 							type="text"
@@ -79,7 +79,7 @@
 					</div>
 					<div class="u-mb10">
 						<label for="v_from_email" class="form-label">
-							<?= tohtml( _("Sender Email Address")) ?><span class="optional">(<?= tohtml( _("Default")) ?>: <?= tohtml(sprintf("noreply@%s", trim(get_hostname(), "'"))) ?>)</span>
+							<?= tohtml(_("Sender Email Address")) ?><span class="optional">(<?= tohtml(_("Default")) ?>: <?= tohtml(sprintf("noreply@%s", trim(get_hostname(), "'"))) ?>)</span>
 						</label>
 						<input
 							type="email"
@@ -91,7 +91,7 @@
 					</div>
 					<div class="u-mb10">
 						<label for="v_subject_email" class="form-label">
-							<?= tohtml( _("Email Subject")) ?><span class="optional">(<?= tohtml( _("Supported variables")) ?>: {{appname}}, {{hostname}}, {{subject}} )</span>
+							<?= tohtml(_("Email Subject")) ?><span class="optional">(<?= tohtml(_("Supported variables")) ?>: {{appname}}, {{hostname}}, {{subject}} )</span>
 						</label>
 						<input
 							type="text"
@@ -103,11 +103,11 @@
 					</div>
 					<div class="u-mb10">
 						<label for="v_hide_docs" class="form-label">
-							<?= tohtml( _("Hide link to Documentation")) ?>
+							<?= tohtml(_("Hide link to Documentation")) ?>
 						</label>
 						<select x-model="hide_docs" class="form-select" name="v_hide_docs" id="v_hide_docs">
-							<option value="yes"><?= tohtml( _("Yes")) ?></option>
-							<option value="no"><?= tohtml( _("No")) ?></option>
+							<option value="yes"><?= tohtml(_("Yes")) ?></option>
+							<option value="no"><?= tohtml(_("No")) ?></option>
 						</select>
 					</div>
 				</div>
@@ -116,12 +116,12 @@
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
 					<i class="fas fa-gear u-mr15"></i>
-					<?= tohtml( _("Custom Logo")) ?>
+					<?= tohtml(_("Custom Logo")) ?>
 				</summary>
 				<div class="box-collapse-content">
 					<div class="u-mb10">
 						<label for="v_custom_logo" class="form-label">
-							<?= tohtml( _("Custom Logo")) ?>
+							<?= tohtml(_("Custom Logo")) ?>
 						</label>
 					</div>
 					<div class="u-mb10">
@@ -137,13 +137,13 @@
 					<div class="u-mb10">
 						<input type="checkbox" id="v_update_logo" name="v_update_logo" value="yes">
 						<label for="v_update_logo" class="form-label">
-							<?= tohtml( _("Update logo")) ?>
+							<?= tohtml(_("Update logo")) ?>
 						</label>
 					</div>
 					<div class="u-mb10">
 						<input type="checkbox" id="v_reset_logo" name="v_reset_logo" value="yes">
 						<label for="v_reset_logo" class="form-label">
-							<?= tohtml( _("Reset Logo")) ?>
+							<?= tohtml(_("Reset Logo")) ?>
 						</label>
 					</div>
 			</details>

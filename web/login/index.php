@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 define("NO_AUTH_REQUIRED", true);
@@ -116,7 +117,8 @@ if (isset($_SESSION["user"])) {
 	exit();
 }
 
-function authenticate_user($user, $password, $twofa = "") {
+function authenticate_user($user, $password, $twofa = "")
+{
 	unset($_SESSION["login"]);
 	if (verify_csrf($_POST, true)) {
 		$v_user = quoteshellarg($user);

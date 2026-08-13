@@ -29,45 +29,53 @@
 								x-on:click="open = !open">
 								<i class="fas fa-bars"></i>
 									<span class="u-hidden" x-text="open ? <?= tohtml(json_encode(_("Close menu"), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR)) ?> : <?= tohtml(json_encode(_("Open menu"), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR)) ?>">
-										<?= tohtml( _("Open menu")) ?>
+										<?= tohtml(_("Open menu")) ?>
 									</span>
 							</button>
 							<div x-cloak x-show="open" x-on:click.outside="open = false" class="top-bar-menu-panel">
 								<ul class="top-bar-menu-list">
 									<li class="top-bar-menu-item">
-										<a class="top-bar-menu-link" href="/list/web/" title="<?= tohtml( _("Back")) ?>">
+										<a class="top-bar-menu-link" href="/list/web/" title="<?= tohtml(_("Back")) ?>">
 											<i class="fas fa-circle-left"></i>
-											<span class="top-bar-menu-link-label"><?= tohtml( _("Back")) ?></span>
+											<span class="top-bar-menu-link-label"><?= tohtml(_("Back")) ?></span>
 										</a>
 									</li>
 									<li class="top-bar-menu-item">
-										<a class="top-bar-menu-link <?php if ($_GET['type'] == 'access') echo 'active' ?>" href="/list/web-log/?<?= tohtml(http_build_query(["domain" => $_GET['domain'], "type" => 'access', "token" => $_SESSION['token']])) ?>" title="<?= tohtml( _("View Logs")) ?>">
+										<a class="top-bar-menu-link <?php if ($_GET['type'] == 'access') {
+											echo 'active';
+										} ?>" href="/list/web-log/?<?= tohtml(http_build_query(["domain" => $_GET['domain'], "type" => 'access', "token" => $_SESSION['token']])) ?>" title="<?= tohtml(_("View Logs")) ?>">
 											<i class="fas fa-eye"></i>
-											<span class="top-bar-menu-link-label"><?= tohtml( _("View Logs")) ?></span>
+											<span class="top-bar-menu-link-label"><?= tohtml(_("View Logs")) ?></span>
 										</a>
 									</li>
 									<li class="top-bar-menu-item">
-										<a class="top-bar-menu-link <?php if ($_GET['type'] == 'access') echo 'active' ?>" href="/download/web-log/?<?= tohtml(http_build_query(["domain" => $_GET['domain'], "type" => 'access', "token" => $_SESSION['token']])) ?>" title="<?= tohtml( _("Download")) ?>">
+										<a class="top-bar-menu-link <?php if ($_GET['type'] == 'access') {
+											echo 'active';
+										} ?>" href="/download/web-log/?<?= tohtml(http_build_query(["domain" => $_GET['domain'], "type" => 'access', "token" => $_SESSION['token']])) ?>" title="<?= tohtml(_("Download")) ?>">
 											<i class="fas fa-download"></i>
-											<span class="u-hidden"><?= tohtml( _("Download")) ?></span>
+											<span class="u-hidden"><?= tohtml(_("Download")) ?></span>
 										</a>
 									</li>
 									<li class="top-bar-menu-item">
-										<a class="top-bar-menu-link <?php if ($_GET['type'] == 'error') echo 'active' ?>" href="/list/web-log/?<?= tohtml(http_build_query(["domain" => $_GET['domain'], "type" => 'error', "token" => $_SESSION['token']])) ?>" title="<?= tohtml( _("Error Log")) ?>">
+										<a class="top-bar-menu-link <?php if ($_GET['type'] == 'error') {
+											echo 'active';
+										} ?>" href="/list/web-log/?<?= tohtml(http_build_query(["domain" => $_GET['domain'], "type" => 'error', "token" => $_SESSION['token']])) ?>" title="<?= tohtml(_("Error Log")) ?>">
 											<i class="fas fa-circle-exclamation"></i>
-											<span class="top-bar-menu-link-label"><?= tohtml( _("Error Log")) ?></span>
+											<span class="top-bar-menu-link-label"><?= tohtml(_("Error Log")) ?></span>
 										</a>
 									</li>
 									<li class="top-bar-menu-item">
-										<a class="top-bar-menu-link <?php if ($_GET['type'] == 'error') echo 'active' ?>" href="/download/web-log/?<?= tohtml(http_build_query(["domain" => $_GET['domain'], "type" => 'error', "token" => $_SESSION['token']])) ?>" title="<?= tohtml( _("Download")) ?>">
+										<a class="top-bar-menu-link <?php if ($_GET['type'] == 'error') {
+											echo 'active';
+										} ?>" href="/download/web-log/?<?= tohtml(http_build_query(["domain" => $_GET['domain'], "type" => 'error', "token" => $_SESSION['token']])) ?>" title="<?= tohtml(_("Download")) ?>">
 											<i class="fas fa-download"></i>
-											<span class="u-hidden"><?= tohtml( _("Download")) ?></span>
+											<span class="u-hidden"><?= tohtml(_("Download")) ?></span>
 										</a>
 									</li>
 									<li class="top-bar-menu-item">
-										<a class="top-bar-menu-link" href="javascript:location.reload();" title="<?= tohtml( _("Refresh")) ?>">
+										<a class="top-bar-menu-link" href="javascript:location.reload();" title="<?= tohtml(_("Refresh")) ?>">
 											<i class="fas fa-arrow-rotate-right"></i>
-											<span class="u-hidden"><?= tohtml( _("Refresh")) ?></span>
+											<span class="u-hidden"><?= tohtml(_("Refresh")) ?></span>
 										</a>
 									</li>
 									<li class="top-bar-menu-item">
@@ -77,9 +85,9 @@
 										</a>
 									</li>
 									<li class="top-bar-menu-item">
-										<a class="top-bar-menu-link top-bar-menu-link-logout" href="/logout/?<?= tohtml(http_build_query(["token" => $_SESSION["token"]])) ?>" title="<?= tohtml( _("Log out")) ?>">
+										<a class="top-bar-menu-link top-bar-menu-link-logout" href="/logout/?<?= tohtml(http_build_query(["token" => $_SESSION["token"]])) ?>" title="<?= tohtml(_("Log out")) ?>">
 											<i class="fas fa-right-from-bracket"></i>
-											<span class="u-hidden"><?= tohtml( _("Log out")) ?></span>
+											<span class="u-hidden"><?= tohtml(_("Log out")) ?></span>
 										</a>
 									</li>
 								</ul>

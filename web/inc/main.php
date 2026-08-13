@@ -1,9 +1,11 @@
 <?php
+
 session_start();
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 require_once __DIR__ . '/lib/quoteshellarg.php';
@@ -19,7 +21,8 @@ require_once dirname(__FILE__) . "/prevent_csrf.php";
 require_once dirname(__FILE__) . "/helpers.php";
 $root_directory = dirname(__FILE__) . "/../../";
 
-function destroy_sessions() {
+function destroy_sessions()
+{
 	unset($_SESSION);
 	session_unset();
 	session_destroy();
@@ -129,7 +132,8 @@ if (!defined("NO_AUTH_REQUIRED")) {
 	}
 }
 
-function ipUsed() {
+function ipUsed()
+{
 	[$http_host, $port] = explode(":", $_SERVER["HTTP_HOST"] . ":");
 	if (filter_var($http_host, FILTER_VALIDATE_IP)) {
 		return true;
@@ -156,7 +160,8 @@ if (!isset($_SESSION["look"])) {
 
 require_once dirname(__FILE__) . "/i18n.php";
 
-function check_error($return_var) {
+function check_error($return_var)
+{
 	if ($return_var > 0) {
 		header("Location: /error/");
 		exit();
@@ -169,7 +174,8 @@ function check_error($return_var) {
 // array until something insists on a real one: in_array(x, null) is a TypeError, and on the
 // login page that means a white screen instead of a form (#575). Callers get an array either
 // way and pick their own fallback.
-function cli_json($cmd) {
+function cli_json($cmd)
+{
 	$output = [];
 	exec(HESTIA_CMD . $cmd, $output, $return_var);
 	if ($return_var !== 0) {
@@ -179,7 +185,8 @@ function cli_json($cmd) {
 	return is_array($data) ? $data : [];
 }
 
-function check_return_code($return_var, $output) {
+function check_return_code($return_var, $output)
+{
 	if ($return_var != 0) {
 		$error = implode("<br>", $output);
 		if (empty($error)) {
@@ -194,7 +201,8 @@ function check_return_code($return_var, $output) {
 		$_SESSION["error_msg"] = $error;
 	}
 }
-function check_return_code_redirect($return_var, $output, $location) {
+function check_return_code_redirect($return_var, $output, $location)
+{
 	if ($return_var != 0) {
 		$error = implode("<br>", $output);
 		if (empty($error)) {
@@ -205,7 +213,8 @@ function check_return_code_redirect($return_var, $output, $location) {
 	}
 }
 
-function render_page($user, $TAB, $page) {
+function render_page($user, $TAB, $page)
+{
 	$__template_dir = dirname(__DIR__) . "/templates/";
 
 	// Extract global variables
@@ -230,7 +239,8 @@ function render_page($user, $TAB, $page) {
 
 // Match $_SESSION['token'] against $_GET['token'] or $_POST['token']
 // Usage: verify_csrf($_POST) or verify_csrf($_GET); Use verify_csrf($_POST,true) to return on failure instead of redirect
-function verify_csrf($method, $return = false) {
+function verify_csrf($method, $return = false)
+{
 	if (
 		// A request without a token is the normal hostile case, not an exception - reading the key
 		// raw made every one of them log a warning before being refused.
@@ -249,7 +259,8 @@ function verify_csrf($method, $return = false) {
 	}
 }
 
-function show_alert_message($data) {
+function show_alert_message($data)
+{
 	$msgIcon = "";
 	$msgText = "";
 	$msgClass = "";
@@ -273,7 +284,8 @@ function show_alert_message($data) {
 	}
 }
 
-function top_panel($user, $TAB) {
+function top_panel($user, $TAB)
+{
 	$command = HESTIA_CMD . "h-list-user " . $user . " 'json'";
 	exec($command, $output, $return_var);
 	if ($return_var > 0) {
@@ -344,17 +356,20 @@ function top_panel($user, $TAB) {
 	return $panel;
 }
 
-function translate_date($date) {
+function translate_date($date)
+{
 	$date = new DateTime($date);
 	return $date->format("d") . " " . _($date->format("M")) . " " . $date->format("Y");
 }
 
-function convert_datetime($date, $format = "Y-m-d H:i:s") {
+function convert_datetime($date, $format = "Y-m-d H:i:s")
+{
 	$date = new DateTime($date);
 	return $date->format($format);
 }
 
-function humanize_time($usage) {
+function humanize_time($usage)
+{
 	if ($usage > 60) {
 		$usage = $usage / 60;
 		if ($usage > 24) {
@@ -371,7 +386,8 @@ function humanize_time($usage) {
 	}
 }
 
-function humanize_usage_size($usage, $round = 2) {
+function humanize_usage_size($usage, $round = 2)
+{
 	if ($usage == "unlimited") {
 		return "∞";
 	}
@@ -407,7 +423,8 @@ function humanize_usage_size($usage, $round = 2) {
 	return $display_usage;
 }
 
-function humanize_usage_measure($usage) {
+function humanize_usage_measure($usage)
+{
 	if ($usage == "unlimited") {
 		return;
 	}
@@ -438,7 +455,8 @@ function humanize_usage_measure($usage) {
 	return $measure;
 }
 
-function get_percentage($used, $total) {
+function get_percentage($used, $total)
+{
 	if ($total === "unlimited") {
 		//return 0 if unlimited
 		return 0;
@@ -464,7 +482,8 @@ function get_percentage($used, $total) {
 	return $percent;
 }
 
-function send_email($to, $subject, $mailtext, $from, $from_name, $to_name = "") {
+function send_email($to, $subject, $mailtext, $from, $from_name, $to_name = "")
+{
 	$mail = new PHPMailer();
 
 	if (isset($_SESSION["USE_SERVER_SMTP"]) && $_SESSION["USE_SERVER_SMTP"] == "true") {
@@ -502,10 +521,10 @@ function send_email($to, $subject, $mailtext, $from, $from_name, $to_name = "") 
 	$mail->send();
 }
 
-function list_timezones() {
+function list_timezones()
+{
 	foreach (
-		["AKST", "AKDT", "PST", "PDT", "MST", "MDT", "CST", "CDT", "EST", "EDT", "AST", "ADT"]
-		as $timezone
+		["AKST", "AKDT", "PST", "PDT", "MST", "MDT", "CST", "CDT", "EST", "EDT", "AST", "ADT"] as $timezone
 	) {
 		$tz = new DateTimeZone($timezone);
 		$timezone_offsets[$timezone] = $tz->getOffset(new DateTime());
@@ -543,7 +562,8 @@ function list_timezones() {
  *
  * @return string
  */
-function is_it_mysql_or_mariadb() {
+function is_it_mysql_or_mariadb()
+{
 	exec(HESTIA_CMD . "h-list-sys-services json", $output, $return_var);
 	$data = json_decode(implode("", $output), true);
 	unset($output);
@@ -554,7 +574,8 @@ function is_it_mysql_or_mariadb() {
 	return $mysqltype;
 }
 
-function load_hestia_config() {
+function load_hestia_config()
+{
 	// Check system configuration
 	exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
 	$data = json_decode(implode("", $output), true);
@@ -569,7 +590,8 @@ function load_hestia_config() {
  *
  * @return array
  */
-function backendtpl_with_webdomains() {
+function backendtpl_with_webdomains()
+{
 	exec(HESTIA_CMD . "h-list-users json", $output, $return_var);
 	$users = json_decode(implode("", $output), true);
 	unset($output);
@@ -601,11 +623,13 @@ function backendtpl_with_webdomains() {
  *
  * @return int; 1 / 0
  */
-function validate_password($password) {
+function validate_password($password)
+{
 	return preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(.){8,}$/', $password);
 }
 
-function unset_alerts() {
+function unset_alerts()
+{
 	if (!empty($_SESSION["unset_alerts"])) {
 		if (!empty($_SESSION["error_msg"])) {
 			unset($_SESSION["error_msg"]);

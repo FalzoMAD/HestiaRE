@@ -1,4 +1,5 @@
 <?php
+
 // Allow-list HTML sanitizer for values rendered as raw HTML in the panel (notification
 // NOTICE via x-html). Default-deny: output is rebuilt from whitelisted tags/attrs only, so
 // it fails by stripping, never by passing a payload. No external dep (ext-dom is standard).
