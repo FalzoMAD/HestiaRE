@@ -37,6 +37,14 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
+# The four callers all gate on RESOURCES_LIMIT, but the safety then lives outside this command:
+# a fifth caller inherits the trap without being told. Checking here is idempotent - the callers
+# may keep their gate - and does not hinder h-add-sys-cgroups, which sets the switch before it
+# applies anything.
+if [ "$RESOURCES_LIMIT" != 'yes' ]; then
+	exit
+fi
+
 user_id=$(id -u "$user")
 user_slice="user-${user_id}.slice"
 # get user resources values

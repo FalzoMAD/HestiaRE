@@ -14,6 +14,13 @@ opens above it.
 
 ### Changed
 
+- **`h-update-user-cgroup` refuses to run while `RESOURCES_LIMIT` is off** (#650). All four callers
+  already gated, so the behaviour is unchanged - but the safety lived outside the command, where a
+  fifth caller would inherit the trap without being told. The check is idempotent and does not
+  hinder `h-add-sys-cgroups`, which sets the switch before it applies anything.
+
+### Changed
+
 - **PHP has a format contract again** (#647). Upstream formats with prettier, which needs node and
   therefore cannot run on our runner, so nothing had enforced the style since the fork - and
   php-cs-fixer, the node-free replacement, defaults to PSR-12 with four spaces and rewrote whatever
