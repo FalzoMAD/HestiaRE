@@ -226,9 +226,8 @@ if (!empty($_GET["domain"]) && !empty($_GET["account"])) {
 	}
 }
 
-// One gate per conditionally rendered control: the view renders on it, the POST section reads on
-// it. A switch the page never showed must not read as "turned off".
-// The command path also needs IMAP, so the view must not offer what the POST would ignore
+// One gate per conditionally rendered control: rendered on it, read on it.
+// Webmail also needs IMAP: the view must not offer what the POST would ignore
 $offer_webmail = !empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"]);
 $offer_antispam = !empty($_SESSION["ANTISPAM_SYSTEM"]);
 $offer_antivirus = !empty($_SESSION["ANTIVIRUS_SYSTEM"]);
@@ -671,7 +670,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		unset($output);
 	}
 
-	$post_webmail = post_or_keep("v_webmail", $v_webmail);
+	$post_webmail = post_or_keep("v_webmail", $offer_webmail, $v_webmail);
 	if ($offer_webmail) {
 		if (empty($_SESSION["error_msg"])) {
 			if (!empty($post_webmail)) {

@@ -289,8 +289,7 @@ exec(HESTIA_CMD . "h-list-web-stats json", $output, $return_var);
 $stats = json_decode(implode("", $output), true);
 unset($output);
 
-// One gate per conditionally rendered control: the view renders on it, the POST section reads on
-// it. Evaluated before any write, so it describes the form that was actually submitted.
+// One gate per conditionally rendered control: rendered on it, read on it.
 // Template and pool choices gate on the real identity; the policy can open them to customers.
 $can_edit_templates =
 	($_SESSION["adminContext"] ?? "") === "admin" ||
@@ -362,7 +361,7 @@ if (!empty($_POST["save"])) {
 
 	if ($can_edit_templates) {
 		// Hidden on apache-web models: the vhost renders from share/, nothing to select
-		$post_template = post_or_keep("v_template", $v_template);
+		$post_template = post_or_keep("v_template", $offer_web_template, $v_template);
 		if ($offer_web_template && $v_template != $post_template && empty($_SESSION["error_msg"])) {
 			exec(
 				HESTIA_CMD .
@@ -382,7 +381,7 @@ if (!empty($_POST["save"])) {
 		}
 
 		// A docker domain has no pool at all
-		$post_backend_template = post_or_keep("v_backend_template", $v_backend_template);
+		$post_backend_template = post_or_keep("v_backend_template", $offer_backend_template, $v_backend_template);
 		if (
 			$offer_backend_template &&
 			$v_backend_template != $post_backend_template &&
@@ -406,7 +405,7 @@ if (!empty($_POST["save"])) {
 
 	}
 	// Change PHP version (its own field since #591)
-	$post_php_version = post_or_keep("v_php_version", $v_php_version);
+	$post_php_version = post_or_keep("v_php_version", $offer_backend, $v_php_version);
 	if ($offer_backend && $v_php_version != $post_php_version && empty($_SESSION["error_msg"])) {
 		$v_php_version = $post_php_version;
 		exec(
@@ -426,8 +425,8 @@ if (!empty($_POST["save"])) {
 
 	// Enable/Disable nginx cache. With nothing stored the field shows a 2m default, so what is
 	// stored and what the form shows are not the same value.
-	$post_nginx_cache_check = post_checkbox("v_nginx_cache_check", $offer_fastcgi_cache, $v_nginx_cache_check);
-	$post_nginx_cache_duration = post_or_keep("v_nginx_cache_duration", $v_nginx_cache_duration);
+	$post_nginx_cache_check = post_checkbox("v_nginx_cache_check", $offer_fastcgi_cache, $v_nginx_cache_check, "on", "");
+	$post_nginx_cache_duration = post_or_keep("v_nginx_cache_duration", $offer_fastcgi_cache, $v_nginx_cache_duration);
 	if (
 		$offer_fastcgi_cache &&
 		($v_nginx_cache_check != $post_nginx_cache_check ||
@@ -465,8 +464,8 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Proxy support, template and extensions. A docker domain renders none of it.
-	$post_proxy = post_checkbox("v_proxy", $offer_proxy, empty($v_proxy) ? "" : "on");
-	$post_proxy_ext = post_or_keep("v_proxy_ext", $v_proxy_ext);
+	$post_proxy = post_checkbox("v_proxy", $offer_proxy, empty($v_proxy) ? "" : "on", "on", "");
+	$post_proxy_ext = post_or_keep("v_proxy_ext", $offer_proxy, $v_proxy_ext);
 	if ($offer_proxy && !empty($v_proxy) && empty($post_proxy) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
@@ -492,9 +491,7 @@ if (!empty($_POST["save"])) {
 		$ext = trim($ext);
 		$ext = str_replace(" ", ", ", $ext);
 		// Absent for a customer and wherever there is only one to pick
-		$post_proxy_template = $offer_proxy_template
-			? post_or_keep("v_proxy_template", $v_proxy_template)
-			: $v_proxy_template;
+		$post_proxy_template = post_or_keep("v_proxy_template", $offer_proxy_template, $v_proxy_template);
 		if ($v_proxy_template != $post_proxy_template || $v_proxy_ext != $ext) {
 			$ext = str_replace(", ", ",", $ext);
 			$v_proxy_template = $post_proxy_template;
@@ -522,7 +519,7 @@ if (!empty($_POST["save"])) {
 	// Add proxy support
 	if ($offer_proxy && empty($v_proxy) && !empty($post_proxy) && empty($_SESSION["error_msg"])) {
 		// template choice stays behind the real-identity gate; a customer enable gets default
-		$v_proxy_template = $offer_proxy_template ? post_or_keep("v_proxy_template", "default") : "default";
+		$v_proxy_template = post_or_keep("v_proxy_template", $offer_proxy_template, "default");
 		if (!empty($post_proxy_ext)) {
 			$ext = preg_replace("/\n/", " ", $post_proxy_ext);
 			$ext = preg_replace("/,/", " ", $ext);
@@ -551,8 +548,8 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Enable/Disable proxy cache
-	$post_proxy_cache_check = post_checkbox("v_proxy_cache_check", $offer_proxy_cache, $v_proxy_cache_check);
-	$post_proxy_cache_duration = post_or_keep("v_proxy_cache_duration", $v_proxy_cache_duration);
+	$post_proxy_cache_check = post_checkbox("v_proxy_cache_check", $offer_proxy_cache, $v_proxy_cache_check, "on", "");
+	$post_proxy_cache_duration = post_or_keep("v_proxy_cache_duration", $offer_proxy_cache, $v_proxy_cache_duration);
 	if (
 		$offer_proxy_cache &&
 		($v_proxy_cache_check != $post_proxy_cache_check ||
@@ -996,7 +993,7 @@ if (!empty($_POST["save"])) {
 
 	// Add HTTP/3 (nginx front only; the command refuses where nginx lacks http_v3). Both arms run
 	// off the difference to the stored field, so an unoffered checkbox moves nothing.
-	$post_http3 = post_checkbox("v_http3", $offer_http3, $v_http3 == "yes" ? "on" : "");
+	$post_http3 = post_checkbox("v_http3", $offer_http3, $v_http3 == "yes" ? "on" : "", "on", "");
 	if (
 		!empty($post_http3) &&
 		$v_http3 != "yes" &&
@@ -1064,11 +1061,11 @@ if (!empty($_POST["save"])) {
 	// Docker proxy (#566/#592): enable or retarget re-runs the add command (it updates the
 	// fields and rebuilds); the command itself validates port, octet, duplicates and wildcards
 	if ($offer_docker && empty($_SESSION["error_msg"])) {
-		$post_docker = post_checkbox("v_docker", $offer_docker, empty($v_docker) ? "" : "on");
+		$post_docker = post_checkbox("v_docker", $offer_docker, empty($v_docker) ? "" : "on", "on", "");
 		// Digits only, then the same ranges the command enforces - so a typo comes back as a
 		// sentence here instead of a command error, and nothing but a number ever reaches the shell.
-		$post_docker_port = preg_replace("/\D/", "", post_or_keep("v_docker_port", $v_docker_port));
-		$post_docker_octet = preg_replace("/\D/", "", post_or_keep("v_docker_octet", $v_docker_octet));
+		$post_docker_port = preg_replace("/\D/", "", post_or_keep("v_docker_port", $offer_docker, $v_docker_port));
+		$post_docker_octet = preg_replace("/\D/", "", post_or_keep("v_docker_octet", $offer_docker, $v_docker_octet));
 		if (!empty($post_docker)) {
 			if ($post_docker_port === "" || (int) $post_docker_port < 1024 || (int) $post_docker_port > 65535) {
 				$_SESSION["error_msg"] = _("Container port must be a number between 1024 and 65535.");
@@ -1077,9 +1074,7 @@ if (!empty($_POST["save"])) {
 			}
 		}
 		// Absent select (single template, or none offered) keeps what the domain has
-		$post_docker_tpl = $offer_docker_template
-			? post_or_keep("v_docker_template", $v_docker ?: "default")
-			: ($v_docker ?: "default");
+		$post_docker_tpl = post_or_keep("v_docker_template", $offer_docker_template, $v_docker ?: "default");
 		if (
 			!empty($post_docker) &&
 			empty($_SESSION["error_msg"]) &&

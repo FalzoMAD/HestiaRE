@@ -89,8 +89,8 @@ exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
 $shells = json_decode(implode("", $output), true);
 unset($output);
 
-// One gate per conditionally rendered control: the view renders on it, the POST section reads on
-// it. Selectability decides for the selects, not the system switch.
+// One gate per conditionally rendered control: rendered on it, read on it.
+// Selectability decides for the selects, not the system switch.
 $offer_web_template = !empty($web_templates);
 $offer_backend_template = !empty($backend_templates);
 $offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
@@ -193,10 +193,10 @@ if (!empty($_POST["save"])) {
 		$v_package = quoteshellarg($_GET["package"]);
 		$v_package_new = quoteshellarg($_POST["v_package_new"]);
 		// An empty select submits nothing; a literal fallback here demoted the shell to nologin
-		$v_web_template = quoteshellarg(post_or_keep("v_web_template", $v_web_template));
-		$v_backend_template = quoteshellarg(post_or_keep("v_backend_template", $v_backend_template));
-		$v_proxy_template = quoteshellarg(post_or_keep("v_proxy_template", $v_proxy_template));
-		$v_shell = quoteshellarg(post_or_keep("v_shell", $v_shell));
+		$v_web_template = quoteshellarg(post_or_keep("v_web_template", $offer_web_template, $v_web_template));
+		$v_backend_template = quoteshellarg(post_or_keep("v_backend_template", $offer_backend_template, $v_backend_template));
+		$v_proxy_template = quoteshellarg(post_or_keep("v_proxy_template", $offer_proxy_template, $v_proxy_template));
+		$v_shell = quoteshellarg(post_or_keep("v_shell", true, $v_shell));
 		$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
 		$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
 		$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
@@ -210,14 +210,12 @@ if (!empty($_POST["save"])) {
 		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 
 		// Only rendered while RESOURCES_LIMIT is on; writing "" dropped 'unlimited' from the record
-		$v_cpu_quota = quoteshellarg($offer_resources ? post_or_keep("v_cpu_quota", $v_cpu_quota) : $v_cpu_quota);
-		$v_cpu_quota_period = quoteshellarg(
-			$offer_resources ? post_or_keep("v_cpu_quota_period", $v_cpu_quota_period) : $v_cpu_quota_period,
-		);
-		$v_memory_limit = quoteshellarg($offer_resources ? post_or_keep("v_memory_limit", $v_memory_limit) : $v_memory_limit);
-		$v_swap_limit = quoteshellarg($offer_resources ? post_or_keep("v_swap_limit", $v_swap_limit) : $v_swap_limit);
+		$v_cpu_quota = quoteshellarg(post_or_keep("v_cpu_quota", $offer_resources, $v_cpu_quota));
+		$v_cpu_quota_period = quoteshellarg(post_or_keep("v_cpu_quota_period", $offer_resources, $v_cpu_quota_period));
+		$v_memory_limit = quoteshellarg(post_or_keep("v_memory_limit", $offer_resources, $v_memory_limit));
+		$v_swap_limit = quoteshellarg(post_or_keep("v_swap_limit", $offer_resources, $v_swap_limit));
 		// a preset name, not a size - the command rejects anything else
-		$v_docker_limit = quoteshellarg($offer_docker_limit ? post_or_keep("v_docker_limit", $v_docker_limit) : $v_docker_limit);
+		$v_docker_limit = quoteshellarg(post_or_keep("v_docker_limit", $offer_docker_limit, $v_docker_limit));
 
 		$v_time = quoteshellarg(date("H:i:s"));
 		$v_date = quoteshellarg(date("Y-m-d"));

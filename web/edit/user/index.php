@@ -120,8 +120,8 @@ exec(HESTIA_CMD . "h-list-sys-php json", $output, $return_var);
 $php_versions = json_decode(implode("", $output), true);
 unset($output);
 
-// One gate per conditionally rendered control: the view renders on it, the POST section reads on
-// it. Docker gates on the real identity because it grants privilege, the rest on the effective one.
+// One gate per conditionally rendered control: rendered on it, read on it.
+// Docker gates on the real identity because it grants privilege, the rest on the effective one.
 $offer_admin_fields = $_SESSION["userContext"] === "admin";
 $offer_role = $offer_admin_fields && $v_username != "admin" && $_SESSION["user"] != $v_username;
 $offer_theme = ($_SESSION["POLICY_USER_CHANGE_THEME"] ?? "") !== "no";
@@ -343,7 +343,7 @@ if (!empty($_POST["save"])) {
 
 	if ($offer_admin_fields) {
 		// Change package (admin only)
-		$post_package = post_or_keep("v_package", $v_package);
+		$post_package = post_or_keep("v_package", $offer_admin_fields, $v_package);
 		if ($v_package != $post_package && empty($_SESSION["error_msg"])) {
 			$v_package = quoteshellarg($post_package);
 			exec(
@@ -360,7 +360,7 @@ if (!empty($_POST["save"])) {
 		}
 
 		// Change phpcli (admin only)
-		$post_phpcli = post_or_keep("v_phpcli", $v_phpcli);
+		$post_phpcli = post_or_keep("v_phpcli", $offer_admin_fields, $v_phpcli);
 		if ($v_phpcli != $post_phpcli && empty($_SESSION["error_msg"])) {
 			$v_phpcli = quoteshellarg($post_phpcli);
 			exec(
@@ -377,7 +377,7 @@ if (!empty($_POST["save"])) {
 		}
 
 		// The select is absent for the admin account and for an admin editing themselves
-		$post_role = post_or_keep("v_role", $v_role);
+		$post_role = post_or_keep("v_role", $offer_role, $v_role);
 		if (
 			$offer_role &&
 			$v_role != $post_role &&
@@ -397,7 +397,7 @@ if (!empty($_POST["save"])) {
 			}
 		}
 		// Change shell (admin only)
-		$post_shell = post_or_keep("v_shell", $v_shell);
+		$post_shell = post_or_keep("v_shell", $offer_admin_fields, $v_shell);
 		if (!empty($post_shell)) {
 			if ($v_shell != $post_shell && empty($_SESSION["error_msg"])) {
 				$v_shell = quoteshellarg($post_shell);
@@ -478,7 +478,7 @@ if (!empty($_POST["save"])) {
 		// session of whoever is editing. An admin editing someone else carries their own theme there,
 		// so every save looked like a change and wrote one.
 		$current_theme = !empty($v_user_theme) ? $v_user_theme : ($_SESSION["THEME"] ?? "");
-		$post_user_theme = post_or_keep("v_user_theme", $current_theme);
+		$post_user_theme = post_or_keep("v_user_theme", $offer_theme, $current_theme);
 		if ($offer_theme && $post_user_theme != $current_theme) {
 			exec(
 				HESTIA_CMD .

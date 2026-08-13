@@ -21,6 +21,10 @@ opens above it.
   expression instead of two hand-written copies that drift. Converted across the web domain, user,
   package, mail and server forms; a hidden witness field was rejected because it is client-supplied
   and a forged one would claim a control the user was never offered.
+- **Two commands stopped running on every save** (#649): enabling HTTP/3 and applying a cache
+  duration now run off the difference to the stored field. That is the intended semantics, but it
+  also drops a side effect - a vhost that had drifted was quietly re-applied by any save, and only
+  an explicit rebuild does that now.
 
 ### Changed
 

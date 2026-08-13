@@ -278,16 +278,14 @@ $v_ssl_signature = $ssl_str["HESTIA"]["SIGNATURE"];
 $v_ssl_pub_key = $ssl_str["HESTIA"]["PUB_KEY"];
 $v_ssl_issuer = $ssl_str["HESTIA"]["ISSUER"];
 
-// One gate per conditionally rendered control: the view renders on it, the POST section reads on
-// it. The suspended-view policy only has a key while the preview switch is on.
+// One gate per conditionally rendered control: rendered on it, read on it.
 $offer_backend = !empty($_SESSION["WEB_BACKEND"]);
 $offer_mail = !empty($_SESSION["MAIL_SYSTEM"]);
 $offer_webmail = $offer_mail && $_SESSION["WEBMAIL_SYSTEM"] != "";
 $offer_preview_policies = ($_SESSION["POLICY_SYSTEM_ENABLE_BACON"] ?? "") === "true";
 $offer_mysql = !empty($_SESSION["DB_SYSTEM"]) && $v_mysql == "yes";
 // The three system policies below are the real root user's alone, on both paths
-$offer_root_policies =
-	$_SESSION["userContext"] === "admin" && $_SESSION["user"] === ($_SESSION["ROOT_USER"] ?? "");
+$offer_root_policies = $_SESSION["userContext"] === "admin" && $is_root_user;
 $offer_pgsql = !empty($_SESSION["DB_SYSTEM"]) && $v_pgsql == "yes";
 
 // Check POST request
@@ -365,7 +363,7 @@ if (!empty($_POST["save"])) {
 		}
 
 		if (empty($_SESSION["error_msg"])) {
-			$post_php_default = post_or_keep("v_php_default_version", substr(DEFAULT_PHP_VERSION, 4));
+			$post_php_default = post_or_keep("v_php_default_version", $offer_backend, substr(DEFAULT_PHP_VERSION, 4));
 			if ($offer_backend && "php-" . $post_php_default != DEFAULT_PHP_VERSION) {
 				exec(
 					HESTIA_CMD .
@@ -630,7 +628,7 @@ if (!empty($_POST["save"])) {
 	if ($offer_mail) {
 		// Update webmail url
 		if (empty($_SESSION["error_msg"])) {
-			$post_webmail_alias = post_or_keep("v_webmail_alias", $_SESSION["WEBMAIL_ALIAS"] ?? "");
+			$post_webmail_alias = post_or_keep("v_webmail_alias", $offer_webmail, $_SESSION["WEBMAIL_ALIAS"] ?? "");
 			if ($offer_webmail) {
 				if ($post_webmail_alias != $_SESSION["WEBMAIL_ALIAS"]) {
 					exec(
@@ -650,10 +648,10 @@ if (!empty($_POST["save"])) {
 
 	// Update system wide smtp relay
 	if (empty($_SESSION["error_msg"])) {
-		$post_relay_host = post_or_keep("v_smtp_relay_host", $v_smtp_relay_host);
-		$post_relay_user = post_or_keep("v_smtp_relay_user", $v_smtp_relay_user);
-		$post_relay_port = post_or_keep("v_smtp_relay_port", $v_smtp_relay_port);
-		$post_relay_pass = post_or_keep("v_smtp_relay_pass", "");
+		$post_relay_host = post_or_keep("v_smtp_relay_host", $offer_mail, $v_smtp_relay_host);
+		$post_relay_user = post_or_keep("v_smtp_relay_user", $offer_mail, $v_smtp_relay_user);
+		$post_relay_port = post_or_keep("v_smtp_relay_port", $offer_mail, $v_smtp_relay_port);
+		$post_relay_pass = post_or_keep("v_smtp_relay_pass", $offer_mail, "");
 		if ($offer_mail && isset($_POST["v_smtp_relay"]) && !empty($post_relay_host)) {
 			if (
 				$post_relay_host != $v_smtp_relay_host ||
@@ -698,7 +696,7 @@ if (!empty($_POST["save"])) {
 
 	// Update phpMyAdmin url. The field only exists on a box with a mysql host.
 	if (empty($_SESSION["error_msg"])) {
-		$post_mysql_url = post_or_keep("v_mysql_url", $_SESSION["DB_PMA_ALIAS"] ?? "");
+		$post_mysql_url = post_or_keep("v_mysql_url", $offer_mysql, $_SESSION["DB_PMA_ALIAS"] ?? "");
 		if ($offer_mysql && $post_mysql_url != $_SESSION["DB_PMA_ALIAS"]) {
 			exec(
 				HESTIA_CMD . "h-change-sys-db-alias pma " . quoteshellarg($post_mysql_url),

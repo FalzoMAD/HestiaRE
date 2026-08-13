@@ -30,8 +30,8 @@ if (!empty($v_domain)) {
 	$v_webmail_alias = $data[$v_domain]["WEBMAIL_ALIAS"];
 }
 
-// One gate per conditionally rendered control: the view renders on it, the POST section reads on
-// it. On a new domain an absent control means the feature is not installed, which is "off".
+// One gate per conditionally rendered control: rendered on it, read on it.
+// On a new domain "not installed" is the same as "off".
 $offer_webmail = !empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"]);
 $offer_antispam = !empty($_SESSION["ANTISPAM_SYSTEM"]);
 $offer_antivirus = !empty($_SESSION["ANTIVIRUS_SYSTEM"]);

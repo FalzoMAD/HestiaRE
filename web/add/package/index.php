@@ -35,8 +35,8 @@ exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
 $web_templates = json_decode(implode("", $output), true);
 unset($output);
 
-// One gate per conditionally rendered control: the view renders on it, the POST section reads on
-// it. A new package has nothing stored, so an absent control takes the shipped default.
+// One gate per conditionally rendered control: rendered on it, read on it.
+// A new package has nothing stored, so an absent control takes the shipped default.
 $offer_web_template = !empty($web_templates);
 $offer_backend_template = !empty($_SESSION["WEB_BACKEND"]) && !empty($backend_templates);
 $offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
@@ -126,12 +126,12 @@ if (!empty($_POST["ok"])) {
 		// Protect input
 		$v_package = quoteshellarg($_POST["v_package"]);
 		// "default" is the name every role resolves; with no backend there is no pool profile to name
-		$v_web_template = quoteshellarg(post_or_keep("v_web_template", "default"));
+		$v_web_template = quoteshellarg(post_or_keep("v_web_template", $offer_web_template, "default"));
 		$v_backend_template = quoteshellarg(
-			empty($_SESSION["WEB_BACKEND"]) ? "" : post_or_keep("v_backend_template", "default"),
+			post_or_keep("v_backend_template", $offer_backend_template, empty($_SESSION["WEB_BACKEND"]) ? "" : "default"),
 		);
-		$v_proxy_template = quoteshellarg(post_or_keep("v_proxy_template", "default"));
-		$v_shell = quoteshellarg(post_or_keep("v_shell", "nologin"));
+		$v_proxy_template = quoteshellarg(post_or_keep("v_proxy_template", $offer_proxy_template, "default"));
+		$v_shell = quoteshellarg(post_or_keep("v_shell", true, "nologin"));
 		$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
 		$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
 		$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
@@ -146,14 +146,12 @@ if (!empty($_POST["ok"])) {
 
 		// No control rendered while RESOURCES_LIMIT is off - a new package takes the shipped
 		// default rather than an empty value.
-		$v_cpu_quota = quoteshellarg($offer_resources ? post_or_keep("v_cpu_quota", "unlimited") : "unlimited");
-		$v_cpu_quota_period = quoteshellarg(
-			$offer_resources ? post_or_keep("v_cpu_quota_period", "unlimited") : "unlimited",
-		);
-		$v_memory_limit = quoteshellarg($offer_resources ? post_or_keep("v_memory_limit", "unlimited") : "unlimited");
-		$v_swap_limit = quoteshellarg($offer_resources ? post_or_keep("v_swap_limit", "unlimited") : "unlimited");
+		$v_cpu_quota = quoteshellarg(post_or_keep("v_cpu_quota", $offer_resources, "unlimited"));
+		$v_cpu_quota_period = quoteshellarg(post_or_keep("v_cpu_quota_period", $offer_resources, "unlimited"));
+		$v_memory_limit = quoteshellarg(post_or_keep("v_memory_limit", $offer_resources, "unlimited"));
+		$v_swap_limit = quoteshellarg(post_or_keep("v_swap_limit", $offer_resources, "unlimited"));
 		// a preset name, not a size - the command rejects anything else
-		$v_docker_limit = quoteshellarg($offer_docker_limit ? post_or_keep("v_docker_limit", "unlimited") : "unlimited");
+		$v_docker_limit = quoteshellarg(post_or_keep("v_docker_limit", $offer_docker_limit, "unlimited"));
 
 		$v_time = quoteshellarg(date("H:i:s"));
 		$v_date = quoteshellarg(date("Y-m-d"));
