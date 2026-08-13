@@ -406,6 +406,14 @@ decides at render time.
 
 Two consequences worth knowing before touching this:
 
+- **A selectable web template exists only where nginx serves.** The ten templates under
+  `templates/nginx/` are standalone web vhosts - `root` plus a fastcgi handler - so they only mean
+  anything when nginx *is* the web role, i.e. nginx-only. In the both and apache-only models apache
+  decides the content shape, and there is exactly one apache vhost; the former per-template proxy
+  variants became per-domain switches instead (cache, http3, hsts, offline, docker). So on three of
+  the four models nobody can pick a web template, by design - a form that offers the choice there
+  offers an empty select, which is why the package form only renders the row where something is
+  selectable (#644).
 - **The role picks the directory, not the service name.** In the both model nginx is the
   proxy and renders `share/web/nginx/default.tpl`; in nginx-only the same service is the
   web role and renders `templates/nginx/default.tpl`. Both files are called `default` and
