@@ -200,6 +200,11 @@ function cli_json($cmd): array
 // Answers null when the call failed or printed nothing, which is the state callers already test
 // for; [] would be the wrong answer, because it compares against null and against a number the
 // other way round than the value it stands in for.
+//
+// null therefore means BOTH "the call failed" and "the value is not set", and this helper only
+// fits where those two lead to the same decision - in reset/index.php both mean "do not honour an
+// expiry". A caller for whom an unset value is a legitimate state must not collapse them here, or
+// it repeats one level down exactly what cli_json() was collapsing.
 function cli_value($cmd)
 {
 	$output = [];
