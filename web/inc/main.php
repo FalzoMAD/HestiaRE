@@ -232,7 +232,9 @@ function render_page($user, $TAB, $page) {
 // Usage: verify_csrf($_POST) or verify_csrf($_GET); Use verify_csrf($_POST,true) to return on failure instead of redirect
 function verify_csrf($method, $return = false) {
 	if (
-		$method["token"] !== $_SESSION["token"] ||
+		// A request without a token is the normal hostile case, not an exception - reading the key
+		// raw made every one of them log a warning before being refused.
+		($method["token"] ?? "") !== ($_SESSION["token"] ?? "") ||
 		empty($method["token"]) ||
 		empty($_SESSION["token"])
 	) {

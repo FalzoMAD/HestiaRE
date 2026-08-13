@@ -484,7 +484,11 @@ if (!empty($_POST["save"])) {
 		if (empty($_SESSION["userTheme"])) {
 			$_SESSION["userTheme"] = "";
 		}
-		if ($_POST["v_user_theme"] != $_SESSION["userTheme"]) {
+		// Compare against the theme THIS user has, falling back to the box default - not against the
+		// session of whoever is editing. An admin editing someone else carries their own theme there,
+		// so every save looked like a change and wrote one.
+		$current_theme = !empty($v_user_theme) ? $v_user_theme : ($_SESSION["THEME"] ?? "");
+		if ($_POST["v_user_theme"] != $current_theme) {
 			exec(
 				HESTIA_CMD .
 					"h-change-user-theme " .

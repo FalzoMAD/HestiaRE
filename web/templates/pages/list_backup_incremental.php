@@ -53,7 +53,9 @@
 	<!-- Begin user backup list item loop -->
 	<?php
 		$i =0;
-		foreach ($data as $key => $value) {
+		// $data carries the command's error text when the listing failed - iterating or counting
+		// a string is a fatal, so treat anything but a list as no snapshots.
+		foreach ((is_array($data) ? $data : []) as $key => $value) {
 			$i++;
 	?>
 		<div class="units-table-row js-unit">
@@ -112,7 +114,7 @@
 <footer class="app-footer">
 	<div class="container app-footer-inner">
 		<p>
-			<?php printf(ngettext("%d snapshot", "%d snapshots", count($data)), count($data)); ?>
+			<?php printf(ngettext("%d snapshot", "%d snapshots", count(is_array($data) ? $data : [])), count(is_array($data) ? $data : [])); ?>
 		</p>
 	</div>
 </footer>
