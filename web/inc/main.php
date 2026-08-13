@@ -27,8 +27,15 @@ function destroy_sessions()
 	session_unset();
 	session_destroy();
 	session_start();
+	// session_start() picks the id back up from the cookie, so without this every forced logout
+	// hands the caller the same id it arrived with. #438 rotates at the impersonation transitions;
+	// this is the plainer fixation case and it was the one still open.
+	session_regenerate_id(true);
 }
 
+// Row counter for the list templates. It looks unused from here and is not: render_page() does
+// extract($GLOBALS), and 26 templates count with it. Removing it printed "Undefined variable $i"
+// on every list page - grep in this file cannot see that, only a run can.
 $i = 0;
 
 // Saving user IPs to the session for preventing session hijacking
@@ -84,6 +91,22 @@ if (isset($_SESSION["user"])) {
 	// instead of limping on with undefined role/shell values.
 	if (empty($data[$username])) {
 		destroy_sessions();
+		header("Location: /login/");
+		exit();
+	}
+	// Suspension is decided HERE and not in top_panel(), which is where it used to live: render_page()
+	// includes header.php before it calls top_panel(), output_buffering is off, so by then the headers
+	// are gone and the Location was never sent - measured, a suspended customer got 13883 bytes of
+	// rendered page. An admin impersonating a suspended customer is not logged out (they arrived
+	// through "look" and need the account visible), which is what POLICY_USER_VIEW_SUSPENDED covers
+	// for everyone else.
+	if (
+		($data[$username]["SUSPENDED"] ?? "") === "yes" &&
+		($_SESSION["POLICY_USER_VIEW_SUSPENDED"] ?? "") !== "yes" &&
+		empty($_SESSION["look"])
+	) {
+		destroy_sessions();
+		$_SESSION["error_msg"] = _("You are logged out, please log in again.");
 		header("Location: /login/");
 		exit();
 	}
@@ -162,7 +185,9 @@ if (!isset($_SESSION["look"])) {
 // The REAL identity, not the effective one: this stays false while an admin impersonates the root
 // user, and true while the root user impersonates someone else. Decided in the one file whose job
 // that is, so a page needing it for a gate does not read $_SESSION["user"] itself (#438).
-$is_real_root_user = isset($_SESSION["user"]) && $_SESSION["user"] === ($_SESSION["ROOT_USER"] ?? "");
+// Both sides non-empty, deliberately: the `?? ""` form compared an empty ROOT_USER against an empty
+// user and answered yes - permissive at the one line whose job is to decide who is the root account.
+$is_real_root_user = !empty($_SESSION["ROOT_USER"]) && ($_SESSION["user"] ?? "") === $_SESSION["ROOT_USER"];
 
 require_once dirname(__FILE__) . "/i18n.php";
 
@@ -212,8 +237,18 @@ function cli_value($cmd)
 	if ($return_var !== 0) {
 		return null;
 	}
-	$data = json_decode(implode("", $output), true);
-	return is_array($data) ? null : $data;
+	$raw = trim(implode("", $output));
+	if ($raw === "") {
+		return null;
+	}
+	$data = json_decode($raw, true);
+	if (is_array($data)) {
+		return null;
+	}
+	// h-get-user-value prints a bare shell value, not JSON: "nologin", "unlimited", a date. Those
+	// decode to null, and answering "no value" for a value that was printed would rebuild the
+	// collapse this helper exists to avoid, one level down. A number still comes back typed.
+	return $data === null ? $raw : $data;
 }
 
 function check_return_code($return_var, $output)
@@ -334,14 +369,9 @@ function top_panel($user, $TAB)
 		exit();
 	}
 
-	// Log out active sessions for suspended users
-	if ($panel[$user]["SUSPENDED"] === "yes" && $_SESSION["POLICY_USER_VIEW_SUSPENDED"] !== "yes") {
-		if (empty($_SESSION["look"])) {
-			destroy_sessions();
-			$_SESSION["error_msg"] = _("You are logged out, please log in again.");
-			header("Location: /login/");
-		}
-	}
+	// Suspension is checked in the session block at the top of this file, before a single byte of
+	// header.php has gone out. It used to be here, where the redirect could no longer be sent and
+	// the function simply carried on against the session it had just destroyed.
 
 	// Reset user permissions if changed while logged in
 	if ($panel[$user]["ROLE"] !== $_SESSION["userContext"] && !isset($_SESSION["look"])) {

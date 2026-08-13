@@ -72,6 +72,21 @@ opens above it.
   the package and language selects on add/edit user, the language list on the server page, the
   ipset lists on the firewall forms, the IP select on the web domain form, the backup exclusions,
   the SSH key duplicate check and the PHP-FPM services list.
+- **A suspended customer was served a rendered page** (#578). The suspension check sat in
+  `top_panel()`, which `render_page()` calls *after* including `header.php` - with output buffering
+  off the headers were already gone, so the `Location` was never sent and, without an `exit()`, the
+  rest of the page rendered against the session just destroyed. Measured on a real suspended
+  account: 13883 bytes of complete HTML and no redirect header at all. The check now runs in the
+  session block before a single byte goes out, and answers 302 with an empty body. An admin
+  impersonating a suspended customer is still not logged out, as before.
+- **The logout did not rotate the session id** (#578), so an id captured beforehand was the id the
+  browser kept and the next request adopted. `/logout/` destroyed the session with three calls of
+  its own instead of `destroy_sessions()`, which now starts a fresh session and regenerates.
+  Measured across a real logout: the cookie was unchanged before, and changes now. #438 had already
+  rotated at the impersonation transitions; this was the plainer case still open.
+- **`$is_real_root_user` compared two empty strings** (#578). With `ROOT_USER` absent the `?? ""`
+  form answered yes for an empty session user - permissive at the one line that decides who the
+  root account is, and it gates the root-only server policies. Both sides must now be non-empty.
 - **An unreadable system config left every policy standing open** (#578). `load_hestia_config()`
   copies `h-list-sys-config` into the session and never checked whether it got anything; a failed
   call left the session without a single policy key, and an absent key is the permissive reading at
