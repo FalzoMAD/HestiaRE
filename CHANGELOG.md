@@ -21,6 +21,13 @@ opens above it.
   expression instead of two hand-written copies that drift. Converted across the web domain, user,
   package, mail and server forms; a hidden witness field was rejected because it is client-supplied
   and a forged one would claim a control the user was never offered.
+- **A customer could set a control the policy had taken away from them** (#649). With
+  `POLICY_USER_CHANGE_THEME=no` the theme select is not rendered, but the handler read the key
+  whenever a request carried one - so a hand-made POST set the theme anyway. Value controls now
+  decide on the server-side gate, not on the presence of the key, which is what the checkbox path
+  already did.
+- **The SSH key list warned on a user without keys** (#649): the command answers with nothing and
+  the template iterated a null.
 - **Two commands stopped running on every save** (#649): enabling HTTP/3 and applying a cache
   duration now run off the difference to the stored field. That is the intended semantics, but it
   also drops a side effect - a vhost that had drifted was quietly re-applied by any save, and only

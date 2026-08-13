@@ -158,9 +158,10 @@ if (!isset($_SESSION["look"])) {
 	$_SESSION["look"] = "";
 }
 
-// The real identity, decided in the one file whose job that is: a page that needs it for a gate
-// takes this flag instead of reading $_SESSION["user"] itself (#438).
-$is_root_user = isset($_SESSION["user"]) && $_SESSION["user"] === ($_SESSION["ROOT_USER"] ?? "");
+// The REAL identity, not the effective one: this stays false while an admin impersonates the root
+// user, and true while the root user impersonates someone else. Decided in the one file whose job
+// that is, so a page needing it for a gate does not read $_SESSION["user"] itself (#438).
+$is_real_root_user = isset($_SESSION["user"]) && $_SESSION["user"] === ($_SESSION["ROOT_USER"] ?? "");
 
 require_once dirname(__FILE__) . "/i18n.php";
 

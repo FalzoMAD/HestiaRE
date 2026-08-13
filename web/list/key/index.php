@@ -15,7 +15,9 @@ exec(HESTIA_CMD . "h-list-user-ssh-key " . $user . " json", $output, $return_var
 if ($return_var > 0) {
 	check_return_code_redirect($return_var, $output, "/");
 }
-$data = json_decode(implode("", $output), true);
+// A user with no key at all makes the command answer with nothing, and the list template would
+// iterate a null
+$data = json_decode(implode("", $output), true) ?: [];
 
 // Render page\
 render_page($user, $TAB, "list_key");

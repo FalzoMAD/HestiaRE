@@ -285,7 +285,7 @@ $offer_webmail = $offer_mail && $_SESSION["WEBMAIL_SYSTEM"] != "";
 $offer_preview_policies = ($_SESSION["POLICY_SYSTEM_ENABLE_BACON"] ?? "") === "true";
 $offer_mysql = !empty($_SESSION["DB_SYSTEM"]) && $v_mysql == "yes";
 // The three system policies below are the real root user's alone, on both paths
-$offer_root_policies = $_SESSION["userContext"] === "admin" && $is_root_user;
+$offer_root_policies = $_SESSION["userContext"] === "admin" && $is_real_root_user;
 $offer_pgsql = !empty($_SESSION["DB_SYSTEM"]) && $v_pgsql == "yes";
 
 // Check POST request
