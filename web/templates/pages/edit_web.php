@@ -85,7 +85,7 @@
 					<?= tohtml(_("Take website temporarily offline (visitors see a maintenance page, HTTP 503)")) ?>
 				</label>
 			</div>
-			<?php if (!empty($_SESSION["PROXY_SYSTEM"]) && $_SESSION["PROXY_SYSTEM"] == "nginx") { ?>
+			<?php if ($offer_proxy_cache) { ?>
 				<div class="form-check u-mb10">
 					<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") {
 						echo "checked";
@@ -232,11 +232,7 @@
 						</a>
 					</label>
 				</div>
-				<?php if (
-					$_SESSION["WEB_HTTP3"] == "yes"
-					&& ($_SESSION["WEB_SYSTEM"] == "nginx"
-						|| (!empty($_SESSION["PROXY_SYSTEM"]) && $_SESSION["PROXY_SYSTEM"] == "nginx"))
-				) { ?>
+				<?php if ($offer_http3) { ?>
 				<div class="form-check u-mb20">
 					<input class="form-check-input" type="checkbox" name="v_http3" id="v_http3" <?php if ($v_http3 == 'yes') {
 						echo 'checked';
@@ -310,7 +306,7 @@
 					</ul>
 				<?php } ?>
 			</div>
-			<?php if (!empty($botfamilies)) { ?>
+			<?php if ($offer_botlimit) { ?>
 				<!-- Layer-B bot throttling, customer-editable: only the families the admin ENABLED are
 				     offered, since the server config defines rate zones for those alone. Humans are
 				     never limited here. The family table itself stays admin-only. -->
@@ -354,7 +350,7 @@
 					</div>
 				</details>
 			<?php } ?>
-			<?php if (!empty($v_docker_net)) { ?>
+			<?php if ($offer_docker) { ?>
 			<div class="form-check u-mb10">
 				<input x-model="dockerEnabled" class="form-check-input" type="checkbox" name="v_docker" id="v_docker" <?php if (!empty($v_docker)) {
 					echo 'checked';
@@ -375,7 +371,7 @@
 				</div>
 				<?php # app shapes differ in proxy mode, headers, websockets - the list is admin-curated,
 					# so the customer picks it; one entry is no choice
-					if (count($docker_templates ?? []) > 1) { ?>
+					if ($offer_docker_template) { ?>
 				<div class="u-mt10">
 					<label for="v_docker_template" class="form-label"><?= tohtml(_("Docker Template")) ?></label>
 					<select class="form-select" name="v_docker_template" id="v_docker_template">
@@ -400,14 +396,14 @@
 				</button>
 			</div>
 			<div x-cloak x-show="showAdvanced">
-				<?php if (empty($v_docker) && (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes")) { ?>
+				<?php if (empty($v_docker) && $can_edit_templates) { ?>
 					<?php // These policy gates protect the CUSTOMER from themselves (a pool set to high, a broken
 					// proxy template), so the REAL admin overrides them even while impersonating: adminContext
 					// is the durable identity (#438), userContext keeps scoping the data. Policy default is
 					// effectively 'no' - protective for customers, invisible to admins.?>
 				<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
 						// share/ and the list is empty, so hide it instead of an empty dropdown (#219/#591)?>
-					<?php if (is_array($templates) && count($templates)) { ?>
+					<?php if ($offer_web_template) { ?>
 						<div class="u-mb10">
 							<label for="v_template" class="form-label">
 								<?= tohtml(_("Web Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_SYSTEM"])) ?></span>
@@ -430,7 +426,7 @@
 				<?php // The blocks below are customer-facing (#566 review): PHP version, pool profile and
 					// proxy extensions stay editable for the user; only the template CHOICE above and the
 					// proxy template select below remain admin/policy-gated?>
-				<?php if (empty($v_docker) && $_SESSION["WEB_SYSTEM"] == "nginx") { ?>
+				<?php if ($offer_fastcgi_cache) { ?>
 						<div class="form-check u-mb10">
 							<input x-model="nginxCacheEnabled" class="form-check-input" type="checkbox" name="v_nginx_cache_check" id="v_nginx_cache_check">
 							<label for="v_nginx_cache_check">
@@ -449,9 +445,9 @@
 							</div>
 						</div>
 					<?php } ?>
-					<?php if (empty($v_docker) && !empty($_SESSION["WEB_BACKEND"])) { ?>
+					<?php if ($offer_backend) { ?>
 						<?php // profile choice is capacity allocation - a customer would simply pick 'high'?>
-						<?php if (($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") { ?>
+						<?php if ($offer_backend_template) { ?>
 						<div class="u-mb10">
 								<label for="v_backend_template" class="form-label">
 									<?= tohtml(_("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
@@ -490,7 +486,7 @@
 							</select>
 						</div>
 					<?php } ?>
-					<?php if (empty($v_docker) && !empty($_SESSION["PROXY_SYSTEM"])) { ?>
+					<?php if ($offer_proxy) { ?>
 						<div style="display: none;">
 							<div class="form-check u-mb10">
 								<input x-model="proxySupportEnabled" class="form-check-input" type="checkbox" name="v_proxy" id="v_proxy">
@@ -502,7 +498,7 @@
 						<div x-cloak x-show="proxySupportEnabled" id="proxytable">
 							<?php # nothing to choose is not a choice: the both model ships one proxy template, the
 						# variety lives in the web templates of an nginx-only box
-						if ((($_SESSION["adminContext"] ?? "") === "admin" || ($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") === "yes") && count($proxy_templates ?? []) > 1) { ?>
+						if ($offer_proxy_template) { ?>
 							<div class="u-mb10">
 								<label for="v_proxy_template" class="form-label"><?= tohtml(_("Proxy Template")) ?></label>
 								<select class="form-select js-proxy-template-select" name="v_proxy_template" id="v_proxy_template">
@@ -561,7 +557,7 @@
 						<small class="js-custom-docroot-hint"></small>
 					</div>
 				</div>
-				<?php if ($_SESSION["FTP_SYSTEM"] == "proftpd") { ?>
+				<?php if ($offer_ftp) { ?>
 					<div class="form-check u-mb10">
 						<input class="form-check-input js-toggle-ftp-accounts" type="checkbox" name="v_ftp" id="v_ftp" <?php if (!empty($v_ftp_user)) {
 							echo 'checked';

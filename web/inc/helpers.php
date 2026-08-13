@@ -187,3 +187,30 @@ function display_title($tab)
 	$array2 = [$tab, get_hostname(), $_SERVER["REMOTE_ADDR"], $_SESSION["APP_NAME"]];
 	return str_replace($array1, $array2, $_SESSION["TITLE"]);
 }
+
+/**
+ * A control the form did not render sends no key at all. Reading it as "" turns "not offered" into
+ * "cleared", which is a silent rewrite (THEME, SHELL, DOCKER_LIMIT) or a fatal at the CLI boundary
+ * (quoteshellarg(null)). Value controls - text, select, textarea - therefore keep what is stored.
+ */
+function post_or_keep(string $key, $stored)
+{
+	return array_key_exists($key, $_POST) ? $_POST[$key] : $stored;
+}
+
+/**
+ * Checkboxes cannot use post_or_keep: unchecked is an absent key too, so "keep" would make the box
+ * impossible to clear. Only the caller knows which of the two it is, so it passes the gate the form
+ * rendered on - the same variable, not a second condition written from memory.
+ *
+ * The gate is evaluated before the write, i.e. against the state the submitted form was rendered
+ * under. A hidden witness field would answer the same question from the client side, which is why
+ * it is not used here: forged, it would claim a control the user was never offered.
+ */
+function post_checkbox(string $key, bool $offered, $stored, string $on = "on", string $off = "")
+{
+	if (!$offered) {
+		return $stored;
+	}
+	return empty($_POST[$key]) ? $off : $on;
+}

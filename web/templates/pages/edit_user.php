@@ -92,7 +92,7 @@
 			</div>
 			<div id="password-details" class="u-mb20">
 				<?php require $_SERVER["HESTIA"] . "/web/templates/includes/password-requirements.php"; ?>
-				<?php if ($_SESSION["userContext"] === "admin") { ?>
+				<?php if ($offer_admin_fields) { ?>
 					<div class="form-check">
 						<input x-model="loginDisabled" class="form-check-input" type="checkbox" name="v_login_disabled" id="v_login_disabled">
 						<label for="v_login_disabled">
@@ -147,7 +147,7 @@
 				?>
 				</select>
 			</div>
-			<?php if ($v_username != "admin" && $_SESSION["userContext"] === "admin" && $_SESSION["user"] != $v_username): ?>
+			<?php if ($offer_role): ?>
 				<div class="u-mb10">
 					<label for="v_role" class="form-label"><?= tohtml(_("Role")) ?></label>
 					<select class="form-select" name="v_role" id="v_role" required>
@@ -156,7 +156,7 @@
 					</select>
 				</div>
 			<?php endif; ?>
-			<?php if ($_SESSION["POLICY_USER_CHANGE_THEME"] !== "no") { ?>
+			<?php if ($offer_theme) { ?>
 			<div class="u-mb10">
 				<label for="v_user_theme" class="form-label"><?= tohtml(_("Theme")) ?></label>
 				<select class="form-select" name="v_user_theme" id="v_user_theme">
@@ -188,7 +188,7 @@
 						} ?>><?= tohtml(_("Name")) ?></option>
 					</select>
 				</div>
-			<?php if ($_SESSION['userContext'] === 'admin') { ?>
+			<?php if ($offer_admin_fields) { ?>
 				<div class="u-mb20">
 					<label for="v_package" class="form-label"><?= tohtml(_("Package")) ?></label>
 					<select class="form-select" name="v_package" id="v_package" required>
@@ -233,7 +233,7 @@
 				?>
 						</select>
 					</div>
-					<?php if ($_SESSION["userContext"] === "admin" && !empty($_SESSION["FILE_MANAGER_PORT"])) { ?>
+					<?php if ($offer_file_manager) { ?>
 						<div class="u-mb10">
 							<div class="form-check">
 								<input x-model="fileManager" class="form-check-input" type="checkbox" name="v_file_manager" id="v_file_manager">
@@ -245,8 +245,7 @@
 					<?php } ?>
 					<?php # docker needs an unjailed login shell; an enabled customer keeps the switch either
 						# way, so it can still be turned off after their shell changed
-						if (($_SESSION["adminContext"] ?? "") === "admin" && !empty($_SESSION["DOCKER_SYSTEM"]) &&
-				($v_docker_eligible || !empty($v_docker_ip))) { ?>
+						if ($offer_docker) { ?>
 						<div class="u-mb10">
 							<div class="form-check">
 								<input x-model="dockerEnabled" class="form-check-input" type="checkbox" name="v_docker" id="v_docker"
