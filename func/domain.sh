@@ -1168,7 +1168,15 @@ process_http2_directive() {
 			sed -i "${lnr}s/[[:space:]]http2//" "$1"
 		done < <(grep -nE "listen.*(\bssl\b(\s|.+){1,}\bhttp2\b|\bhttp2\b(\s|.+){1,}\bssl\b).*;" "$1" | cut -f1 -d:)
 	else
-		if version_ge "$(nginx -v 2>&1 | cut -d'/' -f2)" "1.25.1"; then
+		# The probe must fail closed. Without the binary `nginx -v` prints an error message that
+		# contains no '/', so cut passes the whole line through and sort -V ranks it above every
+		# real version - the box then reads as "nginx >= 1.25.1" and writes the marker into an
+		# /etc/nginx that apache-only does not have (#639). Anything not shaped like a version is
+		# not one, which also covers the callers that render an apache vhost.
+		local nginx_ver
+		nginx_ver=$(nginx -v 2>&1 | cut -d'/' -f2)
+		[[ "$nginx_ver" =~ ^[0-9]+\.[0-9]+ ]] || return 0
+		if version_ge "$nginx_ver" "1.25.1"; then
 			echo "http2 on;" > /etc/nginx/conf.d/http2-directive.conf
 
 			while IFS= read -r lnr; do
