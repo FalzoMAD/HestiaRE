@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 define("NO_AUTH_REQUIRED", true);
@@ -24,9 +25,9 @@ if (!empty($_POST["user"]) && empty($_POST["code"])) {
 	$email = $_POST["email"];
 	$data = cli_json("h-list-user " . $v_user . " json");
 	if (!empty($data[$user])) {
-		$output = "";
-		exec(HESTIA_CMD . "h-get-user-value " . $v_user . " RKEYEXP", $output, $return_var);
-		$rkeyexp = json_decode(implode("", $output), true);
+		// cli_value(), not cli_json(): this is a timestamp, and an empty array answers both
+		// comparisons below the opposite way - the expiry check would stop rejecting anything.
+		$rkeyexp = cli_value("h-get-user-value " . $v_user . " RKEYEXP");
 		if ($rkeyexp === null || $rkeyexp < time() - 1) {
 			// Strict, and both sides non-empty: a loose compare against a missing CONTACT made an
 			// empty submitted address match, which is the one comparison here that gates a reset.

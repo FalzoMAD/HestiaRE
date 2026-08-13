@@ -3,12 +3,12 @@
 	<div class="toolbar-inner">
 		<div class="toolbar-buttons">
 			<a class="button button-secondary button-back js-button-back" href="/list/firewall/ipset/">
-				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 			</a>
 		</div>
 		<div class="toolbar-buttons">
 			<button type="submit" class="button" form="main-form">
-				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml( _("Save")) ?>
+				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 			</button>
 		</div>
 	</div>
@@ -41,50 +41,51 @@
 			"us" => "United States",
 		];
 
-		function generate_iplist($country, $type) {
-			$iplist = [];
-			$lowercaseType = strtolower($type);
-			foreach ($country as $iso => $name) {
-				$iplist[] = [
-					"name" => "[$type] " . _("Country") . " - $name",
-					"source" => "https://raw.githubusercontent.com/ipverse/rir-ip/master/country/$iso/$lowercaseType-aggregated.txt",
-				];
-			}
-			return $iplist;
-		}
+				function generate_iplist($country, $type)
+				{
+					$iplist = [];
+					$lowercaseType = strtolower($type);
+					foreach ($country as $iso => $name) {
+						$iplist[] = [
+							"name" => "[$type] " . _("Country") . " - $name",
+							"source" => "https://raw.githubusercontent.com/ipverse/rir-ip/master/country/$iso/$lowercaseType-aggregated.txt",
+						];
+					}
+					return $iplist;
+				}
 
-		$country_iplists = generate_iplist($country, "IPv4");
-		// Uncomment below for IPv6
-		// $country_ipv6lists = generate_iplist($country, 'IPv6');
+				$country_iplists = generate_iplist($country, "IPv4");
+				// Uncomment below for IPv6
+				// $country_ipv6lists = generate_iplist($country, 'IPv6');
 
-		// Read from share/firewall/blocklists.conf rather than hard-coded here: the previous entry pointed at
-		// a script under install/, which no longer exists, so the shipped preset could only ever fail.
-		$blacklist_iplists = [];
-		foreach (file("/usr/local/hestia/share/firewall/blocklists.conf", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-			if ($line === "" || $line[0] === "#") {
-				continue;
-			}
-			if (preg_match("/NAME='([^']*)'.*LEVEL='([^']*)'.*FAMILY='([^']*)'.*SOURCE='([^']*)'/", $line, $m)) {
-				$blacklist_iplists[] = [
-					// Raw here: the array is escaped once as a whole at the data- attribute below, exactly as
-					// generate_iplist's names are. Escaping the name too rendered "Blocklist&period;de".
-					"name" => "[" . strtoupper($m[3]) . "] " . $m[1] . " (" . _("level") . " " . $m[2] . ")",
-					"source" => $m[4],
-				];
-			}
-		}
-		?>
+				// Read from share/firewall/blocklists.conf rather than hard-coded here: the previous entry pointed at
+				// a script under install/, which no longer exists, so the shipped preset could only ever fail.
+				$blacklist_iplists = [];
+				foreach (file("/usr/local/hestia/share/firewall/blocklists.conf", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+					if ($line === "" || $line[0] === "#") {
+						continue;
+					}
+					if (preg_match("/NAME='([^']*)'.*LEVEL='([^']*)'.*FAMILY='([^']*)'.*SOURCE='([^']*)'/", $line, $m)) {
+						$blacklist_iplists[] = [
+							// Raw here: the array is escaped once as a whole at the data- attribute below, exactly as
+							// generate_iplist's names are. Escaping the name too rendered "Blocklist&period;de".
+							"name" => "[" . strtoupper($m[3]) . "] " . $m[1] . " (" . _("level") . " " . $m[2] . ")",
+							"source" => $m[4],
+						];
+					}
+				}
+				?>
 
 		<div class="form-container">
-			<h1 class="u-mb20"><?= tohtml( _("Add IPset IP List for Firewall")) ?></h1>
+			<h1 class="u-mb20"><?= tohtml(_("Add IPset IP List for Firewall")) ?></h1>
 			<?php show_alert_message($_SESSION); ?>
 			<div class="u-mb10">
-				<label for="v_ipname" class="form-label"><?= tohtml( _("IP List Name")) ?></label>
+				<label for="v_ipname" class="form-label"><?= tohtml(_("IP List Name")) ?></label>
 				<input type="text" class="form-control" name="v_ipname" id="v_ipname" maxlength="255" value="<?= tohtml(trim($v_ipname, "'")) ?>">
 			</div>
 			<div class="u-mb10">
 				<label for="v_datasource" class="form-label">
-					<?= tohtml( _("Data Source")) ?> <span class="optional">(<?= tohtml( _("URL, script or file")) ?>)</span>
+					<?= tohtml(_("Data Source")) ?> <span class="optional">(<?= tohtml(_("URL, script or file")) ?>)</span>
 				</label>
 				<div class="u-pos-relative">
 					<select
@@ -94,23 +95,31 @@
 						data-country-iplists="<?= tohtml(json_encode($country_iplists)) ?>"
 						data-blacklist-iplists="<?= tohtml(json_encode($blacklist_iplists)) ?>"
 					>
-						<option value=""><?= tohtml( _("Clear")) ?></option>
+						<option value=""><?= tohtml(_("Clear")) ?></option>
 					</select>
 					<input type="text" class="form-control list-editor" name="v_datasource" id="v_datasource" maxlength="255" value="<?= tohtml(trim($v_datasource, "'")) ?>">
 				</div>
 			</div>
 			<div class="u-mb10">
-				<label for="v_ipver" class="form-label"><?= tohtml( _("IP Version")) ?></label>
+				<label for="v_ipver" class="form-label"><?= tohtml(_("IP Version")) ?></label>
 				<select class="form-select" name="v_ipver" id="v_ipver">
-					<option value="v4" <?php if ((!empty($v_ipver)) && ( $v_ipver == "'v4'" )) echo 'selected'?>>IPv4</option>
-					<option value="v6" <?php if ((!empty($v_ipver)) && ( $v_ipver == "'v6'" )) echo 'selected'?>>IPv6</option>
+					<option value="v4" <?php if ((!empty($v_ipver)) && ($v_ipver == "'v4'")) {
+						echo 'selected';
+					}?>>IPv4</option>
+					<option value="v6" <?php if ((!empty($v_ipver)) && ($v_ipver == "'v6'")) {
+						echo 'selected';
+					}?>>IPv6</option>
 				</select>
 			</div>
 			<div class="u-mb10">
-				<label for="v_autoupdate" class="form-label"><?= tohtml( _("Auto Update")) ?></label>
+				<label for="v_autoupdate" class="form-label"><?= tohtml(_("Auto Update")) ?></label>
 				<select class="form-select" name="v_autoupdate" id="v_autoupdate">
-					<option value="yes" <?php if ((!empty($v_autoupdate)) && ( $v_autoupdate == "'yes'" )) echo 'selected'?>><?= tohtml( _("Yes")) ?></option>
-					<option value="no" <?php if ((!empty($v_autoupdate)) && ( $v_autoupdate == "'no'" )) echo 'selected'?>><?= tohtml( _("No")) ?></option>
+					<option value="yes" <?php if ((!empty($v_autoupdate)) && ($v_autoupdate == "'yes'")) {
+						echo 'selected';
+					}?>><?= tohtml(_("Yes")) ?></option>
+					<option value="no" <?php if ((!empty($v_autoupdate)) && ($v_autoupdate == "'no'")) {
+						echo 'selected';
+					}?>><?= tohtml(_("No")) ?></option>
 				</select>
 			</div>
 		</div>

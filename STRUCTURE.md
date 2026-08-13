@@ -406,6 +406,14 @@ decides at render time.
 
 Two consequences worth knowing before touching this:
 
+- **Selectable web templates exist where nginx itself serves the content.** The criterion is the
+  role, not the model name: `templates/nginx/*` are standalone web vhosts (`root` plus a fastcgi
+  handler), so they only apply where nginx is the web role. Wherever apache serves, apache decides
+  the shape - there is one apache vhost - and per-domain variance runs through switches instead
+  (cache, http3, hsts, offline, docker). A model that adds a front therefore inherits the answer:
+  serves it itself, so it offers a choice; proxies to apache, so it does not. A form that offers
+  the choice where the criterion does not hold renders an empty select, which is why the package
+  form only renders the row where something is selectable (#644).
 - **The role picks the directory, not the service name.** In the both model nginx is the
   proxy and renders `share/web/nginx/default.tpl`; in nginx-only the same service is the
   web role and renders `templates/nginx/default.tpl`. Both files are called `default` and

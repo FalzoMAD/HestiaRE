@@ -1,5 +1,5 @@
 <?php
-if( !defined("HESTIA_DIR_BIN") ){
+if (!defined("HESTIA_DIR_BIN")) {
 	die("Direct access disabled");
 }
 ?>
@@ -9,55 +9,55 @@ if( !defined("HESTIA_DIR_BIN") ){
 			class="debug-panel-toggle"
 			x-on:click="open = !open"
 			x-text="open ? <?= tohtml(json_encode(_("Close debug panel"), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR)) ?> : <?= tohtml(json_encode(_("Open debug panel"), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR)) ?>">
-			<?= tohtml( _("Open debug panel")) ?>
+			<?= tohtml(_("Open debug panel")) ?>
 		</button>
 	<div x-cloak x-show="open" class="debug-panel-content">
 		<?php
 			echo "<h3 class=\"u-mb10\">Server Variables</h3>";
-			foreach ($_SERVER as $key => $val) {
-				if(is_string($val)){
-					echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> " . tohtml($val) . " ";
-				}
-			}
-  	?>
+foreach ($_SERVER as $key => $val) {
+	if (is_string($val)) {
+		echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> " . tohtml($val) . " ";
+	}
+}
+?>
 		<?php
-			echo "<h3 class=\"u-mb10 u-mt10\">Session Variables</h3>";
-			foreach ($_SESSION as $key => $val) {
-				if(is_string($val)){
-					echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> " . tohtml($val) . " ";
-				}else if(is_array($val)){
-					array_walk_recursive($val, function (&$value) {
-							$value = htmlentities($value);
-					});
-					echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> "  .var_dump($val). " ";
-				}
-			}
-  	?>
+		echo "<h3 class=\"u-mb10 u-mt10\">Session Variables</h3>";
+foreach ($_SESSION as $key => $val) {
+	if (is_string($val)) {
+		echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> " . tohtml($val) . " ";
+	} elseif (is_array($val)) {
+		array_walk_recursive($val, function (&$value) {
+			$value = htmlentities($value);
+		});
+		echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> "  .var_dump($val). " ";
+	}
+}
+?>
 		<?php
-			echo "<h3 class=\"u-mb10 u-mt10\">POST Variables</h3>";
-			foreach ($_POST as $key => $val) {
-				if(is_string($val)){
-					echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> " . tohtml($val) . " ";
-				}else if(is_array($val)){
-					array_walk_recursive($val, function (&$value) {
-							$value = htmlentities($value);
-					});
-					echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> "  .var_dump($val). " ";
-				}
-			}
-  	?>
+		echo "<h3 class=\"u-mb10 u-mt10\">POST Variables</h3>";
+foreach ($_POST as $key => $val) {
+	if (is_string($val)) {
+		echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> " . tohtml($val) . " ";
+	} elseif (is_array($val)) {
+		array_walk_recursive($val, function (&$value) {
+			$value = htmlentities($value);
+		});
+		echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> "  .var_dump($val). " ";
+	}
+}
+?>
 		<?php
-			echo "<h3 class=\"u-mb10 u-mt10\">GET Variables</h3>";
-			foreach ($_GET as $key => $val) {
-				if(is_string($val)){
-					echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> " . tohtml($val) . " ";
-				}else if(is_array($val)){
-					array_walk_recursive($val, function (&$value) {
-							$value = htmlentities($value);
-					});
-					echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> "  .var_dump($val). " ";
-				}
-			}
-  	?>
+		echo "<h3 class=\"u-mb10 u-mt10\">GET Variables</h3>";
+foreach ($_GET as $key => $val) {
+	if (is_string($val)) {
+		echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> " . tohtml($val) . " ";
+	} elseif (is_array($val)) {
+		array_walk_recursive($val, function (&$value) {
+			$value = htmlentities($value);
+		});
+		echo "<span class=\"u-text-bold\">" . tohtml($key) . "= </span> "  .var_dump($val). " ";
+	}
+}
+?>
 	</div>
 </div>

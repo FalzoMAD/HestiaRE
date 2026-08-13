@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 // Join another box's CrowdSec mesh with the one-time code its admin minted there. Both halves of the

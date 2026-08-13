@@ -12,9 +12,7 @@ if ($_SESSION["userContext"] != "admin") {
 }
 
 // Data
-exec(HESTIA_CMD . "h-list-sys-rrd json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-unset($output);
+$data = cli_json("h-list-sys-rrd json");
 
 /*
 if (empty($_GET["period"])) {

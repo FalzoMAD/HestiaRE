@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
@@ -60,53 +61,60 @@ $v_time = $data[$v_package]["TIME"];
 $v_status = "active";
 
 // List web templates
-exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
-$web_templates = json_decode(implode("", $output), true);
-unset($output);
+$web_templates = cli_json("h-list-web-templates json");
+
+// Empty means "nothing selectable", which is what the checks below ask - so they must
+// not depend on whether the conditional load ran.
+$backend_templates = [];
+$proxy_templates = [];
 
 // List backend templates
 if (!empty($_SESSION["WEB_BACKEND"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
-	$backend_templates = json_decode(implode("", $output), true);
-	unset($output);
+	$backend_templates = cli_json("h-list-web-templates-backend json");
 }
 
 // List proxy templates
 if (!empty($_SESSION["PROXY_SYSTEM"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-proxy json", $output, $return_var);
-	$proxy_templates = json_decode(implode("", $output), true);
-	unset($output);
+	$proxy_templates = cli_json("h-list-web-templates-proxy json");
 }
 
 // List shels
-exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
-$shells = json_decode(implode("", $output), true);
-unset($output);
+$shells = cli_json("h-list-sys-shells json");
+
+// One gate per conditionally rendered control: rendered on it, read on it.
+// Selectability decides for the selects, not the system switch.
+$offer_web_template = !empty($web_templates);
+$offer_backend_template = !empty($backend_templates);
+$offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
+$offer_resources = $_SESSION["RESOURCES_LIMIT"] == "yes";
+$offer_docker_limit = !empty($_SESSION["DOCKER_SYSTEM"]);
 
 // Check POST request
 if (!empty($_POST["save"])) {
 	// Check token
 	verify_csrf($_POST);
 
+	// Initialised so a typo in a branch below is a phpstan finding, not a silently dead check.
+	$errors = [];
+
 	// Check empty fields
 	if (empty($_POST["v_package"])) {
 		$errors[] = _("Package");
 	}
-	if (empty($_POST["v_web_template"])) {
+	// Only demanded where something is selectable. An apache web role has no selectable web
+	// template since they moved to share/, so the control is not rendered and the key never
+	// arrives - requiring it there makes the package unsaveable.
+	if ($offer_web_template && empty($_POST["v_web_template"])) {
 		$errors[] = _("Web Template");
 	}
-	if (!empty($_SESSION["WEB_BACKEND"])) {
-		if (empty($_POST["v_backend_template"])) {
-			$errors[] = _("Backend Template");
-		}
+	if ($offer_backend_template && empty($_POST["v_backend_template"])) {
+		$errors[] = _("Backend Template");
 	}
-	if (!empty($_SESSION["PROXY_SYSTEM"])) {
-		if (empty($_POST["v_proxy_template"])) {
-			$errors[] = _("Proxy Template");
-		}
+	if ($offer_proxy_template && empty($_POST["v_proxy_template"])) {
+		$errors[] = _("Proxy Template");
 	}
 	if (empty($_POST["v_shell"])) {
-		$errrors[] = _("Shell");
+		$errors[] = _("Shell");
 	}
 	if (!isset($_POST["v_web_domains"])) {
 		$errors[] = _("Web Domains");
@@ -142,7 +150,7 @@ if (!empty($_POST["save"])) {
 		$errors[] = _("Bandwidth");
 	}
 
-	if ($_SESSION["RESOURCES_LIMIT"] == "yes") {
+	if ($offer_resources) {
 		if (!isset($_POST["v_cpu_quota"])) {
 			$errors[] = _("CPU quota");
 		}
@@ -166,104 +174,101 @@ if (!empty($_POST["save"])) {
 			}
 		}
 		$_SESSION["error_msg"] = sprintf(_('Field "%s" can not be blank.'), $error_msg);
-	}
-
-	// Protect input
-	$v_package = quoteshellarg($_POST["v_package"]);
-	$v_package_new = quoteshellarg($_POST["v_package_new"]);
-	$v_web_template = quoteshellarg($_POST["v_web_template"]);
-	if (!empty($_SESSION["WEB_BACKEND"])) {
-		$v_backend_template = quoteshellarg($_POST["v_backend_template"]);
-	}
-	if (!empty($_SESSION["PROXY_SYSTEM"])) {
-		$v_proxy_template = quoteshellarg($_POST["v_proxy_template"]);
-	}
-	if (!empty($_POST["v_shell"])) {
-		$v_shell = quoteshellarg($_POST["v_shell"]);
 	} else {
-		$v_shell = "nologin";
-	}
-	$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
-	$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
-	$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
-	$v_mail_accounts = quoteshellarg($_POST["v_mail_accounts"]);
-	$v_ratelimit = quoteshellarg($_POST["v_ratelimit"]);
-	$v_databases = quoteshellarg($_POST["v_databases"]);
-	$v_cron_jobs = quoteshellarg($_POST["v_cron_jobs"]);
-	$v_backups = quoteshellarg($_POST["v_backups"]);
-	$v_backups_incremental = quoteshellarg($_POST["v_backups_incremental"]);
-	$v_disk_quota = quoteshellarg($_POST["v_disk_quota"]);
-	$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
+		// Nothing below may run on a rejected form: the input block reads POST keys the form
+		// does not always render, and the write path saves the package regardless - so a form
+		// that failed validation was stored anyway.
 
-	$v_cpu_quota =
-		$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_cpu_quota"]) : "";
-	$v_cpu_quota_period =
-		$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_cpu_quota_period"]) : "";
-	$v_memory_limit =
-		$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_memory_limit"]) : "";
-	$v_swap_limit =
-		$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_swap_limit"]) : "";
-	// a preset name, not a size - the command rejects anything else
-	$v_docker_limit = quoteshellarg($_POST["v_docker_limit"] ?? "unlimited");
+		// Protect input
+		// The lock at the top of this file rejects $_GET["package"], but the write below used the
+		// POST name - a crafted POST walked around it. Anchor the write on the checked value.
+		$v_package = quoteshellarg($_GET["package"]);
+		$v_package_new = quoteshellarg($_POST["v_package_new"]);
+		// An empty select submits nothing; a literal fallback here demoted the shell to nologin
+		$v_web_template = quoteshellarg(post_or_keep("v_web_template", $offer_web_template, $v_web_template));
+		$v_backend_template = quoteshellarg(post_or_keep("v_backend_template", $offer_backend_template, $v_backend_template));
+		$v_proxy_template = quoteshellarg(post_or_keep("v_proxy_template", $offer_proxy_template, $v_proxy_template));
+		$v_shell = quoteshellarg(post_or_keep("v_shell", true, $v_shell));
+		$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
+		$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
+		$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
+		$v_mail_accounts = quoteshellarg($_POST["v_mail_accounts"]);
+		$v_ratelimit = quoteshellarg($_POST["v_ratelimit"]);
+		$v_databases = quoteshellarg($_POST["v_databases"]);
+		$v_cron_jobs = quoteshellarg($_POST["v_cron_jobs"]);
+		$v_backups = quoteshellarg($_POST["v_backups"]);
+		$v_backups_incremental = quoteshellarg($_POST["v_backups_incremental"]);
+		$v_disk_quota = quoteshellarg($_POST["v_disk_quota"]);
+		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 
-	$v_time = quoteshellarg(date("H:i:s"));
-	$v_date = quoteshellarg(date("Y-m-d"));
+		// Only rendered while RESOURCES_LIMIT is on; writing "" dropped 'unlimited' from the record
+		$v_cpu_quota = quoteshellarg(post_or_keep("v_cpu_quota", $offer_resources, $v_cpu_quota));
+		$v_cpu_quota_period = quoteshellarg(post_or_keep("v_cpu_quota_period", $offer_resources, $v_cpu_quota_period));
+		$v_memory_limit = quoteshellarg(post_or_keep("v_memory_limit", $offer_resources, $v_memory_limit));
+		$v_swap_limit = quoteshellarg(post_or_keep("v_swap_limit", $offer_resources, $v_swap_limit));
+		// a preset name, not a size - the command rejects anything else
+		$v_docker_limit = quoteshellarg(post_or_keep("v_docker_limit", $offer_docker_limit, $v_docker_limit));
 
-	// Save package file on a fs
-	$pkg = "WEB_TEMPLATE=" . $v_web_template . "\n";
-	$pkg .= "BACKEND_TEMPLATE=" . $v_backend_template . "\n";
-	$pkg .= "PROXY_TEMPLATE=" . $v_proxy_template . "\n";
-	$pkg .= "WEB_DOMAINS=" . $v_web_domains . "\n";
-	$pkg .= "WEB_ALIASES=" . $v_web_aliases . "\n";
-	$pkg .= "MAIL_DOMAINS=" . $v_mail_domains . "\n";
-	$pkg .= "MAIL_ACCOUNTS=" . $v_mail_accounts . "\n";
-	$pkg .= "RATE_LIMIT=" . $v_ratelimit . "\n";
-	$pkg .= "DATABASES=" . $v_databases . "\n";
-	$pkg .= "CRON_JOBS=" . $v_cron_jobs . "\n";
-	$pkg .= "DISK_QUOTA=" . $v_disk_quota . "\n";
-	$pkg .= "CPU_QUOTA=" . $v_cpu_quota . "\n";
-	$pkg .= "CPU_QUOTA_PERIOD=" . $v_cpu_quota_period . "\n";
-	$pkg .= "MEMORY_LIMIT=" . $v_memory_limit . "\n";
-	$pkg .= "SWAP_LIMIT=" . $v_swap_limit . "\n";
-	$pkg .= "DOCKER_LIMIT=" . $v_docker_limit . "\n";
-	$pkg .= "BANDWIDTH=" . $v_bandwidth . "\n";
-	$pkg .= "SHELL=" . $v_shell . "\n";
-	$pkg .= "BACKUPS=" . $v_backups . "\n";
-	$pkg .= "BACKUPS_INCREMENTAL=" . $v_backups_incremental . "\n";
-	$pkg .= "TIME=" . $v_time . "\n";
-	$pkg .= "DATE=" . $v_date . "\n";
+		$v_time = quoteshellarg(date("H:i:s"));
+		$v_date = quoteshellarg(date("Y-m-d"));
 
-	$tmpfile = tempnam("/tmp/", "hst_");
-	$fp = fopen($tmpfile, "w");
-	fwrite($fp, $pkg);
-	exec(
-		HESTIA_CMD . "h-add-user-package " . $tmpfile . " " . $v_package . " yes",
-		$output,
-		$return_var,
-	);
-	check_return_code($return_var, $output);
-	unset($output);
+		// Save package file on a fs
+		$pkg = "WEB_TEMPLATE=" . $v_web_template . "\n";
+		$pkg .= "BACKEND_TEMPLATE=" . $v_backend_template . "\n";
+		$pkg .= "PROXY_TEMPLATE=" . $v_proxy_template . "\n";
+		$pkg .= "WEB_DOMAINS=" . $v_web_domains . "\n";
+		$pkg .= "WEB_ALIASES=" . $v_web_aliases . "\n";
+		$pkg .= "MAIL_DOMAINS=" . $v_mail_domains . "\n";
+		$pkg .= "MAIL_ACCOUNTS=" . $v_mail_accounts . "\n";
+		$pkg .= "RATE_LIMIT=" . $v_ratelimit . "\n";
+		$pkg .= "DATABASES=" . $v_databases . "\n";
+		$pkg .= "CRON_JOBS=" . $v_cron_jobs . "\n";
+		$pkg .= "DISK_QUOTA=" . $v_disk_quota . "\n";
+		$pkg .= "CPU_QUOTA=" . $v_cpu_quota . "\n";
+		$pkg .= "CPU_QUOTA_PERIOD=" . $v_cpu_quota_period . "\n";
+		$pkg .= "MEMORY_LIMIT=" . $v_memory_limit . "\n";
+		$pkg .= "SWAP_LIMIT=" . $v_swap_limit . "\n";
+		$pkg .= "DOCKER_LIMIT=" . $v_docker_limit . "\n";
+		$pkg .= "BANDWIDTH=" . $v_bandwidth . "\n";
+		$pkg .= "SHELL=" . $v_shell . "\n";
+		$pkg .= "BACKUPS=" . $v_backups . "\n";
+		$pkg .= "BACKUPS_INCREMENTAL=" . $v_backups_incremental . "\n";
+		$pkg .= "TIME=" . $v_time . "\n";
+		$pkg .= "DATE=" . $v_date . "\n";
 
-	fclose($fp);
-	unlink($tmpfile);
-
-	// Propagate new package
-	exec(HESTIA_CMD . "h-update-user-package " . $v_package . " 'json'", $output, $return_var);
-	check_return_code($return_var, $output);
-	unset($output);
-
-	if ($v_package_new != $v_package) {
+		$tmpfile = tempnam("/tmp/", "hst_");
+		$fp = fopen($tmpfile, "w");
+		fwrite($fp, $pkg);
 		exec(
-			HESTIA_CMD . "h-rename-user-package " . $v_package . " " . $v_package_new,
+			HESTIA_CMD . "h-add-user-package " . $tmpfile . " " . $v_package . " yes",
 			$output,
 			$return_var,
 		);
+		fclose($fp);
+		// Removed before the return code is judged: check_return_code can end the request, and the
+		// package file would stay behind in /tmp.
+		unlink($tmpfile);
 		check_return_code($return_var, $output);
 		unset($output);
-	}
-	// Set success message
-	if (empty($_SESSION["error_msg"])) {
-		$_SESSION["ok_msg"] = _("Changes have been saved.");
+
+		// Propagate new package
+		exec(HESTIA_CMD . "h-update-user-package " . $v_package . " 'json'", $output, $return_var);
+		check_return_code($return_var, $output);
+		unset($output);
+
+		if ($v_package_new != $v_package) {
+			exec(
+				HESTIA_CMD . "h-rename-user-package " . $v_package . " " . $v_package_new,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+		}
+		// Set success message
+		if (empty($_SESSION["error_msg"])) {
+			$_SESSION["ok_msg"] = _("Changes have been saved.");
+		}
 	}
 }
 

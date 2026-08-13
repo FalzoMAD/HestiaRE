@@ -46,9 +46,7 @@ if (!empty($_POST["save"])) {
 }
 
 // List config
-exec(HESTIA_CMD . "h-list-sys-php-config json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-unset($output);
+$data = cli_json("h-list-sys-php-config json");
 $v_memory_limit = $data["CONFIG"]["memory_limit"];
 $v_max_execution_time = $data["CONFIG"]["max_execution_time"];
 $v_max_input_time = $data["CONFIG"]["max_input_time"];

@@ -1,11 +1,14 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
+
 $TAB = "BACKUP";
 
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
-function getTransByType($type) {
+function getTransByType($type)
+{
 	switch ($type) {
 		case "dir":
 			echo _("Directory");
@@ -23,20 +26,13 @@ function getTransByType($type) {
 
 // Data & Render page
 if (empty($_GET["snapshot"])) {
-	exec(HESTIA_CMD . "h-list-user-backups-restic $user json", $output, $return_var);
-	$data = json_decode(implode("", $output), true);
-	if (is_array($data)) {
-		$data = array_reverse($data);
-	} else {
-		$data = "";
-	}
+	$data = array_reverse(cli_json("h-list-user-backups-restic $user json"));
 
 	render_page($user, $TAB, "list_backup_incremental");
 } else {
 	if (empty($_GET["browse"])) {
 		$snapshot = quoteshellarg($_GET["snapshot"]);
-		exec(HESTIA_CMD . "h-list-user-backup-restic $user $snapshot json", $output, $return_var);
-		$data = json_decode(implode("", $output), true);
+		$data = cli_json("h-list-user-backup-restic $user $snapshot json");
 		render_page($user, $TAB, "list_backup_detail_incremental");
 	} else {
 		if (empty($_GET["folder"])) {

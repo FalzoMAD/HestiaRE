@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
@@ -104,14 +105,10 @@ if (!empty($_POST["ok"])) {
 }
 
 // List network interfaces
-exec(HESTIA_CMD . "h-list-sys-interfaces 'json'", $output, $return_var);
-$interfaces = json_decode(implode("", $output), true);
-unset($output);
+$interfaces = cli_json("h-list-sys-interfaces 'json'");
 
 // List users
-exec(HESTIA_CMD . "h-list-sys-users 'json'", $output, $return_var);
-$users = json_decode(implode("", $output), true);
-unset($output);
+$users = cli_json("h-list-sys-users 'json'");
 
 if (empty($v_ip)) {
 	$v_ip = "";

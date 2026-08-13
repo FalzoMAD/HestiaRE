@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
@@ -7,9 +8,7 @@ $TAB = "MAIL";
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
-exec(HESTIA_CMD . "h-list-sys-webmail json", $output, $return_var);
-$webmail_clients = json_decode(implode("", $output), true);
-unset($output);
+$webmail_clients = cli_json("h-list-sys-webmail json");
 
 if (!empty($_GET["domain"])) {
 	$v_domain = $_GET["domain"];
@@ -28,6 +27,12 @@ if (!empty($v_domain)) {
 	unset($output);
 	$v_webmail_alias = $data[$v_domain]["WEBMAIL_ALIAS"];
 }
+
+// One gate per conditionally rendered control: rendered on it, read on it.
+// On a new domain "not installed" is the same as "off".
+$offer_webmail = !empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"]);
+$offer_antispam = !empty($_SESSION["ANTISPAM_SYSTEM"]);
+$offer_antivirus = !empty($_SESSION["ANTIVIRUS_SYSTEM"]);
 
 // Check POST request for mail domain
 if (!empty($_POST["ok"])) {
@@ -50,18 +55,10 @@ if (!empty($_POST["ok"])) {
 	}
 
 	// Check antispam option
-	if (!empty($_POST["v_antispam"])) {
-		$v_antispam = "yes";
-	} else {
-		$v_antispam = "no";
-	}
+	$v_antispam = post_checkbox("v_antispam", $offer_antispam, "no", "yes", "no");
 
 	// Check antivirus option
-	if (!empty($_POST["v_antivirus"])) {
-		$v_antivirus = "yes";
-	} else {
-		$v_antivirus = "no";
-	}
+	$v_antivirus = post_checkbox("v_antivirus", $offer_antivirus, "no", "yes", "no");
 
 	// Check dkim option
 	if (!empty($_POST["v_dkim"])) {
@@ -96,7 +93,7 @@ if (!empty($_POST["ok"])) {
 		unset($output);
 	}
 
-	if (!empty($_POST["v_reject"]) && $v_antispam == "yes") {
+	if (post_checkbox("v_reject", $offer_antispam, "no", "yes", "no") == "yes" && $v_antispam == "yes") {
 		exec(
 			HESTIA_CMD . "h-add-mail-domain-reject " . $user . " " . $v_domain . " yes",
 			$output,
@@ -106,7 +103,7 @@ if (!empty($_POST["ok"])) {
 		unset($output);
 	}
 
-	if (!empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"])) {
+	if ($offer_webmail) {
 		if (empty($_SESSION["error_msg"])) {
 			if (!empty($_POST["v_webmail"])) {
 				$v_webmail = quoteshellarg($_POST["v_webmail"]);
@@ -128,7 +125,7 @@ if (!empty($_POST["ok"])) {
 		}
 	}
 
-	if (!empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"])) {
+	if ($offer_webmail) {
 		if (empty($_POST["v_webmail"])) {
 			if (empty($_SESSION["error_msg"])) {
 				exec(

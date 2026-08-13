@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
@@ -42,9 +43,7 @@ $v_date = $data[$v_ip]["DATE"];
 $v_time = $data[$v_ip]["TIME"];
 
 // List users
-exec(HESTIA_CMD . "h-list-sys-users 'json'", $output, $return_var);
-$users = json_decode(implode("", $output), true);
-unset($output);
+$users = cli_json("h-list-sys-users 'json'");
 
 // Check POST request
 if (!empty($_POST["save"])) {

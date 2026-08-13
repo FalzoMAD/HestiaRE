@@ -17,5 +17,3 @@ $config["zipdownload_selection"] = "100MB";
 
 // Charset to use for filenames inside the zip
 $config["zipdownload_charset"] = "ISO-8859-1";
-
-?>

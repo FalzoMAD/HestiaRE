@@ -18,7 +18,8 @@ if (substr($_SERVER["SCRIPT_FILENAME"], 0, 22) == "/usr/local/hestia/bin/") {
 	$check_csrf = false;
 }
 
-function checkStrictness($level) {
+function checkStrictness($level)
+{
 	if ($level >= $_SESSION["POLICY_CSRF_STRICTNESS"]) {
 		return true;
 	} else {
@@ -30,7 +31,8 @@ function checkStrictness($level) {
 	}
 }
 
-function prevent_post_csrf() {
+function prevent_post_csrf()
+{
 	if (!empty($_SERVER["REQUEST_METHOD"])) {
 		if ($_SERVER["REQUEST_METHOD"] === "POST") {
 			if (!empty($_SERVER["HTTP_HOST"])) {
@@ -75,7 +77,8 @@ function prevent_post_csrf() {
 	}
 }
 
-function prevent_get_csrf() {
+function prevent_get_csrf()
+{
 	if (!empty($_SERVER["REQUEST_METHOD"])) {
 		if ($_SERVER["REQUEST_METHOD"] === "GET") {
 			if (!empty($_SERVER["HTTP_HOST"])) {

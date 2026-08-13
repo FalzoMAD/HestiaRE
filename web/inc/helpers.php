@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 require_once __DIR__ . '/cloudflare-ip.php';
@@ -28,7 +29,8 @@ const E_RESTART = 20;
 const E_API_DISABLED = 21;
 
 if (!function_exists("tohtml")) {
-	function tohtml(string|int|float|bool|null $str): string {
+	function tohtml(string|int|float|bool|null $str): string
+	{
 		if ($str === null || $str === "") {
 			return "";
 		}
@@ -55,7 +57,8 @@ if (!function_exists("tohtml")) {
  * @param int $default
  * @return int
  */
-function exit_code_to_http_code(int $exit_code, int $default = 400): int {
+function exit_code_to_http_code(int $exit_code, int $default = 400): int
+{
 	switch ($exit_code) {
 		case 0:
 			return 200;
@@ -64,10 +67,10 @@ function exit_code_to_http_code(int $exit_code, int $default = 400): int {
 			return 400;
 		case E_INVALID:
 			return 422;
-		// case E_NOTEXIST:
-		// 	return 404;
-		// case E_EXISTS:
-		// 	return 302;
+			// case E_NOTEXIST:
+			// 	return 404;
+			// case E_EXISTS:
+			// 	return 302;
 		case E_PASSWORD:
 			return 401;
 		case E_SUSPENDED:
@@ -76,16 +79,17 @@ function exit_code_to_http_code(int $exit_code, int $default = 400): int {
 		case E_FORBIDDEN:
 		case E_API_DISABLED:
 			return 401;
-		// return 403;
+			// return 403;
 		case E_DISABLED:
 			return 400;
-		// return 503;
+			// return 503;
 	}
 
 	return $default;
 }
 
-function check_local_ip($addr) {
+function check_local_ip($addr)
+{
 	if (in_array($addr, [$_SERVER["SERVER_ADDR"], "127.0.0.1"], true)) {
 		return true;
 	} else {
@@ -93,7 +97,8 @@ function check_local_ip($addr) {
 	}
 }
 
-function get_real_user_ip() {
+function get_real_user_ip()
+{
 	$ip = "";
 
 	if (
@@ -128,7 +133,8 @@ function get_real_user_ip() {
  * @param string $user A username for save in the user history ou 'system' to save in Hestia history.
  * @return int The script result code.
  */
-function hst_add_history_log($message, $category = "System", $level = "Info", $user = "system") {
+function hst_add_history_log($message, $category = "System", $level = "Info", $user = "system")
+{
 	//$message = ucfirst($message);
 	//$message = str_replace("'", "`", $message);
 	$category = ucfirst(strtolower($category));
@@ -148,7 +154,8 @@ function hst_add_history_log($message, $category = "System", $level = "Info", $u
 	return $return_var;
 }
 
-function get_hostname() {
+function get_hostname()
+{
 	$badValues = [
 		false,
 		null,
@@ -174,8 +181,47 @@ function get_hostname() {
 	return $ret3;
 }
 
-function display_title($tab) {
+function display_title($tab)
+{
 	$array1 = ["{{page}}", "{{hostname}}", "{{ip}}", "{{appname}}"];
 	$array2 = [$tab, get_hostname(), $_SERVER["REMOTE_ADDR"], $_SESSION["APP_NAME"]];
 	return str_replace($array1, $array2, $_SESSION["TITLE"]);
+}
+
+/**
+ * A control the form did not render sends no key at all. Reading it as "" turns "not offered" into
+ * "cleared", which is a silent rewrite (THEME, SHELL, DOCKER_LIMIT) or a fatal at the CLI boundary
+ * (quoteshellarg(null)).
+ *
+ * $offered is the server-side gate the view rendered on, and it is what decides - not the presence
+ * of the key, which comes from the client. Deciding on presence alone would let a POST carry a
+ * control the user was never offered, which is a policy bypass wherever a select sits behind one
+ * (POLICY_USER_CHANGE_THEME is the plain case).
+ *
+ * The gate is evaluated at write time. That is not always the state the submitted form was rendered
+ * under - a second session can flip a model switch in between - but it is server-side and cannot be
+ * forged, which a hidden witness field in the form could be.
+ */
+function post_or_keep(string $key, bool $offered, $stored)
+{
+	if (!$offered) {
+		return $stored;
+	}
+	return array_key_exists($key, $_POST) ? $_POST[$key] : $stored;
+}
+
+/**
+ * Checkboxes need the gate for a second reason: unchecked is an absent key too, so "keep" alone
+ * would make the box impossible to clear.
+ *
+ * $on and $off carry no default on purpose. The record space (yes/no) and the form space (on/"")
+ * are not the same, and a default would make the convenient call the wrong one - writing "" where
+ * the record wants "no" is the silent rewrite this whole path exists to prevent.
+ */
+function post_checkbox(string $key, bool $offered, $stored, string $on, string $off)
+{
+	if (!$offered) {
+		return $stored;
+	}
+	return empty($_POST[$key]) ? $off : $on;
 }

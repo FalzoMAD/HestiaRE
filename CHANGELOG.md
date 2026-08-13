@@ -12,7 +12,161 @@ opens above it.
 
 ## Unreleased
 
-_Nothing yet._
+### Fixed
+
+- **The system configuration repair never ran** (#654). `h-repair-sys-config` sources only
+  `func/main.sh`, which does not pull in `func/syshealth.sh`, so both of its modes answered
+  `command not found` - and then logged the repair as executed. It was the only command calling a
+  `syshealth_*` function without the source line every other one has. With it working, a running
+  box gained **25 absent keys**, most of the `POLICY_*` set among them; those reached the panel as
+  `""`, which reads as the permissive side at the gates that consume them. The installer now runs
+  the repair as its last configure step, so a fresh box gets the whole set from one place.
+- **A config key holding no value counted as present** (#654). `check_key_exists()` greps `^KEY=`,
+  so `KEY=''` matched and the repair was skipped. An empty value is repaired now - but only where
+  the block's own default is not empty, which excludes the nine keys that default to `''` on
+  purpose without naming them anywhere. Two keys are exempt because a `h-delete-sys-*` empties them
+  deliberately (`DB_PMA_ALIAS`, `WEBMAIL_SYSTEM`): repairing those would re-register a component
+  that was just removed, verified by uninstalling the webmail for real and running the repair.
+- **`POLICY_SYSTEM_PROTECTED_ADMIN` had two homes that disagreed** (#654) - the installer wrote
+  `yes`, the repair `no`. Harmless while the repair only fired on an absent key, and an
+  admin-protection downgrade the moment it fires on an empty one. The repair says `yes` now and the
+  installer seed is gone, as is the one for `POLICY_USER_CHANGE_THEME`: one home per default.
+- **`BACKEND_PORT` lost a repair that pointed at a deleted file** (#654). It scraped the port out of
+  the hestia-nginx config Caddy replaced, so it produced nothing; the value is written at install
+  time and every consumer falls back to 8083.
+
+### Changed
+
+- **`cli_json()` states its contract instead of implying it** (#578). It now declares `: array`, so
+  "always an array" is checked rather than agreed, and a caller may drop its own `is_array()` on
+  the strength of it. The same declaration names the limit it always had: a command whose JSON is a
+  scalar loses its value there, silently, and two comparisons then read the other way round. Those
+  callers take the new `cli_value()`, which answers `null` - the state they already test for.
+- **The panel reads a CLI result in one place** (#578). The remaining 61 sites that decoded a
+  command's JSON by hand now go through `cli_json()`, which closes the class the fatal sites above
+  belonged to rather than only its instances. Two shapes were deliberately left alone: a site whose
+  exit code or raw output is still consulted (a `check_*()` above the decode), and one whose value
+  is a scalar rather than a list - `reset/index.php` reads a reset-key timestamp there and compares
+  it against `null` and against `time()`, and an empty array answers both the other way round.
+  Side effect worth having: `cli_json()` owns its `$output`, so 4 sites where a second `exec()`
+  would have appended to the first one's output are gone with it.
+- **A conditionally rendered control now reads through the gate that rendered it** (#649). A control
+  the form did not render sends no key, and every form carried its own idea of what that means -
+  three separate patches of the same class in one week. `post_or_keep()` and `post_checkbox()` hold
+  the rule now, and each gate is named once so the view and the POST section read the same
+  expression instead of two hand-written copies that drift. Converted across the web domain, user,
+  package, mail and server forms; a hidden witness field was rejected because it is client-supplied
+  and a forged one would claim a control the user was never offered.
+- **A customer could set a control the policy had taken away from them** (#649). With
+  `POLICY_USER_CHANGE_THEME=no` the theme select is not rendered, but the handler read the key
+  whenever a request carried one - so a hand-made POST set the theme anyway. Value controls now
+  decide on the server-side gate, not on the presence of the key, which is what the checkbox path
+  already did.
+- **The SSH key list warned on a user without keys** (#649): the command answers with nothing and
+  the template iterated a null.
+- **Two commands stopped running on every save** (#649): enabling HTTP/3 and applying a cache
+  duration now run off the difference to the stored field. That is the intended semantics, but it
+  also drops a side effect - a vhost that had drifted was quietly re-applied by any save, and only
+  an explicit rebuild does that now.
+
+### Changed
+
+- **`h-update-user-cgroup` refuses to run while `RESOURCES_LIMIT` is off** (#650). All four callers
+  already gated, so the behaviour is unchanged - but the safety lived outside the command, where a
+  fifth caller would inherit the trap without being told. The check is idempotent and does not
+  hinder `h-add-sys-cgroups`, which sets the switch before it applies anything.
+
+### Changed
+
+- **PHP has a format contract again** (#647). Upstream formats with prettier, which needs node and
+  therefore cannot run on our runner, so nothing had enforced the style since the fork - and
+  php-cs-fixer, the node-free replacement, defaults to PSR-12 with four spaces and rewrote whatever
+  it touched. `.php-cs-fixer.dist.php` pins the actual house style (PSR-12, tabs) and the tree was
+  formatted to match it once; vendored PHP is excluded by deriving the list from `VENDORED.json`.
+
+### Fixed
+
+- **A failed CLI read redirected and then rendered the page anyway** (#578).
+  `check_return_code_redirect()` sent a `Location` header without stopping, so all 14 call sites
+  carried on parsing a record the command had never produced - the null derefs above are downstream
+  of exactly that. Same omission in the session-timeout branch of `main.php`, which rendered on
+  against the session it had just destroyed while its sibling branch exited.
+- **Nine forms silently offered an empty list** (#578) where a failed call left a null to iterate:
+  the package and language selects on add/edit user, the language list on the server page, the
+  ipset lists on the firewall forms, the IP select on the web domain form, the backup exclusions,
+  the SSH key duplicate check and the PHP-FPM services list.
+- **A suspended customer was served a rendered page** (#578). The suspension check sat in
+  `top_panel()`, which `render_page()` calls *after* including `header.php` - with output buffering
+  off the headers were already gone, so the `Location` was never sent and, without an `exit()`, the
+  rest of the page rendered against the session just destroyed. Measured on a real suspended
+  account: 13883 bytes of complete HTML and no redirect header at all. The check now runs in the
+  session block before a single byte goes out, and answers 302 with an empty body. An admin
+  impersonating a suspended customer is still not logged out, as before.
+- **The logout did not rotate the session id** (#578), so an id captured beforehand was the id the
+  browser kept and the next request adopted. `/logout/` destroyed the session with three calls of
+  its own instead of `destroy_sessions()`, which now starts a fresh session and regenerates.
+  Measured across a real logout: the cookie was unchanged before, and changes now. #438 had already
+  rotated at the impersonation transitions; this was the plainer case still open.
+- **`$is_real_root_user` compared two empty strings** (#578). With `ROOT_USER` absent the `?? ""`
+  form answered yes for an empty session user - permissive at the one line that decides who the
+  root account is, and it gates the root-only server policies. Both sides must now be non-empty.
+- **An unreadable system config left every policy standing open** (#578). `load_hestia_config()`
+  copies `h-list-sys-config` into the session and never checked whether it got anything; a failed
+  call left the session without a single policy key, and an absent key is the permissive reading at
+  every gate that gets it - the password reset was allowed although the admin had switched it off,
+  the protected-admin flag read as unset, and both log policies read as granted. Measured, not
+  reasoned: with an empty session those five gates decide open. The panel now answers 503 rather
+  than deciding without its own configuration; a table of closed per-policy defaults was rejected
+  because it goes stale the day a policy is added. `top_panel()` gained the matching guard - a user
+  row that comes back empty (exit 0, no output) used to pass the suspension check and write `null`
+  into `userContext`.
+- **23 panel pages died instead of showing an empty list when a CLI call failed** (#578). The pages
+  read a command's JSON without ever looking at its exit code; a failed call leaves the output
+  empty, `json_decode("")` is `null`, and the first `ksort()`/`array_reverse()`/`array_keys()` on it
+  is a TypeError under PHP 8. These are the list pages - the first thing a user sees after logging
+  in. They now read through `cli_json()`, which was introduced with #575 for the two unauthenticated
+  entry points. Counted from scratch rather than from the issue's table, which had missed
+  `array_reverse()`: with it the sort-order branch is fatal too, so the pages failed regardless of
+  which sort order the user had set.
+- **Three saves that wrote a field nobody touched** (#649). A web domain materialised
+  `FASTCGI_CACHE`/`FASTCGI_DURATION` on its first save on every model that does not render the
+  cache control, because with nothing stored the duration field displays a 2m default and the
+  absent key was compared against it - which also ran `h-delete-fastcgi-cache` on a box without an
+  nginx web role. A mail domain lost `ANTIVIRUS` on any plain save wherever no antivirus system is
+  installed. The phpMyAdmin alias was rewritten from an absent key on a box without a mysql host.
+- **A new package wrote its resource limits unquoted** (#649) while `RESOURCES_LIMIT` was off, so
+  four lines in the package file disagreed with the quoting of every other line in it.
+
+- **A package could not be saved from the panel on an apache web role** (#644), which is three of
+  the four models. The web-template select renders empty there - the apache templates moved to
+  `share/` and are not selectable - and an empty select submits no key at all, so the handler read
+  one that was never sent and died with a fatal 500. The row is only offered where something is
+  selectable now, and a rejected form no longer falls through into the write path, which used to
+  save the package regardless of its own validation errors. Saving also stopped blanking
+  `CPU_QUOTA`, `MEMORY_LIMIT` and `SWAP_LIMIT`: their controls only exist while `RESOURCES_LIMIT`
+  is on, and an absent control is not a cleared value. The same file carried four more of the
+  class: a three-`r` typo left the shell check dead while an absent control silently demoted the
+  package to `nologin`, `DOCKER_LIMIT` fell back to a literal instead of the stored value, and the
+  backend and proxy rows demanded fields they never offered when their lists were empty. The
+  system-package lock also read `$_GET` while the write used `$_POST`, so a crafted POST walked
+  around it.
+- **Four dead ends found by clicking every panel page** (#644): `/list/web-log/` answered a URL
+  without a domain with a fatal, the incremental-backup list counted a string when its command
+  failed, `/list/notifications/` rendered a template that has never existed, and the add-package
+  form read a variable that only the POST path sets. A request without a CSRF token no longer logs
+  a warning before being refused.
+- **Saving a user replaced the theme they had chosen** (#645). No option in the select carried
+  `selected`, because the marker was keyed on a session variable rather than on the value being
+  rendered - and an unmarked select submits its first option, `dark`. The two policy checks that
+  decide whether the session even carries a theme also disagreed on their default (`!== "yes"` at
+  login against `=== "no"` everywhere else), so the policy shipping unset dropped it on every
+  login. The policy ships with an empty value, and the repair that would have set it only fired on
+  a *missing* key - it now treats empty as missing.
+
+- **Every domain rebuild on an apache-only box wrote to `/etc/nginx`** (#642). `nginx -v` without
+  the binary prints an error message, which carries no `/` for `cut` to split on and sorts above
+  every real version - so the box read as "nginx 1.25.1 or newer" and tried to drop the http2
+  marker into a directory apache-only does not have. The probe fails closed now.
 
 ## v0.15.0 (2026-08-13)
 

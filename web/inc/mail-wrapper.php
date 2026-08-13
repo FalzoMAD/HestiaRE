@@ -1,5 +1,6 @@
 #!/usr/bin/php8.3
 <?php
+
 if (empty($argv[1])) {
 	echo "ERROR: not enough arguments\n";
 	echo "USAGE: mail-wrapper.php -s SUBJECT EMAIL [NOTIFY]\n";
@@ -17,8 +18,7 @@ define("NO_AUTH_REQUIRED", true);
 include "/usr/local/hestia/web/inc/main.php";
 
 // Set system language
-exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
+$data = cli_json("h-list-sys-config json");
 if (!empty($data["config"]["LANGUAGE"])) {
 	$_SESSION["language"] = $data["config"]["LANGUAGE"];
 } else {
@@ -40,4 +40,3 @@ if (!empty($to) && !empty($subject)) {
 }
 
 session_destroy();
-

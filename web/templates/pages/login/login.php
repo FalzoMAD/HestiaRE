@@ -11,11 +11,11 @@
 			<p class="error"><?= tohtml($error) ?></p>
 		<?php } ?>
 		<div class="u-mb20">
-			<label for="username" class="form-label"><?= tohtml( _("Username")) ?></label>
+			<label for="username" class="form-label"><?= tohtml(_("Username")) ?></label>
 			<input type="text" class="form-control" name="user" id="username" autocomplete="username" required autofocus>
 		</div>
 		<button type="submit" class="button">
-			<i class="fas fa-right-to-bracket"></i><?= tohtml( _("Next")) ?>
+			<i class="fas fa-right-to-bracket"></i><?= tohtml(_("Next")) ?>
 		</button>
 	</form>
 </div>

@@ -46,9 +46,7 @@ if (!empty($_POST["save"])) {
 }
 
 // List config
-exec(HESTIA_CMD . "h-list-sys-nginx-config json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-unset($output);
+$data = cli_json("h-list-sys-nginx-config json");
 $v_worker_processes = $data["CONFIG"]["worker_processes"];
 $v_worker_connections = $data["CONFIG"]["worker_connections"];
 $v_send_timeout = $data["CONFIG"]["send_timeout"];

@@ -19,7 +19,8 @@ $session_name = "SignonSession";
 session_name($session_name);
 @session_start();
 
-function session_invalid() {
+function session_invalid()
+{
 	global $session_name;
 	session_destroy();
 	setcookie($session_name, "", -1, "/");

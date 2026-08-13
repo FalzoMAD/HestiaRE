@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
@@ -25,9 +26,7 @@ $v_username = $user;
 if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_domain = $_GET["domain"];
 
-	exec(HESTIA_CMD . "h-list-sys-webmail json", $output, $return_var);
-	$webmail_clients = json_decode(implode("", $output), true);
-	unset($output);
+	$webmail_clients = cli_json("h-list-sys-webmail json");
 
 	exec(
 		HESTIA_CMD . "h-list-mail-domain " . $user . " " . quoteshellarg($v_domain) . " json",
@@ -55,18 +54,7 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_smtp_relay_port = $data[$v_domain]["U_SMTP_RELAY_PORT"];
 	$v_smtp_relay_user = $data[$v_domain]["U_SMTP_RELAY_USERNAME"];
 
-	exec(
-		HESTIA_CMD .
-			"h-list-mail-domain-relay-exclude " .
-			$user .
-			" " .
-			quoteshellarg($v_domain) .
-			" json",
-		$output,
-		$return_var,
-	);
-	$exclude_data = json_decode(implode("", $output), true);
-	unset($output);
+	$exclude_data = cli_json("h-list-mail-domain-relay-exclude " . $user . " " . quoteshellarg($v_domain) . " json");
 	$v_smtp_relay_exclude = str_replace(
 		",",
 		"\n",
@@ -79,35 +67,13 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_spam_subject_tag = $data[$v_domain]["U_SPAM_SUBJECT_TAG"] ?? "";
 
 	// Per-domain sender white/blacklist (#330)
-	exec(
-		HESTIA_CMD .
-			"h-list-mail-domain-spam-whitelist " .
-			$user .
-			" " .
-			quoteshellarg($v_domain) .
-			" json",
-		$output,
-		$return_var,
-	);
-	$whitelist_data = json_decode(implode("", $output), true);
-	unset($output);
+	$whitelist_data = cli_json("h-list-mail-domain-spam-whitelist " . $user . " " . quoteshellarg($v_domain) . " json");
 	$v_spam_whitelist = str_replace(
 		",",
 		"\n",
 		$whitelist_data[$v_domain]["SPAM_WHITELIST"] ?? "",
 	);
-	exec(
-		HESTIA_CMD .
-			"h-list-mail-domain-spam-blacklist " .
-			$user .
-			" " .
-			quoteshellarg($v_domain) .
-			" json",
-		$output,
-		$return_var,
-	);
-	$blacklist_data = json_decode(implode("", $output), true);
-	unset($output);
+	$blacklist_data = cli_json("h-list-mail-domain-spam-blacklist " . $user . " " . quoteshellarg($v_domain) . " json");
 	$v_spam_blacklist = str_replace(
 		",",
 		"\n",
@@ -122,18 +88,7 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 
 	$v_ssl = $data[$v_domain]["SSL"];
 	if (!empty($v_ssl)) {
-		exec(
-			HESTIA_CMD .
-				"h-list-mail-domain-ssl " .
-				$user .
-				" " .
-				quoteshellarg($v_domain) .
-				" json",
-			$output,
-			$return_var,
-		);
-		$ssl_str = json_decode(implode("", $output), true);
-		unset($output);
+		$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
 		$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
 		$v_ssl_key = $ssl_str[$v_domain]["KEY"];
 		$v_ssl_ca = $ssl_str[$v_domain]["CA"];
@@ -204,26 +159,24 @@ if (!empty($_GET["domain"]) && !empty($_GET["account"])) {
 
 	// Parse autoreply
 	if ($v_autoreply == "yes") {
-		exec(
-			HESTIA_CMD .
-				"h-list-mail-account-autoreply " .
-				$user .
-				" " .
-				quoteshellarg($v_domain) .
-				" " .
-				quoteshellarg($v_account) .
-				" json",
-			$output,
-			$return_var,
+		$autoreply_str = cli_json(
+			"h-list-mail-account-autoreply " . $user . " " . quoteshellarg($v_domain) . " " . quoteshellarg($v_account) . " json",
 		);
-		$autoreply_str = json_decode(implode("", $output), true);
-		unset($output);
 		$v_autoreply_message = $autoreply_str[$v_account]["MSG"];
 		$v_autoreply_message = str_replace("\\n", "\n", $v_autoreply_message);
 	} else {
 		$v_autoreply_message = "";
 	}
 }
+
+// One gate per conditionally rendered control: rendered on it, read on it.
+// Webmail also needs IMAP: the view must not offer what the POST would ignore
+$offer_webmail = !empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"]);
+$offer_antispam = !empty($_SESSION["ANTISPAM_SYSTEM"]);
+$offer_antivirus = !empty($_SESSION["ANTIVIRUS_SYSTEM"]);
+$spam_tuning_allowed =
+	$_SESSION["userContext"] === "admin" ||
+	($_SESSION["POLICY_SPAM_CUSTOMER_TUNING"] ?? "yes") !== "no";
 
 // Check POST request for mail domain
 if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])) {
@@ -239,8 +192,12 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	check_return_code_redirect($return_var, $output, "/list/mail/");
 	unset($output);
 
+	$post_antispam = post_checkbox("v_antispam", $offer_antispam, $v_antispam, "yes", "no");
+	$post_antivirus = post_checkbox("v_antivirus", $offer_antivirus, $v_antivirus, "yes", "no");
+	$post_reject = post_checkbox("v_reject", $offer_antispam, $v_reject, "yes", "no");
+
 	// Delete antispam
-	if ($v_antispam == "yes" && empty($_POST["v_antispam"]) && empty($_SESSION["error_msg"])) {
+	if ($v_antispam == "yes" && $post_antispam != "yes" && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-delete-mail-domain-antispam " .
@@ -256,7 +213,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	}
 
 	// Add antispam
-	if ($v_antispam == "no" && !empty($_POST["v_antispam"]) && empty($_SESSION["error_msg"])) {
+	if ($v_antispam == "no" && $post_antispam == "yes" && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-add-mail-domain-antispam " .
@@ -272,7 +229,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	}
 
 	// Delete antivirus
-	if ($v_antivirus == "yes" && empty($_POST["v_antivirus"]) && empty($_SESSION["error_msg"])) {
+	if ($v_antivirus == "yes" && $post_antivirus != "yes" && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-delete-mail-domain-antivirus " .
@@ -288,7 +245,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	}
 
 	// Add antivirus
-	if ($v_antivirus == "no" && !empty($_POST["v_antivirus"]) && empty($_SESSION["error_msg"])) {
+	if ($v_antivirus == "no" && $post_antivirus == "yes" && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-add-mail-domain-antivirus " .
@@ -376,7 +333,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		unset($output);
 	}
 
-	if (!empty($_POST["v_reject"]) && $v_antispam == "yes" && $v_reject != "yes") {
+	if ($post_reject == "yes" && $v_antispam == "yes" && $v_reject != "yes") {
 		exec(
 			HESTIA_CMD . "h-add-mail-domain-reject " . $user . " " . $v_domain . " yes",
 			$output,
@@ -386,7 +343,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		$v_reject = "yes";
 		unset($output);
 	}
-	if (empty($_POST["v_reject"]) && $v_reject == "yes") {
+	if ($post_reject != "yes" && $v_reject == "yes") {
 		exec(
 			HESTIA_CMD . "h-delete-mail-domain-reject " . $user . " " . $v_domain . " yes",
 			$output,
@@ -404,8 +361,6 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	if (empty($_SESSION["error_msg"]) && isset($_POST["v_spam_sensitivity"])) {
 		$spam_presets = ["tolerant" => "7.0", "normal" => "5.0", "strict" => "3.5"];
 		$spam_is_admin = $_SESSION["userContext"] === "admin";
-		$spam_tuning_allowed =
-			$spam_is_admin || ($_SESSION["POLICY_SPAM_CUSTOMER_TUNING"] ?? "yes") !== "no";
 		if ($spam_tuning_allowed) {
 			// Mark threshold: preset or custom value; "default" clears the override
 			$spam_sensitivity = $_POST["v_spam_sensitivity"];
@@ -564,8 +519,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 				[
 					"whitelist" => "v_spam_whitelist",
 					"blacklist" => "v_spam_blacklist",
-				]
-				as $spam_list_kind => $spam_list_var
+				] as $spam_list_kind => $spam_list_var
 			) {
 				if (!empty($_SESSION["error_msg"])) {
 					break;
@@ -659,10 +613,11 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		unset($output);
 	}
 
-	if (!empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"])) {
+	$post_webmail = post_or_keep("v_webmail", $offer_webmail, $v_webmail);
+	if ($offer_webmail) {
 		if (empty($_SESSION["error_msg"])) {
-			if (!empty($_POST["v_webmail"])) {
-				$v_webmail = quoteshellarg($_POST["v_webmail"]);
+			if (!empty($post_webmail)) {
+				$v_webmail = quoteshellarg($post_webmail);
 				exec(
 					HESTIA_CMD .
 						"h-add-mail-domain-webmail " .
@@ -681,8 +636,8 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		}
 	}
 
-	if (!empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"])) {
-		if (empty($_POST["v_webmail"])) {
+	if ($offer_webmail) {
+		if (empty($post_webmail)) {
 			if (empty($_SESSION["error_msg"])) {
 				exec(
 					HESTIA_CMD . "h-delete-mail-domain-webmail " . $user . " " . $v_domain . " yes",
@@ -753,18 +708,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			$restart_web = "yes";
 			$restart_proxy = "yes";
 
-			exec(
-				HESTIA_CMD .
-					"h-list-mail-domain-ssl " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" json",
-				$output,
-				$return_var,
-			);
-			$ssl_str = json_decode(implode("", $output), true);
-			unset($output);
+			$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
 			$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
 			$v_ssl_key = $ssl_str[$v_domain]["KEY"];
 			$v_ssl_ca = $ssl_str[$v_domain]["CA"];
@@ -921,18 +865,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			$restart_web = "yes";
 			$restart_proxy = "yes";
 
-			exec(
-				HESTIA_CMD .
-					"h-list-mail-domain-ssl " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" json",
-				$output,
-				$return_var,
-			);
-			$ssl_str = json_decode(implode("", $output), true);
-			unset($output);
+			$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
 			$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
 			$v_ssl_key = $ssl_str[$v_domain]["KEY"];
 			$v_ssl_ca = $ssl_str[$v_domain]["CA"];

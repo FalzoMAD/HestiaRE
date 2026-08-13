@@ -1,4 +1,5 @@
 <?php
+
 error_reporting(null);
 $TAB = "BACKUP";
 
@@ -6,9 +7,7 @@ $TAB = "BACKUP";
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
 // Data
-exec(HESTIA_CMD . "h-list-user-backup-exclusions $user json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-unset($output);
+$data = cli_json("h-list-user-backup-exclusions $user json");
 // Render page
 render_page($user, $TAB, "list_backup_exclusions");
 

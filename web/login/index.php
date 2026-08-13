@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 define("NO_AUTH_REQUIRED", true);
@@ -116,7 +117,8 @@ if (isset($_SESSION["user"])) {
 	exit();
 }
 
-function authenticate_user($user, $password, $twofa = "") {
+function authenticate_user($user, $password, $twofa = "")
+{
 	unset($_SESSION["login"]);
 	if (verify_csrf($_POST, true)) {
 		$v_user = quoteshellarg($user);
@@ -364,7 +366,10 @@ function authenticate_user($user, $password, $twofa = "") {
 
 				// Set active user theme on login
 				$_SESSION["userTheme"] = $data[$user]["THEME"];
-				if ($_SESSION["POLICY_USER_CHANGE_THEME"] !== "yes") {
+				// Same meaning as inc/main.php and the edit view: only an explicit "no" withdraws the
+				// choice. Treating anything-but-yes as no dropped the theme on every login, because the
+				// policy ships unset.
+				if ($_SESSION["POLICY_USER_CHANGE_THEME"] === "no") {
 					unset($_SESSION["userTheme"]);
 				}
 

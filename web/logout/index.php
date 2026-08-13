@@ -1,5 +1,7 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
+
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 // Check token
@@ -37,9 +39,11 @@ if (!empty($_SESSION["look"])) {
 		);
 	}
 
-	unset($_SESSION);
-	session_unset();
-	session_destroy();
+	// destroy_sessions(), not the same three calls by hand: it also starts a fresh session and
+	// rotates the id. Destroying without that left the browser holding the id it arrived with, and
+	// the next request adopts it - so an id captured before the logout is the id of the session
+	// after the next login. Measured: the cookie did not change across a logout.
+	destroy_sessions();
 	header("Location: /login/");
 }
 exit();

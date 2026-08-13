@@ -46,9 +46,7 @@ if (!empty($_POST["save"])) {
 }
 
 // List config
-exec(HESTIA_CMD . "h-list-sys-mysql-config json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-unset($output);
+$data = cli_json("h-list-sys-mysql-config json");
 $v_max_user_connections = $data["CONFIG"]["max_user_connections"];
 $v_max_connections = $data["CONFIG"]["max_connections"];
 $v_wait_timeout = $data["CONFIG"]["wait_timeout"];

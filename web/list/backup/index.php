@@ -1,5 +1,7 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
+
 $TAB = "BACKUP";
 
 // Main include
@@ -7,24 +9,15 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
 // Data & Render page
 if (empty($_GET["backup"])) {
-	exec(HESTIA_CMD . "h-list-user-backups $user json", $output, $return_var);
-	$data = json_decode(implode("", $output), true);
+	$data = cli_json("h-list-user-backups $user json");
 	if ($_SESSION["userSortOrder"] == "name") {
 		ksort($data);
 	} else {
 		$data = array_reverse($data, true);
 	}
-	unset($output);
 	render_page($user, $TAB, "list_backup");
 } else {
-	exec(
-		HESTIA_CMD . "h-list-user-backup $user " . quoteshellarg($_GET["backup"]) . " json",
-		$output,
-		$return_var,
-	);
-	$data = json_decode(implode("", $output), true);
-	$data = array_reverse($data, true);
-	unset($output);
+	$data = array_reverse(cli_json("h-list-user-backup $user " . quoteshellarg($_GET["backup"]) . " json"), true);
 
 	render_page($user, $TAB, "list_backup_detail");
 }

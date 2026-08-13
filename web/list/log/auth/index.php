@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
@@ -17,8 +18,8 @@ if ($_SESSION["adminContext"] === "admin" && $_SESSION["look"] != "") {
 exec(HESTIA_CMD . "h-list-user-auth-log " . $user . " json", $output, $return_var);
 check_return_code_redirect($return_var, $output, "/");
 
-$data = json_decode(implode("", $output), true);
-$data = array_reverse($data);
+// Not cli_json(): the redirect above needs the raw $return_var and the command's own error text.
+$data = array_reverse(json_decode(implode("", $output), true) ?: []);
 unset($output);
 
 // Render page

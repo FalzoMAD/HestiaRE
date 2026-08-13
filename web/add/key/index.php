@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
@@ -34,9 +35,7 @@ if (!empty($_POST["ok"])) {
 	if (empty($_SESSION["error_msg"])) {
 		if ($_POST) {
 			//key if key already exists
-			exec(HESTIA_CMD . "h-list-user-ssh-key " . $user . " json", $output, $return_var);
-			$data = json_decode(implode("", $output), true);
-			unset($output);
+			$data = cli_json("h-list-user-ssh-key " . $user . " json");
 			$keylist = [];
 			$idlist = [];
 			foreach ($data as $key => $value) {

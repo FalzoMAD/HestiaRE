@@ -1,4 +1,5 @@
 <?php
+
 // Forward-auth endpoint for the rspamd web UI reverse proxy (Panel-Caddy).
 // Caddy calls this for every /rspamd/* request; a 2xx response lets the
 // request reach the controller, anything else blocks it. This is what keeps
