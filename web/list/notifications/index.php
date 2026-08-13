@@ -13,8 +13,7 @@ function formatNotificationTimestamps(&$note)
 
 if (($_REQUEST["ajax"] ?? "") == 1 && ($_REQUEST["token"] ?? "") === ($_SESSION["token"] ?? "")) {
 	// Data
-	exec(HESTIA_CMD . "h-list-user-notifications $user json", $output, $return_var);
-	$data = json_decode(implode("", $output), true);
+	$data = cli_json("h-list-user-notifications $user json");
 
 	foreach ($data as $key => &$note) {
 		formatNotificationTimestamps($note);
@@ -39,9 +38,7 @@ if (($_REQUEST["ajax"] ?? "") == 1 && ($_REQUEST["token"] ?? "") === ($_SESSION[
 $TAB = "NOTIFICATIONS";
 
 // Data
-exec(HESTIA_CMD . "h-list-user-notifications $user json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-$data = array_reverse($data, true);
+$data = array_reverse(cli_json("h-list-user-notifications $user json"), true);
 
 // The JSON branch above is the live one - the notification bell reads it. There has never been a
 // pages/list_notifications.php, here or upstream, so rendering it only produced an include warning

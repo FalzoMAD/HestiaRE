@@ -50,6 +50,14 @@ opens above it.
 
 ### Fixed
 
+- **23 panel pages died instead of showing an empty list when a CLI call failed** (#578). The pages
+  read a command's JSON without ever looking at its exit code; a failed call leaves the output
+  empty, `json_decode("")` is `null`, and the first `ksort()`/`array_reverse()`/`array_keys()` on it
+  is a TypeError under PHP 8. These are the list pages - the first thing a user sees after logging
+  in. They now read through `cli_json()`, which was introduced with #575 for the two unauthenticated
+  entry points. Counted from scratch rather than from the issue's table, which had missed
+  `array_reverse()`: with it the sort-order branch is fatal too, so the pages failed regardless of
+  which sort order the user had set.
 - **Three saves that wrote a field nobody touched** (#649). A web domain materialised
   `FASTCGI_CACHE`/`FASTCGI_DURATION` on its first save on every model that does not render the
   cache control, because with nothing stored the duration field displays a 2m default and the

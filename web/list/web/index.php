@@ -6,14 +6,13 @@ $TAB = "WEB";
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
 // Data
-exec(HESTIA_CMD . "h-list-web-domains " . $user . " 'json'", $output, $return_var);
-$data = json_decode(implode("", $output), true);
+$data = cli_json("h-list-web-domains " . $user . " 'json'");
 if ($_SESSION["userSortOrder"] == "name") {
 	ksort($data);
 } else {
 	$data = array_reverse($data, true);
 }
-$ips = json_decode(shell_exec(HESTIA_CMD . "h-list-sys-ips json"), true);
+$ips = cli_json("h-list-sys-ips json");
 
 // Render page
 render_page($user, $TAB, "list_web");

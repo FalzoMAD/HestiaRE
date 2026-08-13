@@ -154,10 +154,7 @@ $ips = json_decode(implode("", $output), true);
 unset($output);
 
 // Get all user domains
-exec(HESTIA_CMD . "h-list-web-domains " . $user . " json", $output, $return_var);
-$user_domains = json_decode(implode("", $output), true);
-$user_domains = array_keys($user_domains);
-unset($output);
+$user_domains = array_keys(cli_json("h-list-web-domains " . $user . " json"));
 
 $accept = $_GET["accept"] ?? "";
 
