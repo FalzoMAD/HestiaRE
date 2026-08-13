@@ -169,46 +169,27 @@ is_web_domain_new() {
 	fi
 }
 
-# Web alias existence check
+# Web alias existence check. Mirrors is_web_domain_new: a web domain never reuses an alias, and
+# any other type may not take one that belongs to a different customer. The owner carries its own
+# name - the loop used to overwrite the caller's $user from the file path and then compare that
+# with itself, so the foreign-owner half of the check could never be true.
 is_web_alias_new() {
-	grep -wH "$1" $CONF_DIR/users/*/web.conf | while read -r line; do
-		user=$(echo $line | sed "s|^$CONF_DIR/users/||; s|/web.conf.*||")
-		string=$(echo $line | cut -f 2- -d ':')
-		parse_object_kv_list $string
-		if [ -n "$ALIAS" ]; then
-			a1=$(echo "'$ALIAS'" | grep -F "'$1'")
-			if [ -n "$a1" ] && [ "$2" == "web" ]; then
-				return "$E_EXISTS"
-			fi
-			if [ -n "$a1" ] && [ "$user" != "$user" ]; then
-				return "$E_EXISTS"
-			fi
-			a2=$(echo "'$ALIAS'" | grep -F "'$1,")
-			if [ -n "$a2" ] && [ "$2" == "web" ]; then
-				return "$E_EXISTS"
-			fi
-			if [ -n "$a2" ] && [ "$user" != "$user" ]; then
-				return "$E_EXISTS"
-			fi
-			a3=$(echo "'$ALIAS'" | grep -F ",$1,")
-			if [ -n "$a3" ] && [ "$2" == "web" ]; then
-				return "$E_EXISTS"
-			fi
-			if [ -n "$a3" ] && [ "$user" != "$user" ]; then
-				return "$E_EXISTS"
-			fi
-			a4=$(echo "'$ALIAS'" | grep -F ",$1'")
-			if [ -n "$a4" ] && [ "$2" == "web" ]; then
-				return "$E_EXISTS"
-			fi
-			if [ -n "$a4" ] && [ "$user" != "$user" ]; then
-				return "$E_EXISTS"
-			fi
-		fi
+	local alias_name="$1" alias_type="$2" conf alias_user aliases a
+	for conf in "$CONF_DIR"/users/*/web.conf; do
+		[ -f "$conf" ] || continue
+		grep -qF -- "$alias_name" "$conf" || continue
+		alias_user=$(basename "$(dirname "$conf")")
+		# read the ALIAS values directly: parse_object_kv_list would eval the whole record into
+		# the caller's scope, and the leading space keeps WEBMAIL_ALIAS out of it
+		while IFS= read -r aliases; do
+			for a in ${aliases//,/ }; do
+				[ "$a" = "$alias_name" ] || continue
+				if [ "$alias_type" = 'web' ] || [ "$alias_user" != "$user" ]; then
+					check_result "$E_EXISTS" "Web alias $alias_name exists"
+				fi
+			done
+		done < <(sed -n "s/.* ALIAS='\([^']*\)'.*/\1/p" "$conf")
 	done
-	if [ $? -ne 0 ]; then
-		check_result "$E_EXISTS" "Web alias $1 exists"
-	fi
 }
 
 # The PHP version a domain actually runs, derived once for both the migration and the backup
@@ -338,21 +319,13 @@ prepare_web_domain_values() {
 	fi
 
 	# Set correct document root
+	# The record wins: h-change-web-domain-docroot resolves the path with readlink and checks
+	# containment before storing it, so there is nothing left to recompute here. Two branches
+	# that tried to rebuild it from target_domain/target_directory sat behind this one and could
+	# never run - they are gone rather than reordered, since re-deriving could disagree with the
+	# value the writer validated.
 	if [ -n "$CUSTOM_DOCROOT" ]; then
-		# Custom document root has been set by the user, import from configuration
 		custom_docroot="$CUSTOM_DOCROOT"
-		docroot="$custom_docroot"
-		sdocroot="$docroot"
-	elif [ -n "$CUSTOM_DOCROOT" ] && [ -n "$target_directory" ]; then
-		# Custom document root has been specified with a different target than public_html
-		if [ -d "$HOMEDIR/$user/web/$target_domain/public_html/$target_directory/" ]; then
-			custom_docroot="$HOMEDIR/$user/web/$target_domain/public_html/$target_directory"
-			docroot="$custom_docroot"
-			sdocroot="$docroot"
-		fi
-	elif [ -n "$CUSTOM_DOCROOT" ] && [ -z "$target_directory" ]; then
-		# Set custom document root to target domain's public_html folder
-		custom_docroot="$HOMEDIR/$user/web/$target_domain/public_html"
 		docroot="$custom_docroot"
 		sdocroot="$docroot"
 	else
@@ -766,7 +739,7 @@ is_mail_domain_new() {
 
 # Checking mail account existence
 is_mail_new() {
-	check_acc=$(grep "ACCOUNT='$1'" $USER_DATA/mail/$domain.conf)
+	check_acc=$(grep -F "ACCOUNT='$1'" $USER_DATA/mail/$domain.conf)
 	if [ -n "$check_acc" ]; then
 		check_result "$E_EXISTS" "mail account $1 already exists"
 	fi
@@ -1076,7 +1049,7 @@ is_domain_new() {
 
 # Get domain variables
 get_domain_values() {
-	parse_object_kv_list $(grep "DOMAIN='$domain'" $USER_DATA/$1.conf)
+	parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/$1.conf)
 }
 
 #----------------------------------------------------------#

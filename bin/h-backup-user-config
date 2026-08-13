@@ -96,7 +96,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 	# Parsing domain exclusions
 	conf="$USER_DATA/web.conf"
 	for domain in $(search_objects 'web' 'SUSPENDED' "*" 'DOMAIN'); do
-		exclusion=$(echo -e "$WEB" | tr ',' '\n' | grep "^$domain$\|^\*$")
+		exclusion=$(echo -e "$WEB" | tr ',' '\n' | awk -v d="$domain" '$0 == d || $0 == "*"')
 		if [ -z "$exclusion" ]; then
 			web_list="$web_list $domain"
 		else
@@ -122,7 +122,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		# Backup web.conf
 		cd $tmpdir/web/$domain/
 		conf="$USER_DATA/web.conf"
-		grep "DOMAIN='$domain'" $conf > hestia/web.conf
+		grep -F "DOMAIN='$domain'" $conf > hestia/web.conf
 
 		# Backup vhost config
 		if [ -e "$HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.conf" ]; then
@@ -182,7 +182,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			fi
 		fi
 
-		domain_conf=$(grep "DOMAIN='$domain'" $conf)
+		domain_conf=$(grep -F "DOMAIN='$domain'" $conf)
 		parse_object_kv_list_non_eval domain_conf
 
 		# No template/ copy in the archive (see h-backup-user)
@@ -210,7 +210,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 	# Parsing domain exclusions
 	conf="$USER_DATA/mail.conf"
 	for domain in $(search_objects 'mail' 'SUSPENDED' "*" 'DOMAIN'); do
-		check_exl=$(echo "$MAIL" | tr ',' '\n' | grep "^$domain$")
+		check_exl=$(echo "$MAIL" | tr ',' '\n' | grep -Fx -- "$domain")
 		if [ -z "$check_exl" ]; then
 			mail_list="$mail_list $domain"
 		else
@@ -237,7 +237,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 
 		# Backup mail.conf
 		conf="$USER_DATA/mail.conf"
-		grep "DOMAIN='$domain'" $conf > hestia/mail.conf
+		grep -F "DOMAIN='$domain'" $conf > hestia/mail.conf
 		cp $USER_DATA/mail/$domain.* hestia/
 		if [ -n "$(ls $USER_DATA/mail/ | grep *@$domain)" ]; then
 			cp $USER_DATA/mail/*@$domain.* hestia/
@@ -259,7 +259,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 
 	# Parsing database exclusions
 	for database in $(search_objects 'db' 'SUSPENDED' "*" 'DB'); do
-		exclusion=$(echo "$DB" | tr ',' '\n' | grep "^$database$")
+		exclusion=$(echo "$DB" | tr ',' '\n' | grep -Fx -- "$database")
 		if [ -z "$exclusion" ]; then
 			db_list="$db_list $database"
 		else
@@ -281,7 +281,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 		mkdir -p $tmpdir/db/$database/hestia
 
 		cd $tmpdir/db/$database/
-		grep "DB='$database'" $conf > hestia/db.conf
+		grep -F "DB='$database'" $conf > hestia/db.conf
 
 		dump="$tmpdir/db/$database/$database.$TYPE.sql"
 		if [ "$BACKUP_MODE" = 'zstd' ]; then

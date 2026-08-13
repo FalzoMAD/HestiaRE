@@ -8,7 +8,8 @@
 #
 # Pure bash: stages are functions in this file; shared helpers live in
 # func/helper.sh; component install logic reuses the existing h-add-sys-*
-# commands where they exist. Idempotent via $CONF_DIR/.done.* sentinels.
+# commands where they exist. Idempotent via $CONF_DIR/.done.* sentinels, each carrying the
+# fingerprint of the install.conf it ran with - re-answering the wizard re-runs the stages.
 
 set -eo pipefail
 
@@ -98,11 +99,31 @@ wcv() {
 # truthiness helper for COMPONENT_* values
 is_on() { [ "${1:-}" = "true" ] || [ "${1:-}" = "yes" ]; }
 
+# A stage is only "done" for the answers it ran with. The wizard can be re-run - a mistyped screen
+# on a tablet is enough - and a marker keyed on the stage name alone then skips work whose
+# configuration has since changed. That box had MariaDB selected on the second pass and no
+# database at all, and the failure only surfaced two stages later as "MySQL not available".
+# Usage: stage_done <name>  ->  0 when the stage ran with THIS install.conf
+stage_done() {
+	local marker="$CONF_DIR/.done.$1"
+	[ -f "$marker" ] || return 1
+	[ "$(cat "$marker" 2> /dev/null)" = "$(stage_fingerprint)" ]
+}
+
+# Usage: stage_mark <name>
+stage_mark() {
+	stage_fingerprint > "$CONF_DIR/.done.$1"
+}
+
+stage_fingerprint() {
+	sha256sum "$CONF_DIR/install.conf" 2> /dev/null | cut -f 1 -d ' '
+}
+
 # ════════════════════════════════════════════════════════════════════════════
 # Stage: base — APT repos, OS packages, system users, SSH, NTP, /proc
 # ════════════════════════════════════════════════════════════════════════════
 install_base() {
-	[ -f "$CONF_DIR/.done.base" ] && { echo "[ skip ] base already configured"; return 0; }
+	stage_done base && { echo "[ skip ] base already configured"; return 0; }
 	echo "[ * ] Configuring APT..."
 	[ -f /etc/apt/apt.conf.d/80-retries ] || echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
 	echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/90nolang
@@ -180,7 +201,7 @@ EOF
 	chmod 644 /etc/ssl/dhparam.pem
 	[ -s /etc/ssl/dhparam.pem ] || { echo "ERROR: /etc/ssl/dhparam.pem missing after base stage" >&2; exit 1; }
 
-	touch "$CONF_DIR/.done.base"
+	stage_mark base
 	echo "[ OK ] base complete"
 }
 
@@ -188,7 +209,7 @@ EOF
 # Stage: panel — Caddy + hestia-php.service
 # ════════════════════════════════════════════════════════════════════════════
 install_panel() {
-	[ -f "$CONF_DIR/.done.panel" ] && { echo "[ skip ] panel already configured"; return 0; }
+	stage_done panel && { echo "[ skip ] panel already configured"; return 0; }
 	echo "[ * ] Installing panel packages (Caddy, PHP $PHP_VER FPM)..."
 	# gd/bz2/pgsql (phpMyAdmin/Adminer) + intl/exif (webmail) installed unconditionally
 	# so the panel PHP is self-contained; wired into the isolated conf.d by hestia-php-confd
@@ -254,7 +275,7 @@ install_panel() {
 	# during package install, so `start` would be a no-op and our panel config
 	# (port 8083) would never load — caddy would keep serving :80 (#162).
 	systemctl restart caddy
-	touch "$CONF_DIR/.done.panel"
+	stage_mark panel
 	echo "[ OK ] panel complete"
 }
 
@@ -265,62 +286,67 @@ install_panel() {
 # configure_apache2 now lives in func/web-model.sh (shared with the model switch, #120)
 
 install_web() {
-	[ -f "$CONF_DIR/.done.web" ] && { echo "[ skip ] web already configured"; return 0; }
-	echo "[ * ] Installing web packages (nginx, PHP $PHP_VER extensions)..."
-	hestia_apt -y install \
-		nginx \
-		php${PHP_VER} php${PHP_VER}-apcu php${PHP_VER}-bz2 php${PHP_VER}-cgi \
-		php${PHP_VER}-cli php${PHP_VER}-common php${PHP_VER}-gd \
-		php${PHP_VER}-imagick php${PHP_VER}-imap php${PHP_VER}-intl \
-		php${PHP_VER}-ldap php${PHP_VER}-pgsql php${PHP_VER}-pspell \
-		php${PHP_VER}-readline php${PHP_VER}-xml
+	stage_done web && { echo "[ skip ] web already configured"; return 0; }
 
-	echo "[ * ] Configuring nginx..."
-	rm -f /etc/nginx/conf.d/*.conf
-	cp -f "$HESTIA/share/nginx/nginx.conf" /etc/nginx/
-	cp -f "$HESTIA/share/nginx/status.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA/share/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA/share/nginx/websocket-upgrade.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA/share/nginx/agents.conf" /etc/nginx/conf.d/
-	cp -f "$HESTIA/share/nginx/cloudflare.inc" /etc/nginx/conf.d/
-	# phpMyAdmin is delivered by Panel-Caddy now, not an nginx alias
-	cp -f "$HESTIA/share/nginx/logrotate" /etc/logrotate.d/nginx
-	mkdir -p /etc/nginx/conf.d/domains /etc/nginx/conf.d/main \
-		/etc/nginx/modules-enabled /var/log/nginx/domains
-	local resolver="" ns
-	for ns in $(grep -is '^nameserver' /etc/resolv.conf | awk '{print $2}'); do
-		if echo "$ns" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-			resolver="${resolver:+$resolver }$ns"
-		fi
-	done
-	[ -n "$resolver" ] && sed -i "s/1.0.0.1 8.8.4.4 1.1.1.1 8.8.8.8/$resolver/g" /etc/nginx/nginx.conf || true
-
-	echo "[ * ] Updating Cloudflare IP ranges..."
-	local cf_ips
-	cf_ips=$(curl -fsLm5 --retry 2 https://api.cloudflare.com/client/v4/ips 2>/dev/null || echo "")
-	if [ -n "$cf_ips" ] && [ "$(echo "$cf_ips" | jq -r '.success//""')" = "true" ]; then
-		{
-			echo "# Cloudflare IP Ranges"; echo ""; echo "# IPv4"
-			echo "$cf_ips" | jq -r '.result.ipv4_cidrs[]//""' | sort | sed 's/^/set_real_ip_from /;s/$/;/'
-			echo ""; echo "# IPv6"
-			echo "$cf_ips" | jq -r '.result.ipv6_cidrs[]//""' | sort | sed 's/^/set_real_ip_from /;s/$/;/'
-			echo ""; echo "real_ip_header CF-Connecting-IP;"
-		} > /etc/nginx/conf.d/cloudflare.inc
-		echo "  Cloudflare ranges updated"
-	fi
-	update-rc.d nginx defaults > /dev/null 2>&1
-	# restart, not start: replace the distro default site and free :80 before apache2
-	systemctl restart nginx
-
-	# web-server choice → port model: BOTH = nginx proxy 80/443 -> apache2 8080/8443;
-	# APACHE/NGINX = that server on 80/443, no proxy. Must land in hestia.conf before
-	# the IP is registered and before the multi-PHP loop (h-add-web-php reads WEB_SYSTEM).
+	# The model decides the install scope, not just who serves: apache-only means no nginx on the
+	# box at all. Mail-only needs one and gets it through the model - the wizard fixes that preset
+	# to NGINX for the webmail vhost and ACME termination (share/manifest.json).
 	local web_model
 	case "${COMPONENT_WEB_SERVER:-NGINX}" in
 		APACHE) web_model="apache" ;;
 		BOTH) web_model="both" ;;
 		*) web_model="nginx" ;;
 	esac
+
+	local web_pkgs=()
+	if web_model_uses_nginx "$web_model"; then web_pkgs+=(nginx); fi
+	echo "[ * ] Installing web packages ($(web_model_label "$web_model"), PHP $PHP_VER extensions)..."
+	hestia_apt -y install \
+		"${web_pkgs[@]}" \
+		php${PHP_VER} php${PHP_VER}-apcu php${PHP_VER}-bz2 php${PHP_VER}-cgi \
+		php${PHP_VER}-cli php${PHP_VER}-common php${PHP_VER}-gd \
+		php${PHP_VER}-imagick php${PHP_VER}-imap php${PHP_VER}-intl \
+		php${PHP_VER}-ldap php${PHP_VER}-pgsql php${PHP_VER}-pspell \
+		php${PHP_VER}-readline php${PHP_VER}-xml
+
+	if web_model_uses_nginx "$web_model"; then
+		echo "[ * ] Configuring nginx..."
+		rm -f /etc/nginx/conf.d/*.conf
+		cp -f "$HESTIA/share/nginx/nginx.conf" /etc/nginx/
+		cp -f "$HESTIA/share/nginx/status.conf" /etc/nginx/conf.d/
+		cp -f "$HESTIA/share/nginx/0rtt-anti-replay.conf" /etc/nginx/conf.d/
+		cp -f "$HESTIA/share/nginx/websocket-upgrade.conf" /etc/nginx/conf.d/
+		cp -f "$HESTIA/share/nginx/agents.conf" /etc/nginx/conf.d/
+		cp -f "$HESTIA/share/nginx/cloudflare.inc" /etc/nginx/conf.d/
+		# phpMyAdmin is delivered by Panel-Caddy now, not an nginx alias
+		cp -f "$HESTIA/share/nginx/logrotate" /etc/logrotate.d/nginx
+		mkdir -p /etc/nginx/conf.d/domains /etc/nginx/conf.d/main \
+			/etc/nginx/modules-enabled /var/log/nginx/domains
+		local resolver="" ns
+		for ns in $(grep -is '^nameserver' /etc/resolv.conf | awk '{print $2}'); do
+			if echo "$ns" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
+				resolver="${resolver:+$resolver }$ns"
+			fi
+		done
+		[ -n "$resolver" ] && sed -i "s/1.0.0.1 8.8.4.4 1.1.1.1 8.8.8.8/$resolver/g" /etc/nginx/nginx.conf || true
+
+		echo "[ * ] Updating Cloudflare IP ranges..."
+		local cf_ips
+		cf_ips=$(curl -fsLm5 --retry 2 https://api.cloudflare.com/client/v4/ips 2>/dev/null || echo "")
+		if [ -n "$cf_ips" ] && [ "$(echo "$cf_ips" | jq -r '.success//""')" = "true" ]; then
+			{
+				echo "# Cloudflare IP Ranges"; echo ""; echo "# IPv4"
+				echo "$cf_ips" | jq -r '.result.ipv4_cidrs[]//""' | sort | sed 's/^/set_real_ip_from /;s/$/;/'
+				echo ""; echo "# IPv6"
+				echo "$cf_ips" | jq -r '.result.ipv6_cidrs[]//""' | sort | sed 's/^/set_real_ip_from /;s/$/;/'
+				echo ""; echo "real_ip_header CF-Connecting-IP;"
+			} > /etc/nginx/conf.d/cloudflare.inc
+			echo "  Cloudflare ranges updated"
+	fi
+	update-rc.d nginx defaults > /dev/null 2>&1
+	# restart, not start: replace the distro default site and free :80 before apache2
+	systemctl restart nginx
+	fi
 	# apache backend needs its packages+mods in place before the keyset lands
 	case "$web_model" in apache | both) configure_apache2 ;; esac
 	# Web bot rate-limiting (Layer B): server-native, always available (independent of CrowdSec).
@@ -400,7 +426,7 @@ install_web() {
 	cp -f "$HESTIA/share/apache2/httpd-prerotate/"* /etc/logrotate.d/httpd-prerotate/ 2>/dev/null || true
 	rm -f /etc/cron.d/awstats
 
-	touch "$CONF_DIR/.done.web"
+	stage_mark web
 	echo "[ OK ] web complete"
 }
 
@@ -408,7 +434,7 @@ install_web() {
 # Stage: db — MariaDB (+ phpMyAdmin / PostgreSQL / Redis per components)
 # ════════════════════════════════════════════════════════════════════════════
 install_db() {
-	[ -f "$CONF_DIR/.done.db" ] && { echo "[ skip ] db already configured"; return 0; }
+	stage_done db && { echo "[ skip ] db already configured"; return 0; }
 
 	# MariaDB lifecycle lives in h-add-sys-mariadb. Hard-fail: the panel needs a DB.
 	if is_on "${COMPONENT_DB_MARIADB:-}"; then
@@ -439,7 +465,7 @@ install_db() {
 			|| echo "[ ! ] Redis install reported an issue (see $LOG)"
 	fi
 
-	touch "$CONF_DIR/.done.db"
+	stage_mark db
 	echo "[ OK ] db complete"
 }
 
@@ -447,7 +473,7 @@ install_db() {
 # Stage: mail — exim4, dovecot, rspamd, webmailer (only if mail block present)
 # ════════════════════════════════════════════════════════════════════════════
 install_mail() {
-	[ -f "$CONF_DIR/.done.mail" ] && { echo "[ skip ] mail already configured"; return 0; }
+	stage_done mail && { echo "[ skip ] mail already configured"; return 0; }
 	echo "[ * ] Installing mail packages (exim4, dovecot)..."
 	# sieve packages are not here — the sieve addon installs them when selected
 	hestia_apt -y install \
@@ -543,7 +569,7 @@ install_mail() {
 			;;
 	esac
 
-	touch "$CONF_DIR/.done.mail"
+	stage_mark mail
 	echo "[ OK ] mail complete"
 }
 
@@ -551,7 +577,7 @@ install_mail() {
 # Stage: security — fail2ban (optional), iptables, ipset, crowdsec (optional)
 # ════════════════════════════════════════════════════════════════════════════
 install_security() {
-	[ -f "$CONF_DIR/.done.security" ] && { echo "[ skip ] security already configured"; return 0; }
+	stage_done security && { echo "[ skip ] security already configured"; return 0; }
 	# nftables and nothing else: it IS the backend (func/firewall.sh renders one inet table and shells
 	# /usr/sbin/nft), and it used to arrive only as a Recommends of iptables - which Debian's base image
 	# happens to satisfy and Ubuntu's does not. iptables and ipset are gone with the old renderer: no code
@@ -610,7 +636,7 @@ install_security() {
 	# system IP setup (iptables/ipset rules) runs in the configure stage — the
 	# rules live under /etc/hestia now, not in the install tree.
 
-	touch "$CONF_DIR/.done.security"
+	stage_mark security
 	echo "[ OK ] security complete"
 }
 
@@ -618,7 +644,7 @@ install_security() {
 # Stage: addons — proftpd / docker / filemanager (per components)
 # ════════════════════════════════════════════════════════════════════════════
 install_addons() {
-	[ -f "$CONF_DIR/.done.addons" ] && { echo "[ skip ] addons already configured"; return 0; }
+	stage_done addons && { echo "[ skip ] addons already configured"; return 0; }
 	if is_on "${COMPONENT_ADDON_PROFTPD:-}"; then
 		echo "[ * ] Installing ProFTPD..."
 		"$BIN/h-add-sys-proftpd" >> "$LOG" 2>&1 || true
@@ -631,7 +657,7 @@ install_addons() {
 		echo "[ * ] Installing File Manager..."
 		"$BIN/h-add-sys-filemanager" >> "$LOG" 2>&1 || true
 	fi
-	touch "$CONF_DIR/.done.addons"
+	stage_mark addons
 	echo "[ OK ] addons complete"
 }
 
@@ -663,7 +689,7 @@ init_hestia_structure() {
 # Stage: configure — admin user, SSL, sudoers, firewall, default domain, cron
 # ════════════════════════════════════════════════════════════════════════════
 configure_hestia() {
-	[ -f "$CONF_DIR/.done.configure" ] && { echo "[ skip ] configure already done"; return 0; }
+	stage_done configure && { echo "[ skip ] configure already done"; return 0; }
 	local mail_present="no"
 	is_on "${COMPONENT_MAIL_BLOCK_PRESENT:-}" && mail_present="yes"
 
@@ -793,7 +819,7 @@ configure_hestia() {
 	[ -f /root/.bashrc ] && grep -q 'hestia.sh' /root/.bashrc \
 		|| printf 'if [ "${PATH#*/usr/local/hestia/bin*}" = "$PATH" ]; then\n    . /etc/profile.d/hestia.sh\nfi\n' >> /root/.bashrc
 
-	touch "$CONF_DIR/.done.configure"
+	stage_mark configure
 	echo "[ OK ] configure complete"
 }
 

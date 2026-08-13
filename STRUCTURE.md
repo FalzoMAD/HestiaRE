@@ -381,6 +381,15 @@ The `$HESTIA/data/` tree is **fully dissolved**. `install/` (build-time tree) wa
 into `share/` (shipped runtime assets) + `templates/` (`WEBTPL`) + `packages/` (#119,
 #150); `HESTIA_INSTALL_DIR`/`HESTIA_COMMON_DIR` no longer exist.
 
+### The model is the install scope (#639)
+
+`WEB_SYSTEM`/`PROXY_SYSTEM` decide who serves **and** what is installed. apache-only means no
+nginx package on the box - not a running nginx with no vhosts, which is what it used to be. The one
+shape that needs an nginx without customer web domains is **mail-only**, and it gets one through
+the model: the wizard fixes that preset to `WEB_SERVER=NGINX` for the webmail vhost and ACME
+termination (`share/manifest.json`). Upstream has no equivalent - it installs both servers and
+decides at render time.
+
 ### Template tree: selectable vs shipped (#219)
 
 `templates/` holds **only what somebody chooses**, everything else moved to `share/`:
@@ -388,7 +397,8 @@ into `share/` (shipped runtime assets) + `templates/` (`WEBTPL`) + `packages/` (
 | Path | Anchor | Contents |
 |---|---|---|
 | `templates/nginx/` | `$WEBTPL/nginx` | the nginx-only vhost selection (wordpress, laravel, …) |
-| `templates/php/` | `$PHPTPL` | FPM pool profiles, incl. the generated `PHP-X_Y` |
+| `templates/php/` | `$PHPTPL` | FPM pool profiles (`default`, `small`, `high`) - nothing generated per version since #591 |
+| `templates/docker/<front>/` | `$WEBTPL/docker` | vhosts for a docker domain, per front system (#566/#592) |
 | `share/web/nginx/` | `$SHARETPL/nginx` | the both-model proxy vhost + `proxy_ip` |
 | `share/web/apache2/` | `$SHARETPL/apache2` | the apache vhost (both models render it) |
 | `share/web/suspend/` | `$SHARETPL/suspend` | admin suspension + customer offline, per role |
@@ -432,7 +442,7 @@ These are settled decisions (`README.md:53-59`, registry `CODEMAP.json` `removed
 
 | Removed | Was | Gap to respect |
 |---|---|---|
-| **bind9 / DNS** (#58/#283) | ~50 `*-dns-*` commands, `templates/dns`, `edit_dns` page | No DNS zone-management code path. DNS is external/managed. Only `h-list-mail-domain-dkim-dns` kept. `DNSTPL`/`templates/dns` are **vestigial** (still referenced in `func/main.sh` + `PATHS.md`, but nothing populates zones - a known inconsistency, not a live feature). |
+| **bind9 / DNS** (#58/#283) | ~50 `*-dns-*` commands, `templates/dns`, `edit_dns` page | No DNS zone-management code path. DNS is external/managed. Only `h-list-mail-domain-dkim-dns` kept - it formats mail-stack data for somebody else's DNS. The last leftovers went in #619: `DNSTPL`, the package fields (`DNS_TEMPLATE`/`DNS_DOMAINS`/`DNS_RECORDS`/`NS`), the `U_DNS_*` counters and `h-list-user-ns`. |
 | **REST API** (#146) | `v-*-api-*`, web API endpoint, key auth | No programmatic surface. Entry points are the panel UI and `h-*` CLI only; integrations shell out to `h-*`. |
 | **Web Terminal** (#59) | node sidecar service, `list_terminal` page, `/_shell/` | No browser->shell bridge; `/_shell/` absent by design. Operators use SSH. Closed GHSA-gh6f. |
 | **vsftpd** (#213) | `install/deb/vsftpd` | FTP is **ProFTPd only** (`share/proftpd/`); `FTP_SYSTEM` must not branch on vsftpd. |
@@ -464,6 +474,5 @@ wrappers (deltas 1-2), so there is no `hestia-nginx`/`hestia-php` deb to update.
 
 ## Known inconsistencies (flagged, not yet resolved)
 
-- `DNSTPL` / `templates/dns` remain referenced despite DNS removal (delta 9) - vestigial.
 - Per-domain backup special-cases per-domain backend tpls (`h-backup-user`), but the FM
   pool and the panel pools are outside the per-user domain backup path (delta 2/5).

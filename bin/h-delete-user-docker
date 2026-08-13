@@ -56,6 +56,23 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
+# The domains first: their DOCKER field outlives the companion otherwise, which leaves a vhost
+# proxying to an address that no longer answers - and a panel that shows neither the docker
+# controls (no /24 left) nor the PHP selector (still a docker domain). Reverting them here makes
+# the switch the whole operation the admin thinks it is.
+reverted=0
+if [ -f "$USER_DATA/web.conf" ]; then
+	for dom in $(grep -o "DOMAIN='[^']*'" "$USER_DATA/web.conf" | cut -f 2 -d \'); do
+		grep -q "DOMAIN='$dom'.*DOCKER='[^']" "$USER_DATA/web.conf" || continue
+		"$BIN/h-delete-web-domain-docker" "$user" "$dom" > /dev/null 2>&1 \
+			&& reverted=$((reverted + 1)) \
+			|| echo "Warning: could not revert docker on $dom - it still points at the removed container."
+	done
+	if [ "$reverted" -gt 0 ]; then
+		echo "Reverted $reverted docker domain(s) to a normal vhost."
+	fi
+fi
+
 companion_uid="$(id -u "$companion")"
 
 # userdel refuses while the account owns processes, and fails quietly enough that a

@@ -120,14 +120,20 @@ Caddy (OS repo, port 8083) — replaces hestia-nginx.
 PHP: Sury 8.3, isolated FPM pool — replaces hestia-php.
 
 ### Always installed components
-nginx (OS), php multi (Sury 5.6–8.4), mariadb (ext repo), phpmyadmin (OS),
-caddy (OS), iptables, fail2ban (OS), ipset, composer (system-wide), wp-cli (system-wide)
+php multi (Sury 5.6–8.4), mariadb (ext repo), phpmyadmin (OS), caddy (OS),
+iptables, fail2ban (OS), ipset, composer (system-wide), wp-cli (system-wide)
+
+**The web model decides the web-server packages, not just who serves.** apache-only means no
+nginx on the box; nginx-only and both install nginx. Mail-only needs an nginx for the customer
+webmail vhost and ACME termination, and gets one because the wizard fixes that preset to NGINX -
+an exception carried by the model, not by an install-everything rule.
 
 ### Standard profile adds
 apache2 (OS only — no Sury apache2 repo),
 exim4 (OS), dovecot (OS), rspamd (OS), roundcube + password plugin (OS)
 
-nginx acts as reverse proxy in front of apache2 for customer vhosts.
+nginx acts as reverse proxy in front of apache2 for customer vhosts - in the both model.
+In apache-only there is no nginx at all.
 
 ### Minimal profile
 Standard install minus apache2 and mail stack.

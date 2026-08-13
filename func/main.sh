@@ -63,7 +63,6 @@ WEBTPL=$HESTIA/templates
 SHARETPL=$HESTIA/share/web
 PHPTPL=$HESTIA/templates/php
 # webmail templates live per app at $HESTIA/share/$WEB_SYSTEM/webmail/ (no MAILTPL var)
-DNSTPL=$HESTIA/templates/dns
 RRD=$HESTIA/web/rrd
 SENDMAIL="$HESTIA/web/inc/mail-wrapper.php"
 HESTIA_GIT_REPO="https://raw.githubusercontent.com/hestiacp/hestiacp"
@@ -355,7 +354,7 @@ is_object_new() {
 			object="OK"
 		fi
 	else
-		object=$(grep "$2='$3'" "$(_object_conf "$1")")
+		object=$(grep -F "$2='$3'" "$(_object_conf "$1")")
 	fi
 	if [ -n "$object" ]; then
 		check_result "$E_EXISTS" "$2=$3 already exists"
@@ -370,7 +369,9 @@ is_object_valid() {
 			check_result "$E_NOTEXIST" "$1 $3 doesn't exist"
 		fi
 	else
-		object=$(grep "$2='$3'" "$(_object_conf "$1")")
+		# -F: the value is a domain or account and a dot in it matches any character - with
+		# a.b.com and aXb.com on one box, a lookup on one finds the other's record
+		object=$(grep -F "$2='$3'" "$(_object_conf "$1")")
 		if [ -z "$object" ]; then
 			arg1=$(basename $1)
 			arg2=$(echo $2 | tr '[:upper:]' '[:lower:]')
@@ -563,7 +564,7 @@ is_object_suspended() {
 	if [ "$2" = 'USER' ]; then
 		spnd=$(grep "SUSPENDED='yes'" "$(_object_conf "$1")")
 	else
-		spnd=$(grep "$2='$3'" "$(_object_conf "$1")" | grep "SUSPENDED='yes'")
+		spnd=$(grep -F "$2='$3'" "$(_object_conf "$1")" | grep "SUSPENDED='yes'")
 	fi
 	if [ -z "$spnd" ]; then
 		check_result "$E_UNSUSPENDED" "$(basename $1) $3 is not suspended"
@@ -575,7 +576,7 @@ is_object_unsuspended() {
 	if [ $2 = 'USER' ]; then
 		spnd=$(grep "SUSPENDED='yes'" "$(_object_conf "$1")")
 	else
-		spnd=$(grep "$2='$3'" "$(_object_conf "$1")" | grep "SUSPENDED='yes'")
+		spnd=$(grep -F "$2='$3'" "$(_object_conf "$1")" | grep "SUSPENDED='yes'")
 	fi
 	if [ -n "$spnd" ]; then
 		check_result "$E_SUSPENDED" "$(basename $1) $3 is suspended"
@@ -584,7 +585,7 @@ is_object_unsuspended() {
 
 # Check if object value is empty
 is_object_value_empty() {
-	str=$(grep "$2='$3'" "$(_object_conf "$1")")
+	str=$(grep -F "$2='$3'" "$(_object_conf "$1")")
 	parse_object_kv_list "$str"
 	local varname="${4#\$}"
 	value="${!varname}"
@@ -595,7 +596,7 @@ is_object_value_empty() {
 
 # Check if object value is empty
 is_object_value_exist() {
-	str=$(grep "$2='$3'" "$(_object_conf "$1")")
+	str=$(grep -F "$2='$3'" "$(_object_conf "$1")")
 	parse_object_kv_list "$str"
 	local varname="${4#\$}"
 	value="${!varname}"
@@ -635,7 +636,7 @@ is_dir_symlink() {
 
 # Get object value
 get_object_value() {
-	object=$(grep "$2='$3'" "$(_object_conf "$1")")
+	object=$(grep -F "$2='$3'" "$(_object_conf "$1")")
 	parse_object_kv_list "$object"
 	local varname="${4#\$}"
 	value="${!varname}"
@@ -643,7 +644,7 @@ get_object_value() {
 }
 
 get_object_values() {
-	parse_object_kv_list $(grep "$2='$3'" "$(_object_conf "$1")")
+	parse_object_kv_list $(grep -F "$2='$3'" "$(_object_conf "$1")")
 }
 
 # Update object value
@@ -668,7 +669,7 @@ update_object_value() {
 # Add object key
 add_object_key() {
 	local row lnr object varname old
-	row=$(grep -n "$2='$3'" "$(_object_conf "$1")")
+	row=$(grep -nF "$2='$3'" "$(_object_conf "$1")")
 	lnr=$(echo "$row" | cut -f 1 -d ':')
 	object=$(echo "$row" | sed "s/^$lnr://")
 	# Bail on an empty line number or anchor key: sed without an address edits EVERY line, so a
@@ -718,7 +719,16 @@ remove_exact_line() {
 }
 
 # Search objects
+# The only accessor that stays a regex: its search value is a flag, and h-backup-user-config
+# passes "*" on purpose to mean "any". The guard below is what keeps that from decaying into
+# "matches a domain by accident" - a comment cannot stop the next caller, a refusal can.
 search_objects() {
+	# A dot only appears in a domain or an account, never in a flag value, and as a pattern it
+	# would match any character. The wildcard is the one legitimate pattern here.
+	case "$3" in
+		'*') ;;
+		*.*) check_result "$E_INVALID" "search_objects takes flag values, not names (got '$3')" ;;
+	esac
 	OLD_IFS="$IFS"
 	IFS=$'\n'
 	if [ -f "$(_object_conf "$1")" ]; then
