@@ -13,8 +13,23 @@ if ($_SESSION["userContext"] != "admin") {
 	exit();
 }
 
-// Loaded before the POST handler: the validation below has to know whether a web template is
-// selectable at all, and an apache web role offers none.
+// Loaded before the POST handler: the validation below decides on what is actually selectable,
+// and an apache web role offers no web template at all.
+$backend_templates = [];
+$proxy_templates = [];
+// Read by the template on the first render, where no POST has set it yet.
+$v_backups_incremental = "no";
+if (!empty($_SESSION["WEB_BACKEND"])) {
+	exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
+	$backend_templates = json_decode(implode("", $output), true) ?? [];
+	unset($output);
+}
+if (!empty($_SESSION["PROXY_SYSTEM"])) {
+	exec(HESTIA_CMD . "h-list-web-templates-proxy json", $output, $return_var);
+	$proxy_templates = json_decode(implode("", $output), true) ?? [];
+	unset($output);
+}
+
 exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
 $web_templates = json_decode(implode("", $output), true);
 unset($output);
@@ -32,7 +47,7 @@ if (!empty($_POST["ok"])) {
 		$errors[] = _("Web Template");
 	}
 	if (!empty($_SESSION["WEB_BACKEND"])) {
-		if (!isset($_POST["v_backend_template"])) {
+		if (!empty($backend_templates) && !isset($_POST["v_backend_template"])) {
 			$errors[] = _("Backend Template");
 		}
 	} else {
@@ -114,9 +129,10 @@ if (!empty($_POST["ok"])) {
 		// Without a selectable template the control is not rendered, so fall back to the name every
 		// role resolves - a package record always carries a web template.
 		$v_web_template = quoteshellarg($_POST["v_web_template"] ?? "default");
-		$v_backend_template = quoteshellarg($_POST["v_backend_template"]);
-		$v_proxy_template = quoteshellarg($_POST["v_proxy_template"]);
-		$v_shell = quoteshellarg($_POST["v_shell"]);
+		// no selectable list means no control, so take the name every role resolves
+		$v_backend_template = quoteshellarg($_POST["v_backend_template"] ?? "default");
+		$v_proxy_template = quoteshellarg($_POST["v_proxy_template"] ?? "default");
+		$v_shell = quoteshellarg($_POST["v_shell"] ?? "nologin");
 		$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
 		$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
 		$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
@@ -203,20 +219,6 @@ if (!empty($_POST["ok"])) {
 			unset($v_package);
 		}
 	}
-}
-
-// List web templates for backend
-if (!empty($_SESSION["WEB_BACKEND"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
-	$backend_templates = json_decode(implode("", $output), true);
-	unset($output);
-}
-
-// List web templates for proxy
-if (!empty($_SESSION["PROXY_SYSTEM"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-proxy json", $output, $return_var);
-	$proxy_templates = json_decode(implode("", $output), true);
-	unset($output);
 }
 
 // List system shells

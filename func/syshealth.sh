@@ -418,9 +418,10 @@ function syshealth_repair_system_config() {
 		$BIN/h-change-sys-config-value "POLICY_SYSTEM_PASSWORD_RESET" "no"
 	fi
 
-	# Theme editor
-	if [[ -z $(check_key_exists 'POLICY_USER_CHANGE_THEME') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_CHANGE_THEME ('yes')"
+	# Theme editor. An EMPTY value counts as missing here: the key ships present but unset, so a
+	# check on existence alone never fired, and three readers were left inventing their own default.
+	if [[ -z $(check_key_exists 'POLICY_USER_CHANGE_THEME') ]] || [ -z "$POLICY_USER_CHANGE_THEME" ]; then
+		echo "[ ! ] Setting missing value in hestia.conf: POLICY_USER_CHANGE_THEME ('yes')"
 		$BIN/h-change-sys-config-value "POLICY_USER_CHANGE_THEME" "yes"
 	fi
 	# Per-domain spam tuning for customers (#318): feature toggle and the

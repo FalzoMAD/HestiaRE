@@ -5,12 +5,18 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
 $TAB = "WEB";
 
+// No domain means the URL is malformed, not that there is a domain called "". Reading it raw
+// reached quoteshellarg(null) and answered a hand-typed URL with a fatal 500.
+if (empty($_GET["domain"])) {
+	header("Location: /list/web/");
+	exit();
+}
 $v_domain = quoteshellarg($_GET["domain"]);
 $type = "access";
-if ($_GET["type"] == "access") {
+if (($_GET["type"] ?? "") == "access") {
 	$type = "access";
 }
-if ($_GET["type"] == "error") {
+if (($_GET["type"] ?? "") == "error") {
 	$type = "error";
 }
 // Header

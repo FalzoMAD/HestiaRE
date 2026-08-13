@@ -21,13 +21,24 @@ opens above it.
   selectable now, and a rejected form no longer falls through into the write path, which used to
   save the package regardless of its own validation errors. Saving also stopped blanking
   `CPU_QUOTA`, `MEMORY_LIMIT` and `SWAP_LIMIT`: their controls only exist while `RESOURCES_LIMIT`
-  is on, and an absent control is not a cleared value.
+  is on, and an absent control is not a cleared value. The same file carried four more of the
+  class: a three-`r` typo left the shell check dead while an absent control silently demoted the
+  package to `nologin`, `DOCKER_LIMIT` fell back to a literal instead of the stored value, and the
+  backend and proxy rows demanded fields they never offered when their lists were empty. The
+  system-package lock also read `$_GET` while the write used `$_POST`, so a crafted POST walked
+  around it.
+- **Four dead ends found by clicking every panel page** (#644): `/list/web-log/` answered a URL
+  without a domain with a fatal, the incremental-backup list counted a string when its command
+  failed, `/list/notifications/` rendered a template that has never existed, and the add-package
+  form read a variable that only the POST path sets. A request without a CSRF token no longer logs
+  a warning before being refused.
 - **Saving a user replaced the theme they had chosen** (#645). No option in the select carried
   `selected`, because the marker was keyed on a session variable rather than on the value being
   rendered - and an unmarked select submits its first option, `dark`. The two policy checks that
   decide whether the session even carries a theme also disagreed on their default (`!== "yes"` at
   login against `=== "no"` everywhere else), so the policy shipping unset dropped it on every
-  login.
+  login. The policy ships with an empty value, and the repair that would have set it only fired on
+  a *missing* key - it now treats empty as missing.
 
 - **Every domain rebuild on an apache-only box wrote to `/etc/nginx`** (#642). `nginx -v` without
   the binary prints an error message, which carries no `/` for `cut` to split on and sorts above

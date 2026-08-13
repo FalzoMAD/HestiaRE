@@ -9,7 +9,7 @@ function formatNotificationTimestamps(&$note) {
 	$note["TIMESTAMP_TITLE"] = $dateTime->format("d F Y, H:i:s");
 }
 
-if ($_REQUEST["ajax"] == 1 && $_REQUEST["token"] == $_SESSION["token"]) {
+if (($_REQUEST["ajax"] ?? "") == 1 && ($_REQUEST["token"] ?? "") === ($_SESSION["token"] ?? "")) {
 	// Data
 	exec(HESTIA_CMD . "h-list-user-notifications $user json", $output, $return_var);
 	$data = json_decode(implode("", $output), true);
@@ -40,8 +40,11 @@ exec(HESTIA_CMD . "h-list-user-notifications $user json", $output, $return_var);
 $data = json_decode(implode("", $output), true);
 $data = array_reverse($data, true);
 
-// Render page
-render_page($user, $TAB, "list_notifications");
+// The JSON branch above is the live one - the notification bell reads it. There has never been a
+// pages/list_notifications.php, here or upstream, so rendering it only produced an include warning
+// and an empty shell. Send the browser somewhere real until the page actually exists.
+header("Location: /list/user/");
+exit();
 
 // Back uri
 $_SESSION["back"] = $_SERVER["REQUEST_URI"];

@@ -64,6 +64,11 @@ exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
 $web_templates = json_decode(implode("", $output), true);
 unset($output);
 
+// Empty means "nothing selectable", which is what the checks below ask - so they must
+// not depend on whether the conditional load ran.
+$backend_templates = [];
+$proxy_templates = [];
+
 // List backend templates
 if (!empty($_SESSION["WEB_BACKEND"])) {
 	exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
@@ -88,6 +93,9 @@ if (!empty($_POST["save"])) {
 	// Check token
 	verify_csrf($_POST);
 
+	// Initialised so a typo in a branch below is a phpstan finding, not a silently dead check.
+	$errors = [];
+
 	// Check empty fields
 	if (empty($_POST["v_package"])) {
 		$errors[] = _("Package");
@@ -98,18 +106,16 @@ if (!empty($_POST["save"])) {
 	if (!empty($web_templates) && empty($_POST["v_web_template"])) {
 		$errors[] = _("Web Template");
 	}
-	if (!empty($_SESSION["WEB_BACKEND"])) {
-		if (empty($_POST["v_backend_template"])) {
-			$errors[] = _("Backend Template");
-		}
+	// Selectability decides, not the system switch: with the switch on and the list empty the
+	// form demands a field it never offers - the same dead end as the web template.
+	if (!empty($backend_templates) && empty($_POST["v_backend_template"])) {
+		$errors[] = _("Backend Template");
 	}
-	if (!empty($_SESSION["PROXY_SYSTEM"])) {
-		if (empty($_POST["v_proxy_template"])) {
-			$errors[] = _("Proxy Template");
-		}
+	if (!empty($proxy_templates) && empty($_POST["v_proxy_template"])) {
+		$errors[] = _("Proxy Template");
 	}
 	if (empty($_POST["v_shell"])) {
-		$errrors[] = _("Shell");
+		$errors[] = _("Shell");
 	}
 	if (!isset($_POST["v_web_domains"])) {
 		$errors[] = _("Web Domains");
@@ -175,22 +181,18 @@ if (!empty($_POST["save"])) {
 		// that failed validation was stored anyway.
 
 		// Protect input
-		$v_package = quoteshellarg($_POST["v_package"]);
+		// The lock at the top of this file rejects $_GET["package"], but the write below used the
+		// POST name - a crafted POST walked around it. Anchor the write on the checked value.
+		$v_package = quoteshellarg($_GET["package"]);
 		$v_package_new = quoteshellarg($_POST["v_package_new"]);
 		// Keep the stored template when the form did not offer the control, rather than reading a key
 		// nobody sent: an empty select submits nothing, and quoteshellarg(null) is a fatal.
 		$v_web_template = quoteshellarg($_POST["v_web_template"] ?? $v_web_template);
-		if (!empty($_SESSION["WEB_BACKEND"])) {
-			$v_backend_template = quoteshellarg($_POST["v_backend_template"]);
-		}
-		if (!empty($_SESSION["PROXY_SYSTEM"])) {
-			$v_proxy_template = quoteshellarg($_POST["v_proxy_template"]);
-		}
-		if (!empty($_POST["v_shell"])) {
-			$v_shell = quoteshellarg($_POST["v_shell"]);
-		} else {
-			$v_shell = "nologin";
-		}
+		$v_backend_template = quoteshellarg($_POST["v_backend_template"] ?? $v_backend_template);
+		$v_proxy_template = quoteshellarg($_POST["v_proxy_template"] ?? $v_proxy_template);
+		// Keep the stored shell when the control was not rendered. Falling back to a literal
+		// turned an absent control into a demotion to nologin.
+		$v_shell = quoteshellarg($_POST["v_shell"] ?? $v_shell);
 		$v_web_domains = quoteshellarg($_POST["v_web_domains"]);
 		$v_web_aliases = quoteshellarg($_POST["v_web_aliases"]);
 		$v_mail_domains = quoteshellarg($_POST["v_mail_domains"]);
@@ -223,7 +225,7 @@ if (!empty($_POST["save"])) {
 				? quoteshellarg($_POST["v_swap_limit"])
 				: quoteshellarg($v_swap_limit);
 		// a preset name, not a size - the command rejects anything else
-		$v_docker_limit = quoteshellarg($_POST["v_docker_limit"] ?? "unlimited");
+		$v_docker_limit = quoteshellarg($_POST["v_docker_limit"] ?? $v_docker_limit);
 
 		$v_time = quoteshellarg(date("H:i:s"));
 		$v_date = quoteshellarg(date("Y-m-d"));
@@ -260,11 +262,12 @@ if (!empty($_POST["save"])) {
 			$output,
 			$return_var,
 		);
+		fclose($fp);
+		// Removed before the return code is judged: check_return_code can end the request, and the
+		// package file would stay behind in /tmp.
+		unlink($tmpfile);
 		check_return_code($return_var, $output);
 		unset($output);
-
-		fclose($fp);
-		unlink($tmpfile);
 
 		// Propagate new package
 		exec(HESTIA_CMD . "h-update-user-package " . $v_package . " 'json'", $output, $return_var);
