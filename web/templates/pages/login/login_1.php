@@ -5,14 +5,14 @@
 	<form id="login-form" method="post" action="/login/">
 		<input type="hidden" name="token" value="<?= tohtml($_SESSION["token"]) ?>">
 		<h1 class="login-title">
-			<?= tohtml( _("Welcome")) ?> <?= tohtml($_SESSION["login"]["username"]) ?>!
+			<?= tohtml(_("Welcome")) ?> <?= tohtml($_SESSION["login"]["username"]) ?>!
 		</h1>
 		<div class="u-mb20">
 			<label for="password" class="form-label u-side-by-side">
-				<?= tohtml( _("Password")) ?>
+				<?= tohtml(_("Password")) ?>
 				<?php if ($_SESSION["POLICY_SYSTEM_PASSWORD_RESET"] !== "no") { ?>
 					<a class="login-form-link" href="/reset/">
-						<?= tohtml( _("Forgot Password")) ?>
+						<?= tohtml(_("Forgot Password")) ?>
 					</a>
 				<?php } ?>
 			</label>
@@ -20,10 +20,10 @@
 		</div>
 		<div class="u-side-by-side">
 			<button type="submit" class="button">
-				<i class="fas fa-right-to-bracket"></i><?= tohtml( _("Login")) ?>
+				<i class="fas fa-right-to-bracket"></i><?= tohtml(_("Login")) ?>
 			</button>
 			<a href="/login/?<?= tohtml(http_build_query(["logout" => 'true'])) ?>" class="button button-secondary">
-				<?= tohtml( _("Back")) ?>
+				<?= tohtml(_("Back")) ?>
 			</a>
 		</div>
 	</form>

@@ -1,4 +1,5 @@
 <?php
+
 // CrowdSec fleet-mesh transport, serve side: hands this box's published ban list to a paired peer,
 // which presents the bearer token it got during pairing. No session, no cookie, no fallback path.
 //

@@ -2,22 +2,22 @@
 <div class="toolbar">
 	<div class="toolbar-inner">
 		<div class="toolbar-buttons">
-			<?php if($v_config_path == "/var/spool/cron/crontabs/hestia"){
+			<?php if ($v_config_path == "/var/spool/cron/crontabs/hestia") {
 				?>
 				<a class="button button-secondary button-back js-button-back" href="/edit/server/">
-					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 				</a>
 			<?php
-			}else{
+			} else {
 				?>
 			<a class="button button-secondary button-back js-button-back" href="/list/server/">
-				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 			</a>
 			<?php } ?>
 		</div>
 		<div class="toolbar-buttons">
 			<button type="submit" class="button" form="main-form">
-				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml( _("Save")) ?>
+				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 			</button>
 		</div>
 	</div>
@@ -31,7 +31,7 @@
 		<input type="hidden" name="save" value="save">
 
 		<div class="form-container">
-			<h1 class="u-mb20"><?= tohtml( _("Configure Server")) ?>: <?= tohtml($v_service_name) ?></h1>
+			<h1 class="u-mb20"><?= tohtml(_("Configure Server")) ?>: <?= tohtml($v_service_name) ?></h1>
 			<?php show_alert_message($_SESSION); ?>
 			<div class="u-mb20">
 				<label for="v_config" class="form-label"><?= tohtml($v_config_path) ?></label>
@@ -40,7 +40,7 @@
 			<div class="form-check">
 				<input class="form-check-input" type="checkbox" name="v_restart" id="v_restart" checked>
 				<label for="v_restart">
-					<?= tohtml( _("Restart")) ?>
+					<?= tohtml(_("Restart")) ?>
 				</label>
 			</div>
 		</div>

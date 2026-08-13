@@ -1,6 +1,10 @@
 # editorconfig.org - HestiaRE. Also read by shfmt, which is why the shell block below is not merely
 # cosmetic: it IS the format contract the lint gate enforces (#477). The settings match the
 # prettier-plugin-sh config HestiaCP uses, so the existing tree already conforms.
+#
+# PHP is the exception: php-cs-fixer does NOT read this file, so its contract lives in
+# .php-cs-fixer.dist.php and repeats the indentation there. Change one, change the other - a
+# disagreement means the formatter rewrites the whole tree on the next run.
 root = true
 
 [*]

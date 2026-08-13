@@ -1,4 +1,5 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
@@ -564,8 +565,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 				[
 					"whitelist" => "v_spam_whitelist",
 					"blacklist" => "v_spam_blacklist",
-				]
-				as $spam_list_kind => $spam_list_var
+				] as $spam_list_kind => $spam_list_var
 			) {
 				if (!empty($_SESSION["error_msg"])) {
 					break;

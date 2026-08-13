@@ -1,8 +1,10 @@
 <?php
+
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
-function formatNotificationTimestamps(&$note) {
+function formatNotificationTimestamps(&$note)
+{
 	$dateTime = DateTime::createFromFormat("Y-m-d H:i:s", $note["DATE"] . " " . $note["TIME"]);
 	$note["TIMESTAMP_TEXT"] = $dateTime->format("d M Y, H:i");
 	$note["TIMESTAMP_ISO"] = $dateTime->format(DateTime::ATOM); // ISO 8601 format
@@ -19,7 +21,8 @@ if (($_REQUEST["ajax"] ?? "") == 1 && ($_REQUEST["token"] ?? "") === ($_SESSION[
 	}
 	unset($note);
 
-	function sort_priority_id($element1, $element2) {
+	function sort_priority_id($element1, $element2)
+	{
 		return $element2["PRIORITY"] <=> $element1["PRIORITY"];
 	}
 	$data = array_reverse($data, true);

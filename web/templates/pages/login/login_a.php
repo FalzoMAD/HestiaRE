@@ -11,22 +11,22 @@
 			<p class="error"><?= tohtml($error) ?></p>
 		<?php } ?>
 		<div class="u-mb10">
-			<label for="username" class="form-label"><?= tohtml( _("Username")) ?></label>
+			<label for="username" class="form-label"><?= tohtml(_("Username")) ?></label>
 			<input type="text" class="form-control" name="user" id="username" autocomplete="username" required autofocus>
 		</div>
 		<div class="u-mb20">
 			<label for="password" class="form-label u-side-by-side">
-				<?= tohtml( _("Password")) ?>
+				<?= tohtml(_("Password")) ?>
 				<?php if ($_SESSION["POLICY_SYSTEM_PASSWORD_RESET"] !== "no") { ?>
 					<a class="login-form-link" href="/reset/">
-						<?= tohtml( _("Forgot Password")) ?>
+						<?= tohtml(_("Forgot Password")) ?>
 					</a>
 				<?php } ?>
 			</label>
 			<input type="password" class="form-control" name="password" id="password" autocomplete="current-password" required>
 		</div>
 		<button type="submit" class="button">
-			<i class="fas fa-right-to-bracket"></i><?= tohtml( _("Next")) ?>
+			<i class="fas fa-right-to-bracket"></i><?= tohtml(_("Next")) ?>
 		</button>
 	</form>
 </div>

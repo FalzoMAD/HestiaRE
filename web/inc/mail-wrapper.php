@@ -1,5 +1,6 @@
 #!/usr/bin/php8.3
 <?php
+
 if (empty($argv[1])) {
 	echo "ERROR: not enough arguments\n";
 	echo "USAGE: mail-wrapper.php -s SUBJECT EMAIL [NOTIFY]\n";
@@ -40,4 +41,3 @@ if (!empty($to) && !empty($subject)) {
 }
 
 session_destroy();
-

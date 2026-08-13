@@ -3,13 +3,13 @@
 	<div class="toolbar-inner">
 		<div class="toolbar-buttons">
 			<a class="button button-secondary button-back js-button-back" href="/list/web/">
-				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 			</a>
 		</div>
 		<div class="toolbar-buttons">
 			<?php if (($_SESSION["userContext"] == "admin" && $accept === "true") || $_SESSION["userContext"] !== "admin") { ?>
 				<button type="submit" class="button" form="main-form">
-					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml( _("Save")) ?>
+					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</button>
 			<?php } ?>
 		</div>
@@ -24,7 +24,7 @@
 		<input type="hidden" name="ok" value="Add">
 
 		<div class="form-container">
-			<h1 class="u-mb20"><?= tohtml( _("Add Web Domain")) ?></h1>
+			<h1 class="u-mb20"><?= tohtml(_("Add Web Domain")) ?></h1>
 			<?php show_alert_message($_SESSION); ?>
 			<?php if ($_SESSION["userContext"] == "admin" && $accept !== "true") { ?>
 				<div class="alert alert-danger" role="alert">
@@ -34,17 +34,17 @@
 			<?php } ?>
 			<?php if ($_SESSION["userContext"] == "admin" && empty($accept)) { ?>
 				<div class="u-side-by-side u-mt20">
-					<a href="/add/user/" class="button u-width-full u-mr10"><?= tohtml( _("Add User")) ?></a>
-					<a href="/add/web/?<?= tohtml(http_build_query(["accept" => 'true'])) ?>" class="button button-danger u-width-full u-ml10"><?= tohtml( _("Continue")) ?></a>
+					<a href="/add/user/" class="button u-width-full u-mr10"><?= tohtml(_("Add User")) ?></a>
+					<a href="/add/web/?<?= tohtml(http_build_query(["accept" => 'true'])) ?>" class="button button-danger u-width-full u-ml10"><?= tohtml(_("Continue")) ?></a>
 				</div>
 			<?php } ?>
 			<?php if (($_SESSION["userContext"] == "admin" && $accept === "true") || $_SESSION["userContext"] !== "admin") { ?>
 				<div class="u-mb10">
-					<label for="v_domain" class="form-label"><?= tohtml( _("Domain")) ?></label>
+					<label for="v_domain" class="form-label"><?= tohtml(_("Domain")) ?></label>
 					<input type="text" class="form-control" name="v_domain" id="v_domain" value="<?= tohtml(trim($v_domain, "'")) ?>" required>
 				</div>
 				<div class="u-mb20">
-					<label for="v_ip" class="form-label"><?= tohtml( _("IP Address")) ?></label>
+					<label for="v_ip" class="form-label"><?= tohtml(_("IP Address")) ?></label>
 					<select class="form-select" name="v_ip" id="v_ip">
 						<?php
 							foreach ($ips as $ip => $value) {
@@ -52,7 +52,7 @@
 								$ip_selected = (!empty($v_ip) && $ip == $_POST['v_ip']) ? 'selected' : '';
 								echo "\t\t\t\t<option value=\"{$ip}\" {$ip_selected}>{$display_ip}</option>\n";
 							}
-						?>
+				?>
 					</select>
 				</div>
 
@@ -61,7 +61,7 @@
 						<div class="form-check">
 							<input class="form-check-input" type="checkbox" name="v_mail" id="v_mail" <?php if (empty($v_mail) && $panel[$user_plain]["MAIL_DOMAINS"] != "0"); ?>>
 							<label for="v_mail">
-								<?= tohtml( _("Mail Support")) ?>
+								<?= tohtml(_("Mail Support")) ?>
 							</label>
 						</div>
 					<?php } ?>

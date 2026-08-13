@@ -3,15 +3,15 @@
 	<div class="toolbar-inner">
 		<div class="toolbar-buttons">
 			<a class="button button-secondary button-back js-button-back" href="/list/server/">
-				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 			</a>
 			<a href="/edit/server/php/" class="button button-secondary">
-				<i class="fas fa-pencil icon-orange"></i><?= tohtml( _("Configure")) ?> PHP
+				<i class="fas fa-pencil icon-orange"></i><?= tohtml(_("Configure")) ?> PHP
 			</a>
 		</div>
 		<div class="toolbar-buttons">
 			<button type="submit" class="button" form="main-form">
-				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml( _("Save")) ?>
+				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 			</button>
 		</div>
 	</div>
@@ -25,7 +25,7 @@
 		<input type="hidden" name="save" value="save">
 
 		<div class="form-container">
-			<h1 class="u-mb20"><?= tohtml( _("Configure Server")) ?>: <?= tohtml($v_service_name) ?></h1>
+			<h1 class="u-mb20"><?= tohtml(_("Configure Server")) ?>: <?= tohtml($v_service_name) ?></h1>
 			<?php show_alert_message($_SESSION); ?>
 			<div class="js-basic-options">
 				<div class="u-mb10">
@@ -70,14 +70,16 @@
 				</div>
 				<div class="u-mb20">
 					<button type="button" class="button button-secondary js-toggle-options">
-						<?= tohtml( _("Advanced Options")) ?>
+						<?= tohtml(_("Advanced Options")) ?>
 					</button>
 				</div>
 			</div>
-			<div class="js-advanced-options <?php if (empty($v_adv)) echo 'u-hidden'; ?>">
+			<div class="js-advanced-options <?php if (empty($v_adv)) {
+				echo 'u-hidden';
+			} ?>">
 				<div class="u-mb20">
 					<button type="button" class="button button-secondary js-toggle-options">
-						<?= tohtml( _("Basic Options")) ?>
+						<?= tohtml(_("Basic Options")) ?>
 					</button>
 				</div>
 				<div class="u-mb20">
@@ -87,7 +89,7 @@
 				<div class="form-check">
 					<input class="form-check-input" type="checkbox" name="v_restart" id="v_restart" checked>
 					<label for="v_restart">
-						<?= tohtml( _("Restart")) ?>
+						<?= tohtml(_("Restart")) ?>
 					</label>
 				</div>
 			</div>

@@ -3,12 +3,12 @@
 	<div class="toolbar-inner">
 		<div class="toolbar-buttons">
 			<a class="button button-secondary button-back js-button-back" href="/list/server/">
-				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 			</a>
 		</div>
 		<div class="toolbar-buttons">
 			<a class="button button-secondary" href="/rspamd/" target="_blank" rel="noopener">
-				<i class="fas fa-up-right-from-square icon-green"></i><?= tohtml( _("Open in new tab")) ?>
+				<i class="fas fa-up-right-from-square icon-green"></i><?= tohtml(_("Open in new tab")) ?>
 			</a>
 		</div>
 	</div>
@@ -24,8 +24,8 @@
 // stylesheet into the same-origin iframe (#319). Shipped dark themes follow
 // the "dark*" naming convention (dark, dark-tonal).
 $panel_theme = !empty($_SESSION["userTheme"]) ? $_SESSION["userTheme"] : ($_SESSION["THEME"] ?? "light");
-$rspamd_dark = str_starts_with($panel_theme, "dark");
-?>
+				$rspamd_dark = str_starts_with($panel_theme, "dark");
+				?>
 <div class="container">
 	<iframe
 		id="rspamd-frame"

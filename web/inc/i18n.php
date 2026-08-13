@@ -1,4 +1,5 @@
 <?php
+
 // Functions for internationalization
 // I18N support information here
 
@@ -15,7 +16,8 @@ textdomain($domain);
  * @param string Fallback language (default: 'en')
  * @return string Language code (such as 'en' and 'ja')
  */
-function detect_user_language() {
+function detect_user_language()
+{
 	if (!empty($_SESSION["language"])) {
 		return $_SESSION["language"];
 	} elseif (!empty($_SESSION["LANGUAGE"])) {
@@ -30,7 +32,8 @@ function detect_user_language() {
  * @param string iso2 code
  * @return string Language
  */
-function translate_json($string) {
+function translate_json($string)
+{
 	$json = file_get_contents($_SERVER["DOCUMENT_ROOT"] . "/locale/languages.json");
 	$json_a = json_decode($json, true);
 	return $json_a[$string][0] . " (" . $json_a[$string . "_locale"][0] . ")";
@@ -38,7 +41,8 @@ function translate_json($string) {
 /**
  * Support translation strings that contains html
  */
-function htmlify_trans($string, $closingTag) {
+function htmlify_trans($string, $closingTag)
+{
 	$arguments = func_get_args();
 	return preg_replace_callback(
 		"/{(.*?)}/", // Ungreedy (*?)
@@ -51,7 +55,8 @@ function htmlify_trans($string, $closingTag) {
 	);
 }
 
-function get_email_template($file, $language) {
+function get_email_template($file, $language)
+{
 	if (
 		file_exists(
 			$_SERVER["HESTIA"] . "/share/email/" . $language . "/" . $file . ".html",
@@ -67,7 +72,8 @@ function get_email_template($file, $language) {
 	return false;
 }
 
-function translate_email($string, $replace) {
+function translate_email($string, $replace)
+{
 	$array1 = $array2 = [];
 	foreach ($replace as $key => $value) {
 		$array1[] = "{{" . $key . "}}";
@@ -81,4 +87,6 @@ function translate_email($string, $replace) {
  * @return string Language code (such as 'en' and 'ja')
  */
 
-function detect_login_language() {}
+function detect_login_language()
+{
+}

@@ -6,8 +6,10 @@
  * @version 1.0
  * @author HestiaCP <info@hestiacp.com>
  */
-class rcube_hestia_password {
-	public function save($curpass, $passwd) {
+class rcube_hestia_password
+{
+	public function save($curpass, $passwd)
+	{
 		$rcmail = rcmail::get_instance();
 		$hestia_host = $rcmail->config->get("password_hestia_host");
 

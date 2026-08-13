@@ -3,21 +3,21 @@
 	<div class="toolbar-inner">
 		<div class="toolbar-buttons">
 			<a href="/list/server/" class="button button-secondary button-back js-button-back">
-				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
+				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 			</a>
 			<a href="/list/ip/" class="button button-secondary">
-				<i class="fas fa-ethernet icon-blue"></i><?= tohtml( _("Network")) ?>
+				<i class="fas fa-ethernet icon-blue"></i><?= tohtml(_("Network")) ?>
 			</a>
 			<a href="/edit/server/whitelabel/" class="button button-secondary">
-				<i class="fas fa-paint-brush icon-blue"></i><?= tohtml( _("White Label")) ?>
+				<i class="fas fa-paint-brush icon-blue"></i><?= tohtml(_("White Label")) ?>
 			</a>
 			<a href="/edit/server/hestia/" class="button button-secondary">
-				<i class="fas fa-clock icon-blue"></i><?= tohtml( _("Panel Cronjobs")) ?>
+				<i class="fas fa-clock icon-blue"></i><?= tohtml(_("Panel Cronjobs")) ?>
 			</a>
 		</div>
 		<div class="toolbar-buttons">
 			<button type="submit" class="button" form="main-form">
-				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml( _("Save")) ?>
+				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 			</button>
 		</div>
 	</div>
@@ -37,7 +37,7 @@
 				"backupType" => !empty($v_backup_type) ? trim($v_backup_type, "'") : "",
 				"webmailAlias" => $_SESSION["WEBMAIL_ALIAS"] ?? "",
 			];
-		?>
+				?>
 			<form
 				x-data="<?= tohtml(json_encode($server_x_data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR)) ?>"
 				id="main-form"
@@ -49,19 +49,19 @@
 
 		<div class="form-container">
 			<h1 class="u-mb20">
-				<?= tohtml( _("Configure Server")) ?>
+				<?= tohtml(_("Configure Server")) ?>
 			</h1>
 			<?php show_alert_message($_SESSION); ?>
 
 			<!-- Basic options section -->
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
-					<i class="fas fa-gear u-mr10"></i><?= tohtml( _("Basic Options")) ?>
+					<i class="fas fa-gear u-mr10"></i><?= tohtml(_("Basic Options")) ?>
 				</summary>
 				<div class="box-collapse-content">
 					<div class="u-mb10">
 						<label for="v_hostname" class="form-label">
-							<?= tohtml( _("Hostname")) ?>
+							<?= tohtml(_("Hostname")) ?>
 						</label>
 						<input
 							type="text"
@@ -73,7 +73,7 @@
 					</div>
 					<div class="u-mb10">
 						<label for="v_timezone" class="form-label">
-							<?= tohtml( _("Time Zone")) ?>
+							<?= tohtml(_("Time Zone")) ?>
 						</label>
 						<select x-model="timezone" class="form-select" name="v_timezone" id="v_timezone">
 							<?php foreach ($v_timezones as $key => $value) { ?>
@@ -85,7 +85,7 @@
 					</div>
 					<div class="u-mb10">
 						<label for="v_theme" class="form-label">
-							<?= tohtml( _("Theme")) ?>
+							<?= tohtml(_("Theme")) ?>
 						</label>
 						<select x-model="theme" class="form-select" name="v_theme" id="v_theme">
 							<?php foreach ($theme as $key => $value) { ?>
@@ -104,11 +104,11 @@
 							<?= tohtml($_SESSION["POLICY_USER_CHANGE_THEME"] == "no" ? "checked" : "") ?>
 						>
 						<label for="v_policy_user_change_theme">
-							<?= tohtml( _("Set as selected theme for all users")) ?>
+							<?= tohtml(_("Set as selected theme for all users")) ?>
 						</label>
 					</div>
 					<div class="u-mb10">
-						<label for="v_language" class="form-label"><?= tohtml( _("Default Language")) ?></label>
+						<label for="v_language" class="form-label"><?= tohtml(_("Default Language")) ?></label>
 						<select x-model="language" class="form-select" name="v_language" id="v_language">
 							<?php foreach ($languages as $key => $value) { ?>
 								<option value="<?= tohtml($key) ?>">
@@ -125,7 +125,7 @@
 							id="v_language_update"
 						>
 						<label for="v_language_update">
-							<?= tohtml( _("Set as default language for all users")) ?>
+							<?= tohtml(_("Set as default language for all users")) ?>
 						</label>
 					</div>
 					<div class="form-check">
@@ -137,7 +137,7 @@
 							<?= tohtml($_SESSION["DEBUG_MODE"] == "true" ? "checked" : "") ?>
 						>
 						<label for="v_debug_mode">
-							<?= tohtml( _("Enable debug mode")) ?>
+							<?= tohtml(_("Enable debug mode")) ?>
 						</label>
 					</div>
 				</div>
@@ -146,25 +146,25 @@
 			<!-- Updates section -->
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
-					<i class="fas fa-code-branch u-mr10"></i><?= tohtml( _("Updates")) ?>
+					<i class="fas fa-code-branch u-mr10"></i><?= tohtml(_("Updates")) ?>
 				</summary>
 				<div class="box-collapse-content">
 					<p class="u-mb10">
-						<?= tohtml( _("Version")) ?>:
+						<?= tohtml(_("Version")) ?>:
 						<span class="optional">
 							<?= tohtml($_SESSION["VERSION"]) ?>
 						</span>
 					</p>
 					<?php if ($_SESSION["RELEASE_BRANCH"] !== "release") { ?>
 						<p class="u-mb10">
-							<?= tohtml( _("Release")) ?>:
+							<?= tohtml(_("Release")) ?>:
 							<span class="optional">
 								<?= tohtml($_SESSION["RELEASE_BRANCH"]) ?>
 							</span>
 						</p>
 					<?php } ?>
 					<p class="u-mb5">
-						<?= tohtml( _("Options")) ?>
+						<?= tohtml(_("Options")) ?>
 					</p>
 					<div class="form-check">
 						<input
@@ -175,11 +175,11 @@
 							<?= tohtml($_SESSION["POLICY_SYSTEM_ENABLE_BACON"] == "true" ? "checked" : "") ?>
 						>
 						<label for="v_experimental_features">
-							<?= tohtml( _("Enable preview features")) ?>
+							<?= tohtml(_("Enable preview features")) ?>
 						</label>
 						<span class="hint">
 							<a href="/list/server/preview/">
-								(<?= tohtml( _("View")) ?>)
+								(<?= tohtml(_("View")) ?>)
 							</a>
 						</span>
 					</div>
@@ -192,7 +192,7 @@
 							<?= tohtml($_SESSION["UPGRADE_SEND_EMAIL"] == "true" ? "checked" : "") ?>
 						>
 						<label for="v_upgrade_send_notification_email">
-							<?= tohtml( _("Send email notification when an update has been installed")) ?>
+							<?= tohtml(_("Send email notification when an update has been installed")) ?>
 						</label>
 					</div>
 					<div class="form-check">
@@ -204,7 +204,7 @@
 							<?= tohtml($_SESSION["UPGRADE_SEND_EMAIL_LOG"] == "true" ? "checked" : "") ?>
 						>
 						<label for="v_upgrade_send_email_log">
-							<?= tohtml( _("Send update installation log by email")) ?>
+							<?= tohtml(_("Send update installation log by email")) ?>
 						</label>
 					</div>
 				</div>
@@ -213,12 +213,12 @@
 			<!-- Web Server section -->
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
-					<i class="fas fa-earth-americas u-mr10"></i><?= tohtml( _("Web Server")) ?>
+					<i class="fas fa-earth-americas u-mr10"></i><?= tohtml(_("Web Server")) ?>
 				</summary>
 				<div class="box-collapse-content">
 					<?php if (!empty($_SESSION["PROXY_SYSTEM"])) { ?>
 						<p>
-							<?= tohtml( _("Proxy Server")) ?>:
+							<?= tohtml(_("Proxy Server")) ?>:
 							<span class="u-ml5">
 								<?= tohtml($_SESSION["PROXY_SYSTEM"]) ?>
 							</span>
@@ -229,7 +229,7 @@
 					<?php } ?>
 					<?php if (!empty($_SESSION["WEB_SYSTEM"])) { ?>
 						<p>
-							<?= tohtml( _("Web Server")) ?>:
+							<?= tohtml(_("Web Server")) ?>:
 							<span class="u-ml5">
 								<?= tohtml($_SESSION["WEB_SYSTEM"]) ?>
 							</span>
@@ -244,27 +244,32 @@
 					     deep-link target for the Server page's "Bot Rate Limiting" button (#482). -->
 					<details class="box-collapse u-mb10" id="botlimit">
 						<summary class="box-collapse-header">
-							<i class="fas fa-robot u-mr10"></i><?= tohtml( _("Bot Rate Limiting")) ?>
+							<i class="fas fa-robot u-mr10"></i><?= tohtml(_("Bot Rate Limiting")) ?>
 							<span class="optional u-ml5">
-								<?php $bl_enabled_count = 0; foreach ($botfamily_rows as $r) { if ($r["enabled"]) { ++$bl_enabled_count; } } ?>
+								<?php $bl_enabled_count = 0;
+				foreach ($botfamily_rows as $r) {
+					if ($r["enabled"]) {
+						++$bl_enabled_count;
+					}
+				} ?>
 								<?= tohtml(sprintf(_("%d active"), $bl_enabled_count)) ?>,
 								<?= tohtml(!empty($_SESSION["PROXY_SYSTEM"]) ? $_SESSION["PROXY_SYSTEM"] : $_SESSION["WEB_SYSTEM"]) ?>
 							</span>
 						</summary>
 						<div class="box-collapse-content">
 							<p class="hint u-mb20">
-								<?= tohtml( _("Bot families are matched on the User-Agent and throttled to the rate below (HTTP 429). Humans are never limited; malicious traffic is handled by CrowdSec, not here. Each domain then picks off, lenient or strict per family in its own settings - nothing is throttled until someone does.")) ?>
+								<?= tohtml(_("Bot families are matched on the User-Agent and throttled to the rate below (HTTP 429). Humans are never limited; malicious traffic is handled by CrowdSec, not here. Each domain then picks off, lenient or strict per family in its own settings - nothing is throttled until someone does.")) ?>
 							</p>
 							<?php foreach ($botfamily_rows as $i => $r) { ?>
 								<details class="box-collapse u-mb10">
 									<summary class="box-collapse-header">
 										<?php if ($r["fam"] === "") { ?>
-											<span class="optional"><?= tohtml( _("unused slot")) ?></span>
+											<span class="optional"><?= tohtml(_("unused slot")) ?></span>
 										<?php } else { ?>
 											<?= tohtml($r["fam"]) ?>
 											<span class="optional u-ml5">
 												<?= tohtml($r["lenient"]) ?> / <?= tohtml($r["strict"]) ?>
-												<?php if (!$r["enabled"]) { ?>- <?= tohtml( _("Disabled")) ?><?php } ?>
+												<?php if (!$r["enabled"]) { ?>- <?= tohtml(_("Disabled")) ?><?php } ?>
 											</span>
 										<?php } ?>
 									</summary>
@@ -272,35 +277,39 @@
 										<input type="hidden" name="v_bl_orig[<?= tohtml($i) ?>]" value="<?= tohtml($r["orig"]) ?>">
 										<div class="u-mb10">
 											<label for="v_bl_fam<?= tohtml($i) ?>" class="form-label">
-												<?= tohtml( _("Family")) ?>
-												<span class="optional">(<?= tohtml( _("empty to remove")) ?>)</span>
+												<?= tohtml(_("Family")) ?>
+												<span class="optional">(<?= tohtml(_("empty to remove")) ?>)</span>
 											</label>
-											<input type="text" class="form-control" name="v_bl_fam[<?= tohtml($i) ?>]" id="v_bl_fam<?= tohtml($i) ?>" value="<?= tohtml($r["fam"]) ?>" placeholder="<?= tohtml( _("unused slot")) ?>">
+											<input type="text" class="form-control" name="v_bl_fam[<?= tohtml($i) ?>]" id="v_bl_fam<?= tohtml($i) ?>" value="<?= tohtml($r["fam"]) ?>" placeholder="<?= tohtml(_("unused slot")) ?>">
 										</div>
 										<div class="u-mb10">
 											<label for="v_bl_match<?= tohtml($i) ?>" class="form-label">
-												<?= tohtml( _("User-Agent Match")) ?> <span class="optional">(<?= tohtml( _("tokens separated by |")) ?>)</span>
+												<?= tohtml(_("User-Agent Match")) ?> <span class="optional">(<?= tohtml(_("tokens separated by |")) ?>)</span>
 											</label>
 											<input type="text" class="form-control" name="v_bl_match[<?= tohtml($i) ?>]" id="v_bl_match<?= tohtml($i) ?>" value="<?= tohtml($r["match"]) ?>" placeholder="examplebot|example-crawler">
 										</div>
 										<div class="u-mb10">
-											<label for="v_bl_lenient<?= tohtml($i) ?>" class="form-label"><?= tohtml( _("Lenient")) ?></label>
+											<label for="v_bl_lenient<?= tohtml($i) ?>" class="form-label"><?= tohtml(_("Lenient")) ?></label>
 											<input type="text" class="form-control" name="v_bl_lenient[<?= tohtml($i) ?>]" id="v_bl_lenient<?= tohtml($i) ?>" value="<?= tohtml($r["lenient"]) ?>" placeholder="60r/m">
 										</div>
 										<div class="u-mb10">
-											<label for="v_bl_strict<?= tohtml($i) ?>" class="form-label"><?= tohtml( _("Strict")) ?></label>
+											<label for="v_bl_strict<?= tohtml($i) ?>" class="form-label"><?= tohtml(_("Strict")) ?></label>
 											<input type="text" class="form-control" name="v_bl_strict[<?= tohtml($i) ?>]" id="v_bl_strict<?= tohtml($i) ?>" value="<?= tohtml($r["strict"]) ?>" placeholder="20r/m">
 										</div>
 										<div class="u-mb10">
-											<label for="v_bl_enabled<?= tohtml($i) ?>" class="form-label"><?= tohtml( _("Enabled")) ?></label>
+											<label for="v_bl_enabled<?= tohtml($i) ?>" class="form-label"><?= tohtml(_("Enabled")) ?></label>
 											<select class="form-select" name="v_bl_enabled[<?= tohtml($i) ?>]" id="v_bl_enabled<?= tohtml($i) ?>">
-												<option value="yes" <?php if ($r["enabled"]) echo "selected"; ?>><?= tohtml( _("yes")) ?></option>
-												<option value="no" <?php if (!$r["enabled"]) echo "selected"; ?>><?= tohtml( _("no")) ?></option>
+												<option value="yes" <?php if ($r["enabled"]) {
+													echo "selected";
+												} ?>><?= tohtml(_("yes")) ?></option>
+												<option value="no" <?php if (!$r["enabled"]) {
+													echo "selected";
+												} ?>><?= tohtml(_("no")) ?></option>
 											</select>
 										</div>
 										<?php if ($r["burst"] !== "") { ?>
 											<p class="hint">
-												<?= tohtml( _("Advanced (config file only)")) ?>:
+												<?= tohtml(_("Advanced (config file only)")) ?>:
 												burst=<?= tohtml($r["burst"]) ?><?php if ($r["nodelay"] == "yes") { ?>, nodelay<?php } ?>
 											</p>
 										<?php } ?>
@@ -308,13 +317,13 @@
 								</details>
 							<?php } ?>
 							<p class="hint">
-								<?= tohtml( _("Disabling or removing a family also stops it being applied to any domain that used it.")) ?>
+								<?= tohtml(_("Disabling or removing a family also stops it being applied to any domain that used it.")) ?>
 							</p>
 						</div>
 					</details>
 					<?php if (!empty($_SESSION["WEB_BACKEND"])) { ?>
 						<p>
-							<?= tohtml( _("PHP Interpreter")) ?>:
+							<?= tohtml(_("PHP Interpreter")) ?>:
 							<span class="u-ml5">
 								<?= tohtml($_SESSION["WEB_BACKEND"]) ?>
 							</span>
@@ -326,11 +335,11 @@
 					<?php if (count($v_php_versions)) { ?>
 						<div class="u-mt15">
 							<p class="u-mb10">
-								<?= tohtml( _("Enabled PHP Versions")) ?>
+								<?= tohtml(_("Enabled PHP Versions")) ?>
 							</p>
 							<div class="alert alert-info u-mb10" role="alert">
 								<i class="fas fa-info"></i>
-								<p><?= tohtml( _("It may take a few minutes to save your changes. Please wait until the process has completed and do not refresh the page.")) ?></p>
+								<p><?= tohtml(_("It may take a few minutes to save your changes. Please wait until the process has completed and do not refresh the page.")) ?></p>
 							</div>
 						</div>
 						<?php foreach ($v_php_versions as $php_version) { ?>
@@ -363,7 +372,7 @@
 					<?php if (!empty($_SESSION["WEB_BACKEND"])) { ?>
 						<div class="u-mt10">
 							<label for="v_php_default_version" class="form-label">
-								<?= tohtml( _("System PHP Version")) ?>
+								<?= tohtml(_("System PHP Version")) ?>
 							</label>
 							<select class="form-select" name="v_php_default_version" id="v_php_default_version">
 								<?php foreach ($v_php_versions as $php_version) { ?>
@@ -386,11 +395,11 @@
 			<?php if (!empty($_SESSION["MAIL_SYSTEM"])) { ?>
 				<details class="box-collapse u-mb10">
 					<summary class="box-collapse-header">
-						<i class="fas fa-envelopes-bulk u-mr10"></i><?= tohtml( _("Mail Server")) ?>
+						<i class="fas fa-envelopes-bulk u-mr10"></i><?= tohtml(_("Mail Server")) ?>
 					</summary>
 					<div class="box-collapse-content">
 						<p>
-							<?= tohtml( _("Mail Server")) ?>:
+							<?= tohtml(_("Mail Server")) ?>:
 							<span class="u-ml5">
 								<?= tohtml($_SESSION["MAIL_SYSTEM"]) ?>
 							</span>
@@ -400,7 +409,7 @@
 						</p>
 						<?php if (!empty($_SESSION["ANTIVIRUS_SYSTEM"])) { ?>
 							<p>
-								<?= tohtml( _("Anti-Virus")) ?>:
+								<?= tohtml(_("Anti-Virus")) ?>:
 								<span class="u-ml5">
 									<?= tohtml($_SESSION["ANTIVIRUS_SYSTEM"]) ?>
 								</span>
@@ -411,7 +420,7 @@
 						<?php } ?>
 						<?php if (!empty($_SESSION["ANTISPAM_SYSTEM"])) { ?>
 							<p>
-								<?= tohtml( _("Spam Filter")) ?>:
+								<?= tohtml(_("Spam Filter")) ?>:
 								<span class="u-ml5">
 									<?= tohtml($_SESSION["ANTISPAM_SYSTEM"]) ?>
 								</span>
@@ -423,7 +432,7 @@
 						<?php if ($_SESSION["WEBMAIL_SYSTEM"]) { ?>
 							<div class="u-mt15 u-mb10">
 								<label for="v_webmail_alias" class="form-label">
-									<?= tohtml( _("Webmail Alias")) ?>
+									<?= tohtml(_("Webmail Alias")) ?>
 									<span x-cloak x-text="`${webmailAlias}.example.com`" class="hint"></span>
 								</label>
 								<input
@@ -444,7 +453,7 @@
 								id="v_smtp_relay"
 							>
 							<label for="v_smtp_relay">
-								<?= tohtml( _("Global SMTP Relay")) ?>
+								<?= tohtml(_("Global SMTP Relay")) ?>
 							</label>
 						</div>
 						<div
@@ -454,7 +463,7 @@
 						>
 							<div class="u-mb10">
 								<label for="v_smtp_relay_host" class="form-label">
-									<?= tohtml( _("Host")) ?>
+									<?= tohtml(_("Host")) ?>
 								</label>
 								<input
 									type="text"
@@ -466,7 +475,7 @@
 							</div>
 							<div class="u-mb10">
 								<label for="v_smtp_relay_port" class="form-label">
-									<?= tohtml( _("Port")) ?>
+									<?= tohtml(_("Port")) ?>
 								</label>
 								<input
 									type="text"
@@ -478,7 +487,7 @@
 							</div>
 							<div class="u-mb10">
 								<label for="v_smtp_relay_user" class="form-label">
-									<?= tohtml( _("Username")) ?>
+									<?= tohtml(_("Username")) ?>
 								</label>
 								<input
 									type="text"
@@ -490,7 +499,7 @@
 							</div>
 							<div class="u-mb10">
 								<label for="v_smtp_relay_pass" class="form-label">
-									<?= tohtml( _("Password")) ?>
+									<?= tohtml(_("Password")) ?>
 								</label>
 								<div class="u-pos-relative">
 									<input
@@ -510,12 +519,12 @@
 			<?php if (!empty($_SESSION["DB_SYSTEM"])) { ?>
 				<details class="box-collapse u-mb10">
 					<summary class="box-collapse-header">
-						<i class="fas fa-database u-mr10"></i><?= tohtml( _("Databases")) ?>
+						<i class="fas fa-database u-mr10"></i><?= tohtml(_("Databases")) ?>
 					</summary>
 					<div class="box-collapse-content">
 						<div class="u-mb10">
 							<p>
-								<?= tohtml( _("MySQL Support")) ?>:
+								<?= tohtml(_("MySQL Support")) ?>:
 								<span class="u-ml5">
 									<?= tohtml($v_mysql == "yes" ? _("Yes") : _("No")) ?>
 								</span>
@@ -528,7 +537,7 @@
 						<?php if ($v_mysql == "yes") { ?>
 							<div class="u-mb20">
 								<label for="v_mysql_url" class="form-label">
-									<?= tohtml( _("phpMyAdmin Alias")) ?>
+									<?= tohtml(_("phpMyAdmin Alias")) ?>
 								</label>
 								<input
 									type="text"
@@ -540,13 +549,13 @@
 							</div>
 							<div class="u-mb10">
 								<label for="v_phpmyadmin_key" class="form-label">
-									<?= tohtml( _("phpMyAdmin Single Sign On")) ?>
+									<?= tohtml(_("phpMyAdmin Single Sign On")) ?>
 									<span class="hint">
 										<a
 											href="https://hestiacp.com/docs/server-administration/databases.html"
 											target="_blank"
 										>
-											(<?= tohtml( _("More info")) ?>)
+											(<?= tohtml(_("More info")) ?>)
 										</a>
 									</span>
 								</label>
@@ -556,22 +565,22 @@
 									id="v_phpmyadmin_key"
 								>
 									<option value="no">
-										<?= tohtml( _("Disabled")) ?>
+										<?= tohtml(_("Disabled")) ?>
 									</option>
 									<option value="yes" <?= tohtml($_SESSION["PHPMYADMIN_KEY"] != "" ? "selected" : "") ?>>
-										<?= tohtml( _("Enabled")) ?>
+										<?= tohtml(_("Enabled")) ?>
 									</option>
 								</select>
 							</div>
 							<?php
 								$i = 0;
-								foreach ($v_mysql_hosts as $value) {
-									$i++;
-							?>
+							foreach ($v_mysql_hosts as $value) {
+								$i++;
+								?>
 							<div class="u-pl30">
 								<div class="u-mb10">
 									<label for="v_mysql_host" class="form-label">
-										<?= tohtml( _("Host") . " #" . $i) ?>
+										<?= tohtml(_("Host") . " #" . $i) ?>
 									</label>
 									<input
 										type="text"
@@ -584,7 +593,7 @@
 								</div>
 								<div class="u-mb10">
 									<label for="v_mysql_password" class="form-label">
-										<?= tohtml( _("Password")) ?>
+										<?= tohtml(_("Password")) ?>
 									</label>
 									<div class="u-pos-relative">
 										<input
@@ -597,7 +606,7 @@
 								</div>
 								<div class="u-mb10">
 									<label for="v_mysql_max" class="form-label">
-										<?= tohtml( _("Maximum Number of Databases")) ?>
+										<?= tohtml(_("Maximum Number of Databases")) ?>
 									</label>
 									<input
 										type="text"
@@ -610,7 +619,7 @@
 								</div>
 								<div class="u-mb10">
 									<label for="v_mysql_current" class="form-label">
-										<?= tohtml( _("Current Number of Databases")) ?>
+										<?= tohtml(_("Current Number of Databases")) ?>
 									</label>
 									<input
 										type="text"
@@ -622,12 +631,13 @@
 									>
 								</div>
 							</div>
-						<?php } } ?>
+						<?php }
+							} ?>
 						<!-- PostgreSQL Options-->
 						<?php if ($v_pgsql == "yes") { ?>
 							<div class="u-mb10">
 								<p>
-									<?= tohtml( _("PostgreSQL Support")) ?>:
+									<?= tohtml(_("PostgreSQL Support")) ?>:
 									<span class="u-ml5">
 										<?= tohtml($v_pgsql == "yes" ? _("Yes") : _("No")) ?>
 									</span>
@@ -637,32 +647,33 @@
 								</p>
 							</div>
 							<?php /* PostgreSQL's web UI is Adminer (fixed /adminer/ route,
-							         no configurable alias - see h-add-sys-adminer). */ ?>
+									 no configurable alias - see h-add-sys-adminer). */ ?>
 						<?php } ?>
 						<?php if ($v_pgsql == "yes") {
 							$i = 0;
 							foreach ($v_pgsql_hosts as $value) {
 								$i++;
-							?>
+								?>
 							<div class="u-pl30">
 								<div class="u-mb10">
-									<label for="v_pgsql_host" class="form-label"><?= tohtml( _("Host") . " #" . $i) ?></label>
+									<label for="v_pgsql_host" class="form-label"><?= tohtml(_("Host") . " #" . $i) ?></label>
 									<input type="text" class="form-control" name="v_pgsql_host" id="v_pgsql_host" value="<?= tohtml($value["HOST"]) ?>" disabled>
 								</div>
 								<div class="u-mb10">
 									<label for="v_psql_max" class="form-label">
-										<?= tohtml( _("Maximum Number of Databases")) ?>
+										<?= tohtml(_("Maximum Number of Databases")) ?>
 									</label>
 									<input type="text" class="form-control" name="v_psql_max" id="v_psql_max" value="<?= tohtml($value["MAX_DB"]) ?>" disabled>
 								</div>
 								<div class="u-mb10">
 									<label for="v_pgsql_max" class="form-label">
-										<?= tohtml( _("Current Number of Databases")) ?>
+										<?= tohtml(_("Current Number of Databases")) ?>
 									</label>
 									<input type="text" class="form-control" name="v_pgsql_max" id="v_pgsql_max" value="<?= tohtml($value["U_DB_BASES"]) ?>" disabled>
 								</div>
 							</div>
-						<?php }} ?>
+						<?php }
+							} ?>
 					</div>
 				</details>
 			<?php } ?>
@@ -670,25 +681,25 @@
 			<!-- Backups section -->
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
-					<i class="fas fa-arrow-rotate-left u-mr10"></i><?= tohtml( _("Backups")) ?>
+					<i class="fas fa-arrow-rotate-left u-mr10"></i><?= tohtml(_("Backups")) ?>
 				</summary>
 				<div class="box-collapse-content">
 					<div class="u-mb10">
 						<label for="v_backup" class="form-label">
-							<?= tohtml( _("Local Backup")) ?>
+							<?= tohtml(_("Local Backup")) ?>
 						</label>
 						<select class="form-select" name="v_backup" id="v_backup">
 							<option value="no">
-								<?= tohtml( _("No")) ?>
+								<?= tohtml(_("No")) ?>
 							</option>
 							<option value="yes" <?= tohtml($v_backup == "yes" ? "selected" : "") ?>>
-								<?= tohtml( _("Yes")) ?>
+								<?= tohtml(_("Yes")) ?>
 							</option>
 						</select>
 					</div>
 					<div class="u-mb10">
 						<label for="v_backup_mode" class="form-label">
-							<?= tohtml( _("Compression")) ?>
+							<?= tohtml(_("Compression")) ?>
 							<a
 								href="https://hestiacp.com/docs/server-administration/backup-restore.html#what-is-the-difference-between-zstd-and-gzip"
 								target="_blank"
@@ -708,7 +719,7 @@
 					</div>
 					<div class="u-mb10">
 						<label for="v_backup_gzip" class="form-label">
-							<?= tohtml( _("Compression Level")) ?>
+							<?= tohtml(_("Compression Level")) ?>
 							<a
 								href="https://hestiacp.com/docs/server-administration/backup-restore.html#what-is-the-optimal-compression-ratio"
 								target="_blank"
@@ -731,7 +742,7 @@
 					</div>
 					<div class="u-mb20">
 						<label for="v_backup_dir" class="form-label">
-							<?= tohtml( _("Directory")) ?>
+							<?= tohtml(_("Directory")) ?>
 							<a
 								href="https://hestiacp.com/docs/server-administration/backup-restore.html#how-to-change-default-backup-folder"
 								target="_blank"
@@ -758,13 +769,13 @@
 							id="v_backup_remote_adv"
 						>
 						<label for="v_backup_remote_adv">
-							<?= tohtml( _("Remote Backup")) ?>
+							<?= tohtml(_("Remote Backup")) ?>
 						</label>
 					</div>
 					<div x-cloak x-show="remoteBackupEnabled" class="u-pl30 u-mt20">
 						<div class="u-mb10">
 							<label for="backup_type" class="form-label">
-								<?= tohtml( _("Protocol")) ?>
+								<?= tohtml(_("Protocol")) ?>
 								<a
 									href="https://hestiacp.com/docs/server-administration/backup-restore.html#what-kind-of-protocols-are-currently-supported"
 									target="_blank"
@@ -796,7 +807,7 @@
 						<div x-cloak x-show="backupType == 'ftp' || backupType == 'sftp' || backupType == ''">
 							<div class="u-mb10">
 								<label for="v_backup_host" class="form-label">
-									<?= tohtml( _("Host")) ?>
+									<?= tohtml(_("Host")) ?>
 								</label>
 								<input
 									type="text"
@@ -808,7 +819,7 @@
 							</div>
 							<div class="u-mb20">
 								<label for="v_backup_port" class="form-label">
-									<?= tohtml( _("Port")) ?>
+									<?= tohtml(_("Port")) ?>
 								</label>
 								<input
 									type="text"
@@ -820,7 +831,7 @@
 							</div>
 							<div class="u-mb10">
 								<label for="v_backup_username" class="form-label">
-									<?= tohtml( _("Username")) ?>
+									<?= tohtml(_("Username")) ?>
 								</label>
 								<input
 									type="text"
@@ -832,7 +843,7 @@
 							</div>
 							<div class="u-mb20">
 								<label for="v_backup_password" class="form-label">
-									<?= tohtml( _("Password")) ?>
+									<?= tohtml(_("Password")) ?>
 								</label>
 								<div class="u-pos-relative">
 									<input
@@ -846,7 +857,7 @@
 							</div>
 							<div class="u-mb10">
 								<label for="v_backup_bpath" class="form-label">
-									<?= tohtml( _("Directory")) ?>
+									<?= tohtml(_("Directory")) ?>
 								</label>
 								<input
 									type="text"
@@ -898,7 +909,7 @@
 						<div x-cloak x-show="backupType == 'rclone'">
 							<div class="u-mb10">
 								<label for="v_rclone_host" class="form-label">
-									<?= tohtml( _("Host")) ?>
+									<?= tohtml(_("Host")) ?>
 								</label>
 								<input
 									type="text"
@@ -910,7 +921,7 @@
 							</div>
 							<div class="u-mb10">
 								<label for="v_rclone_path" class="form-label">
-									<?= tohtml( _("Directory")) ?>
+									<?= tohtml(_("Directory")) ?>
 								</label>
 								<input
 									type="text"
@@ -926,26 +937,26 @@
 			</details>
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
-					<i class="fas fa-arrows-rotate u-mr10"></i><?= tohtml( _("Incremental Backups")) ?>
+					<i class="fas fa-arrows-rotate u-mr10"></i><?= tohtml(_("Incremental Backups")) ?>
 				</summary>
 				<div class="box-collapse-content">
 					<div class="u-mb10">
 						<label for="v_backup_incremental" class="form-label">
-							<?= tohtml( _("Enable incremental backup")) ?>
+							<?= tohtml(_("Enable incremental backup")) ?>
 						</label>
 						<select class="form-select" name="v_backup_incremental" id="v_backup_incremental" x-model="incrementalBackups">
 							<option value="no">
-								<?= tohtml( _("No")) ?>
+								<?= tohtml(_("No")) ?>
 							</option>
 							<option value="yes" <?= tohtml($v_backup_incremental == "yes" ? "selected" : "") ?>>
-								<?= tohtml( _("Yes")) ?>
+								<?= tohtml(_("Yes")) ?>
 							</option>
 						</select>
 					</div>
 						<div x-cloak x-show="incrementalBackups == 'yes'">
 						<div class="u-mb10">
 							<label for="v_repo" class="form-label">
-								<?= tohtml( _("Repository")) ?>
+								<?= tohtml(_("Repository")) ?>
 							</label>
 							<input
 								type="text"
@@ -957,7 +968,7 @@
 						</div>
 						<div class="u-mb10">
 							<label for="v_repo" class="form-label">
-								<?= tohtml( _("Snapshots")) ?>
+								<?= tohtml(_("Snapshots")) ?>
 							</label>
 							<input
 								type="text"
@@ -969,7 +980,7 @@
 						</div>
 						<div class="u-mb10">
 							<label for="v_repo" class="form-label">
-								<?= tohtml( _("Keep last daily backups")) ?>
+								<?= tohtml(_("Keep last daily backups")) ?>
 							</label>
 							<input
 								type="text"
@@ -981,7 +992,7 @@
 						</div>
 						<div class="u-mb10">
 							<label for="v_repo" class="form-label">
-								<?= tohtml( _("Keep last weekly backups")) ?>
+								<?= tohtml(_("Keep last weekly backups")) ?>
 							</label>
 							<input
 								type="text"
@@ -993,7 +1004,7 @@
 						</div>
 						<div class="u-mb10">
 							<label for="v_repo" class="form-label">
-								<?= tohtml( _("Keep last monthly backups")) ?>
+								<?= tohtml(_("Keep last monthly backups")) ?>
 							</label>
 							<input
 								type="text"
@@ -1005,7 +1016,7 @@
 						</div>
 						<div class="u-mb10">
 							<label for="v_repo" class="form-label">
-								<?= tohtml( _("Keep last yearly backups")) ?>
+								<?= tohtml(_("Keep last yearly backups")) ?>
 							</label>
 							<input
 								type="text"
@@ -1022,12 +1033,12 @@
 			<!-- SSL section -->
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
-					<i class="fas fa-lock u-mr10"></i><?= tohtml( _("SSL")) ?>
+					<i class="fas fa-lock u-mr10"></i><?= tohtml(_("SSL")) ?>
 				</summary>
 				<div class="box-collapse-content">
 					<div class="u-mb20">
 						<label for="v_ssl_crt" class="form-label">
-							<?= tohtml( _("SSL Certificate")) ?>
+							<?= tohtml(_("SSL Certificate")) ?>
 							<span id="generate-csr">
 								/
 								<a
@@ -1035,7 +1046,7 @@
 									href="/generate/ssl/?<?= tohtml(http_build_query(["domain" => trim($v_hostname, '"')])) ?>"
 									target="_blank"
 								>
-									<?= tohtml( _("Generate Self-Signed SSL Certificate")) ?>
+									<?= tohtml(_("Generate Self-Signed SSL Certificate")) ?>
 								</a>
 							</span>
 						</label>
@@ -1047,7 +1058,7 @@
 					</div>
 					<div class="u-mb20">
 						<label for="v_ssl_key" class="form-label">
-							<?= tohtml( _("SSL Private Key")) ?>
+							<?= tohtml(_("SSL Private Key")) ?>
 						</label>
 						<textarea
 							class="form-control u-min-height100 u-console"
@@ -1057,33 +1068,33 @@
 					</div>
 					<ul class="values-list">
 						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml( _("Issued To")) ?></span>
+							<span class="values-list-label"><?= tohtml(_("Issued To")) ?></span>
 							<span class="values-list-value"><?= tohtml($v_ssl_subject) ?></span>
 						</li>
 						<?php if ($v_ssl_aliases) { ?>
 							<li class="values-list-item">
-								<span class="values-list-label"><?= tohtml( _("Alternate")) ?></span>
+								<span class="values-list-label"><?= tohtml(_("Alternate")) ?></span>
 								<span class="values-list-value"><?= tohtml($v_ssl_aliases) ?></span>
 							</li>
 						<?php } ?>
 						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml( _("Not Before")) ?></span>
+							<span class="values-list-label"><?= tohtml(_("Not Before")) ?></span>
 							<span class="values-list-value"><?= tohtml($v_ssl_not_before) ?></span>
 						</li>
 						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml( _("Not After")) ?></span>
+							<span class="values-list-label"><?= tohtml(_("Not After")) ?></span>
 							<span class="values-list-value"><?= tohtml($v_ssl_not_after) ?></span>
 						</li>
 						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml( _("Signature")) ?></span>
+							<span class="values-list-label"><?= tohtml(_("Signature")) ?></span>
 							<span class="values-list-value"><?= tohtml($v_ssl_signature) ?></span>
 						</li>
 						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml( _("Key Size")) ?></span>
+							<span class="values-list-label"><?= tohtml(_("Key Size")) ?></span>
 							<span class="values-list-value"><?= tohtml($v_ssl_pub_key) ?></span>
 						</li>
 						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml( _("Issued By")) ?></span>
+							<span class="values-list-label"><?= tohtml(_("Issued By")) ?></span>
 							<span class="values-list-value"><?= tohtml($v_ssl_issuer) ?></span>
 						</li>
 					</ul>
@@ -1093,34 +1104,34 @@
 			<!-- Security section -->
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
-					<i class="fas fa-key u-mr10"></i><?= tohtml( _("Security")) ?>
+					<i class="fas fa-key u-mr10"></i><?= tohtml(_("Security")) ?>
 				</summary>
 				<div class="box-collapse-content">
 
 					<details class="collapse">
 						<summary class="collapse-header">
-							<?= tohtml( _("System")) ?>
+							<?= tohtml(_("System")) ?>
 						</summary>
 						<div class="collapse-content">
 							<h3 class="u-mt20 u-mb10">
-								<?= tohtml( _("Login")) ?>
+								<?= tohtml(_("Login")) ?>
 							</h3>
 							<div class="u-mb10">
 								<label for="v_login_style" class="form-label">
-									<?= tohtml( _("Login screen style")) ?>
+									<?= tohtml(_("Login screen style")) ?>
 								</label>
 								<select class="form-select" name="v_login_style" id="v_login_style">
 									<option value="default">
-										<?= tohtml( _("Default")) ?>
+										<?= tohtml(_("Default")) ?>
 									</option>
 									<option value="old" <?= tohtml($_SESSION["LOGIN_STYLE"] == "old" ? "selected" : "") ?>>
-										<?= tohtml( _("Old Style")) ?>
+										<?= tohtml(_("Old Style")) ?>
 									</option>
 								</select>
 							</div>
 							<div class="u-mb10">
 								<label for="v_policy_system_password_reset" class="form-label">
-									<?= tohtml( _("Allow users to reset their passwords")) ?>
+									<?= tohtml(_("Allow users to reset their passwords")) ?>
 								</label>
 								<select
 									class="form-select"
@@ -1128,19 +1139,19 @@
 									id="v_policy_system_password_reset"
 								>
 									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
+										<?= tohtml(_("Yes")) ?>
 									</option>
 									<option
 										value="no"
 										<?= tohtml($_SESSION["POLICY_SYSTEM_PASSWORD_RESET"] == "no" ? "selected" : "") ?>
 									>
-										<?= tohtml( _("No")) ?>
+										<?= tohtml(_("No")) ?>
 									</option>
 								</select>
 							</div>
 							<div class="u-mb20">
 								<label for="v_inactive_session_timeout" class="form-label">
-									<?= tohtml( _("Inactive session timeout")) ?> (<?= tohtml( _("Minutes")) ?>)
+									<?= tohtml(_("Inactive session timeout")) ?> (<?= tohtml(_("Minutes")) ?>)
 								</label>
 								<input
 									type="text"
@@ -1152,7 +1163,7 @@
 							</div>
 							<div class="u-mb10">
 								<label for="v_policy_csrf_strictness" class="form-label">
-									<?= tohtml( _("Prevent CSRF")) ?>
+									<?= tohtml(_("Prevent CSRF")) ?>
 								</label>
 								<select
 									class="form-select"
@@ -1160,13 +1171,13 @@
 									id="v_policy_csrf_strictness"
 								>
 									<option value="0">
-										<?= tohtml( _("Disabled")) ?>
+										<?= tohtml(_("Disabled")) ?>
 									</option>
 									<option value="1"	<?= tohtml($_SESSION["POLICY_CSRF_STRICTNESS"] == "1" ? "selected" : "") ?>>
-										<?= tohtml( _("Enabled")) ?>
+										<?= tohtml(_("Enabled")) ?>
 									</option>
 									<option value="2"	<?= tohtml($_SESSION["POLICY_CSRF_STRICTNESS"] == "2" ? "selected" : "") ?>>
-										<?= tohtml( _("Strict")) ?>
+										<?= tohtml(_("Strict")) ?>
 									</option>
 								</select>
 							</div>
@@ -1176,15 +1187,15 @@
 					<?php if ($_SESSION["userContext"] === "admin" && $_SESSION["user"] === $_SESSION["ROOT_USER"]) { ?>
 						<details class="collapse">
 							<summary class="collapse-header">
-								<?= tohtml( _("System Protection")) ?>
+								<?= tohtml(_("System Protection")) ?>
 							</summary>
 							<div class="collapse-content">
 								<h3 class="u-mb10">
-									<?= tohtml( _("System Administrator account")) ?>
+									<?= tohtml(_("System Administrator account")) ?>
 								</h3>
 								<div class="u-mb10">
 									<label for="v_policy_system_protected_admin" class="form-label">
-										<?= tohtml( _("Restrict access to read-only for other administrators")) ?>
+										<?= tohtml(_("Restrict access to read-only for other administrators")) ?>
 									</label>
 									<select
 										class="form-select"
@@ -1192,16 +1203,16 @@
 										id="v_policy_system_protected_admin"
 									>
 										<option value="yes">
-											<?= tohtml( _("Yes")) ?>
+											<?= tohtml(_("Yes")) ?>
 										</option>
 										<option value="no" <?= tohtml($_SESSION["POLICY_SYSTEM_PROTECTED_ADMIN"] !== "yes" ? "selected" : "") ?>>
-											<?= tohtml( _("No")) ?>
+											<?= tohtml(_("No")) ?>
 										</option>
 									</select>
 								</div>
 								<div class="u-mb10">
 									<label for="v_policy_system_hide_admin" class="form-label">
-										<?= tohtml( _("Hide account from other administrators")) ?>
+										<?= tohtml(_("Hide account from other administrators")) ?>
 									</label>
 									<select
 										class="form-select"
@@ -1209,16 +1220,16 @@
 										id="v_policy_system_hide_admin"
 									>
 										<option value="yes">
-											<?= tohtml( _("Yes")) ?>
+											<?= tohtml(_("Yes")) ?>
 										</option>
 										<option value="no" <?= tohtml($_SESSION["POLICY_SYSTEM_HIDE_ADMIN"] !== "yes" ? "selected" : "") ?>>
-											<?= tohtml( _("No")) ?>
+											<?= tohtml(_("No")) ?>
 										</option>
 									</select>
 								</div>
 								<div class="u-mb10">
 									<label for="v_policy_system_hide_services" class="form-label">
-										<?= tohtml( _("Do not allow other administrators to access Server Settings")) ?>
+										<?= tohtml(_("Do not allow other administrators to access Server Settings")) ?>
 									</label>
 									<select
 										class="form-select"
@@ -1226,10 +1237,10 @@
 										id="v_policy_system_hide_services"
 									>
 										<option value="yes">
-											<?= tohtml( _("Yes")) ?>
+											<?= tohtml(_("Yes")) ?>
 										</option>
 										<option value="no" <?= tohtml($_SESSION["POLICY_SYSTEM_HIDE_SERVICES"] !== "yes" ? "selected" : "") ?>>
-											<?= tohtml( _("No")) ?>
+											<?= tohtml(_("No")) ?>
 										</option>
 									</select>
 								</div>
@@ -1239,15 +1250,15 @@
 
 					<details class="collapse">
 						<summary class="collapse-header">
-							<?= tohtml( _("Policies")) ?>
+							<?= tohtml(_("Policies")) ?>
 						</summary>
 						<div class="collapse-content">
 							<h3 class="u-mb10">
-								<?= tohtml( _("Users")) ?>
+								<?= tohtml(_("Users")) ?>
 							</h3>
 							<div class="u-mb10">
 								<label for="v_policy_user_edit_details" class="form-label">
-									<?= tohtml( _("Allow users to edit their account details")) ?>
+									<?= tohtml(_("Allow users to edit their account details")) ?>
 								</label>
 								<select
 									class="form-select"
@@ -1255,29 +1266,29 @@
 									id="v_policy_user_edit_details"
 								>
 									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
+										<?= tohtml(_("Yes")) ?>
 									</option>
 									<option value="no" <?= tohtml($_SESSION["POLICY_USER_EDIT_DETAILS"] == "no" ? "selected" : "") ?>>
-										<?= tohtml( _("No")) ?>
+										<?= tohtml(_("No")) ?>
 									</option>
 								</select>
 							</div>
 							<div class="u-mb10">
 								<label for="v_policy_user_edit_web_templates" class="form-label">
-									<?= tohtml( _("Allow users to change templates when editing web domains")) ?>
+									<?= tohtml(_("Allow users to change templates when editing web domains")) ?>
 								</label>
 								<select class="form-select" name="v_policy_user_edit_web_templates" id="v_policy_user_edit_web_templates">
 									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
+										<?= tohtml(_("Yes")) ?>
 									</option>
 									<option value="no" <?= tohtml($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] == "no" ? "selected" : "") ?>>
-										<?= tohtml( _("No")) ?>
+										<?= tohtml(_("No")) ?>
 									</option>
 								</select>
 							</div>
 							<div class="u-mb10">
 								<label for="v_policy_user_view_logs" class="form-label">
-									<?= tohtml( _("Allow users to view action and login history logs")) ?>
+									<?= tohtml(_("Allow users to view action and login history logs")) ?>
 								</label>
 								<select
 									class="form-select"
@@ -1285,16 +1296,16 @@
 									id="v_policy_user_view_logs"
 								>
 									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
+										<?= tohtml(_("Yes")) ?>
 									</option>
 									<option value="no" <?= tohtml($_SESSION["POLICY_USER_VIEW_LOGS"] == "no" ? "selected" : "") ?>>
-										<?= tohtml( _("No")) ?>
+										<?= tohtml(_("No")) ?>
 									</option>
 								</select>
 							</div>
 							<div class="u-mb10">
 								<label for="v_policy_user_delete_logs" class="form-label">
-									<?= tohtml( _("Allow users to delete log history")) ?>
+									<?= tohtml(_("Allow users to delete log history")) ?>
 								</label>
 								<select
 									class="form-select"
@@ -1302,18 +1313,18 @@
 									id="v_policy_user_delete_logs"
 								>
 									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
+										<?= tohtml(_("Yes")) ?>
 									</option>
 									<option value="no" <?= tohtml($_SESSION["POLICY_USER_DELETE_LOGS"] == "no" ? "selected" : "") ?>>
-										<?= tohtml( _("No")) ?>
+										<?= tohtml(_("No")) ?>
 									</option>
 								</select>
 							</div>
 							<?php if ($_SESSION["POLICY_SYSTEM_ENABLE_BACON"] === "true") { ?>
 								<div class="u-mb10">
 									<label for="v_policy_user_view_suspended" class="form-label">
-										<?= tohtml( _("Allow suspended users to log in with read-only access")) ?>
-										<span class="hint">(<?= tohtml( _("Preview")) ?>)</span>
+										<?= tohtml(_("Allow suspended users to log in with read-only access")) ?>
+										<span class="hint">(<?= tohtml(_("Preview")) ?>)</span>
 									</label>
 									<select
 										class="form-select"
@@ -1321,17 +1332,17 @@
 										id="v_policy_user_view_suspended"
 									>
 										<option value="yes">
-											<?= tohtml( _("Yes")) ?>
+											<?= tohtml(_("Yes")) ?>
 										</option>
 										<option value="no" <?= tohtml($_SESSION["POLICY_USER_VIEW_SUSPENDED"] == "no" ? "selected" : "") ?>>
-											<?= tohtml( _("No")) ?>
+											<?= tohtml(_("No")) ?>
 										</option>
 									</select>
 								</div>
 							<?php } ?>
 							<div class="u-mb10">
 								<label for="v_policy_backup_suspended_users" class="form-label">
-									<?= tohtml( _("Allow suspended users to create new backups")) ?>
+									<?= tohtml(_("Allow suspended users to create new backups")) ?>
 								</label>
 								<select
 									class="form-select"
@@ -1339,16 +1350,16 @@
 									id="v_policy_backup_suspended_users"
 								>
 									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
+										<?= tohtml(_("Yes")) ?>
 									</option>
 									<option value="no" <?= tohtml($_SESSION["POLICY_BACKUP_SUSPENDED_USERS"] == "no" ? "selected" : "") ?>>
-										<?= tohtml( _("No")) ?>
+										<?= tohtml(_("No")) ?>
 									</option>
 								</select>
 							</div>
 							<div class="u-mb10">
 								<label for="v_policy_sync_error_documents" class="form-label">
-									<?= tohtml( _("Sync Error document templates on user rebuild")) ?>
+									<?= tohtml(_("Sync Error document templates on user rebuild")) ?>
 								</label>
 								<select
 									class="form-select"
@@ -1356,16 +1367,16 @@
 									id="v_policy_sync_error_documents"
 								>
 									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
+										<?= tohtml(_("Yes")) ?>
 									</option>
 									<option value="no" <?= tohtml($_SESSION["POLICY_SYNC_ERROR_DOCUMENTS"] == "no" ? "selected" : "") ?>>
-										<?= tohtml( _("No")) ?>
+										<?= tohtml(_("No")) ?>
 									</option>
 								</select>
 							</div>
 							<div class="u-mb10">
 								<label for="v_policy_sync_skeleton" class="form-label">
-									<?= tohtml( _("Sync Skeleton templates")) ?>
+									<?= tohtml(_("Sync Skeleton templates")) ?>
 								</label>
 								<select
 									class="form-select"
@@ -1373,19 +1384,19 @@
 									id="v_policy_sync_skeleton"
 								>
 									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
+										<?= tohtml(_("Yes")) ?>
 									</option>
 									<option value="no" <?= tohtml($_SESSION["POLICY_SYNC_SKELETON"] == "no" ? "selected" : "") ?>>
-										<?= tohtml( _("No")) ?>
+										<?= tohtml(_("No")) ?>
 									</option>
 								</select>
 							</div>
 							<h3 class="u-mt20 u-mb10">
-								<?= tohtml( _("Domains")) ?>
+								<?= tohtml(_("Domains")) ?>
 							</h3>
 							<div class="u-mb10">
 								<label for="v_enforce_subdomain_ownership" class="form-label">
-									<?= tohtml( _("Enforce subdomain ownership")) ?>
+									<?= tohtml(_("Enforce subdomain ownership")) ?>
 								</label>
 								<select
 									class="form-select"
@@ -1393,10 +1404,10 @@
 									id="v_enforce_subdomain_ownership"
 								>
 									<option value="yes">
-										<?= tohtml( _("Yes")) ?>
+										<?= tohtml(_("Yes")) ?>
 									</option>
 									<option value="no" <?= tohtml($_SESSION["ENFORCE_SUBDOMAIN_OWNERSHIP"] == "no" ? "selected" : "") ?>>
-										<?= tohtml( _("No")) ?>
+										<?= tohtml(_("No")) ?>
 									</option>
 								</select>
 							</div>
@@ -1409,63 +1420,63 @@
 			<!-- Plugins section -->
 			<details class="box-collapse u-mb10">
 				<summary class="box-collapse-header">
-					<i class="fas fa-puzzle-piece u-mr10"></i><?= tohtml( _("Plugins")) ?>
+					<i class="fas fa-puzzle-piece u-mr10"></i><?= tohtml(_("Plugins")) ?>
 				</summary>
 				<div class="box-collapse-content">
 					<div class="u-mb10">
 						<label for="v_resources_limit" class="form-label">
-							<?= tohtml( _("Limit System Resources")) ?>
+							<?= tohtml(_("Limit System Resources")) ?>
 						</label>
 						<select class="form-select" name="v_resources_limit" id="v_resources_limit">
 							<option value="no">
-								<?= tohtml( _("No")) ?>
+								<?= tohtml(_("No")) ?>
 							</option>
 							<option value="yes" <?= tohtml($_SESSION["RESOURCES_LIMIT"] == "yes" ? "selected" : "") ?>>
-								<?= tohtml( _("Yes")) ?>
+								<?= tohtml(_("Yes")) ?>
 							</option>
 						</select>
 					</div>
 					<div class="u-mb10">
 						<label for="v_quota" class="form-label">
-							<?= tohtml( _("File System Disk Quota")) ?>
+							<?= tohtml(_("File System Disk Quota")) ?>
 						</label>
 						<select class="form-select" name="v_quota" id="v_quota">
 							<option value="no">
-								<?= tohtml( _("No")) ?>
+								<?= tohtml(_("No")) ?>
 							</option>
 							<option value="yes" <?= tohtml($_SESSION["DISK_QUOTA"] == "yes" ? "selected" : "") ?>>
-								<?= tohtml( _("Yes")) ?>
+								<?= tohtml(_("Yes")) ?>
 							</option>
 						</select>
 					</div>
 					<div class="u-mb10">
 						<label for="v_firewall" class="form-label">
-							<?= tohtml( _("Firewall")) ?>
+							<?= tohtml(_("Firewall")) ?>
 						</label>
 						<select class="form-select" name="v_firewall" id="v_firewall">
 							<option value="no">
-								<?= tohtml( _("No")) ?>
+								<?= tohtml(_("No")) ?>
 							</option>
 							<option value="yes" <?= tohtml($_SESSION["FIREWALL_SYSTEM"] == "nftables" ? "selected" : "") ?>>
-								<?= tohtml( _("Yes")) ?>
+								<?= tohtml(_("Yes")) ?>
 							</option>
 						</select>
 					</div>
 					<div class="u-mb10">
 						<label for="v_fail2ban" class="form-label">
-							<?= tohtml( _("Brute-force protection (Fail2Ban)")) ?>
+							<?= tohtml(_("Brute-force protection (Fail2Ban)")) ?>
 						</label>
 						<select class="form-select" name="v_fail2ban" id="v_fail2ban">
 							<option value="no">
-								<?= tohtml( _("No")) ?>
+								<?= tohtml(_("No")) ?>
 							</option>
 							<option value="yes" <?= tohtml($_SESSION["FIREWALL_EXTENSION"] == "fail2ban" ? "selected" : "") ?>>
-								<?= tohtml( _("Yes")) ?>
+								<?= tohtml(_("Yes")) ?>
 							</option>
 						</select>
 						<?php if (!empty($_SESSION["MAIL_SYSTEM"])) { ?>
 							<span class="hint">
-								<?= tohtml( _("Mail is installed: turning this off and relying on CrowdSec alone leaves mail brute force unprotected - CrowdSec has no mail detection surface.")) ?>
+								<?= tohtml(_("Mail is installed: turning this off and relying on CrowdSec alone leaves mail brute force unprotected - CrowdSec has no mail detection surface.")) ?>
 							</span>
 						<?php } ?>
 					</div>

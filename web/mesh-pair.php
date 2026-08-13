@@ -1,4 +1,5 @@
 <?php
+
 // CrowdSec fleet-mesh pairing, accepting side: completes a coupling that a peer initiated with the
 // one-time code an admin minted HERE (h-generate-sys-crowdsec-pairing).
 //

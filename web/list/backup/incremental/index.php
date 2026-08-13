@@ -1,11 +1,14 @@
 <?php
+
 use function Hestiacp\quoteshellarg\quoteshellarg;
+
 $TAB = "BACKUP";
 
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
-function getTransByType($type) {
+function getTransByType($type)
+{
 	switch ($type) {
 		case "dir":
 			echo _("Directory");

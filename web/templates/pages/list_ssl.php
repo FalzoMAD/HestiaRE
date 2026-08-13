@@ -4,7 +4,7 @@
 		<input type="hidden" name="token" value="<?= tohtml($_SESSION["token"]) ?>">
 
 		<div class="form-container">
-			<h1 class="u-mb20"><?= tohtml( _("Generate Self-Signed SSL Certificate")) ?></h1>
+			<h1 class="u-mb20"><?= tohtml(_("Generate Self-Signed SSL Certificate")) ?></h1>
 			<?php show_alert_message($_SESSION); ?>
 			<div
 				x-data="{
@@ -16,14 +16,14 @@
 				class="u-mb20"
 			>
 				<label for="v_crt" class="form-label u-side-by-side">
-					<?= tohtml( _("SSL Certificate")) ?>
+					<?= tohtml(_("SSL Certificate")) ?>
 					<a
 						x-bind:href="blob()"
 						download="<?= tohtml($v_domain) ?>.crt"
-						title="<?= tohtml( _("Download")) ?>"
+						title="<?= tohtml(_("Download")) ?>"
 					>
 						<i class="fas fa-download"></i>
-						<span class="u-hidden"><?= tohtml( _("Download")) ?></span>
+						<span class="u-hidden"><?= tohtml(_("Download")) ?></span>
 					</a>
 				</label>
 				<textarea
@@ -43,14 +43,14 @@
 				class="u-mb20"
 			>
 				<label for="v_key" class="form-label u-side-by-side">
-					<?= tohtml( _("SSL Private Key")) ?>
+					<?= tohtml(_("SSL Private Key")) ?>
 					<a
 						x-bind:href="blob()"
 						download="<?= tohtml($v_domain) ?>.key"
-						title="<?= tohtml( _("Download")) ?>"
+						title="<?= tohtml(_("Download")) ?>"
 					>
 						<i class="fas fa-download"></i>
-						<span class="u-hidden"><?= tohtml( _("Download")) ?></span>
+						<span class="u-hidden"><?= tohtml(_("Download")) ?></span>
 					</a>
 				</label>
 				<textarea
@@ -70,14 +70,14 @@
 				class="u-mb20"
 			>
 				<label for="v_csr" class="form-label u-side-by-side">
-					<?= tohtml( _("SSL CSR")) ?>
+					<?= tohtml(_("SSL CSR")) ?>
 					<a
 						x-bind:href="blob()"
 						download="<?= tohtml($v_domain) ?>.csr"
-						title="<?= tohtml( _("Download")) ?>"
+						title="<?= tohtml(_("Download")) ?>"
 					>
 						<i class="fas fa-download"></i>
-						<span class="u-hidden"><?= tohtml( _("Download")) ?></span>
+						<span class="u-hidden"><?= tohtml(_("Download")) ?></span>
 					</a>
 				</label>
 				<textarea

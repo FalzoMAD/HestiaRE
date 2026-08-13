@@ -12,6 +12,14 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **PHP has a format contract again** (#647). Upstream formats with prettier, which needs node and
+  therefore cannot run on our runner, so nothing had enforced the style since the fork - and
+  php-cs-fixer, the node-free replacement, defaults to PSR-12 with four spaces and rewrote whatever
+  it touched. `.php-cs-fixer.dist.php` pins the actual house style (PSR-12, tabs) and the tree was
+  formatted to match it once; vendored PHP is excluded by deriving the list from `VENDORED.json`.
+
 ### Fixed
 
 - **A package could not be saved from the panel on an apache web role** (#644), which is three of
