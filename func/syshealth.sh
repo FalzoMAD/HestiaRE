@@ -282,94 +282,106 @@ function check_key_exists() {
 	grep -e "^$1=" $HESTIA/conf/hestia.conf
 }
 
+# Restore one system config key to its default.
+#
+# The key holding no value is the same problem as the key being absent: h-list-sys-config emits
+# every key of its fixed set, so both reach the panel as "" - and an empty value reads as the
+# PERMISSIVE side at the gates that consume it (POLICY_SYSTEM_PASSWORD_RESET as "not no",
+# POLICY_SYSTEM_PROTECTED_ADMIN as "not yes"). Checking presence alone let that through.
+#
+# The decision needs no table of keys: each call carries its own default, and an empty value is
+# only repaired when that default is not empty. Nine keys here default to '' on purpose (the SMTP
+# relay fields, FROM_NAME/FROM_EMAIL, PHPMYADMIN_KEY) and drop out by themselves.
+#
+# What it does NOT cover, and must not: a key that h-delete-sys-* empties deliberately. Repairing
+# those would re-register a component that was just removed. Two exist, they pass 'keyonly' and
+# name the command that clears them.
+# The decision, separate from the write: a block that needs its own command (LANGUAGE) asks the same
+# question rather than carrying a second copy of the rule.
+function key_needs_default() {
+	local key="$1" default="$2" mode="${3:-}" line value
+	line=$(check_key_exists "$key" | head -1)
+	[ -z "$line" ] && return 0
+	[ "$mode" = "keyonly" ] && return 1
+	[ -z "$default" ] && return 1
+	value="${line#*=}"
+	value="${value#\'}"
+	value="${value%\'}"
+	[ -z "$value" ]
+}
+
+function repair_key() {
+	local key="$1" default="$2" mode="${3:-}"
+	key_needs_default "$key" "$default" "$mode" || return 0
+	if [ -z "$(check_key_exists "$key")" ]; then
+		echo "[ ! ] Adding missing variable to hestia.conf: $key ('$default')"
+	else
+		echo "[ ! ] Setting empty value in hestia.conf: $key ('$default')"
+	fi
+	$BIN/h-change-sys-config-value "$key" "$default"
+}
+
 # Repair System Configuration
 # Adds missing variables to $HESTIA/conf/hestia.conf with safe default values
 function syshealth_repair_system_config() {
 	# Release branch
-	if [[ -z $(check_key_exists 'RELEASE_BRANCH') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: RELEASE_BRANCH ('release')"
-		$BIN/h-change-sys-config-value 'RELEASE_BRANCH' 'release'
-	fi
+	repair_key 'RELEASE_BRANCH' 'release'
 	# Webmail alias
 	if [ -n "$IMAP_SYSTEM" ]; then
-		if [[ -z $(check_key_exists 'WEBMAIL_ALIAS') ]]; then
-			echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_ALIAS ('webmail')"
-			$BIN/h-change-sys-config-value 'WEBMAIL_ALIAS' 'webmail'
-		fi
+		repair_key 'WEBMAIL_ALIAS' 'webmail'
 	fi
 
 	# phpMyAdmin alias (PostgreSQL uses Adminer, wired up by h-add-sys-adminer)
 	if [ -n "$DB_SYSTEM" ]; then
 		if echo "$DB_SYSTEM" | grep -qw 'mysql'; then
-			if [[ -z $(check_key_exists 'DB_PMA_ALIAS') ]]; then
-				echo "[ ! ] Adding missing variable to hestia.conf: DB_PMA_ALIAS ('phpmyadmin)"
-				$BIN/h-change-sys-config-value 'DB_PMA_ALIAS' 'phpmyadmin'
-			fi
+			# keyonly: h-delete-sys-mariadb and h-delete-sys-phpmyadmin empty this key on purpose.
+			# Repairing it on emptiness would hand the alias back to a phpMyAdmin that is gone.
+			repair_key 'DB_PMA_ALIAS' 'phpmyadmin' 'keyonly'
 		fi
 	fi
 
 	# Backup compression level
-	if [[ -z $(check_key_exists 'BACKUP_GZIP') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: BACKUP_GZIP ('4')"
-		$BIN/h-change-sys-config-value 'BACKUP_GZIP' '4'
-	fi
+	repair_key 'BACKUP_GZIP' '4'
 
 	# Theme
-	if [[ -z $(check_key_exists 'THEME') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: THEME ('dark')"
-		$BIN/h-change-sys-config-value 'THEME' 'dark'
-	fi
+	repair_key 'THEME' 'dark'
 
 	# Default language
-	if [[ -z $(check_key_exists 'LANGUAGE') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: LANGUAGE ('en')"
+	# Its own command, so it asks the shared question instead of repeating the rule.
+	if key_needs_default 'LANGUAGE' 'en'; then
+		echo "[ ! ] Setting missing value in hestia.conf: LANGUAGE ('en')"
 		$BIN/h-change-sys-language 'LANGUAGE' 'en'
 	fi
 
 	# Disk Quota
-	if [[ -z $(check_key_exists 'DISK_QUOTA') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: DISK_QUOTA ('no')"
-		$BIN/h-change-sys-config-value 'DISK_QUOTA' 'no'
-	fi
+	repair_key 'DISK_QUOTA' 'no'
 
 	# CRON daemon
-	if [[ -z $(check_key_exists 'CRON_SYSTEM') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: CRON_SYSTEM ('cron')"
-		$BIN/h-change-sys-config-value 'CRON_SYSTEM' 'cron'
-	fi
+	repair_key 'CRON_SYSTEM' 'cron'
 
-	# Backend port
-	if [[ -z $(check_key_exists 'BACKEND_PORT') ]]; then
-		ORIGINAL_PORT=$(sed -ne "/listen/{s/.*listen[^0-9]*\([0-9][0-9]*\)[ \t]*ssl\;/\1/p;q}" "$HESTIA/nginx/conf/nginx.conf")
-		echo "[ ! ] Adding missing variable to hestia.conf: BACKEND_PORT ('$ORIGINAL_PORT')"
-		$BIN/h-change-sys-config-value 'BACKEND_PORT' $ORIGINAL_PORT
-	fi
+	# BACKEND_PORT has no repair here on purpose. It used to scrape the port out of
+	# $HESTIA/nginx/conf/nginx.conf - the hestia-nginx that Caddy replaced, so that file does not
+	# exist and the sed produced nothing; h-add-firewall-chain hit the same dead path once. The
+	# value is written at install time (func/helper.sh, _wcv BACKEND_PORT), and every consumer
+	# already falls back to 8083. Left in, the block would go from never firing to writing an empty
+	# value the moment the key turns up empty.
 
 	# Upgrade: Send email notification
-	if [[ -z $(check_key_exists 'UPGRADE_SEND_EMAIL') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: UPGRADE_SEND_EMAIL ('true')"
-		$BIN/h-change-sys-config-value 'UPGRADE_SEND_EMAIL' 'true'
-	fi
+	repair_key 'UPGRADE_SEND_EMAIL' 'true'
 
 	# Upgrade: Send email notification
-	if [[ -z $(check_key_exists 'UPGRADE_SEND_EMAIL_LOG') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: UPGRADE_SEND_EMAIL_LOG ('false')"
-		$BIN/h-change-sys-config-value 'UPGRADE_SEND_EMAIL_LOG' 'false'
-	fi
+	repair_key 'UPGRADE_SEND_EMAIL_LOG' 'false'
 
 	# Support for ZSTD / GZIP Change
-	if [[ -z $(check_key_exists 'BACKUP_MODE') ]]; then
-		echo "[ ! ] Setting zstd backup compression type as default..."
-		$BIN/h-change-sys-config-value "BACKUP_MODE" "zstd"
-	fi
+	repair_key 'BACKUP_MODE' 'zstd'
 
 	# Login style switcher
-	if [[ -z $(check_key_exists 'LOGIN_STYLE') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: LOGIN_STYLE ('default')"
-		$BIN/h-change-sys-config-value "LOGIN_STYLE" "default"
-	fi
+	repair_key 'LOGIN_STYLE' 'default'
 
 	# Webmail clients
+	# Presence only, and not repair_key: h-delete-sys-roundcube empties this key deliberately, so a
+	# repair keyed on emptiness would advertise a webmail that is no longer installed. When the key
+	# is genuinely absent the value is decided by what is on disk, not by a default.
 	if [[ -z $(check_key_exists 'WEBMAIL_SYSTEM') ]]; then
 		if [ -d "/var/lib/roundcube" ]; then
 			echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_SYSTEM ('roundcube')"
@@ -381,206 +393,83 @@ function syshealth_repair_system_config() {
 	fi
 
 	# Inactive session timeout
-	if [[ -z $(check_key_exists 'INACTIVE_SESSION_TIMEOUT') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: INACTIVE_SESSION_TIMEOUT ('60')"
-		$BIN/h-change-sys-config-value "INACTIVE_SESSION_TIMEOUT" "60"
-	fi
+	repair_key 'INACTIVE_SESSION_TIMEOUT' '60'
 
 	# Enforce subdomain ownership
-	if [[ -z $(check_key_exists 'ENFORCE_SUBDOMAIN_OWNERSHIP') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: ENFORCE_SUBDOMAIN_OWNERSHIP ('yes')"
-		$BIN/h-change-sys-config-value "ENFORCE_SUBDOMAIN_OWNERSHIP" "yes"
-	fi
+	repair_key 'ENFORCE_SUBDOMAIN_OWNERSHIP' 'yes'
 
 	# Debug mode
-	if [[ -z $(check_key_exists 'DEBUG_MODE') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: DEBUG_MODE ('false')"
-		$BIN/h-change-sys-config-value "DEBUG_MODE" "false"
-	fi
+	repair_key 'DEBUG_MODE' 'false'
 	# Quick install plugin
-	if [[ -z $(check_key_exists 'PLUGIN_APP_INSTALLER') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: PLUGIN_APP_INSTALLER ('true')"
-		$BIN/h-change-sys-config-value "PLUGIN_APP_INSTALLER" "true"
-	fi
+	repair_key 'PLUGIN_APP_INSTALLER' 'true'
 	# Enable preview mode
-	if [[ -z $(check_key_exists 'POLICY_SYSTEM_ENABLE_BACON') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_ENABLE_BACON ('false')"
-		$BIN/h-change-sys-config-value "POLICY_SYSTEM_ENABLE_BACON" "false"
-	fi
+	repair_key 'POLICY_SYSTEM_ENABLE_BACON' 'false'
 	# Hide system services
-	if [[ -z $(check_key_exists 'POLICY_SYSTEM_HIDE_SERVICES') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_HIDE_SERVICES ('no')"
-		$BIN/h-change-sys-config-value "POLICY_SYSTEM_HIDE_SERVICES" "no"
-	fi
+	repair_key 'POLICY_SYSTEM_HIDE_SERVICES' 'no'
 	# Password reset
-	if [[ -z $(check_key_exists 'POLICY_SYSTEM_PASSWORD_RESET') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_PASSWORD_RESET ('no')"
-		$BIN/h-change-sys-config-value "POLICY_SYSTEM_PASSWORD_RESET" "no"
-	fi
+	repair_key 'POLICY_SYSTEM_PASSWORD_RESET' 'no'
 
-	# Theme editor. The installer seeds this now; the repair is the net behind it. An empty value
-	# counts as missing too - h-list-sys-config emits every key of its fixed set, so an absent key
-	# reaches the panel as "" and each reader would otherwise invent its own default.
-	if [[ -z $(check_key_exists 'POLICY_USER_CHANGE_THEME') ]] || [ -z "$POLICY_USER_CHANGE_THEME" ]; then
-		echo "[ ! ] Setting missing value in hestia.conf: POLICY_USER_CHANGE_THEME ('yes')"
-		$BIN/h-change-sys-config-value "POLICY_USER_CHANGE_THEME" "yes"
-	fi
+	# Theme editor. Was the one key with a hand-written emptiness check and an installer seed beside
+	# it; both are the general rule now, so the seed is gone and this reads like its 48 neighbours.
+	repair_key 'POLICY_USER_CHANGE_THEME' 'yes'
 	# Per-domain spam tuning for customers (#318): feature toggle and the
 	# allowed threshold ranges (points) for non-admin users
-	if [[ -z $(check_key_exists 'POLICY_SPAM_CUSTOMER_TUNING') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_CUSTOMER_TUNING ('yes')"
-		$BIN/h-change-sys-config-value "POLICY_SPAM_CUSTOMER_TUNING" "yes"
-	fi
-	if [[ -z $(check_key_exists 'POLICY_SPAM_SCORE_MIN') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_SCORE_MIN ('3.0')"
-		$BIN/h-change-sys-config-value "POLICY_SPAM_SCORE_MIN" "3.0"
-	fi
-	if [[ -z $(check_key_exists 'POLICY_SPAM_SCORE_MAX') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_SCORE_MAX ('10.0')"
-		$BIN/h-change-sys-config-value "POLICY_SPAM_SCORE_MAX" "10.0"
-	fi
-	if [[ -z $(check_key_exists 'POLICY_SPAM_REJECT_SCORE_MIN') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_REJECT_SCORE_MIN ('8.0')"
-		$BIN/h-change-sys-config-value "POLICY_SPAM_REJECT_SCORE_MIN" "8.0"
-	fi
-	if [[ -z $(check_key_exists 'POLICY_SPAM_REJECT_SCORE_MAX') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SPAM_REJECT_SCORE_MAX ('20.0')"
-		$BIN/h-change-sys-config-value "POLICY_SPAM_REJECT_SCORE_MAX" "20.0"
-	fi
+	repair_key 'POLICY_SPAM_CUSTOMER_TUNING' 'yes'
+	repair_key 'POLICY_SPAM_SCORE_MIN' '3.0'
+	repair_key 'POLICY_SPAM_SCORE_MAX' '10.0'
+	repair_key 'POLICY_SPAM_REJECT_SCORE_MIN' '8.0'
+	repair_key 'POLICY_SPAM_REJECT_SCORE_MAX' '20.0'
 	# Protect admin user
-	if [[ -z $(check_key_exists 'POLICY_SYSTEM_PROTECTED_ADMIN') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYSTEM_PROTECTED_ADMIN ('no')"
-		$BIN/h-change-sys-config-value "POLICY_SYSTEM_PROTECTED_ADMIN" "no"
-	fi
+	repair_key 'POLICY_SYSTEM_PROTECTED_ADMIN' 'no'
 	# Allow user delete logs
-	if [[ -z $(check_key_exists 'POLICY_USER_DELETE_LOGS') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_DELETE_LOGS ('yes')"
-		$BIN/h-change-sys-config-value "POLICY_USER_DELETE_LOGS" "yes"
-	fi
+	repair_key 'POLICY_USER_DELETE_LOGS' 'yes'
 	# Allow users to delete details
-	if [[ -z $(check_key_exists 'POLICY_USER_EDIT_DETAILS') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_EDIT_DETAILS ('yes')"
-		$BIN/h-change-sys-config-value "POLICY_USER_EDIT_DETAILS" "yes"
-	fi
+	repair_key 'POLICY_USER_EDIT_DETAILS' 'yes'
 	# Allow users to edit web templates
-	if [[ -z $(check_key_exists 'POLICY_USER_EDIT_WEB_TEMPLATES') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_EDIT_WEB_TEMPLATES ('yes')"
-		$BIN/h-change-sys-config-value "POLICY_USER_EDIT_WEB_TEMPLATES" "yes"
-	fi
+	repair_key 'POLICY_USER_EDIT_WEB_TEMPLATES' 'yes'
 	# View user logs
-	if [[ -z $(check_key_exists 'POLICY_USER_VIEW_LOGS') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_VIEW_LOGS ('yes')"
-		$BIN/h-change-sys-config-value "POLICY_USER_VIEW_LOGS" "yes"
-	fi
+	repair_key 'POLICY_USER_VIEW_LOGS' 'yes'
 	# Allow users to login (read only) when suspended
-	if [[ -z $(check_key_exists 'POLICY_USER_VIEW_SUSPENDED') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_USER_VIEW_SUSPENDED ('no')"
-		$BIN/h-change-sys-config-value "POLICY_USER_VIEW_SUSPENDED" "no"
-	fi
+	repair_key 'POLICY_USER_VIEW_SUSPENDED' 'no'
 	# PHPMyadmin SSO key
-	if [[ -z $(check_key_exists 'PHPMYADMIN_KEY') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: PHPMYADMIN_KEY ('')"
-		$BIN/h-change-sys-config-value "PHPMYADMIN_KEY" ""
-	fi
+	repair_key 'PHPMYADMIN_KEY' ''
 	# Use SMTP server for hestia internal mail
-	if [[ -z $(check_key_exists 'USE_SERVER_SMTP') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: USE_SERVER_SMTP ('')"
-		$BIN/h-change-sys-config-value "USE_SERVER_SMTP" "false"
-	fi
+	repair_key 'USE_SERVER_SMTP' 'false'
 
-	if [[ -z $(check_key_exists 'SERVER_SMTP_PORT') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_PORT ('')"
-		$BIN/h-change-sys-config-value "SERVER_SMTP_PORT" ""
-	fi
+	repair_key 'SERVER_SMTP_PORT' ''
 
-	if [[ -z $(check_key_exists 'SERVER_SMTP_HOST') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_HOST ('')"
-		$BIN/h-change-sys-config-value "SERVER_SMTP_HOST" ""
-	fi
+	repair_key 'SERVER_SMTP_HOST' ''
 
-	if [[ -z $(check_key_exists 'SERVER_SMTP_SECURITY') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_SECURITY ('')"
-		$BIN/h-change-sys-config-value "SERVER_SMTP_SECURITY" ""
-	fi
+	repair_key 'SERVER_SMTP_SECURITY' ''
 
-	if [[ -z $(check_key_exists 'SERVER_SMTP_USER') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_USER ('')"
-		$BIN/h-change-sys-config-value "SERVER_SMTP_USER" ""
-	fi
+	repair_key 'SERVER_SMTP_USER' ''
 
-	if [[ -z $(check_key_exists 'SERVER_SMTP_PASSWD') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_PASSWD ('')"
-		$BIN/h-change-sys-config-value "SERVER_SMTP_PASSWD" ""
-	fi
+	repair_key 'SERVER_SMTP_PASSWD' ''
 
-	if [[ -z $(check_key_exists 'SERVER_SMTP_ADDR') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: SERVER_SMTP_ADDR ('')"
-		$BIN/h-change-sys-config-value "SERVER_SMTP_ADDR" ""
-	fi
-	if [[ -z $(check_key_exists 'POLICY_CSRF_STRICTNESS') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_CSRF_STRICTNESS ('')"
-		$BIN/h-change-sys-config-value "POLICY_CSRF_STRICTNESS" "1"
-	fi
+	repair_key 'SERVER_SMTP_ADDR' ''
+	repair_key 'POLICY_CSRF_STRICTNESS' '1'
 
-	if [[ -z $(check_key_exists 'DISABLE_IP_CHECK') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: DISABLE_IP_CHECK ('no')"
-		$BIN/h-change-sys-config-value "DISABLE_IP_CHECK" "no"
-	fi
-	if [[ -z $(check_key_exists 'APP_NAME') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: APP_NAME ('Hestia Control Panel')"
-		$BIN/h-change-sys-config-value "APP_NAME" "Hestia Control Panel"
-	fi
-	if [[ -z $(check_key_exists 'FROM_NAME') ]]; then
-		# Default is always APP_NAME
-		echo "[ ! ] Adding missing variable to hestia.conf: FROM_NAME ('')"
-		$BIN/h-change-sys-config-value "FROM_NAME" ""
-	fi
-	if [[ -z $(check_key_exists 'FROM_EMAIL') ]]; then
-		# Default is always noreply@hostname.com
-		echo "[ ! ] Adding missing variable to hestia.conf: FROM_EMAIL ('')"
-		$BIN/h-change-sys-config-value "FROM_EMAIL" ""
-	fi
-	if [[ -z $(check_key_exists 'SUBJECT_EMAIL') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: SUBJECT_EMAIL ('{{subject}}')"
-		$BIN/h-change-sys-config-value "SUBJECT_EMAIL" "{{subject}}"
-	fi
+	repair_key 'DISABLE_IP_CHECK' 'no'
+	repair_key 'APP_NAME' 'Hestia Control Panel'
+	# Empty default on purpose: FROM_NAME falls back to APP_NAME and FROM_EMAIL to noreply@hostname
+	# where they are read. repair_key only fills an empty value when the default is not empty, so
+	# these two are added when absent and then left alone.
+	repair_key 'FROM_NAME' ''
+	repair_key 'FROM_EMAIL' ''
+	repair_key 'SUBJECT_EMAIL' '{{subject}}'
 
-	if [[ -z $(check_key_exists 'BACKUP_INCREMENTAL') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: BACKUP_INCREMENTAL ('no')"
-		$BIN/h-change-sys-config-value "BACKUP_INCREMENTAL" "no"
-	fi
+	repair_key 'BACKUP_INCREMENTAL' 'no'
 
-	if [[ -z $(check_key_exists 'TITLE') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: TITLE ('{{page}} - {{hostname}} - {{appname}}')"
-		$BIN/h-change-sys-config-value "TITLE" "{{page}} - {{hostname}} - {{appname}}"
-	fi
+	repair_key 'TITLE' '{{page}} - {{hostname}} - {{appname}}'
 
-	if [[ -z $(check_key_exists 'HIDE_DOCS') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: HIDE_DOCS ('no')"
-		$BIN/h-change-sys-config-value "HIDE_DOCS" "no"
-	fi
+	repair_key 'HIDE_DOCS' 'no'
 
-	if [[ -z $(check_key_exists 'POLICY_SYNC_ERROR_DOCUMENTS') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYNC_ERROR_DOCUMENTS ('yes')"
-		$BIN/h-change-sys-config-value "POLICY_SYNC_ERROR_DOCUMENTS" "yes"
-	fi
+	repair_key 'POLICY_SYNC_ERROR_DOCUMENTS' 'yes'
 
-	if [[ -z $(check_key_exists 'POLICY_SYNC_SKELETON') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_SYNC_SKELETON ('yes')"
-		$BIN/h-change-sys-config-value "POLICY_SYNC_SKELETON" "yes"
-	fi
-	if [[ -z $(check_key_exists 'POLICY_BACKUP_SUSPENDED_USERS') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: POLICY_BACKUP_SUSPENDED_USERS ('no')"
-		$BIN/h-change-sys-config-value "POLICY_BACKUP_SUSPENDED_USERS" "no"
-	fi
-	if [[ -z $(check_key_exists 'ROOT_USER') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: ROOT_USER ('admin')"
-		$BIN/h-change-sys-config-value "ROOT_USER" "admin"
-	fi
-	if [[ -z $(check_key_exists 'DOMAINDIR_WRITABLE') ]]; then
-		echo "[ ! ] Adding missing variable to hestia.conf: DOMAINDIR_WRITABLE ('no')"
-		$BIN/h-change-sys-config-value "DOMAINDIR_WRITABLE" "no"
-	fi
+	repair_key 'POLICY_SYNC_SKELETON' 'yes'
+	repair_key 'POLICY_BACKUP_SUSPENDED_USERS' 'no'
+	repair_key 'ROOT_USER' 'admin'
+	repair_key 'DOMAINDIR_WRITABLE' 'no'
 
 	# TRUNCATE, and remove unconditionally below: with `touch` plus `>>`, a .new file left behind by a
 	# run that found nothing to fix was appended to on the next one - so a key deleted in the meantime
