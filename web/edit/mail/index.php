@@ -226,9 +226,8 @@ if (!empty($_GET["domain"]) && !empty($_GET["account"])) {
 	}
 }
 
-// One gate per conditionally rendered control (#649): the view renders on it and the POST section
-// reads on it, so a switch the page never showed cannot be read as "turned off". The spam tuning
-// gate is the policy one - it decided the render and now also decides the read.
+// One gate per conditionally rendered control: the view renders on it, the POST section reads on
+// it. A switch the page never showed must not read as "turned off".
 // The command path also needs IMAP, so the view must not offer what the POST would ignore
 $offer_webmail = !empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"]);
 $offer_antispam = !empty($_SESSION["ANTISPAM_SYSTEM"]);

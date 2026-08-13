@@ -120,10 +120,8 @@ exec(HESTIA_CMD . "h-list-sys-php json", $output, $return_var);
 $php_versions = json_decode(implode("", $output), true);
 unset($output);
 
-// One gate per conditionally rendered control (#649): the view renders on it and the POST section
-// reads on it, so a control a customer was never offered cannot be read as "cleared". The
-// admin-only ones use the REAL identity where the field grants privilege, the effective one where
-// it is ordinary scoping (#438).
+// One gate per conditionally rendered control: the view renders on it, the POST section reads on
+// it. Docker gates on the real identity because it grants privilege, the rest on the effective one.
 $offer_admin_fields = $_SESSION["userContext"] === "admin";
 $offer_role = $offer_admin_fields && $v_username != "admin" && $_SESSION["user"] != $v_username;
 $offer_theme = ($_SESSION["POLICY_USER_CHANGE_THEME"] ?? "") !== "no";
@@ -227,8 +225,7 @@ if (!empty($_POST["save"])) {
 
 	// Update Control Panel login disabled status (admin only)
 	if ($offer_admin_fields && empty($_SESSION["error_msg"])) {
-		// Compared in record space, not form space: "on" never equals "yes", so the old comparison
-		// rewrote the value on nearly every save
+		// Compared in record space: "on" never equals "yes"
 		$v_login_disabled = $v_login_disabled === "yes" ? "yes" : "no";
 		$post_login_disabled = post_checkbox("v_login_disabled", $offer_admin_fields, $v_login_disabled, "yes", "no");
 		if ($post_login_disabled != $v_login_disabled) {

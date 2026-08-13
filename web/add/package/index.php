@@ -35,9 +35,8 @@ exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
 $web_templates = json_decode(implode("", $output), true);
 unset($output);
 
-// One gate per conditionally rendered control (#649): the view renders on it and the POST section
-// reads on it. A new package has nothing stored, so an absent control falls back to the shipped
-// default rather than to an empty value.
+// One gate per conditionally rendered control: the view renders on it, the POST section reads on
+// it. A new package has nothing stored, so an absent control takes the shipped default.
 $offer_web_template = !empty($web_templates);
 $offer_backend_template = !empty($_SESSION["WEB_BACKEND"]) && !empty($backend_templates);
 $offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
@@ -126,9 +125,7 @@ if (!empty($_POST["ok"])) {
 	} else {
 		// Protect input
 		$v_package = quoteshellarg($_POST["v_package"]);
-		// Without a selectable template the control is not rendered, so fall back to the name every
-		// role resolves - a package record always carries a web template. With no backend at all
-		// there is no pool profile to name, which is why that one falls back to empty.
+		// "default" is the name every role resolves; with no backend there is no pool profile to name
 		$v_web_template = quoteshellarg(post_or_keep("v_web_template", "default"));
 		$v_backend_template = quoteshellarg(
 			empty($_SESSION["WEB_BACKEND"]) ? "" : post_or_keep("v_backend_template", "default"),

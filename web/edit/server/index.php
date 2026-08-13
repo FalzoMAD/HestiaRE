@@ -278,16 +278,14 @@ $v_ssl_signature = $ssl_str["HESTIA"]["SIGNATURE"];
 $v_ssl_pub_key = $ssl_str["HESTIA"]["PUB_KEY"];
 $v_ssl_issuer = $ssl_str["HESTIA"]["ISSUER"];
 
-// One gate per conditionally rendered control (#649): the view renders on it and the POST section
-// reads on it. The suspended-view policy sits behind the preview switch, so its key only exists
-// while that switch is on - read without the gate it looked like the policy had been turned off.
+// One gate per conditionally rendered control: the view renders on it, the POST section reads on
+// it. The suspended-view policy only has a key while the preview switch is on.
 $offer_backend = !empty($_SESSION["WEB_BACKEND"]);
 $offer_mail = !empty($_SESSION["MAIL_SYSTEM"]);
 $offer_webmail = $offer_mail && $_SESSION["WEBMAIL_SYSTEM"] != "";
 $offer_preview_policies = ($_SESSION["POLICY_SYSTEM_ENABLE_BACON"] ?? "") === "true";
 $offer_mysql = !empty($_SESSION["DB_SYSTEM"]) && $v_mysql == "yes";
-// The three system policies below are the real root user's alone - the same gate now decides
-// the render and the read, so a crafted POST from another admin has nothing to land on
+// The three system policies below are the real root user's alone, on both paths
 $offer_root_policies =
 	$_SESSION["userContext"] === "admin" && $_SESSION["user"] === ($_SESSION["ROOT_USER"] ?? "");
 $offer_pgsql = !empty($_SESSION["DB_SYSTEM"]) && $v_pgsql == "yes";
@@ -470,8 +468,7 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Update experimental features status. The checkbox already arrives as true/false, so the
-	// on-to-true mapping the comparison used to run in between is gone.
+	// Update experimental features status. The checkbox arrives as the value it is compared against.
 	if (empty($_SESSION["error_msg"]) && $post_experimental != $_SESSION["POLICY_SYSTEM_ENABLE_BACON"]) {
 		exec(
 			HESTIA_CMD .
@@ -699,8 +696,7 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Update phpMyAdmin url. The field only exists on a box with a mysql host - read without the
-	// gate, an absent key rewrote the alias to empty.
+	// Update phpMyAdmin url. The field only exists on a box with a mysql host.
 	if (empty($_SESSION["error_msg"])) {
 		$post_mysql_url = post_or_keep("v_mysql_url", $_SESSION["DB_PMA_ALIAS"] ?? "");
 		if ($offer_mysql && $post_mysql_url != $_SESSION["DB_PMA_ALIAS"]) {

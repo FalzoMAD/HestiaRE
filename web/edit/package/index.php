@@ -89,9 +89,8 @@ exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
 $shells = json_decode(implode("", $output), true);
 unset($output);
 
-// One gate per conditionally rendered control (#649): the view renders on it and the POST section
-// reads on it. Selectability decides for the template selects, not the system switch - with the
-// switch on and the list empty the form would demand a field it never offers.
+// One gate per conditionally rendered control: the view renders on it, the POST section reads on
+// it. Selectability decides for the selects, not the system switch.
 $offer_web_template = !empty($web_templates);
 $offer_backend_template = !empty($backend_templates);
 $offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
@@ -193,9 +192,7 @@ if (!empty($_POST["save"])) {
 		// POST name - a crafted POST walked around it. Anchor the write on the checked value.
 		$v_package = quoteshellarg($_GET["package"]);
 		$v_package_new = quoteshellarg($_POST["v_package_new"]);
-		// An empty select submits nothing, and quoteshellarg(null) is a fatal - so an absent key
-		// keeps what the package carries. Same for the shell: falling back to a literal turned an
-		// absent control into a demotion to nologin.
+		// An empty select submits nothing; a literal fallback here demoted the shell to nologin
 		$v_web_template = quoteshellarg(post_or_keep("v_web_template", $v_web_template));
 		$v_backend_template = quoteshellarg(post_or_keep("v_backend_template", $v_backend_template));
 		$v_proxy_template = quoteshellarg(post_or_keep("v_proxy_template", $v_proxy_template));
@@ -212,8 +209,7 @@ if (!empty($_POST["save"])) {
 		$v_disk_quota = quoteshellarg($_POST["v_disk_quota"]);
 		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 
-		// These four are only rendered while RESOURCES_LIMIT is on, so an absent key keeps what
-		// the package carries - writing "" silently dropped 'unlimited' out of the record.
+		// Only rendered while RESOURCES_LIMIT is on; writing "" dropped 'unlimited' from the record
 		$v_cpu_quota = quoteshellarg($offer_resources ? post_or_keep("v_cpu_quota", $v_cpu_quota) : $v_cpu_quota);
 		$v_cpu_quota_period = quoteshellarg(
 			$offer_resources ? post_or_keep("v_cpu_quota_period", $v_cpu_quota_period) : $v_cpu_quota_period,

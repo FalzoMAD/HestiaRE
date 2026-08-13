@@ -289,14 +289,9 @@ exec(HESTIA_CMD . "h-list-web-stats json", $output, $return_var);
 $stats = json_decode(implode("", $output), true);
 unset($output);
 
-// One gate per conditionally rendered control (#649). The view renders on it and the POST section
-// reads on it, so a control that was never offered cannot be read as "cleared". Evaluated here,
-// before any write: this is the state the submitted form was rendered under, and on the error path
-// the page re-renders exactly what the user still has in front of them.
-//
-// Template and pool choices are capacity/stability decisions: the REAL identity gates them (an
-// impersonating admin keeps them, #438/#566), the policy can open them to customers. PHP version
-// and proxy extensions stay customer-editable.
+// One gate per conditionally rendered control: the view renders on it, the POST section reads on
+// it. Evaluated before any write, so it describes the form that was actually submitted.
+// Template and pool choices gate on the real identity; the policy can open them to customers.
 $can_edit_templates =
 	($_SESSION["adminContext"] ?? "") === "admin" ||
 	($_SESSION["POLICY_USER_EDIT_WEB_TEMPLATES"] ?? "") == "yes";
@@ -366,8 +361,7 @@ if (!empty($_POST["save"])) {
 	}
 
 	if ($can_edit_templates) {
-		// The selector is hidden on apache-web models (the vhost renders from share/), so the read
-		// goes through the gate the view rendered on
+		// Hidden on apache-web models: the vhost renders from share/, nothing to select
 		$post_template = post_or_keep("v_template", $v_template);
 		if ($offer_web_template && $v_template != $post_template && empty($_SESSION["error_msg"])) {
 			exec(
@@ -387,8 +381,7 @@ if (!empty($_POST["save"])) {
 			$restart_web = "yes";
 		}
 
-		// A docker domain has no pool at all, so the control is absent - reading it raw was a
-		// fatal, not a warning: quoteshellarg(null) killed the whole save
+		// A docker domain has no pool at all
 		$post_backend_template = post_or_keep("v_backend_template", $v_backend_template);
 		if (
 			$offer_backend_template &&
@@ -431,10 +424,8 @@ if (!empty($_POST["save"])) {
 		unset($output);
 	}
 
-	// Enable/Disable nginx cache. The stored duration and the one the form shows are not the same
-	// thing: with nothing stored the field displays the 2m default, so an absent key compared
-	// against that default fired this block on every model that never renders the control - and
-	// then ran h-delete-fastcgi-cache on a box without an nginx web role.
+	// Enable/Disable nginx cache. With nothing stored the field shows a 2m default, so what is
+	// stored and what the form shows are not the same value.
 	$post_nginx_cache_check = post_checkbox("v_nginx_cache_check", $offer_fastcgi_cache, $v_nginx_cache_check);
 	$post_nginx_cache_duration = post_or_keep("v_nginx_cache_duration", $v_nginx_cache_duration);
 	if (
@@ -473,9 +464,7 @@ if (!empty($_POST["save"])) {
 		$restart_web = "yes";
 	}
 
-	// Proxy support, template and extensions. All three blocks read through $offer_proxy, the gate
-	// the view renders on: for a docker domain nothing here is on the page, so an absent checkbox
-	// is not an unchecked one - read that way it dropped PROXY on every save.
+	// Proxy support, template and extensions. A docker domain renders none of it.
 	$post_proxy = post_checkbox("v_proxy", $offer_proxy, empty($v_proxy) ? "" : "on");
 	$post_proxy_ext = post_or_keep("v_proxy_ext", $v_proxy_ext);
 	if ($offer_proxy && !empty($v_proxy) && empty($post_proxy) && empty($_SESSION["error_msg"])) {
@@ -502,8 +491,7 @@ if (!empty($_POST["save"])) {
 		$ext = preg_replace("/\s+/", " ", $ext);
 		$ext = trim($ext);
 		$ext = str_replace(" ", ", ", $ext);
-		// The select is absent for a customer and wherever there is only one to pick; reading the
-		// key raw made every save a template change
+		// Absent for a customer and wherever there is only one to pick
 		$post_proxy_template = $offer_proxy_template
 			? post_or_keep("v_proxy_template", $v_proxy_template)
 			: $v_proxy_template;
@@ -1007,8 +995,7 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Add HTTP/3 (nginx front only; the command refuses where nginx lacks http_v3). Both arms run
-	// off the difference to the stored field, so a form that never offered the checkbox produces
-	// no difference and neither command runs.
+	// off the difference to the stored field, so an unoffered checkbox moves nothing.
 	$post_http3 = post_checkbox("v_http3", $offer_http3, $v_http3 == "yes" ? "on" : "");
 	if (
 		!empty($post_http3) &&
@@ -1060,8 +1047,7 @@ if (!empty($_POST["save"])) {
 		$restart_proxy = "yes";
 	}
 
-	// Delete HTTP/3. Where no nginx serves the domain the checkbox is absent, and an absent one
-	// must not clear a field the rebuild reconciles from (#613).
+	// Delete HTTP/3. The field is what a rebuild reconciles from, so it must survive an absent box.
 	if ($v_http3 == "yes" && empty($post_http3) && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD . "h-delete-web-domain-http3 " . $user . " " . quoteshellarg($v_domain),
@@ -1324,8 +1310,7 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Update ftp account. The whole section is absent without proftpd, so the gate also keeps a
-	// hand-made POST from reaching the ftp commands on a box that has no ftp server.
+	// Update ftp account. No proftpd, no section - and no way in for a hand-made POST either.
 	if ($offer_ftp && !empty($_POST["v_ftp_user"])) {
 		$v_ftp_users_updated = [];
 		foreach ($_POST["v_ftp_user"] as $i => $v_ftp_user_data) {
