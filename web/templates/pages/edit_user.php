@@ -155,12 +155,14 @@
 				<label for="v_user_theme" class="form-label"><?= tohtml( _("Theme")) ?></label>
 				<select class="form-select" name="v_user_theme" id="v_user_theme">
 					<?php
+						// Mark by the value being rendered, never by a session key: gating the marker on
+						// $_SESSION['userTheme'] leaves every option unmarked whenever that key is absent,
+						// and an unmarked select submits its FIRST option - so the next save silently
+						// replaced the theme this user had chosen.
+						$selected_theme = !empty($v_user_theme) ? $v_user_theme : ($_SESSION['THEME'] ?? '');
 						foreach ($themes as $key => $value) {
 							echo "\t\t\t\t<option value=\"".$value."\"";
-							if ((!empty($_SESSION['userTheme'])) && ( $value == $v_user_theme )) {
-								echo ' selected' ;
-							}
-							if ((empty($v_user_theme) && (!empty($_SESSION['THEME']))) && ( $value == $_SESSION['THEME'] )) {
+							if ($value === $selected_theme) {
 								echo ' selected' ;
 							}
 							echo ">".$value."</option>\n";
