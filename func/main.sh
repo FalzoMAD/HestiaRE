@@ -63,7 +63,6 @@ WEBTPL=$HESTIA/templates
 SHARETPL=$HESTIA/share/web
 PHPTPL=$HESTIA/templates/php
 # webmail templates live per app at $HESTIA/share/$WEB_SYSTEM/webmail/ (no MAILTPL var)
-DNSTPL=$HESTIA/templates/dns
 RRD=$HESTIA/web/rrd
 SENDMAIL="$HESTIA/web/inc/mail-wrapper.php"
 HESTIA_GIT_REPO="https://raw.githubusercontent.com/hestiacp/hestiacp"
