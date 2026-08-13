@@ -43,9 +43,7 @@ if (!empty($_POST["ok"])) {
 	// Gets public IP from 'h-list-user-ips' command (that reads /etc/hestia/ips/ip), precisely from 'NAT' field
 	$v_public_ip = $v_ip;
 	$v_clean_ip = $_POST["v_ip"]; // clean_ip = IP without quotas
-	exec(HESTIA_CMD . "h-list-user-ips " . $user . " json", $output, $return_var);
-	$ips = json_decode(implode("", $output), true);
-	unset($output);
+	$ips = cli_json("h-list-user-ips " . $user . " json");
 	if (
 		isset($ips[$v_clean_ip]) &&
 		isset($ips[$v_clean_ip]["NAT"]) &&
@@ -61,9 +59,7 @@ if (!empty($_POST["ok"])) {
 	// Define proxy extensions
 	$_POST["v_proxy_ext"] = "";
 
-	exec(HESTIA_CMD . "h-list-user " . $user . " json", $output, $return_var);
-	$user_config = json_decode(implode("", $output), true);
-	unset($output);
+	$user_config = cli_json("h-list-user " . $user . " json");
 
 	$v_template = $user_config[$user_plain]["WEB_TEMPLATE"];
 	$v_backend_template = $user_config[$user_plain]["BACKEND_TEMPLATE"];
@@ -118,21 +114,15 @@ if (!empty($_POST["ok"])) {
 $v_aliases = "";
 
 // List user package
-exec(HESTIA_CMD . "h-list-user " . $user . " json", $output, $return_var);
-$user_config = json_decode(implode("", $output), true);
-unset($output);
+$user_config = cli_json("h-list-user " . $user . " json");
 // List web templates and set default values
-exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
-$templates = json_decode(implode("", $output), true);
-unset($output);
+$templates = cli_json("h-list-web-templates json");
 $v_template = !empty($_POST["v_template"])
 	? $_POST["v_template"]
 	: $user_config[$user_plain]["WEB_TEMPLATE"];
 // List backend templates
 if (!empty($_SESSION["WEB_BACKEND"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
-	$backend_templates = json_decode(implode("", $output), true);
-	unset($output);
+	$backend_templates = cli_json("h-list-web-templates-backend json");
 	$v_backend_template = !empty($_POST["v_backend_template"])
 		? $_POST["v_backend_template"]
 		: $user_config[$user_plain]["BACKEND_TEMPLATE"];
@@ -140,18 +130,14 @@ if (!empty($_SESSION["WEB_BACKEND"])) {
 
 // List proxy templates
 if (!empty($_SESSION["PROXY_SYSTEM"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-proxy json", $output, $return_var);
-	$proxy_templates = json_decode(implode("", $output), true);
-	unset($output);
+	$proxy_templates = cli_json("h-list-web-templates-proxy json");
 	$v_proxy_template = !empty($_POST["v_proxy_template"])
 		? $_POST["v_proxy_template"]
 		: $user_config[$user_plain]["PROXY_TEMPLATE"];
 }
 
 // List IP addresses
-exec(HESTIA_CMD . "h-list-user-ips " . $user . " json", $output, $return_var);
-$ips = json_decode(implode("", $output), true);
-unset($output);
+$ips = cli_json("h-list-user-ips " . $user . " json");
 
 // Get all user domains
 $user_domains = array_keys(cli_json("h-list-web-domains " . $user . " json"));

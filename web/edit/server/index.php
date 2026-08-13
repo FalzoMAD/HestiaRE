@@ -25,14 +25,10 @@ exec(HESTIA_CMD . "h-get-sys-timezone", $output, $return_var);
 $v_timezone = $output[0];
 unset($output);
 
-exec(HESTIA_CMD . "h-get-sys-timezones json", $output, $return_var);
-$v_timezones = json_decode(implode("", $output), true);
-unset($output);
+$v_timezones = cli_json("h-get-sys-timezones json");
 
 // List supported php versions
-exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
-$backend_templates = json_decode(implode("", $output), true);
-unset($output);
+$backend_templates = cli_json("h-list-web-templates-backend json");
 
 $v_php_versions = [
 	"php-5.6",
@@ -104,9 +100,7 @@ foreach ($language as $lang) {
 asort($languages);
 
 // List themes
-exec(HESTIA_CMD . "h-list-sys-themes json", $output, $return_var);
-$theme = json_decode(implode("", $output), true);
-unset($output);
+$theme = cli_json("h-list-sys-themes json");
 
 $v_release_branch = $_SESSION["RELEASE_BRANCH"];
 
@@ -134,9 +128,7 @@ if (!empty($_SESSION["SMTP_RELAY_USER"])) {
 $v_smtp_relay_pass = "";
 
 // List Database hosts
-exec(HESTIA_CMD . "h-list-database-hosts json", $output, $return_var);
-$db_hosts = json_decode(implode("", $output), true);
-unset($output);
+$db_hosts = cli_json("h-list-database-hosts json");
 $v_mysql_hosts = array_values(
 	array_filter($db_hosts, function ($host) {
 		return $host["TYPE"] === "mysql";
@@ -169,13 +161,7 @@ foreach ($backup_types as $backup_type) {
 	if ($backup_type == "local") {
 		$v_backup = "yes";
 	} else {
-		exec(
-			HESTIA_CMD . "h-list-backup-host " . quoteshellarg($backup_type) . " json",
-			$output,
-			$return_var,
-		);
-		$v_remote_backup = json_decode(implode("", $output), true);
-		unset($output);
+		$v_remote_backup = cli_json("h-list-backup-host " . quoteshellarg($backup_type) . " json");
 		if (in_array($backup_type, ["ftp", "sftp"])) {
 			$v_backup_host = $v_remote_backup[$backup_type]["HOST"];
 			$v_backup_type = $v_remote_backup[$backup_type]["TYPE"];
@@ -262,9 +248,7 @@ if ($_SESSION["BACKUP_INCREMENTAL"] == "yes") {
 }
 
 // List ssl certificate info
-exec(HESTIA_CMD . "h-list-sys-hestia-ssl json", $output, $return_var);
-$ssl_str = json_decode(implode("", $output), true);
-unset($output);
+$ssl_str = cli_json("h-list-sys-hestia-ssl json");
 $v_ssl_crt = $ssl_str["HESTIA"]["CRT"];
 $v_ssl_key = $ssl_str["HESTIA"]["KEY"];
 $v_ssl_ca = $ssl_str["HESTIA"]["CA"];
@@ -1696,9 +1680,7 @@ if (!empty($_POST["save"])) {
 			unset($output);
 
 			// List ssl certificate info
-			exec(HESTIA_CMD . "h-list-sys-hestia-ssl json", $output, $return_var);
-			$ssl_str = json_decode(implode("", $output), true);
-			unset($output);
+			$ssl_str = cli_json("h-list-sys-hestia-ssl json");
 			$v_ssl_crt = $ssl_str["HESTIA"]["CRT"];
 			$v_ssl_key = $ssl_str["HESTIA"]["KEY"];
 			$v_ssl_ca = $ssl_str["HESTIA"]["CA"];
@@ -1792,9 +1774,7 @@ if (!empty($_POST["save"])) {
 }
 
 // Check system configuration
-exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-unset($output);
+$data = cli_json("h-list-sys-config json");
 
 $sys_arr = $data["config"];
 foreach ($sys_arr as $key => $value) {
@@ -1803,9 +1783,7 @@ foreach ($sys_arr as $key => $value) {
 
 // Padded to the slot count so empty rows are offered. Read after the POST block so a save renders.
 $bl_slots = $bl_slots_max;
-exec(HESTIA_CMD . "h-list-sys-botfamily json", $output, $return_var);
-$bl_data = json_decode(implode("", $output), true);
-unset($output);
+$bl_data = cli_json("h-list-sys-botfamily json");
 $botfamily_rows = [];
 foreach (is_array($bl_data) ? $bl_data : [] as $bl_name => $bl_v) {
 	$botfamily_rows[] = [

@@ -65,10 +65,8 @@ $v_template = $data[$v_domain]["TPL"];
 // which app it fronts (octet inside the /24 + port). reset(), not [$user]: in the admin path
 // $user is already quoteshellarg'd and would miss the plain json key - the json carries
 // exactly the one requested user anyway.
-exec(HESTIA_CMD . "h-list-user " . $user . " json", $output, $return_var);
-$owner_info = json_decode(implode("", $output), true);
-unset($output);
-$owner_row = is_array($owner_info) ? reset($owner_info) : null;
+$owner_info = cli_json("h-list-user " . $user . " json");
+$owner_row = reset($owner_info) ?: [];
 $v_docker_net = "";
 if (!empty($owner_row["DOCKER_IP"])) {
 	$v_docker_net = preg_replace('/\.\d+$/', "", $owner_row["DOCKER_IP"]);
@@ -111,9 +109,7 @@ foreach (explode(",", (string) ($data[$v_domain]["BOTLIMIT"] ?? "")) as $entry) 
 	$v_botlimit[$bl_fam] = $bl_lvl;
 }
 $botfamilies = [];
-exec(HESTIA_CMD . "h-list-sys-botfamily json", $output, $return_var);
-$bf = json_decode(implode("", $output), true);
-unset($output);
+$bf = cli_json("h-list-sys-botfamily json");
 // Only enabled families: the server config defines rate zones for those alone, so referencing a
 // disabled one would break the nginx config test.
 foreach (is_array($bf) ? $bf : [] as $bf_name => $bf_data) {
@@ -251,41 +247,29 @@ if (!isset($ips[$v_ip])) {
 $v_ip_public = empty($ips[$v_ip]["NAT"]) ? $v_ip : $ips[$v_ip]["NAT"];
 
 // List web templates
-exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
-$templates = json_decode(implode("", $output), true);
-unset($output);
+$templates = cli_json("h-list-web-templates json");
 
 // List backend templates (pool profiles) and installed PHP versions - the version is its
 // own field since #591, so it is offered as a separate control
 if (!empty($_SESSION["WEB_BACKEND"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
-	$backend_templates = json_decode(implode("", $output), true);
-	unset($output);
+	$backend_templates = cli_json("h-list-web-templates-backend json");
 
-	exec(HESTIA_CMD . "h-list-sys-php json", $output, $return_var);
-	$php_versions = json_decode(implode("", $output), true);
-	unset($output);
+	$php_versions = cli_json("h-list-sys-php json");
 }
 
 // List proxy templates
 if (!empty($_SESSION["PROXY_SYSTEM"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-proxy json", $output, $return_var);
-	$proxy_templates = json_decode(implode("", $output), true);
-	unset($output);
+	$proxy_templates = cli_json("h-list-web-templates-proxy json");
 }
 
 // List docker templates - only a docker customer can pick one
 $docker_templates = [];
 if (!empty($v_docker_net)) {
-	exec(HESTIA_CMD . "h-list-web-templates-docker json", $output, $return_var);
-	$docker_templates = json_decode(implode("", $output), true) ?: [];
-	unset($output);
+	$docker_templates = cli_json("h-list-web-templates-docker json");
 }
 
 // List web stat engines
-exec(HESTIA_CMD . "h-list-web-stats json", $output, $return_var);
-$stats = json_decode(implode("", $output), true);
-unset($output);
+$stats = cli_json("h-list-web-stats json");
 
 // One gate per conditionally rendered control: rendered on it, read on it.
 // Template and pool choices gate on the real identity; the policy can open them to customers.

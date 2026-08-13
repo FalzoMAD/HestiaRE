@@ -16,9 +16,7 @@ if ($_SESSION["userContext"] === "admin" && $_SESSION["look"] == "") {
 		$data = array_reverse(cli_json("h-list-user-stats $v_user json"), true);
 	}
 
-	exec(HESTIA_CMD . "h-list-sys-users 'json'", $output, $return_var);
-	$users = json_decode(implode("", $output), true);
-	unset($output);
+	$users = cli_json("h-list-sys-users 'json'");
 } else {
 	$data = array_reverse(cli_json("h-list-user-stats $user json"), true);
 }

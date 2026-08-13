@@ -18,8 +18,7 @@ define("NO_AUTH_REQUIRED", true);
 include "/usr/local/hestia/web/inc/main.php";
 
 // Set system language
-exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
+$data = cli_json("h-list-sys-config json");
 if (!empty($data["config"]["LANGUAGE"])) {
 	$_SESSION["language"] = $data["config"]["LANGUAGE"];
 } else {

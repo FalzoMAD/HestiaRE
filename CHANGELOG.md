@@ -14,6 +14,14 @@ opens above it.
 
 ### Changed
 
+- **The panel reads a CLI result in one place** (#578). The remaining 61 sites that decoded a
+  command's JSON by hand now go through `cli_json()`, which closes the class the fatal sites above
+  belonged to rather than only its instances. Two shapes were deliberately left alone: a site whose
+  exit code or raw output is still consulted (a `check_*()` above the decode), and one whose value
+  is a scalar rather than a list - `reset/index.php` reads a reset-key timestamp there and compares
+  it against `null` and against `time()`, and an empty array answers both the other way round.
+  Side effect worth having: `cli_json()` owns its `$output`, so 4 sites where a second `exec()`
+  would have appended to the first one's output are gone with it.
 - **A conditionally rendered control now reads through the gate that rendered it** (#649). A control
   the form did not render sends no key, and every form carried its own idea of what that means -
   three separate patches of the same class in one week. `post_or_keep()` and `post_checkbox()` hold
