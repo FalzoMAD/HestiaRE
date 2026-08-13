@@ -226,6 +226,17 @@ if (!empty($_GET["domain"]) && !empty($_GET["account"])) {
 	}
 }
 
+// One gate per conditionally rendered control (#649): the view renders on it and the POST section
+// reads on it, so a switch the page never showed cannot be read as "turned off". The spam tuning
+// gate is the policy one - it decided the render and now also decides the read.
+// The command path also needs IMAP, so the view must not offer what the POST would ignore
+$offer_webmail = !empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"]);
+$offer_antispam = !empty($_SESSION["ANTISPAM_SYSTEM"]);
+$offer_antivirus = !empty($_SESSION["ANTIVIRUS_SYSTEM"]);
+$spam_tuning_allowed =
+	$_SESSION["userContext"] === "admin" ||
+	($_SESSION["POLICY_SPAM_CUSTOMER_TUNING"] ?? "yes") !== "no";
+
 // Check POST request for mail domain
 if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])) {
 	// Check token
@@ -240,8 +251,12 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	check_return_code_redirect($return_var, $output, "/list/mail/");
 	unset($output);
 
+	$post_antispam = post_checkbox("v_antispam", $offer_antispam, $v_antispam, "yes", "no");
+	$post_antivirus = post_checkbox("v_antivirus", $offer_antivirus, $v_antivirus, "yes", "no");
+	$post_reject = post_checkbox("v_reject", $offer_antispam, $v_reject, "yes", "no");
+
 	// Delete antispam
-	if ($v_antispam == "yes" && empty($_POST["v_antispam"]) && empty($_SESSION["error_msg"])) {
+	if ($v_antispam == "yes" && $post_antispam != "yes" && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-delete-mail-domain-antispam " .
@@ -257,7 +272,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	}
 
 	// Add antispam
-	if ($v_antispam == "no" && !empty($_POST["v_antispam"]) && empty($_SESSION["error_msg"])) {
+	if ($v_antispam == "no" && $post_antispam == "yes" && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-add-mail-domain-antispam " .
@@ -273,7 +288,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	}
 
 	// Delete antivirus
-	if ($v_antivirus == "yes" && empty($_POST["v_antivirus"]) && empty($_SESSION["error_msg"])) {
+	if ($v_antivirus == "yes" && $post_antivirus != "yes" && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-delete-mail-domain-antivirus " .
@@ -289,7 +304,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	}
 
 	// Add antivirus
-	if ($v_antivirus == "no" && !empty($_POST["v_antivirus"]) && empty($_SESSION["error_msg"])) {
+	if ($v_antivirus == "no" && $post_antivirus == "yes" && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-add-mail-domain-antivirus " .
@@ -377,7 +392,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		unset($output);
 	}
 
-	if (!empty($_POST["v_reject"]) && $v_antispam == "yes" && $v_reject != "yes") {
+	if ($post_reject == "yes" && $v_antispam == "yes" && $v_reject != "yes") {
 		exec(
 			HESTIA_CMD . "h-add-mail-domain-reject " . $user . " " . $v_domain . " yes",
 			$output,
@@ -387,7 +402,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		$v_reject = "yes";
 		unset($output);
 	}
-	if (empty($_POST["v_reject"]) && $v_reject == "yes") {
+	if ($post_reject != "yes" && $v_reject == "yes") {
 		exec(
 			HESTIA_CMD . "h-delete-mail-domain-reject " . $user . " " . $v_domain . " yes",
 			$output,
@@ -405,8 +420,6 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 	if (empty($_SESSION["error_msg"]) && isset($_POST["v_spam_sensitivity"])) {
 		$spam_presets = ["tolerant" => "7.0", "normal" => "5.0", "strict" => "3.5"];
 		$spam_is_admin = $_SESSION["userContext"] === "admin";
-		$spam_tuning_allowed =
-			$spam_is_admin || ($_SESSION["POLICY_SPAM_CUSTOMER_TUNING"] ?? "yes") !== "no";
 		if ($spam_tuning_allowed) {
 			// Mark threshold: preset or custom value; "default" clears the override
 			$spam_sensitivity = $_POST["v_spam_sensitivity"];
@@ -659,10 +672,11 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		unset($output);
 	}
 
-	if (!empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"])) {
+	$post_webmail = post_or_keep("v_webmail", $v_webmail);
+	if ($offer_webmail) {
 		if (empty($_SESSION["error_msg"])) {
-			if (!empty($_POST["v_webmail"])) {
-				$v_webmail = quoteshellarg($_POST["v_webmail"]);
+			if (!empty($post_webmail)) {
+				$v_webmail = quoteshellarg($post_webmail);
 				exec(
 					HESTIA_CMD .
 						"h-add-mail-domain-webmail " .
@@ -681,8 +695,8 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 		}
 	}
 
-	if (!empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"])) {
-		if (empty($_POST["v_webmail"])) {
+	if ($offer_webmail) {
+		if (empty($post_webmail)) {
 			if (empty($_SESSION["error_msg"])) {
 				exec(
 					HESTIA_CMD . "h-delete-mail-domain-webmail " . $user . " " . $v_domain . " yes",

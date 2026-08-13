@@ -134,12 +134,6 @@ if (!empty($_SESSION["SMTP_RELAY_USER"])) {
 	$v_smtp_relay_user = "";
 }
 $v_smtp_relay_pass = "";
-if (empty($_POST["v_experimental_features"])) {
-	$_POST["v_experimental_features"] = "false";
-}
-if (empty($_POST["v_policy_user_view_suspended"])) {
-	$_POST["v_policy_user_view_suspended"] = "false";
-}
 
 // List Database hosts
 exec(HESTIA_CMD . "h-list-database-hosts json", $output, $return_var);
@@ -284,9 +278,31 @@ $v_ssl_signature = $ssl_str["HESTIA"]["SIGNATURE"];
 $v_ssl_pub_key = $ssl_str["HESTIA"]["PUB_KEY"];
 $v_ssl_issuer = $ssl_str["HESTIA"]["ISSUER"];
 
+// One gate per conditionally rendered control (#649): the view renders on it and the POST section
+// reads on it. The suspended-view policy sits behind the preview switch, so its key only exists
+// while that switch is on - read without the gate it looked like the policy had been turned off.
+$offer_backend = !empty($_SESSION["WEB_BACKEND"]);
+$offer_mail = !empty($_SESSION["MAIL_SYSTEM"]);
+$offer_webmail = $offer_mail && $_SESSION["WEBMAIL_SYSTEM"] != "";
+$offer_preview_policies = ($_SESSION["POLICY_SYSTEM_ENABLE_BACON"] ?? "") === "true";
+$offer_mysql = !empty($_SESSION["DB_SYSTEM"]) && $v_mysql == "yes";
+// The three system policies below are the real root user's alone - the same gate now decides
+// the render and the read, so a crafted POST from another admin has nothing to land on
+$offer_root_policies =
+	$_SESSION["userContext"] === "admin" && $_SESSION["user"] === ($_SESSION["ROOT_USER"] ?? "");
+$offer_pgsql = !empty($_SESSION["DB_SYSTEM"]) && $v_pgsql == "yes";
+
 // Check POST request
 if (!empty($_POST["save"])) {
 	$require_refresh = false;
+	$post_experimental = post_checkbox("v_experimental_features", true, "false", "true", "false");
+	$post_view_suspended = post_checkbox(
+		"v_policy_user_view_suspended",
+		$offer_preview_policies,
+		$_SESSION["POLICY_SYSTEM_ENABLE_BACON"] ?? "false",
+		"true",
+		"false",
+	);
 	// Check token
 	verify_csrf($_POST);
 
@@ -351,11 +367,12 @@ if (!empty($_POST["save"])) {
 		}
 
 		if (empty($_SESSION["error_msg"])) {
-			if ("php-" . $_POST["v_php_default_version"] != DEFAULT_PHP_VERSION) {
+			$post_php_default = post_or_keep("v_php_default_version", substr(DEFAULT_PHP_VERSION, 4));
+			if ($offer_backend && "php-" . $post_php_default != DEFAULT_PHP_VERSION) {
 				exec(
 					HESTIA_CMD .
 						"h-change-sys-php " .
-						quoteshellarg($_POST["v_php_default_version"]),
+						quoteshellarg($post_php_default),
 					$output,
 					$return_var,
 				);
@@ -453,37 +470,28 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Update experimental features status
-	if (
-		empty($_SESSION["error_msg"]) &&
-		$_POST["v_experimental_features"] != $_SESSION["POLICY_SYSTEM_ENABLE_BACON"]
-	) {
-		if ($_POST["v_experimental_features"] == "on") {
-			$_POST["v_experimental_features"] = "true";
-		} else {
-			$_POST["v_experimental_features"] = "false";
-		}
-		if ($_POST["v_experimental_features"] != $_SESSION["POLICY_SYSTEM_ENABLE_BACON"]) {
-			exec(
-				HESTIA_CMD .
-					"h-change-sys-config-value POLICY_SYSTEM_ENABLE_BACON " .
-					quoteshellarg($_POST["v_experimental_features"]),
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			$v_debug_mode_adv = "yes";
-		}
+	// Update experimental features status. The checkbox already arrives as true/false, so the
+	// on-to-true mapping the comparison used to run in between is gone.
+	if (empty($_SESSION["error_msg"]) && $post_experimental != $_SESSION["POLICY_SYSTEM_ENABLE_BACON"]) {
+		exec(
+			HESTIA_CMD .
+				"h-change-sys-config-value POLICY_SYSTEM_ENABLE_BACON " .
+				quoteshellarg($post_experimental),
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		unset($output);
+		$v_debug_mode_adv = "yes";
 		if (
-			$_POST["v_policy_user_view_suspended"] != $_SESSION["POLICY_SYSTEM_ENABLE_BACON"] &&
-			$_POST["v_experimental_features"] == "false"
+			$post_view_suspended != $_SESSION["POLICY_SYSTEM_ENABLE_BACON"] &&
+			$post_experimental == "false"
 		) {
 			//disable preview mode
 			exec(
 				HESTIA_CMD .
 					"h-change-sys-config-value POLICY_USER_VIEW_SUSPENDED " .
-					quoteshellarg($_POST["v_policy_user_view_suspended"]),
+					quoteshellarg($post_view_suspended),
 				$output,
 				$return_var,
 			);
@@ -622,15 +630,16 @@ if (!empty($_POST["save"])) {
 			$v_db_adv = "yes";
 		}
 	}
-	if (!empty($_SESSION["MAIL_SYSTEM"])) {
+	if ($offer_mail) {
 		// Update webmail url
 		if (empty($_SESSION["error_msg"])) {
-			if ($_SESSION["WEBMAIL_SYSTEM"] != "") {
-				if ($_POST["v_webmail_alias"] != $_SESSION["WEBMAIL_ALIAS"]) {
+			$post_webmail_alias = post_or_keep("v_webmail_alias", $_SESSION["WEBMAIL_ALIAS"] ?? "");
+			if ($offer_webmail) {
+				if ($post_webmail_alias != $_SESSION["WEBMAIL_ALIAS"]) {
 					exec(
 						HESTIA_CMD .
 							"h-change-sys-webmail " .
-							quoteshellarg($_POST["v_webmail_alias"]),
+							quoteshellarg($post_webmail_alias),
 						$output,
 						$return_var,
 					);
@@ -644,19 +653,23 @@ if (!empty($_POST["save"])) {
 
 	// Update system wide smtp relay
 	if (empty($_SESSION["error_msg"])) {
-		if (isset($_POST["v_smtp_relay"]) && !empty($_POST["v_smtp_relay_host"])) {
+		$post_relay_host = post_or_keep("v_smtp_relay_host", $v_smtp_relay_host);
+		$post_relay_user = post_or_keep("v_smtp_relay_user", $v_smtp_relay_user);
+		$post_relay_port = post_or_keep("v_smtp_relay_port", $v_smtp_relay_port);
+		$post_relay_pass = post_or_keep("v_smtp_relay_pass", "");
+		if ($offer_mail && isset($_POST["v_smtp_relay"]) && !empty($post_relay_host)) {
 			if (
-				$_POST["v_smtp_relay_host"] != $v_smtp_relay_host ||
-				$_POST["v_smtp_relay_user"] != $v_smtp_relay_user ||
-				$_POST["v_smtp_relay_port"] != $v_smtp_relay_port ||
-				!empty($_POST["v_smtp_relay_pass"])
+				$post_relay_host != $v_smtp_relay_host ||
+				$post_relay_user != $v_smtp_relay_user ||
+				$post_relay_port != $v_smtp_relay_port ||
+				!empty($post_relay_pass)
 			) {
 				$v_smtp_relay = true;
-				$v_smtp_relay_host = quoteshellarg($_POST["v_smtp_relay_host"]);
-				$v_smtp_relay_user = quoteshellarg($_POST["v_smtp_relay_user"]);
-				$v_smtp_relay_pass = quoteshellarg($_POST["v_smtp_relay_pass"]);
-				if (!empty($_POST["v_smtp_relay_port"])) {
-					$v_smtp_relay_port = quoteshellarg($_POST["v_smtp_relay_port"]);
+				$v_smtp_relay_host = quoteshellarg($post_relay_host);
+				$v_smtp_relay_user = quoteshellarg($post_relay_user);
+				$v_smtp_relay_pass = quoteshellarg($post_relay_pass);
+				if (!empty($post_relay_port)) {
+					$v_smtp_relay_port = quoteshellarg($post_relay_port);
 				} else {
 					$v_smtp_relay_port = "587";
 				}
@@ -677,7 +690,7 @@ if (!empty($_POST["save"])) {
 				unset($output);
 			}
 		}
-		if (!isset($_POST["v_smtp_relay"]) && $v_smtp_relay == true) {
+		if ($offer_mail && !isset($_POST["v_smtp_relay"]) && $v_smtp_relay == true) {
 			$v_smtp_relay = false;
 			$v_smtp_relay_host = $v_smtp_relay_user = $v_smtp_relay_pass = $v_smtp_relay_port = "";
 			exec(HESTIA_CMD . "h-delete-sys-smtp-relay", $output, $return_var);
@@ -686,11 +699,13 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Update phpMyAdmin url
+	// Update phpMyAdmin url. The field only exists on a box with a mysql host - read without the
+	// gate, an absent key rewrote the alias to empty.
 	if (empty($_SESSION["error_msg"])) {
-		if ($_POST["v_mysql_url"] != $_SESSION["DB_PMA_ALIAS"]) {
+		$post_mysql_url = post_or_keep("v_mysql_url", $_SESSION["DB_PMA_ALIAS"] ?? "");
+		if ($offer_mysql && $post_mysql_url != $_SESSION["DB_PMA_ALIAS"]) {
 			exec(
-				HESTIA_CMD . "h-change-sys-db-alias pma " . quoteshellarg($_POST["v_mysql_url"]),
+				HESTIA_CMD . "h-change-sys-db-alias pma " . quoteshellarg($post_mysql_url),
 				$output,
 				$return_var,
 			);
@@ -1465,7 +1480,7 @@ if (!empty($_POST["save"])) {
 
 	// Change POLICY_SYSTEM_PROTECTED_ADMIN
 	if (empty($_SESSION["error_msg"])) {
-		if (!empty($_POST["v_policy_system_protected_admin"])) {
+		if ($offer_root_policies && !empty($_POST["v_policy_system_protected_admin"])) {
 			if (
 				$_POST["v_policy_system_protected_admin"] !=
 				$_SESSION["POLICY_SYSTEM_PROTECTED_ADMIN"]
@@ -1489,22 +1504,22 @@ if (!empty($_POST["save"])) {
 
 	// Change POLICY_USER_VIEW_SUSPENDED
 	if (empty($_SESSION["error_msg"])) {
-		if (!empty($_POST["v_policy_user_view_suspended"])) {
+		if ($offer_preview_policies) {
 			if (
-				$_POST["v_policy_user_view_suspended"] != $_SESSION["POLICY_USER_VIEW_SUSPENDED"] &&
+				$post_view_suspended != $_SESSION["POLICY_USER_VIEW_SUSPENDED"] &&
 				!empty($_SESSION["POLICY_USER_VIEW_SUSPENDED"])
 			) {
 				exec(
 					HESTIA_CMD .
 						"h-change-sys-config-value POLICY_USER_VIEW_SUSPENDED " .
-						quoteshellarg($_POST["v_policy_user_view_suspended"]),
+						quoteshellarg($post_view_suspended),
 					$output,
 					$return_var,
 				);
 				check_return_code($return_var, $output);
 				unset($output);
 				if (empty($_SESSION["error_msg"])) {
-					$v_policy_user_view_suspended = $_POST["v_policy_user_view_suspended"];
+					$v_policy_user_view_suspended = $post_view_suspended;
 				}
 				$v_security_adv = "yes";
 			}
@@ -1543,7 +1558,7 @@ if (!empty($_POST["save"])) {
 
 	// Change POLICY_SYSTEM_HIDE_ADMIN
 	if (empty($_SESSION["error_msg"])) {
-		if (!empty($_POST["v_policy_system_hide_admin"])) {
+		if ($offer_root_policies && !empty($_POST["v_policy_system_hide_admin"])) {
 			if ($_POST["v_policy_system_hide_admin"] != $_SESSION["POLICY_SYSTEM_HIDE_ADMIN"]) {
 				exec(
 					HESTIA_CMD .
@@ -1564,7 +1579,7 @@ if (!empty($_POST["save"])) {
 
 	// Change POLICY_SYSTEM_HIDE_SERVICES
 	if (empty($_SESSION["error_msg"])) {
-		if (!empty($_POST["v_policy_system_hide_services"])) {
+		if ($offer_root_policies && !empty($_POST["v_policy_system_hide_services"])) {
 			if (
 				$_POST["v_policy_system_hide_services"] != $_SESSION["POLICY_SYSTEM_HIDE_SERVICES"]
 			) {

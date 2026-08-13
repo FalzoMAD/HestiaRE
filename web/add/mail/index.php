@@ -30,6 +30,13 @@ if (!empty($v_domain)) {
 	$v_webmail_alias = $data[$v_domain]["WEBMAIL_ALIAS"];
 }
 
+// One gate per conditionally rendered control (#649): the view renders on it and the POST section
+// reads on it. A new domain has nothing stored, so an absent control means the feature is not on
+// this box - which is the same as "off".
+$offer_webmail = !empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"]);
+$offer_antispam = !empty($_SESSION["ANTISPAM_SYSTEM"]);
+$offer_antivirus = !empty($_SESSION["ANTIVIRUS_SYSTEM"]);
+
 // Check POST request for mail domain
 if (!empty($_POST["ok"])) {
 	// Check token
@@ -51,18 +58,10 @@ if (!empty($_POST["ok"])) {
 	}
 
 	// Check antispam option
-	if (!empty($_POST["v_antispam"])) {
-		$v_antispam = "yes";
-	} else {
-		$v_antispam = "no";
-	}
+	$v_antispam = post_checkbox("v_antispam", $offer_antispam, "no", "yes", "no");
 
 	// Check antivirus option
-	if (!empty($_POST["v_antivirus"])) {
-		$v_antivirus = "yes";
-	} else {
-		$v_antivirus = "no";
-	}
+	$v_antivirus = post_checkbox("v_antivirus", $offer_antivirus, "no", "yes", "no");
 
 	// Check dkim option
 	if (!empty($_POST["v_dkim"])) {
@@ -97,7 +96,7 @@ if (!empty($_POST["ok"])) {
 		unset($output);
 	}
 
-	if (!empty($_POST["v_reject"]) && $v_antispam == "yes") {
+	if (post_checkbox("v_reject", $offer_antispam, "no", "yes", "no") == "yes" && $v_antispam == "yes") {
 		exec(
 			HESTIA_CMD . "h-add-mail-domain-reject " . $user . " " . $v_domain . " yes",
 			$output,
@@ -107,7 +106,7 @@ if (!empty($_POST["ok"])) {
 		unset($output);
 	}
 
-	if (!empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"])) {
+	if ($offer_webmail) {
 		if (empty($_SESSION["error_msg"])) {
 			if (!empty($_POST["v_webmail"])) {
 				$v_webmail = quoteshellarg($_POST["v_webmail"]);
@@ -129,7 +128,7 @@ if (!empty($_POST["ok"])) {
 		}
 	}
 
-	if (!empty($_SESSION["IMAP_SYSTEM"]) && !empty($_SESSION["WEBMAIL_SYSTEM"])) {
+	if ($offer_webmail) {
 		if (empty($_POST["v_webmail"])) {
 			if (empty($_SESSION["error_msg"])) {
 				exec(
