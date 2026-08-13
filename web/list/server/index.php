@@ -120,16 +120,13 @@ exec(HESTIA_CMD . "h-list-sys-info json", $output, $return_var);
 $sys = json_decode(implode("", $output), true);
 unset($output);
 
-exec(HESTIA_CMD . "h-list-sys-php json", $output, $return_var);
-$php = json_decode(implode("", $output), true);
-unset($output);
+$php = cli_json("h-list-sys-php json");
 $phpfpm = [];
 foreach ($php as $version) {
 	$phpfpm[] = "php" . $version . "-fpm";
 }
 
-exec(HESTIA_CMD . "h-list-sys-services json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
+$data = cli_json("h-list-sys-services json");
 ksort($data);
 
 unset($output);

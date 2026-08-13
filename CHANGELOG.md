@@ -14,6 +14,19 @@ opens above it.
 
 ### Changed
 
+- **`cli_json()` states its contract instead of implying it** (#578). It now declares `: array`, so
+  "always an array" is checked rather than agreed, and a caller may drop its own `is_array()` on
+  the strength of it. The same declaration names the limit it always had: a command whose JSON is a
+  scalar loses its value there, silently, and two comparisons then read the other way round. Those
+  callers take the new `cli_value()`, which answers `null` - the state they already test for.
+- **The panel reads a CLI result in one place** (#578). The remaining 61 sites that decoded a
+  command's JSON by hand now go through `cli_json()`, which closes the class the fatal sites above
+  belonged to rather than only its instances. Two shapes were deliberately left alone: a site whose
+  exit code or raw output is still consulted (a `check_*()` above the decode), and one whose value
+  is a scalar rather than a list - `reset/index.php` reads a reset-key timestamp there and compares
+  it against `null` and against `time()`, and an empty array answers both the other way round.
+  Side effect worth having: `cli_json()` owns its `$output`, so 4 sites where a second `exec()`
+  would have appended to the first one's output are gone with it.
 - **A conditionally rendered control now reads through the gate that rendered it** (#649). A control
   the form did not render sends no key, and every form carried its own idea of what that means -
   three separate patches of the same class in one week. `post_or_keep()` and `post_checkbox()` hold
@@ -50,6 +63,48 @@ opens above it.
 
 ### Fixed
 
+- **A failed CLI read redirected and then rendered the page anyway** (#578).
+  `check_return_code_redirect()` sent a `Location` header without stopping, so all 14 call sites
+  carried on parsing a record the command had never produced - the null derefs above are downstream
+  of exactly that. Same omission in the session-timeout branch of `main.php`, which rendered on
+  against the session it had just destroyed while its sibling branch exited.
+- **Nine forms silently offered an empty list** (#578) where a failed call left a null to iterate:
+  the package and language selects on add/edit user, the language list on the server page, the
+  ipset lists on the firewall forms, the IP select on the web domain form, the backup exclusions,
+  the SSH key duplicate check and the PHP-FPM services list.
+- **A suspended customer was served a rendered page** (#578). The suspension check sat in
+  `top_panel()`, which `render_page()` calls *after* including `header.php` - with output buffering
+  off the headers were already gone, so the `Location` was never sent and, without an `exit()`, the
+  rest of the page rendered against the session just destroyed. Measured on a real suspended
+  account: 13883 bytes of complete HTML and no redirect header at all. The check now runs in the
+  session block before a single byte goes out, and answers 302 with an empty body. An admin
+  impersonating a suspended customer is still not logged out, as before.
+- **The logout did not rotate the session id** (#578), so an id captured beforehand was the id the
+  browser kept and the next request adopted. `/logout/` destroyed the session with three calls of
+  its own instead of `destroy_sessions()`, which now starts a fresh session and regenerates.
+  Measured across a real logout: the cookie was unchanged before, and changes now. #438 had already
+  rotated at the impersonation transitions; this was the plainer case still open.
+- **`$is_real_root_user` compared two empty strings** (#578). With `ROOT_USER` absent the `?? ""`
+  form answered yes for an empty session user - permissive at the one line that decides who the
+  root account is, and it gates the root-only server policies. Both sides must now be non-empty.
+- **An unreadable system config left every policy standing open** (#578). `load_hestia_config()`
+  copies `h-list-sys-config` into the session and never checked whether it got anything; a failed
+  call left the session without a single policy key, and an absent key is the permissive reading at
+  every gate that gets it - the password reset was allowed although the admin had switched it off,
+  the protected-admin flag read as unset, and both log policies read as granted. Measured, not
+  reasoned: with an empty session those five gates decide open. The panel now answers 503 rather
+  than deciding without its own configuration; a table of closed per-policy defaults was rejected
+  because it goes stale the day a policy is added. `top_panel()` gained the matching guard - a user
+  row that comes back empty (exit 0, no output) used to pass the suspension check and write `null`
+  into `userContext`.
+- **23 panel pages died instead of showing an empty list when a CLI call failed** (#578). The pages
+  read a command's JSON without ever looking at its exit code; a failed call leaves the output
+  empty, `json_decode("")` is `null`, and the first `ksort()`/`array_reverse()`/`array_keys()` on it
+  is a TypeError under PHP 8. These are the list pages - the first thing a user sees after logging
+  in. They now read through `cli_json()`, which was introduced with #575 for the two unauthenticated
+  entry points. Counted from scratch rather than from the issue's table, which had missed
+  `array_reverse()`: with it the sort-order branch is fatal too, so the pages failed regardless of
+  which sort order the user had set.
 - **Three saves that wrote a field nobody touched** (#649). A web domain materialised
   `FASTCGI_CACHE`/`FASTCGI_DURATION` on its first save on every model that does not render the
   cache control, because with nothing stored the duration field displays a 2m default and the

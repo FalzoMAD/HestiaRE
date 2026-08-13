@@ -15,7 +15,8 @@ if ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) {
 // List backup exclustions
 exec(HESTIA_CMD . "h-list-user-backup-exclusions " . $user . " 'json'", $output, $return_var);
 check_return_code($return_var, $output);
-$data = json_decode(implode("", $output), true);
+// Not cli_json(): the check above needs the raw exit code and the command's own error text.
+$data = json_decode(implode("", $output), true) ?: [];
 unset($output);
 
 $v_web = $v_mail = $v_db = $v_userdir = "";

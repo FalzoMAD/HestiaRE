@@ -88,9 +88,7 @@ if (!empty($_POST)) {
 }
 
 // Check system configuration
-exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-unset($output);
+$data = cli_json("h-list-sys-config json");
 
 $sys_arr = $data["config"];
 foreach ($sys_arr as $key => $value) {

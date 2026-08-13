@@ -61,9 +61,7 @@ $v_time = $data[$v_package]["TIME"];
 $v_status = "active";
 
 // List web templates
-exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
-$web_templates = json_decode(implode("", $output), true);
-unset($output);
+$web_templates = cli_json("h-list-web-templates json");
 
 // Empty means "nothing selectable", which is what the checks below ask - so they must
 // not depend on whether the conditional load ran.
@@ -72,22 +70,16 @@ $proxy_templates = [];
 
 // List backend templates
 if (!empty($_SESSION["WEB_BACKEND"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
-	$backend_templates = json_decode(implode("", $output), true);
-	unset($output);
+	$backend_templates = cli_json("h-list-web-templates-backend json");
 }
 
 // List proxy templates
 if (!empty($_SESSION["PROXY_SYSTEM"])) {
-	exec(HESTIA_CMD . "h-list-web-templates-proxy json", $output, $return_var);
-	$proxy_templates = json_decode(implode("", $output), true);
-	unset($output);
+	$proxy_templates = cli_json("h-list-web-templates-proxy json");
 }
 
 // List shels
-exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
-$shells = json_decode(implode("", $output), true);
-unset($output);
+$shells = cli_json("h-list-sys-shells json");
 
 // One gate per conditionally rendered control: rendered on it, read on it.
 // Selectability decides for the selects, not the system switch.

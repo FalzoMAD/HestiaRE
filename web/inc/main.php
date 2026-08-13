@@ -27,8 +27,15 @@ function destroy_sessions()
 	session_unset();
 	session_destroy();
 	session_start();
+	// session_start() picks the id back up from the cookie, so without this every forced logout
+	// hands the caller the same id it arrived with. #438 rotates at the impersonation transitions;
+	// this is the plainer fixation case and it was the one still open.
+	session_regenerate_id(true);
 }
 
+// Row counter for the list templates. It looks unused from here and is not: render_page() does
+// extract($GLOBALS), and 26 templates count with it. Removing it printed "Undefined variable $i"
+// on every list page - grep in this file cannot see that, only a run can.
 $i = 0;
 
 // Saving user IPs to the session for preventing session hijacking
@@ -77,15 +84,29 @@ if (isset($_SESSION["user"])) {
 		$username = $_SESSION["look"];
 	}
 
-	exec(HESTIA_CMD . "h-list-user " . quoteshellarg($username) . " json", $output, $return_var);
-	$data = json_decode(implode("", $output), true);
-	unset($output, $return_var);
+	$data = cli_json("h-list-user " . quoteshellarg($username) . " json");
 	// The effective user can vanish mid-session - e.g. an admin deletes the
 	// impersonated customer from another session (#438 blocks delete/user from
 	// within an impersonation session, so it happens elsewhere). Log out cleanly
 	// instead of limping on with undefined role/shell values.
 	if (empty($data[$username])) {
 		destroy_sessions();
+		header("Location: /login/");
+		exit();
+	}
+	// Suspension is decided HERE and not in top_panel(), which is where it used to live: render_page()
+	// includes header.php before it calls top_panel(), output_buffering is off, so by then the headers
+	// are gone and the Location was never sent - measured, a suspended customer got 13883 bytes of
+	// rendered page. An admin impersonating a suspended customer is not logged out (they arrived
+	// through "look" and need the account visible), which is what POLICY_USER_VIEW_SUSPENDED covers
+	// for everyone else.
+	if (
+		($data[$username]["SUSPENDED"] ?? "") === "yes" &&
+		($_SESSION["POLICY_USER_VIEW_SUSPENDED"] ?? "") !== "yes" &&
+		empty($_SESSION["look"])
+	) {
+		destroy_sessions();
+		$_SESSION["error_msg"] = _("You are logged out, please log in again.");
 		header("Location: /login/");
 		exit();
 	}
@@ -116,6 +137,9 @@ if (!defined("NO_AUTH_REQUIRED")) {
 	if (empty($_SESSION["LAST_ACTIVITY"]) || empty($_SESSION["INACTIVE_SESSION_TIMEOUT"])) {
 		destroy_sessions();
 		header("Location: /login/");
+		// The sibling branch below exits; without it here the page rendered on against the session
+		// that was just destroyed.
+		exit();
 	} elseif ($_SESSION["INACTIVE_SESSION_TIMEOUT"] * 60 + $_SESSION["LAST_ACTIVITY"] < time()) {
 		$v_user = quoteshellarg($_SESSION["user"]);
 		$v_session_id = quoteshellarg($_SESSION["token"]);
@@ -161,7 +185,9 @@ if (!isset($_SESSION["look"])) {
 // The REAL identity, not the effective one: this stays false while an admin impersonates the root
 // user, and true while the root user impersonates someone else. Decided in the one file whose job
 // that is, so a page needing it for a gate does not read $_SESSION["user"] itself (#438).
-$is_real_root_user = isset($_SESSION["user"]) && $_SESSION["user"] === ($_SESSION["ROOT_USER"] ?? "");
+// Both sides non-empty, deliberately: the `?? ""` form compared an empty ROOT_USER against an empty
+// user and answered yes - permissive at the one line whose job is to decide who is the root account.
+$is_real_root_user = !empty($_SESSION["ROOT_USER"]) && ($_SESSION["user"] ?? "") === $_SESSION["ROOT_USER"];
 
 require_once dirname(__FILE__) . "/i18n.php";
 
@@ -179,7 +205,12 @@ function check_error($return_var)
 // array until something insists on a real one: in_array(x, null) is a TypeError, and on the
 // login page that means a white screen instead of a form (#575). Callers get an array either
 // way and pick their own fallback.
-function cli_json($cmd)
+//
+// The `: array` is the point, not decoration: it turns "always an array" from an observation
+// about today's body into a checked promise, and callers are entitled to drop their own is_array()
+// on the strength of it. It also states the limit - a command whose JSON is a SCALAR loses its
+// value here, silently, so those callers take cli_value() below.
+function cli_json($cmd): array
 {
 	$output = [];
 	exec(HESTIA_CMD . $cmd, $output, $return_var);
@@ -188,6 +219,36 @@ function cli_json($cmd)
 	}
 	$data = json_decode(implode("", $output), true);
 	return is_array($data) ? $data : [];
+}
+
+// Same call for a command that prints ONE value rather than a list, e.g. h-get-user-value.
+// Answers null when the call failed or printed nothing, which is the state callers already test
+// for; [] would be the wrong answer, because it compares against null and against a number the
+// other way round than the value it stands in for.
+//
+// null therefore means BOTH "the call failed" and "the value is not set", and this helper only
+// fits where those two lead to the same decision - in reset/index.php both mean "do not honour an
+// expiry". A caller for whom an unset value is a legitimate state must not collapse them here, or
+// it repeats one level down exactly what cli_json() was collapsing.
+function cli_value($cmd)
+{
+	$output = [];
+	exec(HESTIA_CMD . $cmd, $output, $return_var);
+	if ($return_var !== 0) {
+		return null;
+	}
+	$raw = trim(implode("", $output));
+	if ($raw === "") {
+		return null;
+	}
+	$data = json_decode($raw, true);
+	if (is_array($data)) {
+		return null;
+	}
+	// h-get-user-value prints a bare shell value, not JSON: "nologin", "unlimited", a date. Those
+	// decode to null, and answering "no value" for a value that was printed would rebuild the
+	// collapse this helper exists to avoid, one level down. A number still comes back typed.
+	return $data === null ? $raw : $data;
 }
 
 function check_return_code($return_var, $output)
@@ -215,6 +276,9 @@ function check_return_code_redirect($return_var, $output, $location)
 		}
 		$_SESSION["error_msg"] = $error;
 		header("Location:" . $location);
+		// Without this the caller carries on parsing a record the command never produced, which is
+		// where the null derefs of this issue come from. A redirect means stop, at all 14 call sites.
+		exit();
 	}
 }
 
@@ -293,23 +357,21 @@ function top_panel($user, $TAB)
 {
 	$command = HESTIA_CMD . "h-list-user " . $user . " 'json'";
 	exec($command, $output, $return_var);
-	if ($return_var > 0) {
+	$panel = json_decode(implode("", $output), true);
+	unset($output);
+	// A row that is not there decides everything below it the wrong way round: the suspension check
+	// compares against null and passes, and the role refresh writes null into userContext. Exit 0
+	// with no output produces exactly that, so an empty row logs out like a non-zero exit does.
+	if ($return_var > 0 || empty($panel[$user])) {
 		destroy_sessions();
 		$_SESSION["error_msg"] = _("You are logged out, please log in again.");
 		header("Location: /login/");
 		exit();
 	}
-	$panel = json_decode(implode("", $output), true);
-	unset($output);
 
-	// Log out active sessions for suspended users
-	if ($panel[$user]["SUSPENDED"] === "yes" && $_SESSION["POLICY_USER_VIEW_SUSPENDED"] !== "yes") {
-		if (empty($_SESSION["look"])) {
-			destroy_sessions();
-			$_SESSION["error_msg"] = _("You are logged out, please log in again.");
-			header("Location: /login/");
-		}
-	}
+	// Suspension is checked in the session block at the top of this file, before a single byte of
+	// header.php has gone out. It used to be here, where the redirect could no longer be sent and
+	// the function simply carried on against the session it had just destroyed.
 
 	// Reset user permissions if changed while logged in
 	if ($panel[$user]["ROLE"] !== $_SESSION["userContext"] && !isset($_SESSION["look"])) {
@@ -569,9 +631,7 @@ function list_timezones()
  */
 function is_it_mysql_or_mariadb()
 {
-	exec(HESTIA_CMD . "h-list-sys-services json", $output, $return_var);
-	$data = json_decode(implode("", $output), true);
-	unset($output);
+	$data = cli_json("h-list-sys-services json");
 	$mysqltype = "mysql";
 	if (isset($data["mariadb"])) {
 		$mysqltype = "mariadb";
@@ -582,9 +642,18 @@ function is_it_mysql_or_mariadb()
 function load_hestia_config()
 {
 	// Check system configuration
-	exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
-	$data = json_decode(implode("", $output), true);
-	$sys_arr = $data["config"];
+	$data = cli_json("h-list-sys-config json");
+	$sys_arr = $data["config"] ?? [];
+	// Without the config there is no policy set, and an absent key is the PERMISSIVE reading at
+	// every gate that consumes one: POLICY_SYSTEM_PASSWORD_RESET is honoured as "not no",
+	// POLICY_SYSTEM_PROTECTED_ADMIN as "not yes", same for the log policies. Seeding a closed
+	// default per policy would be a hand-kept table that goes stale the day a policy is added, so
+	// the panel serves nothing rather than decide without its own configuration. Runs before the
+	// translations are loaded, hence the untranslated text.
+	if (!$sys_arr) {
+		http_response_code(503);
+		exit("Hestia configuration unavailable.\n");
+	}
 	foreach ($sys_arr as $key => $value) {
 		$_SESSION[$key] = $value;
 	}
@@ -597,19 +666,11 @@ function load_hestia_config()
  */
 function backendtpl_with_webdomains()
 {
-	exec(HESTIA_CMD . "h-list-users json", $output, $return_var);
-	$users = json_decode(implode("", $output), true);
-	unset($output);
+	$users = cli_json("h-list-users json");
 
 	$backend_list = [];
 	foreach ($users as $user => $user_details) {
-		exec(
-			HESTIA_CMD . "h-list-web-domains " . quoteshellarg($user) . " json",
-			$output,
-			$return_var,
-		);
-		$domains = json_decode(implode("", $output), true);
-		unset($output);
+		$domains = cli_json("h-list-web-domains " . quoteshellarg($user) . " json");
 		foreach ($domains as $domain => $domain_details) {
 			// The version is its own field now (#591); group by it under the PHP-X_Y key the
 			// server page looks up. 'none' domains run no PHP and are not counted.

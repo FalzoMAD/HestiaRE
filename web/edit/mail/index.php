@@ -26,9 +26,7 @@ $v_username = $user;
 if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_domain = $_GET["domain"];
 
-	exec(HESTIA_CMD . "h-list-sys-webmail json", $output, $return_var);
-	$webmail_clients = json_decode(implode("", $output), true);
-	unset($output);
+	$webmail_clients = cli_json("h-list-sys-webmail json");
 
 	exec(
 		HESTIA_CMD . "h-list-mail-domain " . $user . " " . quoteshellarg($v_domain) . " json",
@@ -56,18 +54,7 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_smtp_relay_port = $data[$v_domain]["U_SMTP_RELAY_PORT"];
 	$v_smtp_relay_user = $data[$v_domain]["U_SMTP_RELAY_USERNAME"];
 
-	exec(
-		HESTIA_CMD .
-			"h-list-mail-domain-relay-exclude " .
-			$user .
-			" " .
-			quoteshellarg($v_domain) .
-			" json",
-		$output,
-		$return_var,
-	);
-	$exclude_data = json_decode(implode("", $output), true);
-	unset($output);
+	$exclude_data = cli_json("h-list-mail-domain-relay-exclude " . $user . " " . quoteshellarg($v_domain) . " json");
 	$v_smtp_relay_exclude = str_replace(
 		",",
 		"\n",
@@ -80,35 +67,13 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 	$v_spam_subject_tag = $data[$v_domain]["U_SPAM_SUBJECT_TAG"] ?? "";
 
 	// Per-domain sender white/blacklist (#330)
-	exec(
-		HESTIA_CMD .
-			"h-list-mail-domain-spam-whitelist " .
-			$user .
-			" " .
-			quoteshellarg($v_domain) .
-			" json",
-		$output,
-		$return_var,
-	);
-	$whitelist_data = json_decode(implode("", $output), true);
-	unset($output);
+	$whitelist_data = cli_json("h-list-mail-domain-spam-whitelist " . $user . " " . quoteshellarg($v_domain) . " json");
 	$v_spam_whitelist = str_replace(
 		",",
 		"\n",
 		$whitelist_data[$v_domain]["SPAM_WHITELIST"] ?? "",
 	);
-	exec(
-		HESTIA_CMD .
-			"h-list-mail-domain-spam-blacklist " .
-			$user .
-			" " .
-			quoteshellarg($v_domain) .
-			" json",
-		$output,
-		$return_var,
-	);
-	$blacklist_data = json_decode(implode("", $output), true);
-	unset($output);
+	$blacklist_data = cli_json("h-list-mail-domain-spam-blacklist " . $user . " " . quoteshellarg($v_domain) . " json");
 	$v_spam_blacklist = str_replace(
 		",",
 		"\n",
@@ -123,18 +88,7 @@ if (!empty($_GET["domain"]) && empty($_GET["account"])) {
 
 	$v_ssl = $data[$v_domain]["SSL"];
 	if (!empty($v_ssl)) {
-		exec(
-			HESTIA_CMD .
-				"h-list-mail-domain-ssl " .
-				$user .
-				" " .
-				quoteshellarg($v_domain) .
-				" json",
-			$output,
-			$return_var,
-		);
-		$ssl_str = json_decode(implode("", $output), true);
-		unset($output);
+		$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
 		$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
 		$v_ssl_key = $ssl_str[$v_domain]["KEY"];
 		$v_ssl_ca = $ssl_str[$v_domain]["CA"];
@@ -205,20 +159,9 @@ if (!empty($_GET["domain"]) && !empty($_GET["account"])) {
 
 	// Parse autoreply
 	if ($v_autoreply == "yes") {
-		exec(
-			HESTIA_CMD .
-				"h-list-mail-account-autoreply " .
-				$user .
-				" " .
-				quoteshellarg($v_domain) .
-				" " .
-				quoteshellarg($v_account) .
-				" json",
-			$output,
-			$return_var,
+		$autoreply_str = cli_json(
+			"h-list-mail-account-autoreply " . $user . " " . quoteshellarg($v_domain) . " " . quoteshellarg($v_account) . " json",
 		);
-		$autoreply_str = json_decode(implode("", $output), true);
-		unset($output);
 		$v_autoreply_message = $autoreply_str[$v_account]["MSG"];
 		$v_autoreply_message = str_replace("\\n", "\n", $v_autoreply_message);
 	} else {
@@ -765,18 +708,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			$restart_web = "yes";
 			$restart_proxy = "yes";
 
-			exec(
-				HESTIA_CMD .
-					"h-list-mail-domain-ssl " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" json",
-				$output,
-				$return_var,
-			);
-			$ssl_str = json_decode(implode("", $output), true);
-			unset($output);
+			$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
 			$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
 			$v_ssl_key = $ssl_str[$v_domain]["KEY"];
 			$v_ssl_ca = $ssl_str[$v_domain]["CA"];
@@ -933,18 +865,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			$restart_web = "yes";
 			$restart_proxy = "yes";
 
-			exec(
-				HESTIA_CMD .
-					"h-list-mail-domain-ssl " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" json",
-				$output,
-				$return_var,
-			);
-			$ssl_str = json_decode(implode("", $output), true);
-			unset($output);
+			$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
 			$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
 			$v_ssl_key = $ssl_str[$v_domain]["KEY"];
 			$v_ssl_ca = $ssl_str[$v_domain]["CA"];

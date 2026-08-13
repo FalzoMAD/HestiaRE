@@ -8,9 +8,7 @@ $TAB = "MAIL";
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
-exec(HESTIA_CMD . "h-list-sys-webmail json", $output, $return_var);
-$webmail_clients = json_decode(implode("", $output), true);
-unset($output);
+$webmail_clients = cli_json("h-list-sys-webmail json");
 
 if (!empty($_GET["domain"])) {
 	$v_domain = $_GET["domain"];

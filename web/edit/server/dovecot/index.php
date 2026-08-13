@@ -182,9 +182,7 @@ if (!empty($_POST["save"])) {
 }
 
 // List config
-exec(HESTIA_CMD . "h-list-sys-dovecot-config json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-unset($output);
+$data = cli_json("h-list-sys-dovecot-config json");
 
 $v_config_path = $data["CONFIG"]["config_path"];
 $v_config_path1 = $data["CONFIG"]["config_path1"];

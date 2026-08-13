@@ -91,34 +91,24 @@ if (empty($v_phpcli)) {
 }
 
 // List packages
-exec(HESTIA_CMD . "h-list-user-packages json", $output, $return_var);
-$packages = json_decode(implode("", $output), true);
-unset($output);
+$packages = cli_json("h-list-user-packages json");
 
 // List languages
-exec(HESTIA_CMD . "h-list-sys-languages json", $output, $return_var);
-$language = json_decode(implode("", $output), true);
+$language = cli_json("h-list-sys-languages json");
 foreach ($language as $lang) {
 	$languages[$lang] = translate_json($lang);
 }
 asort($languages);
-unset($output);
 
 // List themes
-exec(HESTIA_CMD . "h-list-sys-themes json", $output, $return_var);
-$themes = json_decode(implode("", $output), true);
-unset($output);
+$themes = cli_json("h-list-sys-themes json");
 
 // List shells
-exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
-$shells = json_decode(implode("", $output), true);
-unset($output);
+$shells = cli_json("h-list-sys-shells json");
 
 //List PHP Versions
 // List supported php versions
-exec(HESTIA_CMD . "h-list-sys-php json", $output, $return_var);
-$php_versions = json_decode(implode("", $output), true);
-unset($output);
+$php_versions = cli_json("h-list-sys-php json");
 
 // One gate per conditionally rendered control: rendered on it, read on it.
 // Docker gates on the real identity because it grants privilege, the rest on the effective one.

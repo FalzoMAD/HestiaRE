@@ -18,12 +18,7 @@ if (!empty($_SESSION["look"])) {
 }
 
 // Data
-if ($_SESSION["userContext"] === "admin") {
-	exec(HESTIA_CMD . "h-list-users json", $output, $return_var);
-} else {
-	exec(HESTIA_CMD . "h-list-user " . $user . " json", $output, $return_var);
-}
-$data = json_decode(implode("", $output), true);
+$data = cli_json($_SESSION["userContext"] === "admin" ? "h-list-users json" : "h-list-user " . $user . " json");
 if ($_SESSION["userSortOrder"] == "name") {
 	ksort($data);
 } else {

@@ -67,9 +67,7 @@ if (!empty($_POST["save"])) {
 }
 
 // List config
-exec(HESTIA_CMD . "h-list-sys-pgsql-config json", $output, $return_var);
-$data = json_decode(implode("", $output), true);
-unset($output);
+$data = cli_json("h-list-sys-pgsql-config json");
 
 $v_options_path = $data["CONFIG"]["pg_hba_path"];
 $v_config_path = $data["CONFIG"]["config_path"];

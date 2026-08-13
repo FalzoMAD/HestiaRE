@@ -31,9 +31,7 @@ if (!empty($_SESSION["PROXY_SYSTEM"])) {
 	unset($output);
 }
 
-exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
-$web_templates = json_decode(implode("", $output), true);
-unset($output);
+$web_templates = cli_json("h-list-web-templates json");
 
 // One gate per conditionally rendered control: rendered on it, read on it.
 // A new package has nothing stored, so an absent control takes the shipped default.
@@ -215,9 +213,7 @@ if (!empty($_POST["ok"])) {
 }
 
 // List system shells
-exec(HESTIA_CMD . "h-list-sys-shells json", $output, $return_var);
-$shells = json_decode(implode("", $output), true);
-unset($output);
+$shells = cli_json("h-list-sys-shells json");
 
 // Set default values
 if (empty($v_package)) {
