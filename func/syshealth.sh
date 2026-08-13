@@ -29,6 +29,13 @@ syshealth_refresh_registry() {
 		db) syshealth_update_db_config_format ;;
 		ip) syshealth_update_ip_config_format ;;
 		system) syshealth_update_system_config_format ;;
+		# Same reason syshealth_known_keys refuses one: without this an unknown subsystem fell
+		# through silently, the registry was never written, and the cat below failed into an empty
+		# key list - the vacuous agreement the comment there argues against, reached from here.
+		*)
+			echo "ERROR: unknown configuration subsystem '$1'" >&2
+			return 1
+			;;
 	esac
 }
 
@@ -37,7 +44,9 @@ function read_kv_config_file() {
 	local system=$1
 
 	if [ ! -f "$HESTIA/conf/defaults/$system.conf" ]; then
-		syshealth_refresh_registry "$system"
+		# A refusal here means the subsystem is unknown, so there is no key list to fall back to.
+		# Reading on gave a cat error and an empty answer, which every caller treats as valid.
+		syshealth_refresh_registry "$system" || return 1
 	fi
 	while read -r str; do
 		echo "$str"
@@ -300,7 +309,10 @@ function check_key_exists() {
 # question rather than carrying a second copy of the rule.
 function key_needs_default() {
 	local key="$1" default="$2" mode="${3:-}" line value
-	line=$(check_key_exists "$key" | head -1)
+	# Not `| head -1`: that SIGPIPEs the grep, which is inert today and stops being inert the moment
+	# a sourcing script runs under `set -o pipefail`. The first line is taken with an expansion.
+	line=$(check_key_exists "$key")
+	line="${line%%$'\n'*}"
 	[ -z "$line" ] && return 0
 	[ "$mode" = "keyonly" ] && return 1
 	[ -z "$default" ] && return 1
@@ -331,12 +343,18 @@ function syshealth_repair_system_config() {
 		repair_key 'WEBMAIL_ALIAS' 'webmail'
 	fi
 
-	# phpMyAdmin alias (PostgreSQL uses Adminer, wired up by h-add-sys-adminer)
-	if [ -n "$DB_SYSTEM" ]; then
-		if echo "$DB_SYSTEM" | grep -qw 'mysql'; then
-			# keyonly: h-delete-sys-mariadb and h-delete-sys-phpmyadmin empty this key on purpose.
-			# Repairing it on emptiness would hand the alias back to a phpMyAdmin that is gone.
+	# phpMyAdmin alias (PostgreSQL uses Adminer, wired up by h-add-sys-adminer).
+	#
+	# Decided by what is on disk, not by a default. keyonly covers the DELETED case - the key is
+	# empty and must stay empty - but an ABSENT key is repaired, and on a box that never installed
+	# phpMyAdmin that wrote an alias for something that is not there. Same damage as re-registering
+	# a removed component, only entered from the other end. The marker is the one
+	# h-delete-sys-phpmyadmin uses to decide the same question.
+	if [ -n "$DB_SYSTEM" ] && echo "$DB_SYSTEM" | grep -qw 'mysql'; then
+		if [ -f "/usr/share/phpmyadmin/index.php" ] || [ -f "/etc/phpmyadmin/config-db.php" ]; then
 			repair_key 'DB_PMA_ALIAS' 'phpmyadmin' 'keyonly'
+		else
+			repair_key 'DB_PMA_ALIAS' '' 'keyonly'
 		fi
 	fi
 
@@ -379,17 +397,18 @@ function syshealth_repair_system_config() {
 	repair_key 'LOGIN_STYLE' 'default'
 
 	# Webmail clients
-	# Presence only, and not repair_key: h-delete-sys-roundcube empties this key deliberately, so a
-	# repair keyed on emptiness would advertise a webmail that is no longer installed. When the key
-	# is genuinely absent the value is decided by what is on disk, not by a default.
+	# Presence only, and not repair_key: the delete commands empty this key deliberately, so a repair
+	# keyed on emptiness would advertise a webmail that is no longer installed. When the key is
+	# genuinely absent the value is assembled from what is on disk - both clients, not just
+	# roundcube: a snappymail box with no key was answered with '' and lost its webmail that way.
+	# Markers taken from the delete commands, which decide the same question.
 	if [[ -z $(check_key_exists 'WEBMAIL_SYSTEM') ]]; then
-		if [ -d "/var/lib/roundcube" ]; then
-			echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_SYSTEM ('roundcube')"
-			$BIN/h-change-sys-config-value "WEBMAIL_SYSTEM" "roundcube"
-		else
-			echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_SYSTEM ('')"
-			$BIN/h-change-sys-config-value "WEBMAIL_SYSTEM" ""
-		fi
+		found=""
+		[ -d "/var/lib/roundcube" ] && found="roundcube"
+		[ -f "/var/lib/snappymail/data/VERSION" ] && found="${found:+$found,}snappymail"
+		echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_SYSTEM ('$found')"
+		$BIN/h-change-sys-config-value "WEBMAIL_SYSTEM" "$found"
+		unset found
 	fi
 
 	# Inactive session timeout
@@ -474,25 +493,34 @@ function syshealth_repair_system_config() {
 	repair_key 'ROOT_USER' 'admin'
 	repair_key 'DOMAINDIR_WRITABLE' 'no'
 
+	# Deduplicate by key, keeping the LAST occurrence - which is what the sed here used to do.
+	#
+	# The value is carried across VERBATIM. The previous loop rebuilt each line from a parsed value
+	# and cut everything after the first '#' to strip an inline comment, which silently truncated any
+	# value that legitimately contains one: SERVER_SMTP_PASSWD, PHPMYADMIN_KEY, every generated
+	# secret. cmp then found a difference by construction and copied the truncated file over the
+	# real one. Reproduced: 'p4ss#w0rd!x' came out as 'p4ss'. It also fed the value through a sed
+	# replacement, where a '|' or '&' in a password rewrites the expression. An inline comment can
+	# only be recognised after the closing quote, never at the first '#', so this no longer tries.
+	#
 	# TRUNCATE, and remove unconditionally below: with `touch` plus `>>`, a .new file left behind by a
 	# run that found nothing to fix was appended to on the next one - so a key deleted in the meantime
 	# came back from the stale copy. Reproduced: delete a key, run twice, the key returns.
+	local -A conf_last=()
+	local -a conf_order=()
+	local conf_line conf_key
 	: > "$HESTIA/conf/hestia.conf.new"
-	while IFS='= ' read -r lhs rhs; do
-		if [[ ! $lhs =~ ^\ *# && -n $lhs ]]; then
-			# The old patterns were inert: '^' is literal in a shell pattern, and *( ) needs extglob.
-			rhs="${rhs%%#*}"             # Del inline right comments
-			rhs="${rhs%"${rhs##*[! ]}"}" # Del trailing spaces
-			rhs="${rhs%\'}"              # Del closing string quote
-			rhs="${rhs#\'}"              # Del opening string quote
-		fi
-		check_ckey=$(grep "^$lhs='" "$HESTIA/conf/hestia.conf.new")
-		if [ -z "$check_ckey" ]; then
-			echo "$lhs='$rhs'" >> "$HESTIA/conf/hestia.conf.new"
-		else
-			sed -i "s|^$lhs=.*|$lhs='$rhs'|g" "$HESTIA/conf/hestia.conf.new"
-		fi
+	while IFS= read -r conf_line || [ -n "$conf_line" ]; do
+		# Blank and comment lines are dropped, as before. hestia.conf is generated and holds none.
+		[[ $conf_line =~ ^[[:space:]]*(#|$) ]] && continue
+		conf_key="${conf_line%%=*}"
+		[ "$conf_key" = "$conf_line" ] && continue
+		[ -n "${conf_last[$conf_key]:-}" ] || conf_order+=("$conf_key")
+		conf_last[$conf_key]="$conf_line"
 	done < "$HESTIA/conf/hestia.conf"
+	for conf_key in "${conf_order[@]}"; do
+		printf '%s\n' "${conf_last[$conf_key]}" >> "$HESTIA/conf/hestia.conf.new"
+	done
 
 	if ! cmp --silent "$HESTIA/conf/hestia.conf" "$HESTIA/conf/hestia.conf.new"; then
 		echo "[ ! ] Duplicated keys found repair config"
