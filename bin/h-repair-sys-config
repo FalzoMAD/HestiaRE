@@ -13,20 +13,30 @@ mode=$1
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/func/main.sh
 source $HESTIA/func/main.sh
+# Both functions below live here and main.sh does not pull it in. Without this the command answered
+# "syshealth_repair_system_config: command not found" and then logged the repair as executed - the
+# only caller of these functions that was missing the line every other one has.
+# shellcheck source=/usr/local/hestia/func/syshealth.sh
+source $HESTIA/func/syshealth.sh
 
 #----------------------------------------------------------#
 #                        Action                            #
 #----------------------------------------------------------#
 
-if [ "$mode" = "restore" ]; then
-	syshealth_restore_system_config
-fi
-
-if [ "$mode" = "repair" ]; then
-	# load config file
-	source_conf "$HESTIA/conf/hestia.conf"
-	syshealth_repair_system_config
-fi
+case "$mode" in
+	restore)
+		syshealth_restore_system_config
+		;;
+	repair)
+		# load config file
+		source_conf "$HESTIA/conf/hestia.conf"
+		syshealth_repair_system_config
+		;;
+	*)
+		# Anything else did nothing and still logged "Executed  operation on system configuration".
+		check_result "$E_INVALID" "unknown mode '$mode', expected: repair | restore"
+		;;
+esac
 
 #----------------------------------------------------------#
 #                        Hestia                            #

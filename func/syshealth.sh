@@ -419,8 +419,11 @@ function syshealth_repair_system_config() {
 	repair_key 'POLICY_SPAM_SCORE_MAX' '10.0'
 	repair_key 'POLICY_SPAM_REJECT_SCORE_MIN' '8.0'
 	repair_key 'POLICY_SPAM_REJECT_SCORE_MAX' '20.0'
-	# Protect admin user
-	repair_key 'POLICY_SYSTEM_PROTECTED_ADMIN' 'no'
+	# Protect admin user. 'yes' here, not the inherited 'no': the installer has always written 'yes'
+	# and this was the one key with two homes that disagreed. Harmless while the repair only fired on
+	# an absent key - the installer had already set it - but repairing an EMPTY value to 'no' would
+	# have switched the protection off. Where the two disagree, the closed side wins.
+	repair_key 'POLICY_SYSTEM_PROTECTED_ADMIN' 'yes'
 	# Allow user delete logs
 	repair_key 'POLICY_USER_DELETE_LOGS' 'yes'
 	# Allow users to delete details
