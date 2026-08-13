@@ -17,7 +17,8 @@ if ($_SESSION["userContext"] != "admin") {
 // Get ipset lists
 exec(HESTIA_CMD . "h-list-firewall-ipset 'json'", $output, $return_var);
 check_return_code($return_var, $output);
-$data = json_decode(implode("", $output), true);
+// Not cli_json(): the check above needs the raw exit code and the command's own error text.
+$data = json_decode(implode("", $output), true) ?: [];
 unset($output);
 
 $ipset_lists = [];

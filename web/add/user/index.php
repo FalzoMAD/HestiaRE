@@ -250,8 +250,7 @@ $data = json_decode(implode("", $output), true);
 unset($output);
 
 // List languages
-exec(HESTIA_CMD . "h-list-sys-languages json", $output, $return_var);
-$language = json_decode(implode("", $output), true);
+$language = cli_json("h-list-sys-languages json");
 foreach ($language as $lang) {
 	$languages[$lang] = translate_json($lang);
 }

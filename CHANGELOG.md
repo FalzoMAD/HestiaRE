@@ -50,6 +50,15 @@ opens above it.
 
 ### Fixed
 
+- **A failed CLI read redirected and then rendered the page anyway** (#578).
+  `check_return_code_redirect()` sent a `Location` header without stopping, so all 14 call sites
+  carried on parsing a record the command had never produced - the null derefs above are downstream
+  of exactly that. Same omission in the session-timeout branch of `main.php`, which rendered on
+  against the session it had just destroyed while its sibling branch exited.
+- **Nine forms silently offered an empty list** (#578) where a failed call left a null to iterate:
+  the package and language selects on add/edit user, the language list on the server page, the
+  ipset lists on the firewall forms, the IP select on the web domain form, the backup exclusions,
+  the SSH key duplicate check and the PHP-FPM services list.
 - **An unreadable system config left every policy standing open** (#578). `load_hestia_config()`
   copies `h-list-sys-config` into the session and never checked whether it got anything; a failed
   call left the session without a single policy key, and an absent key is the permissive reading at

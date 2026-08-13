@@ -114,6 +114,9 @@ if (!defined("NO_AUTH_REQUIRED")) {
 	if (empty($_SESSION["LAST_ACTIVITY"]) || empty($_SESSION["INACTIVE_SESSION_TIMEOUT"])) {
 		destroy_sessions();
 		header("Location: /login/");
+		// The sibling branch below exits; without it here the page rendered on against the session
+		// that was just destroyed.
+		exit();
 	} elseif ($_SESSION["INACTIVE_SESSION_TIMEOUT"] * 60 + $_SESSION["LAST_ACTIVITY"] < time()) {
 		$v_user = quoteshellarg($_SESSION["user"]);
 		$v_session_id = quoteshellarg($_SESSION["token"]);
@@ -213,6 +216,9 @@ function check_return_code_redirect($return_var, $output, $location)
 		}
 		$_SESSION["error_msg"] = $error;
 		header("Location:" . $location);
+		// Without this the caller carries on parsing a record the command never produced, which is
+		// where the null derefs of this issue come from. A redirect means stop, at all 14 call sites.
+		exit();
 	}
 }
 

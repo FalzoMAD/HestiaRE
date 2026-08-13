@@ -235,9 +235,7 @@ $v_time = $data[$v_domain]["TIME"];
 $v_date = $data[$v_domain]["DATE"];
 
 // List ip addresses
-exec(HESTIA_CMD . "h-list-user-ips " . $user . " json", $output, $return_var);
-$ips = json_decode(implode("", $output), true);
-unset($output);
+$ips = cli_json("h-list-user-ips " . $user . " json");
 
 // A record written by the CLI holds the public address (get_user_ip substitutes NAT), the IP list
 // is keyed by the local one. Unmatched, the select preselects nothing and the save rewrites the IP.
