@@ -12,6 +12,29 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **The system configuration repair never ran** (#654). `h-repair-sys-config` sources only
+  `func/main.sh`, which does not pull in `func/syshealth.sh`, so both of its modes answered
+  `command not found` - and then logged the repair as executed. It was the only command calling a
+  `syshealth_*` function without the source line every other one has. With it working, a running
+  box gained **25 absent keys**, most of the `POLICY_*` set among them; those reached the panel as
+  `""`, which reads as the permissive side at the gates that consume them. The installer now runs
+  the repair as its last configure step, so a fresh box gets the whole set from one place.
+- **A config key holding no value counted as present** (#654). `check_key_exists()` greps `^KEY=`,
+  so `KEY=''` matched and the repair was skipped. An empty value is repaired now - but only where
+  the block's own default is not empty, which excludes the nine keys that default to `''` on
+  purpose without naming them anywhere. Two keys are exempt because a `h-delete-sys-*` empties them
+  deliberately (`DB_PMA_ALIAS`, `WEBMAIL_SYSTEM`): repairing those would re-register a component
+  that was just removed, verified by uninstalling the webmail for real and running the repair.
+- **`POLICY_SYSTEM_PROTECTED_ADMIN` had two homes that disagreed** (#654) - the installer wrote
+  `yes`, the repair `no`. Harmless while the repair only fired on an absent key, and an
+  admin-protection downgrade the moment it fires on an empty one. The repair says `yes` now and the
+  installer seed is gone, as is the one for `POLICY_USER_CHANGE_THEME`: one home per default.
+- **`BACKEND_PORT` lost a repair that pointed at a deleted file** (#654). It scraped the port out of
+  the hestia-nginx config Caddy replaced, so it produced nothing; the value is written at install
+  time and every consumer falls back to 8083.
+
 ### Changed
 
 - **`cli_json()` states its contract instead of implying it** (#578). It now declares `: array`, so

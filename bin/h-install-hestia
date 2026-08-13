@@ -750,10 +750,10 @@ configure_hestia() {
 	"$BIN/h-change-user-shell" "$HESTIA_ADMIN" nologin
 	"$BIN/h-change-user-role" "$HESTIA_ADMIN" admin
 	"$BIN/h-change-user-language" "$HESTIA_ADMIN" en
-	"$BIN/h-change-sys-config-value" 'POLICY_SYSTEM_PROTECTED_ADMIN' 'yes'
-	# Seeded rather than left to the syshealth repair: an absent key reaches the panel as "" through
-	# the fixed-key listing, and readers then disagree on what the default means.
-	"$BIN/h-change-sys-config-value" 'POLICY_USER_CHANGE_THEME' 'yes'
+	# The policy defaults live in the syshealth repair, one home each. Two were seeded here as well:
+	# POLICY_USER_CHANGE_THEME, and POLICY_SYSTEM_PROTECTED_ADMIN - the latter with 'yes' while the
+	# repair said 'no', which is exactly the drift a second home produces. Both are gone; the repair
+	# now fills an empty value for every key whose default is not empty.
 
 	# DB host registration + phpMyAdmin alias happen inside h-add-sys-mariadb (db stage)
 
@@ -819,6 +819,12 @@ configure_hestia() {
 	# no auto-update cron: HestiaRE updates via the release tarball, not apt/git
 	"$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" > /dev/null 2>&1 || true
 	"$BIN/h-update-sys-defaults" > /dev/null 2>&1 || true
+	# Seed every config key from its single home. The installer writes only the keys it knows about,
+	# and the repair holds the default for all of them - measured on a running box, 25 keys were
+	# absent, among them most of the POLICY_* set, which the panel then reads as "" and treats as the
+	# permissive side. Runs last, when hestia.conf is complete, and repairs rather than overwrites:
+	# every value written above is already non-empty and is left alone.
+	"$BIN/h-repair-sys-config" repair > /dev/null 2>&1 || true
 	[ -f /root/.bashrc ] && grep -q 'hestia.sh' /root/.bashrc \
 		|| printf 'if [ "${PATH#*/usr/local/hestia/bin*}" = "$PATH" ]; then\n    . /etc/profile.d/hestia.sh\nfi\n' >> /root/.bashrc
 
