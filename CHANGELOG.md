@@ -50,6 +50,16 @@ opens above it.
 
 ### Fixed
 
+- **An unreadable system config left every policy standing open** (#578). `load_hestia_config()`
+  copies `h-list-sys-config` into the session and never checked whether it got anything; a failed
+  call left the session without a single policy key, and an absent key is the permissive reading at
+  every gate that gets it - the password reset was allowed although the admin had switched it off,
+  the protected-admin flag read as unset, and both log policies read as granted. Measured, not
+  reasoned: with an empty session those five gates decide open. The panel now answers 503 rather
+  than deciding without its own configuration; a table of closed per-policy defaults was rejected
+  because it goes stale the day a policy is added. `top_panel()` gained the matching guard - a user
+  row that comes back empty (exit 0, no output) used to pass the suspension check and write `null`
+  into `userContext`.
 - **23 panel pages died instead of showing an empty list when a CLI call failed** (#578). The pages
   read a command's JSON without ever looking at its exit code; a failed call leaves the output
   empty, `json_decode("")` is `null`, and the first `ksort()`/`array_reverse()`/`array_keys()` on it

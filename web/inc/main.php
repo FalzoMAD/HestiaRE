@@ -77,9 +77,7 @@ if (isset($_SESSION["user"])) {
 		$username = $_SESSION["look"];
 	}
 
-	exec(HESTIA_CMD . "h-list-user " . quoteshellarg($username) . " json", $output, $return_var);
-	$data = json_decode(implode("", $output), true);
-	unset($output, $return_var);
+	$data = cli_json("h-list-user " . quoteshellarg($username) . " json");
 	// The effective user can vanish mid-session - e.g. an admin deletes the
 	// impersonated customer from another session (#438 blocks delete/user from
 	// within an impersonation session, so it happens elsewhere). Log out cleanly
@@ -293,14 +291,17 @@ function top_panel($user, $TAB)
 {
 	$command = HESTIA_CMD . "h-list-user " . $user . " 'json'";
 	exec($command, $output, $return_var);
-	if ($return_var > 0) {
+	$panel = json_decode(implode("", $output), true);
+	unset($output);
+	// A row that is not there decides everything below it the wrong way round: the suspension check
+	// compares against null and passes, and the role refresh writes null into userContext. Exit 0
+	// with no output produces exactly that, so an empty row logs out like a non-zero exit does.
+	if ($return_var > 0 || empty($panel[$user])) {
 		destroy_sessions();
 		$_SESSION["error_msg"] = _("You are logged out, please log in again.");
 		header("Location: /login/");
 		exit();
 	}
-	$panel = json_decode(implode("", $output), true);
-	unset($output);
 
 	// Log out active sessions for suspended users
 	if ($panel[$user]["SUSPENDED"] === "yes" && $_SESSION["POLICY_USER_VIEW_SUSPENDED"] !== "yes") {
@@ -569,9 +570,7 @@ function list_timezones()
  */
 function is_it_mysql_or_mariadb()
 {
-	exec(HESTIA_CMD . "h-list-sys-services json", $output, $return_var);
-	$data = json_decode(implode("", $output), true);
-	unset($output);
+	$data = cli_json("h-list-sys-services json");
 	$mysqltype = "mysql";
 	if (isset($data["mariadb"])) {
 		$mysqltype = "mariadb";
@@ -582,9 +581,18 @@ function is_it_mysql_or_mariadb()
 function load_hestia_config()
 {
 	// Check system configuration
-	exec(HESTIA_CMD . "h-list-sys-config json", $output, $return_var);
-	$data = json_decode(implode("", $output), true);
-	$sys_arr = $data["config"];
+	$data = cli_json("h-list-sys-config json");
+	$sys_arr = $data["config"] ?? [];
+	// Without the config there is no policy set, and an absent key is the PERMISSIVE reading at
+	// every gate that consumes one: POLICY_SYSTEM_PASSWORD_RESET is honoured as "not no",
+	// POLICY_SYSTEM_PROTECTED_ADMIN as "not yes", same for the log policies. Seeding a closed
+	// default per policy would be a hand-kept table that goes stale the day a policy is added, so
+	// the panel serves nothing rather than decide without its own configuration. Runs before the
+	// translations are loaded, hence the untranslated text.
+	if (!$sys_arr) {
+		http_response_code(503);
+		exit("Hestia configuration unavailable.\n");
+	}
 	foreach ($sys_arr as $key => $value) {
 		$_SESSION[$key] = $value;
 	}
@@ -597,19 +605,11 @@ function load_hestia_config()
  */
 function backendtpl_with_webdomains()
 {
-	exec(HESTIA_CMD . "h-list-users json", $output, $return_var);
-	$users = json_decode(implode("", $output), true);
-	unset($output);
+	$users = cli_json("h-list-users json");
 
 	$backend_list = [];
 	foreach ($users as $user => $user_details) {
-		exec(
-			HESTIA_CMD . "h-list-web-domains " . quoteshellarg($user) . " json",
-			$output,
-			$return_var,
-		);
-		$domains = json_decode(implode("", $output), true);
-		unset($output);
+		$domains = cli_json("h-list-web-domains " . quoteshellarg($user) . " json");
 		foreach ($domains as $domain => $domain_details) {
 			// The version is its own field now (#591); group by it under the PHP-X_Y key the
 			// server page looks up. 'none' domains run no PHP and are not counted.
