@@ -12,7 +12,12 @@ opens above it.
 
 ## Unreleased
 
-_Nothing yet._
+### Fixed
+
+- **Every domain rebuild on an apache-only box wrote to `/etc/nginx`** (#642). `nginx -v` without
+  the binary prints an error message, which carries no `/` for `cut` to split on and sorts above
+  every real version - so the box read as "nginx 1.25.1 or newer" and tried to drop the http2
+  marker into a directory apache-only does not have. The probe fails closed now.
 
 ## v0.15.0 (2026-08-13)
 
