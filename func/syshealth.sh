@@ -418,8 +418,9 @@ function syshealth_repair_system_config() {
 		$BIN/h-change-sys-config-value "POLICY_SYSTEM_PASSWORD_RESET" "no"
 	fi
 
-	# Theme editor. An EMPTY value counts as missing here: the key ships present but unset, so a
-	# check on existence alone never fired, and three readers were left inventing their own default.
+	# Theme editor. The installer seeds this now; the repair is the net behind it. An empty value
+	# counts as missing too - h-list-sys-config emits every key of its fixed set, so an absent key
+	# reaches the panel as "" and each reader would otherwise invent its own default.
 	if [[ -z $(check_key_exists 'POLICY_USER_CHANGE_THEME') ]] || [ -z "$POLICY_USER_CHANGE_THEME" ]; then
 		echo "[ ! ] Setting missing value in hestia.conf: POLICY_USER_CHANGE_THEME ('yes')"
 		$BIN/h-change-sys-config-value "POLICY_USER_CHANGE_THEME" "yes"

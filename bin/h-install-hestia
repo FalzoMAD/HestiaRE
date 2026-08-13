@@ -751,6 +751,9 @@ configure_hestia() {
 	"$BIN/h-change-user-role" "$HESTIA_ADMIN" admin
 	"$BIN/h-change-user-language" "$HESTIA_ADMIN" en
 	"$BIN/h-change-sys-config-value" 'POLICY_SYSTEM_PROTECTED_ADMIN' 'yes'
+	# Seeded rather than left to the syshealth repair: an absent key reaches the panel as "" through
+	# the fixed-key listing, and readers then disagree on what the default means.
+	"$BIN/h-change-sys-config-value" 'POLICY_USER_CHANGE_THEME' 'yes'
 
 	# DB host registration + phpMyAdmin alias happen inside h-add-sys-mariadb (db stage)
 
