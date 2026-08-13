@@ -92,6 +92,9 @@
 							</button>
 						</div>
 					</div>
+					<?php // No selectable web template on an apache web role - an empty required
+					     // select cannot be answered, and it submits no key at all. ?>
+					<?php if (!empty($web_templates)) { ?>
 					<div class="u-mb10">
 						<label for="v_web_template" class="form-label">
 							<?= tohtml( _("Web Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_SYSTEM"])) ?></span>
@@ -108,6 +111,7 @@
 								?>
 						</select>
 					</div>
+					<?php } ?>
 					<?php if (!empty($_SESSION['WEB_BACKEND'])) { echo ""; ?>
 						<div class="u-mb10">
 								<label for="v_backend_template" class="form-label">

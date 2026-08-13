@@ -13,6 +13,12 @@ if ($_SESSION["userContext"] != "admin") {
 	exit();
 }
 
+// Loaded before the POST handler: the validation below has to know whether a web template is
+// selectable at all, and an apache web role offers none.
+exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
+$web_templates = json_decode(implode("", $output), true);
+unset($output);
+
 // Check POST request
 if (!empty($_POST["ok"])) {
 	// Check token
@@ -22,7 +28,7 @@ if (!empty($_POST["ok"])) {
 	if (!isset($_POST["v_package"])) {
 		$errors[] = _("Package");
 	}
-	if (!isset($_POST["v_web_template"])) {
+	if (!empty($web_templates) && !isset($_POST["v_web_template"])) {
 		$errors[] = _("Web Template");
 	}
 	if (!empty($_SESSION["WEB_BACKEND"])) {
@@ -105,7 +111,9 @@ if (!empty($_POST["ok"])) {
 	} else {
 		// Protect input
 		$v_package = quoteshellarg($_POST["v_package"]);
-		$v_web_template = quoteshellarg($_POST["v_web_template"]);
+		// Without a selectable template the control is not rendered, so fall back to the name every
+		// role resolves - a package record always carries a web template.
+		$v_web_template = quoteshellarg($_POST["v_web_template"] ?? "default");
 		$v_backend_template = quoteshellarg($_POST["v_backend_template"]);
 		$v_proxy_template = quoteshellarg($_POST["v_proxy_template"]);
 		$v_shell = quoteshellarg($_POST["v_shell"]);
@@ -121,16 +129,18 @@ if (!empty($_POST["ok"])) {
 		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 		$v_ratelimit = quoteshellarg($_POST["v_ratelimit"]);
 
+		// No control rendered while RESOURCES_LIMIT is off - a new package takes the shipped
+		// default rather than an empty value.
 		$v_cpu_quota =
-			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_cpu_quota"]) : "";
+			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_cpu_quota"]) : "unlimited";
 		$v_cpu_quota_period =
 			$_SESSION["RESOURCES_LIMIT"] == "yes"
 				? quoteshellarg($_POST["v_cpu_quota_period"])
-				: "";
+				: "unlimited";
 		$v_memory_limit =
-			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_memory_limit"]) : "";
+			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_memory_limit"]) : "unlimited";
 		$v_swap_limit =
-			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_swap_limit"]) : "";
+			$_SESSION["RESOURCES_LIMIT"] == "yes" ? quoteshellarg($_POST["v_swap_limit"]) : "unlimited";
 		// a preset name, not a size - the command rejects anything else
 		$v_docker_limit = quoteshellarg($_POST["v_docker_limit"] ?? "unlimited");
 
@@ -194,11 +204,6 @@ if (!empty($_POST["ok"])) {
 		}
 	}
 }
-
-// List web temmplates
-exec(HESTIA_CMD . "h-list-web-templates json", $output, $return_var);
-$web_templates = json_decode(implode("", $output), true);
-unset($output);
 
 // List web templates for backend
 if (!empty($_SESSION["WEB_BACKEND"])) {
