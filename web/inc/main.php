@@ -180,7 +180,12 @@ function check_error($return_var)
 // array until something insists on a real one: in_array(x, null) is a TypeError, and on the
 // login page that means a white screen instead of a form (#575). Callers get an array either
 // way and pick their own fallback.
-function cli_json($cmd)
+//
+// The `: array` is the point, not decoration: it turns "always an array" from an observation
+// about today's body into a checked promise, and callers are entitled to drop their own is_array()
+// on the strength of it. It also states the limit - a command whose JSON is a SCALAR loses its
+// value here, silently, so those callers take cli_value() below.
+function cli_json($cmd): array
 {
 	$output = [];
 	exec(HESTIA_CMD . $cmd, $output, $return_var);
@@ -189,6 +194,21 @@ function cli_json($cmd)
 	}
 	$data = json_decode(implode("", $output), true);
 	return is_array($data) ? $data : [];
+}
+
+// Same call for a command that prints ONE value rather than a list, e.g. h-get-user-value.
+// Answers null when the call failed or printed nothing, which is the state callers already test
+// for; [] would be the wrong answer, because it compares against null and against a number the
+// other way round than the value it stands in for.
+function cli_value($cmd)
+{
+	$output = [];
+	exec(HESTIA_CMD . $cmd, $output, $return_var);
+	if ($return_var !== 0) {
+		return null;
+	}
+	$data = json_decode(implode("", $output), true);
+	return is_array($data) ? null : $data;
 }
 
 function check_return_code($return_var, $output)

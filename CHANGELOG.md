@@ -14,6 +14,11 @@ opens above it.
 
 ### Changed
 
+- **`cli_json()` states its contract instead of implying it** (#578). It now declares `: array`, so
+  "always an array" is checked rather than agreed, and a caller may drop its own `is_array()` on
+  the strength of it. The same declaration names the limit it always had: a command whose JSON is a
+  scalar loses its value there, silently, and two comparisons then read the other way round. Those
+  callers take the new `cli_value()`, which answers `null` - the state they already test for.
 - **The panel reads a CLI result in one place** (#578). The remaining 61 sites that decoded a
   command's JSON by hand now go through `cli_json()`, which closes the class the fatal sites above
   belonged to rather than only its instances. Two shapes were deliberately left alone: a site whose
