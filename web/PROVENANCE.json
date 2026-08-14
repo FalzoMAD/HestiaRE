@@ -6,7 +6,7 @@
     "upstream_ref": "bc3720a",
     "upstream_ref_date": "2026-08-10",
     "last_updated": "2026-08-14",
-    "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100 from `git diff --numstat`. RAW - overstates semantic divergence. Triage, not truth.",
+    "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100 from `git diff --numstat`. RAW - overstates semantic divergence. Triage, not truth. BINARY files are measured by byte identity instead (pct 0 or 100, method \"bytes\"): a line diff on a binary reports nothing at all - git numstat prints \"-\" - which silently read as 0% churn and typed a differing font or image as verbatim.",
     "source_type_values": {
       "verbatim": "Upstream file we track closely (churn <=3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
       "derived": "Reimplemented or diverged from upstream on purpose (churn >3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
@@ -16,7 +16,8 @@
     "aggregate": {
       "upstream_mapped_files": 336,
       "eigenbau_files": 36,
-      "weighted_pct": 7
+      "weighted_pct": 8,
+      "weighted_pct_note": "text files only - binary entries are byte-compared, not line-counted"
     },
     "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it."
   },
@@ -1569,12 +1570,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 6,
-        "our_lines": 6,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 1150,
+        "our_bytes": 1150,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -1675,18 +1676,17 @@
     },
     {
       "path": "images/favicon.png",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/images/favicon.png",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 7,
-        "our_lines": 10,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 1336,
+        "our_bytes": 1232,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -1708,18 +1708,17 @@
     },
     {
       "path": "images/logo.png",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/images/logo.png",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 40,
-        "our_lines": 27,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 9087,
+        "our_bytes": 8718,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -2819,239 +2818,225 @@
     },
     {
       "path": "locale/ar/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/ar/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 250,
-        "our_lines": 251,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 69588,
+        "our_bytes": 69925,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/az/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/az/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 40,
-        "our_lines": 40,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 9741,
+        "our_bytes": 9741,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/bg/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/bg/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 191,
-        "our_lines": 190,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 41281,
+        "our_bytes": 41582,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/bn/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/bn/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 67,
-        "our_lines": 67,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 35432,
+        "our_bytes": 35585,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/bs/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/bs/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 253,
-        "our_lines": 246,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 53394,
+        "our_bytes": 53677,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/ca/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/ca/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 235,
-        "our_lines": 231,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 55216,
+        "our_bytes": 55505,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/cs/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/cs/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 233,
-        "our_lines": 232,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 49611,
+        "our_bytes": 49825,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/da/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/da/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 240,
-        "our_lines": 235,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 52838,
+        "our_bytes": 53110,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/de/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/de/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 248,
-        "our_lines": 253,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 54948,
+        "our_bytes": 53297,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/el/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/el/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 152,
-        "our_lines": 149,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 25363,
+        "our_bytes": 25272,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/es/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/es/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 224,
-        "our_lines": 222,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 55960,
+        "our_bytes": 54848,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/fa/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/fa/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 52,
-        "our_lines": 52,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 10791,
+        "our_bytes": 10791,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/fi/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/fi/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 33,
-        "our_lines": 33,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 7248,
+        "our_bytes": 7248,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/fr/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/fr/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 227,
-        "our_lines": 220,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 49369,
+        "our_bytes": 49191,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -3073,18 +3058,17 @@
     },
     {
       "path": "locale/hr/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/hr/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 57,
-        "our_lines": 46,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 20210,
+        "our_bytes": 17652,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -3122,120 +3106,113 @@
     },
     {
       "path": "locale/hu/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/hu/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 246,
-        "our_lines": 245,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 53316,
+        "our_bytes": 53668,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/id/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/id/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 244,
-        "our_lines": 134,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 48334,
+        "our_bytes": 13067,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/it/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/it/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 84,
-        "our_lines": 86,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 22666,
+        "our_bytes": 22775,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/ja/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/ja/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 196,
-        "our_lines": 195,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 53393,
+        "our_bytes": 53732,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/ka/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/ka/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 80,
-        "our_lines": 84,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 73331,
+        "our_bytes": 73784,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/ko/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/ko/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 31,
-        "our_lines": 31,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 9200,
+        "our_bytes": 9200,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/ku/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/ku/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 56,
-        "our_lines": 54,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 24927,
+        "our_bytes": 25068,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -3257,307 +3234,289 @@
     },
     {
       "path": "locale/nl/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/nl/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 247,
-        "our_lines": 238,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 53969,
+        "our_bytes": 53003,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/no/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/no/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 186,
-        "our_lines": 186,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 17656,
+        "our_bytes": 17836,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/pl/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/pl/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 206,
-        "our_lines": 209,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 40051,
+        "our_bytes": 40204,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/pt-br/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/pt-br/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 229,
-        "our_lines": 223,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 55653,
+        "our_bytes": 54608,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/pt/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/pt/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 230,
-        "our_lines": 232,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 51977,
+        "our_bytes": 50706,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/ro/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/ro/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 150,
-        "our_lines": 151,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 19156,
+        "our_bytes": 19286,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/ru/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/ru/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 238,
-        "our_lines": 227,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 72732,
+        "our_bytes": 71372,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/sk/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/sk/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 53,
-        "our_lines": 50,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 21161,
+        "our_bytes": 21269,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/sq/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/sq/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 172,
-        "our_lines": 174,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 19062,
+        "our_bytes": 19281,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/sr/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/sr/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 45,
-        "our_lines": 45,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 17279,
+        "our_bytes": 17279,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/sv/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/sv/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 35,
-        "our_lines": 35,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 8089,
+        "our_bytes": 8089,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/th/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/th/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 55,
-        "our_lines": 55,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 15568,
+        "our_bytes": 15568,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/tr/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/tr/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 235,
-        "our_lines": 229,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 54364,
+        "our_bytes": 54592,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/uk/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/uk/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 230,
-        "our_lines": 225,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 67343,
+        "our_bytes": 65855,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/ur/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/ur/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 48,
-        "our_lines": 48,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 10060,
+        "our_bytes": 10060,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/vi/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/vi/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 238,
-        "our_lines": 234,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 57795,
+        "our_bytes": 58075,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/zh-cn/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/zh-cn/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 230,
-        "our_lines": 227,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 49627,
+        "our_bytes": 49868,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "locale/zh-tw/LC_MESSAGES/hestiacp.mo",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/zh-tw/LC_MESSAGES/hestiacp.mo",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 230,
-        "our_lines": 227,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 49874,
+        "our_bytes": 50084,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5402,12 +5361,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 50,
-        "our_lines": 50,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 13936,
+        "our_bytes": 13936,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5418,12 +5377,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 39,
-        "our_lines": 39,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 11120,
+        "our_bytes": 11120,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5434,12 +5393,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 50,
-        "our_lines": 50,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 15184,
+        "our_bytes": 15184,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5450,12 +5409,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 51,
-        "our_lines": 51,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 11940,
+        "our_bytes": 11940,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5466,12 +5425,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 68,
-        "our_lines": 68,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 13880,
+        "our_bytes": 13880,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5482,12 +5441,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 53,
-        "our_lines": 53,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 10996,
+        "our_bytes": 10996,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5498,12 +5457,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 58,
-        "our_lines": 58,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 15204,
+        "our_bytes": 15204,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5514,12 +5473,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 58,
-        "our_lines": 58,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 12052,
+        "our_bytes": 12052,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5530,12 +5489,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 54,
-        "our_lines": 54,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 13972,
+        "our_bytes": 13972,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5546,12 +5505,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 41,
-        "our_lines": 41,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 11096,
+        "our_bytes": 11096,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5562,12 +5521,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 56,
-        "our_lines": 56,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 15144,
+        "our_bytes": 15144,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5578,12 +5537,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 47,
-        "our_lines": 47,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 12008,
+        "our_bytes": 12008,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5594,12 +5553,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 53,
-        "our_lines": 53,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 13964,
+        "our_bytes": 13964,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5610,12 +5569,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 37,
-        "our_lines": 37,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 11052,
+        "our_bytes": 11052,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5626,12 +5585,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 60,
-        "our_lines": 60,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 15160,
+        "our_bytes": 15160,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5642,12 +5601,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 45,
-        "our_lines": 45,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 11944,
+        "our_bytes": 11944,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5658,12 +5617,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 59,
-        "our_lines": 59,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 15204,
+        "our_bytes": 15204,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5674,12 +5633,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 47,
-        "our_lines": 47,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 11984,
+        "our_bytes": 11984,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5690,12 +5649,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 47,
-        "our_lines": 47,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 13972,
+        "our_bytes": 13972,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5706,29 +5665,28 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 52,
-        "our_lines": 52,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 11100,
+        "our_bytes": 11100,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
     {
       "path": "webfonts/fa-solid-900.woff2",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/webfonts/fa-solid-900.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 557,
-        "our_lines": 484,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12",
-        "binary": true
+        "upstream_bytes": 150124,
+        "our_bytes": 119156,
+        "identical": false,
+        "pct": 100,
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": "Font Awesome 7 vendored for the panel; binary and not byte-identical to upstream, so churn is not measurable."
     },
@@ -5739,12 +5697,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 78,
-        "our_lines": 78,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 19708,
+        "our_bytes": 19708,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     },
@@ -5755,12 +5713,12 @@
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_lines": 52,
-        "our_lines": 52,
-        "added": 0,
-        "removed": 0,
+        "upstream_bytes": 16244,
+        "our_bytes": 16244,
+        "identical": true,
         "pct": 0,
-        "measured_at": "2026-08-12"
+        "method": "bytes",
+        "measured_at": "2026-08-14"
       },
       "note": ""
     }

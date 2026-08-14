@@ -48,6 +48,21 @@ opens above it.
 
 ### Fixed
 
+- **A configure re-run rewrote admin-created hosting packages** (#663 follow-up). One line under the
+  careful "copy per file only when absent", a `sed s/domain.tld/<host>/` ranged over the whole
+  `$CONF_DIR/packages/` glob. Before #663 that reached only the install root, which an update replaces
+  anyway; as instance state it reached every package an admin had made, and the configure stage does
+  re-run whenever `install.conf` changes. Removed rather than narrowed: the substitution only ever
+  filled upstream's `NS='ns1.domain.tld,...'` field, which left with bind9 (#619), so it had been
+  rewriting nothing of ours while ranging over everything.
+
+- **Binary files were bucketed by a measurement that cannot see them** (#551 follow-up). `git diff
+  --numstat` reports `-` for a binary, which the manifests recorded as 0% churn - so every image, font
+  and compiled catalogue read as unchanged from upstream. 43 entries were labelled `verbatim` while
+  actually differing, 41 of them the `.mo` translation catalogues HestiaRE maintains itself. Binaries
+  are now compared byte-wise (`method: "bytes"`, pct 0 or 100) and excluded from the line-based
+  weighted average.
+
 - **Panel action pages consumed results their command never produced** (#670). Found by rendering all
   144 panel pages against a fresh v0.15.2 install. `/schedule/restore/` answered a request without a
   `backup` id with an uncaught `TypeError` (500) because `quoteshellarg()` sat in front of the guard;

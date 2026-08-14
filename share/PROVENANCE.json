@@ -6,7 +6,7 @@
     "upstream_ref": "bc3720a",
     "upstream_ref_date": "2026-08-10",
     "last_updated": "2026-08-14",
-    "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100 from `git diff --numstat`. RAW - overstates semantic divergence. Triage, not truth.",
+    "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100 from `git diff --numstat`. RAW - overstates semantic divergence. Triage, not truth. BINARY files are measured by byte identity instead (pct 0 or 100, method \"bytes\"): a line diff on a binary reports nothing at all - git numstat prints \"-\" - which silently read as 0% churn and typed a differing font or image as verbatim.",
     "source_type_values": {
       "verbatim": "Upstream file we track closely (churn <=3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
       "derived": "Reimplemented or diverged from upstream on purpose (churn >3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
@@ -17,7 +17,8 @@
     "aggregate": {
       "upstream_mapped_files": 71,
       "eigenbau_files": 125,
-      "weighted_pct": 8
+      "weighted_pct": 8,
+      "weighted_pct_note": "text files only - binary entries are byte-compared, not line-counted"
     },
     "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it."
   },
@@ -79,7 +80,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "basename-matched (path reorg by #119); confirm origin Inspired by upstream install/deb/logrotate/httpd-prerotate/awstats (25% churn), rewritten for HestiaRE."
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/logrotate/httpd-prerotate/awstats (25% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "apache2/logrotate",
@@ -258,7 +259,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "Inspired by upstream README.md (92% churn), rewritten for HestiaRE."
+      "note": "Former upstream_path pointer, unconfirmed: README.md (92% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "crowdsec/acquis.d/hestia-nginx.yaml",
@@ -446,7 +447,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "basename-matched (path reorg by #119); confirm origin Inspired by upstream install/common/dovecot/2.4/conf.d/15-lda.conf (84% churn), rewritten for HestiaRE."
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/common/dovecot/2.4/conf.d/15-lda.conf (84% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "dovecot/2.3/conf.d/20-imap.conf",
@@ -535,7 +536,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "basename-matched (path reorg by #119); confirm origin Inspired by upstream install/common/dovecot/2.4/conf.d/15-lda.conf (86% churn), rewritten for HestiaRE."
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/common/dovecot/2.4/conf.d/15-lda.conf (86% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "dovecot/2.3/sieve/20-managesieve.conf",
@@ -800,7 +801,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "basename-matched (path reorg by #119); confirm origin Inspired by upstream install/common/dovecot/2.4/conf.d/15-lda.conf (86% churn), rewritten for HestiaRE."
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/common/dovecot/2.4/conf.d/15-lda.conf (86% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "dovecot/2.4/sieve/20-managesieve.conf",
@@ -1288,7 +1289,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "basename-matched (path reorg by #119); confirm origin Inspired by upstream install/deb/nginx/phpmyadmin.inc (97% churn), rewritten for HestiaRE."
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/nginx/phpmyadmin.inc (97% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/cloudflare.inc",
@@ -1420,7 +1421,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "basename-matched (path reorg by #119); confirm origin Inspired by upstream install/deb/templates/mail/nginx/default_snappymail.stpl (45% churn), rewritten for HestiaRE."
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/templates/mail/nginx/default_snappymail.stpl (45% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/webmail/default_snappymail.tpl",
@@ -1429,7 +1430,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "basename-matched (path reorg by #119); confirm origin Inspired by upstream install/deb/templates/mail/nginx/default_snappymail.tpl (55% churn), rewritten for HestiaRE."
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/templates/mail/nginx/default_snappymail.tpl (55% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/webmail/disabled.stpl",
@@ -1474,7 +1475,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "basename-matched (path reorg by #119); confirm origin Inspired by upstream install/deb/templates/mail/nginx/web_system.stpl (41% churn), rewritten for HestiaRE."
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/templates/mail/nginx/web_system.stpl (41% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/webmail/web_system.tpl",
@@ -1483,7 +1484,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "basename-matched (path reorg by #119); confirm origin Inspired by upstream install/deb/templates/mail/nginx/web_system.tpl (49% churn), rewritten for HestiaRE."
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/templates/mail/nginx/web_system.tpl (49% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/websocket-upgrade.conf",
@@ -1582,7 +1583,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "no upstream counterpart found; native or renamed - confirm manually Inspired by upstream src/deb/php/php.ini (100% churn), rewritten for HestiaRE."
+      "note": "no upstream counterpart found; native or renamed - confirm manually. Former upstream_path pointer, unconfirmed: src/deb/php/php.ini (100% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "panel-php/fpm/php.ini",
@@ -1591,7 +1592,7 @@
       "upstream_ref": null,
       "last_reconciled": "2026-08-12",
       "divergence": null,
-      "note": "no upstream counterpart found; native or renamed - confirm manually Inspired by upstream src/deb/php/php.ini (99% churn), rewritten for HestiaRE."
+      "note": "no upstream counterpart found; native or renamed - confirm manually. Former upstream_path pointer, unconfirmed: src/deb/php/php.ini (99% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "panel-php/hestia-php.service",

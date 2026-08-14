@@ -206,6 +206,12 @@ whole tree**, `bin/` + `include/` + `web/` + `share/` + `install.sh`, not just t
   panel's firewall row then fell through to `systemctl` and **destroyed the live ruleset**.
 - **A validator or guard**: hardening one makes previously-dead checks fire. Find the callers that were
   silently passing before, and fix them in the same PR rather than exempting them.
+- **A MOVED file: grep the bare name, not the old path.** A path pattern only finds references that
+  spell the separator. `sbin/` cost seven live call sites written `"$BIN/hestia-php-confd"` — a
+  variable, so `bin/hestia-php-confd` matched none of them and a fresh install died. `func/ -> include/`
+  then cost `.php-cs-fixer.dist.php`, which writes `__DIR__ . "/func"` with no trailing slash, so the
+  formatter silently refused to run. Same shape twice: sweep the **basename on its own**, then every
+  variable that could prefix it, and only then the full path.
 - **`h-install-hestia` is a first-class caller of `h-*`** (deliberately — one code path, never an
   installer copy that drifts). So every guard must also make sense at **install time**, against a
   half-built box: the state it rejects may be exactly what an earlier install stage just produced.
