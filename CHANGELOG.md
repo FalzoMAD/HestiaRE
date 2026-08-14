@@ -35,6 +35,16 @@ opens above it.
 
 ### Fixed
 
+- **Seven calls still reached the `sbin/` commands through `bin/`** (#209 follow-up). The sbin split
+  moved the panel-PHP wrappers and the lifecycle commands out of the sudo wildcard's reach, but the
+  callers referenced them as `"$BIN/x"` - a variable, so a grep for `bin/hestia-php-confd` did not
+  find them and they kept pointing at a path with no file behind it. A fresh install died in the
+  panel stage on `$BIN/hestia-php-confd`, and `hestia install`, `hestia update` and
+  `hestia uninstall` all dispatched into nothing. `func/main.sh` now anchors `SBIN=$HESTIA/sbin`
+  next to `BIN`, and all seven sites use it. A smoke check (`check_sbin_not_under_bin`) derives the
+  command set from what is actually in `sbin/` and fails on an empty directory, so a future move
+  cannot go quiet the same way.
+
 - **Notification-mail overrides were read from a path that never held them** (#393 follow-up).
   `get_email_template()` read `share/email/`, but the shipped samples sat in `share/email/examples/`
   one level down, so no override ever loaded - the panel always fell back to its inline default

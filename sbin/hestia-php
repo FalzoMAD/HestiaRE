@@ -13,7 +13,7 @@ ini="/etc/php/hestia/cli/php.ini"
 # Load only the curated CLI extension set from the panel's own conf.d (built by
 # hestia-php-confd), isolated from the customer version's conf.d. Fall back to
 # the compiled default scan dir if it is not built yet (e.g. mid-upgrade) so
-# CLI helpers never run with no extensions. Same pattern as bin/hestia-php-fpm.
+# CLI helpers never run with no extensions. Same pattern as ssbin/hestia-php-fpm.
 confd="/etc/php/hestia/cli/conf.d"
 if [ -d "$confd" ] && [ -n "$(ls -A "$confd" 2> /dev/null)" ]; then
 	export PHP_INI_SCAN_DIR="$confd"

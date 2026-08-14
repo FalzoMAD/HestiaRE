@@ -448,7 +448,7 @@
         "Ubuntu 24.04 LTS (noble)",
         "Debian 13 (trixie, priority 2, planned June 2026+)"
       ],
-      "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. Install logic: Makefile (removed) → Justfile #102 → pure-bash bin/h-install-hestia + func/wizard.sh + func/helper.sh in Issue #112 (just removed). See make_release component.",
+      "note": "Monolithic bash installers removed in Issue #26b. install/hst-install.sh removed in Issue #26d. Install logic: Makefile (removed) → Justfile #102 → pure-bash sbin/h-install-hestia + func/wizard.sh + func/helper.sh in Issue #112 (just removed). See make_release component.",
       "web_templates": {
         "nginx": "templates/nginx/ - the nginx-only selection ($WEBTPL/nginx)",
         "php": "templates/php/ - FPM pool profiles ($PHPTPL): default/ondemand/high (#591). The version is its own web.conf field PHP_VERSION now, not encoded in a template - BACKEND holds only the profile, prepare_web_backend reads PHP_VERSION for the version. Per-domain via h-change-web-domain-php ('none' = no pool). Backup carries a HestiaCP-compat BACKEND='PHP-<ver>' plus native PHP_VERSION/PHP_PROFILE; restore prefers native, preflight aborts on a missing version unless RESTORE_PHP_FALLBACK=yes. Pre-#591 socket.tpl/no-php.tpl and generated PHP-X_Y are swept by h-update-web-templates.",
@@ -550,9 +550,9 @@
         "share/panel-php/pool.d/panel.conf",
         "share/panel-php/pool.d/phpmyadmin.conf",
         "share/panel-php/pool.d/adminer.conf",
-        "bin/hestia-php-fpm",
-        "bin/hestia-php",
-        "bin/hestia-php-confd",
+        "sbin/hestia-php-fpm",
+        "sbin/hestia-php",
+        "ssbin/hestia-php-confd",
         "bin/h-change-sys-panel-php",
         "bin/h-delete-web-php"
       ],
@@ -585,11 +585,11 @@
       }
     },
     "make_release": {
-      "description": "Pure-bash installer. install.sh (bootstrap) → func/wizard.sh (manifest-driven Q&A → /etc/hestia/install.conf) → bin/h-install-hestia (non-interactive, COMPONENT_*-gated). Migrated from Justfile/just/* to bash h-* commands in Issue #112 (epic); just removed (was Makefile→Justfile in #102, Justfile→bash in #112).",
+      "description": "Pure-bash installer. install.sh (bootstrap) → func/wizard.sh (manifest-driven Q&A → /etc/hestia/install.conf) → sbin/h-install-hestia (non-interactive, COMPONENT_*-gated). Migrated from Justfile/just/* to bash h-* commands in Issue #112 (epic); just removed (was Makefile→Justfile in #102, Justfile→bash in #112).",
       "entry_points": [
         "install.sh",
         "func/wizard.sh",
-        "bin/h-install-hestia"
+        "ssbin/h-install-hestia"
       ],
       "directories": [
         "bin/",
@@ -599,22 +599,22 @@
         "install.sh",
         "func/wizard.sh",
         "func/helper.sh",
-        "bin/h-install-hestia",
-        "bin/hestia",
-        "bin/h-update-hestia",
-        "bin/h-uninstall-hestia",
+        "ssbin/h-install-hestia",
+        "sbin/hestia",
+        "ssbin/h-update-hestia",
+        "ssbin/h-uninstall-hestia",
         "bin/h-list-sys-install",
         "VERSION"
       ],
       "language": "bash",
       "structure": {
-        "install.sh": "Bootstrap (curl-able): root + OS detect, apt prereqs (curl jq whiptail gnupg ca-certificates — no just), --dev source setup, fetch+extract release tarball, run func/wizard.sh, seed_hestia_etc, hand off to bin/h-install-hestia.",
+        "install.sh": "Bootstrap (curl-able): root + OS detect, apt prereqs (curl jq whiptail gnupg ca-certificates — no just), --dev source setup, fetch+extract release tarball, run func/wizard.sh, seed_hestia_etc, hand off to sbin/h-install-hestia.",
         "func/wizard.sh": "Interactive whiptail wizard (bash fallback), manifest-driven: pre-questions + preset + dynamic version discovery + component questions; writes /etc/hestia/install.conf. Runnable standalone (hestia configure).",
         "func/helper.sh": "hestia_apt (spinner + apt log split), load_os_profile (OS_ID/CODENAME/RELEASE/EXIM_USR/BASE_PKGS_EXTRA for deb12/deb13/ub24/ub26), seed_hestia_etc (hestia.env + profile.d + seed hestia.conf).",
-        "bin/h-install-hestia": "Non-interactive orchestrator: validates /etc/hestia, sources hestia.env+main.sh+helper.sh+install.conf, runs stages gated by COMPONENT_*. Idempotent via .done.* sentinels (exit→return).",
-        "bin/hestia": "Umbrella dispatcher: hestia install|configure|update|uninstall|status (no v-* alias).",
-        "bin/h-update-hestia": "Update whole distribution from release tarball (+ --check); stops/starts hestia around copy. Does NOT use the legacy h-update-sys-hestia* apt/git updaters (removal tracked in #128).",
-        "bin/h-uninstall-hestia": "Conservative uninstall (keeps /home + DBs always; --purge removes packages + /usr/local/hestia + /etc/hestia).",
+        "ssbin/h-install-hestia": "Non-interactive orchestrator: validates /etc/hestia, sources hestia.env+main.sh+helper.sh+install.conf, runs stages gated by COMPONENT_*. Idempotent via .done.* sentinels (exit→return).",
+        "sbin/hestia": "Umbrella dispatcher: hestia install|configure|update|uninstall|status (no v-* alias).",
+        "ssbin/h-update-hestia": "Update whole distribution from release tarball (+ --check); stops/starts hestia around copy. Does NOT use the legacy h-update-sys-hestia* apt/git updaters (removal tracked in #128).",
+        "ssbin/h-uninstall-hestia": "Conservative uninstall (keeps /home + DBs always; --purge removes packages + /usr/local/hestia + /etc/hestia).",
         "bin/h-list-sys-install": "Status report: version, source, OS, profile, .done.* phases, COMPONENT_*."
       },
       "stages": {
@@ -631,13 +631,13 @@
       },
       "sentinel_files": "/etc/hestia/.done.{base,panel,web,db,mail,security,addons,configure} — presence skips that stage (return 0, NOT exit)",
       "presets": "7 manifest presets (standard/compact/latest/singlephp/nomail/mailonly/custom) drive COMPONENT_* in the wizard; h-install-hestia consumes COMPONENT_* directly (no profile-name dispatch)",
-      "bootstrap_flow": "curl | bash install.sh → OS detect → apt prereqs → download+extract tarball → func/wizard.sh → seed_hestia_etc → bin/h-install-hestia",
+      "bootstrap_flow": "curl | bash install.sh → OS detect → apt prereqs → download+extract tarball → func/wizard.sh → seed_hestia_etc → sbin/h-install-hestia",
       "release_sources": {
         "github": "https://github.com/FalzoMAD/HestiaRE (default)",
         "gitea": "Configurable via /etc/hestia/source.conf"
       },
       "install_conf": "/etc/hestia/install.conf — written by func/wizard.sh; HESTIA_* params + COMPONENT_* selections; sourced by h-install-hestia; COMPONENT_* kept current by h-add-*/h-delete-* via set_install_component",
-      "upstream_ref": "hestiare-native — the whole installer (install.sh, func/wizard.sh, bin/h-install-hestia, func/helper.sh) was rebuilt from scratch (Makefile→just→bash, #106/#112/#114); upstream's install/hst-install-*.sh were removed (#26). No cherry-pick path.",
+      "upstream_ref": "hestiare-native — the whole installer (install.sh, func/wizard.sh, sbin/h-install-hestia, func/helper.sh) was rebuilt from scratch (Makefile→just→bash, #106/#112/#114); upstream's install/hst-install-*.sh were removed (#26). No cherry-pick path.",
       "dependencies": [
         "installer"
       ],

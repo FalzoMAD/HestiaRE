@@ -7,14 +7,15 @@
 
 HESTIA="${HESTIA:-/usr/local/hestia}"
 BIN="$HESTIA/bin"
+SBIN="$HESTIA/sbin"
 cmd="${1:-help}"
 [ $# -gt 0 ] && shift || true
 
 case "$cmd" in
-	install)   exec "$BIN/h-install-hestia" "$@" ;;
+	install)   exec "$SBIN/h-install-hestia" "$@" ;;
 	configure) exec bash "$HESTIA/func/wizard.sh" "$@" ;;
-	update)    exec "$BIN/h-update-hestia" "$@" ;;
-	uninstall) exec "$BIN/h-uninstall-hestia" "$@" ;;
+	update)    exec "$SBIN/h-update-hestia" "$@" ;;
+	uninstall) exec "$SBIN/h-uninstall-hestia" "$@" ;;
 	status)    exec "$BIN/h-list-sys-install" "$@" ;;
 	"" | help | -h | --help)
 		cat << 'EOF'

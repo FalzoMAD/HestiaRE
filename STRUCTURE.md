@@ -57,7 +57,7 @@ several past bugs (#234, #441).
 
 **Consequence for panel PHP: it cannot see inside `/home/<customer>`.** Upstream ships
 `setfacl -m "g:hestia-users:---"` on every customer home, and HestiaRE puts the panel
-account into that group (`bin/h-install-hestia`), which upstream does not do for its own
+account into that group (`sbin/h-install-hestia`), which upstream does not do for its own
 panel user - only for `hestiamail`. So the deny entry applies here and every PHP
 filesystem call on a customer path fails: `realpath()` returns `false`, and `is_dir()`,
 `file_exists()`, `scandir()` return false or nothing, each reading like "does not exist".
@@ -122,7 +122,7 @@ as the customer.
 installer (`bin/h-install-hestia:92`) so only one Sury stanza is ever written (avoids
 apt's "Conflicting Signed-By"). The panel runs on a **dedicated PHP tree**
 `/etc/php/hestia/` (Sury reference version), not a deb, launched by the wrapper
-`bin/hestia-php-fpm` (reads `/etc/php/hestia/php-version`, `exec`s the right
+`sbin/hestia-php-fpm` (reads `/etc/php/hestia/php-version`, `exec`s the right
 `php-fpm<ver>`) under `share/panel-php/hestia-php.service`. The single pool explodes
 into **five** on that one `hestia` master:
 
@@ -147,9 +147,9 @@ env (a bare `$HESTIA` expands empty -> 502).
 
 **Follow-on.**
 - One `hestia` master hosts five co-tenant pools sharing **one** curated `conf.d`
-  extension set built by `bin/hestia-php-confd` - pruning an extension can break a
+  extension set built by `sbin/hestia-php-confd` - pruning an extension can break a
   co-tenant (the Roundcube `dom` 500 regression, #402; documented in
-  `bin/hestia-php-confd` header).
+  `sbin/hestia-php-confd` header).
 - "PHP pools on the box" now spans two trees: `/etc/php/hestia/fpm/pool.d/*`
   (hestia/caddy) and `/etc/php/<ver>/fpm/pool.d/*` (customers + `fm-<user>` + `dummy`).
 - Panel PHP version is switchable with rollback (`bin/h-change-sys-panel-php:83-91`);
@@ -471,7 +471,7 @@ custom apt repository.
 **HestiaRE.** No packages, no binaries - source only (`README.md:32-46`): a `v*` git
 tag triggers CI (`.github/workflows/release.yml`), which stamps `VERSION` and packs the
 tree into one `hestiare-<version>.tar.gz`; `install.sh` fetches + extracts it into
-`/usr/local/hestia` and hands off to the wizard -> `bin/h-install-hestia`. Source/channel
+`/usr/local/hestia` and hands off to the wizard -> `sbin/h-install-hestia`. Source/channel
 is overridable via `/etc/hestia/source.conf`. The release actually runs on the public
 GitHub mirror (Gitea has no release workflow); see `project-release-github-mirror` in
 memory for the full Gitea-release -> mirror -> GitHub chain. No compiled artifact, no
