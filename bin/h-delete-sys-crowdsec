@@ -16,8 +16,8 @@ FORCE=$1
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state
@@ -52,7 +52,7 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-source "$HESTIA/func/crowdsec.sh"
+source "$HESTIA/include/crowdsec.sh"
 
 # crowdsec_remove_nginx rewrites and reloads nginx config, so a concurrent web switch must not race it.
 # Reentrant, so h-delete-sys-nginx's teardown passes straight through.
@@ -86,8 +86,8 @@ set_install_component ADDON_CROWDSEC false
 
 # CrowdSec no longer owns L7, so fail2ban's web jails come back on and that model regains its coverage.
 if [ "$FIREWALL_EXTENSION" = 'fail2ban' ] && [ -f /etc/fail2ban/jail.d/hestia.local ]; then
-	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
-	source "$HESTIA/func/fail2ban.sh"
+	# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+	source "$HESTIA/include/fail2ban.sh"
 	fail2ban_gate_web_jail
 	fail2ban_prune_empty_jails
 	systemctl reload-or-restart fail2ban > /dev/null 2>&1

@@ -104,7 +104,7 @@ and `#`); any line that doesn't is a hit to inspect. Never regex-strip a trailin
 ### CLI conventions
 ```
 h-*    HestiaRE commands (renamed from v-* in Issue #22)
-v-*    symlinks only — ease of cherry-picking HestiaCP upstream changes
+v-*    symlinks only — HestiaCP CLI compatibility
 ```
 
 Symlink rules (non-negotiable):
@@ -156,8 +156,8 @@ upstream/hestiacp HestiaCP snapshot, READ ONLY, never modify
 ### Key files
 ```
 install.sh        bootstrap: prereqs, fetch release, run wizard, hand off to h-install-hestia
-func/wizard.sh    interactive wizard (manifest-driven) → writes /etc/hestia/install.conf
-func/helper.sh    installer helpers: hestia_apt, load_os_profile, seed_hestia_etc
+include/wizard.sh    interactive wizard (manifest-driven) → writes /etc/hestia/install.conf
+include/helper.sh    installer helpers: hestia_apt, load_os_profile, seed_hestia_etc
 sbin/h-install-hestia non-interactive installer (reads install.conf, COMPONENT_*-gated)
 sbin/hestia       umbrella: hestia install|configure|update|uninstall|status
 VERSION           empty placeholder, filled at build time — never edit
@@ -168,7 +168,7 @@ CLAUDE.md         this file
 ### Directories (HestiaCP origin, being refined)
 ```
 bin/              CLI commands (h-*; v-* symlinks via Issue #23)
-func/             shared bash function libraries
+include/          shared bash function libraries
 share/            install-time service configs + assets (absorbed the old install/ tree, #119)
 web/              panel UI (plain PHP, no framework)
 src/              frontend assets
@@ -195,7 +195,7 @@ conf/             service configuration templates
 
 Changing something that already existed — especially inherited from HestiaCP — is only safe once you
 know who else uses it. The issue scope is *not* the change's scope. Enumerate consumers **across the
-whole tree**, `bin/` + `func/` + `web/` + `share/` + `install.sh`, not just the files in the diff:
+whole tree**, `bin/` + `include/` + `web/` + `share/` + `install.sh`, not just the files in the diff:
 
 - **A shared function**: every caller. A grep of the defining file alone is not an audit — it is how
   four live callers of a "dead" helper get missed.
@@ -206,6 +206,12 @@ whole tree**, `bin/` + `func/` + `web/` + `share/` + `install.sh`, not just the 
   panel's firewall row then fell through to `systemctl` and **destroyed the live ruleset**.
 - **A validator or guard**: hardening one makes previously-dead checks fire. Find the callers that were
   silently passing before, and fix them in the same PR rather than exempting them.
+- **A MOVED file: grep the bare name, not the old path.** A path pattern only finds references that
+  spell the separator. `sbin/` cost seven live call sites written `"$BIN/hestia-php-confd"` — a
+  variable, so `bin/hestia-php-confd` matched none of them and a fresh install died. `func/ -> include/`
+  then cost `.php-cs-fixer.dist.php`, which writes `__DIR__ . "/func"` with no trailing slash, so the
+  formatter silently refused to run. Same shape twice: sweep the **basename on its own**, then every
+  variable that could prefix it, and only then the full path.
 - **`h-install-hestia` is a first-class caller of `h-*`** (deliberately — one code path, never an
   installer copy that drifts). So every guard must also make sense at **install time**, against a
   half-built box: the state it rejects may be exactly what an earlier install stage just produced.
@@ -239,7 +245,7 @@ an empty or zero reference set fail rather than pass. State in the guard's comme
 
 ### Fresh-install verification (installer / firewall / fail2ban changes)
 
-Any change to `h-install-hestia`, `func/fail2ban.sh`, the firewall renderer, or the service configs they
+Any change to `h-install-hestia`, `include/fail2ban.sh`, the firewall renderer, or the service configs they
 apply must be verified against a **genuinely fresh from-scratch install**, not only a re-run of the apply
 step on an already-populated box. Re-running on a box that already has domains, proftpd, a whitelist, etc.
 is what hid two separate breaks: the v0.12.2 template-include gap, and the installer aborting in the
@@ -262,6 +268,16 @@ Open the PR against `dev` — never merge it yourself; the author reviews and me
 The remote host, the exact API call, use of TOKEN and the test-VM fleet live in
 `CLAUDE.local.md` (untracked, so the personal host stays off the public GitHub mirror).
 
+### Before every minor release
+
+- Consolidate the `CHANGELOG.md` Unreleased section into the new minor (point releases stay
+  inside the cycle they belong to).
+- **Recompute the PROVENANCE manifests** against the current `upstream/hestiacp` snapshot, and
+  reseed `source_type` from the fresh numbers. `verbatim`/`derived` is a bucketing of the measured
+  `pct`, so it goes stale exactly when the numbers do — it drifted 80 entries out of step once
+  (#551) because nobody re-derived it. `eigenbau` is the one curated value; a recompute never
+  touches it.
+
 ---
 
 ## HESTIACP COMPATIBILITY
@@ -274,7 +290,12 @@ This is non-negotiable and permanent:
 When reimplementing HestiaCP functionality:
 - Read the original in `upstream/hestiacp` branch first
 - Reimplement clean for HestiaRE, do not copy entangled code verbatim
-- Direct cherry-pick only for isolated bugfixes with no HestiaCP-specific deps
+
+**Never cherry-pick.** Every adoption is a reimplementation, including isolated bugfixes.
+Challenge each upstream change on its own: what does the *diff* actually do (not the changelog
+title), do we already have it or something better, and is it an improvement worth the regression
+risk? Compare per function, not per file. The PROVENANCE manifests say which of our files still
+track upstream closely — that is orientation for the comparison, never a merge plan.
 
 ---
 

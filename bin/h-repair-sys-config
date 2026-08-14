@@ -11,13 +11,13 @@ mode=$1
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
 # Both functions below live here and main.sh does not pull it in. Without this the command answered
 # "syshealth_repair_system_config: command not found" and then logged the repair as executed - the
 # only caller of these functions that was missing the line every other one has.
-# shellcheck source=/usr/local/hestia/func/syshealth.sh
-source $HESTIA/func/syshealth.sh
+# shellcheck source=/usr/local/hestia/include/syshealth.sh
+source $HESTIA/include/syshealth.sh
 
 #----------------------------------------------------------#
 #                        Action                            #

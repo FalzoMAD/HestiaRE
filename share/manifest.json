@@ -4,7 +4,7 @@
   "manifest_version": 1,
 
   "software_versions": {
-    "$comment": "Release-shipped third-party version pins (#288, replaces install/upgrade/upgrade.conf). Bump per release. Read at runtime via manifest_get() in func/main.sh.",
+    "$comment": "Release-shipped third-party version pins (#288, replaces install/upgrade/upgrade.conf). Bump per release. Read at runtime via manifest_get() in include/main.sh.",
     "snappymail": "2.38.2",
     "backblaze_b2": "3.6.0",
     "php_supported": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]

@@ -27,14 +27,14 @@ proxy_ext=$6
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
-# shellcheck source=/usr/local/hestia/func/domain.sh
-source $HESTIA/func/domain.sh
-# shellcheck source=/usr/local/hestia/func/ip.sh
-source $HESTIA/func/ip.sh
-# shellcheck source=/usr/local/hestia/func/syshealth.sh
-source $HESTIA/func/syshealth.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/domain.sh
+source $HESTIA/include/domain.sh
+# shellcheck source=/usr/local/hestia/include/ip.sh
+source $HESTIA/include/ip.sh
+# shellcheck source=/usr/local/hestia/include/syshealth.sh
+source $HESTIA/include/syshealth.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 web_lock_acquire || exit 1
@@ -116,8 +116,8 @@ ln -f -s /var/log/$WEB_SYSTEM/domains/$domain.*log \
 # fail2ban resolves its logpath glob once, at jail start, so a domain added later goes unwatched until the
 # daemon restarts. Hand it the new file explicitly.
 if [ -n "$FIREWALL_EXTENSION" ]; then
-	# shellcheck source=/usr/local/hestia/func/fail2ban.sh
-	source $HESTIA/func/fail2ban.sh
+	# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+	source $HESTIA/include/fail2ban.sh
 	fail2ban_watch_domain add "$domain"
 fi
 

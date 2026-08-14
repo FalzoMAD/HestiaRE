@@ -9,6 +9,12 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 // Check token
 verify_csrf($_GET);
 
+// Without a backup id there is nothing to schedule; quoteshellarg(null) is a TypeError, so this
+// has to refuse before it, not after.
+if (empty($_GET["backup"])) {
+	header("Location: /list/backup/");
+	exit();
+}
 $backup = quoteshellarg($_GET["backup"]);
 
 $web = "no";

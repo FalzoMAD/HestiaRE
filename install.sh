@@ -8,7 +8,7 @@
 #   1. install prerequisites (curl, jq, whiptail, gnupg)
 #   2. detect the OS
 #   3. fetch + extract the release tarball into /usr/local/hestia
-#   4. run the wizard (func/wizard.sh)  -> writes /etc/hestia/install.conf
+#   4. run the wizard (include/wizard.sh)  -> writes /etc/hestia/install.conf
 #   5. seed /etc/hestia (env + hestia.conf) so h-* commands can run
 #   6. hand off to sbin/h-install-hestia  (or: hestia install)
 #
@@ -201,15 +201,15 @@ main() {
     echo ""
 
     # Wizard: manifest-driven Q&A -> /etc/hestia/install.conf (separate process)
-    bash "${INSTALL_DIR}/func/wizard.sh" --os="${OS}" \
+    bash "${INSTALL_DIR}/include/wizard.sh" --os="${OS}" \
         ${FASTTRACK_PRESET:+--preset="${FASTTRACK_PRESET}"} \
         $([ "$AUTO_MODE" = true ] && echo --auto)
 
     # Seed /etc/hestia (env + hestia.conf) before any h-* command runs, so the
-    # bootstrap-trap (func/main.sh sourcing hestia.env/hestia.conf at load) is a
+    # bootstrap-trap (include/main.sh sourcing hestia.env/hestia.conf at load) is a
     # non-issue. h-install-hestia then only validates these files exist.
-    # shellcheck source=/usr/local/hestia/func/helper.sh
-    HESTIA="${INSTALL_DIR}" source "${INSTALL_DIR}/func/helper.sh"
+    # shellcheck source=/usr/local/hestia/include/helper.sh
+    HESTIA="${INSTALL_DIR}" source "${INSTALL_DIR}/include/helper.sh"
     HESTIA="${INSTALL_DIR}" seed_hestia_etc
 
     echo ""

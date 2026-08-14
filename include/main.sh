@@ -811,7 +811,7 @@ send_notice() {
 		# Second writer of notifications.conf besides h-add-user-notification: sanitize NOTICE
 		# (rendered via x-html) here too or it's an XSS bypass. %quote% keeps the record intact.
 		topic=$(echo "$topic" | sed "s/'/%quote%/g")
-		notice=$("$HESTIA_PHP" "$HESTIA/func/internal/sanitize_html.php" "$notice" | sed "s/'/%quote%/g")
+		notice=$("$HESTIA_PHP" "$HESTIA/include/sanitize_html.php" "$notice" | sed "s/'/%quote%/g")
 
 		touch $USER_DATA/notifications.conf
 		chmod 660 $USER_DATA/notifications.conf
@@ -1713,15 +1713,6 @@ is_format_valid() {
 is_folder_exists() {
 	if [ ! -d "$1" ]; then
 		check_result "$E_NOTEXIST" "folder $1 does not exist"
-	fi
-}
-
-is_command_valid_format() {
-	if [[ ! "$1" =~ ^v-[[:alnum:]][-._[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
-		check_result "$E_INVALID" "Invalid command format"
-	fi
-	if [[ -n $(echo "$1" | grep -e '\-\-') ]]; then
-		check_result "$E_INVALID" "Invalid command format"
 	fi
 }
 

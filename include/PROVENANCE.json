@@ -1,0 +1,257 @@
+{
+  "_meta": {
+    "folder": "include/",
+    "description": "Per-file provenance vs HestiaCP. A file with no upstream_path is HestiaRE-native. Recompute is a manual, occasional job (when we reimplement against upstream or re-measure a snapshot); numbers are a snapshot at each file's upstream_ref + measured_at, not live. HestiaRE does not cherry-pick: every adoption is a reimplementation, compared per function against the upstream diff, so these numbers are orientation for that comparison - not a merge plan.",
+    "upstream_branch": "upstream/hestiacp",
+    "upstream_ref": "bc3720a",
+    "upstream_ref_date": "2026-08-10",
+    "last_updated": "2026-08-14",
+    "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100, from a line diff between the two blobs. RAW: includes the mechanical v-*->h-* rename + path churn (install/->share/, CONF_DIR, func/->include/), so it OVERSTATES semantic divergence. Triage, not truth. BINARY files are measured by byte identity instead (pct 0 or 100, method \"bytes\"): a line diff on a binary reports nothing at all - git numstat prints \"-\" - which silently read as 0% churn and typed a differing font or image as verbatim.",
+    "source_type_values": {
+      "verbatim": "Upstream file we track closely (churn <=3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
+      "derived": "Reimplemented or diverged from upstream on purpose (churn >3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
+      "eigenbau": "HestiaRE-native: no upstream counterpart. The one curated value - a recompute never changes it. An 'inspired by' pointer belongs in the note, not in upstream_path."
+    },
+    "folder_note": "Upstream calls this directory func/; HestiaRE renamed it to include/ because it holds sourced libraries, not only functions. The upstream_path fields below therefore all read func/*, and the rename itself is part of the raw churn.",
+    "upstream_files_not_adopted": {
+      "func/remote.sh": "REST API is a permanent ground-rule exclusion - nothing to port.",
+      "func/upgrade.sh": "No update/migration paths before v1 (no production instances), so there is no upgrade library to carry.",
+      "func/internal/dns_record_validator.php": "No bundled DNS server (bind9 is a ground-rule exclusion), so no DNS record validation."
+    },
+    "aggregate": {
+      "upstream_mapped_files": 9,
+      "eigenbau_files": 9,
+      "weighted_pct": 28,
+      "weighted_pct_note": "text files only - binary entries are byte-compared, not line-counted"
+    },
+    "scope": "include",
+    "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it. Byte-compared entries carry no pct at all - there is no percentage to have: the reseed reads their `identical` flag, text entries their pct."
+  },
+  "files": [
+    {
+      "path": "backup.sh",
+      "source_type": "verbatim",
+      "upstream_path": "func/backup.sh",
+      "upstream_ref": "bc3720a",
+      "last_reconciled": "2026-08-14",
+      "divergence": {
+        "upstream_lines": 579,
+        "our_lines": 579,
+        "added": 9,
+        "removed": 9,
+        "pct": 2,
+        "measured_at": "2026-08-14"
+      },
+      "note": "Backup format is bidirectionally compatible with HestiaCP forever, so this stays close to upstream on purpose."
+    },
+    {
+      "path": "db.sh",
+      "source_type": "derived",
+      "upstream_path": "func/db.sh",
+      "upstream_ref": "bc3720a",
+      "last_reconciled": "2026-08-14",
+      "divergence": {
+        "upstream_lines": 696,
+        "our_lines": 673,
+        "added": 15,
+        "removed": 38,
+        "pct": 4,
+        "measured_at": "2026-08-14"
+      },
+      "note": ""
+    },
+    {
+      "path": "domain.sh",
+      "source_type": "derived",
+      "upstream_path": "func/domain.sh",
+      "upstream_ref": "bc3720a",
+      "last_reconciled": "2026-08-14",
+      "divergence": {
+        "upstream_lines": 1196,
+        "our_lines": 1124,
+        "added": 405,
+        "removed": 477,
+        "pct": 38,
+        "measured_at": "2026-08-14"
+      },
+      "note": "No DNS half (bind9 excluded); web/mail template handling reworked for the Caddy/nginx/apache model."
+    },
+    {
+      "path": "firewall.sh",
+      "source_type": "derived",
+      "upstream_path": "func/firewall.sh",
+      "upstream_ref": "bc3720a",
+      "last_reconciled": "2026-08-14",
+      "divergence": {
+        "upstream_lines": 25,
+        "our_lines": 685,
+        "added": 673,
+        "removed": 13,
+        "pct": 97,
+        "measured_at": "2026-08-14"
+      },
+      "note": "Effectively eigenbau: upstream ships 25 lines, this is the 685-line nftables renderer (#495). Kept mapped rather than relabelled so the upstream path stays findable."
+    },
+    {
+      "path": "ip.sh",
+      "source_type": "derived",
+      "upstream_path": "func/ip.sh",
+      "upstream_ref": "bc3720a",
+      "last_reconciled": "2026-08-14",
+      "divergence": {
+        "upstream_lines": 280,
+        "our_lines": 286,
+        "added": 41,
+        "removed": 35,
+        "pct": 13,
+        "measured_at": "2026-08-14"
+      },
+      "note": ""
+    },
+    {
+      "path": "main.sh",
+      "source_type": "derived",
+      "upstream_path": "func/main.sh",
+      "upstream_ref": "bc3720a",
+      "last_reconciled": "2026-08-14",
+      "divergence": {
+        "upstream_lines": 2133,
+        "our_lines": 2081,
+        "added": 424,
+        "removed": 476,
+        "pct": 21,
+        "measured_at": "2026-08-14"
+      },
+      "note": "Carries the HestiaRE input hardening (single-eval object parser, source_conf, validator char classes) and the BIN/SBIN/CONF_DIR anchors."
+    },
+    {
+      "path": "rebuild.sh",
+      "source_type": "derived",
+      "upstream_path": "func/rebuild.sh",
+      "upstream_ref": "bc3720a",
+      "last_reconciled": "2026-08-14",
+      "divergence": {
+        "upstream_lines": 938,
+        "our_lines": 931,
+        "added": 170,
+        "removed": 177,
+        "pct": 19,
+        "measured_at": "2026-08-14"
+      },
+      "note": ""
+    },
+    {
+      "path": "sanitize_html.php",
+      "source_type": "derived",
+      "upstream_path": "func/internal/sanitize_html.php",
+      "upstream_ref": "bc3720a",
+      "last_reconciled": "2026-08-14",
+      "divergence": {
+        "upstream_lines": 19,
+        "our_lines": 145,
+        "added": 141,
+        "removed": 15,
+        "pct": 95,
+        "measured_at": "2026-08-14"
+      },
+      "note": "Own dependency-free DOMDocument allow-list sanitizer (#471); upstream's counterpart is a 19-line wrapper around a bundled library we rejected. Lived in func/internal/ until the subdirectory was dissolved."
+    },
+    {
+      "path": "syshealth.sh",
+      "source_type": "derived",
+      "upstream_path": "func/syshealth.sh",
+      "upstream_ref": "bc3720a",
+      "last_reconciled": "2026-08-14",
+      "divergence": {
+        "upstream_lines": 646,
+        "our_lines": 555,
+        "added": 304,
+        "removed": 395,
+        "pct": 58,
+        "measured_at": "2026-08-14"
+      },
+      "note": "Key registry + repair model reworked (#654: an empty value no longer counts as present)."
+    },
+    {
+      "path": "botpolicy.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-14",
+      "divergence": null,
+      "note": "Bot rate limiting (#483/#487)."
+    },
+    {
+      "path": "crowdsec.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-14",
+      "divergence": null,
+      "note": "CrowdSec integration (#186)."
+    },
+    {
+      "path": "crowdsec-mesh.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-14",
+      "divergence": null,
+      "note": "Multi-box CrowdSec mesh (#186)."
+    },
+    {
+      "path": "docker.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-14",
+      "divergence": null,
+      "note": "Per-user Docker (#389); upstream has no counterpart."
+    },
+    {
+      "path": "fail2ban.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-14",
+      "divergence": null,
+      "note": "Jail rendering as a modular addon (#525)."
+    },
+    {
+      "path": "helper.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-14",
+      "divergence": null,
+      "note": "Installer helpers (hestia_apt, load_os_profile, seed_hestia_etc); the whole installer was rebuilt from scratch, no upstream path."
+    },
+    {
+      "path": "identity.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-14",
+      "divergence": null,
+      "note": ""
+    },
+    {
+      "path": "web-model.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-14",
+      "divergence": null,
+      "note": "Web model (nginx / both / apache-only) keyset and switch (#120)."
+    },
+    {
+      "path": "wizard.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-14",
+      "divergence": null,
+      "note": "Manifest-driven install wizard; upstream has no interactive wizard."
+    }
+  ]
+}

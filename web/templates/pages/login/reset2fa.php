@@ -2,7 +2,7 @@
 	<a href="/" class="u-block u-mb40">
 		<img src="/images/logo.svg" alt="<?= tohtml($_SESSION["APP_NAME"]) ?>" width="108" height="120">
 	</a>
-	<?php if ($success) { ?>
+	<?php if (!empty($success)) { ?>
 		<div>
 			<h1 class="login-title">
 				<?= tohtml(_("Account Unlocked")) ?>

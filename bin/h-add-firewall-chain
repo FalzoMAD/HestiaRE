@@ -23,10 +23,10 @@ protocol=$(echo "$protocol" | tr '[:lower:]' '[:upper:]')
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source "$HESTIA/func/main.sh"
-# shellcheck source=/usr/local/hestia/func/firewall.sh
-source "$HESTIA/func/firewall.sh"
+# shellcheck source=/usr/local/hestia/include/main.sh
+source "$HESTIA/include/main.sh"
+# shellcheck source=/usr/local/hestia/include/firewall.sh
+source "$HESTIA/include/firewall.sh"
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 

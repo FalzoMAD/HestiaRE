@@ -9,7 +9,7 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 verify_csrf($_GET);
 
 // Prevent editing of default package
-if ($_GET["package"] === "default") {
+if (($_GET["package"] ?? "") === "default") {
 	header("Location: /list/package/");
 	exit();
 }
@@ -18,8 +18,8 @@ if ($_SESSION["userContext"] === "admin") {
 	if (!empty($_GET["package"])) {
 		$v_package = quoteshellarg($_GET["package"]);
 		exec(HESTIA_CMD . "h-delete-user-package " . $v_package, $output, $return_var);
+		check_return_code($return_var, $output);
 	}
-	check_return_code($return_var, $output);
 	unset($output);
 }
 

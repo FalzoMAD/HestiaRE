@@ -11,16 +11,16 @@
 # Imports are hardened against a bad peer: IPv4-validated, per-peer + total caps, peer-attributed.
 # Run by the hestia-crowdsec-mesh timer. No-op unless mesh is enabled (the marker conf).
 #
-# The pull is the paired transport (func/crowdsec-mesh.sh); anything else dropped into MESH_PEERS_DIR
+# The pull is the paired transport (include/crowdsec-mesh.sh); anything else dropped into MESH_PEERS_DIR
 # as <name>.json is imported just the same, so a hand-wired transport still works.
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
-# shellcheck source=/usr/local/hestia/func/crowdsec-mesh.sh
-source $HESTIA/func/crowdsec-mesh.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/crowdsec-mesh.sh
+source $HESTIA/include/crowdsec-mesh.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 

@@ -1,24 +1,25 @@
 {
   "_meta": {
     "folder": "bin/",
-    "description": "Per-file provenance vs HestiaCP. A file listed with source_type 'eigenbau' is HestiaRE-native. Recompute is a manual, occasional job (when we cherry-pick or reintegrate from upstream); numbers are a snapshot at each file's upstream_ref + measured_at, not live.",
+    "description": "Per-file provenance vs HestiaCP. A file with no upstream_path is HestiaRE-native. Recompute is a manual, occasional job (when we reimplement against upstream or re-measure a snapshot); numbers are a snapshot at each file's upstream_ref + measured_at, not live. HestiaRE does not cherry-pick: every adoption is a reimplementation, compared per function against the upstream diff, so these numbers are orientation for that comparison - not a merge plan.",
     "upstream_branch": "upstream/hestiacp",
     "upstream_ref": "bc3720a",
     "upstream_ref_date": "2026-08-10",
-    "last_updated": "2026-08-12",
-    "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100, from `git diff --numstat` between the two blobs. RAW: includes the mechanical v-*->h-* rename + path churn (install/->share/, CONF_DIR), so it OVERSTATES semantic divergence. Triage, not truth.",
+    "last_updated": "2026-08-14",
+    "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100, from `git diff --numstat` between the two blobs. RAW: includes the mechanical v-*->h-* rename + path churn (install/->share/, CONF_DIR), so it OVERSTATES semantic divergence. Triage, not truth. BINARY files are measured by byte identity instead (pct 0 or 100, method \"bytes\"): a line diff on a binary reports nothing at all - git numstat prints \"-\" - which silently read as 0% churn and typed a differing font or image as verbatim.",
     "source_type_values": {
-      "verbatim": "Near-unchanged upstream file (auto-seeded when churn <=3%; only rename/path shims).",
-      "derived": "Reimplemented/diverged from upstream on purpose (auto-seeded when churn >3%).",
-      "cherry-pick": "Isolated upstream bugfix taken directly. Manual promotion - not auto-detectable from churn.",
-      "eigenbau": "HestiaRE-native, no upstream counterpart. May carry an inspiration note."
+      "verbatim": "Upstream file we track closely (churn <=3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
+      "derived": "Reimplemented or diverged from upstream on purpose (churn >3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
+      "eigenbau": "HestiaRE-native: no upstream counterpart. The one curated value - a recompute never changes it. An 'inspired by' pointer belongs in the note, not in upstream_path."
     },
-    "symlink_policy": "v-* aliases are committed symlinks (upstream cherry-pick ease); they are NOT listed here - only real files carry provenance.",
+    "symlink_policy": "v-* aliases are committed symlinks (HestiaCP CLI compatibility); they are NOT listed here - only real files carry provenance.",
     "aggregate": {
       "upstream_mapped_files": 437,
-      "eigenbau_files": 96,
-      "weighted_pct": 11
-    }
+      "eigenbau_files": 89,
+      "weighted_pct": 12,
+      "weighted_pct_note": "text files only - binary entries are byte-compared, not line-counted"
+    },
+    "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it. Byte-compared entries carry no pct at all - there is no percentage to have: the reseed reads their `identical` flag, text entries their pct."
   },
   "files": [
     {
@@ -1083,11 +1084,11 @@
         "pct": 4,
         "measured_at": "2026-08-12"
       },
-      "note": "1.9.8 XSS fix (#5548) reimplemented: NOTICE sanitized via func/internal/sanitize_html.php before store."
+      "note": "1.9.8 XSS fix (#5548) reimplemented: NOTICE sanitized via include/sanitize_html.php before store."
     },
     {
       "path": "h-add-user-package",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-add-user-package",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -4426,7 +4427,7 @@
     },
     {
       "path": "h-list-cron-job",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-cron-job",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -4458,7 +4459,7 @@
     },
     {
       "path": "h-list-database",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-database",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -4677,7 +4678,7 @@
     },
     {
       "path": "h-list-mail-account",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-mail-account",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -4946,7 +4947,7 @@
     },
     {
       "path": "h-list-sys-hestia-ssl",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-sys-hestia-ssl",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5163,7 +5164,7 @@
     },
     {
       "path": "h-list-sys-php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-sys-php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5339,7 +5340,7 @@
     },
     {
       "path": "h-list-user",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-user",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5387,7 +5388,7 @@
     },
     {
       "path": "h-list-user-backup-exclusions",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-user-backup-exclusions",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5515,7 +5516,7 @@
     },
     {
       "path": "h-list-user-package",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-user-package",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5563,7 +5564,7 @@
     },
     {
       "path": "h-list-user-stats",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-user-stats",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5611,7 +5612,7 @@
     },
     {
       "path": "h-list-web-domain",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-web-domain",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5659,7 +5660,7 @@
     },
     {
       "path": "h-list-web-domain-ssl",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-web-domain-ssl",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5675,7 +5676,7 @@
     },
     {
       "path": "h-list-web-domains",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-web-domains",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5723,7 +5724,7 @@
     },
     {
       "path": "h-list-web-templates-backend",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-web-templates-backend",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5748,7 +5749,7 @@
     },
     {
       "path": "h-list-web-templates-proxy",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-list-web-templates-proxy",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -7503,7 +7504,7 @@
     },
     {
       "path": "h-update-sys-rrd-nginx",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "bin/v-update-sys-rrd-nginx",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",

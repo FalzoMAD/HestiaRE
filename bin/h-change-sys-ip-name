@@ -17,10 +17,10 @@ ip_name="$2"
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
-# shellcheck source=/usr/local/hestia/func/ip.sh
-source $HESTIA/func/ip.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/ip.sh
+source $HESTIA/include/ip.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 

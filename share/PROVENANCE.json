@@ -1,25 +1,26 @@
 {
   "_meta": {
     "folder": "share/",
-    "description": "Per-file provenance vs HestiaCP. source_type 'eigenbau' = HestiaRE-native (or origin not auto-confirmable - see note). Recompute is a manual, occasional job; numbers are a snapshot at upstream_ref + measured_at, not live.",
+    "description": "Per-file provenance vs HestiaCP. A file with no upstream_path is HestiaRE-native. Recompute is a manual, occasional job (when we reimplement against upstream or re-measure a snapshot); numbers are a snapshot at each file's upstream_ref + measured_at, not live. HestiaRE does not cherry-pick: every adoption is a reimplementation, compared per function against the upstream diff, so these numbers are orientation for that comparison - not a merge plan.",
     "upstream_branch": "upstream/hestiacp",
     "upstream_ref": "bc3720a",
     "upstream_ref_date": "2026-08-10",
-    "last_updated": "2026-08-12",
-    "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100 from `git diff --numstat`. RAW - overstates semantic divergence. Triage, not truth.",
+    "last_updated": "2026-08-14",
+    "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100 from `git diff --numstat`. RAW - overstates semantic divergence. Triage, not truth. BINARY files are measured by byte identity instead (pct 0 or 100, method \"bytes\"): a line diff on a binary reports nothing at all - git numstat prints \"-\" - which silently read as 0% churn and typed a differing font or image as verbatim.",
     "source_type_values": {
-      "verbatim": "Near-unchanged upstream file (auto-seeded when churn <=3%).",
-      "derived": "Reimplemented/diverged on purpose (auto-seeded when churn >3%).",
-      "cherry-pick": "Isolated upstream bugfix taken directly. Manual promotion.",
-      "eigenbau": "HestiaRE-native OR origin not auto-confirmable (see note)."
+      "verbatim": "Upstream file we track closely (churn <=3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
+      "derived": "Reimplemented or diverged from upstream on purpose (churn >3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
+      "eigenbau": "HestiaRE-native: no upstream counterpart. The one curated value - a recompute never changes it. An 'inspired by' pointer belongs in the note, not in upstream_path."
     },
     "third_party_note": "Third-party vendored code is tracked in VENDORED.json, not here; those paths are excluded to keep the two manifests disjoint.",
     "reorg_note": "#119 dissolved upstream install/deb/ into share/; paths do not line up 1:1. Matches are exact-path first, then unique basename; unmatched files are marked eigenbau with a note and need manual origin confirmation. Best-effort, not authoritative.",
     "aggregate": {
-      "upstream_mapped_files": 88,
-      "eigenbau_files": 113,
-      "weighted_pct": 14
-    }
+      "upstream_mapped_files": 71,
+      "eigenbau_files": 125,
+      "weighted_pct": 8,
+      "weighted_pct_note": "text files only - binary entries are byte-compared, not line-counted"
+    },
+    "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it. Byte-compared entries carry no pct at all - there is no percentage to have: the reseed reads their `identical` flag, text entries their pct."
   },
   "files": [
     {
@@ -75,18 +76,11 @@
     {
       "path": "apache2/httpd-prerotate/awstats",
       "source_type": "eigenbau",
-      "upstream_path": "install/deb/logrotate/httpd-prerotate/awstats",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 4,
-        "our_lines": 4,
-        "added": 1,
-        "removed": 1,
-        "pct": 25,
-        "measured_at": "2026-08-12"
-      },
-      "note": "basename-matched (path reorg by #119); confirm origin"
+      "divergence": null,
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/logrotate/httpd-prerotate/awstats (25% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "apache2/logrotate",
@@ -261,18 +255,11 @@
     {
       "path": "crowdsec/README.md",
       "source_type": "eigenbau",
-      "upstream_path": "README.md",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 138,
-        "our_lines": 31,
-        "added": 24,
-        "removed": 131,
-        "pct": 92,
-        "measured_at": "2026-08-12"
-      },
-      "note": ""
+      "divergence": null,
+      "note": "Former upstream_path pointer, unconfirmed: README.md (92% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "crowdsec/acquis.d/hestia-nginx.yaml",
@@ -375,7 +362,7 @@
     },
     {
       "path": "dovecot/2.3/conf.d/10-auth.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/conf.d/10-auth.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -391,7 +378,7 @@
     },
     {
       "path": "dovecot/2.3/conf.d/10-logging.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/conf.d/10-logging.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -407,7 +394,7 @@
     },
     {
       "path": "dovecot/2.3/conf.d/10-mail.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/conf.d/10-mail.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -439,7 +426,7 @@
     },
     {
       "path": "dovecot/2.3/conf.d/10-ssl.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/conf.d/10-ssl.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -456,22 +443,15 @@
     {
       "path": "dovecot/2.3/conf.d/15-lda.conf",
       "source_type": "eigenbau",
-      "upstream_path": "install/common/dovecot/2.4/conf.d/15-lda.conf",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 66,
-        "our_lines": 11,
-        "added": 5,
-        "removed": 60,
-        "pct": 84,
-        "measured_at": "2026-08-12"
-      },
-      "note": "basename-matched (path reorg by #119); confirm origin"
+      "divergence": null,
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/common/dovecot/2.4/conf.d/15-lda.conf (84% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "dovecot/2.3/conf.d/20-imap.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/conf.d/20-imap.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -487,7 +467,7 @@
     },
     {
       "path": "dovecot/2.3/conf.d/20-pop3.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/conf.d/20-pop3.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -503,7 +483,7 @@
     },
     {
       "path": "dovecot/2.3/conf.d/90-quota.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/conf.d/90-quota.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -519,7 +499,7 @@
     },
     {
       "path": "dovecot/2.3/conf.d/auth-passwdfile.conf.ext",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/conf.d/auth-passwdfile.conf.ext",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -535,7 +515,7 @@
     },
     {
       "path": "dovecot/2.3/dovecot.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/dovecot.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -552,22 +532,15 @@
     {
       "path": "dovecot/2.3/sieve/15-lda.conf",
       "source_type": "eigenbau",
-      "upstream_path": "install/common/dovecot/2.4/conf.d/15-lda.conf",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 66,
-        "our_lines": 19,
-        "added": 13,
-        "removed": 60,
-        "pct": 86,
-        "measured_at": "2026-08-12"
-      },
-      "note": "basename-matched (path reorg by #119); confirm origin"
+      "divergence": null,
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/common/dovecot/2.4/conf.d/15-lda.conf (86% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "dovecot/2.3/sieve/20-managesieve.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/sieve/20-managesieve.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -583,7 +556,7 @@
     },
     {
       "path": "dovecot/2.3/sieve/90-sieve-extprograms.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/sieve/90-sieve-extprograms.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -599,7 +572,7 @@
     },
     {
       "path": "dovecot/2.3/sieve/90-sieve.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.3/sieve/90-sieve.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -615,7 +588,7 @@
     },
     {
       "path": "dovecot/2.4/conf.d/10-auth.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/conf.d/10-auth.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -631,7 +604,7 @@
     },
     {
       "path": "dovecot/2.4/conf.d/10-logging.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/conf.d/10-logging.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -647,7 +620,7 @@
     },
     {
       "path": "dovecot/2.4/conf.d/10-mail.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/conf.d/10-mail.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -663,7 +636,7 @@
     },
     {
       "path": "dovecot/2.4/conf.d/10-master.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/conf.d/10-master.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -695,7 +668,7 @@
     },
     {
       "path": "dovecot/2.4/conf.d/10-ssl.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/conf.d/10-ssl.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -743,7 +716,7 @@
     },
     {
       "path": "dovecot/2.4/conf.d/20-imap.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/conf.d/20-imap.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -759,7 +732,7 @@
     },
     {
       "path": "dovecot/2.4/conf.d/20-pop3.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/conf.d/20-pop3.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -775,7 +748,7 @@
     },
     {
       "path": "dovecot/2.4/conf.d/90-quota.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/conf.d/90-quota.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -791,7 +764,7 @@
     },
     {
       "path": "dovecot/2.4/conf.d/auth-passwdfile.conf.ext",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/conf.d/auth-passwdfile.conf.ext",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -824,22 +797,15 @@
     {
       "path": "dovecot/2.4/sieve/15-lda.conf",
       "source_type": "eigenbau",
-      "upstream_path": "install/common/dovecot/2.4/conf.d/15-lda.conf",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 66,
-        "our_lines": 22,
-        "added": 16,
-        "removed": 60,
-        "pct": 86,
-        "measured_at": "2026-08-12"
-      },
-      "note": "basename-matched (path reorg by #119); confirm origin"
+      "divergence": null,
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/common/dovecot/2.4/conf.d/15-lda.conf (86% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "dovecot/2.4/sieve/20-managesieve.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/sieve/20-managesieve.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -855,7 +821,7 @@
     },
     {
       "path": "dovecot/2.4/sieve/90-sieve-extprograms.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/sieve/90-sieve-extprograms.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -871,7 +837,7 @@
     },
     {
       "path": "dovecot/2.4/sieve/90-sieve.conf",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "install/common/dovecot/2.4/sieve/90-sieve.conf",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -1319,22 +1285,15 @@
     {
       "path": "nginx/apps/phpmyadmin.inc",
       "source_type": "eigenbau",
-      "upstream_path": "install/deb/nginx/phpmyadmin.inc",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 25,
-        "our_lines": 13,
-        "added": 12,
-        "removed": 25,
-        "pct": 97,
-        "measured_at": "2026-08-12"
-      },
-      "note": "basename-matched (path reorg by #119); confirm origin"
+      "divergence": null,
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/nginx/phpmyadmin.inc (97% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/cloudflare.inc",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "install/deb/nginx/cloudflare.inc",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -1425,7 +1384,7 @@
     },
     {
       "path": "nginx/webmail/default_disabled.stpl",
-      "source_type": "eigenbau",
+      "source_type": "verbatim",
       "upstream_path": "install/deb/templates/mail/nginx/default_disabled.stpl",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -1441,7 +1400,7 @@
     },
     {
       "path": "nginx/webmail/default_disabled.tpl",
-      "source_type": "eigenbau",
+      "source_type": "verbatim",
       "upstream_path": "install/deb/templates/mail/nginx/default_disabled.tpl",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -1458,34 +1417,20 @@
     {
       "path": "nginx/webmail/default_snappymail.stpl",
       "source_type": "eigenbau",
-      "upstream_path": "install/deb/templates/mail/nginx/default_snappymail.stpl",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 57,
-        "our_lines": 41,
-        "added": 14,
-        "removed": 30,
-        "pct": 45,
-        "measured_at": "2026-08-12"
-      },
-      "note": "basename-matched (path reorg by #119); confirm origin"
+      "divergence": null,
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/templates/mail/nginx/default_snappymail.stpl (45% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/webmail/default_snappymail.tpl",
       "source_type": "eigenbau",
-      "upstream_path": "install/deb/templates/mail/nginx/default_snappymail.tpl",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 48,
-        "our_lines": 32,
-        "added": 14,
-        "removed": 30,
-        "pct": 55,
-        "measured_at": "2026-08-12"
-      },
-      "note": "basename-matched (path reorg by #119); confirm origin"
+      "divergence": null,
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/templates/mail/nginx/default_snappymail.tpl (55% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/webmail/disabled.stpl",
@@ -1526,34 +1471,20 @@
     {
       "path": "nginx/webmail/web_system.stpl",
       "source_type": "eigenbau",
-      "upstream_path": "install/deb/templates/mail/nginx/web_system.stpl",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 49,
-        "our_lines": 42,
-        "added": 15,
-        "removed": 22,
-        "pct": 41,
-        "measured_at": "2026-08-12"
-      },
-      "note": "basename-matched (path reorg by #119); confirm origin"
+      "divergence": null,
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/templates/mail/nginx/web_system.stpl (41% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/webmail/web_system.tpl",
       "source_type": "eigenbau",
-      "upstream_path": "install/deb/templates/mail/nginx/web_system.tpl",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 39,
-        "our_lines": 31,
-        "added": 13,
-        "removed": 21,
-        "pct": 49,
-        "measured_at": "2026-08-12"
-      },
-      "note": "basename-matched (path reorg by #119); confirm origin"
+      "divergence": null,
+      "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/templates/mail/nginx/web_system.tpl (49% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "nginx/websocket-upgrade.conf",
@@ -1648,34 +1579,20 @@
     {
       "path": "panel-php/cli/php.ini",
       "source_type": "eigenbau",
-      "upstream_path": "src/deb/php/php.ini",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 1977,
-        "our_lines": 11,
-        "added": 10,
-        "removed": 1976,
-        "pct": 100,
-        "measured_at": "2026-08-12"
-      },
-      "note": "no upstream counterpart found; native or renamed - confirm manually"
+      "divergence": null,
+      "note": "no upstream counterpart found; native or renamed - confirm manually. Former upstream_path pointer, unconfirmed: src/deb/php/php.ini (100% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "panel-php/fpm/php.ini",
       "source_type": "eigenbau",
-      "upstream_path": "src/deb/php/php.ini",
-      "upstream_ref": "bc3720a",
+      "upstream_path": null,
+      "upstream_ref": null,
       "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 1977,
-        "our_lines": 48,
-        "added": 36,
-        "removed": 1965,
-        "pct": 99,
-        "measured_at": "2026-08-12"
-      },
-      "note": "no upstream counterpart found; native or renamed - confirm manually"
+      "divergence": null,
+      "note": "no upstream counterpart found; native or renamed - confirm manually. Former upstream_path pointer, unconfirmed: src/deb/php/php.ini (99% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
       "path": "panel-php/hestia-php.service",

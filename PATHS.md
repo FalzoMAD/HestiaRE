@@ -27,7 +27,7 @@
 ├── templates/         Selectable only: nginx/ vhosts, php/ pool profiles, docker/ (#219)
 ├── .sessions/         PHP panel session files (owner: hestia)
 │                      (data/ fully dissolved — see /etc/hestia below)
-├── func/              Shared bash function libraries
+├── include/           Shared bash function libraries
 ├── log -> /var/log/hestia   Symlink
 ├── ssl/               Panel SSL certificate and key
 └── web/               Panel PHP UI
@@ -176,7 +176,7 @@ User home structure — unchanged from HestiaCP, bidirectional backup compatibil
 └── tmp/                  PHP session temp (`/home/*/tmp/sess_*`)
 ```
 
-Variables set in `func/main.sh`:
+Variables set in `include/main.sh`:
 
 | Variable | Value |
 |----------|-------|

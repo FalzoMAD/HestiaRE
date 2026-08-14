@@ -15,8 +15,8 @@ verify_csrf($_GET);
 if (!empty($_GET["database"])) {
 	$v_database = quoteshellarg($_GET["database"]);
 	exec(HESTIA_CMD . "h-delete-database " . $user . " " . $v_database, $output, $return_var);
+	check_return_code($return_var, $output);
 }
-check_return_code($return_var, $output);
 unset($output);
 
 $back = $_SESSION["back"];

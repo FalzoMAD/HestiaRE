@@ -36,14 +36,14 @@ nat_ip="$7"
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
-# shellcheck source=/usr/local/hestia/func/ip.sh
-source $HESTIA/func/ip.sh
-# shellcheck source=/usr/local/hestia/func/domain.sh
-source $HESTIA/func/domain.sh
-# shellcheck source=/usr/local/hestia/func/web-model.sh
-source $HESTIA/func/web-model.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/ip.sh
+source $HESTIA/include/ip.sh
+# shellcheck source=/usr/local/hestia/include/domain.sh
+source $HESTIA/include/domain.sh
+# shellcheck source=/usr/local/hestia/include/web-model.sh
+source $HESTIA/include/web-model.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -146,7 +146,7 @@ chmod 660 $CONF_DIR/ips/$ip
 rebuild_ip_web_config "$ip"
 
 # Proxy real-IP module registration (dormant unless the conf exists). The per-IP
-# web/proxy config generation moved into rebuild_ip_web_config (func/web-model.sh, #120).
+# web/proxy config generation moved into rebuild_ip_web_config (include/web-model.sh, #120).
 if [ -n "$PROXY_SYSTEM" ]; then
 	# mod_extract_forwarded
 	fw_conf="/etc/$WEB_SYSTEM/conf.d/mod_extract_forwarded.conf"
