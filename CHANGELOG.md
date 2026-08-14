@@ -58,10 +58,17 @@ opens above it.
 
 - **Binary files were bucketed by a measurement that cannot see them** (#551 follow-up). `git diff
   --numstat` reports `-` for a binary, which the manifests recorded as 0% churn - so every image, font
-  and compiled catalogue read as unchanged from upstream. 43 entries were labelled `verbatim` while
-  actually differing, 41 of them the `.mo` translation catalogues HestiaRE maintains itself. Binaries
-  are now compared byte-wise (`method: "bytes"`, pct 0 or 100) and excluded from the line-based
-  weighted average.
+  and compiled catalogue read as unchanged from upstream, including three that plainly are not
+  (`favicon.png`, `logo.png`, `fa-solid-900.woff2`). Binaries are detected by content now and compared
+  by hash: `method: "bytes"` with an `identical` flag and **no pct at all**, because a hash yields equal
+  or unequal and a percentage there would be a number nobody measured. The reseed branches on that flag;
+  byte-compared entries stay out of the line-based weighted average.
+
+- **The 40 compiled translation catalogues are pinned to the snapshot they arrived with** (#551
+  follow-up). All of them are byte-identical to the fork snapshot and no HestiaRE commit has ever
+  touched one - there is no `.po` source in the tree to edit. Measured against a newer upstream they
+  read as diverged, which describes upstream's continuing translation work rather than anything of
+  ours, so each entry now carries that ref and the note saying why.
 
 - **Panel action pages consumed results their command never produced** (#670). Found by rendering all
   144 panel pages against a fresh v0.15.2 install. `/schedule/restore/` answered a request without a

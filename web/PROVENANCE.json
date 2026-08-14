@@ -19,7 +19,7 @@
       "weighted_pct": 8,
       "weighted_pct_note": "text files only - binary entries are byte-compared, not line-counted"
     },
-    "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it."
+    "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it. Byte-compared entries carry no pct at all - there is no percentage to have: the reseed reads their `identical` flag, text entries their pct."
   },
   "files": [
     {
@@ -1573,7 +1573,6 @@
         "upstream_bytes": 1150,
         "our_bytes": 1150,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -1684,7 +1683,6 @@
         "upstream_bytes": 1336,
         "our_bytes": 1232,
         "identical": false,
-        "pct": 100,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -1716,7 +1714,6 @@
         "upstream_bytes": 9087,
         "our_bytes": 8718,
         "identical": false,
-        "pct": 100,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -2818,227 +2815,213 @@
     },
     {
       "path": "locale/ar/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/ar/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 69588,
+        "upstream_bytes": 69925,
         "our_bytes": 69925,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/az/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/az/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
         "upstream_bytes": 9741,
         "our_bytes": 9741,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/bg/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/bg/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 41281,
+        "upstream_bytes": 41582,
         "our_bytes": 41582,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/bn/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/bn/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 35432,
+        "upstream_bytes": 35585,
         "our_bytes": 35585,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/bs/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/bs/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 53394,
+        "upstream_bytes": 53677,
         "our_bytes": 53677,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/ca/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/ca/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 55216,
+        "upstream_bytes": 55505,
         "our_bytes": 55505,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/cs/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/cs/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 49611,
+        "upstream_bytes": 49825,
         "our_bytes": 49825,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/da/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/da/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 52838,
+        "upstream_bytes": 53110,
         "our_bytes": 53110,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/de/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/de/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 54948,
+        "upstream_bytes": 53297,
         "our_bytes": 53297,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/el/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/el/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 25363,
+        "upstream_bytes": 25272,
         "our_bytes": 25272,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/es/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/es/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 55960,
+        "upstream_bytes": 54848,
         "our_bytes": 54848,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/fa/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/fa/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
         "upstream_bytes": 10791,
         "our_bytes": 10791,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/fi/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/fi/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
         "upstream_bytes": 7248,
         "our_bytes": 7248,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/fr/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/fr/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 49369,
+        "upstream_bytes": 49191,
         "our_bytes": 49191,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/hestiacp.pot",
@@ -3058,19 +3041,18 @@
     },
     {
       "path": "locale/hr/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/hr/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 20210,
+        "upstream_bytes": 17652,
         "our_bytes": 17652,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/hst_convert_po2mo.sh",
@@ -3106,115 +3088,108 @@
     },
     {
       "path": "locale/hu/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/hu/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 53316,
+        "upstream_bytes": 53668,
         "our_bytes": 53668,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/id/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/id/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 48334,
+        "upstream_bytes": 13067,
         "our_bytes": 13067,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/it/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/it/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 22666,
+        "upstream_bytes": 22775,
         "our_bytes": 22775,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/ja/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/ja/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 53393,
+        "upstream_bytes": 53732,
         "our_bytes": 53732,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/ka/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/ka/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 73331,
+        "upstream_bytes": 73784,
         "our_bytes": 73784,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/ko/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/ko/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
         "upstream_bytes": 9200,
         "our_bytes": 9200,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/ku/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/ku/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 24927,
+        "upstream_bytes": 25068,
         "our_bytes": 25068,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/languages.json",
@@ -3234,291 +3209,273 @@
     },
     {
       "path": "locale/nl/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/nl/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 53969,
+        "upstream_bytes": 53003,
         "our_bytes": 53003,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/no/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/no/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 17656,
+        "upstream_bytes": 17836,
         "our_bytes": 17836,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/pl/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/pl/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 40051,
+        "upstream_bytes": 40204,
         "our_bytes": 40204,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/pt-br/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/pt-br/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 55653,
+        "upstream_bytes": 54608,
         "our_bytes": 54608,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/pt/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/pt/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 51977,
+        "upstream_bytes": 50706,
         "our_bytes": 50706,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/ro/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/ro/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 19156,
+        "upstream_bytes": 19286,
         "our_bytes": 19286,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/ru/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/ru/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 72732,
+        "upstream_bytes": 71372,
         "our_bytes": 71372,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/sk/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/sk/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 21161,
+        "upstream_bytes": 21269,
         "our_bytes": 21269,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/sq/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/sq/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 19062,
+        "upstream_bytes": 19281,
         "our_bytes": 19281,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/sr/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/sr/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
         "upstream_bytes": 17279,
         "our_bytes": 17279,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/sv/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/sv/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
         "upstream_bytes": 8089,
         "our_bytes": 8089,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/th/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/th/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
         "upstream_bytes": 15568,
         "our_bytes": 15568,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/tr/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/tr/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 54364,
+        "upstream_bytes": 54592,
         "our_bytes": 54592,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/uk/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/uk/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 67343,
+        "upstream_bytes": 65855,
         "our_bytes": 65855,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/ur/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/ur/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
         "upstream_bytes": 10060,
         "our_bytes": 10060,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/vi/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/vi/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 57795,
+        "upstream_bytes": 58075,
         "our_bytes": 58075,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/zh-cn/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/zh-cn/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 49627,
+        "upstream_bytes": 49868,
         "our_bytes": 49868,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "locale/zh-tw/LC_MESSAGES/hestiacp.mo",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/locale/zh-tw/LC_MESSAGES/hestiacp.mo",
-      "upstream_ref": "bc3720a",
+      "upstream_ref": "c684e21",
       "last_reconciled": "2026-08-12",
       "divergence": {
-        "upstream_bytes": 49874,
+        "upstream_bytes": 50084,
         "our_bytes": 50084,
-        "identical": false,
-        "pct": 100,
+        "identical": true,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
-      "note": ""
+      "note": "Compiled catalogue, carried unchanged from the fork snapshot - HestiaRE has never edited one and ships no .po source to edit. Pinned to that ref because a comparison against a newer upstream shows upstream's continuing translation work, not a divergence of ours."
     },
     {
       "path": "login/index.php",
@@ -5364,7 +5321,6 @@
         "upstream_bytes": 13936,
         "our_bytes": 13936,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5380,7 +5336,6 @@
         "upstream_bytes": 11120,
         "our_bytes": 11120,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5396,7 +5351,6 @@
         "upstream_bytes": 15184,
         "our_bytes": 15184,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5412,7 +5366,6 @@
         "upstream_bytes": 11940,
         "our_bytes": 11940,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5428,7 +5381,6 @@
         "upstream_bytes": 13880,
         "our_bytes": 13880,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5444,7 +5396,6 @@
         "upstream_bytes": 10996,
         "our_bytes": 10996,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5460,7 +5411,6 @@
         "upstream_bytes": 15204,
         "our_bytes": 15204,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5476,7 +5426,6 @@
         "upstream_bytes": 12052,
         "our_bytes": 12052,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5492,7 +5441,6 @@
         "upstream_bytes": 13972,
         "our_bytes": 13972,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5508,7 +5456,6 @@
         "upstream_bytes": 11096,
         "our_bytes": 11096,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5524,7 +5471,6 @@
         "upstream_bytes": 15144,
         "our_bytes": 15144,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5540,7 +5486,6 @@
         "upstream_bytes": 12008,
         "our_bytes": 12008,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5556,7 +5501,6 @@
         "upstream_bytes": 13964,
         "our_bytes": 13964,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5572,7 +5516,6 @@
         "upstream_bytes": 11052,
         "our_bytes": 11052,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5588,7 +5531,6 @@
         "upstream_bytes": 15160,
         "our_bytes": 15160,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5604,7 +5546,6 @@
         "upstream_bytes": 11944,
         "our_bytes": 11944,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5620,7 +5561,6 @@
         "upstream_bytes": 15204,
         "our_bytes": 15204,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5636,7 +5576,6 @@
         "upstream_bytes": 11984,
         "our_bytes": 11984,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5652,7 +5591,6 @@
         "upstream_bytes": 13972,
         "our_bytes": 13972,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5668,7 +5606,6 @@
         "upstream_bytes": 11100,
         "our_bytes": 11100,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5684,7 +5621,6 @@
         "upstream_bytes": 150124,
         "our_bytes": 119156,
         "identical": false,
-        "pct": 100,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5700,7 +5636,6 @@
         "upstream_bytes": 19708,
         "our_bytes": 19708,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
@@ -5716,7 +5651,6 @@
         "upstream_bytes": 16244,
         "our_bytes": 16244,
         "identical": true,
-        "pct": 0,
         "method": "bytes",
         "measured_at": "2026-08-14"
       },
