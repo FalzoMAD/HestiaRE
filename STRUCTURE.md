@@ -375,11 +375,15 @@ updates. `CONF_DIR="${CONF_DIR:-/etc/hestia}"` (`func/main.sh:48`), exported via
 | `/etc/hestia/install.conf` | wizard recipe **and** live `COMPONENT_*` state (#103) |
 | `/etc/hestia/conf/` | panel config; `$HESTIA/conf` is now a **symlink** here (#129) |
 | `/etc/hestia/{firewall,ips,queue,users}/` | moved out of `$HESTIA/data/` (#148/#154/#156) |
+| `/etc/hestia/packages/` | hosting packages: instance state, panel-created; seeded from `share/hestia/packages/` at install (#663) |
 | `/etc/hestia/.done.*` | installer idempotency sentinels |
 
 The `$HESTIA/data/` tree is **fully dissolved**. `install/` (build-time tree) was split
-into `share/` (shipped runtime assets) + `templates/` (`WEBTPL`) + `packages/` (#119,
-#150); `HESTIA_INSTALL_DIR`/`HESTIA_COMMON_DIR` no longer exist.
+into `share/` (shipped runtime assets) + `templates/` (`WEBTPL`); `HESTIA_INSTALL_DIR`/
+`HESTIA_COMMON_DIR` no longer exist. The `packages/` split of #119/#150 was revised in #663:
+hosting packages are instance state (panel-created, restore-writable), so they live in
+`/etc/hestia/packages/`, and the shipped `default`/`system.pkg` seed there from
+`share/hestia/packages/` at install.
 
 ### The model is the install scope (#639)
 
@@ -450,7 +454,7 @@ These are settled decisions (`README.md:53-59`, registry `CODEMAP.json` `removed
 
 | Removed | Was | Gap to respect |
 |---|---|---|
-| **bind9 / DNS** (#58/#283) | ~50 `*-dns-*` commands, `templates/dns`, `edit_dns` page | No DNS zone-management code path. DNS is external/managed. Only `h-list-mail-domain-dkim-dns` kept - it formats mail-stack data for somebody else's DNS. The last leftovers went in #619: `DNSTPL`, the package fields (`DNS_TEMPLATE`/`DNS_DOMAINS`/`DNS_RECORDS`/`NS`), the `U_DNS_*` counters and `h-list-user-ns`. |
+| **bind9 / DNS** (#58/#283) | ~50 `*-dns-*` commands, `templates/dns`, `edit_dns` page | No DNS zone-management code path. DNS is external/managed. Only `h-list-mail-domain-dkim-dns` kept - it formats mail-stack data for somebody else's DNS. The last leftovers went in #619: `DNSTPL`, the package fields (`DNS_TEMPLATE`/`DNS_DOMAINS`/`DNS_RECORDS`/`NS`), the `U_DNS_*` counters and `h-list-user-ns`. The firewall seed keeps the original rule ids, so **6 and 7 are absent** where upstream opens port 53 - a gap, not a missing rule. Renumbering would move every later rule, and a firewall rule id is its precedence. |
 | **REST API** (#146) | `v-*-api-*`, web API endpoint, key auth | No programmatic surface. Entry points are the panel UI and `h-*` CLI only; integrations shell out to `h-*`. |
 | **Web Terminal** (#59) | node sidecar service, `list_terminal` page, `/_shell/` | No browser->shell bridge; `/_shell/` absent by design. Operators use SSH. Closed GHSA-gh6f. |
 | **vsftpd** (#213) | `install/deb/vsftpd` | FTP is **ProFTPd only** (`share/proftpd/`); `FTP_SYSTEM` must not branch on vsftpd. |

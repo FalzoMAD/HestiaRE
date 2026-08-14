@@ -192,8 +192,8 @@ EOF
 
 	# DH params in the base stage: nginx and dovecot both fatal without /etc/ssl/dhparam.pem, 
     # so it must exist before any TLS service starts. Ship the curated file; regenerate only as a fallback.
-	if [ -s "$HESTIA/share/ssl/dhparam.pem" ]; then
-		cp -f "$HESTIA/share/ssl/dhparam.pem" /etc/ssl/dhparam.pem
+	if [ -s "$HESTIA/share/hestia/dhparam.pem" ]; then
+		cp -f "$HESTIA/share/hestia/dhparam.pem" /etc/ssl/dhparam.pem
 	else
 		echo "[ ! ] shipped dhparam.pem missing — generating (this is slow)..."
 		openssl dhparam -out /etc/ssl/dhparam.pem 2048
@@ -248,12 +248,12 @@ install_panel() {
 		KEY_END=$(grep -n "END RSA" /tmp/hst.pem | head -n1 | cut -f1 -d:)
 	fi
 	(
-		cd "$HESTIA/ssl"
+		cd "$HESTIA_SSL"
 		sed -n "1,${CRT_END}p" /tmp/hst.pem > certificate.crt
 		sed -n "${KEY_START},${KEY_END}p" /tmp/hst.pem > certificate.key
 	)
-	chown root:mail "$HESTIA/ssl/"* 2> /dev/null || true
-	chmod 660 "$HESTIA/ssl/"*
+	chown root:mail "$HESTIA_SSL/"* 2> /dev/null || true
+	chmod 660 "$HESTIA_SSL/"*
 	rm -f /tmp/hst.pem
 
 	echo "[ * ] Configuring Caddy..."
@@ -495,6 +495,9 @@ install_mail() {
 	chmod 640 /etc/exim4/srs.conf /etc/exim4/exim4.conf.template
 	chown root:"$EXIM_USR" /etc/exim4/srs.conf
 	rm -rf /etc/exim4/domains && mkdir -p /etc/exim4/domains
+	# SNI lookup dir: filenames are the SNI names, contents are links into the customer's own
+	# mail conf. Group mail so exim traverses it, not world-readable so the domain list is not.
+	mkdir -p "$MAIL_SNI_DIR" && chown root:mail "$MAIL_SNI_DIR" && chmod 0750 "$MAIL_SNI_DIR"
 	rm -f /etc/alternatives/mta
 	ln -s /usr/sbin/exim4 /etc/alternatives/mta
 	update-rc.d -f sendmail remove > /dev/null 2>&1 || true
@@ -668,11 +671,17 @@ init_hestia_structure() {
 	[ -L /var/log/hestia ] && rm -f /var/log/hestia || true
 	mkdir -p /var/log/hestia
 	ln -sf /var/log/hestia "$HESTIA/log"
-	# templates/ and packages/ ship at the install root (tarball) — not created here.
-	mkdir -p "$HESTIA/conf" "$HESTIA/ssl" \
+	# templates/ still ships at the install root (tarball). packages/ is instance state now (#663),
+	# so it lives under CONF_DIR and is created here, then seeded from share/ below.
+	mkdir -p "$HESTIA/conf" "$HESTIA_SSL" \
 		"$CONF_DIR/ips" "$CONF_DIR/queue" \
-		"$CONF_DIR/users" "$CONF_DIR/firewall" \
-		"$HESTIA/.sessions"
+		"$CONF_DIR/users" "$CONF_DIR/firewall" "$CONF_DIR/packages" \
+		"$CONF_DIR/hooks" "$HESTIA/.sessions"
+	# The LE hook mechanism already exists in h-add-letsencrypt-domain (#4925); create the directory
+	# and drop its README so the hooks are discoverable rather than a secret handshake.
+	[ -e "$CONF_DIR/hooks/README.md" ] || cp -f "$HESTIA/share/hestia/hooks/README.md" "$CONF_DIR/hooks/README.md"
+	# caddy, exim and proftpd all read the panel certificate as non-root, all of them via group mail.
+	chown root:mail "$HESTIA_SSL" && chmod 0750 "$HESTIA_SSL"
 	touch "$CONF_DIR/queue/backup.pipe" "$CONF_DIR/queue/disk.pipe" \
 		"$CONF_DIR/queue/webstats.pipe" "$CONF_DIR/queue/restart.pipe" \
 		"$CONF_DIR/queue/traffic.pipe" "$CONF_DIR/queue/daily.pipe" \
@@ -701,7 +710,7 @@ configure_hestia() {
 
 	echo "[ * ] Configuring Hestia Control Panel..."
 	mkdir -p /etc/sudoers.d
-	cp -f "$HESTIA/share/sudo/hestia" /etc/sudoers.d/
+	cp -f "$HESTIA/share/hestia/sudoers" /etc/sudoers.d/hestia
 	chmod 440 /etc/sudoers.d/hestia
 	cp -f "$HESTIA/share/hestia/logrotate" /etc/logrotate.d/hestia 2>/dev/null || true
 
@@ -709,11 +718,17 @@ configure_hestia() {
 	# commands) — just prune dangling ones left by a renamed/removed h-*
 	find "$HESTIA/bin" -maxdepth 1 -name 'v-*' -xtype l -delete 2> /dev/null || true
 
-	echo "[ * ] Installing firewall data; customizing shipped packages..."
-	# packages/ and templates/ ship at the install root via the tarball — no copy.
+	echo "[ * ] Installing firewall data; seeding hosting packages..."
+	# Seed the shipped default/system.pkg into the instance dir, then customize (#663). Never
+	# clobber an admin-created package that a re-run might find: copy per file only when absent.
+	for _pkg in "$HESTIA/share/hestia/packages/"*.pkg; do
+		[ -e "$_pkg" ] || continue
+		_dest="$CONF_DIR/packages/$(basename "$_pkg")"
+		[ -e "$_dest" ] || cp -f "$_pkg" "$_dest"
+	done
 	local -a dom; IFS='.' read -r -a dom <<< "$HESTIA_HOSTNAME"
 	if [ -n "${dom[-2]:-}" ] && [ -n "${dom[-1]:-}" ]; then
-		sed -i "s/domain.tld/${dom[-2]}.${dom[-1]}/g" "$HESTIA/packages/"*.pkg 2>/dev/null || true
+		sed -i "s/domain.tld/${dom[-2]}.${dom[-1]}/g" "$CONF_DIR/packages/"*.pkg 2>/dev/null || true
 	fi
 	mkdir -p "$CONF_DIR/firewall"
 	cp -f "$HESTIA/share/firewall/rules.conf" "$CONF_DIR/firewall/rules.conf"
@@ -903,9 +918,22 @@ finalize_install() {
 	systemctl restart caddy hestia-php 2>/dev/null || true
 	chown hestia:hestia "$HESTIA/.sessions"
 	mkdir -p /backup && chmod 755 /backup
-	echo "[ * ] Scheduling Let's Encrypt host certificate..."
-	echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && $HESTIA/bin/h-add-letsencrypt-host" \
-		> /etc/cron.d/hestia-ssl
+	# Now, with the cron only as fallback: @reboot alone meant a box that is never rebooted never got
+	# a certificate. The web domain exists and the web server is up by here, so ACME can answer.
+	echo "[ * ] Requesting Let's Encrypt host certificate..."
+	if "$BIN/h-add-letsencrypt-host" >> "$LOG" 2>&1; then
+		echo "[ OK ] Panel certificate issued for $HESTIA_HOSTNAME"
+		rm -f /etc/cron.d/hestia-ssl
+	else
+		echo "[ !! ] Let's Encrypt could not issue yet (public DNS for $HESTIA_HOSTNAME and port 80"
+		echo "       have to be reachable). The panel keeps its self-signed certificate; the request"
+		echo "       is retried once after the next reboot, or run h-add-letsencrypt-host by hand."
+		echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && $HESTIA/bin/h-add-letsencrypt-host" \
+			> /etc/cron.d/hestia-ssl
+		# cron REFUSES a group- or world-writable file in /etc/cron.d and says so only in its log
+		# ("INSECURE MODE"). The installer's umask left it 0664, so this fallback never ran anywhere.
+		chmod 644 /etc/cron.d/hestia-ssl
+	fi
 	echo "[ * ] Building initial RRD graphs..."
 	"$BIN/h-update-sys-rrd" > /dev/null 2>&1 || true
 	echo "[ * ] Final package upgrade..."

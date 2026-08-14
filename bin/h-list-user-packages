@@ -27,7 +27,7 @@ json_list() {
 	echo "{"
 	for package in $packages; do
 		PACKAGE=${package/.pkg/}
-		source_conf "$HESTIA/packages/$PACKAGE.pkg"
+		source_conf "$CONF_DIR/packages/$PACKAGE.pkg"
 		echo -n '    "'$PACKAGE'": {
         "WEB_TEMPLATE": "'$WEB_TEMPLATE'",
         "PROXY_TEMPLATE": "'$PROXY_TEMPLATE'",
@@ -65,9 +65,9 @@ shell_list() {
 	echo "PKG   TPL   WEB   MAIL   DB   SHELL   DISK   CPU_QUOTA   CPU_QUOTA_PERIOD   MEMORY_LIMIT   SWAP_LIMIT   DOCKER_LIMIT   BW"
 	echo "---   ---   ---   ---   ----   --   -----   ----   ---------   ----------------   ------------   ----------   --"
 	for package in $packages; do
-		source $HESTIA/packages/$package
+		source $CONF_DIR/packages/$package
 		PACKAGE=${package/.pkg/}
-		package_data=$(cat $HESTIA/packages/$package)
+		package_data=$(cat $CONF_DIR/packages/$package)
 		package_data=$(echo "$package_data" | sed -e 's/unlimited/unlim/g')
 		parse_object_kv_list "$package_data"
 		echo -n "$PACKAGE $WEB_TEMPLATE $WEB_DOMAINS "
@@ -78,7 +78,7 @@ shell_list() {
 # PLAIN list function
 plain_list() {
 	for package in $packages; do
-		source $HESTIA/packages/$package
+		source $CONF_DIR/packages/$package
 		PACKAGE=${package/.pkg/}
 		echo -ne "$PACKAGE\t$WEB_TEMPLATE\t$PROXY_TEMPLATE\t"
 		echo -ne "$WEB_DOMAINS\t$WEB_ALIASES\t"
@@ -110,7 +110,7 @@ csv_list() {
 #----------------------------------------------------------#
 
 # Parsing packages
-packages=$(ls --sort=time $HESTIA/packages | grep .pkg)
+packages=$(ls --sort=time $CONF_DIR/packages | grep .pkg)
 
 # Listing data
 case $format in

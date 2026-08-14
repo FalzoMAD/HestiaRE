@@ -184,7 +184,7 @@
       "note": "ambiguous: 2 upstream basename candidates; confirm manually"
     },
     {
-      "path": "botpolicy/botfamilies.conf",
+      "path": "hestia/botfamilies.conf",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -893,86 +893,6 @@
       "last_reconciled": "2026-08-12",
       "divergence": null,
       "note": "no upstream counterpart found; native or renamed - confirm manually"
-    },
-    {
-      "path": "email/examples/account_ready.html",
-      "source_type": "verbatim",
-      "upstream_path": "install/common/templates/email/examples/account_ready.html",
-      "upstream_ref": "bc3720a",
-      "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 12,
-        "our_lines": 12,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12"
-      },
-      "note": ""
-    },
-    {
-      "path": "email/examples/database_credentials.html",
-      "source_type": "verbatim",
-      "upstream_path": "install/common/templates/email/examples/database_credentials.html",
-      "upstream_ref": "bc3720a",
-      "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 11,
-        "our_lines": 11,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12"
-      },
-      "note": ""
-    },
-    {
-      "path": "email/examples/email_credentials.html",
-      "source_type": "verbatim",
-      "upstream_path": "install/common/templates/email/examples/email_credentials.html",
-      "upstream_ref": "bc3720a",
-      "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 30,
-        "our_lines": 30,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12"
-      },
-      "note": ""
-    },
-    {
-      "path": "email/examples/ftp_credentials.html",
-      "source_type": "verbatim",
-      "upstream_path": "install/common/templates/email/examples/ftp_credentials.html",
-      "upstream_ref": "bc3720a",
-      "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 10,
-        "our_lines": 10,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12"
-      },
-      "note": ""
-    },
-    {
-      "path": "email/examples/reset_password.html",
-      "source_type": "verbatim",
-      "upstream_path": "install/common/templates/email/examples/reset_password.html",
-      "upstream_ref": "bc3720a",
-      "last_reconciled": "2026-08-12",
-      "divergence": {
-        "upstream_lines": 15,
-        "our_lines": 15,
-        "added": 0,
-        "removed": 0,
-        "pct": 0,
-        "measured_at": "2026-08-12"
-      },
-      "note": ""
     },
     {
       "path": "exim/dnsbl.conf",

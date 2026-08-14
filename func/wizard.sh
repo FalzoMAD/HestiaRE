@@ -607,7 +607,11 @@ fn_ask_components() {
         if [ "$type" = "fixed" ]; then COMP_VALUES["$id"]="true"; continue; fi
 
         # derived: value mirrors another component (no prompt). Source precedes it.
+        # A preset may opt out (phpMyAdmin on mailonly). has()-based like the two sites above: jq's
+        # // reads a boolean false as absent, and every opt-out here IS false.
         if [ "$type" = "derived" ]; then
+            local dfnp; dfnp=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '(.components[$id].fixed_no_prompt // {}) as $f | if ($f | has($p)) then ($f[$p] | tostring) else "" end')
+            if [ -n "$dfnp" ]; then COMP_VALUES["$id"]="$dfnp"; continue; fi
             local src; src=$(mq --arg id "$id" '.components[$id].derived_from')
             COMP_VALUES["$id"]="${COMP_VALUES[$src]:-false}"
             continue

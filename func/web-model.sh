@@ -6,7 +6,7 @@
 #                                                                           #
 # One source of truth for the web-serving model (nginx-only / both /        #
 # apache-only) so the installer and the live model switch cannot drift.     #
-# Callers: bin/h-install-hestia (install time) and the switch commands      #
+# Callers: sbin/h-install-hestia (install time) and the switch commands      #
 # (h-add-sys-nginx / -apache2, h-delete-sys-nginx / -apache2).              #
 #                                                                           #
 #===========================================================================#

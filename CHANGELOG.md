@@ -12,6 +12,148 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **Hosting packages move to `/etc/hestia/packages/`** (#663). They are instance state - created and
+  rewritten from the panel - not shipped assets, so they belong with `users/`, `ips/` and the
+  firewall data under `CONF_DIR`, out of the install root that `h-update-hestia` replaces wholesale.
+  The shipped `default`/`system.pkg` are samples now, kept in `share/hestia/packages/` and seeded
+  into the instance dir at install (only when absent, so a re-run never clobbers an admin package).
+  All 35 path references now write `$CONF_DIR/packages` directly, the same way `firewall/`, `queue/`
+  and `ips/` are referenced (no dedicated variable - the path is under `CONF_DIR` and self-evident).
+  The panel never touched the path directly, only `h-*` commands, so nothing in `web/` changed.
+
+### Added
+
+- **A user's hosting package travels with its backup and is restored** (#663). The backup archive
+  now carries the `.pkg` (and `.sh` if any) named by the account's `PACKAGE` field; a restore onto a
+  box that never had that package recreates it, instead of leaving the user pointing at a package
+  that is not there. **Add-only, never overwrite**: a package of the same name already on the target
+  is kept exactly as it is, even if its values differ - the admin owns the target definition and a
+  restore may not rewrite it. Verified both ways on a VM (missing -> deployed, present-with-
+  different-values -> untouched).
+
+### Fixed
+
+- **Notification-mail overrides were read from a path that never held them** (#393 follow-up).
+  `get_email_template()` read `share/email/`, but the shipped samples sat in `share/email/examples/`
+  one level down, so no override ever loaded - the panel always fell back to its inline default
+  text (which is why mail kept working and the gap was invisible). The samples move to
+  `templates/email/examples/` and the reader to `templates/email/`, the mixed shipped+custom tree
+  that an update overwrites but never deletes - so an admin override survives updates. This keeps
+  the upstream `data/templates/email` habit reachable under `/usr/local/hestia` rather than moving
+  it to `/etc/hestia`. A README explains the override and the per-language lookup
+  (`templates/email/<lang>/<name>.html` before `templates/email/<name>.html` before the built-in).
+
+### Fixed
+
+- **A validator character class let `|` through into a `bash`-executed queue line** (#393, GHSA-47mf
+  class). `is_object_format_valid` and eight sibling validators wrote their allowed set as
+  `[-|\.|_[:alnum:]]`; inside a bracket expression the `|` and `\` are *members*, not alternation,
+  so a pipe character passed validation. `h-schedule-user-backup-download` puts its (validated)
+  backup name **unquoted** into `conf/queue/backup.pipe`, which `h-update-sys-queue` runs through
+  `bash` as root - so a backup name like `x|command` became `h-download-backup admin x|command`, a
+  shell pipe to an attacker-named command, reachable from the panel's download form. Demonstrated on
+  a VM before and after: the crafted name is refused now, real archive names and the backup queue
+  are unaffected. The same class was corrected in all nine validators (username, service, command,
+  firewall port, cron, object name), each verified to still accept its legitimate inputs.
+
+### Changed
+
+- **What the panel must not reach moved to `sbin/`** (#209). The panel runs as user `hestia` and
+  reaches its commands through `sudo …/bin/*`, and `bin/` held more than commands: the PHP wrappers
+  and the install, uninstall and update entry points. Those are now in `/usr/local/hestia/sbin`,
+  which the sudo rule does not name, so the wildcard says what it means - `bin/` **is** the
+  panel-callable surface. A directory is a boundary that cannot rot; a list of 213 command names
+  would have. All seven are HestiaRE-native with no `v-*` symlink, so no upstream path changes.
+  Root keeps them on its `PATH`. Not moved, although never called by the panel: `h-add-sys-*` and
+  friends - the panel does call five of them (fail2ban, firewall, quota, cgroups, pma-sso), so that
+  group has no clean edge. Applies to a fresh install; no migration path before v1.
+- **`share/sudo/hestia` is now `share/hestia/sudoers`** (#209), copied to an explicit target name.
+  `share/`'s first level names a service, and sudo is a function rather than one. The target must
+  stay `/etc/sudoers.d/hestia`: sudo ignores any file in that directory whose name contains a dot.
+
+### Fixed
+
+- **The reboot fallback for the panel certificate was never eligible to run** (#564). cron refuses a
+  group- or world-writable file in `/etc/cron.d` and says so only in its own log
+  (`INSECURE MODE (group/other writable)`), and the installer's umask left `hestia-ssl` at `0664`
+  while every other file there is `0644`. Measured on a public box across a real reboot: the file
+  sat untouched and the log carried the refusal once a minute. So the missing panel certificate had
+  two independent causes, not one - this and the fact that the request only ever happened at reboot.
+- **Two commands refused every call that passed their optional argument** (#564).
+  `is_format_valid` takes variable NAMES; `h-add-mail-domain-ssl` and `h-restart-system` handed it
+  the VALUE, so `h-add-mail-domain-ssl … updatessl` and `h-restart-system yes 5` both died with
+  "names no variable". The first is the Let's Encrypt path for a mail domain, which was therefore
+  impossible; both call sites already validated the same argument correctly one line earlier. A
+  sweep over `bin/` and `func/` found no third one. `h-move-firewall-rule` had a dead sibling of
+  the same class - a `comment` validation guarded by a variable the command never sets, so the
+  guard was always false and the check never ran; removed rather than left looking like a check.
+
+### Changed
+
+- **The panel certificate and the mail SNI links leave the install root** (#564). Both sat in
+  `/usr/local/hestia/ssl/`, which `h-update-hestia` replaces wholesale on every update. The
+  certificate now lives in `/etc/ssl/hestia/`, next to the `dhparam.pem` that was already there -
+  not under `/etc/hestia/`, because that is `0700` and caddy, exim and proftpd all read the
+  certificate as non-root through group `mail` (measured: caddy cannot traverse `0700`). The exim
+  SNI lookup directory moves to `/etc/exim4/ssl/`, into the service's own configuration, which is
+  where dovecot's per-domain certificates already pointed. `/usr/local/hestia/ssl` is gone.
+  Deliberately still a flat directory of links named after the SNI: exim interpolates the name into
+  a path, and stripping a `mail.` prefix would resolve a domain literally called `mail.kunde.de` to
+  another customer's certificate.
+- **`share/ssl/` folds into `share/hestia/`** (#564): the first level under `share/` names the
+  service a file configures, and the lone `dhparam.pem` there serves nginx and dovecot alike. Its
+  runtime target `/etc/ssl/dhparam.pem` is unchanged.
+
+### Fixed
+
+- **The panel certificate is requested at the end of the install, not only after a reboot** (#656).
+  It was scheduled as an `@reboot` cron that deletes itself, so a box that is never rebooted never
+  got one - measured on a public install where the cron file was still sitting there untouched
+  while Caddy served the self-signed certificate. Everything ACME needs is in place by that point
+  in the install: the hostname's web domain exists and the web server has just been restarted. The
+  cron is written only when the immediate attempt fails, so a box without public DNS yet still gets
+  its retry, and a reboot after the install stays a recommendation rather than a requirement.
+- **The panel never took over its own Let's Encrypt certificate** (#656). `UPDATE_HOSTNAME_SSL` has
+  been in the key registry since the fork with no repair block behind it, so it was absent on every
+  box - and both readers gate on `== "yes"`, which an absent key never is. `h-add-web-domain-ssl`
+  and `h-update-letsencrypt-ssl` therefore skipped the handoff in silence. Measured on a public
+  box: LE issued for the hostname, the certificate sat in the user's domain directory, and Caddy
+  went on serving the self-signed one from install day; setting the key and re-running
+  `h-update-host-certificate` switched it over at once. Same class as the empty-value keys of #654,
+  for a key that had no default anywhere to begin with.
+- **phpMyAdmin dragged apache2 onto a box that has no apache2** (#656). Its unversioned `php-*`
+  dependencies resolve to `libapache2-mod-phpX` on some targets, which Depends on apache2 - and
+  HestiaRE never uses that apache2, it only binds `*:80`, after which nginx cannot bind its own
+  `:80`/`:443`. Measured on a fresh Ubuntu 26.04 mailonly install: apache2 arrived with phpMyAdmin,
+  nginx failed with `EADDRINUSE`, nothing answered on 443 - so the box had no webmail vhost and no
+  ACME termination, and the smoke check reported it. Ubuntu 24.04 resolved the same dependencies
+  without apache2, so it cannot be decided per release. The install now refuses apache2, but only
+  when it is not already there: passing that on an apache or both model would ask apt to remove the
+  web server.
+
+### Changed
+
+- **The mailonly preset asks nothing about databases** (#656). MariaDB is installed silently from
+  the OS repositories, because Roundcube keeps a database there and nobody else ever touches it;
+  PostgreSQL, Redis and phpMyAdmin are off without a question. The whole database screen therefore
+  disappears from that preset.
+- **The mailonly preset stops offering what a mail box has no use for** (#656): Composer, Docker,
+  the file manager and phpMyAdmin. All four were already off by default there; now they are not on
+  the screen at all, and each stays installable by hand afterwards. phpMyAdmin was the interesting
+  one - it is *derived* from the MariaDB choice, and MariaDB is genuinely needed on mailonly because
+  Roundcube keeps a database. So the derived type learned to honour a per-preset opt-out. The file
+  manager points at `/home/$user`, which on a mail box is the raw maildirs: a second way into the
+  mailbox with no IMAP semantics, where a deleted file is a lost mail. Exporting mailboxes that way
+  is a real use case, which is why it stays installable rather than being removed.
+- **Composer and Docker are no longer offered on the mailonly preset** (#656). Neither has anything
+  to serve on a box with no customer web, both were already defaulted off there, and both stay
+  installable by hand afterwards - the same reasoning CrowdSec already carries. The file manager is
+  still offered and is a separate question.
+- **MariaDB installs 11.8 by default** (#656) on the standard and nomail presets, up from 11.4.
+  11.4 stays selectable because Magento 2.4.9 is approved against it.
+
 ### Fixed
 
 - **The system configuration repair never ran** (#654). `h-repair-sys-config` sources only

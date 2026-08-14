@@ -26,7 +26,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 # object base (get_object_value appends .conf); fall back to the shipped default
 OBJ="$CONF_DIR/botfamilies"
-[ -f "$OBJ.conf" ] || OBJ="$HESTIA/share/botpolicy/botfamilies"
+[ -f "$OBJ.conf" ] || OBJ="$HESTIA/share/hestia/botfamilies"
 
 #----------------------------------------------------------#
 #                       Action                             #

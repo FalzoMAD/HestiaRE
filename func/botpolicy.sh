@@ -4,7 +4,7 @@
 # UNLIMITED; malicious traffic is CrowdSec's job (ban -> 403), never here. Available on ANY web
 # install (nginx-only, apache-only, both), whether or not CrowdSec is installed.
 #
-# Model: an admin bot-family table (share/botpolicy/botfamilies.conf, seeded to
+# Model: an admin bot-family table (share/hestia/botfamilies.conf, seeded to
 # /etc/hestia/botfamilies.conf). Each family = name / UA match / lenient+strict rate / enabled,
 # plus conf-only advanced burst + nodelay. Per domain each family is off/lenient/strict (the
 # web.conf BOTLIMIT field). nginx keys per family PER DOMAIN ($host:family, so customers don't share
@@ -22,7 +22,7 @@
 botpolicy_seed_families() {
 	mkdir -p "$CONF_DIR"
 	[ -f "$CONF_DIR/botfamilies.conf" ] \
-		|| cp -f "$HESTIA/share/botpolicy/botfamilies.conf" "$CONF_DIR/botfamilies.conf"
+		|| cp -f "$HESTIA/share/hestia/botfamilies.conf" "$CONF_DIR/botfamilies.conf"
 }
 
 # "120r/m" -> "120 60"; "2r/s" -> "2 1" (count + window seconds for mod_qos). Fallback "60 60".

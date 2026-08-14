@@ -152,6 +152,7 @@
     "DB_MARIADB": {
       "group": "db",
       "type": "checkbox",
+      "fixed_no_prompt": { "mailonly": true },
       "label": "MariaDB",
       "description": "MySQL-compatible DB server (incl. phpMyAdmin)",
       "question": "Install MariaDB?",
@@ -170,6 +171,7 @@
     "DB_POSTGRESQL": {
       "group": "db",
       "type": "checkbox",
+      "fixed_no_prompt": { "mailonly": false },
       "label": "PostgreSQL",
       "description": "Object-relational DB server (web UI via Adminer addon)",
       "question": "Install PostgreSQL?",
@@ -179,6 +181,7 @@
     "DB_REDIS": {
       "group": "db",
       "type": "checkbox",
+      "fixed_no_prompt": { "mailonly": false },
       "label": "Redis",
       "description": "In-memory cache / key-value store (not a DB server)",
       "question": "Install Redis?",
@@ -190,6 +193,7 @@
       "type": "version_select",
       "question": "Which MariaDB version to install?",
       "visible_if": "DB_MARIADB == true",
+      "fixed_no_prompt": { "mailonly": "__os__" },
       "options": [
         { "value": "12.3",   "source": "mariadb_repo", "description": "MariaDB.org repo" },
         { "value": "11.8",   "source": "mariadb_repo", "description": "MariaDB.org repo" },
@@ -197,22 +201,23 @@
         { "value": "__os__", "source": "os_default", "label_template": "{version} (OS default)", "description": "Distribution default" }
       ],
       "default": {
-        "standard":  "11.4",
+        "standard":  "11.8",
         "compact":   "11.8",
         "latest":    "12.3",
         "singlephp": "__os__",
-        "nomail":    "11.4",
+        "nomail":    "11.8",
         "mailonly":  "__os__",
         "custom":    null
       },
-      "note": "Only shown/asked when MariaDB was chosen (visible_if DB_MARIADB == true). 11.4 because of Magento 2.4.9 (Adobe-approved); 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime."
+      "note": "Only asked when MariaDB was chosen. Default 11.8; 11.4 stays selectable for Magento 2.4.9. 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime, and fixed on mailonly."
     },
 
     "DB_PHPMYADMIN": {
       "group": "db",
       "type": "derived",
       "derived_from": "DB_MARIADB",
-      "note": "Implicit: installed without its own question as soon as MariaDB is chosen (value = DB_MARIADB)."
+      "fixed_no_prompt": { "mailonly": false },
+      "note": "Installed without its own question as soon as MariaDB is chosen. Not on mailonly: the database there belongs to the webmailer, so a DB admin UI is surface without a purpose - and it was how apt dragged apache2 onto a box that must not have one (#656)."
     },
 
     "MAIL_BLOCK_PRESENT": {
@@ -299,12 +304,13 @@
       "type": "checkbox",
       "label": "Composer",
       "description": "PHP dependency manager (system-wide)",
+      "fixed_no_prompt": { "mailonly": false },
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false, "custom": null },
       "source_default": {
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
         "singlephp": "os_package", "nomail": "os_package"
       },
-      "note": "latest uses the upstream installer script (getcomposer.org) instead of the OS package for a more current version. Backlog: an h-update-sys-composer command to switch the source afterwards."
+      "note": "latest uses the upstream installer script (getcomposer.org) instead of the OS package. Backlog: an h-update-sys-composer to switch the source afterwards. Not on mailonly - no customer web to build for; h-add-sys-composer installs it by hand."
     },
 
     "ADDON_CROWDSEC": {
@@ -383,8 +389,9 @@
       "type": "checkbox",
       "label": "Docker",
       "description": "Rootless containers per customer",
+      "fixed_no_prompt": { "mailonly": false },
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Shown in all presets, preset nowhere. Real resource footprint (RAM/disk), deliberately no automatic activation. Installs the host side only (#389); a customer gets a companion and their own daemon via h-add-user-docker."
+      "note": "Preset nowhere: real resource footprint, so no automatic activation. Installs the host side only (#389); a customer gets their own daemon via h-add-user-docker. Not on mailonly - nothing to put in front of a container there."
     },
 
     "ADDON_FILEMANAGER": {
@@ -392,8 +399,9 @@
       "type": "checkbox",
       "label": "FileManager",
       "description": "Web file manager",
+      "fixed_no_prompt": { "mailonly": false },
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Shown in all presets incl. mailonly, preset nowhere. TODO: dependencies on PHP version/mode still to be checked before production use."
+      "note": "Preset nowhere. Not on mailonly: it points at /home/$user, i.e. the raw maildirs - a second way into the mailbox with no IMAP semantics. Exporting them is a real use case, so it stays installable by hand. TODO: PHP version/mode dependencies before production use."
     },
 
     "ADDON_UTILITIES": {

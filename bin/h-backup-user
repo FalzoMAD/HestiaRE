@@ -279,6 +279,17 @@ cp -r $USER_DATA/user.conf $tmpdir/hestia/
 echo "WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'" > $tmpdir/hestia/web-system
 cp -r $USER_DATA/ssl $tmpdir/hestia/
 
+# The user's hosting package, so a restore onto a box that never had it can recreate it (#663). The
+# .pkg name is the PACKAGE field of the user.conf just copied. Restore only ADDS it, never
+# overwrites an existing one - see h-restore-user.
+pkg_name=$(grep -m1 "^PACKAGE=" $USER_DATA/user.conf | cut -f2 -d "'")
+if [ -n "$pkg_name" ] && [ -e "$CONF_DIR/packages/$pkg_name.pkg" ]; then
+	mkdir -p $tmpdir/hestia/packages
+	cp -f "$CONF_DIR/packages/$pkg_name.pkg" $tmpdir/hestia/packages/
+	[ -e "$CONF_DIR/packages/$pkg_name.sh" ] && cp -f "$CONF_DIR/packages/$pkg_name.sh" $tmpdir/hestia/packages/
+	echo -e "$(date "+%F %T") package $pkg_name" | tee -a $BACKUP/$user.log
+fi
+
 if [ -e "$USER_DATA/stats.log" ]; then
 	echo -e "$(date "+%F %T") stats.log" | tee -a $BACKUP/$user.log
 	cp -r $USER_DATA/stats.log $tmpdir/hestia/

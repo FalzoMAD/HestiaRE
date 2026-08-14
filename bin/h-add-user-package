@@ -147,9 +147,9 @@ BACKUPS='$BACKUPS'
 BACKUPS_INCREMENTAL='$BACKUPS_INCREMENTAL'
 TIME='$time'
 DATE='$date'
-" > "$HESTIA/packages/$package.pkg"
+" > "$CONF_DIR/packages/$package.pkg"
 
-chmod 644 "$HESTIA/packages/$package.pkg"
+chmod 644 "$CONF_DIR/packages/$package.pkg"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

@@ -51,9 +51,16 @@ RRD_STEP=300
 BIN=$HESTIA/bin
 # instance config root; fallback covers installs whose hestia.env predates the var
 CONF_DIR="${CONF_DIR:-/etc/hestia}"
+# Panel certificate: out of the install root, which h-update-hestia replaces wholesale. Not under
+# CONF_DIR either - that is 0700 and caddy, exim and proftpd all read this as non-root (#564).
+HESTIA_SSL="/etc/ssl/hestia"
+# Exim looks a certificate up by interpolating the SNI name into a path, so it needs a directory
+# whose filenames ARE the SNI names. Kept flat and exact rather than stripping a "mail." prefix:
+# a domain literally called mail.kunde.de would strip to another customer's domain (#564).
+MAIL_SNI_DIR="/etc/exim4/ssl"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 # CLI helpers run through the hestia-php wrapper (panel PHP version indirection)
-HESTIA_PHP="$HESTIA/bin/hestia-php"
+HESTIA_PHP="$HESTIA/sbin/hestia-php"
 USER_DATA=$CONF_DIR/users/$user
 # Selectable vhost templates (the customer picks these), the non-selectable ones served
 # from share/, and the FPM pool profiles. PHPTPL is its own anchor rather than
@@ -288,11 +295,11 @@ generate_password() {
 # Package existence check
 is_package_valid() {
 	if [ -z $1 ]; then
-		if [ ! -e "$HESTIA/packages/$package.pkg" ]; then
+		if [ ! -e "$CONF_DIR/packages/$package.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $package doesn't exist"
 		fi
 	else
-		if [ ! -e "$HESTIA/packages/$1.pkg" ]; then
+		if [ ! -e "$CONF_DIR/packages/$1.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $1 doesn't exist"
 		fi
 	fi
@@ -300,7 +307,7 @@ is_package_valid() {
 }
 
 is_package_new() {
-	if [ -e "$HESTIA/packages/$1.pkg" ]; then
+	if [ -e "$CONF_DIR/packages/$1.pkg" ]; then
 		echo "Error: package $1 already exists."
 		log_event "$E_EXISTS" "$ARGUMENTS"
 		exit "$E_EXISTS"
@@ -974,11 +981,11 @@ is_user_format_valid() {
 	else
 		if [ -n "$3" ]; then
 			maxlenght=$(($3 - 2))
-			if ! [[ "$1" =~ ^[[:alnum:]][-|\.|_[:alnum:]]{0,$maxlenght}[[:alnum:]]$ ]]; then
+			if ! [[ "$1" =~ ^[[:alnum:]][-._[:alnum:]]{0,$maxlenght}[[:alnum:]]$ ]]; then
 				check_result "$E_INVALID" "invalid $2 format :: $1"
 			fi
 		else
-			if ! [[ "$1" =~ ^[[:alnum:]][-|\.|_[:alnum:]]{0,28}[[:alnum:]]$ ]]; then
+			if ! [[ "$1" =~ ^[[:alnum:]][-._[:alnum:]]{0,28}[[:alnum:]]$ ]]; then
 				check_result "$E_INVALID" "invalid $2 format :: $1"
 			fi
 		fi
@@ -989,7 +996,7 @@ is_user_format_valid() {
 
 	# Only for new users
 	if [[ "$FROM_V_ADD_USER" == "true" ]]; then
-		if ! [[ "$1" =~ ^[a-zA-Z][-|_[:alnum:]]{0,28}[[:alnum:]]$ ]]; then
+		if ! [[ "$1" =~ ^[a-zA-Z][-_[:alnum:]]{0,28}[[:alnum:]]$ ]]; then
 			check_result "$E_INVALID" "invalid $2 format :: $1"
 		fi
 	fi
@@ -1393,7 +1400,7 @@ is_fw_port_format_valid() {
 			check_result "$E_INVALID" "invalid port format :: $1"
 		fi
 	else
-		if ! [[ "$1" =~ ^[0-9][-|,|:|0-9]{0,76}[0-9]$ ]]; then
+		if ! [[ "$1" =~ ^[0-9][-,:0-9]{0,76}[0-9]$ ]]; then
 			check_result "$E_INVALID" "invalid port format and/or more than 78 chars used :: $1"
 		fi
 	fi
@@ -1460,7 +1467,7 @@ is_cron_format_valid() {
 			check_format='ok'
 		fi
 	fi
-	if [[ "$1" =~ ^[0-9][-|,|0-9]{0,70}[\/][0-9]$ ]]; then
+	if [[ "$1" =~ ^[0-9][-,0-9]{0,70}[\/][0-9]$ ]]; then
 		check_format='ok'
 		crn_values=${1//,/ }
 		crn_values=${crn_values//-/ }
@@ -1512,7 +1519,7 @@ is_valid_swap_size() {
 }
 
 is_object_name_format_valid() {
-	if ! [[ "$1" =~ ^[-|\ |\.|_[:alnum:]]{0,50}$ ]]; then
+	if ! [[ "$1" =~ ^[-\ ._[:alnum:]]{0,50}$ ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
 	fi
 }
@@ -1527,7 +1534,7 @@ is_name_format_valid() {
 
 # Object validator
 is_object_format_valid() {
-	if ! [[ "$1" =~ ^[[:alnum:]][-|\.|_[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
+	if ! [[ "$1" =~ ^[[:alnum:]][-._[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
 	fi
 }
@@ -1578,7 +1585,7 @@ is_format_valid_shell() {
 
 # Service name validator
 is_service_format_valid() {
-	if ! [[ "$1" =~ ^[[:alnum:]][-|\.|_[:alnum:]]{0,64}$ ]]; then
+	if ! [[ "$1" =~ ^[[:alnum:]][-._[:alnum:]]{0,64}$ ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
 	fi
 }
@@ -1707,7 +1714,7 @@ is_folder_exists() {
 }
 
 is_command_valid_format() {
-	if [[ ! "$1" =~ ^v-[[:alnum:]][-|\.|_[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
+	if [[ ! "$1" =~ ^v-[[:alnum:]][-._[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
 		check_result "$E_INVALID" "Invalid command format"
 	fi
 	if [[ -n $(echo "$1" | grep -e '\-\-') ]]; then

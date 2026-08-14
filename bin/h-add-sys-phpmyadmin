@@ -51,7 +51,14 @@ fi
 echo "phpmyadmin phpmyadmin/dbconfig-install boolean false" \
 	| debconf-set-selections
 
-DEBIAN_FRONTEND=noninteractive apt-get -y install phpmyadmin
+# The php-* metas resolve to libapache2-mod-phpX on some targets, which drags in apache2; it then
+# holds *:80 and nginx cannot bind. Only refused where absent - apache2- would REMOVE a real one.
+pma_no_apache=""
+if ! dpkg-query -W -f='${Status}' apache2 2> /dev/null | grep -q "install ok installed"; then
+	pma_no_apache="apache2-"
+fi
+# shellcheck disable=SC2086  # deliberately unquoted: empty must expand to no argument at all
+DEBIAN_FRONTEND=noninteractive apt-get -y install phpmyadmin $pma_no_apache
 
 # Generate blowfish secret and write to expected location
 blowfish="$(openssl rand -base64 32 | tr -d '/+=' | cut -c1-32)"
