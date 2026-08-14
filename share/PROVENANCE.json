@@ -184,7 +184,7 @@
       "note": "ambiguous: 2 upstream basename candidates; confirm manually"
     },
     {
-      "path": "botpolicy/botfamilies.conf",
+      "path": "hestia/botfamilies.conf",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
