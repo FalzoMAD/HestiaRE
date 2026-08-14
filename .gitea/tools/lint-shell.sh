@@ -65,6 +65,20 @@ else
 fi
 [ -n "$ALL" ] && changed=("${ALL_FILES[@]}")
 
+# A moved file's baseline lives at its OLD path. Looking it up by the new path finds nothing, both
+# comparisons below then read an empty base, and every inherited finding is rated as introduced by
+# this change - the func/ -> include/ rename lit up six libraries nobody had edited. Map new -> old
+# from git's own rename detection so the gate keeps judging regressions, not moves.
+# Fails safe: if git does not detect a rename (heavy edit alongside the move), the file falls back to
+# its own path and its findings read as new - a false red, never a false green.
+declare -A BASE_PATH
+if git rev-parse --verify --quiet "$BASE" > /dev/null; then
+	while IFS=$'\t' read -r _ old new; do
+		[ -n "${new:-}" ] && BASE_PATH["$new"]="$old"
+	done < <(git diff --find-renames --diff-filter=R --name-status "$BASE"...HEAD 2> /dev/null)
+fi
+base_of() { echo "${BASE_PATH[$1]:-$1}"; }
+
 rc=0
 echo "== tier 1: shellcheck (severity=error), ${#ALL_FILES[@]} files =="
 if out=$(shellcheck -S error -f gcc "${ALL_FILES[@]}" 2> /dev/null) && [ -z "$out" ]; then
@@ -89,7 +103,7 @@ else
 	for f in "${changed[@]}"; do
 		now=$(shellcheck -S warning -f gcc "$f" 2> /dev/null | sc_sig)
 		[ -z "$now" ] && continue
-		base=$(git show "$BASE:$f" 2> /dev/null | shellcheck -S warning -f gcc - 2> /dev/null | sc_sig)
+		base=$(git show "$BASE:$(base_of "$f")" 2> /dev/null | shellcheck -S warning -f gcc - 2> /dev/null | sc_sig)
 		added=$(comm -23 <(echo "$now") <(echo "$base"))
 		if [ -n "$added" ]; then
 			echo "--- $f"
@@ -117,7 +131,7 @@ else
 	fmt_debt=0
 	for f in "${changed[@]}"; do
 		shfmt -d "$f" > /dev/null 2>&1 && continue
-		if git show "$BASE:$f" 2> /dev/null | shfmt -d - > /dev/null 2>&1; then
+		if git show "$BASE:$(base_of "$f")" 2> /dev/null | shfmt -d - > /dev/null 2>&1; then
 			# clean before, dirty now (or newly added) -> a regression this change introduced
 			echo "--- $f"
 			shfmt -d "$f" 2>&1 | sed 's/^/   /'
