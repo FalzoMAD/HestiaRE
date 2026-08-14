@@ -12,6 +12,26 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **Hosting packages move to `/etc/hestia/packages/`** (#663). They are instance state - created and
+  rewritten from the panel - not shipped assets, so they belong with `users/`, `ips/` and the
+  firewall data under `CONF_DIR`, out of the install root that `h-update-hestia` replaces wholesale.
+  The shipped `default`/`system.pkg` are samples now, kept in `share/hestia/packages/` and seeded
+  into the instance dir at install (only when absent, so a re-run never clobbers an admin package).
+  All 35 path references went through one `HESTIA_PACKAGE_DIR` variable; the panel never touched the
+  path directly, only `h-*` commands, so nothing in `web/` changed.
+
+### Added
+
+- **A user's hosting package travels with its backup and is restored** (#663). The backup archive
+  now carries the `.pkg` (and `.sh` if any) named by the account's `PACKAGE` field; a restore onto a
+  box that never had that package recreates it, instead of leaving the user pointing at a package
+  that is not there. **Add-only, never overwrite**: a package of the same name already on the target
+  is kept exactly as it is, even if its values differ - the admin owns the target definition and a
+  restore may not rewrite it. Verified both ways on a VM (missing -> deployed, present-with-
+  different-values -> untouched).
+
 ### Fixed
 
 - **A validator character class let `|` through into a `bash`-executed queue line** (#393, GHSA-47mf

@@ -58,6 +58,10 @@ HESTIA_SSL="/etc/ssl/hestia"
 # whose filenames ARE the SNI names. Kept flat and exact rather than stripping a "mail." prefix:
 # a domain literally called mail.kunde.de would strip to another customer's domain (#564).
 MAIL_SNI_DIR="/etc/exim4/ssl"
+# Hosting packages: instance state, created from the panel and rewritten on every add/edit. Under
+# CONF_DIR like users/ ips/ firewall/, not the install root that h-update-hestia replaces. The
+# shipped default/system.pkg are seeded here at install from share/hestia/packages/ (#663).
+HESTIA_PACKAGE_DIR="$CONF_DIR/packages"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 # CLI helpers run through the hestia-php wrapper (panel PHP version indirection)
 HESTIA_PHP="$HESTIA/sbin/hestia-php"
@@ -295,11 +299,11 @@ generate_password() {
 # Package existence check
 is_package_valid() {
 	if [ -z $1 ]; then
-		if [ ! -e "$HESTIA/packages/$package.pkg" ]; then
+		if [ ! -e "$HESTIA_PACKAGE_DIR/$package.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $package doesn't exist"
 		fi
 	else
-		if [ ! -e "$HESTIA/packages/$1.pkg" ]; then
+		if [ ! -e "$HESTIA_PACKAGE_DIR/$1.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $1 doesn't exist"
 		fi
 	fi
@@ -307,7 +311,7 @@ is_package_valid() {
 }
 
 is_package_new() {
-	if [ -e "$HESTIA/packages/$1.pkg" ]; then
+	if [ -e "$HESTIA_PACKAGE_DIR/$1.pkg" ]; then
 		echo "Error: package $1 already exists."
 		log_event "$E_EXISTS" "$ARGUMENTS"
 		exit "$E_EXISTS"

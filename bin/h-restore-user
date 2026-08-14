@@ -183,6 +183,22 @@ if [ "$create_user" = 'yes' ]; then
 	cp -r $tmpdir/$backup_system/ssl $USER_DATA/ > /dev/null 2>&1
 	cp $tmpdir/$backup_system/backup-excludes.conf $USER_DATA/ > /dev/null 2>&1
 
+	# The user's hosting package, if the archive carried one (#663). ADD ONLY: a package of that name
+	# already on this box is left exactly as it is, even if its values differ - the admin owns the
+	# target definition, and a restore may never rewrite it. Without this a custom package missing on
+	# the target left the user pointing at a .pkg that is not there.
+	if [ -d "$tmpdir/$backup_system/packages" ]; then
+		for _pkg in "$tmpdir/$backup_system/packages/"*; do
+			[ -e "$_pkg" ] || continue
+			_dest="$HESTIA_PACKAGE_DIR/$(basename "$_pkg")"
+			if [ -e "$_dest" ]; then
+				echo "$(date "+%F %T") package $(basename "$_pkg") exists on target, kept unchanged" >> $tmpdir/restore.log 2>/dev/null || true
+			else
+				cp -f "$_pkg" "$_dest"
+			fi
+		done
+	fi
+
 	# Creates the account with a freshly allocated uid, before anything is unpacked, so
 	# tar can resolve the archived owner name onto it.
 	rebuild_user_conf
