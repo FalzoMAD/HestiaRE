@@ -197,15 +197,15 @@
         { "value": "__os__", "source": "os_default", "label_template": "{version} (OS default)", "description": "Distribution default" }
       ],
       "default": {
-        "standard":  "11.4",
+        "standard":  "11.8",
         "compact":   "11.8",
         "latest":    "12.3",
         "singlephp": "__os__",
-        "nomail":    "11.4",
+        "nomail":    "11.8",
         "mailonly":  "__os__",
         "custom":    null
       },
-      "note": "Only shown/asked when MariaDB was chosen (visible_if DB_MARIADB == true). 11.4 because of Magento 2.4.9 (Adobe-approved); 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime."
+      "note": "Only shown/asked when MariaDB was chosen (visible_if DB_MARIADB == true). 11.8 is the default; 11.4 stays selectable because Magento 2.4.9 is approved against it. 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime."
     },
 
     "DB_PHPMYADMIN": {
@@ -299,12 +299,13 @@
       "type": "checkbox",
       "label": "Composer",
       "description": "PHP dependency manager (system-wide)",
+      "fixed_no_prompt": { "mailonly": false },
       "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false, "custom": null },
       "source_default": {
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
         "singlephp": "os_package", "nomail": "os_package"
       },
-      "note": "latest uses the upstream installer script (getcomposer.org) instead of the OS package for a more current version. Backlog: an h-update-sys-composer command to switch the source afterwards."
+      "note": "latest uses the upstream installer script (getcomposer.org) instead of the OS package for a more current version. Backlog: an h-update-sys-composer command to switch the source afterwards. NOT offered on mailonly (fixed_no_prompt): there is no customer web to build for, and it stays installable by hand via h-add-sys-composer."
     },
 
     "ADDON_CROWDSEC": {
@@ -383,8 +384,9 @@
       "type": "checkbox",
       "label": "Docker",
       "description": "Rootless containers per customer",
+      "fixed_no_prompt": { "mailonly": false },
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Shown in all presets, preset nowhere. Real resource footprint (RAM/disk), deliberately no automatic activation. Installs the host side only (#389); a customer gets a companion and their own daemon via h-add-user-docker."
+      "note": "Preset nowhere: real resource footprint (RAM/disk), so no automatic activation. Installs the host side only (#389); a customer gets a companion and their own daemon via h-add-user-docker. NOT offered on mailonly (fixed_no_prompt) - a mailonly box has no customer web to put in front of a container, and h-add-sys-docker installs it by hand if one is wanted anyway."
     },
 
     "ADDON_FILEMANAGER": {

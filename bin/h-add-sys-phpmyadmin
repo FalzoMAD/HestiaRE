@@ -51,7 +51,21 @@ fi
 echo "phpmyadmin phpmyadmin/dbconfig-install boolean false" \
 	| debconf-set-selections
 
-DEBIAN_FRONTEND=noninteractive apt-get -y install phpmyadmin
+# phpMyAdmin pulls the unversioned php-* metas, and on some targets those resolve to
+# libapache2-mod-phpX, which Depends on apache2. HestiaRE serves phpMyAdmin through Caddy and never
+# uses that apache2 - but it binds *:80, so nginx cannot bind its own :80/:443 afterwards. Measured
+# on Ubuntu 26.04 mailonly: apache2 arrived with this command, nginx failed with EADDRINUSE, and the
+# box answered nothing on 443 - no webmail vhost, no ACME. Ubuntu 24.04 resolved the same metas
+# without it, so this is not a target-wide rule and cannot be decided by the release.
+#
+# Only refused when apache2 is not already there: passing apache2- on a box that legitimately runs
+# apache2 (the both and apache-only models) would ask apt to REMOVE the web server.
+pma_no_apache=""
+if ! dpkg-query -W -f='${Status}' apache2 2> /dev/null | grep -q "install ok installed"; then
+	pma_no_apache="apache2-"
+fi
+# shellcheck disable=SC2086  # deliberately unquoted: empty must expand to no argument at all
+DEBIAN_FRONTEND=noninteractive apt-get -y install phpmyadmin $pma_no_apache
 
 # Generate blowfish secret and write to expected location
 blowfish="$(openssl rand -base64 32 | tr -d '/+=' | cut -c1-32)"

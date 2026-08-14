@@ -14,6 +14,27 @@ opens above it.
 
 ### Fixed
 
+- **phpMyAdmin dragged apache2 onto a box that has no apache2** (#656). Its unversioned `php-*`
+  dependencies resolve to `libapache2-mod-phpX` on some targets, which Depends on apache2 - and
+  HestiaRE never uses that apache2, it only binds `*:80`, after which nginx cannot bind its own
+  `:80`/`:443`. Measured on a fresh Ubuntu 26.04 mailonly install: apache2 arrived with phpMyAdmin,
+  nginx failed with `EADDRINUSE`, nothing answered on 443 - so the box had no webmail vhost and no
+  ACME termination, and the smoke check reported it. Ubuntu 24.04 resolved the same dependencies
+  without apache2, so it cannot be decided per release. The install now refuses apache2, but only
+  when it is not already there: passing that on an apache or both model would ask apt to remove the
+  web server.
+
+### Changed
+
+- **Composer and Docker are no longer offered on the mailonly preset** (#656). Neither has anything
+  to serve on a box with no customer web, both were already defaulted off there, and both stay
+  installable by hand afterwards - the same reasoning CrowdSec already carries. The file manager is
+  still offered and is a separate question.
+- **MariaDB installs 11.8 by default** (#656) on the standard and nomail presets, up from 11.4.
+  11.4 stays selectable because Magento 2.4.9 is approved against it.
+
+### Fixed
+
 - **The system configuration repair never ran** (#654). `h-repair-sys-config` sources only
   `func/main.sh`, which does not pull in `func/syshealth.sh`, so both of its modes answered
   `command not found` - and then logged the repair as executed. It was the only command calling a
