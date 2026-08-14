@@ -18,8 +18,8 @@ force=$3
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -128,7 +128,7 @@ fi
 
 # The docker cap is applied whatever RESOURCES_LIMIT says: it exists only for docker customers,
 # and the toggle is off by default - a preset that silently does nothing is worse than none.
-source $HESTIA/func/docker.sh
+source $HESTIA/include/docker.sh
 docker_slice_apply "$user" "$(get_user_value '$DOCKER_LIMIT')"
 #----------------------------------------------------------#
 #                       Hestia                             #

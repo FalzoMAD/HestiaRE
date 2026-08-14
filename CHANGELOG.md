@@ -14,6 +14,19 @@ opens above it.
 
 ### Changed
 
+- **`func/` is now `include/`, and `func/internal/` is dissolved.** The directory holds sourced
+  libraries - constants, path anchors, whole subsystems like the nftables renderer - not only
+  functions, and the one-file `internal/` subdirectory promised a boundary the tree does not
+  enforce. 18 files, ~1876 references rewritten across `bin/`, `sbin/`, `include/`, `share/` and
+  `install.sh`; `web/` never referenced the directory. `sanitize_html.php` moves up one level with
+  its two loaders. The two references that matter beyond a path rewrite are the lint gate's
+  `is_shell()` regex and the `.editorconfig` glob - both decide which files get checked at all, so
+  a stale one would have made the gate go green by looking at 18 files less; verified the tier-1
+  count is unchanged at 546. New `include/PROVENANCE.json` records per-file upstream heritage
+  (9 upstream-mapped, 9 HestiaRE-native, 28% weighted raw churn) and names the three upstream
+  `func/` files deliberately not adopted. No migration path: an updated box would keep a stale
+  `func/` that nothing sources, which the no-migration-before-v1 rule answers with a reinstall.
+
 - **Hosting packages move to `/etc/hestia/packages/`** (#663). They are instance state - created and
   rewritten from the panel - not shipped assets, so they belong with `users/`, `ips/` and the
   firewall data under `CONF_DIR`, out of the install root that `h-update-hestia` replaces wholesale.
@@ -40,7 +53,7 @@ opens above it.
   callers referenced them as `"$BIN/x"` - a variable, so a grep for `bin/hestia-php-confd` did not
   find them and they kept pointing at a path with no file behind it. A fresh install died in the
   panel stage on `$BIN/hestia-php-confd`, and `hestia install`, `hestia update` and
-  `hestia uninstall` all dispatched into nothing. `func/main.sh` now anchors `SBIN=$HESTIA/sbin`
+  `hestia uninstall` all dispatched into nothing. `include/main.sh` now anchors `SBIN=$HESTIA/sbin`
   next to `BIN`, and all seven sites use it. A smoke check (`check_sbin_not_under_bin`) derives the
   command set from what is actually in `sbin/` and fails on an empty directory, so a future move
   cannot go quiet the same way.
@@ -167,7 +180,7 @@ opens above it.
 ### Fixed
 
 - **The system configuration repair never ran** (#654). `h-repair-sys-config` sources only
-  `func/main.sh`, which does not pull in `func/syshealth.sh`, so both of its modes answered
+  `include/main.sh`, which does not pull in `include/syshealth.sh`, so both of its modes answered
   `command not found` - and then logged the repair as executed. It was the only command calling a
   `syshealth_*` function without the source line every other one has. With it working, a running
   box gained **25 absent keys**, most of the `POLICY_*` set among them; those reached the panel as
@@ -352,7 +365,7 @@ read side of the object accessors with it.
   and a customer-facing offline switch (`h-add-web-domain-offline`) serves a 503 maintenance page.
 - **Proxy caching is a switch** (#587), not a template variant: `h-add-web-domain-cache` with a
   duration, on any template.
-- **Panel users get their uid from a dedicated band** (`func/identity.sh`, #388), deterministic per
+- **Panel users get their uid from a dedicated band** (`include/identity.sh`, #388), deterministic per
   username, with the companion block one thousand below. A smoke guard checks the preconditions -
   `UID_MAX`/`GID_MAX` below the band, subordinate ranges wide enough, no two panel users sharing a
   uid - because a collision only surfaces much later.
@@ -393,7 +406,7 @@ read side of the object accessors with it.
   fingerprint of their `install.conf`; re-answering the wizard re-runs what changed. A legacy empty
   marker no longer counts as done.
 - **PROVENANCE recomputed for all three folders** against `upstream/hestiacp@bc3720a` (snapshot
-  2026-08-10). `DNSTPL` is gone from `func/main.sh` with the rest of the DNS leftovers, and
+  2026-08-10). `DNSTPL` is gone from `include/main.sh` with the rest of the DNS leftovers, and
   PATHS.md/STRUCTURE.md/CODEMAP carry the flattened template tree.
 - **Scanner bans drop, credential bans still reject** (#555): the verdict is per jail chain.
 - **`/proc` hardening lives in `/etc/fstab`**, not an `@reboot` cron job, and its exemption gid is
@@ -527,7 +540,7 @@ three-way model.
 
 - **CrowdSec** (#186) - an nginx-gated, removable addon in four layers (local decisions, CAPI,
   a fleet mesh, and an L3 feeder), offered in the wizard as one three-way choice.
-- **Server-native web bot rate-limiting** (#482) - `func/botpolicy.sh`, nginx `limit_req` or
+- **Server-native web bot rate-limiting** (#482) - `include/botpolicy.sh`, nginx `limit_req` or
   apache `mod_qos`, independent of CrowdSec so a box without it still throttles bots.
 - **Shell lint gate** (#477), check-only, two tiers - both judging regressions rather than the
   ~240 inherited findings.
@@ -574,7 +587,7 @@ divergence and per-folder `PROVENANCE.json` for per-file upstream heritage.
 - Live web-serving model switch (#120): `h-add-sys-nginx`, `h-add-sys-apache2`,
   `h-delete-sys-nginx`, `h-delete-sys-apache2` change a running server between
   nginx-only / both / apache-only (previously fixed at install). Four thin commands over
-  one shared core (`func/web-model.sh`); the model is derived from the configured
+  one shared core (`include/web-model.sh`); the model is derived from the configured
   component set. Runs as a maintenance operation: an exclusive freeze serializes domain
   ops and defers reloads (h-restart-web/-proxy/-service, apache logrotate, LE renewal)
   for the flip; snapshot + rollback (with a crash sentinel + `--recover`) means no
@@ -927,7 +940,7 @@ entries are grouped per release.
 - Bundled `hestia-nginx`/`hestia-php` services — the panel now runs on
   OS-repo Caddy and a dedicated Sury PHP-FPM pool, see Changed (#24, #25)
 - Legacy hestia package auto-update subsystem (#128) and the dead
-  `func/upgrade.sh` (#197)
+  `include/upgrade.sh` (#197)
 - Composer dependencies in the panel — the few remaining libraries are
   vendored (#56)
 - Node.js build chain for panel assets — native ESM modules, vendored

@@ -16,8 +16,8 @@ format=${1-shell}
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source "$HESTIA/func/main.sh"
+# shellcheck source=/usr/local/hestia/include/main.sh
+source "$HESTIA/include/main.sh"
 
 # The live file exim reads per message (exim4.conf.template: readfile /etc/exim4/dnsbl.conf).
 # There is no shadow copy - this is the source of truth.

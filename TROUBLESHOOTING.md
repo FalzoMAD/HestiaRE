@@ -77,7 +77,7 @@ If the problem is a wrong choice in the recipe (`/etc/hestia/install.conf`),
 re-run the wizard, then the installer:
 
 ```bash
-bash /usr/local/hestia/func/wizard.sh     # or:  hestia configure
+bash /usr/local/hestia/include/wizard.sh     # or:  hestia configure
 h-install-hestia                          # or:  hestia install
 ```
 

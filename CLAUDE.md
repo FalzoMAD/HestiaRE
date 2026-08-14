@@ -156,8 +156,8 @@ upstream/hestiacp HestiaCP snapshot, READ ONLY, never modify
 ### Key files
 ```
 install.sh        bootstrap: prereqs, fetch release, run wizard, hand off to h-install-hestia
-func/wizard.sh    interactive wizard (manifest-driven) → writes /etc/hestia/install.conf
-func/helper.sh    installer helpers: hestia_apt, load_os_profile, seed_hestia_etc
+include/wizard.sh    interactive wizard (manifest-driven) → writes /etc/hestia/install.conf
+include/helper.sh    installer helpers: hestia_apt, load_os_profile, seed_hestia_etc
 sbin/h-install-hestia non-interactive installer (reads install.conf, COMPONENT_*-gated)
 sbin/hestia       umbrella: hestia install|configure|update|uninstall|status
 VERSION           empty placeholder, filled at build time — never edit
@@ -168,7 +168,7 @@ CLAUDE.md         this file
 ### Directories (HestiaCP origin, being refined)
 ```
 bin/              CLI commands (h-*; v-* symlinks via Issue #23)
-func/             shared bash function libraries
+include/          shared bash function libraries
 share/            install-time service configs + assets (absorbed the old install/ tree, #119)
 web/              panel UI (plain PHP, no framework)
 src/              frontend assets
@@ -195,7 +195,7 @@ conf/             service configuration templates
 
 Changing something that already existed — especially inherited from HestiaCP — is only safe once you
 know who else uses it. The issue scope is *not* the change's scope. Enumerate consumers **across the
-whole tree**, `bin/` + `func/` + `web/` + `share/` + `install.sh`, not just the files in the diff:
+whole tree**, `bin/` + `include/` + `web/` + `share/` + `install.sh`, not just the files in the diff:
 
 - **A shared function**: every caller. A grep of the defining file alone is not an audit — it is how
   four live callers of a "dead" helper get missed.
@@ -239,7 +239,7 @@ an empty or zero reference set fail rather than pass. State in the guard's comme
 
 ### Fresh-install verification (installer / firewall / fail2ban changes)
 
-Any change to `h-install-hestia`, `func/fail2ban.sh`, the firewall renderer, or the service configs they
+Any change to `h-install-hestia`, `include/fail2ban.sh`, the firewall renderer, or the service configs they
 apply must be verified against a **genuinely fresh from-scratch install**, not only a re-run of the apply
 step on an already-populated box. Re-running on a box that already has domains, proftpd, a whitelist, etc.
 is what hid two separate breaks: the v0.12.2 template-include gap, and the installer aborting in the

@@ -47,7 +47,7 @@ for t in shellcheck shfmt; do
 done
 
 # The shell surface: the CLI, the sourced libraries, the bootstrap. v-* are symlinks (skipped by -f).
-is_shell() { [[ "$1" =~ ^(bin/h-|func/.*\.sh$|install\.sh$|\.gitea/tools/.*\.sh$) ]]; }
+is_shell() { [[ "$1" =~ ^(bin/h-|include/.*\.sh$|install\.sh$|\.gitea/tools/.*\.sh$) ]]; }
 
 mapfile -t ALL_FILES < <(git ls-files | while read -r f; do
 	is_shell "$f" && [ -f "$f" ] && echo "$f"
@@ -64,6 +64,20 @@ else
 	ALL=1
 fi
 [ -n "$ALL" ] && changed=("${ALL_FILES[@]}")
+
+# A moved file's baseline lives at its OLD path. Looking it up by the new path finds nothing, both
+# comparisons below then read an empty base, and every inherited finding is rated as introduced by
+# this change - the func/ -> include/ rename lit up six libraries nobody had edited. Map new -> old
+# from git's own rename detection so the gate keeps judging regressions, not moves.
+# Fails safe: if git does not detect a rename (heavy edit alongside the move), the file falls back to
+# its own path and its findings read as new - a false red, never a false green.
+declare -A BASE_PATH
+if git rev-parse --verify --quiet "$BASE" > /dev/null; then
+	while IFS=$'\t' read -r _ old new; do
+		[ -n "${new:-}" ] && BASE_PATH["$new"]="$old"
+	done < <(git diff --find-renames --diff-filter=R --name-status "$BASE"...HEAD 2> /dev/null)
+fi
+base_of() { echo "${BASE_PATH[$1]:-$1}"; }
 
 rc=0
 echo "== tier 1: shellcheck (severity=error), ${#ALL_FILES[@]} files =="
@@ -89,7 +103,7 @@ else
 	for f in "${changed[@]}"; do
 		now=$(shellcheck -S warning -f gcc "$f" 2> /dev/null | sc_sig)
 		[ -z "$now" ] && continue
-		base=$(git show "$BASE:$f" 2> /dev/null | shellcheck -S warning -f gcc - 2> /dev/null | sc_sig)
+		base=$(git show "$BASE:$(base_of "$f")" 2> /dev/null | shellcheck -S warning -f gcc - 2> /dev/null | sc_sig)
 		added=$(comm -23 <(echo "$now") <(echo "$base"))
 		if [ -n "$added" ]; then
 			echo "--- $f"
@@ -108,7 +122,7 @@ else
 	fi
 
 	# Formatting is judged as "do not make it worse", not "clean up on sight". 26 inherited files
-	# still deviate, several of them the installer and func/main.sh; demanding a reformat from whoever
+	# still deviate, several of them the installer and include/main.sh; demanding a reformat from whoever
 	# next edits one would bury their change - exactly what a mass reformat does, only piecemeal.
 	# So: a file that was clean in the base must stay clean, and a new file must start clean; a file
 	# that was already dirty is reported and left alone.
@@ -117,7 +131,7 @@ else
 	fmt_debt=0
 	for f in "${changed[@]}"; do
 		shfmt -d "$f" > /dev/null 2>&1 && continue
-		if git show "$BASE:$f" 2> /dev/null | shfmt -d - > /dev/null 2>&1; then
+		if git show "$BASE:$(base_of "$f")" 2> /dev/null | shfmt -d - > /dev/null 2>&1; then
 			# clean before, dirty now (or newly added) -> a regression this change introduced
 			echo "--- $f"
 			shfmt -d "$f" 2>&1 | sed 's/^/   /'

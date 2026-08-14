@@ -20,10 +20,10 @@ user=$1
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
-# shellcheck source=/usr/local/hestia/func/docker.sh
-source $HESTIA/func/docker.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/docker.sh
+source $HESTIA/include/docker.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 

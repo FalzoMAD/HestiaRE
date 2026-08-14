@@ -43,7 +43,7 @@ There is no compiled artifact, no private package repo, and no build toolchain r
 
 Because there are no packages doing the setup work, the installer had to be rebuilt around that source-tarball model. It is now a clean two-stage flow:
 
-- **`install.sh` (bootstrap):** installs prerequisites, detects the OS, fetches and extracts the release, runs the interactive **manifest-driven wizard** (`func/wizard.sh`) which writes `/etc/hestia/install.conf`, and seeds `/etc/hestia` so the `h-*` commands can run.
+- **`install.sh` (bootstrap):** installs prerequisites, detects the OS, fetches and extracts the release, runs the interactive **manifest-driven wizard** (`include/wizard.sh`) which writes `/etc/hestia/install.conf`, and seeds `/etc/hestia` so the `h-*` commands can run.
 - **`h-install-hestia` (installer):** non-interactive, reads `install.conf`, and is **component-gated and idempotent** — every subsystem is guarded by a flag, so profiles (minimal / standard) and optional add-ons (via `h-add-*` / `h-delete-*`) compose cleanly and re-runs don't fight themselves.
 
 A post-install smoke test then verifies that the services implied by the chosen configuration actually came up.

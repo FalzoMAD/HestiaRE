@@ -3,11 +3,11 @@
 # options: (none)
 #
 # Non-interactive installer orchestrator. Reads $CONF_DIR/install.conf
-# (produced by func/wizard.sh via install.sh) and installs HestiaRE in stages,
+# (produced by include/wizard.sh via install.sh) and installs HestiaRE in stages,
 # gated by the COMPONENT_* values. Replaces the former `just install` flow.
 #
 # Pure bash: stages are functions in this file; shared helpers live in
-# func/helper.sh; component install logic reuses the existing h-add-sys-*
+# include/helper.sh; component install logic reuses the existing h-add-sys-*
 # commands where they exist. Idempotent via $CONF_DIR/.done.* sentinels, each carrying the
 # fingerprint of the install.conf it ran with - re-answering the wizard re-runs the stages.
 
@@ -42,7 +42,7 @@ for _f in "$INSTALL_CONF" $CONF_DIR/hestia.env $CONF_DIR/conf/hestia.conf; do
 	[ -f "$_f" ] || {
 		echo "ERROR: $_f not found." >&2
 		echo "       Run the installer first:  bash install.sh" >&2
-		echo "       (or regenerate the recipe: bash /usr/local/hestia/func/wizard.sh)" >&2
+		echo "       (or regenerate the recipe: bash /usr/local/hestia/include/wizard.sh)" >&2
 		exit 1
 	}
 done
@@ -52,14 +52,14 @@ done
 set +e
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env                 # sets HESTIA
-# shellcheck source=/usr/local/hestia/func/main.sh
-source "$HESTIA/func/main.sh"                  # source_conf hestia.conf, BIN, dirs, error codes, user
-# shellcheck source=/usr/local/hestia/func/helper.sh
-source "$HESTIA/func/helper.sh"                   # hestia_apt, load_os_profile, seed_hestia_etc
-# shellcheck source=/usr/local/hestia/func/fail2ban.sh
-source "$HESTIA/func/fail2ban.sh"                # fail2ban_apply
-# shellcheck source=/usr/local/hestia/func/web-model.sh
-source "$HESTIA/func/web-model.sh"             # configure_apache2, web_model_keyset, apache_remoteip_* (#120)
+# shellcheck source=/usr/local/hestia/include/main.sh
+source "$HESTIA/include/main.sh"                  # source_conf hestia.conf, BIN, dirs, error codes, user
+# shellcheck source=/usr/local/hestia/include/helper.sh
+source "$HESTIA/include/helper.sh"                   # hestia_apt, load_os_profile, seed_hestia_etc
+# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+source "$HESTIA/include/fail2ban.sh"                # fail2ban_apply
+# shellcheck source=/usr/local/hestia/include/web-model.sh
+source "$HESTIA/include/web-model.sh"             # configure_apache2, web_model_keyset, apache_remoteip_* (#120)
 # shellcheck source=/etc/hestia/install.conf
 source "$INSTALL_CONF"                          # HESTIA_*, INSTALL_OS/PROFILE, COMPONENT_*, TOOLS_SELECTION
 set -e
@@ -283,7 +283,7 @@ install_panel() {
 # Stage: web — nginx (+ optional apache2), PHP multi-version, web pool
 # ════════════════════════════════════════════════════════════════════════════
 
-# configure_apache2 now lives in func/web-model.sh (shared with the model switch, #120)
+# configure_apache2 now lives in include/web-model.sh (shared with the model switch, #120)
 
 install_web() {
 	stage_done web && { echo "[ skip ] web already configured"; return 0; }
@@ -352,7 +352,7 @@ install_web() {
 	# Web bot rate-limiting (Layer B): server-native, always available (independent of CrowdSec).
 	# Seed the bot-family conf + render the front's rate-limit config. nginx fronts in nginx-only +
 	# both; apache does Layer B only when it is the public front (apache-only, via mod_qos).
-	source "$HESTIA/func/botpolicy.sh"
+	source "$HESTIA/include/botpolicy.sh"
 	botpolicy_seed_families
 	if [ "$web_model" = "apache" ]; then
 		apt_install_optional "apache mod_qos (bot rate limiting)" libapache2-mod-qos || true
@@ -363,7 +363,7 @@ install_web() {
 		mkdir -p /etc/nginx/conf.d
 		botpolicy_render_nginx
 	fi
-	# One keyset table (func/web-model.sh), shared with the live model switch
+	# One keyset table (include/web-model.sh), shared with the live model switch
 	local kv
 	while IFS= read -r kv; do
 		wcv "${kv%%=*}" "${kv#*=}"
@@ -581,7 +581,7 @@ install_mail() {
 # ════════════════════════════════════════════════════════════════════════════
 install_security() {
 	stage_done security && { echo "[ skip ] security already configured"; return 0; }
-	# nftables and nothing else: it IS the backend (func/firewall.sh renders one inet table and shells
+	# nftables and nothing else: it IS the backend (include/firewall.sh renders one inet table and shells
 	# /usr/sbin/nft), and it used to arrive only as a Recommends of iptables - which Debian's base image
 	# happens to satisfy and Ubuntu's does not. iptables and ipset are gone with the old renderer: no code
 	# calls either binary any more. fw_legacy_teardown still retires an older box's iptables ruleset, but it
@@ -625,7 +625,7 @@ install_security() {
 				systemctl restart crowdsec 2> /dev/null || true
 			fi
 			# detection + nginx Layer-A/B wiring (collections, bouncer, http glue)
-			source "$HESTIA/func/crowdsec.sh"
+			source "$HESTIA/include/crowdsec.sh"
 			crowdsec_apply || echo "[ ! ] CrowdSec wiring reported an issue (non-fatal)"
 			# 'mesh' model: arm the mechanism (publish + import timer). Inert until peers are paired,
 			# which is a two-admin step done afterwards in the panel or via the pairing commands.
@@ -800,7 +800,7 @@ configure_hestia() {
 	"$BIN/h-update-firewall" || true
 
 	# BOTH: apache2 behind nginx must see the real client IP via mod_remoteip (X-Real-IP).
-	# Same toggle the model switch uses (func/web-model.sh); it does not reload, so we do.
+	# Same toggle the model switch uses (include/web-model.sh); it does not reload, so we do.
 	if [ "${COMPONENT_WEB_SERVER:-NGINX}" = "BOTH" ]; then
 		echo "[ * ] Configuring apache2 remoteip (client IP behind nginx)..."
 		apache_remoteip_enable "$IP" "$PUB_IP"

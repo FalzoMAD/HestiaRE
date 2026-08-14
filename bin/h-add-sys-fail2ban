@@ -14,8 +14,8 @@
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state
@@ -64,7 +64,7 @@ ftp='no'
 [ -n "$FTP_SYSTEM" ] && ftp='yes'
 
 # Copies the WHOLE share/fail2ban tree, gates the jails, syncs ignoreip and starts the daemon.
-source "$HESTIA/func/fail2ban.sh"
+source "$HESTIA/include/fail2ban.sh"
 fail2ban_apply "$mail" "$ftp"
 
 if ! systemctl is-active --quiet fail2ban 2> /dev/null; then

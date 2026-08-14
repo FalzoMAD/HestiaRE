@@ -17,13 +17,13 @@ priority=$5
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
 # NOTICE renders via x-html, so sanitize before storing (allow-list; drops script/on*/js:).
-notice=$("$HESTIA_PHP" "$HESTIA/func/internal/sanitize_html.php" "$3" | sed "s/'/%quote%/g")
+notice=$("$HESTIA_PHP" "$HESTIA/include/sanitize_html.php" "$3" | sed "s/'/%quote%/g")
 
 #----------------------------------------------------------#
 #                    Verifications                         #

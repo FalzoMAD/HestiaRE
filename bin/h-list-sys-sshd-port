@@ -14,8 +14,8 @@
 format=${1-shell}
 
 # Includes
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
 
 json_list() {
 	sh_counter=$(echo "$ports" | wc -l)

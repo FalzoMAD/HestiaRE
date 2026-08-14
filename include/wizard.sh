@@ -8,9 +8,9 @@
 # recipe to $CONF_DIR/install.conf. Called by install.sh after the release
 # tarball is extracted, and also runnable standalone to regenerate the recipe:
 #
-#   bash /usr/local/hestia/func/wizard.sh                # full interactive
-#   bash /usr/local/hestia/func/wizard.sh --preset=standard   # fasttrack
-#   bash /usr/local/hestia/func/wizard.sh --os=debian-bookworm
+#   bash /usr/local/hestia/include/wizard.sh                # full interactive
+#   bash /usr/local/hestia/include/wizard.sh --preset=standard   # fasttrack
+#   bash /usr/local/hestia/include/wizard.sh --os=debian-bookworm
 #
 # After it writes install.conf, run the installer:
 #   h-install-hestia      (or: hestia install)
@@ -30,8 +30,8 @@ LOG_DIR="/var/log/hestia"
 
 # Shared install-time helpers (add_sury_repo, …). Sourcing only defines
 # functions - no side effects - so it is safe in the standalone wizard too.
-# shellcheck source=func/helper.sh
-[ -f "${INSTALL_DIR}/func/helper.sh" ] && . "${INSTALL_DIR}/func/helper.sh"
+# shellcheck source=include/helper.sh
+[ -f "${INSTALL_DIR}/include/helper.sh" ] && . "${INSTALL_DIR}/include/helper.sh"
 
 # ── State ──────────────────────────────────────────────────
 HAS_WHIPTAIL=false
@@ -679,7 +679,7 @@ fn_write_install_conf() {
     local ids=(); readarray -t ids < <(mq '.components | keys_unsorted[]')
     {
         echo "# HestiaRE install.conf"
-        echo "# Written by func/wizard.sh - do not edit manually."
+        echo "# Written by include/wizard.sh - do not edit manually."
         echo "# Re-run the wizard to change parameters."
         echo ""
         echo "HESTIA_HOSTNAME=\"${HESTIA_HOSTNAME}\""

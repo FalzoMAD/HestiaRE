@@ -5,7 +5,7 @@
 # that could hide a genuine bug stays on and is silenced per line with `# shellcheck disable=`,
 # where the reason is visible next to the code.
 
-# `source $HESTIA/func/main.sh` and `$BIN/h-*` dispatch are unquoted on purpose: both are internal
+# `source $HESTIA/include/main.sh` and `$BIN/h-*` dispatch are unquoted on purpose: both are internal
 # install-root paths from hestia.env, never user input, and quoting them would diverge from ~500
 # scripts. A real unquoted USER value shows up as SC2086 elsewhere in the same file, so the signal
 # is not lost - it is the tree-wide noise floor that is.
@@ -16,7 +16,7 @@ disable=SC2086
 # the expected reading, not a bug.
 disable=SC2016
 
-# Sources resolve at runtime from the install root (/etc/hestia/hestia.env, $HESTIA/func/...), which
+# Sources resolve at runtime from the install root (/etc/hestia/hestia.env, $HESTIA/include/...), which
 # does not exist in a checkout. The `# shellcheck source=` directives already document the targets.
 disable=SC1091
 

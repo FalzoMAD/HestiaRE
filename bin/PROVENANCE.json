@@ -1083,7 +1083,7 @@
         "pct": 4,
         "measured_at": "2026-08-12"
       },
-      "note": "1.9.8 XSS fix (#5548) reimplemented: NOTICE sanitized via func/internal/sanitize_html.php before store."
+      "note": "1.9.8 XSS fix (#5548) reimplemented: NOTICE sanitized via include/sanitize_html.php before store."
     },
     {
       "path": "h-add-user-package",
