@@ -25,7 +25,9 @@ opens above it.
   the VALUE, so `h-add-mail-domain-ssl … updatessl` and `h-restart-system yes 5` both died with
   "names no variable". The first is the Let's Encrypt path for a mail domain, which was therefore
   impossible; both call sites already validated the same argument correctly one line earlier. A
-  sweep over `bin/` and `func/` found no third one.
+  sweep over `bin/` and `func/` found no third one. `h-move-firewall-rule` had a dead sibling of
+  the same class - a `comment` validation guarded by a variable the command never sets, so the
+  guard was always false and the check never ran; removed rather than left looking like a check.
 
 ### Changed
 
