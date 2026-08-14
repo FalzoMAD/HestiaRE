@@ -157,8 +157,10 @@ crowdsec_apply() {
 	fi
 
 	# Bouncer runtime + http-block init glue (conf.d loads in http{} before vhosts); enforcement per-vhost.
-	mkdir -p /usr/local/hestia/lua
-	cp -f "$share/lua/hestia_bouncer.lua" /usr/local/hestia/lua/hestia_bouncer.lua
+	# The bouncer CODE lives next to its config under /etc/crowdsec/bouncers, not in a lua dir of its
+	# own under the install root: share/ is a template source that setup copies FROM, never a runtime
+	# include path. cp -f so a Hestia update refreshes the code; the config there is seed-if-absent.
+	cp -f "$share/lua/hestia_bouncer.lua" /etc/crowdsec/bouncers/hestia_bouncer.lua
 	cp -f "$share/nginx/crowdsec_init.conf" /etc/nginx/conf.d/crowdsec_init.conf
 	# Layer B (bot rate limiting) is func/botpolicy.sh, wired at web install. CrowdSec owns Layer A only.
 
@@ -265,6 +267,6 @@ crowdsec_render_domain_fragment() {
 
 # Remove the nginx-side wiring (leaves the engine + /etc/crowdsec saved state).
 crowdsec_remove_nginx() {
-	rm -f /etc/nginx/conf.d/crowdsec_init.conf /usr/local/hestia/lua/hestia_bouncer.lua
+	rm -f /etc/nginx/conf.d/crowdsec_init.conf /etc/crowdsec/bouncers/hestia_bouncer.lua
 	nginx -t > /dev/null 2>&1 && { systemctl reload nginx > /dev/null 2>&1 || true; }
 }
