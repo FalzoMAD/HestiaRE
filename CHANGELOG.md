@@ -22,8 +22,7 @@ opens above it.
   would have. All seven are HestiaRE-native with no `v-*` symlink, so no upstream path changes.
   Root keeps them on its `PATH`. Not moved, although never called by the panel: `h-add-sys-*` and
   friends - the panel does call five of them (fail2ban, firewall, quota, cgroups, pma-sso), so that
-  group has no clean edge. The updater removes the seven from `bin/` after copying, otherwise the
-  old copies would survive the update that is meant to remove them.
+  group has no clean edge. Applies to a fresh install; no migration path before v1.
 - **`share/sudo/hestia` is now `share/hestia/sudoers`** (#209), copied to an explicit target name.
   `share/`'s first level names a service, and sudo is a function rather than one. The target must
   stay `/etc/sudoers.d/hestia`: sudo ignores any file in that directory whose name contains a dot.
