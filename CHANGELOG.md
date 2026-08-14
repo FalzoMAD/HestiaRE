@@ -14,6 +14,18 @@ opens above it.
 
 ### Fixed
 
+- **Notification-mail overrides were read from a path that never held them** (#393 follow-up).
+  `get_email_template()` read `share/email/`, but the shipped samples sat in `share/email/examples/`
+  one level down, so no override ever loaded - the panel always fell back to its inline default
+  text (which is why mail kept working and the gap was invisible). The samples move to
+  `templates/email/examples/` and the reader to `templates/email/`, the mixed shipped+custom tree
+  that an update overwrites but never deletes - so an admin override survives updates. This keeps
+  the upstream `data/templates/email` habit reachable under `/usr/local/hestia` rather than moving
+  it to `/etc/hestia`. A README explains the override and the per-language lookup
+  (`templates/email/<lang>/<name>.html` before `templates/email/<name>.html` before the built-in).
+
+### Fixed
+
 - **A validator character class let `|` through into a `bash`-executed queue line** (#393, GHSA-47mf
   class). `is_object_format_valid` and eight sibling validators wrote their allowed set as
   `[-|\.|_[:alnum:]]`; inside a bracket expression the `|` and `\` are *members*, not alternation,
