@@ -55,19 +55,18 @@ function htmlify_trans($string, $closingTag)
 	);
 }
 
+// An admin override for a notification mail, or false so the caller uses its inline default. Read
+// from templates/email/, the mixed shipped+custom tree (upstream data/templates parity, #119), NOT
+// from share/ which an update overwrites. templates/email/examples/ holds copy-from samples and is
+// never read here - a custom lives one level up, as templates/email/<file>.html or per language.
 function get_email_template($file, $language)
 {
-	if (
-		file_exists(
-			$_SERVER["HESTIA"] . "/share/email/" . $language . "/" . $file . ".html",
-		)
-	) {
-		return file_get_contents(
-			$_SERVER["HESTIA"] . "/share/email/" . $language . "/" . $file . ".html",
-		);
+	$base = $_SERVER["HESTIA"] . "/templates/email/";
+	if (file_exists($base . $language . "/" . $file . ".html")) {
+		return file_get_contents($base . $language . "/" . $file . ".html");
 	}
-	if (file_exists($_SERVER["HESTIA"] . "/share/email/" . $file . ".html")) {
-		return file_get_contents($_SERVER["HESTIA"] . "/share/email/" . $file . ".html");
+	if (file_exists($base . $file . ".html")) {
+		return file_get_contents($base . $file . ".html");
 	}
 	return false;
 }
