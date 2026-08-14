@@ -903,9 +903,19 @@ finalize_install() {
 	systemctl restart caddy hestia-php 2>/dev/null || true
 	chown hestia:hestia "$HESTIA/.sessions"
 	mkdir -p /backup && chmod 755 /backup
-	echo "[ * ] Scheduling Let's Encrypt host certificate..."
-	echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && $HESTIA/bin/h-add-letsencrypt-host" \
-		> /etc/cron.d/hestia-ssl
+	# Now, with the cron only as fallback: @reboot alone meant a box that is never rebooted never got
+	# a certificate. The web domain exists and the web server is up by here, so ACME can answer.
+	echo "[ * ] Requesting Let's Encrypt host certificate..."
+	if "$BIN/h-add-letsencrypt-host" >> "$LOG" 2>&1; then
+		echo "[ OK ] Panel certificate issued for $HESTIA_HOSTNAME"
+		rm -f /etc/cron.d/hestia-ssl
+	else
+		echo "[ !! ] Let's Encrypt could not issue yet (public DNS for $HESTIA_HOSTNAME and port 80"
+		echo "       have to be reachable). The panel keeps its self-signed certificate; the request"
+		echo "       is retried once after the next reboot, or run h-add-letsencrypt-host by hand."
+		echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && $HESTIA/bin/h-add-letsencrypt-host" \
+			> /etc/cron.d/hestia-ssl
+	fi
 	echo "[ * ] Building initial RRD graphs..."
 	"$BIN/h-update-sys-rrd" > /dev/null 2>&1 || true
 	echo "[ * ] Final package upgrade..."

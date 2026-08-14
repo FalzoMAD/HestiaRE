@@ -385,6 +385,10 @@ function syshealth_repair_system_config() {
 	# value the moment the key turns up empty.
 
 	# Upgrade: Send email notification
+	# Was in the key registry with no repair behind it, so absent everywhere - and both readers gate
+	# on == "yes", so the panel never took over its own LE certificate.
+	repair_key 'UPDATE_HOSTNAME_SSL' 'yes'
+
 	repair_key 'UPGRADE_SEND_EMAIL' 'true'
 
 	# Upgrade: Send email notification

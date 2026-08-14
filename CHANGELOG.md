@@ -14,6 +14,54 @@ opens above it.
 
 ### Fixed
 
+- **The panel certificate is requested at the end of the install, not only after a reboot** (#656).
+  It was scheduled as an `@reboot` cron that deletes itself, so a box that is never rebooted never
+  got one - measured on a public install where the cron file was still sitting there untouched
+  while Caddy served the self-signed certificate. Everything ACME needs is in place by that point
+  in the install: the hostname's web domain exists and the web server has just been restarted. The
+  cron is written only when the immediate attempt fails, so a box without public DNS yet still gets
+  its retry, and a reboot after the install stays a recommendation rather than a requirement.
+- **The panel never took over its own Let's Encrypt certificate** (#656). `UPDATE_HOSTNAME_SSL` has
+  been in the key registry since the fork with no repair block behind it, so it was absent on every
+  box - and both readers gate on `== "yes"`, which an absent key never is. `h-add-web-domain-ssl`
+  and `h-update-letsencrypt-ssl` therefore skipped the handoff in silence. Measured on a public
+  box: LE issued for the hostname, the certificate sat in the user's domain directory, and Caddy
+  went on serving the self-signed one from install day; setting the key and re-running
+  `h-update-host-certificate` switched it over at once. Same class as the empty-value keys of #654,
+  for a key that had no default anywhere to begin with.
+- **phpMyAdmin dragged apache2 onto a box that has no apache2** (#656). Its unversioned `php-*`
+  dependencies resolve to `libapache2-mod-phpX` on some targets, which Depends on apache2 - and
+  HestiaRE never uses that apache2, it only binds `*:80`, after which nginx cannot bind its own
+  `:80`/`:443`. Measured on a fresh Ubuntu 26.04 mailonly install: apache2 arrived with phpMyAdmin,
+  nginx failed with `EADDRINUSE`, nothing answered on 443 - so the box had no webmail vhost and no
+  ACME termination, and the smoke check reported it. Ubuntu 24.04 resolved the same dependencies
+  without apache2, so it cannot be decided per release. The install now refuses apache2, but only
+  when it is not already there: passing that on an apache or both model would ask apt to remove the
+  web server.
+
+### Changed
+
+- **The mailonly preset asks nothing about databases** (#656). MariaDB is installed silently from
+  the OS repositories, because Roundcube keeps a database there and nobody else ever touches it;
+  PostgreSQL, Redis and phpMyAdmin are off without a question. The whole database screen therefore
+  disappears from that preset.
+- **The mailonly preset stops offering what a mail box has no use for** (#656): Composer, Docker,
+  the file manager and phpMyAdmin. All four were already off by default there; now they are not on
+  the screen at all, and each stays installable by hand afterwards. phpMyAdmin was the interesting
+  one - it is *derived* from the MariaDB choice, and MariaDB is genuinely needed on mailonly because
+  Roundcube keeps a database. So the derived type learned to honour a per-preset opt-out. The file
+  manager points at `/home/$user`, which on a mail box is the raw maildirs: a second way into the
+  mailbox with no IMAP semantics, where a deleted file is a lost mail. Exporting mailboxes that way
+  is a real use case, which is why it stays installable rather than being removed.
+- **Composer and Docker are no longer offered on the mailonly preset** (#656). Neither has anything
+  to serve on a box with no customer web, both were already defaulted off there, and both stay
+  installable by hand afterwards - the same reasoning CrowdSec already carries. The file manager is
+  still offered and is a separate question.
+- **MariaDB installs 11.8 by default** (#656) on the standard and nomail presets, up from 11.4.
+  11.4 stays selectable because Magento 2.4.9 is approved against it.
+
+### Fixed
+
 - **The system configuration repair never ran** (#654). `h-repair-sys-config` sources only
   `func/main.sh`, which does not pull in `func/syshealth.sh`, so both of its modes answered
   `command not found` - and then logged the repair as executed. It was the only command calling a
