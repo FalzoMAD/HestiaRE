@@ -1716,15 +1716,6 @@ is_folder_exists() {
 	fi
 }
 
-is_command_valid_format() {
-	if [[ ! "$1" =~ ^v-[[:alnum:]][-._[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
-		check_result "$E_INVALID" "Invalid command format"
-	fi
-	if [[ -n $(echo "$1" | grep -e '\-\-') ]]; then
-		check_result "$E_INVALID" "Invalid command format"
-	fi
-}
-
 # Domain argument formatting
 format_domain() {
 	if [[ "$domain" = *[![:ascii:]]* ]]; then
