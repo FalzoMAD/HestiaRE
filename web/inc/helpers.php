@@ -88,15 +88,6 @@ function exit_code_to_http_code(int $exit_code, int $default = 400): int
 	return $default;
 }
 
-function check_local_ip($addr)
-{
-	if (in_array($addr, [$_SERVER["SERVER_ADDR"], "127.0.0.1"], true)) {
-		return true;
-	} else {
-		return false;
-	}
-}
-
 function get_real_user_ip()
 {
 	$ip = "";

@@ -15,8 +15,8 @@ verify_csrf($_GET);
 if (!empty($_GET["backup"])) {
 	$v_backup = quoteshellarg($_GET["backup"]);
 	exec(HESTIA_CMD . "h-delete-user-backup " . $user . " " . $v_backup, $output, $return_var);
+	check_return_code($return_var, $output);
 }
-check_return_code($return_var, $output);
 unset($output);
 
 $back = $_SESSION["back"];

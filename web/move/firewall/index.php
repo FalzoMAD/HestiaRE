@@ -4,7 +4,6 @@ use function Hestiacp\quoteshellarg\quoteshellarg;
 
 ob_start();
 
-session_start();
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
 // Check user
@@ -20,8 +19,8 @@ if (!empty($_GET["rule"])) {
 	$v_rule = quoteshellarg($_GET["rule"]);
 	$v_direction = quoteshellarg($_GET["direction"]);
 	exec(HESTIA_CMD . "h-move-firewall-rule " . $v_rule . " " . $v_direction, $output, $return_var);
+	check_return_code($return_var, $output);
 }
-check_return_code($return_var, $output);
 unset($output);
 
 $back = getenv("HTTP_REFERER");

@@ -13,19 +13,21 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 $ok = 0;
 $ip = $_SERVER["REMOTE_ADDR"];
 
-exec(HESTIA_CMD . "h-list-sys-ips json", $output, $return_var);
-$output = implode("", $output);
-$arr = json_decode($output, true);
+// cli_json() rather than exec+decode: a failed h-list-sys-ips decodes to null, and iterating that is
+// a TypeError - a 500 in an endpoint that is reachable without a session (#578).
+$arr = cli_json("h-list-sys-ips json");
 foreach ($arr as $arr_key => $arr_val) {
 	// search for NAT IPs and allow them
-	if ($ip == $arr_key || $ip == $arr_val["NAT"]) {
+	if ($ip == $arr_key || $ip == ($arr_val["NAT"] ?? "")) {
 		$ok = 1;
 		break;
 	}
 }
-if ($ip == $_SERVER["SERVER_ADDR"]) {
-	$ok = 1;
-}
+// There used to be an "$ip == $_SERVER[SERVER_ADDR]" branch here. Caddy's php_fastcgi does not pass
+// SERVER_ADDR (nginx did, via fastcgi_params), so on this panel the key is absent on every request:
+// the branch never fired and only produced a warning inside an access gate. Dropping it does not
+// narrow anything - the loop above already walks every address h-list-sys-ips knows, NAT included,
+// which is where the box's own address comes from.
 if ($ip == "127.0.0.1") {
 	$ok = 1;
 }

@@ -12,8 +12,8 @@ if ($_SESSION["userContext"] === "admin") {
 	if (!empty($_GET["ip"])) {
 		$v_ip = quoteshellarg($_GET["ip"]);
 		exec(HESTIA_CMD . "h-delete-sys-ip " . $v_ip, $output, $return_var);
+		check_return_code($return_var, $output);
 	}
-	check_return_code($return_var, $output);
 	unset($output);
 }
 

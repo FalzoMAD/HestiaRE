@@ -48,6 +48,30 @@ opens above it.
 
 ### Fixed
 
+- **Panel action pages consumed results their command never produced** (#670). Found by rendering all
+  144 panel pages against a fresh v0.15.2 install. `/schedule/restore/` answered a request without a
+  `backup` id with an uncaught `TypeError` (500) because `quoteshellarg()` sat in front of the guard;
+  it refuses cleanly now. In 15 further pages `check_return_code($return_var, $output)` stood outside
+  the `if (!empty($_GET[...]))` that wrapped its `exec()`, so a skipped command was still "checked" -
+  around 40 PHP warnings per sweep, on variables nothing had set. `delete/notification` read a raw
+  `$_GET` key and checked only one of its two acknowledge paths. `/search/` with an empty query shelled
+  out a `grep` with no pattern, and its result list could reach the template as `null`. Verified on a
+  box: the same sweep now produces **0 new log lines, down from 47**, with the log oracle itself
+  re-proven by a deliberate probe.
+
+- **`SERVER_ADDR` does not exist under Caddy, and an access gate relied on it** (#670). `php_fastcgi`
+  does not pass the key that nginx supplied via `fastcgi_params`, so it was absent on every panel
+  request. In `reset/mail/` - reachable without a session - that made one branch of the IP allow-list
+  a check that could never fire, plus a warning on every call. No bypass: `REMOTE_ADDR` is always set
+  and the address loop above already covers the box's own IPs including NAT. The dead branch is gone
+  with the reason recorded, `check_local_ip()` (unused, and equally broken) with it, and that same
+  loop now goes through `cli_json()` so a failed `h-list-sys-ips` cannot turn into a 500.
+
+- **`.php-cs-fixer.dist.php` still pointed at `func/`** after the rename, so the PHP formatter refused
+  to run at all. It writes the path without a trailing slash, which the rename sweep's `func/` pattern
+  did not match - the same shape as the `$BIN` miss. Nothing caught it because php-cs-fixer is
+  deliberately not in CI.
+
 - **Seven calls still reached the `sbin/` commands through `bin/`** (#209 follow-up). The sbin split
   moved the panel-PHP wrappers and the lifecycle commands out of the sudo wildcard's reach, but the
   callers referenced them as `"$BIN/x"` - a variable, so a grep for `bin/hestia-php-confd` did not

@@ -12,8 +12,8 @@ if ($_SESSION["userContext"] === "admin") {
 	if (!empty($_GET["user"])) {
 		$v_username = quoteshellarg($_GET["user"]);
 		exec(HESTIA_CMD . "h-delete-user " . $v_username, $output, $return_var);
+		check_return_code($return_var, $output);
 	}
-	check_return_code($return_var, $output);
 	unset($_SESSION["look"]);
 	unset($output);
 }

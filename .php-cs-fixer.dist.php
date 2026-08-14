@@ -39,7 +39,7 @@ $walk(json_decode(file_get_contents(__DIR__ . "/VENDORED.json"), true));
 $vendored = array_filter($vendored);
 
 $finder = PhpCsFixer\Finder::create()
-	->in([__DIR__ . "/web", __DIR__ . "/func", __DIR__ . "/share"])
+	->in([__DIR__ . "/web", __DIR__ . "/include", __DIR__ . "/share"])
 	->name("*.php")
 	->name("*.inc.php")
 	->filter(fn(SplFileInfo $file) => !in_array($file->getRealPath(), $vendored, true));
