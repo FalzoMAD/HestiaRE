@@ -4393,15 +4393,6 @@
       "note": ""
     },
     {
-      "path": "h-install-hestia",
-      "source_type": "eigenbau",
-      "upstream_path": null,
-      "upstream_ref": null,
-      "last_reconciled": "2026-08-12",
-      "divergence": null,
-      "note": ""
-    },
-    {
       "path": "h-list-backup-host",
       "source_type": "verbatim",
       "upstream_path": "bin/v-list-backup-host",
@@ -6892,15 +6883,6 @@
       "note": ""
     },
     {
-      "path": "h-uninstall-hestia",
-      "source_type": "eigenbau",
-      "upstream_path": null,
-      "upstream_ref": null,
-      "last_reconciled": "2026-08-12",
-      "divergence": null,
-      "note": ""
-    },
-    {
       "path": "h-unsuspend-cron-job",
       "source_type": "derived",
       "upstream_path": "bin/v-unsuspend-cron-job",
@@ -7204,15 +7186,6 @@
         "pct": 17,
         "measured_at": "2026-08-12"
       },
-      "note": ""
-    },
-    {
-      "path": "h-update-hestia",
-      "source_type": "eigenbau",
-      "upstream_path": null,
-      "upstream_ref": null,
-      "last_reconciled": "2026-08-12",
-      "divergence": null,
       "note": ""
     },
     {
@@ -7834,42 +7807,6 @@
     },
     {
       "path": "h-upgrade-sys-mariadb",
-      "source_type": "eigenbau",
-      "upstream_path": null,
-      "upstream_ref": null,
-      "last_reconciled": "2026-08-12",
-      "divergence": null,
-      "note": ""
-    },
-    {
-      "path": "hestia",
-      "source_type": "eigenbau",
-      "upstream_path": null,
-      "upstream_ref": null,
-      "last_reconciled": "2026-08-12",
-      "divergence": null,
-      "note": ""
-    },
-    {
-      "path": "hestia-php",
-      "source_type": "eigenbau",
-      "upstream_path": null,
-      "upstream_ref": null,
-      "last_reconciled": "2026-08-12",
-      "divergence": null,
-      "note": ""
-    },
-    {
-      "path": "hestia-php-confd",
-      "source_type": "eigenbau",
-      "upstream_path": null,
-      "upstream_ref": null,
-      "last_reconciled": "2026-08-12",
-      "divergence": null,
-      "note": ""
-    },
-    {
-      "path": "hestia-php-fpm",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,

@@ -1,0 +1,6 @@
+# The panel runs as user hestia and reaches the h-* commands through sudo. The wildcard is the whole
+# grant on purpose: bin/ IS the panel-callable surface, and the directory is the boundary.
+#
+# Everything the panel must not reach lives in /usr/local/hestia/sbin and is deliberately not named
+# here. Keep it that way - do not widen this rule, and do not add a second one for sbin.
+hestia   ALL=NOPASSWD:/usr/local/hestia/bin/*
