@@ -385,12 +385,8 @@ function syshealth_repair_system_config() {
 	# value the moment the key turns up empty.
 
 	# Upgrade: Send email notification
-	# Hand a hostname certificate on to the panel. In the key registry since forever but with no
-	# repair block, so it was ABSENT on every box - and both readers gate on == "yes", which an
-	# absent key never is: h-add-web-domain-ssl and h-update-letsencrypt-ssl silently skipped the
-	# handoff. Measured on a public box: Let's Encrypt issued for the hostname, the certificate sat
-	# in the user's domain directory, and Caddy went on serving the self-signed one from install
-	# day. Setting the key and re-running h-update-host-certificate switched it over immediately.
+	# Was in the key registry with no repair behind it, so absent everywhere - and both readers gate
+	# on == "yes", so the panel never took over its own LE certificate.
 	repair_key 'UPDATE_HOSTNAME_SSL' 'yes'
 
 	repair_key 'UPGRADE_SEND_EMAIL' 'true'

@@ -209,7 +209,7 @@
         "mailonly":  "__os__",
         "custom":    null
       },
-      "note": "Only shown/asked when MariaDB was chosen (visible_if DB_MARIADB == true). 11.8 is the default; 11.4 stays selectable because Magento 2.4.9 is approved against it. 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime."
+      "note": "Only asked when MariaDB was chosen. Default 11.8; 11.4 stays selectable for Magento 2.4.9. 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime, and fixed on mailonly."
     },
 
     "DB_PHPMYADMIN": {
@@ -217,7 +217,7 @@
       "type": "derived",
       "derived_from": "DB_MARIADB",
       "fixed_no_prompt": { "mailonly": false },
-      "note": "Implicit: installed without its own question as soon as MariaDB is chosen (value = DB_MARIADB). NOT on mailonly: the database there exists for the webmailer and holds nothing a customer or admin browses, so a DB admin UI is surface without a purpose - and it was the route by which apt dragged apache2 onto a box that must not have one (#656). h-add-sys-phpmyadmin installs it by hand if one is wanted."
+      "note": "Installed without its own question as soon as MariaDB is chosen. Not on mailonly: the database there belongs to the webmailer, so a DB admin UI is surface without a purpose - and it was how apt dragged apache2 onto a box that must not have one (#656)."
     },
 
     "MAIL_BLOCK_PRESENT": {
@@ -310,7 +310,7 @@
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
         "singlephp": "os_package", "nomail": "os_package"
       },
-      "note": "latest uses the upstream installer script (getcomposer.org) instead of the OS package for a more current version. Backlog: an h-update-sys-composer command to switch the source afterwards. NOT offered on mailonly (fixed_no_prompt): there is no customer web to build for, and it stays installable by hand via h-add-sys-composer."
+      "note": "latest uses the upstream installer script (getcomposer.org) instead of the OS package. Backlog: an h-update-sys-composer to switch the source afterwards. Not on mailonly - no customer web to build for; h-add-sys-composer installs it by hand."
     },
 
     "ADDON_CROWDSEC": {
@@ -391,7 +391,7 @@
       "description": "Rootless containers per customer",
       "fixed_no_prompt": { "mailonly": false },
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Preset nowhere: real resource footprint (RAM/disk), so no automatic activation. Installs the host side only (#389); a customer gets a companion and their own daemon via h-add-user-docker. NOT offered on mailonly (fixed_no_prompt) - a mailonly box has no customer web to put in front of a container, and h-add-sys-docker installs it by hand if one is wanted anyway."
+      "note": "Preset nowhere: real resource footprint, so no automatic activation. Installs the host side only (#389); a customer gets their own daemon via h-add-user-docker. Not on mailonly - nothing to put in front of a container there."
     },
 
     "ADDON_FILEMANAGER": {
@@ -401,7 +401,7 @@
       "description": "Web file manager",
       "fixed_no_prompt": { "mailonly": false },
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Preset nowhere. NOT offered on mailonly (fixed_no_prompt): it points at /home/$user, which on a mail box means the raw maildirs - a second way into the mailbox with no IMAP semantics, where a deleted file is a lost mail. Exporting mailboxes as a download is a real use case, but then it is installed on purpose via h-add-sys-filemanager. TODO: dependencies on PHP version/mode still to be checked before production use."
+      "note": "Preset nowhere. Not on mailonly: it points at /home/$user, i.e. the raw maildirs - a second way into the mailbox with no IMAP semantics. Exporting them is a real use case, so it stays installable by hand. TODO: PHP version/mode dependencies before production use."
     },
 
     "ADDON_UTILITIES": {
