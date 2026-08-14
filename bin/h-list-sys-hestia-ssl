@@ -102,11 +102,11 @@ csv_list() {
 #----------------------------------------------------------#
 
 # Parsing SSL certificate
-crt=$(cat $HESTIA/ssl/certificate.crt | sed ':a;N;$!ba;s/\n/\\n/g')
-key=$(cat $HESTIA/ssl/certificate.key | sed ':a;N;$!ba;s/\n/\\n/g')
+crt=$(cat $HESTIA_SSL/certificate.crt | sed ':a;N;$!ba;s/\n/\\n/g')
+key=$(cat $HESTIA_SSL/certificate.key | sed ':a;N;$!ba;s/\n/\\n/g')
 
 # Parsing SSL certificate details without CA
-info=$(openssl x509 -text -in $HESTIA/ssl/certificate.crt)
+info=$(openssl x509 -text -in $HESTIA_SSL/certificate.crt)
 subj=$(echo "$info" | grep Subject: | cut -f 2 -d =)
 before=$(echo "$info" | grep Before: | sed -e "s/.*Before: //")
 after=$(echo "$info" | grep "After :" | sed -e "s/.*After : //")

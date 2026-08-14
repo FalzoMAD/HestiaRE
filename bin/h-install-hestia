@@ -192,8 +192,8 @@ EOF
 
 	# DH params in the base stage: nginx and dovecot both fatal without /etc/ssl/dhparam.pem, 
     # so it must exist before any TLS service starts. Ship the curated file; regenerate only as a fallback.
-	if [ -s "$HESTIA/share/ssl/dhparam.pem" ]; then
-		cp -f "$HESTIA/share/ssl/dhparam.pem" /etc/ssl/dhparam.pem
+	if [ -s "$HESTIA/share/hestia/dhparam.pem" ]; then
+		cp -f "$HESTIA/share/hestia/dhparam.pem" /etc/ssl/dhparam.pem
 	else
 		echo "[ ! ] shipped dhparam.pem missing — generating (this is slow)..."
 		openssl dhparam -out /etc/ssl/dhparam.pem 2048
@@ -248,12 +248,12 @@ install_panel() {
 		KEY_END=$(grep -n "END RSA" /tmp/hst.pem | head -n1 | cut -f1 -d:)
 	fi
 	(
-		cd "$HESTIA/ssl"
+		cd "$HESTIA_SSL"
 		sed -n "1,${CRT_END}p" /tmp/hst.pem > certificate.crt
 		sed -n "${KEY_START},${KEY_END}p" /tmp/hst.pem > certificate.key
 	)
-	chown root:mail "$HESTIA/ssl/"* 2> /dev/null || true
-	chmod 660 "$HESTIA/ssl/"*
+	chown root:mail "$HESTIA_SSL/"* 2> /dev/null || true
+	chmod 660 "$HESTIA_SSL/"*
 	rm -f /tmp/hst.pem
 
 	echo "[ * ] Configuring Caddy..."
@@ -495,6 +495,9 @@ install_mail() {
 	chmod 640 /etc/exim4/srs.conf /etc/exim4/exim4.conf.template
 	chown root:"$EXIM_USR" /etc/exim4/srs.conf
 	rm -rf /etc/exim4/domains && mkdir -p /etc/exim4/domains
+	# SNI lookup dir: filenames are the SNI names, contents are links into the customer's own
+	# mail conf. Group mail so exim traverses it, not world-readable so the domain list is not.
+	mkdir -p "$MAIL_SNI_DIR" && chown root:mail "$MAIL_SNI_DIR" && chmod 0750 "$MAIL_SNI_DIR"
 	rm -f /etc/alternatives/mta
 	ln -s /usr/sbin/exim4 /etc/alternatives/mta
 	update-rc.d -f sendmail remove > /dev/null 2>&1 || true
@@ -669,10 +672,12 @@ init_hestia_structure() {
 	mkdir -p /var/log/hestia
 	ln -sf /var/log/hestia "$HESTIA/log"
 	# templates/ and packages/ ship at the install root (tarball) — not created here.
-	mkdir -p "$HESTIA/conf" "$HESTIA/ssl" \
+	mkdir -p "$HESTIA/conf" "$HESTIA_SSL" \
 		"$CONF_DIR/ips" "$CONF_DIR/queue" \
 		"$CONF_DIR/users" "$CONF_DIR/firewall" \
 		"$HESTIA/.sessions"
+	# caddy, exim and proftpd all read the panel certificate as non-root, all of them via group mail.
+	chown root:mail "$HESTIA_SSL" && chmod 0750 "$HESTIA_SSL"
 	touch "$CONF_DIR/queue/backup.pipe" "$CONF_DIR/queue/disk.pipe" \
 		"$CONF_DIR/queue/webstats.pipe" "$CONF_DIR/queue/restart.pipe" \
 		"$CONF_DIR/queue/traffic.pipe" "$CONF_DIR/queue/daily.pipe" \

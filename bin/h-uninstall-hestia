@@ -49,6 +49,9 @@ if [ "$PURGE" = true ]; then
 	echo "[ * ] Purging panel packages and directories..."
 	DEBIAN_FRONTEND=noninteractive apt-get -y purge caddy 2>/dev/null || true
 	rm -rf "$HESTIA" "$CONF_DIR"
+	# Both live outside the install root, so the line above does not reach them (#564). The SNI dir
+	# holds only symlinks into the customers' own mail conf, which stays.
+	rm -rf /etc/ssl/hestia /etc/exim4/ssl
 	echo "[ * ] Purged. /home user data and databases left intact."
 else
 	echo "[ * ] Panel config removed. Packages, $HESTIA and $CONF_DIR left in place."

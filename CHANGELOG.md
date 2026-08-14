@@ -12,6 +12,22 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **The panel certificate and the mail SNI links leave the install root** (#564). Both sat in
+  `/usr/local/hestia/ssl/`, which `h-update-hestia` replaces wholesale on every update. The
+  certificate now lives in `/etc/ssl/hestia/`, next to the `dhparam.pem` that was already there -
+  not under `/etc/hestia/`, because that is `0700` and caddy, exim and proftpd all read the
+  certificate as non-root through group `mail` (measured: caddy cannot traverse `0700`). The exim
+  SNI lookup directory moves to `/etc/exim4/ssl/`, into the service's own configuration, which is
+  where dovecot's per-domain certificates already pointed. `/usr/local/hestia/ssl` is gone.
+  Deliberately still a flat directory of links named after the SNI: exim interpolates the name into
+  a path, and stripping a `mail.` prefix would resolve a domain literally called `mail.kunde.de` to
+  another customer's certificate.
+- **`share/ssl/` folds into `share/hestia/`** (#564): the first level under `share/` names the
+  service a file configures, and the lone `dhparam.pem` there serves nginx and dovecot alike. Its
+  runtime target `/etc/ssl/dhparam.pem` is unchanged.
+
 ### Fixed
 
 - **The panel certificate is requested at the end of the install, not only after a reboot** (#656).

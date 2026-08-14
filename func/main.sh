@@ -51,6 +51,13 @@ RRD_STEP=300
 BIN=$HESTIA/bin
 # instance config root; fallback covers installs whose hestia.env predates the var
 CONF_DIR="${CONF_DIR:-/etc/hestia}"
+# Panel certificate: out of the install root, which h-update-hestia replaces wholesale. Not under
+# CONF_DIR either - that is 0700 and caddy, exim and proftpd all read this as non-root (#564).
+HESTIA_SSL="/etc/ssl/hestia"
+# Exim looks a certificate up by interpolating the SNI name into a path, so it needs a directory
+# whose filenames ARE the SNI names. Kept flat and exact rather than stripping a "mail." prefix:
+# a domain literally called mail.kunde.de would strip to another customer's domain (#564).
+MAIL_SNI_DIR="/etc/exim4/ssl"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 # CLI helpers run through the hestia-php wrapper (panel PHP version indirection)
 HESTIA_PHP="$HESTIA/bin/hestia-php"
