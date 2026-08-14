@@ -23,7 +23,7 @@ source $HESTIA/func/main.sh
 source_conf "$HESTIA/conf/hestia.conf"
 
 # NOTICE renders via x-html, so sanitize before storing (allow-list; drops script/on*/js:).
-notice=$("$HESTIA_PHP" "$HESTIA/func/internal/sanitize_html.php" "$3" | sed "s/'/%quote%/g")
+notice=$("$HESTIA_PHP" "$HESTIA/func/sanitize_html.php" "$3" | sed "s/'/%quote%/g")
 
 #----------------------------------------------------------#
 #                    Verifications                         #
