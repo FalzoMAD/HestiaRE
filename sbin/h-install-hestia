@@ -676,7 +676,10 @@ init_hestia_structure() {
 	mkdir -p "$HESTIA/conf" "$HESTIA_SSL" \
 		"$CONF_DIR/ips" "$CONF_DIR/queue" \
 		"$CONF_DIR/users" "$CONF_DIR/firewall" "$CONF_DIR/packages" \
-		"$HESTIA/.sessions"
+		"$CONF_DIR/hooks" "$HESTIA/.sessions"
+	# The LE hook mechanism already exists in h-add-letsencrypt-domain (#4925); create the directory
+	# and drop its README so the hooks are discoverable rather than a secret handshake.
+	[ -e "$CONF_DIR/hooks/README.md" ] || cp -f "$HESTIA/share/hestia/hooks/README.md" "$CONF_DIR/hooks/README.md"
 	# caddy, exim and proftpd all read the panel certificate as non-root, all of them via group mail.
 	chown root:mail "$HESTIA_SSL" && chmod 0750 "$HESTIA_SSL"
 	touch "$CONF_DIR/queue/backup.pipe" "$CONF_DIR/queue/disk.pipe" \
