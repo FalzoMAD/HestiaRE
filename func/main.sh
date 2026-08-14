@@ -295,11 +295,11 @@ generate_password() {
 # Package existence check
 is_package_valid() {
 	if [ -z $1 ]; then
-		if [ ! -e "$HESTIA/packages/$package.pkg" ]; then
+		if [ ! -e "$CONF_DIR/packages/$package.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $package doesn't exist"
 		fi
 	else
-		if [ ! -e "$HESTIA/packages/$1.pkg" ]; then
+		if [ ! -e "$CONF_DIR/packages/$1.pkg" ]; then
 			check_result "$E_NOTEXIST" "package $1 doesn't exist"
 		fi
 	fi
@@ -307,7 +307,7 @@ is_package_valid() {
 }
 
 is_package_new() {
-	if [ -e "$HESTIA/packages/$1.pkg" ]; then
+	if [ -e "$CONF_DIR/packages/$1.pkg" ]; then
 		echo "Error: package $1 already exists."
 		log_event "$E_EXISTS" "$ARGUMENTS"
 		exit "$E_EXISTS"

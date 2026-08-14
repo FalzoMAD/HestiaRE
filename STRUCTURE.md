@@ -375,11 +375,15 @@ updates. `CONF_DIR="${CONF_DIR:-/etc/hestia}"` (`func/main.sh:48`), exported via
 | `/etc/hestia/install.conf` | wizard recipe **and** live `COMPONENT_*` state (#103) |
 | `/etc/hestia/conf/` | panel config; `$HESTIA/conf` is now a **symlink** here (#129) |
 | `/etc/hestia/{firewall,ips,queue,users}/` | moved out of `$HESTIA/data/` (#148/#154/#156) |
+| `/etc/hestia/packages/` | hosting packages: instance state, panel-created; seeded from `share/hestia/packages/` at install (#663) |
 | `/etc/hestia/.done.*` | installer idempotency sentinels |
 
 The `$HESTIA/data/` tree is **fully dissolved**. `install/` (build-time tree) was split
-into `share/` (shipped runtime assets) + `templates/` (`WEBTPL`) + `packages/` (#119,
-#150); `HESTIA_INSTALL_DIR`/`HESTIA_COMMON_DIR` no longer exist.
+into `share/` (shipped runtime assets) + `templates/` (`WEBTPL`); `HESTIA_INSTALL_DIR`/
+`HESTIA_COMMON_DIR` no longer exist. The `packages/` split of #119/#150 was revised in #663:
+hosting packages are instance state (panel-created, restore-writable), so they live in
+`/etc/hestia/packages/`, and the shipped `default`/`system.pkg` seed there from
+`share/hestia/packages/` at install.
 
 ### The model is the install scope (#639)
 
