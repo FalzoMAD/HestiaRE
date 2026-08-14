@@ -14,6 +14,13 @@ opens above it.
 
 ### Fixed
 
+- **The panel certificate is requested at the end of the install, not only after a reboot** (#656).
+  It was scheduled as an `@reboot` cron that deletes itself, so a box that is never rebooted never
+  got one - measured on a public install where the cron file was still sitting there untouched
+  while Caddy served the self-signed certificate. Everything ACME needs is in place by that point
+  in the install: the hostname's web domain exists and the web server has just been restarted. The
+  cron is written only when the immediate attempt fails, so a box without public DNS yet still gets
+  its retry, and a reboot after the install stays a recommendation rather than a requirement.
 - **The panel never took over its own Let's Encrypt certificate** (#656). `UPDATE_HOSTNAME_SSL` has
   been in the key registry since the fork with no repair block behind it, so it was absent on every
   box - and both readers gate on `== "yes"`, which an absent key never is. `h-add-web-domain-ssl`
