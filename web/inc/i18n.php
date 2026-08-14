@@ -62,8 +62,14 @@ function htmlify_trans($string, $closingTag)
 function get_email_template($file, $language)
 {
 	$base = $_SERVER["HESTIA"] . "/templates/email/";
-	if (file_exists($base . $language . "/" . $file . ".html")) {
-		return file_get_contents($base . $language . "/" . $file . ".html");
+	// $language becomes a path component, so it may only ever be a bare locale name. The callers are
+	// validated today (is_language_valid checks the char class AND that web/locale/<lang>/ exists,
+	// and the session is only set once the CLI accepted it) - this is the constraint living where the
+	// path is actually built, so no caller can turn a language into traversal or into a quoted value.
+	if (preg_match('/^[A-Za-z0-9_-]+$/', (string) $language)) {
+		if (file_exists($base . $language . "/" . $file . ".html")) {
+			return file_get_contents($base . $language . "/" . $file . ".html");
+		}
 	}
 	if (file_exists($base . $file . ".html")) {
 		return file_get_contents($base . $file . ".html");

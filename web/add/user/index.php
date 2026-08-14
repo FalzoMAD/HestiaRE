@@ -142,7 +142,9 @@ if (!empty($_POST["ok"])) {
 
 		$name = empty($_POST["v_name"]) ? $_POST["v_username"] : $_POST["v_name"];
 
-		$template = get_email_template("account_ready", $v_language);
+		// $v_language is shell-quoted for the exec above; a path component must be the raw value, the
+		// same one putenv() uses two lines up. With the quotes this override could never load.
+		$template = get_email_template("account_ready", $_POST["v_language"]);
 		if (!empty($template)) {
 			preg_match("/<subject>(.*?)<\/subject>/si", $template, $matches);
 			$subject = $matches[1];
