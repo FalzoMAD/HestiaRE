@@ -701,8 +701,8 @@ add_mail_ssl_config() {
 		mkdir -p $HOMEDIR/$user/conf/mail/$domain/ssl/
 	fi
 
-	if [ ! -d "$HESTIA/ssl/mail" ]; then
-		mkdir -p $HESTIA/ssl/mail
+	if [ ! -d "$MAIL_SNI_DIR" ]; then
+		mkdir -p $MAIL_SNI_DIR
 	fi
 
 	if [ ! -d /etc/dovecot/conf.d/domains ]; then
@@ -757,8 +757,8 @@ add_mail_ssl_config() {
 			echo "}" >> /etc/dovecot/conf.d/domains/$domain.conf
 		fi
 		# Add domain SSL configuration to exim4
-		ln -s $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.pem $HESTIA/ssl/mail/$domain.crt
-		ln -s $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.key $HESTIA/ssl/mail/$domain.key
+		ln -s $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.pem $MAIL_SNI_DIR/$domain.crt
+		ln -s $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.key $MAIL_SNI_DIR/$domain.key
 	fi
 
 	# Add domain SSL configuration to dovecot
@@ -777,16 +777,16 @@ add_mail_ssl_config() {
 	fi
 
 	# Add domain SSL configuration to exim4
-	ln -s $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.pem $HESTIA/ssl/mail/mail.$domain.crt
-	ln -s $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.key $HESTIA/ssl/mail/mail.$domain.key
+	ln -s $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.pem $MAIL_SNI_DIR/mail.$domain.crt
+	ln -s $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.key $MAIL_SNI_DIR/mail.$domain.key
 
 	# Set correct permissions on certificates
 	chmod 0750 $HOMEDIR/$user/conf/mail/$domain/ssl
 	chown -R $MAIL_USER:mail $HOMEDIR/$user/conf/mail/$domain/ssl
 	chmod 0644 $HOMEDIR/$user/conf/mail/$domain/ssl/*
 	chown -h $user:mail $HOMEDIR/$user/conf/mail/$domain/ssl/*
-	chmod -R 0644 $HESTIA/ssl/mail/*
-	chown -h $user:mail $HESTIA/ssl/mail/*
+	chmod -R 0644 $MAIL_SNI_DIR/*
+	chown -h $user:mail $MAIL_SNI_DIR/*
 }
 
 del_mail_ssl_config() {
@@ -808,9 +808,9 @@ del_mail_ssl_config() {
 	# Remove SSL certificates
 	rm -f $HOMEDIR/$user/conf/mail/$domain/ssl/*
 	if [ -n "$mail_cert_match" ]; then
-		rm -f $HESTIA/ssl/mail/$domain.crt $HESTIA/ssl/mail/$domain.key
+		rm -f $MAIL_SNI_DIR/$domain.crt $MAIL_SNI_DIR/$domain.key
 	fi
-	rm -f $HESTIA/ssl/mail/mail.$domain.crt $HESTIA/ssl/mail/mail.$domain.key
+	rm -f $MAIL_SNI_DIR/mail.$domain.crt $MAIL_SNI_DIR/mail.$domain.key
 }
 
 del_mail_ssl_certificates() {

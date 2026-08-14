@@ -14,6 +14,39 @@ opens above it.
 
 ### Fixed
 
+- **The reboot fallback for the panel certificate was never eligible to run** (#564). cron refuses a
+  group- or world-writable file in `/etc/cron.d` and says so only in its own log
+  (`INSECURE MODE (group/other writable)`), and the installer's umask left `hestia-ssl` at `0664`
+  while every other file there is `0644`. Measured on a public box across a real reboot: the file
+  sat untouched and the log carried the refusal once a minute. So the missing panel certificate had
+  two independent causes, not one - this and the fact that the request only ever happened at reboot.
+- **Two commands refused every call that passed their optional argument** (#564).
+  `is_format_valid` takes variable NAMES; `h-add-mail-domain-ssl` and `h-restart-system` handed it
+  the VALUE, so `h-add-mail-domain-ssl … updatessl` and `h-restart-system yes 5` both died with
+  "names no variable". The first is the Let's Encrypt path for a mail domain, which was therefore
+  impossible; both call sites already validated the same argument correctly one line earlier. A
+  sweep over `bin/` and `func/` found no third one. `h-move-firewall-rule` had a dead sibling of
+  the same class - a `comment` validation guarded by a variable the command never sets, so the
+  guard was always false and the check never ran; removed rather than left looking like a check.
+
+### Changed
+
+- **The panel certificate and the mail SNI links leave the install root** (#564). Both sat in
+  `/usr/local/hestia/ssl/`, which `h-update-hestia` replaces wholesale on every update. The
+  certificate now lives in `/etc/ssl/hestia/`, next to the `dhparam.pem` that was already there -
+  not under `/etc/hestia/`, because that is `0700` and caddy, exim and proftpd all read the
+  certificate as non-root through group `mail` (measured: caddy cannot traverse `0700`). The exim
+  SNI lookup directory moves to `/etc/exim4/ssl/`, into the service's own configuration, which is
+  where dovecot's per-domain certificates already pointed. `/usr/local/hestia/ssl` is gone.
+  Deliberately still a flat directory of links named after the SNI: exim interpolates the name into
+  a path, and stripping a `mail.` prefix would resolve a domain literally called `mail.kunde.de` to
+  another customer's certificate.
+- **`share/ssl/` folds into `share/hestia/`** (#564): the first level under `share/` names the
+  service a file configures, and the lone `dhparam.pem` there serves nginx and dovecot alike. Its
+  runtime target `/etc/ssl/dhparam.pem` is unchanged.
+
+### Fixed
+
 - **The panel certificate is requested at the end of the install, not only after a reboot** (#656).
   It was scheduled as an `@reboot` cron that deletes itself, so a box that is never rebooted never
   got one - measured on a public install where the cron file was still sitting there untouched

@@ -57,8 +57,8 @@ else
 fi
 
 # Adding new certificate
-cp -f $ssl_dir/certificate.crt $HESTIA/ssl/certificate.crt
-cp -f $ssl_dir/certificate.key $HESTIA/ssl/certificate.key
+cp -f $ssl_dir/certificate.crt $HESTIA_SSL/certificate.crt
+cp -f $ssl_dir/certificate.key $HESTIA_SSL/certificate.key
 
 #----------------------------------------------------------#
 #                       Hestia                             #
