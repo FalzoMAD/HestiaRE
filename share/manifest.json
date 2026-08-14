@@ -212,7 +212,8 @@
       "group": "db",
       "type": "derived",
       "derived_from": "DB_MARIADB",
-      "note": "Implicit: installed without its own question as soon as MariaDB is chosen (value = DB_MARIADB)."
+      "fixed_no_prompt": { "mailonly": false },
+      "note": "Implicit: installed without its own question as soon as MariaDB is chosen (value = DB_MARIADB). NOT on mailonly: the database there exists for the webmailer and holds nothing a customer or admin browses, so a DB admin UI is surface without a purpose - and it was the route by which apt dragged apache2 onto a box that must not have one (#656). h-add-sys-phpmyadmin installs it by hand if one is wanted."
     },
 
     "MAIL_BLOCK_PRESENT": {
@@ -394,8 +395,9 @@
       "type": "checkbox",
       "label": "FileManager",
       "description": "Web file manager",
+      "fixed_no_prompt": { "mailonly": false },
       "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
-      "note": "Shown in all presets incl. mailonly, preset nowhere. TODO: dependencies on PHP version/mode still to be checked before production use."
+      "note": "Preset nowhere. NOT offered on mailonly (fixed_no_prompt): it points at /home/$user, which on a mail box means the raw maildirs - a second way into the mailbox with no IMAP semantics, where a deleted file is a lost mail. Exporting mailboxes as a download is a real use case, but then it is installed on purpose via h-add-sys-filemanager. TODO: dependencies on PHP version/mode still to be checked before production use."
     },
 
     "ADDON_UTILITIES": {

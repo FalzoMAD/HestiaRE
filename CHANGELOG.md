@@ -26,6 +26,14 @@ opens above it.
 
 ### Changed
 
+- **The mailonly preset stops offering what a mail box has no use for** (#656): Composer, Docker,
+  the file manager and phpMyAdmin. All four were already off by default there; now they are not on
+  the screen at all, and each stays installable by hand afterwards. phpMyAdmin was the interesting
+  one - it is *derived* from the MariaDB choice, and MariaDB is genuinely needed on mailonly because
+  Roundcube keeps a database. So the derived type learned to honour a per-preset opt-out. The file
+  manager points at `/home/$user`, which on a mail box is the raw maildirs: a second way into the
+  mailbox with no IMAP semantics, where a deleted file is a lost mail. Exporting mailboxes that way
+  is a real use case, which is why it stays installable rather than being removed.
 - **Composer and Docker are no longer offered on the mailonly preset** (#656). Neither has anything
   to serve on a box with no customer web, both were already defaulted off there, and both stay
   installable by hand afterwards - the same reasoning CrowdSec already carries. The file manager is
