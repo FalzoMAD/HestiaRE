@@ -1,23 +1,22 @@
 {
   "_meta": {
     "folder": "web/",
-    "description": "Per-file provenance vs HestiaCP. source_type 'eigenbau' = HestiaRE-native (or origin not auto-confirmable - see note). Recompute is a manual, occasional job; numbers are a snapshot at upstream_ref + measured_at, not live.",
+    "description": "Per-file provenance vs HestiaCP. A file with no upstream_path is HestiaRE-native. Recompute is a manual, occasional job (when we reimplement against upstream or re-measure a snapshot); numbers are a snapshot at each file's upstream_ref + measured_at, not live. HestiaRE does not cherry-pick: every adoption is a reimplementation, compared per function against the upstream diff, so these numbers are orientation for that comparison - not a merge plan.",
     "upstream_branch": "upstream/hestiacp",
     "upstream_ref": "bc3720a",
     "upstream_ref_date": "2026-08-10",
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100 from `git diff --numstat`. RAW - overstates semantic divergence. Triage, not truth.",
     "source_type_values": {
-      "verbatim": "Near-unchanged upstream file (auto-seeded when churn <=3%).",
-      "derived": "Reimplemented/diverged on purpose (auto-seeded when churn >3%).",
-      "cherry-pick": "Isolated upstream bugfix taken directly. Manual promotion.",
-      "eigenbau": "HestiaRE-native OR origin not auto-confirmable (see note)."
+      "verbatim": "Upstream file we track closely (churn <=3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
+      "derived": "Reimplemented or diverged from upstream on purpose (churn >3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
+      "eigenbau": "HestiaRE-native: no upstream counterpart. The one curated value - a recompute never changes it. An 'inspired by' pointer belongs in the note, not in upstream_path."
     },
     "third_party_note": "Third-party vendored code is tracked in VENDORED.json, not here; those paths are excluded to keep the two manifests disjoint.",
     "aggregate": {
       "upstream_mapped_files": 336,
       "eigenbau_files": 36,
-      "weighted_pct": 6
+      "weighted_pct": 7
     }
   },
   "files": [
@@ -297,7 +296,7 @@
     },
     {
       "path": "bulk/firewall/banlist/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/bulk/firewall/banlist/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -338,7 +337,7 @@
     },
     {
       "path": "bulk/firewall/ipset/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/bulk/firewall/ipset/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -482,7 +481,7 @@
     },
     {
       "path": "copy/package/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/copy/package/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -705,7 +704,7 @@
     },
     {
       "path": "delete/firewall/banlist/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/delete/firewall/banlist/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -995,7 +994,7 @@
     },
     {
       "path": "edit/backup/exclusions/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/edit/backup/exclusions/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -2095,7 +2094,7 @@
     },
     {
       "path": "js/src/editWebListeners.js",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/js/src/editWebListeners.js",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -3241,7 +3240,7 @@
     },
     {
       "path": "locale/languages.json",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/locale/languages.json",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -3613,7 +3612,7 @@
     },
     {
       "path": "move/firewall/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/move/firewall/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -3629,7 +3628,7 @@
     },
     {
       "path": "reset/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/reset/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -3887,7 +3886,7 @@
     },
     {
       "path": "suspend/firewall/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/suspend/firewall/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -3919,7 +3918,7 @@
     },
     {
       "path": "suspend/user/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/suspend/user/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -4200,7 +4199,7 @@
     },
     {
       "path": "templates/pages/add_firewall_ipset.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/templates/pages/add_firewall_ipset.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -4817,7 +4816,7 @@
     },
     {
       "path": "templates/pages/list_firewall_banlist.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/templates/pages/list_firewall_banlist.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5077,7 +5076,7 @@
     },
     {
       "path": "templates/pages/list_services.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/templates/pages/list_services.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5333,7 +5332,7 @@
     },
     {
       "path": "unsuspend/firewall/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/unsuspend/firewall/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5365,7 +5364,7 @@
     },
     {
       "path": "unsuspend/user/index.php",
-      "source_type": "verbatim",
+      "source_type": "derived",
       "upstream_path": "web/unsuspend/user/index.php",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5397,7 +5396,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-300.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-300.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5413,7 +5412,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-300.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-300.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5429,7 +5428,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-300italic.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-300italic.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5445,7 +5444,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-300italic.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-300italic.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5461,7 +5460,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-500.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-500.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5477,7 +5476,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-500.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-500.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5493,7 +5492,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-500italic.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-500italic.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5509,7 +5508,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-500italic.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-500italic.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5525,7 +5524,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-600.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-600.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5541,7 +5540,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-600.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-600.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5557,7 +5556,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-600italic.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-600italic.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5573,7 +5572,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-600italic.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-600italic.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5589,7 +5588,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-700.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-700.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5605,7 +5604,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-700.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-700.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5621,7 +5620,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-700italic.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-700italic.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5637,7 +5636,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-700italic.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-700italic.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5653,7 +5652,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-italic.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-italic.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5669,7 +5668,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-italic.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-italic.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5685,7 +5684,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-regular.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-regular.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5701,7 +5700,7 @@
     },
     {
       "path": "webfonts/exo-v20-latin-regular.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/exo-v20-latin-regular.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5717,7 +5716,7 @@
     },
     {
       "path": "webfonts/fa-solid-900.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/fa-solid-900.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5734,7 +5733,7 @@
     },
     {
       "path": "webfonts/inconsolata-regular.woff",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/inconsolata-regular.woff",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
@@ -5750,7 +5749,7 @@
     },
     {
       "path": "webfonts/inconsolata-regular.woff2",
-      "source_type": "derived",
+      "source_type": "verbatim",
       "upstream_path": "web/webfonts/inconsolata-regular.woff2",
       "upstream_ref": "bc3720a",
       "last_reconciled": "2026-08-12",
