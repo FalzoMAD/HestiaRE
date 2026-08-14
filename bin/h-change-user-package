@@ -33,7 +33,7 @@ is_package_available() {
 	DISK_QUOTA='0'
 	BANDWIDTH='0'
 
-	source_conf "$HESTIA_PACKAGE_DIR/$package.pkg"
+	source_conf "$CONF_DIR/packages/$package.pkg"
 
 	# Checking usage agains package limits
 	if [ "$WEB_DOMAINS" != 'unlimited' ]; then
@@ -74,7 +74,7 @@ change_user_package() {
 	# lost on a package change, and a docker customer lost the address their isolation rule is
 	# rendered from. Only the fields a package actually defines are touched now.
 	local key
-	source_conf "$HESTIA_PACKAGE_DIR/$package.pkg"
+	source_conf "$CONF_DIR/packages/$package.pkg"
 	update_user_value "$user" '$PACKAGE' "$package"
 	for key in WEB_TEMPLATE BACKEND_TEMPLATE PROXY_TEMPLATE WEB_DOMAINS WEB_ALIASES \
 		MAIL_DOMAINS MAIL_ACCOUNTS RATE_LIMIT DATABASES CRON_JOBS DISK_QUOTA \
@@ -107,12 +107,12 @@ check_hestia_demo_mode
 change_user_package
 
 # Update user shell
-shell_conf=$(cat "$HESTIA_PACKAGE_DIR/$package.pkg" | grep -m1 'SHELL' | cut -f 2 -d \')
+shell_conf=$(cat "$CONF_DIR/packages/$package.pkg" | grep -m1 'SHELL' | cut -f 2 -d \')
 $BIN/h-change-user-shell "$user" "$shell_conf"
 
 # Run template trigger
-if [ -x "$HESTIA_PACKAGE_DIR/$package.sh" ]; then
-	$HESTIA_PACKAGE_DIR/$package.sh "$user" "$CONTACT" "$NAME"
+if [ -x "$CONF_DIR/packages/$package.sh" ]; then
+	$CONF_DIR/packages/$package.sh "$user" "$CONTACT" "$NAME"
 fi
 
 # Update disk quota

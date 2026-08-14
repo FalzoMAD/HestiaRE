@@ -19,8 +19,9 @@ opens above it.
   firewall data under `CONF_DIR`, out of the install root that `h-update-hestia` replaces wholesale.
   The shipped `default`/`system.pkg` are samples now, kept in `share/hestia/packages/` and seeded
   into the instance dir at install (only when absent, so a re-run never clobbers an admin package).
-  All 35 path references went through one `HESTIA_PACKAGE_DIR` variable; the panel never touched the
-  path directly, only `h-*` commands, so nothing in `web/` changed.
+  All 35 path references now write `$CONF_DIR/packages` directly, the same way `firewall/`, `queue/`
+  and `ips/` are referenced (no dedicated variable - the path is under `CONF_DIR` and self-evident).
+  The panel never touched the path directly, only `h-*` commands, so nothing in `web/` changed.
 
 ### Added
 

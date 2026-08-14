@@ -283,10 +283,10 @@ cp -r $USER_DATA/ssl $tmpdir/hestia/
 # .pkg name is the PACKAGE field of the user.conf just copied. Restore only ADDS it, never
 # overwrites an existing one - see h-restore-user.
 pkg_name=$(grep -m1 "^PACKAGE=" $USER_DATA/user.conf | cut -f2 -d "'")
-if [ -n "$pkg_name" ] && [ -e "$HESTIA_PACKAGE_DIR/$pkg_name.pkg" ]; then
+if [ -n "$pkg_name" ] && [ -e "$CONF_DIR/packages/$pkg_name.pkg" ]; then
 	mkdir -p $tmpdir/hestia/packages
-	cp -f "$HESTIA_PACKAGE_DIR/$pkg_name.pkg" $tmpdir/hestia/packages/
-	[ -e "$HESTIA_PACKAGE_DIR/$pkg_name.sh" ] && cp -f "$HESTIA_PACKAGE_DIR/$pkg_name.sh" $tmpdir/hestia/packages/
+	cp -f "$CONF_DIR/packages/$pkg_name.pkg" $tmpdir/hestia/packages/
+	[ -e "$CONF_DIR/packages/$pkg_name.sh" ] && cp -f "$CONF_DIR/packages/$pkg_name.sh" $tmpdir/hestia/packages/
 	echo -e "$(date "+%F %T") package $pkg_name" | tee -a $BACKUP/$user.log
 fi
 

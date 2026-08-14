@@ -675,7 +675,7 @@ init_hestia_structure() {
 	# so it lives under CONF_DIR and is created here, then seeded from share/ below.
 	mkdir -p "$HESTIA/conf" "$HESTIA_SSL" \
 		"$CONF_DIR/ips" "$CONF_DIR/queue" \
-		"$CONF_DIR/users" "$CONF_DIR/firewall" "$HESTIA_PACKAGE_DIR" \
+		"$CONF_DIR/users" "$CONF_DIR/firewall" "$CONF_DIR/packages" \
 		"$HESTIA/.sessions"
 	# caddy, exim and proftpd all read the panel certificate as non-root, all of them via group mail.
 	chown root:mail "$HESTIA_SSL" && chmod 0750 "$HESTIA_SSL"
@@ -720,12 +720,12 @@ configure_hestia() {
 	# clobber an admin-created package that a re-run might find: copy per file only when absent.
 	for _pkg in "$HESTIA/share/hestia/packages/"*.pkg; do
 		[ -e "$_pkg" ] || continue
-		_dest="$HESTIA_PACKAGE_DIR/$(basename "$_pkg")"
+		_dest="$CONF_DIR/packages/$(basename "$_pkg")"
 		[ -e "$_dest" ] || cp -f "$_pkg" "$_dest"
 	done
 	local -a dom; IFS='.' read -r -a dom <<< "$HESTIA_HOSTNAME"
 	if [ -n "${dom[-2]:-}" ] && [ -n "${dom[-1]:-}" ]; then
-		sed -i "s/domain.tld/${dom[-2]}.${dom[-1]}/g" "$HESTIA_PACKAGE_DIR/"*.pkg 2>/dev/null || true
+		sed -i "s/domain.tld/${dom[-2]}.${dom[-1]}/g" "$CONF_DIR/packages/"*.pkg 2>/dev/null || true
 	fi
 	mkdir -p "$CONF_DIR/firewall"
 	cp -f "$HESTIA/share/firewall/rules.conf" "$CONF_DIR/firewall/rules.conf"

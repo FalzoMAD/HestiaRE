@@ -51,7 +51,7 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Deleting user package
-rm -f "$HESTIA_PACKAGE_DIR/$package.pkg"
+rm -f "$CONF_DIR/packages/$package.pkg"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

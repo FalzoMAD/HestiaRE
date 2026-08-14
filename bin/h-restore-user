@@ -190,7 +190,7 @@ if [ "$create_user" = 'yes' ]; then
 	if [ -d "$tmpdir/$backup_system/packages" ]; then
 		for _pkg in "$tmpdir/$backup_system/packages/"*; do
 			[ -e "$_pkg" ] || continue
-			_dest="$HESTIA_PACKAGE_DIR/$(basename "$_pkg")"
+			_dest="$CONF_DIR/packages/$(basename "$_pkg")"
 			if [ -e "$_dest" ]; then
 				echo "$(date "+%F %T") package $(basename "$_pkg") exists on target, kept unchanged" >> $tmpdir/restore.log 2>/dev/null || true
 			else

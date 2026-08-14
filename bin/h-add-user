@@ -69,7 +69,7 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Parsing package data
-pkg_data=$(cat $HESTIA_PACKAGE_DIR/$package.pkg | egrep -v "TIME|DATE")
+pkg_data=$(cat $CONF_DIR/packages/$package.pkg | egrep -v "TIME|DATE")
 
 # Checking shell
 shell_conf=$(echo "$pkg_data" | grep -m1 'SHELL' | cut -f 2 -d \')
@@ -280,8 +280,8 @@ if [ "$user" != "$ROOT_USER" ]; then
 fi
 
 # Run template trigger
-if [ -x "$HESTIA_PACKAGE_DIR/$package.sh" ]; then
-	$HESTIA_PACKAGE_DIR/$package.sh "$user" "$email" "$name"
+if [ -x "$CONF_DIR/packages/$package.sh" ]; then
+	$CONF_DIR/packages/$package.sh "$user" "$email" "$name"
 fi
 
 # Adding jailed sftp env

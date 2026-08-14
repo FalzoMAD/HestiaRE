@@ -73,8 +73,8 @@ rebuild_user_conf() {
 	# customers only by chance.
 	syshealth_repair_user_config
 	# Run template trigger
-	if [ -x "$HESTIA_PACKAGE_DIR/$PACKAGE.sh" ]; then
-		$HESTIA_PACKAGE_DIR/$PACKAGE.sh "$user" "$CONTACT" "$NAME"
+	if [ -x "$CONF_DIR/packages/$PACKAGE.sh" ]; then
+		$CONF_DIR/packages/$PACKAGE.sh "$user" "$CONTACT" "$NAME"
 	fi
 
 	# Rebuild user. Every caller is a rebuild or restore path, so the account usually exists and

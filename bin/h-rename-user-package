@@ -41,7 +41,7 @@ fi
 
 is_package_valid "$old_name"
 is_object_format_valid "$new_name" "New package"
-pkg_dir="$HESTIA_PACKAGE_DIR"
+pkg_dir="$CONF_DIR/packages"
 if [ -e "$pkg_dir/$new_name.pkg" ]; then
 	check_result "$E_NOTEXIST" "package $new_name exist"
 fi
@@ -53,11 +53,11 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
-if [ -e "$HESTIA_PACKAGE_DIR/$old_name.pkg" ]; then
-	mv "$HESTIA_PACKAGE_DIR/$old_name.pkg" "$HESTIA_PACKAGE_DIR/$new_name.pkg"
+if [ -e "$CONF_DIR/packages/$old_name.pkg" ]; then
+	mv "$CONF_DIR/packages/$old_name.pkg" "$CONF_DIR/packages/$new_name.pkg"
 	# Don't leave the .sh file behind
-	if [ -e "$HESTIA_PACKAGE_DIR/$old_name.sh" ]; then
-		mv "$HESTIA_PACKAGE_DIR/$old_name.sh" "$HESTIA_PACKAGE_DIR/$new_name.sh"
+	if [ -e "$CONF_DIR/packages/$old_name.sh" ]; then
+		mv "$CONF_DIR/packages/$old_name.sh" "$CONF_DIR/packages/$new_name.sh"
 	fi
 
 	# Update package for existing users
