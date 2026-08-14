@@ -12,6 +12,22 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **What the panel must not reach moved to `sbin/`** (#209). The panel runs as user `hestia` and
+  reaches its commands through `sudo …/bin/*`, and `bin/` held more than commands: the PHP wrappers
+  and the install, uninstall and update entry points. Those are now in `/usr/local/hestia/sbin`,
+  which the sudo rule does not name, so the wildcard says what it means - `bin/` **is** the
+  panel-callable surface. A directory is a boundary that cannot rot; a list of 213 command names
+  would have. All seven are HestiaRE-native with no `v-*` symlink, so no upstream path changes.
+  Root keeps them on its `PATH`. Not moved, although never called by the panel: `h-add-sys-*` and
+  friends - the panel does call five of them (fail2ban, firewall, quota, cgroups, pma-sso), so that
+  group has no clean edge. The updater removes the seven from `bin/` after copying, otherwise the
+  old copies would survive the update that is meant to remove them.
+- **`share/sudo/hestia` is now `share/hestia/sudoers`** (#209), copied to an explicit target name.
+  `share/`'s first level names a service, and sudo is a function rather than one. The target must
+  stay `/etc/sudoers.d/hestia`: sudo ignores any file in that directory whose name contains a dot.
+
 ### Fixed
 
 - **The reboot fallback for the panel certificate was never eligible to run** (#564). cron refuses a

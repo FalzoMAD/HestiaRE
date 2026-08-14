@@ -60,7 +60,7 @@ HESTIA_SSL="/etc/ssl/hestia"
 MAIL_SNI_DIR="/etc/exim4/ssl"
 HESTIA_BACKUP="/root/hst_backups/$(date +%d%m%Y%H%M)"
 # CLI helpers run through the hestia-php wrapper (panel PHP version indirection)
-HESTIA_PHP="$HESTIA/bin/hestia-php"
+HESTIA_PHP="$HESTIA/sbin/hestia-php"
 USER_DATA=$CONF_DIR/users/$user
 # Selectable vhost templates (the customer picks these), the non-selectable ones served
 # from share/, and the FPM pool profiles. PHPTPL is its own anchor rather than

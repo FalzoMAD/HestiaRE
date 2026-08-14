@@ -68,6 +68,12 @@ rm -f /tmp/hestiare-update.tar.gz
 systemctl stop caddy hestia-php 2>/dev/null || true
 cp -r "/tmp/hestiare-$LATEST/." "$HESTIA/"
 rm -rf "/tmp/hestiare-$LATEST"
+# cp -r never deletes, so a box updated across #209 would keep the old copies in bin/ - and the
+# sudo rule grants bin/*, so the interpreter-as-root path would survive the very update that
+# removes it. Only the seven that moved, by name.
+for _moved in hestia hestia-php hestia-php-fpm hestia-php-confd h-install-hestia h-uninstall-hestia h-update-hestia; do
+	[ -e "$HESTIA/sbin/$_moved" ] && rm -f "$HESTIA/bin/$_moved"
+done
 # No apt-package migration step: HestiaRE ships no hestia-* apt packages.
 # Migrate any legacy $HESTIA/data/* dirs to their $CONF_DIR targets (#148)
 # while the panel is stopped, so the new code never reads the old paths.

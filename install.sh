@@ -10,7 +10,7 @@
 #   3. fetch + extract the release tarball into /usr/local/hestia
 #   4. run the wizard (func/wizard.sh)  -> writes /etc/hestia/install.conf
 #   5. seed /etc/hestia (env + hestia.conf) so h-* commands can run
-#   6. hand off to bin/h-install-hestia  (or: hestia install)
+#   6. hand off to sbin/h-install-hestia  (or: hestia install)
 #
 # There is no `just` dependency anymore — the installer is pure bash.
 #
@@ -218,7 +218,7 @@ main() {
     echo "========================================================================"
     echo ""
 
-    "${INSTALL_DIR}/bin/h-install-hestia"
+    "${INSTALL_DIR}/sbin/h-install-hestia"
 }
 
 main "$@"

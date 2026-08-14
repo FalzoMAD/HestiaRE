@@ -5,7 +5,7 @@
 # HestiaRE - Installer Helper Library                                        #
 #                                                                           #
 # General home for cross-cutting install-time helpers, sourced by           #
-# bin/h-install-hestia and the other lifecycle commands:                    #
+# sbin/h-install-hestia and the other lifecycle commands:                    #
 #   - hestia_apt    : apt wrapper (spinner + stdout->log, stderr->term+log) #
 #   - load_os_profile : per-OS data for all supported targets               #
 #   - seed_hestia_etc  : create /etc/hestia env + seed hestia.conf          #
@@ -193,9 +193,10 @@ seed_hestia_etc() {
 		"export CONF_DIR='/etc/hestia'" \
 		"if [ -f /etc/hestia/local.conf ]; then . /etc/hestia/local.conf; fi" \
 		> /etc/hestia/hestia.env
-	# root-only (0600): /etc/profile skips it for non-root, so login users aren't exposed
-	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$PATH:%s/bin\nexport PATH\n' \
-		"$hestia_root" "$hestia_root" > /etc/profile.d/hestia.sh
+	# root-only (0600): /etc/profile skips it for non-root, so login users aren't exposed.
+	# sbin holds what the panel must never reach through sudo (#209) - root still types it.
+	printf 'export HESTIA='"'"'%s'"'"'\nPATH=$PATH:%s/bin:%s/sbin\nexport PATH\n' \
+		"$hestia_root" "$hestia_root" "$hestia_root" > /etc/profile.d/hestia.sh
 	chmod 600 /etc/profile.d/hestia.sh
 
 	# instance config lives in /etc/hestia/conf; bridge $HESTIA/conf as a DIRECTORY
@@ -306,8 +307,8 @@ migrate_data_layout() {
 		"$hestia_root/web/css/src/themes/flat.css"
 
 	# build the isolated panel conf.d - activates the isolation on existing installs
-	if [ -x "$hestia_root/bin/hestia-php-confd" ] && [ -f /etc/php/hestia/php-version ]; then
-		"$hestia_root/bin/hestia-php-confd" > /dev/null 2>&1 || true
+	if [ -x "$hestia_root/sbin/hestia-php-confd" ] && [ -f /etc/php/hestia/php-version ]; then
+		"$hestia_root/sbin/hestia-php-confd" > /dev/null 2>&1 || true
 	fi
 
 	# restrict the shell-profile snippet to root on existing installs (was world-readable)
