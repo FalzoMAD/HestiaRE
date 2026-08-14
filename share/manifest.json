@@ -152,6 +152,7 @@
     "DB_MARIADB": {
       "group": "db",
       "type": "checkbox",
+      "fixed_no_prompt": { "mailonly": true },
       "label": "MariaDB",
       "description": "MySQL-compatible DB server (incl. phpMyAdmin)",
       "question": "Install MariaDB?",
@@ -170,6 +171,7 @@
     "DB_POSTGRESQL": {
       "group": "db",
       "type": "checkbox",
+      "fixed_no_prompt": { "mailonly": false },
       "label": "PostgreSQL",
       "description": "Object-relational DB server (web UI via Adminer addon)",
       "question": "Install PostgreSQL?",
@@ -179,6 +181,7 @@
     "DB_REDIS": {
       "group": "db",
       "type": "checkbox",
+      "fixed_no_prompt": { "mailonly": false },
       "label": "Redis",
       "description": "In-memory cache / key-value store (not a DB server)",
       "question": "Install Redis?",
@@ -190,6 +193,7 @@
       "type": "version_select",
       "question": "Which MariaDB version to install?",
       "visible_if": "DB_MARIADB == true",
+      "fixed_no_prompt": { "mailonly": "__os__" },
       "options": [
         { "value": "12.3",   "source": "mariadb_repo", "description": "MariaDB.org repo" },
         { "value": "11.8",   "source": "mariadb_repo", "description": "MariaDB.org repo" },

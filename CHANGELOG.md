@@ -14,6 +14,14 @@ opens above it.
 
 ### Fixed
 
+- **The panel never took over its own Let's Encrypt certificate** (#656). `UPDATE_HOSTNAME_SSL` has
+  been in the key registry since the fork with no repair block behind it, so it was absent on every
+  box - and both readers gate on `== "yes"`, which an absent key never is. `h-add-web-domain-ssl`
+  and `h-update-letsencrypt-ssl` therefore skipped the handoff in silence. Measured on a public
+  box: LE issued for the hostname, the certificate sat in the user's domain directory, and Caddy
+  went on serving the self-signed one from install day; setting the key and re-running
+  `h-update-host-certificate` switched it over at once. Same class as the empty-value keys of #654,
+  for a key that had no default anywhere to begin with.
 - **phpMyAdmin dragged apache2 onto a box that has no apache2** (#656). Its unversioned `php-*`
   dependencies resolve to `libapache2-mod-phpX` on some targets, which Depends on apache2 - and
   HestiaRE never uses that apache2, it only binds `*:80`, after which nginx cannot bind its own
@@ -26,6 +34,10 @@ opens above it.
 
 ### Changed
 
+- **The mailonly preset asks nothing about databases** (#656). MariaDB is installed silently from
+  the OS repositories, because Roundcube keeps a database there and nobody else ever touches it;
+  PostgreSQL, Redis and phpMyAdmin are off without a question. The whole database screen therefore
+  disappears from that preset.
 - **The mailonly preset stops offering what a mail box has no use for** (#656): Composer, Docker,
   the file manager and phpMyAdmin. All four were already off by default there; now they are not on
   the screen at all, and each stays installable by hand afterwards. phpMyAdmin was the interesting
