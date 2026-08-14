@@ -56,8 +56,6 @@ check_args '2' "$#" 'RULE DIRECTION'
 # being passed as if it were a second name. is_format_valid dispatches on variable NAMES and has no
 # 'source_rule' case, so call the underlying validator with the value.
 is_int_format_valid "$source_rule" 'rule id'
-# The 'comment' validation that used to sit here read a variable this command never sets, so the
-# guard around it was always false. It takes RULE and DIRECTION - there is no comment to check.
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 is_object_valid "$CONF_DIR/firewall/rules" 'RULE' "$source_rule"
 
