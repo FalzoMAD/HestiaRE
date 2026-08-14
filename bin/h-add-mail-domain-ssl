@@ -69,9 +69,8 @@ is_web_domain_cert_valid
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode
 
-if [ -n "$restart" ]; then
-	is_format_valid "$restart"
-fi
+# is_format_valid takes variable NAMES, and the line above already checks 'restart' by name. Passing
+# the value made every caller with a RESTART argument fail - which is the Let's Encrypt path (#564).
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

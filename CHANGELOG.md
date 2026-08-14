@@ -12,6 +12,21 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **The reboot fallback for the panel certificate was never eligible to run** (#564). cron refuses a
+  group- or world-writable file in `/etc/cron.d` and says so only in its own log
+  (`INSECURE MODE (group/other writable)`), and the installer's umask left `hestia-ssl` at `0664`
+  while every other file there is `0644`. Measured on a public box across a real reboot: the file
+  sat untouched and the log carried the refusal once a minute. So the missing panel certificate had
+  two independent causes, not one - this and the fact that the request only ever happened at reboot.
+- **Two commands refused every call that passed their optional argument** (#564).
+  `is_format_valid` takes variable NAMES; `h-add-mail-domain-ssl` and `h-restart-system` handed it
+  the VALUE, so `h-add-mail-domain-ssl … updatessl` and `h-restart-system yes 5` both died with
+  "names no variable". The first is the Let's Encrypt path for a mail domain, which was therefore
+  impossible; both call sites already validated the same argument correctly one line earlier. A
+  sweep over `bin/` and `func/` found no third one.
+
 ### Changed
 
 - **The panel certificate and the mail SNI links leave the install root** (#564). Both sat in

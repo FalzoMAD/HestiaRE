@@ -28,9 +28,9 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 check_args '1' "$#" 'RESTART [DELAY]'
 is_format_valid 'restart'
-if [ -n "$delay" ]; then
-	is_format_valid "$delay" 'delay'
-fi
+# By NAME, not by value: the value form looked the delay up as a variable and refused every call
+# that passed one.
+is_format_valid 'delay'
 
 # Perform verification if read-only mode is enabled
 check_hestia_demo_mode

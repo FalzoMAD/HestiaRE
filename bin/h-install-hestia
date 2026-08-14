@@ -920,6 +920,9 @@ finalize_install() {
 		echo "       is retried once after the next reboot, or run h-add-letsencrypt-host by hand."
 		echo "@reboot root sleep 10 && rm /etc/cron.d/hestia-ssl && PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:' && $HESTIA/bin/h-add-letsencrypt-host" \
 			> /etc/cron.d/hestia-ssl
+		# cron REFUSES a group- or world-writable file in /etc/cron.d and says so only in its log
+		# ("INSECURE MODE"). The installer's umask left it 0664, so this fallback never ran anywhere.
+		chmod 644 /etc/cron.d/hestia-ssl
 	fi
 	echo "[ * ] Building initial RRD graphs..."
 	"$BIN/h-update-sys-rrd" > /dev/null 2>&1 || true
