@@ -981,11 +981,11 @@ is_user_format_valid() {
 	else
 		if [ -n "$3" ]; then
 			maxlenght=$(($3 - 2))
-			if ! [[ "$1" =~ ^[[:alnum:]][-|\.|_[:alnum:]]{0,$maxlenght}[[:alnum:]]$ ]]; then
+			if ! [[ "$1" =~ ^[[:alnum:]][-._[:alnum:]]{0,$maxlenght}[[:alnum:]]$ ]]; then
 				check_result "$E_INVALID" "invalid $2 format :: $1"
 			fi
 		else
-			if ! [[ "$1" =~ ^[[:alnum:]][-|\.|_[:alnum:]]{0,28}[[:alnum:]]$ ]]; then
+			if ! [[ "$1" =~ ^[[:alnum:]][-._[:alnum:]]{0,28}[[:alnum:]]$ ]]; then
 				check_result "$E_INVALID" "invalid $2 format :: $1"
 			fi
 		fi
@@ -996,7 +996,7 @@ is_user_format_valid() {
 
 	# Only for new users
 	if [[ "$FROM_V_ADD_USER" == "true" ]]; then
-		if ! [[ "$1" =~ ^[a-zA-Z][-|_[:alnum:]]{0,28}[[:alnum:]]$ ]]; then
+		if ! [[ "$1" =~ ^[a-zA-Z][-_[:alnum:]]{0,28}[[:alnum:]]$ ]]; then
 			check_result "$E_INVALID" "invalid $2 format :: $1"
 		fi
 	fi
@@ -1400,7 +1400,7 @@ is_fw_port_format_valid() {
 			check_result "$E_INVALID" "invalid port format :: $1"
 		fi
 	else
-		if ! [[ "$1" =~ ^[0-9][-|,|:|0-9]{0,76}[0-9]$ ]]; then
+		if ! [[ "$1" =~ ^[0-9][-,:0-9]{0,76}[0-9]$ ]]; then
 			check_result "$E_INVALID" "invalid port format and/or more than 78 chars used :: $1"
 		fi
 	fi
@@ -1467,7 +1467,7 @@ is_cron_format_valid() {
 			check_format='ok'
 		fi
 	fi
-	if [[ "$1" =~ ^[0-9][-|,|0-9]{0,70}[\/][0-9]$ ]]; then
+	if [[ "$1" =~ ^[0-9][-,0-9]{0,70}[\/][0-9]$ ]]; then
 		check_format='ok'
 		crn_values=${1//,/ }
 		crn_values=${crn_values//-/ }
@@ -1519,7 +1519,7 @@ is_valid_swap_size() {
 }
 
 is_object_name_format_valid() {
-	if ! [[ "$1" =~ ^[-|\ |\.|_[:alnum:]]{0,50}$ ]]; then
+	if ! [[ "$1" =~ ^[-\ ._[:alnum:]]{0,50}$ ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
 	fi
 }
@@ -1534,7 +1534,7 @@ is_name_format_valid() {
 
 # Object validator
 is_object_format_valid() {
-	if ! [[ "$1" =~ ^[[:alnum:]][-|\.|_[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
+	if ! [[ "$1" =~ ^[[:alnum:]][-._[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
 	fi
 }
@@ -1585,7 +1585,7 @@ is_format_valid_shell() {
 
 # Service name validator
 is_service_format_valid() {
-	if ! [[ "$1" =~ ^[[:alnum:]][-|\.|_[:alnum:]]{0,64}$ ]]; then
+	if ! [[ "$1" =~ ^[[:alnum:]][-._[:alnum:]]{0,64}$ ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
 	fi
 }
@@ -1714,7 +1714,7 @@ is_folder_exists() {
 }
 
 is_command_valid_format() {
-	if [[ ! "$1" =~ ^v-[[:alnum:]][-|\.|_[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
+	if [[ ! "$1" =~ ^v-[[:alnum:]][-._[:alnum:]]{0,64}[[:alnum:]]$ ]]; then
 		check_result "$E_INVALID" "Invalid command format"
 	fi
 	if [[ -n $(echo "$1" | grep -e '\-\-') ]]; then

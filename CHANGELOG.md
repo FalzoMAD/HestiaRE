@@ -12,6 +12,19 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **A validator character class let `|` through into a `bash`-executed queue line** (#393, GHSA-47mf
+  class). `is_object_format_valid` and eight sibling validators wrote their allowed set as
+  `[-|\.|_[:alnum:]]`; inside a bracket expression the `|` and `\` are *members*, not alternation,
+  so a pipe character passed validation. `h-schedule-user-backup-download` puts its (validated)
+  backup name **unquoted** into `conf/queue/backup.pipe`, which `h-update-sys-queue` runs through
+  `bash` as root - so a backup name like `x|command` became `h-download-backup admin x|command`, a
+  shell pipe to an attacker-named command, reachable from the panel's download form. Demonstrated on
+  a VM before and after: the crafted name is refused now, real archive names and the backup queue
+  are unaffected. The same class was corrected in all nine validators (username, service, command,
+  firewall port, cron, object name), each verified to still accept its legitimate inputs.
+
 ### Changed
 
 - **What the panel must not reach moved to `sbin/`** (#209). The panel runs as user `hestia` and
