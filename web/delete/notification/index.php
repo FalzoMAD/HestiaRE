@@ -7,7 +7,7 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 // Check token
 verify_csrf($_GET);
 
-if ($_GET["delete"] == 1) {
+if (($_GET["delete"] ?? 0) == 1) {
 	if (empty($_GET["notification_id"])) {
 		exec(HESTIA_CMD . "h-delete-user-notification " . $user . " all", $output, $return_var);
 	} else {
@@ -34,9 +34,9 @@ if ($_GET["delete"] == 1) {
 			$output,
 			$return_var,
 		);
-		check_return_code($return_var, $output);
-		unset($output);
 	}
+	check_return_code($return_var, $output);
+	unset($output);
 }
 
 exit();

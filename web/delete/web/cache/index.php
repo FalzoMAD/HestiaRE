@@ -17,7 +17,9 @@ if (!empty($_GET["domain"])) {
 	$v_domain = quoteshellarg($_GET["domain"]);
 	exec(HESTIA_CMD . "h-purge-nginx-cache " . $user . " " . $v_domain, $output, $return_var);
 	check_return_code($return_var, $output);
+	$_SESSION["ok_msg"] = _("NGINX cache has been purged successfully.");
+	header("Location: /edit/web/?domain=" . $_GET["domain"]);
+	exit();
 }
-$_SESSION["ok_msg"] = _("NGINX cache has been purged successfully.");
-header("Location: /edit/web/?domain=" . $_GET["domain"]);
+header("Location: /list/web/");
 exit();

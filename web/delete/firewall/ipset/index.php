@@ -22,8 +22,8 @@ if (!empty($_GET["listname"])) {
 		$output,
 		$return_var,
 	);
+	check_return_code($return_var, $output);
 }
-check_return_code($return_var, $output);
 unset($output);
 
 $back = $_SESSION["back"];

@@ -12,8 +12,8 @@ if (!empty($_GET["domain"])) {
 	$v_username = quoteshellarg($user);
 	$v_domain = quoteshellarg($_GET["domain"]);
 	exec(HESTIA_CMD . "h-suspend-web-domain " . $user . " " . $v_domain, $output, $return_var);
+	check_return_code($return_var, $output);
 }
-check_return_code($return_var, $output);
 unset($output);
 
 $back = $_SESSION["back"];

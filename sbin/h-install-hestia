@@ -719,17 +719,16 @@ configure_hestia() {
 	find "$HESTIA/bin" -maxdepth 1 -name 'v-*' -xtype l -delete 2> /dev/null || true
 
 	echo "[ * ] Installing firewall data; seeding hosting packages..."
-	# Seed the shipped default/system.pkg into the instance dir, then customize (#663). Never
-	# clobber an admin-created package that a re-run might find: copy per file only when absent.
+	# Seed the shipped default/system.pkg into the instance dir (#663). Never clobber an
+	# admin-created package that a re-run might find: copy per file only when absent. There used to
+	# be a "s/domain.tld/<host>/" pass over the whole directory here - it only ever filled upstream's
+	# NS field, which went with bind9 (#619), so it rewrote nothing of ours while ranging over every
+	# admin package. Configure re-runs when install.conf changes, so that was reachable.
 	for _pkg in "$HESTIA/share/hestia/packages/"*.pkg; do
 		[ -e "$_pkg" ] || continue
 		_dest="$CONF_DIR/packages/$(basename "$_pkg")"
 		[ -e "$_dest" ] || cp -f "$_pkg" "$_dest"
 	done
-	local -a dom; IFS='.' read -r -a dom <<< "$HESTIA_HOSTNAME"
-	if [ -n "${dom[-2]:-}" ] && [ -n "${dom[-1]:-}" ]; then
-		sed -i "s/domain.tld/${dom[-2]}.${dom[-1]}/g" "$CONF_DIR/packages/"*.pkg 2>/dev/null || true
-	fi
 	mkdir -p "$CONF_DIR/firewall"
 	cp -f "$HESTIA/share/firewall/rules.conf" "$CONF_DIR/firewall/rules.conf"
 	# Strip mail firewall rules when there is no mail block (was: profile != standard)

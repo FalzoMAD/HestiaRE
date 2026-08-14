@@ -104,7 +104,7 @@ and `#`); any line that doesn't is a hit to inspect. Never regex-strip a trailin
 ### CLI conventions
 ```
 h-*    HestiaRE commands (renamed from v-* in Issue #22)
-v-*    symlinks only — ease of cherry-picking HestiaCP upstream changes
+v-*    symlinks only — HestiaCP CLI compatibility
 ```
 
 Symlink rules (non-negotiable):
@@ -206,6 +206,12 @@ whole tree**, `bin/` + `include/` + `web/` + `share/` + `install.sh`, not just t
   panel's firewall row then fell through to `systemctl` and **destroyed the live ruleset**.
 - **A validator or guard**: hardening one makes previously-dead checks fire. Find the callers that were
   silently passing before, and fix them in the same PR rather than exempting them.
+- **A MOVED file: grep the bare name, not the old path.** A path pattern only finds references that
+  spell the separator. `sbin/` cost seven live call sites written `"$BIN/hestia-php-confd"` — a
+  variable, so `bin/hestia-php-confd` matched none of them and a fresh install died. `func/ -> include/`
+  then cost `.php-cs-fixer.dist.php`, which writes `__DIR__ . "/func"` with no trailing slash, so the
+  formatter silently refused to run. Same shape twice: sweep the **basename on its own**, then every
+  variable that could prefix it, and only then the full path.
 - **`h-install-hestia` is a first-class caller of `h-*`** (deliberately — one code path, never an
   installer copy that drifts). So every guard must also make sense at **install time**, against a
   half-built box: the state it rejects may be exactly what an earlier install stage just produced.
@@ -262,6 +268,16 @@ Open the PR against `dev` — never merge it yourself; the author reviews and me
 The remote host, the exact API call, use of TOKEN and the test-VM fleet live in
 `CLAUDE.local.md` (untracked, so the personal host stays off the public GitHub mirror).
 
+### Before every minor release
+
+- Consolidate the `CHANGELOG.md` Unreleased section into the new minor (point releases stay
+  inside the cycle they belong to).
+- **Recompute the PROVENANCE manifests** against the current `upstream/hestiacp` snapshot, and
+  reseed `source_type` from the fresh numbers. `verbatim`/`derived` is a bucketing of the measured
+  `pct`, so it goes stale exactly when the numbers do — it drifted 80 entries out of step once
+  (#551) because nobody re-derived it. `eigenbau` is the one curated value; a recompute never
+  touches it.
+
 ---
 
 ## HESTIACP COMPATIBILITY
@@ -274,7 +290,12 @@ This is non-negotiable and permanent:
 When reimplementing HestiaCP functionality:
 - Read the original in `upstream/hestiacp` branch first
 - Reimplement clean for HestiaRE, do not copy entangled code verbatim
-- Direct cherry-pick only for isolated bugfixes with no HestiaCP-specific deps
+
+**Never cherry-pick.** Every adoption is a reimplementation, including isolated bugfixes.
+Challenge each upstream change on its own: what does the *diff* actually do (not the changelog
+title), do we already have it or something better, and is it an improvement worth the regression
+risk? Compare per function, not per file. The PROVENANCE manifests say which of our files still
+track upstream closely — that is orientation for the comparison, never a merge plan.
 
 ---
 
