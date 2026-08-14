@@ -12,12 +12,13 @@
       "derived": "Reimplemented or diverged from upstream on purpose (churn >3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
       "eigenbau": "HestiaRE-native: no upstream counterpart. The one curated value - a recompute never changes it. An 'inspired by' pointer belongs in the note, not in upstream_path."
     },
-    "symlink_policy": "v-* aliases are committed symlinks (upstream cherry-pick ease); they are NOT listed here - only real files carry provenance.",
+    "symlink_policy": "v-* aliases are committed symlinks (HestiaCP CLI compatibility); they are NOT listed here - only real files carry provenance.",
     "aggregate": {
       "upstream_mapped_files": 437,
       "eigenbau_files": 89,
       "weighted_pct": 12
-    }
+    },
+    "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it."
   },
   "files": [
     {

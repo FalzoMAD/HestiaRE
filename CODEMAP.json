@@ -19,17 +19,16 @@
     "note": "install_root is intentionally identical to HestiaCP — only instance_config changed (/etc/hestiacp → /etc/hestia). See PATHS.md for full reference."
   },
   "upstream_provenance": {
-    "purpose": "Maps HestiaRE files back to their HestiaCP origin so an upstream advisory or bugfix can be diffed/cherry-picked against the right file. Fork point: HestiaCP 1.9.6, kept read-only in the upstream/hestiacp branch. Each component carries an `upstream_ref` using these tags.",
+    "purpose": "Maps HestiaRE files back to their HestiaCP origin so an upstream advisory or bugfix can be diffed against the right file. Fork point: HestiaCP 1.9.6, kept read-only in the upstream/hestiacp branch. Each component carries an `upstream_ref` using these tags.",
     "tags": {
       "verbatim": "byte-identical to upstream (rare)",
-      "near-verbatim": "upstream file, renamed and/or path-migrated (v-*→h-*, /etc/hestiacp→/etc/hestia) but logic intact — cherry-pick candidate for isolated bugfixes",
-      "reimplemented": "clean HestiaRE reimplementation that diverges from upstream — do NOT cherry-pick, port by hand; the v-* symlink is usually removed (symlink_policy.escalation_rule)",
+      "near-verbatim": "upstream file, renamed and/or path-migrated (v-*->h-*, /etc/hestiacp->/etc/hestia) but logic intact - the cheapest file to compare an upstream change against, since our version is still close",
+      "reimplemented": "clean HestiaRE reimplementation that diverges from upstream - compare per function, not per file; the v-* symlink is usually removed (symlink_policy.escalation_rule)",
       "moved": "upstream file relocated in-tree (mainly install/deb/* and install/common/* → share/*, #119) but otherwise near-verbatim",
       "removed": "upstream component deleted from HestiaRE (bind9/DNS #58/#283, web terminal #59, REST API #146, SpamAssassin #284, software installer #56)",
       "hestiare-native": "no upstream equivalent — HestiaRE-only (Caddy + hestia-php panel services, the pure-bash installer, panel Eigenbau libs, repo tooling)"
     },
-    "cherry_pick_rule": "Direct cherry-pick ONLY for verbatim/near-verbatim files carrying an isolated, dependency-free bugfix (CLAUDE.md). reimplemented/moved/native = port manually. Always verify installed==fixed against the actual file, never the version label (#386 method).",
-    "verification_note": "The #386 triage is a worked example: near-verbatim files (include/db.sh) took a direct helper cherry-pick; reimplemented ones (include/main.sh parse_object_kv_list, the search-object commands) were confirmed safe/ported by hand, not cherry-picked.",
+    "verification_note": "The #386 triage is a worked example, from when direct picks were still allowed: near-verbatim files (include/db.sh) took a helper verbatim, reimplemented ones (include/main.sh parse_object_kv_list, the search-object commands) were confirmed safe or ported by hand. Kept as history - today the answer would be 'port by hand' in both cases.",
     "drift_watch": {
       "purpose": "Machine-checkable per-file drift markers (#412). share/upstream/sync-upstream.sh reads this map and, after refreshing the upstream/hestiacp snapshot, flags any listed file that upstream MOVED since its checked_ref — so drift is caught deterministically, not by chance (the jailbash 5-bind drift behind `--tmpfs /usr/share` was a lucky find). checked_ref is the upstream/hestiacp commit the HestiaRE copy was last human-verified against; bump it ONLY after re-verifying the file against the newer upstream. upstream_path handles renames (v-*→h-*). A ref-stamp (not a flat ignore list) distinguishes 'deliberately diverged, verified at ref X' from 'not looked at yet'.",
       "upstream_branch": "upstream/hestiacp",
@@ -40,14 +39,15 @@
           "note": "byte-identical to upstream at this ref (#412 re-sync of the 5 --tmpfs /usr/share binds)"
         }
       }
-    }
+    },
+    "adoption_rule": "HestiaRE does not cherry-pick. Every adoption is a reimplementation, including isolated bugfixes, and every upstream change is challenged on its own: what the diff actually does (not the changelog title), whether we already have it or better, and whether it is worth the regression risk. Compare per function. These tags say how close our file still is - orientation for that comparison, never a merge plan. Always verify installed==fixed against the actual file, never the version string."
   },
   "components": {
     "cli_commands": {
       "description": "All CLI commands. h-* prefix is HestiaRE-native (renamed from v-* in Issue #22). v-* symlinks for HestiaCP compatibility added in Issue #23. No hl-* commands.",
       "symlink_policy": {
         "baseline": "Each h-* command that predated Issue #23 has one v-* symlink. New h-* commands created after Issue #23 get NO v-* symlink — the v-* name never existed.",
-        "escalation_rule": "When a command is substantially rewritten and diverges significantly from its HestiaCP upstream equivalent, its v-* symlink is removed. Rationale: prevent accidental upstream cherry-picks onto an internally incompatible implementation. Applied in Issue #54 (v-add-sys-roundcube removed after total rewrite for OS-package migration).",
+        "escalation_rule": "When a command is substantially rewritten and diverges significantly from its HestiaCP upstream equivalent, its v-* symlink is removed. Rationale: prevent an upstream v-* command being mistaken for a drop-in equivalent of an internally incompatible implementation. Applied in Issue #54 (v-add-sys-roundcube removed after total rewrite for OS-package migration).",
         "deletion": "When removing an h-* command: remove its v-* symlink too — no orphans.",
         "creation": "Committed v-* symlinks ship in the tarball, so the installer does NOT blanket-create them (a `for h-* ; ln -s v-*` loop minted an orphan alias for every HestiaRE-native command, #123). configure_hestia only prunes dangling v-* (a `find -xtype l` — e.g. an alias left pointing at a renamed/removed h-*); h-check-sys-smoke check_v_symlinks_resolve guards against a dangling alias at runtime. No allowlist: an extra working alias for a native command is harmless and not worth maintaining a list for a compat layer meant to fade out."
       },
@@ -637,7 +637,7 @@
         "gitea": "Configurable via /etc/hestia/source.conf"
       },
       "install_conf": "/etc/hestia/install.conf — written by include/wizard.sh; HESTIA_* params + COMPONENT_* selections; sourced by h-install-hestia; COMPONENT_* kept current by h-add-*/h-delete-* via set_install_component",
-      "upstream_ref": "hestiare-native — the whole installer (install.sh, include/wizard.sh, sbin/h-install-hestia, include/helper.sh) was rebuilt from scratch (Makefile→just→bash, #106/#112/#114); upstream's install/hst-install-*.sh were removed (#26). No cherry-pick path.",
+      "upstream_ref": "hestiare-native — the whole installer (install.sh, include/wizard.sh, sbin/h-install-hestia, include/helper.sh) was rebuilt from scratch (Makefile→just→bash, #106/#112/#114); upstream's install/hst-install-*.sh were removed (#26). No upstream counterpart.",
       "dependencies": [
         "installer"
       ],

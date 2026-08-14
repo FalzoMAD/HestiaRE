@@ -239,7 +239,7 @@ never collide.
 - Webmail availability now depends on Caddy + hestia-php; if Caddy is down, all
   `webmail.<domain>` vhosts 502 even with nginx up.
 - Backporting upstream `templates/mail/` changes is structurally incompatible: upstream
-  `.tpl` carry docroot+fastcgi, HestiaRE `.tpl` carry `proxy_pass`. Cherry-picks
+  `.tpl` carry docroot+fastcgi, HestiaRE `.tpl` carry `proxy_pass`. Backports
   conflict by design.
 
 ---

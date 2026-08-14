@@ -17,7 +17,8 @@
       "upstream_mapped_files": 336,
       "eigenbau_files": 36,
       "weighted_pct": 7
-    }
+    },
+    "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it."
   },
   "files": [
     {
