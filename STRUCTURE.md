@@ -118,7 +118,7 @@ compromise cannot reach panel-owned files. Customer domains get per-domain Sury 
 as the customer.
 
 **HestiaRE.** Sury repo factored into one idempotent helper `add_sury_repo <codename>`
-(`func/helper.sh:55-74`), called by both wizard-discovery (`func/wizard.sh:267`) and
+(`include/helper.sh:55-74`), called by both wizard-discovery (`include/wizard.sh:267`) and
 installer (`bin/h-install-hestia:92`) so only one Sury stanza is ever written (avoids
 apt's "Conflicting Signed-By"). The panel runs on a **dedicated PHP tree**
 `/etc/php/hestia/` (Sury reference version), not a deb, launched by the wrapper
@@ -155,7 +155,7 @@ env (a bare `$HESTIA` expands empty -> 502).
 - Panel PHP version is switchable with rollback (`bin/h-change-sys-panel-php:83-91`);
   upstream had no analogue (fixed by the deb).
 - `WEB_BACKEND=php-fpm` + `%backend_lsnr%` wiring is otherwise unchanged
-  (`func/domain.sh:100-131`).
+  (`include/domain.sh:100-131`).
 
 ---
 
@@ -290,14 +290,14 @@ by `fm-auth.php`, never the client (the "§7.2 invariant").
 
 ## 6. SFTP jail: static `/srv/jail` bind-mounts -> per-session `pam_namespace` tmpfs
 
-**Upstream.** `add_chroot_jail()` (`upstream:func/main.sh:1986`) creates
+**Upstream.** `add_chroot_jail()` (`upstream:include/main.sh:1986`) creates
 `/srv/jail/$user`, `chown 0:0`, and writes a **persistent systemd `.mount` unit**
 bind-mounting the real home into the jail; `v-add-user-sftp-jail` appends the user to a
 growing `Match User a|b|c` sshd list and does `chown root:root /home/$user` (ownership
 flip so the chroot component is root-owned). A `@reboot` cron re-seeds the dummy block.
 
 **HestiaRE.** Group-scoped, per-session, zero persistent on-disk jail state (#413):
-- `add_chroot_jail()` (`func/main.sh:1780`) reduces to `groupadd sftp-jailed` +
+- `add_chroot_jail()` (`include/main.sh:1780`) reduces to `groupadd sftp-jailed` +
   `usermod -aG sftp-jailed`; delete is `gpasswd -d`. No mounts, no sshd edits per user.
 - `bin/h-add-sys-sftp-jail` installs the machinery once: a tmpfiles mountpoint
   (`/run/hestia/jail` 0755 root:root - sshd's `safely_chroot()` refuses a writable
@@ -326,7 +326,7 @@ ownership flip; rebuild the jail per login on tmpfs, leaving the real home untou
   per user.
 - `jailbash` (interactive shell sandbox) is **shared** with upstream, only relocated
   `install/common/bubblewrap` -> `share/bubblewrap/` (#119); the shell allowlist was
-  trimmed to `nologin jailbash bash sh` (`func/main.sh:1414`, #412).
+  trimmed to `nologin jailbash bash sh` (`include/main.sh:1414`, #412).
 
 ---
 
@@ -336,12 +336,12 @@ ownership flip; rebuild the jail per login on tmpfs, leaving the real home untou
 
 **HestiaRE.** The installer seeds a **commented, inert** `#AllowUsers` directive plus
 guidance (`bin/h-install-hestia:121-131`); nothing is enforced until the operator
-uncomments it. `manage_sshd_allowusers(add|del, user)` (`func/main.sh:1794-1860`)
+uncomments it. `manage_sshd_allowusers(add|del, user)` (`include/main.sh:1794-1860`)
 edits only the `$user` token (comparing `${t%%@*}` so `root@ip` operator entries
 survive), preserves commented/active state, applies a **lockout guard** (re-comments
 rather than leave an active line with zero tokens), validates on a temp copy with
 `sshd -t -f`, and reloads ssh **only if the line is active**. Hooked from
-`h-add-user`, `h-delete-user`, `func/rebuild.sh:95` (restore path - bypasses
+`h-add-user`, `h-delete-user`, `include/rebuild.sh:95` (restore path - bypasses
 `h-add-user`, so without this a restored user is silently locked out), and the FTP
 sub-account add/delete hooks.
 
@@ -353,7 +353,7 @@ sub-account add/delete hooks.
   that bypasses these hooks locks the account out.
 - **#416 seed/regex bug**: the original regex matched the guidance comment, appending
   usernames to prose. Fixed to sshd's `#?AllowUsers` form + reworded seed
-  (`func/main.sh:1800-1805`). Existing installs carry the mangled comment; remediation
+  (`include/main.sh:1800-1805`). Existing installs carry the mangled comment; remediation
   is to re-seed (inert, no access impact).
 
 ---
@@ -364,8 +364,8 @@ sub-account add/delete hooks.
 `$HESTIA/conf/`); bootstrap is `/etc/hestiacp/hestia.conf`. Update overwrites the tree.
 
 **HestiaRE.** A single instance-config dir `/etc/hestia`, outside git, surviving
-updates. `CONF_DIR="${CONF_DIR:-/etc/hestia}"` (`func/main.sh:48`), exported via
-`func/helper.sh:133`. New residents that upstream lacks:
+updates. `CONF_DIR="${CONF_DIR:-/etc/hestia}"` (`include/main.sh:48`), exported via
+`include/helper.sh:133`. New residents that upstream lacks:
 
 | Path | Role |
 |---|---|
@@ -421,7 +421,7 @@ Two consequences worth knowing before touching this:
 - **The role picks the directory, not the service name.** In the both model nginx is the
   proxy and renders `share/web/nginx/default.tpl`; in nginx-only the same service is the
   web role and renders `templates/nginx/default.tpl`. Both files are called `default` and
-  are not interchangeable - `web_template_file` in `func/domain.sh` is the only place that
+  are not interchangeable - `web_template_file` in `include/domain.sh` is the only place that
   decides, and validators and renderer both go through it.
 - **`PHPTPL` is its own anchor**, not `$WEBTPL/$WEB_BACKEND`. `WEB_BACKEND` is a config
   VALUE (`php-fpm`); deriving a directory name from it would mean renaming the directory
@@ -481,6 +481,34 @@ removed - pure bash).
 **Follow-on.** `VERSION` is stamped by CI, never edited. Upstream update tooling keyed
 on deb package names does not apply. The panel and its PHP are OS/Sury packages + local
 wrappers (deltas 1-2), so there is no `hestia-nginx`/`hestia-php` deb to update.
+
+---
+
+## 11. Shared bash libraries: `func/` -> `include/`
+
+**Upstream.** `func/` holds the sourced shell libraries, plus a `func/internal/`
+subdirectory for the two PHP helpers it shells out to.
+
+**HestiaRE.** One flat `include/`. The `internal/` subdirectory is gone.
+
+**Why.** The directory holds sourced libraries - constants, path anchors, `source_conf`,
+whole subsystems like the nftables renderer - not only functions, so `func/` named a
+part for the whole. `internal/` promised a boundary nothing enforces: every file in
+there is exactly as internal as the rest.
+
+**Follow-on.** Two of these are easy to miss because nothing fails loudly when they are
+wrong - they just make a check look at less:
+
+| Anchor | What breaks if it still says `func/` |
+|---|---|
+| `.gitea/tools/lint-shell.sh:50` (`is_shell()`) | The regex decides which paths are shell at all. Stale = 18 libraries silently drop out of both lint tiers and the gate stays green on less. |
+| `.editorconfig:29` | The `shfmt` formatting contract is matched by glob; stale = the libraries lose their tab/indent rules. |
+
+Everything else is a plain path rewrite: `$HESTIA/include/*`, the `# shellcheck source=`
+directives, and `install.sh`'s bootstrap `${INSTALL_DIR}/include/`. `web/` never
+referenced the directory at all. No runtime migration exists or is needed - `h-update-hestia`
+copies the tree without removing, so an updated box would keep a stale `func/` that nothing
+sources; per the no-migration-before-v1 rule the answer is a reinstall, not a shim.
 
 ---
 

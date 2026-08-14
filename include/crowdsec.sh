@@ -2,8 +2,8 @@
 # Engine + nginx Layer-A bouncer for the current web model. Idempotent; no-op when nginx is not the front.
 
 # Declared here rather than in each of the six callers. Guarded: re-sourcing would reset an in-flight batch.
-# shellcheck source=/usr/local/hestia/func/firewall.sh
-declare -F fw_set_chain_destroy > /dev/null 2>&1 || source "$HESTIA/func/firewall.sh"
+# shellcheck source=/usr/local/hestia/include/firewall.sh
+declare -F fw_set_chain_destroy > /dev/null 2>&1 || source "$HESTIA/include/firewall.sh"
 
 # The EXPOSED web server (PROXY_SYSTEM fronts in 'both'), not "is nginx installed".
 crowdsec_public_web() {
@@ -162,7 +162,7 @@ crowdsec_apply() {
 	# include path. cp -f so a Hestia update refreshes the code; the config there is seed-if-absent.
 	cp -f "$share/lua/hestia_bouncer.lua" /etc/crowdsec/bouncers/hestia_bouncer.lua
 	cp -f "$share/nginx/crowdsec_init.conf" /etc/nginx/conf.d/crowdsec_init.conf
-	# Layer B (bot rate limiting) is func/botpolicy.sh, wired at web install. CrowdSec owns Layer A only.
+	# Layer B (bot rate limiting) is include/botpolicy.sh, wired at web install. CrowdSec owns Layer A only.
 
 	# Only 'capi' keeps the central blocklist. mesh is local plus peer exchange, so it must not enrol either.
 	[ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf" 2> /dev/null
@@ -185,8 +185,8 @@ crowdsec_apply() {
 	crowdsec_gate_bruteforce
 	if [ "$(sed -n "s/^FIREWALL_EXTENSION='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)" = 'fail2ban' ] \
 		&& [ -f /etc/fail2ban/jail.d/hestia.local ]; then
-		# shellcheck source=/usr/local/hestia/func/fail2ban.sh
-		declare -F fail2ban_gate_web_jail > /dev/null 2>&1 || source "$HESTIA/func/fail2ban.sh"
+		# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+		declare -F fail2ban_gate_web_jail > /dev/null 2>&1 || source "$HESTIA/include/fail2ban.sh"
 		fail2ban_gate_web_jail
 		systemctl reload-or-restart fail2ban > /dev/null 2>&1
 	fi
@@ -208,7 +208,7 @@ crowdsec_l3_setup() {
 	if [ ! -f "$marker" ]; then
 		cat > "$marker" <<-EOF
 			# HestiaRE CrowdSec L3 marker: presence enables the set, the DROP chain and the feeder timer.
-			# Managed by func/crowdsec.sh; do not edit.
+			# Managed by include/crowdsec.sh; do not edit.
 			SET='crowdsec-blacklists'
 		EOF
 		chmod 640 "$marker"

@@ -11,8 +11,8 @@
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_MAIL_WEBMAILER), if present
@@ -106,8 +106,8 @@ fi
 $BIN/h-log-action "system" "Info" "Plugins" "SnappyMail removed (Version: $version)."
 
 # Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).
-# shellcheck source=/usr/local/hestia/func/fail2ban.sh
-source "$HESTIA/func/fail2ban.sh"
+# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+source "$HESTIA/include/fail2ban.sh"
 source_conf "$HESTIA/conf/hestia.conf"
 fail2ban_refresh_webmail
 

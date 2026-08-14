@@ -4,19 +4,19 @@
 #
 # example: h-delete-sys-apache2 yes
 #
-# Thin entry point over the shared web-model switch core (func/web-model.sh, #120).
+# Thin entry point over the shared web-model switch core (include/web-model.sh, #120).
 # The model is derived from the resulting component set; MODE omitted/not 'yes'
 # previews, 'yes' applies. New h-* command: no v-* symlink.
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
-# shellcheck source=/usr/local/hestia/func/domain.sh
-source $HESTIA/func/domain.sh
-# shellcheck source=/usr/local/hestia/func/web-model.sh
-source $HESTIA/func/web-model.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/domain.sh
+source $HESTIA/include/domain.sh
+# shellcheck source=/usr/local/hestia/include/web-model.sh
+source $HESTIA/include/web-model.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 

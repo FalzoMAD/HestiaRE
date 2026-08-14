@@ -16,14 +16,14 @@ user=$1
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
-# shellcheck source=/usr/local/hestia/func/db.sh
-source $HESTIA/func/db.sh
-# shellcheck source=/usr/local/hestia/func/rebuild.sh
-source $HESTIA/func/rebuild.sh
-# shellcheck source=/usr/local/hestia/func/syshealth.sh
-source $HESTIA/func/syshealth.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/db.sh
+source $HESTIA/include/db.sh
+# shellcheck source=/usr/local/hestia/include/rebuild.sh
+source $HESTIA/include/rebuild.sh
+# shellcheck source=/usr/local/hestia/include/syshealth.sh
+source $HESTIA/include/syshealth.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 

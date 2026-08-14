@@ -10,10 +10,10 @@
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
-# shellcheck source=/usr/local/hestia/func/firewall.sh
-source $HESTIA/func/firewall.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/firewall.sh
+source $HESTIA/include/firewall.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -71,8 +71,8 @@ fw_set_replace "$SET6" "$CACHE6" 6
 # and the model gates only run at explicit transitions - so re-assert on this timer. File-checked, so a
 # no-op unless one actually drifted back. Removal direction only: re-adding would fight a deliberate removal.
 if [ "$FIREWALL_EXTENSION" = 'fail2ban' ]; then
-	# shellcheck source=/usr/local/hestia/func/crowdsec.sh
-	declare -F crowdsec_gate_bruteforce > /dev/null 2>&1 || source "$HESTIA/func/crowdsec.sh"
+	# shellcheck source=/usr/local/hestia/include/crowdsec.sh
+	declare -F crowdsec_gate_bruteforce > /dev/null 2>&1 || source "$HESTIA/include/crowdsec.sh"
 	crowdsec_gate_bruteforce
 fi
 

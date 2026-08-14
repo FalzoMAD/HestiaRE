@@ -47,7 +47,7 @@ for t in shellcheck shfmt; do
 done
 
 # The shell surface: the CLI, the sourced libraries, the bootstrap. v-* are symlinks (skipped by -f).
-is_shell() { [[ "$1" =~ ^(bin/h-|func/.*\.sh$|install\.sh$|\.gitea/tools/.*\.sh$) ]]; }
+is_shell() { [[ "$1" =~ ^(bin/h-|include/.*\.sh$|install\.sh$|\.gitea/tools/.*\.sh$) ]]; }
 
 mapfile -t ALL_FILES < <(git ls-files | while read -r f; do
 	is_shell "$f" && [ -f "$f" ] && echo "$f"
@@ -108,7 +108,7 @@ else
 	fi
 
 	# Formatting is judged as "do not make it worse", not "clean up on sight". 26 inherited files
-	# still deviate, several of them the installer and func/main.sh; demanding a reformat from whoever
+	# still deviate, several of them the installer and include/main.sh; demanding a reformat from whoever
 	# next edits one would bury their change - exactly what a mass reformat does, only piecemeal.
 	# So: a file that was clean in the base must stay clean, and a new file must start clean; a file
 	# that was already dirty is reported and left alone.

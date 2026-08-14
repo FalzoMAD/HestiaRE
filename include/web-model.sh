@@ -52,7 +52,7 @@ web_model_keyset() {
 }
 
 # apt wrapper that stays installer-consistent: at install time hestia_apt (spinner +
-# $LOG capture, func/helper.sh) is used unchanged; from the live switch (no $LOG) it
+# $LOG capture, include/helper.sh) is used unchanged; from the live switch (no $LOG) it
 # falls back to a plain noninteractive apt-get, conffile-safe for re-installs. This keeps
 # a fresh install's behaviour identical while letting configure_apache2 run standalone.
 _web_apt_install() {
@@ -158,8 +158,8 @@ apache_remoteip_disable() {
 # from the model globals. Extracted verbatim from h-add-sys-ip (144-181) so the IP add
 # and the model switch share one copy (#120). The MEF/rpaf/remoteip proxy-registration
 # appends stay in h-add-sys-ip (dormant unless those confs exist); the switch handles
-# remoteip via apache_remoteip_enable. Needs process_http2_directive (func/domain.sh)
-# and WEBTPL (func/main.sh) in the caller's scope.
+# remoteip via apache_remoteip_enable. Needs process_http2_directive (include/domain.sh)
+# and WEBTPL (include/main.sh) in the caller's scope.
 rebuild_ip_web_config() {
 	local ip="$1"
 	if [ -n "$WEB_SYSTEM" ]; then
@@ -564,9 +564,9 @@ web_model_run() {
 	# logpath still points at the old model's domains dir - a later `systemctl restart fail2ban` would
 	# re-glob that stale path and silently stop watching the new logs. Repoint + reload now so the switch
 	# survives a restart. Guarded on fail2ban being our extension; no-op otherwise.
-	if [ "${FIREWALL_EXTENSION:-}" = 'fail2ban' ] && [ -f "$HESTIA/func/fail2ban.sh" ]; then
-		# shellcheck source=/usr/local/hestia/func/fail2ban.sh
-		source "$HESTIA/func/fail2ban.sh"
+	if [ "${FIREWALL_EXTENSION:-}" = 'fail2ban' ] && [ -f "$HESTIA/include/fail2ban.sh" ]; then
+		# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+		source "$HESTIA/include/fail2ban.sh"
 		fail2ban_gate_web_jail
 		systemctl reload-or-restart fail2ban > /dev/null 2>&1
 	fi

@@ -6,8 +6,8 @@
 #                                                                           #
 #===========================================================================#
 
-# shellcheck source=/usr/local/hestia/func/identity.sh
-[ -f "$HESTIA/func/identity.sh" ] && source "$HESTIA/func/identity.sh"
+# shellcheck source=/usr/local/hestia/include/identity.sh
+[ -f "$HESTIA/include/identity.sh" ] && source "$HESTIA/include/identity.sh"
 
 # User account rebuild
 rebuild_user_conf() {
@@ -305,8 +305,8 @@ rebuild_web_domain_conf() {
 
 	# A restore or rebuild recreates the log, and fail2ban only globs at jail start. Idempotent.
 	if [ -n "$FIREWALL_EXTENSION" ]; then
-		# shellcheck source=/usr/local/hestia/func/fail2ban.sh
-		source $HESTIA/func/fail2ban.sh
+		# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+		source $HESTIA/include/fail2ban.sh
 		fail2ban_watch_domain add "$domain"
 	fi
 
@@ -372,9 +372,9 @@ rebuild_web_domain_conf() {
 	# Re-render the per-domain fragments from the domain flags (both self-guard + write nothing
 	# when unset): CrowdSec Layer A (ban -> 403, nginx-only) + the server-native Layer-B bot
 	# rate-limit (nginx.botlimit.conf / botlimit.apache2.conf).
-	type crowdsec_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/func/crowdsec.sh
+	type crowdsec_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/include/crowdsec.sh
 	crowdsec_render_domain_fragment "$user" "$domain"
-	type botpolicy_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/func/botpolicy.sh
+	type botpolicy_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/include/botpolicy.sh
 	botpolicy_render_domain_fragment "$user" "$domain"
 
 	# Re-apply directory listing (apache Options -Indexes flip lives only in the

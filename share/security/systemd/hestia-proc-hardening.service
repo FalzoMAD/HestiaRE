@@ -1,7 +1,7 @@
 #=========================================================================#
 # HestiaRE - /proc hardening (hidepid)                                    #
 #                                                                         #
-# Installed verbatim by proc_hardening_apply (func/helper.sh).            #
+# Installed verbatim by proc_hardening_apply (include/helper.sh).            #
 # DO NOT MODIFY THE INSTALLED COPY - it is regenerated.                   #
 #=========================================================================#
 #

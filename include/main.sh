@@ -811,7 +811,7 @@ send_notice() {
 		# Second writer of notifications.conf besides h-add-user-notification: sanitize NOTICE
 		# (rendered via x-html) here too or it's an XSS bypass. %quote% keeps the record intact.
 		topic=$(echo "$topic" | sed "s/'/%quote%/g")
-		notice=$("$HESTIA_PHP" "$HESTIA/func/sanitize_html.php" "$notice" | sed "s/'/%quote%/g")
+		notice=$("$HESTIA_PHP" "$HESTIA/include/sanitize_html.php" "$notice" | sed "s/'/%quote%/g")
 
 		touch $USER_DATA/notifications.conf
 		chmod 660 $USER_DATA/notifications.conf

@@ -13,16 +13,16 @@
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
-# shellcheck source=/usr/local/hestia/func/firewall.sh
-source $HESTIA/func/firewall.sh
-# shellcheck source=/usr/local/hestia/func/fail2ban.sh
-source $HESTIA/func/fail2ban.sh
-# shellcheck source=/usr/local/hestia/func/domain.sh
-source $HESTIA/func/domain.sh
-# shellcheck source=/usr/local/hestia/func/syshealth.sh
-source $HESTIA/func/syshealth.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/firewall.sh
+source $HESTIA/include/firewall.sh
+# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+source $HESTIA/include/fail2ban.sh
+# shellcheck source=/usr/local/hestia/include/domain.sh
+source $HESTIA/include/domain.sh
+# shellcheck source=/usr/local/hestia/include/syshealth.sh
+source $HESTIA/include/syshealth.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_* flags), if present
@@ -779,7 +779,7 @@ check_object_counters() {
 }
 
 # check_key_registries - conf/defaults/*.conf must exist and match the key sets compiled into
-# func/syshealth.sh. A registry that is missing, stale or duplicated makes the repair functions
+# include/syshealth.sh. A registry that is missing, stale or duplicated makes the repair functions
 # skip exactly the keys they exist to add, and does it silently (#559) - which is the whole reason
 # this guard is here rather than a comment.
 check_key_registries() {
@@ -1071,17 +1071,17 @@ check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$
 # GHSA-cr7q: search-object commands must not eval raw conf-field payloads
 check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
 	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
-# GHSA-xffx class: func/ip.sh must not go back to eval-ing an IP conf as bash - it now parses via the
+# GHSA-xffx class: include/ip.sh must not go back to eval-ing an IP conf as bash - it now parses via the
 # hardened source_conf and derefs with ${!var}. A reintroduced `eval` would re-open the sink.
-check_source_absent "no raw eval in func/ip.sh (GHSA-xffx class)" '(^|[^_])eval[[:space:]]' \
-	"$HESTIA/func/ip.sh"
+check_source_absent "no raw eval in include/ip.sh (GHSA-xffx class)" '(^|[^_])eval[[:space:]]' \
+	"$HESTIA/include/ip.sh"
 # GHSA-xffx class: source_conf must keep its identifier guard on the key, or a
 # `key[$(cmd)]=` line in any parsed conf executes cmd through declare -g. Positive
 # check: the sink is shared by ~500 callers, so losing the guard is a silent hole.
-if grep -qE '\[\[ \$lhs =~ \^\[A-Za-z_\]' "$HESTIA/func/main.sh" 2> /dev/null; then
+if grep -qE '\[\[ \$lhs =~ \^\[A-Za-z_\]' "$HESTIA/include/main.sh" 2> /dev/null; then
 	ok "invariant: source_conf rejects non-identifier keys (GHSA-xffx class)"
 else
-	no "invariant: source_conf rejects non-identifier keys (GHSA-xffx class)" "guard missing in func/main.sh"
+	no "invariant: source_conf rejects non-identifier keys (GHSA-xffx class)" "guard missing in include/main.sh"
 fi
 # #438: the real session user may only be touched by allowlisted files (auth /
 # dispatch / reset / real-identity display) — everything else must use the

@@ -402,7 +402,7 @@ proc_visible_add() {
 }
 
 # ── login.defs guard rail for the panel UID band (#388) ─────────────────────
-# Keeps a bare useradd/adduser out of the band func/identity.sh allocates from; a
+# Keeps a bare useradd/adduser out of the band include/identity.sh allocates from; a
 # foreign account inside it would collide with an allocation. SUB_UID_MAX has to be
 # raised too - the shipped 600100000 is below our highest range end (1048675999).
 login_defs_guard() {

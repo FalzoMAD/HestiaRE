@@ -225,8 +225,8 @@ fail2ban_jail_logpath() {
 fail2ban_sync_ignoreip() {
 	local excludes="$CONF_DIR/firewall/excludes.conf" ips='' rc=0
 	[ -d "$F2B_DIR/jail.d" ] || return 0
-	# shellcheck source=/usr/local/hestia/func/firewall.sh
-	declare -F fw_is_addr > /dev/null 2>&1 || source "$HESTIA/func/firewall.sh"
+	# shellcheck source=/usr/local/hestia/include/firewall.sh
+	declare -F fw_is_addr > /dev/null 2>&1 || source "$HESTIA/include/firewall.sh"
 	# grep rc 0/1 is the normal empty case; rc>=2 is a real read failure and must not vanish into `|| true`.
 	if [ -f "$excludes" ]; then
 		ips="$(grep -oE "$FW_ADDR_RE|^[0-9A-Fa-f:]+(/[0-9]{1,3})?$" "$excludes")" || rc=$?
@@ -258,8 +258,8 @@ fail2ban_apply() {
 	# fail2ban now owns brute force, so CrowdSec drops its SSH scenarios. No-op at install (crowdsec is later);
 	# fires when fail2ban is added to a box that already has it.
 	if [ -f "$CONF_DIR/firewall/crowdsec.conf" ]; then
-		# shellcheck source=/usr/local/hestia/func/crowdsec.sh
-		declare -F crowdsec_gate_bruteforce > /dev/null 2>&1 || source "$HESTIA/func/crowdsec.sh"
+		# shellcheck source=/usr/local/hestia/include/crowdsec.sh
+		declare -F crowdsec_gate_bruteforce > /dev/null 2>&1 || source "$HESTIA/include/crowdsec.sh"
 		crowdsec_gate_bruteforce
 	fi
 }

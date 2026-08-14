@@ -6,7 +6,7 @@
 #
 # Creates the customer's file-manager FPM pool (runs as the customer, so the kernel
 # UID is the file boundary) and the private-listener vhost, then sets FILE_MANAGER=yes.
-# Idempotent; also called by rebuild/restore (func/rebuild.sh) and by
+# Idempotent; also called by rebuild/restore (include/rebuild.sh) and by
 # h-add-sys-filemanager to reactivate saved flags. Reverse: h-delete-user-filemanager.
 
 #----------------------------------------------------------#
@@ -19,8 +19,8 @@ restart="$2"
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 

@@ -16,8 +16,8 @@ FORCE=$1
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
-# shellcheck source=/usr/local/hestia/func/main.sh
-source $HESTIA/func/main.sh
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state
@@ -45,7 +45,7 @@ fi
 #----------------------------------------------------------#
 
 # Stop the daemon, drop the live chains/jumps + our config (banlist records go too).
-source "$HESTIA/func/fail2ban.sh"
+source "$HESTIA/include/fail2ban.sh"
 fail2ban_teardown
 
 # Clear the key first so the re-render skips the fail2ban block, then re-render the base ruleset.
@@ -68,8 +68,8 @@ set_install_component ADDON_FAIL2BAN false
 
 # CrowdSec takes brute force back: re-install the ssh scenarios it drops while fail2ban is around.
 if dpkg -l crowdsec 2> /dev/null | grep -q '^ii'; then
-	# shellcheck source=/usr/local/hestia/func/crowdsec.sh
-	source "$HESTIA/func/crowdsec.sh"
+	# shellcheck source=/usr/local/hestia/include/crowdsec.sh
+	source "$HESTIA/include/crowdsec.sh"
 	crowdsec_gate_bruteforce
 fi
 

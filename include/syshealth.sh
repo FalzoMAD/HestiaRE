@@ -380,7 +380,7 @@ function syshealth_repair_system_config() {
 	# BACKEND_PORT has no repair here on purpose. It used to scrape the port out of
 	# $HESTIA/nginx/conf/nginx.conf - the hestia-nginx that Caddy replaced, so that file does not
 	# exist and the sed produced nothing; h-add-firewall-chain hit the same dead path once. The
-	# value is written at install time (func/helper.sh, _wcv BACKEND_PORT), and every consumer
+	# value is written at install time (include/helper.sh, _wcv BACKEND_PORT), and every consumer
 	# already falls back to 8083. Left in, the block would go from never firing to writing an empty
 	# value the moment the key turns up empty.
 
