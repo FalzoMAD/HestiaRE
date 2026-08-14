@@ -158,8 +158,8 @@ upstream/hestiacp HestiaCP snapshot, READ ONLY, never modify
 install.sh        bootstrap: prereqs, fetch release, run wizard, hand off to h-install-hestia
 func/wizard.sh    interactive wizard (manifest-driven) → writes /etc/hestia/install.conf
 func/helper.sh    installer helpers: hestia_apt, load_os_profile, seed_hestia_etc
-bin/h-install-hestia  non-interactive installer (reads install.conf, COMPONENT_*-gated)
-bin/hestia        umbrella: hestia install|configure|update|uninstall|status
+sbin/h-install-hestia non-interactive installer (reads install.conf, COMPONENT_*-gated)
+sbin/hestia       umbrella: hestia install|configure|update|uninstall|status
 VERSION           empty placeholder, filled at build time — never edit
 CODEMAP.json      component map — read before exploring the codebase
 CLAUDE.md         this file

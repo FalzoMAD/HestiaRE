@@ -230,7 +230,7 @@ install_panel() {
 	# single source of truth for the panel PHP version (read by the wrappers)
 	echo "$PHP_VER" > /etc/php/hestia/php-version
 	# build the isolated conf.d before starting (curated extension set)
-	"$BIN/hestia-php-confd" "$PHP_VER"
+	"$SBIN/hestia-php-confd" "$PHP_VER"
 	cp -f "$HESTIA/share/panel-php/hestia-php.service" /etc/systemd/system/
 	systemctl daemon-reload
 	systemctl enable hestia-php
