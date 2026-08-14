@@ -462,6 +462,31 @@ check_v_symlinks_resolve() {
 	fi
 }
 
+# check_sbin_not_under_bin - nothing may invoke an sbin command through a bin/ path. The sbin split
+# (#209) moved the panel-PHP wrappers and the lifecycle commands out of the sudo wildcard's reach;
+# callers referencing them as "$BIN/x" kept resolving to a file that is no longer there, and the
+# breakage only shows when that code path runs (a fresh install died on $BIN/hestia-php-confd).
+# The set is derived from what actually IS in sbin/, so a later move needs no edit here, and an
+# empty sbin/ fails rather than silently agreeing with nothing.
+# NOT covered: bare "bin/x" in prose/comments (deliberate - only invocation forms are checked), and
+# any path assembled at runtime from a variable this cannot see.
+check_sbin_not_under_bin() {
+	local names hit
+	names=$(find "$HESTIA/sbin" -maxdepth 1 -type f -printf '%f\n' 2> /dev/null | grep -v '\.json$' | paste -sd'|')
+	if [ -z "$names" ]; then
+		no "sbin commands never invoked via bin/" "sbin/ is empty or unreadable"
+		return
+	fi
+	hit=$(grep -rnE "(\\\$BIN|\\\$HESTIA/bin|/usr/local/hestia/bin)/($names)([\"'[:space:]]|\$)" \
+		"$HESTIA/bin" "$HESTIA/sbin" "$HESTIA/func" "$HESTIA/web" "$HESTIA/share" 2> /dev/null \
+		| grep -vE ':[[:space:]]*(//|#|\*|;)')
+	if [ -z "$hit" ]; then
+		ok "sbin commands never invoked via bin/"
+	else
+		no "sbin commands never invoked via bin/" "$(echo "$hit" | head -n1)"
+	fi
+}
+
 # check_policy_fragment_coverage â€” a per-domain POLICY fragment (CrowdSec Layer A, bot rate limiting)
 # must be in EVERY customer-domain template of its web system: it applies to all traffic, so a template
 # missing one is a silent bypass (switch to the wordpress template, escape the throttle, nothing fails).
@@ -1072,6 +1097,8 @@ check_source_absent "no gating on the effective-mirror \$_SESSION[role] (#438 â€
 check_xaccel_allowlist "$HESTIA/web"
 # v-* compat symlinks must all resolve (no dangling alias left by a rename).
 check_v_symlinks_resolve
+# an sbin command called through a bin/ path resolves to nothing (the sbin split, #209).
+check_sbin_not_under_bin
 # a policy fragment (crowdsec Layer A, bot rate limiting) missing from one template is a silent bypass.
 check_policy_fragment_coverage
 # a cache flag without its zone (or a 0-byte vhost) fails silently until the next reload.
