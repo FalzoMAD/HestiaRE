@@ -14,9 +14,15 @@ opens above it.
 
 ### Changed
 
-- **Edit-user gets the same toolbar treatment as edit-web** (#621). The "Advanced Options" button
-  moves into the toolbar next to Save, the fold animates, and a second Save sits at the bottom. Field
-  order and gating are untouched - that is a separate pass.
+- **Edit-user gets the same toolbar treatment as edit-web, and a new order** (#621). The "Advanced
+  Options" button moves into the toolbar next to Save, the fold animates, and a second Save sits at
+  the bottom. Above the fold now: package, SSH access, file manager and docker - the things an admin
+  sets when they open the form. Role, theme, default sort order and PHP CLI version fold away.
+  The move needed the fold to leave the `$offer_admin_fields` wrapper it was nested in, because the
+  sort order is a customer setting and would have become admin-only inside it. SSH access and the CLI
+  version had no gate of their own - they inherited that wrapper - so both now carry it explicitly.
+  Verified from both sides: an admin sees the four fields collapsed and the rest on expand, a
+  customer sees no admin field at all and keeps theme and sort order.
 
 - **Adding a database or a mail account no longer hides anything** (#621). Both forms had an
   "Advanced Options" fold over two settings (host, charset) and five (quota, aliases, forward, discard,
