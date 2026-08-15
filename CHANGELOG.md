@@ -42,7 +42,6 @@ opens above it.
   (`x-collapse`, the plugin was already shipped). Field dependencies are untouched: every block moved
   whole, with its gate.
 
-
 - **The web-statistics selector is a checkbox** (#239). The dropdown offered exactly two entries,
   `none` and `awstats`: it was built when `STATS_SYSTEM` could hold a second engine, and the list is
   still assembled as `"none ${STATS_SYSTEM//,/ }"`. A checkbox says the same thing and now sits with
@@ -54,7 +53,6 @@ opens above it.
   and its `v-*` alias are removed - the panel was the only caller, and a future replacement would be
   a replacement, not a third option. The Alpine `x-show` on the authorization block replaces the
   hand-written show/hide listener, which is what that file's own TODO asked for.
-
 
 - **`func/` is now `include/`, and `func/internal/` is dissolved.** The directory holds sourced
   libraries - constants, path anchors, whole subsystems like the nftables renderer - not only
@@ -90,14 +88,16 @@ opens above it.
 
 ### Fixed
 
-- **The bottom Save row is responsive** (#621). It sits outside `.form-container`, so it never
-  inherited the page gutter: on a phone the full-width button ran edge to edge while the toolbar's
-  kept its 20px margin, which read as docked to one side. The row carries the gutter itself below the
-  breakpoint now, and from 768px it is the compact right-aligned button it is on desktop -
-  `.toolbar-buttons` holds its buttons at full width until 1024px, which is correct inside the
-  toolbar's content-sized column and wrong for a full-width row. Measured at three widths: on a phone
-  the two buttons are pixel-identical, on tablet and desktop the bottom one is 75px wide with its
-  right edge on the "Advanced Options" button above.
+- **The bottom Save row is responsive, and its alignment survives translation** (#621). It sits
+  outside `.form-container`, so it never inherited the page gutter: on a phone the full-width button
+  ran edge to edge while the toolbar's kept its 20px margin, which read as docked to one side. The row
+  carries the gutter itself below the breakpoint now, and from 768px it is the compact right-aligned
+  button it is on desktop - `.toolbar-buttons` holds its buttons at full width until 1024px, which is
+  correct inside the toolbar's content-sized column and wrong for a full-width row. The indent that
+  lines it up with "Advanced Options" is **not** a measured number: an invisible copy of the same
+  button reserves the width, because the toolbar's Save is as wide as its translation. Verified in
+  German, where "Speichern" is 107px against "Save"'s 75 and a hard-coded indent would have missed by
+  31: both edges land on 1090.
 
 - **The Docker disable confirmation never appeared** (#621). Turning Docker off for a customer
   deletes their containers, images and volumes, and the panel is supposed to demand the user name be
@@ -112,7 +112,6 @@ opens above it.
   stops the chain now. Verified: the page no longer reloads, the dialog carries its title, the typed
   confirmation and Cancel, and OK stays disabled until the name matches.
 
-
 - **The FPM pools pinned a locale that does not exist** (#239 follow-up). All five panel pools set
   `env[LANG] = en_US.UTF-8`, and nothing generates it - none of the four targets has it, they carry
   `C` and `C.utf8`. Every locale-aware child said so: awstats' perl warnings arrived in the panel log
@@ -124,7 +123,6 @@ opens above it.
   pinned value out of the deployed pool and fails when it is not generated, so the assumption is
   verified rather than trusted. Verified through the panel: the same run that produced 280 lines now
   produces none.
-
 
 - **What the installer creates no longer depends on the admin's umask.** deb13 and ub26 ship no
   `UMASK` line in `login.defs`, so 24 paths came out group-writable there and `0644`/`0755` on

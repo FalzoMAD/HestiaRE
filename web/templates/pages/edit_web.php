@@ -62,10 +62,6 @@
 		<input type="hidden" name="save" value="save">
 
 		<div class="form-container">
-			<?php // Gates here protect the CUSTOMER from themselves (a pool set to high, a broken
-			// proxy template), so the REAL admin overrides them even while impersonating: adminContext
-			// is the durable identity (#438), userContext keeps scoping the data. The frontend template
-			// and the pool profile ride that gate; PHP version does not - that one is the customer's.?>
 			<h1 class="u-mb20"><?= tohtml(_("Edit Web Domain")) ?></h1>
 			<?php show_alert_message($_SESSION); ?>
 			<div class="u-mb10">
@@ -643,6 +639,9 @@
 				<button type="submit" class="button" form="main-form">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</button>
+				<span class="button u-form-actions-spacer" aria-hidden="true">
+					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
+				</span>
 			</div>
 	</form>
 

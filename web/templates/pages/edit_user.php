@@ -307,6 +307,9 @@
 				<button type="submit" class="button" form="main-form">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</button>
+				<span class="button u-form-actions-spacer" aria-hidden="true">
+					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
+				</span>
 			</div>
 	</form>
 
