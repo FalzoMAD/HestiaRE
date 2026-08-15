@@ -62,6 +62,10 @@
 		<input type="hidden" name="save" value="save">
 
 		<div class="form-container">
+			<?php // Gates here protect the CUSTOMER from themselves (a pool set to high, a broken
+			// proxy template), so the REAL admin overrides them even while impersonating: adminContext
+			// is the durable identity (#438), userContext keeps scoping the data. The frontend template
+			// and the pool profile ride that gate; PHP version does not - that one is the customer's.?>
 			<h1 class="u-mb20"><?= tohtml(_("Edit Web Domain")) ?></h1>
 			<?php show_alert_message($_SESSION); ?>
 			<div class="u-mb10">
@@ -99,12 +103,55 @@
 					<?= tohtml(_("Take website temporarily offline (visitors see a maintenance page, HTTP 503)")) ?>
 				</label>
 			</div>
+				<?php if (empty($v_docker) && $can_edit_templates) { ?>
+					<?php // These policy gates protect the CUSTOMER from themselves (a pool set to high, a broken
+					// proxy template), so the REAL admin overrides them even while impersonating: adminContext
+					// is the durable identity (#438), userContext keeps scoping the data. Policy default is
+					// effectively 'no' - protective for customers, invisible to admins.?>
+				<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
+						// share/ and the list is empty, so hide it instead of an empty dropdown (#219/#591)?>
+					<?php if ($offer_web_template) { ?>
+						<div class="u-mb10">
+							<label for="v_template" class="form-label">
+								<?= tohtml(_("Web Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_SYSTEM"])) ?></span>
+							</label>
+							<select class="form-select" name="v_template" id="v_template">
+								<?php
+									foreach ($templates as $key => $value) {
+										echo "\t\t\t\t<option value=\"".htmlentities($value)."\"";
+										$svalue = "'".$value."'";
+										if ((!empty($v_template)) && ($value == $v_template) || ($svalue == $v_template)) {
+											echo ' selected' ;
+										}
+										echo ">".htmlentities($value)."</option>\n";
+									}
+						?>
+							</select>
+						</div>
+					<?php } ?>
+				<?php } ?>
 					<?php if ($offer_backend) { ?>
 						<?php // profile choice is capacity allocation - a customer would simply pick 'high'?>
+						<div class="u-mb10">
+								<label for="v_php_version" class="form-label"><?= tohtml(_("PHP Version")) ?></label>
+							<select class="form-select" name="v_php_version" id="v_php_version">
+								<?php
+								$v_cur_php = trim($v_php_version, "'");
+						foreach (($php_versions ?: []) as $value) {
+							echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
+							if ($v_cur_php == $value) {
+								echo ' selected';
+							}
+							echo ">PHP " . tohtml($value) . "</option>\n";
+						}
+						echo "\t\t\t\t<option value=\"none\"" . ($v_cur_php == 'none' ? ' selected' : '') . ">" . tohtml(_("None (no PHP)")) . "</option>\n";
+						?>
+							</select>
+						</div>
 						<?php if ($offer_backend_template) { ?>
 						<div class="u-mb10">
 								<label for="v_backend_template" class="form-label">
-									<?= tohtml(_("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
+									<?= tohtml(_("PHP Pool Size")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
 								</label>
 							<select class="form-select" name="v_backend_template" id="v_backend_template">
 								<?php
@@ -123,22 +170,6 @@
 							</select>
 						</div>
 						<?php } ?>
-						<div class="u-mb10">
-								<label for="v_php_version" class="form-label"><?= tohtml(_("PHP Version")) ?></label>
-							<select class="form-select" name="v_php_version" id="v_php_version">
-								<?php
-								$v_cur_php = trim($v_php_version, "'");
-						foreach (($php_versions ?: []) as $value) {
-							echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
-							if ($v_cur_php == $value) {
-								echo ' selected';
-							}
-							echo ">PHP " . tohtml($value) . "</option>\n";
-						}
-						echo "\t\t\t\t<option value=\"none\"" . ($v_cur_php == 'none' ? ' selected' : '') . ">" . tohtml(_("None (no PHP)")) . "</option>\n";
-						?>
-							</select>
-						</div>
 					<?php } ?>
 			<?php if ($offer_stats) { ?>
 				<div class="form-check u-mb10">
@@ -284,24 +315,6 @@
 				<?php } ?>
 			</div>
 			<div x-cloak x-show="showAdvanced" x-collapse>
-			<?php if ($offer_proxy_cache) { ?>
-				<div class="form-check u-mb10">
-					<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") {
-						echo "checked";
-					} ?>>
-					<label for="v_proxy_cache_check">
-						<?= tohtml(_("Enable proxy cache")) ?>
-					</label>
-				</div>
-				<div x-cloak x-show="proxyCacheEnabled" id="v_proxy_duration" class="u-pl30">
-					<div class="u-mb10">
-						<label for="v_proxy_cache_duration" class="form-label">
-							<?= tohtml(_("Cache Duration")) ?> <span class="optional">(<?= tohtml(_("For example")) ?>: 30s, 10m or 1d)</span>
-						</label>
-						<input type="text" class="form-control" name="v_proxy_cache_duration" id="v_proxy_cache_duration" value="<?= tohtml(trim($v_proxy_cache_duration, "'")) ?>">
-					</div>
-				</div>
-			<?php } ?>
 			<div class="form-check u-mb10">
 				<input x-model="redirectEnabled" class="form-check-input" type="checkbox" name="h-redirect-checkbox" id="h-redirect-checkbox">
 				<label for="h-redirect-checkbox">
@@ -354,6 +367,35 @@
 					</div>
 				</div>
 			</div>
+				<div class="form-check u-mb10">
+					<input x-model="customDocumentRootEnabled" class="form-check-input" type="checkbox" name="v_custom_doc_root_check" id="v_custom_doc_root_check">
+					<label for="v_custom_doc_root_check">
+						<?= tohtml(_("Custom document root")) ?>
+					</label>
+				</div>
+				<div x-cloak x-show="customDocumentRootEnabled" id="v_custom_doc_root" class="u-pl30">
+					<div class="u-mb10">
+						<label for="h-custom-doc-domain" class="form-label"><?= tohtml(_("Point to")) ?></label>
+						<input type="hidden" class="js-custom-docroot-prepath" name="h-custom-doc-root_prepath" value="<?= tohtml($v_custom_doc_root_prepath) ?>">
+						<select class="form-select js-custom-docroot-domain" name="h-custom-doc-domain" id="h-custom-doc-domain">
+							<?php foreach ($user_domains as $domain): ?>
+							<option value="<?= tohtml($domain) ?>"
+								<?php if ($v_custom_doc_domain === $domain || (empty($v_custom_doc_domain) && $domain === $v_domain)) {
+									echo 'selected="selected"';
+								} ?>>
+								<?= tohtml($domain) ?>
+							</option>
+							<?php endforeach; ?>
+						</select>
+					</div>
+					<div class="u-mb10">
+						<label for="h-custom-doc-folder" class="form-label">
+							<?= tohtml(_("Directory")) ?> <span class="optional">(<?= tohtml(_("Optional")) ?>)</span>
+						</label>
+						<input type="text" class="form-control js-custom-docroot-dir" name="h-custom-doc-folder" id="h-custom-doc-folder" value="<?= tohtml(trim($v_custom_doc_folder, "'")) ?>">
+						<small class="js-custom-docroot-hint"></small>
+					</div>
+				</div>
 			<?php if ($offer_botlimit) { ?>
 				<!-- Layer-B bot throttling, customer-editable: only the families the admin ENABLED are
 				     offered, since the server config defines rate zones for those alone. Humans are
@@ -438,36 +480,24 @@
 				<?php } ?>
 			</div>
 			<?php } ?>
-				<?php if (empty($v_docker) && $can_edit_templates) { ?>
-					<?php // These policy gates protect the CUSTOMER from themselves (a pool set to high, a broken
-					// proxy template), so the REAL admin overrides them even while impersonating: adminContext
-					// is the durable identity (#438), userContext keeps scoping the data. Policy default is
-					// effectively 'no' - protective for customers, invisible to admins.?>
-				<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
-						// share/ and the list is empty, so hide it instead of an empty dropdown (#219/#591)?>
-					<?php if ($offer_web_template) { ?>
-						<div class="u-mb10">
-							<label for="v_template" class="form-label">
-								<?= tohtml(_("Web Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_SYSTEM"])) ?></span>
-							</label>
-							<select class="form-select" name="v_template" id="v_template">
-								<?php
-									foreach ($templates as $key => $value) {
-										echo "\t\t\t\t<option value=\"".htmlentities($value)."\"";
-										$svalue = "'".$value."'";
-										if ((!empty($v_template)) && ($value == $v_template) || ($svalue == $v_template)) {
-											echo ' selected' ;
-										}
-										echo ">".htmlentities($value)."</option>\n";
-									}
-						?>
-							</select>
-						</div>
-					<?php } ?>
-				<?php } ?>
-				<?php // The blocks below are customer-facing (#566 review): PHP version, pool profile and
-					// proxy extensions stay editable for the user; only the template CHOICE above and the
-					// proxy template select below remain admin/policy-gated?>
+			<?php if ($offer_proxy_cache) { ?>
+				<div class="form-check u-mb10">
+					<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") {
+						echo "checked";
+					} ?>>
+					<label for="v_proxy_cache_check">
+						<?= tohtml(_("Enable proxy cache")) ?>
+					</label>
+				</div>
+				<div x-cloak x-show="proxyCacheEnabled" id="v_proxy_duration" class="u-pl30">
+					<div class="u-mb10">
+						<label for="v_proxy_cache_duration" class="form-label">
+							<?= tohtml(_("Cache Duration")) ?> <span class="optional">(<?= tohtml(_("For example")) ?>: 30s, 10m or 1d)</span>
+						</label>
+						<input type="text" class="form-control" name="v_proxy_cache_duration" id="v_proxy_cache_duration" value="<?= tohtml(trim($v_proxy_cache_duration, "'")) ?>">
+					</div>
+				</div>
+			<?php } ?>
 				<?php if ($offer_fastcgi_cache) { ?>
 						<div class="form-check u-mb10">
 							<input x-model="nginxCacheEnabled" class="form-check-input" type="checkbox" name="v_nginx_cache_check" id="v_nginx_cache_check">
@@ -529,35 +559,6 @@
 							</div>
 						</div>
 					<?php } ?>
-				<div class="form-check u-mb10">
-					<input x-model="customDocumentRootEnabled" class="form-check-input" type="checkbox" name="v_custom_doc_root_check" id="v_custom_doc_root_check">
-					<label for="v_custom_doc_root_check">
-						<?= tohtml(_("Custom document root")) ?>
-					</label>
-				</div>
-				<div x-cloak x-show="customDocumentRootEnabled" id="v_custom_doc_root" class="u-pl30">
-					<div class="u-mb10">
-						<label for="h-custom-doc-domain" class="form-label"><?= tohtml(_("Point to")) ?></label>
-						<input type="hidden" class="js-custom-docroot-prepath" name="h-custom-doc-root_prepath" value="<?= tohtml($v_custom_doc_root_prepath) ?>">
-						<select class="form-select js-custom-docroot-domain" name="h-custom-doc-domain" id="h-custom-doc-domain">
-							<?php foreach ($user_domains as $domain): ?>
-							<option value="<?= tohtml($domain) ?>"
-								<?php if ($v_custom_doc_domain === $domain || (empty($v_custom_doc_domain) && $domain === $v_domain)) {
-									echo 'selected="selected"';
-								} ?>>
-								<?= tohtml($domain) ?>
-							</option>
-							<?php endforeach; ?>
-						</select>
-					</div>
-					<div class="u-mb10">
-						<label for="h-custom-doc-folder" class="form-label">
-							<?= tohtml(_("Directory")) ?> <span class="optional">(<?= tohtml(_("Optional")) ?>)</span>
-						</label>
-						<input type="text" class="form-control js-custom-docroot-dir" name="h-custom-doc-folder" id="h-custom-doc-folder" value="<?= tohtml(trim($v_custom_doc_folder, "'")) ?>">
-						<small class="js-custom-docroot-hint"></small>
-					</div>
-				</div>
 				<?php if ($offer_ftp) { ?>
 					<div class="form-check u-mb10">
 						<input class="form-check-input js-toggle-ftp-accounts" type="checkbox" name="v_ftp" id="v_ftp" <?php if (!empty($v_ftp_user)) {
@@ -633,7 +634,7 @@
 			</div>
 		</div>
 
-			<div class="u-mt20">
+			<div class="u-mt10 u-text-right">
 				<button type="submit" class="button" form="main-form">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</button>
