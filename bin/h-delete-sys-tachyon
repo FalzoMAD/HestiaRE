@@ -1,8 +1,8 @@
 #!/bin/bash
-# info: Delete SnappyMail webmail client
+# info: Delete Tachyon webmail client
 # options: None
 #
-# This function removes the SnappyMail webmail client.
+# This function removes the Tachyon webmail client.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -19,9 +19,9 @@ source_conf "$HESTIA/conf/hestia.conf"
 [ -f "$CONF_DIR/install.conf" ] && source "$CONF_DIR/install.conf"
 
 # Folder paths
-SM_INSTALL_DIR="/var/lib/snappymail"
-SM_CONFIG_DIR="/etc/snappymail"
-SM_LOG="/var/log/snappymail"
+TX_INSTALL_DIR="/var/lib/tachyon"
+TX_CONFIG_DIR="/etc/tachyon"
+TX_LOG="/var/log/tachyon"
 
 #----------------------------------------------------------#
 #                    Verifications                         #
@@ -29,7 +29,7 @@ SM_LOG="/var/log/snappymail"
 
 # Checking root permissions
 if [ "x$(id -u)" != 'x0' ]; then
-	echo "ERROR: h-delete-sys-snappymail can only be executed by the root user"
+	echo "ERROR: h-delete-sys-tachyon can only be executed by the root user"
 	exit 10
 fi
 
@@ -49,10 +49,10 @@ if [ -z "$(echo "$DB_SYSTEM" | grep -w 'mysql')" ]; then
 fi
 
 # Get current version
-if [ -f "/var/lib/snappymail/data/VERSION" ]; then
-	version=$(cat /var/lib/snappymail/data/VERSION)
+if [ -f "/var/lib/tachyon/data/VERSION" ]; then
+	version=$(cat /var/lib/tachyon/data/VERSION)
 else
-	echo "Error: SnappyMail is not installed"
+	echo "Error: Tachyon is not installed"
 	exit 2
 fi
 
@@ -64,29 +64,29 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Panel-Caddy teardown first (listener + FPM pool), so nothing serves from the dirs we delete
-rm -f /etc/caddy/webmail-snappymail.conf
+rm -f /etc/caddy/webmail-tachyon.conf
 systemctl try-restart caddy > /dev/null 2>&1 || true
-rm -f /etc/php/hestia/fpm/pool.d/snappymail.conf
+rm -f /etc/php/hestia/fpm/pool.d/tachyon.conf
 systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
 
-rm -f -r $SM_INSTALL_DIR
-rm -f -r $SM_CONFIG_DIR
-rm -f -r $SM_LOG
-# logrotate fragment deployed by h-add-sys-snappymail
-rm -f /etc/logrotate.d/snappymail
-rm ~/.snappymail
+rm -f -r $TX_INSTALL_DIR
+rm -f -r $TX_CONFIG_DIR
+rm -f -r $TX_LOG
+# logrotate fragment deployed by h-add-sys-tachyon
+rm -f /etc/logrotate.d/tachyon
+rm ~/.tachyon
 
 if [ -f '/usr/bin/mariadb' ]; then
-	mariadb -e "DROP DATABASE snappymail" 2>&1
-	mariadb -e "DROP USER snappymail@localhost"
+	mariadb -e "DROP DATABASE tachyon" 2>&1
+	mariadb -e "DROP USER tachyon@localhost"
 else
-	mysql -e "DROP DATABASE snappymail" 2>&1
-	mysql -e "DROP USER snappymail@localhost"
+	mysql -e "DROP DATABASE tachyon" 2>&1
+	mysql -e "DROP USER tachyon@localhost"
 fi
-# remove snappymail from WEBMAIL_SYSTEM. Token-based strip (not sed) so no stray
+# remove tachyon from WEBMAIL_SYSTEM. Token-based strip (not sed) so no stray
 # commas survive in any position.
-if echo "$WEBMAIL_SYSTEM" | grep -qw 'snappymail'; then
-	new_webmail=$(echo "$WEBMAIL_SYSTEM" | tr ',' '\n' | grep -vx 'snappymail' | grep -v '^$' | paste -sd ',' -)
+if echo "$WEBMAIL_SYSTEM" | grep -qw 'tachyon'; then
+	new_webmail=$(echo "$WEBMAIL_SYSTEM" | tr ',' '\n' | grep -vx 'tachyon' | grep -v '^$' | paste -sd ',' -)
 	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "$new_webmail"
 fi
 
@@ -98,12 +98,12 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# reset the wizard selection only if SnappyMail was the recorded one (don't clobber a secondary)
-if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "SNAPPYMAIL" ]; then
+# reset the wizard selection only if Tachyon was the recorded one (don't clobber a secondary)
+if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "TACHYON" ]; then
 	set_install_component MAIL_WEBMAILER NONE
 fi
 
-$BIN/h-log-action "system" "Info" "Plugins" "SnappyMail removed (Version: $version)."
+$BIN/h-log-action "system" "Info" "Plugins" "Tachyon removed (Version: $version)."
 
 # Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).
 # shellcheck source=/usr/local/hestia/include/fail2ban.sh

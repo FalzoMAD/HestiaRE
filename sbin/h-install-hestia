@@ -557,22 +557,22 @@ install_mail() {
 		"$BIN/h-add-sys-clamav" >> "$LOG" 2>&1 || true
 	fi
 
-	# Webmailer choice (ROUNDCUBE / SNAPPYMAIL / NONE)
+	# Webmailer choice (ROUNDCUBE / TACHYON / NONE)
 	case "${COMPONENT_MAIL_WEBMAILER:-NONE}" in
 		ROUNDCUBE)
 			wcv "WEBMAIL_SYSTEM" "roundcube"; wcv "WEBMAIL_ALIAS" "webmail"
 			echo "[ * ] Installing Roundcube..."
 			"$BIN/h-add-sys-roundcube" >> "$LOG"
 			;;
-		SNAPPYMAIL)
-			echo "[ * ] Installing SnappyMail..."
+		TACHYON)
+			echo "[ * ] Installing Tachyon..."
 			# WEBMAIL_SYSTEM only after the command succeeds: setting it first made the panel
 			# claim a webmail that a failed download had never unpacked (#573). Non-fatal like
 			# the addons above, but loud - the box stays usable, the gap stays visible.
-			if "$BIN/h-add-sys-snappymail" >> "$LOG" 2>&1; then
+			if "$BIN/h-add-sys-tachyon" >> "$LOG" 2>&1; then
 				wcv "WEBMAIL_ALIAS" "webmail"
 			else
-				echo "[ !! ] SnappyMail install FAILED - no webmail configured (see $LOG)"
+				echo "[ !! ] Tachyon install FAILED - no webmail configured (see $LOG)"
 			fi
 			;;
 		*)

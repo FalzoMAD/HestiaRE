@@ -179,11 +179,11 @@ fail2ban_gate_webmail_jails() {
 		*) fail2ban_set_enabled 'roundcube-auth' 'false' ;;
 	esac
 	case ",$wm," in
-		*,snappymail,*)
-			fail2ban_set_enabled 'snappymail-auth' 'true'
-			fail2ban_ensure_webmail_log /var/log/snappymail/fail2ban/auth.txt
+		*,tachyon,*)
+			fail2ban_set_enabled 'tachyon-auth' 'true'
+			fail2ban_ensure_webmail_log /var/log/tachyon/fail2ban/auth.txt
 			;;
-		*) fail2ban_set_enabled 'snappymail-auth' 'false' ;;
+		*) fail2ban_set_enabled 'tachyon-auth' 'false' ;;
 	esac
 }
 

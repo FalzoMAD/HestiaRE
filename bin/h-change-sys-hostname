@@ -52,8 +52,8 @@ echo "$domain" > /etc/hostname
 if [ -d /etc/roundcube/ ]; then
 	sed -i "/password_hestia_host/c\$rcmail_config['password_hestia_host'] = '$domain';" /etc/roundcube/plugins/password/config.inc.php
 fi
-if [ -d /etc/snappymail/ ]; then
-	sed -i "/\"hestia_host\":/c\\\"hestia_host\": \"$domain\"," /etc/snappymail/data/_data_/_default_/configs/plugin-change-password.json
+if [ -d /etc/tachyon/ ]; then
+	sed -i "/\"hestia_host\":/c\\\"hestia_host\": \"$domain\"," /etc/tachyon/data/_data_/_default_/configs/plugin-change-password.json
 fi
 
 # Update /etc/hosts

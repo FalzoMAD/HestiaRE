@@ -1,11 +1,12 @@
 #!/bin/bash
-# info: Install SnappyMail webmail client
+# info: Install Tachyon webmail client
 # options: [MODE]
 #
-# This function installs the SnappyMail webmail client.
+# This function installs the Tachyon webmail client (the maintained SnappyMail fork,
+# adopted in #584 after SnappyMail upstream went dormant).
 #
 # Source is the GitHub release for the version pinned in share/manifest.json: a pinned
-# version is the only one we can verify, and the project's own host has proven unreliable.
+# version is the only one we can verify.
 #
 # Fetched and verified before anything is removed - an unreachable source must not take an
 # existing installation down with it.
@@ -22,26 +23,24 @@ source $HESTIA/include/main.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
-sm_v=$(manifest_get '.software_versions.snappymail')
+tx_v=$(manifest_get '.software_versions.tachyon')
 
 MODE=$1
 UPDATE="no"
-SM_FILE="snappymail-${sm_v}.tar.gz"
-# For removal of folder
-SM_EXTRACT_MAIN="snappymail"
+TX_FILE="tachyon-${tx_v}.tar.gz"
 
-SM_URL="https://github.com/the-djmaze/snappymail/releases/download/v${sm_v}/snappymail-${sm_v}.tar.gz"
+TX_URL="https://github.com/kimusan/Tachyon/releases/download/v${tx_v}/tachyon-${tx_v}.tar.gz"
 
 # Folder paths
-SM_INSTALL_DIR="/var/lib/snappymail"
-SM_CONFIG_DIR="/etc/snappymail"
-SM_LOG="/var/log/snappymail"
+TX_INSTALL_DIR="/var/lib/tachyon"
+TX_CONFIG_DIR="/etc/tachyon"
+TX_LOG="/var/log/tachyon"
 
 # Bounded on purpose: wget's defaults are 20 tries at a 900s read timeout, so a host that
 # drops SYNs costs ~45 minutes before the first error surfaces.
-sm_fetch() {
+tx_fetch() {
 	local dest="$1"
-	wget "$SM_URL" --timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" || return 1
+	wget "$TX_URL" --timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" || return 1
 	# wget -O leaves a 0-byte file behind on failure, which a plain [ -f ] check accepts.
 	[ -s "$dest" ] || return 1
 	gzip -t "$dest" 2> /dev/null || return 1
@@ -53,7 +52,7 @@ sm_fetch() {
 
 # Checking root permissions
 if [ "x$(id -u)" != 'x0' ]; then
-	echo "ERROR: h-add-sys-snappymail can only be executed by the root user"
+	echo "ERROR: h-add-sys-tachyon can only be executed by the root user"
 	exit 10
 fi
 
@@ -72,17 +71,17 @@ if [ -z "$(echo "$DB_SYSTEM" | grep -w 'mysql')" ]; then
 	exit 2
 fi
 
-# Without it the release URL would resolve to .../download/v/snappymail-.tar.gz and 404.
-if [ -z "$sm_v" ]; then
-	echo "ERROR: no SnappyMail version pinned in share/manifest.json. Installation aborted"
+# Without it the release URL would resolve to .../download/v/tachyon-.tar.gz and 404.
+if [ -z "$tx_v" ]; then
+	echo "ERROR: no Tachyon version pinned in share/manifest.json. Installation aborted"
 	exit 2
 fi
 
 # Get current version
-if [ -f "/var/lib/snappymail/data/VERSION" ]; then
-	version=$(cat $SM_INSTALL_DIR/data/VERSION)
-	if [ "$version" == "$sm_v" ]; then
-		echo "Error: Installed version ($version) is equal to the available version ($sm_v)"
+if [ -f "/var/lib/tachyon/data/VERSION" ]; then
+	version=$(cat $TX_INSTALL_DIR/data/VERSION)
+	if [ "$version" == "$tx_v" ]; then
+		echo "Error: Installed version ($version) is equal to the available version ($tx_v)"
 		exit 2
 	else
 		UPDATE="yes"
@@ -98,122 +97,122 @@ check_hestia_demo_mode
 
 if [ "$UPDATE" == "no" ]; then
 	# Fetched before the removals below: a dead source must not cost the running install.
-	sm_tmp="$(mktemp -t snappymail.XXXXXX.tar.gz)"
-	if ! sm_fetch "$sm_tmp"; then
-		rm -f "$sm_tmp"
-		echo "ERROR: could not download SnappyMail $sm_v from $SM_URL"
+	tx_tmp="$(mktemp -t tachyon.XXXXXX.tar.gz)"
+	if ! tx_fetch "$tx_tmp"; then
+		rm -f "$tx_tmp"
+		echo "ERROR: could not download Tachyon $tx_v from $TX_URL"
 		echo "       Installation aborted - nothing was changed."
 		exit 2
 	fi
 
-	rm -f -r $SM_INSTALL_DIR
-	rm -f -r $SM_CONFIG_DIR
+	rm -f -r $TX_INSTALL_DIR
+	rm -f -r $TX_CONFIG_DIR
 
-	mkdir $SM_INSTALL_DIR
-	mkdir $SM_CONFIG_DIR
+	mkdir $TX_INSTALL_DIR
+	mkdir $TX_CONFIG_DIR
 
-	cd "$SM_INSTALL_DIR"
-	mv "$sm_tmp" "${SM_INSTALL_DIR}/${SM_FILE}"
+	cd "$TX_INSTALL_DIR"
+	mv "$tx_tmp" "${TX_INSTALL_DIR}/${TX_FILE}"
 
 	key=$(openssl rand -hex 4)
 	suffix=$(openssl rand -hex 4)
 	admin_account="admin_$key"
 	admin_password=$(generate_password)
 
-	echo "Username: admin_$key" > ~/.snappymail
-	echo "Password: $admin_password" >> ~/.snappymail
-	echo "Admin Panel key: admin_$suffix" >> ~/.snappymail
+	echo "Username: admin_$key" > ~/.tachyon
+	echo "Password: $admin_password" >> ~/.tachyon
+	echo "Admin Panel key: admin_$suffix" >> ~/.tachyon
 
-	tar -xzf ${SM_INSTALL_DIR}/${SM_FILE}
+	tar -xzf ${TX_INSTALL_DIR}/${TX_FILE}
 	# No set -e here: an empty tree would otherwise run the rest of this script to exit 0,
 	# leaving a dangling data symlink and a WEBMAIL_SYSTEM claiming an install nobody had.
 	if [ ! -s ./data/VERSION ]; then
-		echo "ERROR: SnappyMail archive did not unpack (no data/VERSION). Installation aborted."
+		echo "ERROR: Tachyon archive did not unpack (no data/VERSION). Installation aborted."
 		exit 2
 	fi
 	version=$(cat ./data/VERSION)
 
-	mv ./data $SM_CONFIG_DIR/
-	ln -s $SM_CONFIG_DIR/data/ ./data
+	mv ./data $TX_CONFIG_DIR/
+	ln -s $TX_CONFIG_DIR/data/ ./data
 
 	# Create cache folder and set permissions
-	mkdir -p "$SM_CONFIG_DIR/data/_data_/_default_/cache/"
+	mkdir -p "$TX_CONFIG_DIR/data/_data_/_default_/cache/"
 	chown -R www-data:www-data ./data
 
 	if [ -f '/usr/bin/mariadb' ]; then
-		mariadb -e "CREATE DATABASE snappymail" 2>&1
+		mariadb -e "CREATE DATABASE tachyon" 2>&1
 		r=$(generate_password)
-		mariadb -e "GRANT ALL ON snappymail.*
-		 TO snappymail@localhost IDENTIFIED BY '$r'"
+		mariadb -e "GRANT ALL ON tachyon.*
+		 TO tachyon@localhost IDENTIFIED BY '$r'"
 	else
-		mysql -e "CREATE DATABASE snappymail" 2>&1
+		mysql -e "CREATE DATABASE tachyon" 2>&1
 		r=$(generate_password)
-		mysql -e "GRANT ALL ON snappymail.*
-		 TO snappymail@localhost IDENTIFIED BY '$r'"
+		mysql -e "GRANT ALL ON tachyon.*
+		 TO tachyon@localhost IDENTIFIED BY '$r'"
 	fi
 	# Temporarily set the permissions to www-data
-	chown -R www-data:www-data $SM_CONFIG_DIR/
-	php -f $HESTIA/share/snappymail/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT"
+	chown -R www-data:www-data $TX_CONFIG_DIR/
+	php -f $HESTIA/share/tachyon/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT"
 
 	# back to caddy (the FPM pool user); explicit 0750 keeps the data dir caddy-private
-	chown -R caddy:caddy $SM_CONFIG_DIR/
-	chmod -R 750 $SM_CONFIG_DIR/data
+	chown -R caddy:caddy $TX_CONFIG_DIR/
+	chmod -R 750 $TX_CONFIG_DIR/data
 
-	# Auth-log target for the fail2ban webmail jail. SnappyMail runs as caddy and writes
-	# /var/log/snappymail/fail2ban/auth.txt (see share/snappymail/install.php); create the root here so
+	# Auth-log target for the fail2ban webmail jail. Tachyon runs as caddy and writes
+	# /var/log/tachyon/fail2ban/auth.txt (see share/tachyon/install.php); create the root here so
 	# the first failed login has somewhere to write and the jail has a file to watch.
-	mkdir -p /var/log/snappymail
-	chown caddy:caddy /var/log/snappymail
-	chmod 750 /var/log/snappymail
-	# the fail2ban snappymail-auth jail tails fail2ban/auth.txt, so the log must rotate
-	cp -f "$HESTIA/share/snappymail/logrotate" /etc/logrotate.d/snappymail
+	mkdir -p /var/log/tachyon
+	chown caddy:caddy /var/log/tachyon
+	chmod 750 /var/log/tachyon
+	# the fail2ban tachyon-auth jail tails fail2ban/auth.txt, so the log must rotate
+	cp -f "$HESTIA/share/tachyon/logrotate" /etc/logrotate.d/tachyon
 
 	# Remove the downloaded file
-	rm ${SM_INSTALL_DIR}/${SM_FILE}
+	rm ${TX_INSTALL_DIR}/${TX_FILE}
 	# Add robots.txt
-	echo "User-agent: *" > $SM_INSTALL_DIR/robots.txt
-	echo "Disallow: /" >> $SM_INSTALL_DIR/robots.txt
+	echo "User-agent: *" > $TX_INSTALL_DIR/robots.txt
+	echo "Disallow: /" >> $TX_INSTALL_DIR/robots.txt
 
 	# Panel-Caddy delivery: caddy FPM pool behind the :8091 loopback listener
 	# (the caddy-owned data dir only works because the pool runs as caddy)
-	mkdir -p $SM_INSTALL_DIR/tmp
-	chown caddy:caddy $SM_INSTALL_DIR/tmp
-	chmod 770 $SM_INSTALL_DIR/tmp
-	cp -f "$HESTIA/share/panel-php/pool.d/snappymail.conf" /etc/php/hestia/fpm/pool.d/snappymail.conf
+	mkdir -p $TX_INSTALL_DIR/tmp
+	chown caddy:caddy $TX_INSTALL_DIR/tmp
+	chmod 770 $TX_INSTALL_DIR/tmp
+	cp -f "$HESTIA/share/panel-php/pool.d/tachyon.conf" /etc/php/hestia/fpm/pool.d/tachyon.conf
 	systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
-	cp -f "$HESTIA/share/panel-caddy/webmail-snappymail.conf" /etc/caddy/webmail-snappymail.conf
+	cp -f "$HESTIA/share/panel-caddy/webmail-tachyon.conf" /etc/caddy/webmail-tachyon.conf
 	systemctl try-restart caddy > /dev/null 2>&1 || true
 
 	# Updating hestia.conf
 	if [ -z "$(grep WEBMAIL_SYSTEM $HESTIA/conf/hestia.conf)" ]; then
-		$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' 'snappymail'
+		$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' 'tachyon'
 	else
-		if [ -z "$(echo "$WEBMAIL_SYSTEM" | grep -w 'snappymail')" ]; then
+		if [ -z "$(echo "$WEBMAIL_SYSTEM" | grep -w 'tachyon')" ]; then
 			if [ -n "$WEBMAIL_SYSTEM" ]; then
-				$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "snappymail,$WEBMAIL_SYSTEM"
+				$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "tachyon,$WEBMAIL_SYSTEM"
 			else
-				$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "snappymail"
+				$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' "tachyon"
 			fi
 		fi
 	fi
 
 else
-	if [ ! -s "${SM_INSTALL_DIR}/${SM_FILE}" ] && ! sm_fetch "${SM_INSTALL_DIR}/${SM_FILE}"; then
-		rm -f "${SM_INSTALL_DIR}/${SM_FILE}"
-		echo "ERROR: could not download SnappyMail $sm_v from $SM_URL"
+	if [ ! -s "${TX_INSTALL_DIR}/${TX_FILE}" ] && ! tx_fetch "${TX_INSTALL_DIR}/${TX_FILE}"; then
+		rm -f "${TX_INSTALL_DIR}/${TX_FILE}"
+		echo "ERROR: could not download Tachyon $tx_v from $TX_URL"
 		echo "       Update aborted - the installed version is untouched."
 		exit 2
 	fi
 
-	version=$(cat $SM_INSTALL_DIR/data/VERSION)
-	cd $SM_INSTALL_DIR
+	version=$(cat $TX_INSTALL_DIR/data/VERSION)
+	cd $TX_INSTALL_DIR
 	mkdir -p /tmp/snappy/
-	tar -xzf "$SM_FILE" -C /tmp/snappy/
+	tar -xzf "$TX_FILE" -C /tmp/snappy/
 	version_source=$(cat /tmp/snappy/data/VERSION)
 	# check the version in the tarball in case hestia hasn't updated yet
 	if [ "$version" != "$version_source" ]; then
-		tar -xzf ${SM_INSTALL_DIR}/${SM_FILE}
-		rm $SM_INSTALL_DIR/$SM_FILE
+		tar -xzf ${TX_INSTALL_DIR}/${TX_FILE}
+		rm $TX_INSTALL_DIR/$TX_FILE
 	fi
 	rm -fr /tmp/snappy
 fi
@@ -225,12 +224,12 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-set_install_component MAIL_WEBMAILER SNAPPYMAIL
+set_install_component MAIL_WEBMAILER TACHYON
 
 if [ "$UPDATE" = "yes" ]; then
-	$BIN/h-log-action "system" "Info" "Plugins" "SnappyMail updated (Version: $version)."
+	$BIN/h-log-action "system" "Info" "Plugins" "Tachyon updated (Version: $version)."
 else
-	$BIN/h-log-action "system" "Info" "Plugins" "SnappyMail enabled (Version: $version)."
+	$BIN/h-log-action "system" "Info" "Plugins" "Tachyon enabled (Version: $version)."
 fi
 # Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).
 # shellcheck source=/usr/local/hestia/include/fail2ban.sh

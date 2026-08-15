@@ -9,9 +9,9 @@
 #
 # Roundcube-only on purpose: handle_path strips the /webmail prefix, and Roundcube
 # emits relative asset URLs + detects its sub-path base, so it runs cleanly here.
-# SnappyMail is a root-mounted app (assets hard-wired to /snappymail/…, no prefix)
+# Tachyon is a root-mounted app (assets hard-wired to /tachyon/…, no prefix)
 # and cannot live under a sub-path - it stays reachable via webmail.<domain>, where
-# it is root-mounted and works. So there is no SnappyMail panel route (#205).
+# it is root-mounted and works. So there is no Tachyon panel route (#205).
 redir /webmail /webmail/ 308
 handle_path /webmail/* {
 	root * /var/lib/roundcube/public_html

@@ -973,7 +973,7 @@
       "note": ""
     },
     {
-      "path": "h-add-sys-snappymail",
+      "path": "h-add-sys-tachyon",
       "source_type": "derived",
       "upstream_path": "bin/v-add-sys-snappymail",
       "upstream_ref": "bc3720a",
@@ -986,7 +986,7 @@
         "pct": 33,
         "measured_at": "2026-08-12"
       },
-      "note": ""
+      "note": "renamed from h-add-sys-snappymail (#584, Tachyon fork adoption); lineage still upstream v-add-sys-snappymail"
     },
     {
       "path": "h-add-sys-ssh-jail",
@@ -3586,7 +3586,7 @@
       "note": ""
     },
     {
-      "path": "h-delete-sys-snappymail",
+      "path": "h-delete-sys-tachyon",
       "source_type": "derived",
       "upstream_path": "bin/v-delete-sys-snappymail",
       "upstream_ref": "bc3720a",
@@ -3599,7 +3599,7 @@
         "pct": 35,
         "measured_at": "2026-08-12"
       },
-      "note": ""
+      "note": "renamed from h-delete-sys-snappymail (#584); lineage still upstream v-delete-sys-snappymail"
     },
     {
       "path": "h-delete-sys-ssh-jail",

@@ -160,7 +160,7 @@
       "note": "ambiguous: 2 upstream basename candidates; confirm manually"
     },
     {
-      "path": "apache2/webmail/snappymail.stpl",
+      "path": "apache2/webmail/tachyon.stpl",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -169,7 +169,7 @@
       "note": "ambiguous: 2 upstream basename candidates; confirm manually"
     },
     {
-      "path": "apache2/webmail/snappymail.tpl",
+      "path": "apache2/webmail/tachyon.tpl",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -1002,7 +1002,7 @@
       "note": ""
     },
     {
-      "path": "fail2ban/filter.d/hestia-snappymail.conf",
+      "path": "fail2ban/filter.d/hestia-tachyon.conf",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -1415,7 +1415,7 @@
       "note": "basename-matched (path reorg by #119); confirm origin"
     },
     {
-      "path": "nginx/webmail/default_snappymail.stpl",
+      "path": "nginx/webmail/default_tachyon.stpl",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -1424,7 +1424,7 @@
       "note": "basename-matched (path reorg by #119); confirm origin. Former upstream_path pointer, unconfirmed: install/deb/templates/mail/nginx/default_snappymail.stpl (45% raw line churn) - a lead for a manual check, not a claim of shared origin."
     },
     {
-      "path": "nginx/webmail/default_snappymail.tpl",
+      "path": "nginx/webmail/default_tachyon.tpl",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -1451,7 +1451,7 @@
       "note": "ambiguous: 2 upstream basename candidates; confirm manually"
     },
     {
-      "path": "nginx/webmail/snappymail.stpl",
+      "path": "nginx/webmail/tachyon.stpl",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -1460,7 +1460,7 @@
       "note": "ambiguous: 2 upstream basename candidates; confirm manually"
     },
     {
-      "path": "nginx/webmail/snappymail.tpl",
+      "path": "nginx/webmail/tachyon.tpl",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -1568,7 +1568,7 @@
       "note": "no upstream counterpart found; native or renamed - confirm manually"
     },
     {
-      "path": "panel-caddy/webmail-snappymail.conf",
+      "path": "panel-caddy/webmail-tachyon.conf",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -1649,7 +1649,7 @@
       "note": "no upstream counterpart found; native or renamed - confirm manually"
     },
     {
-      "path": "panel-php/pool.d/snappymail.conf",
+      "path": "panel-php/pool.d/tachyon.conf",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,
@@ -1910,7 +1910,7 @@
       "note": "HestiaRE-native (#565); replaces the inherited @reboot cron for the hidepid remount"
     },
     {
-      "path": "snappymail/install.php",
+      "path": "tachyon/install.php",
       "source_type": "derived",
       "upstream_path": "install/common/snappymail/install.php",
       "upstream_ref": "bc3720a",
@@ -1926,7 +1926,7 @@
       "note": "basename-matched (path reorg by #119); confirm origin"
     },
     {
-      "path": "snappymail/logrotate",
+      "path": "tachyon/logrotate",
       "source_type": "eigenbau",
       "upstream_path": null,
       "upstream_ref": null,

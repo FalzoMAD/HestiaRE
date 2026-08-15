@@ -14,6 +14,18 @@ opens above it.
 
 ### Changed
 
+- **SnappyMail is replaced by Tachyon, its maintained fork** (#584). SnappyMail upstream is
+  dormant (last release October 2024, maintainer gone) - no security-patch channel for an
+  internet-facing login is disqualifying. Tachyon (kimusan/Tachyon, AGPL like its parent) keeps
+  the identical tarball layout, config keys, auth-log format and the plugin ecosystem including
+  `change-password-hestia`, so the whole integration carries over as a rename: `h-add-sys-tachyon`
+  / `h-delete-sys-tachyon` (no `v-*` symlink - upstream has no such command), `WEBMAIL_SYSTEM`
+  value `tachyon`, wizard option `TACHYON`, paths `/var/lib/tachyon` + `/etc/tachyon` +
+  `/var/log/tachyon`, FPM pool socket `hestia-webmail-tx.sock`, fail2ban jail `tachyon-auth`.
+  The `:8091` loopback listener and the webmail vhost chain are unchanged. Our `install.php`
+  moves to the renamed namespaces (`RainLoop\` -> `Tachyon\`, `SnappyMail\` -> `Tachyon\Util\`).
+  No migration for existing SnappyMail installs on purpose (fresh installs only before v1).
+
 - **Edit-user gets the same toolbar treatment as edit-web, and a new order** (#621). The "Advanced
   Options" button moves into the toolbar next to Save, the fold animates, and a second Save sits at
   the bottom. Above the fold now: package, SSH access, file manager and docker - the things an admin

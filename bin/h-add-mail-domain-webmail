@@ -3,7 +3,7 @@
 # options: USER DOMAIN [WEBMAIL] [RESTART] [QUIET]
 #
 # example: h-add-mail-domain-webmail user domain.com
-# example: h-add-mail-domain-webmail user domain.com snappymail
+# example: h-add-mail-domain-webmail user domain.com tachyon
 # example: h-add-mail-domain-webmail user domain.com roundcube
 #
 # This function enables webmail client for a mail domain.

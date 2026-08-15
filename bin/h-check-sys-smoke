@@ -1033,10 +1033,10 @@ if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	check_socket /run/hestia-webmail-rc.sock "roundcube FPM"
 	check_http "http://127.0.0.1:8090/" "roundcube internal listener"
 fi
-if echo "$WEBMAIL_SYSTEM" | grep -qw 'snappymail'; then
-	check_webmail_payload snappymail /etc/snappymail/data/VERSION
-	check_socket /run/hestia-webmail-sm.sock "snappymail FPM"
-	check_http "http://127.0.0.1:8091/" "snappymail internal listener"
+if echo "$WEBMAIL_SYSTEM" | grep -qw 'tachyon'; then
+	check_webmail_payload tachyon /etc/tachyon/data/VERSION
+	check_socket /run/hestia-webmail-tx.sock "tachyon FPM"
+	check_http "http://127.0.0.1:8091/" "tachyon internal listener"
 fi
 # redis: user's DB choice or rspamd's always-present Bayes companion
 if is_on "${COMPONENT_DB_REDIS:-}" || [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then

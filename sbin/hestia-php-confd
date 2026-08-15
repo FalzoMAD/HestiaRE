@@ -11,7 +11,7 @@
 # install and by h-change-sys-panel-php (version-specific path).
 #
 # EVERY app on the single hestia FPM master shares this fpm conf.d — panel UI,
-# phpMyAdmin/Adminer, and the webmail clients (Roundcube/SnappyMail). Before
+# phpMyAdmin/Adminer, and the webmail clients (Roundcube/Tachyon). Before
 # dropping any extension, check all three groups (fpm_*, fpm_apps_*,
 # fpm_webmail_*): a 2026-07 audit removed `dom` after checking only panel + DB
 # tools and 500'd every Roundcube page. Critical = hard build-time failure;
@@ -37,7 +37,7 @@ fpm_optional="opcache curl gmp zip ftp"
 # phpMyAdmin/Adminer: ctype/iconv/fileinfo (php-common) + xml family (php-xml) critical
 fpm_apps_critical="ctype iconv fileinfo simplexml xmlwriter xmlreader"
 fpm_apps_optional="gd bz2 pgsql pdo_pgsql"
-# webmail: intl(IDN), phar(SnappyMail plugins), dom(Roundcube renders every page) critical
+# webmail: intl(IDN), phar(Tachyon plugins), dom(Roundcube renders every page) critical
 fpm_webmail_critical="intl phar dom"
 fpm_webmail_optional="exif"
 # CLI (sbin/hestia-php): composer + the notification HTML sanitizer (dom). No DB chain, no gettext

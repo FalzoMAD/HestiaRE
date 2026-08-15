@@ -5,7 +5,7 @@
 
   "software_versions": {
     "$comment": "Release-shipped third-party version pins (#288, replaces install/upgrade/upgrade.conf). Bump per release. Read at runtime via manifest_get() in include/main.sh.",
-    "snappymail": "2.38.2",
+    "tachyon": "3.2.2",
     "backblaze_b2": "3.6.0",
     "php_supported": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
   },
@@ -248,7 +248,7 @@
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "options": [
         { "value": "ROUNDCUBE",  "label": "Roundcube",  "description": "Full-featured webmail" },
-        { "value": "SNAPPYMAIL", "label": "SnappyMail", "description": "Lightweight webmail" },
+        { "value": "TACHYON", "label": "Tachyon", "description": "Lightweight webmail (maintained SnappyMail fork)" },
         { "value": "NONE",       "label": "None",       "description": "No webmail client" }
       ],
       "default": {
@@ -259,7 +259,7 @@
         "mailonly":  "ROUNDCUBE",
         "custom":    null
       },
-      "note": "Roundcube/SnappyMail are served architecturally via Panel-Caddy+Panel-PHP; the respective web server (nginx/Apache) only acts as a reverse proxy to the webmail subdomain. DKIM runs independently via the existing Exim+OpenSSL mechanism (inherited from HestiaCP upstream, not rspamd dkim_signing)."
+      "note": "Roundcube/Tachyon are served architecturally via Panel-Caddy+Panel-PHP; the respective web server (nginx/Apache) only acts as a reverse proxy to the webmail subdomain. DKIM runs independently via the existing Exim+OpenSSL mechanism (inherited from HestiaCP upstream, not rspamd dkim_signing)."
     },
 
     "PANEL_CADDY": {
