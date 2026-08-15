@@ -90,6 +90,20 @@ opens above it.
 
 ### Fixed
 
+- **The Docker disable confirmation never appeared** (#621). Turning Docker off for a customer
+  deletes their containers, images and volumes, and the panel is supposed to demand the user name be
+  typed first. Two bugs stacked: the guard registered itself only when the checkbox read as checked
+  at page load, but that box is driven by Alpine's `x-model` and carries no `checked` attribute while
+  the module runs before Alpine - so it unhooked itself exactly when Docker was on. It takes the
+  server's own state through a data attribute now and reads the live one at submit. Underneath that
+  sat a second one: the guard called `preventDefault()`, which does not stop other listeners, and
+  `handleFormSubmit` ends in `mainForm.submit()` - a call that bypasses the submit event. The dialog
+  was built and then thrown away by the navigation half a second later, which is why the visible
+  result was the server's refusal, asking for a user name with no field to type it in. The guard
+  stops the chain now. Verified: the page no longer reloads, the dialog carries its title, the typed
+  confirmation and Cancel, and OK stays disabled until the name matches.
+
+
 - **The FPM pools pinned a locale that does not exist** (#239 follow-up). All five panel pools set
   `env[LANG] = en_US.UTF-8`, and nothing generates it - none of the four targets has it, they carry
   `C` and `C.utf8`. Every locale-aware child said so: awstats' perl warnings arrived in the panel log

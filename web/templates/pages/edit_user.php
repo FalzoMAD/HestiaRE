@@ -214,6 +214,7 @@
 						<div class="u-mb10">
 							<div class="form-check">
 								<input x-model="dockerEnabled" class="form-check-input" type="checkbox" name="v_docker" id="v_docker"
+									data-docker-enabled="<?= tohtml(empty($v_docker_ip) ? "no" : "yes") ?>"
 									data-docker-user="<?= tohtml($v_username) ?>"
 									data-confirm-title="<?= tohtml(sprintf(_("Disable Docker for %s?"), $v_username)) ?>"
 									data-confirm-message="<?= tohtml(_("This removes the companion account and deletes every container, image and volume of this customer. Turning Docker back on later creates an empty companion - nothing comes back. Their docker domains revert to normal vhosts.")) ?>"
