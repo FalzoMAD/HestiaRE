@@ -14,6 +14,19 @@ opens above it.
 
 ### Changed
 
+- **The web-statistics selector is a checkbox** (#239). The dropdown offered exactly two entries,
+  `none` and `awstats`: it was built when `STATS_SYSTEM` could hold a second engine, and the list is
+  still assembled as `"none ${STATS_SYSTEM//,/ }"`. A checkbox says the same thing and now sits with
+  the other switches on the form. It renders only when `STATS_SYSTEM` is set - the value is
+  settable through `h-change-sys-config-value` and no repair block overwrites it, so clearing it
+  hides the control and `post_checkbox()` keeps each domain's stored setting rather than reading the
+  absent key as "off" (#649). The dead "change engine" branch went with it: with one engine left, a
+  non-empty record is always awstats, so "not awstats" was always the delete branch. `h-list-web-stats`
+  and its `v-*` alias are removed - the panel was the only caller, and a future replacement would be
+  a replacement, not a third option. The Alpine `x-show` on the authorization block replaces the
+  hand-written show/hide listener, which is what that file's own TODO asked for.
+
+
 - **`func/` is now `include/`, and `func/internal/` is dissolved.** The directory holds sourced
   libraries - constants, path anchors, whole subsystems like the nftables renderer - not only
   functions, and the one-file `internal/` subdirectory promised a boundary the tree does not
