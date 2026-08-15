@@ -235,138 +235,16 @@ seed_hestia_etc() {
 	unset -f _wcv
 }
 
-# ── migrate $HESTIA/data/* to their PATHS.md targets on upgrade ──────────────
-# Real move, idempotent (only when old exists + new absent), so fresh installs skip it.
+# ── re-apply on an existing box what a copy-only update would not ────────────
+# NOT a path migration any more: the $HESTIA/data/* moves are gone, and so are the ones added for
+# this week's relocations. HestiaRE supports at most one minor back, and every relocation
+# (data/, ssl/, packages/, lua/, bin/->sbin/, func/->include/) landed a minor or more ago - there is
+# no box left where any of them can fire. bin/, the conf dirs and include/ are at their final
+# locations, so this is not expected to grow path cases again.
+# What remains are things a `cp -r` of the tree cannot do by itself. Every step is idempotent, so a
+# fresh install runs them as no-ops.
 migrate_data_layout() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
-	local d f ssl_new
-
-	# ips + firewall + users -> $CONF_DIR (plain move; backup format is location-agnostic)
-	for d in ips firewall users; do
-		if [ -d "$hestia_root/data/$d" ] && [ ! -e "$CONF_DIR/$d" ]; then
-			mkdir -p $CONF_DIR
-			mv "$hestia_root/data/$d" "$CONF_DIR/$d"
-		fi
-	done
-
-	# data/ is fully dissolved - drop the empty husk if nothing else remains.
-	rmdir "$hestia_root/data" 2> /dev/null || true
-
-	# extensions/ dissolved: PSL cache -> file, mail-domain hooks -> $CONF_DIR/hooks
-	if [ -d "$hestia_root/data/extensions" ]; then
-		mkdir -p $CONF_DIR/hooks
-		local h
-		for h in add-mail-domain delete-mail-domain; do
-			if [ -f "$hestia_root/data/extensions/$h.sh" ] && [ ! -e "$CONF_DIR/hooks/$h.sh" ]; then
-				mv "$hestia_root/data/extensions/$h.sh" "$CONF_DIR/hooks/$h.sh"
-			fi
-		done
-		if [ -f "$hestia_root/data/extensions/public_suffix_list.dat" ] && [ ! -e "$CONF_DIR/public_suffix_list.dat" ]; then
-			mv "$hestia_root/data/extensions/public_suffix_list.dat" "$CONF_DIR/public_suffix_list.dat"
-		fi
-		rmdir "$hestia_root/data/extensions" 2> /dev/null || true
-	fi
-
-	# PHP panel sessions -> $HESTIA/.sessions (plain move)
-	if [ -d "$hestia_root/data/sessions" ] && [ ! -e "$hestia_root/.sessions" ]; then
-		mv "$hestia_root/data/sessions" "$hestia_root/.sessions"
-		chmod 770 "$hestia_root/.sessions" 2> /dev/null || true
-	fi
-
-	# Queue holds runtime pipes - recreate fresh at the new location, never copy.
-	if [ -d "$hestia_root/data/queue" ] && [ ! -d "$CONF_DIR/queue" ]; then
-		mkdir -p $CONF_DIR/queue
-		chmod 750 $CONF_DIR/queue
-		local p
-		for p in backup disk webstats restart traffic daily; do
-			[ -e "$CONF_DIR/queue/$p.pipe" ] || touch "$CONF_DIR/queue/$p.pipe"
-		done
-		rm -rf "$hestia_root/data/queue"
-	fi
-
-	# templates ship via the tarball and belong in the install root; preserve operator-added files
-	if [ -d "$hestia_root/data/templates" ]; then
-		mkdir -p "$hestia_root/templates"
-		cp -rn "$hestia_root/data/templates/." "$hestia_root/templates/" 2> /dev/null || true
-		rm -rf "$hestia_root/data/templates"
-	fi
-
-	# packages are instance state since #663, so the target is $CONF_DIR. This used to point at
-	# $hestia_root/packages, which no command reads any more - an update would have parked them at a
-	# dead address while $CONF_DIR/packages, created only by the installer, never appeared at all.
-	# Two possible sources: the pre-#148 data/ dir and the pre-#663 install-root dir.
-	for d in "$hestia_root/data/packages" "$hestia_root/packages"; do
-		[ -d "$d" ] || continue
-		mkdir -p "$CONF_DIR/packages"
-		chmod 0750 "$CONF_DIR/packages"
-		for f in "$d"/*; do
-			[ -e "$f" ] || continue
-			# never overwrite a definition the admin already has at the new location
-			[ -e "$CONF_DIR/packages/$(basename "$f")" ] || cp -f "$f" "$CONF_DIR/packages/"
-		done
-		rm -rf "$d"
-	done
-
-	# The sbin split (#209) is a privilege boundary: bin/ is what the sudo wildcard grants. An update
-	# only ever copies, so the pre-split duplicates would stay in bin/ and keep the panel user's
-	# NOPASSWD reach on the lifecycle commands - h-uninstall-hestia among them. Derived from what is
-	# actually in sbin/ rather than a list, and keyed on the executable bit so bin/PROVENANCE.json
-	# (a legitimate namesake of sbin/PROVENANCE.json) is not touched.
-	for f in "$hestia_root/sbin"/*; do
-		[ -x "$f" ] && [ -f "$f" ] || continue
-		if [ -f "$hestia_root/bin/$(basename "$f")" ]; then
-			rm -f "$hestia_root/bin/$(basename "$f")"
-		fi
-	done
-
-	# Panel certificate out of the install root (#659). The files can be moved, but every consumer
-	# config lives under /etc and an update never refreshes those - so the deployed references have
-	# to be rewritten too, or the box comes up pointing at a path that no longer exists. Order is
-	# copy -> rewrite -> remove, so at no point does a config name a file that is not there.
-	ssl_new="${HESTIA_SSL:-/etc/ssl/hestia}"
-	if [ -d "$hestia_root/ssl" ]; then
-		mkdir -p "$ssl_new"
-		chown root:mail "$ssl_new" 2> /dev/null || true
-		chmod 0750 "$ssl_new"
-		for f in "$hestia_root/ssl"/*; do
-			[ -f "$f" ] || continue
-			[ -e "$ssl_new/$(basename "$f")" ] || cp -f "$f" "$ssl_new/"
-		done
-		chown root:mail "$ssl_new"/* 2> /dev/null || true
-		chmod 0660 "$ssl_new"/* 2> /dev/null || true
-		for d in /etc/caddy /etc/exim4 /etc/dovecot /etc/proftpd /etc/nginx /etc/apache2 /etc/apparmor.d; do
-			[ -d "$d" ] || continue
-			grep -rl "$hestia_root/ssl" "$d" 2> /dev/null | while read -r f; do
-				sed -i "s#$hestia_root/ssl#$ssl_new#g" "$f"
-			done
-		done
-		rm -rf "$hestia_root/ssl"
-	fi
-
-	# CrowdSec bouncer lua moved next to its own config (#665); same story as the certificate, the
-	# nginx include that loads it is deployed under /etc and not refreshed. Copied only when the
-	# target is absent, NOT with -f: what sits in the install root is the version from before the
-	# update, so overwriting would replace the freshly shipped bouncer with the old one. Where the
-	# new file is already in place (crowdsec_apply ran), the old copy is only dropped.
-	if [ -d "$hestia_root/lua" ]; then
-		if [ -d /etc/crowdsec/bouncers ]; then
-			for f in "$hestia_root/lua"/*.lua; do
-				[ -f "$f" ] || continue
-				[ -e "/etc/crowdsec/bouncers/$(basename "$f")" ] || cp -f "$f" /etc/crowdsec/bouncers/
-			done
-			grep -rl "$hestia_root/lua" /etc/nginx 2> /dev/null | while read -r f; do
-				sed -i "s#$hestia_root/lua#/etc/crowdsec/bouncers#g" "$f"
-			done
-		fi
-		rm -rf "$hestia_root/lua"
-	fi
-
-	# func/ became include/ (#669). Nothing sources the old path, but an update only copies, so the
-	# husk would sit there forever holding a stale copy of every library. Guarded on include/ being
-	# present, so this cannot fire on a tree that never got the new one.
-	if [ -d "$hestia_root/include" ]; then
-		rm -rf "$hestia_root/func"
-	fi
 
 	# theme renames: vestia removed, default->light, flat->light-flat; drop stale files
 	local theme_sed="s/^THEME='vestia'/THEME='light'/; s/^THEME='default'/THEME='light'/; s/^THEME='flat'/THEME='light-flat'/"

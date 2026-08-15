@@ -57,20 +57,15 @@ opens above it.
   created in the same `mkdir` as their siblings but left to the ambient setting. Verified against a
   002 environment: pinned gives 755/644 where unpinned gives 775/664.
 
-- **The update path caught up with four relocations** (#663 follow-up). `migrate_data_layout` runs on
-  every `hestia update` and had drifted behind this week's moves. **Hosting packages** were migrated to
-  `$HESTIA/packages`, which no command has read since #663, while `$CONF_DIR/packages` - created only by
-  the installer's structure stage - never appeared on an updated box at all. **The pre-split copies of
-  the `sbin/` commands stayed in `bin/`**, which is what the sudo rule grants the panel user NOPASSWD
-  on, so the privilege boundary #209 draws was undone by an update, `h-uninstall-hestia` included. The
-  **panel certificate** and the **crowdsec lua** could not simply be moved either: every consumer config
-  lives under `/etc` and an update never refreshes it, so the deployed references are rewritten in the
-  order copy → rewrite → remove, and the lua is copied only where the target is absent (the install-root
-  copy is the *older* one). The stale `func/` husk is dropped. Verified by reconstructing the pre-move
-  layout on a box and running the migration for real: certificate back at `/etc/ssl/hestia` 0750
-  root:mail with every config rewritten and no residual reference, an admin package adopted while an
-  existing one of the same name was left alone, the four `bin/` duplicates gone with
-  `bin/PROVENANCE.json` untouched, smoke 80/0 afterwards.
+- **`migrate_data_layout` loses its path migrations** (#663 follow-up). The helper carried moves for
+  `$HESTIA/data/*` that no release has referenced since at least v0.13.0 - twenty tags - and a first
+  pass at this extended them with cases for this week's relocations. Both are dead weight: HestiaRE
+  supports at most one minor back, and every relocation (`data/`, `ssl/`, `packages/`, `lua/`,
+  `bin/`->`sbin/`, `func/`->`include/`) landed a minor or more ago, so there is no box on which any of
+  them can fire. 127 lines removed, 159 down to 31. What is left is what a `cp -r` of the tree cannot
+  do by itself: the theme renames, the panel conf.d rebuild, the profile.d mode, `proc_hardening_apply`
+  and `login_defs_guard` - all idempotent, all no-ops on a fresh install. `bin/`, the config dirs and
+  `include/` are at their final locations, so path cases are not expected to return.
 
 - **A configure re-run rewrote admin-created hosting packages** (#663 follow-up). One line under the
   careful "copy per file only when absent", a `sed s/domain.tld/<host>/` ranged over the whole
