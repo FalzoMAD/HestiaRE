@@ -634,9 +634,12 @@
 			</div>
 		</div>
 
-			<?php // Same wrapper the toolbar uses, so the button is the identical control rather than
-			// a lookalike: .toolbar-buttons carries its padding and its per-breakpoint width.?>
-			<div class="toolbar-buttons u-justify-end">
+			<?php // Same wrapper the toolbar uses, so this is the identical control, not a lookalike.
+			// Indented by one toolbar button plus its gap (75+8) so the right edge lines up with
+			// "Advanced Options" above, clear of the floating scroll/shortcut controls at the page
+			// edge. The 8px below is the toolbar's own button-to-edge gap, measured - .toolbar-buttons
+			// zeroes its padding-bottom on a last child, which would leave this on the footer rule.?>
+			<div class="toolbar-buttons u-justify-end" style="padding-right: 83px; margin-bottom: 8px;">
 				<button type="submit" class="button" form="main-form">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</button>
