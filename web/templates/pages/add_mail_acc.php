@@ -18,9 +18,6 @@
 <div class="container">
 
 	<form
-		x-data="{
-			showAdvanced: <?= tohtml(empty($v_adv) ? "false" : "true") ?>
-		}"
 		id="main-form"
 		name="v_add_mail_acc"
 		method="post"
@@ -62,10 +59,7 @@
 						<li><?= tohtml(_("1 uppercase & 1 lowercase character")) ?></li>
 						<li><?= tohtml(_("1 number")) ?></li>
 					</ul>
-					<button x-on:click="showAdvanced = !showAdvanced" type="button" class="button button-secondary u-mb20">
-						<?= tohtml(_("Advanced Options")) ?>
-					</button>
-					<div x-cloak x-show="showAdvanced" id="advtable">
+					<div id="advtable">
 						<div class="u-mb10">
 							<label for="v_quota" class="form-label">
 								<?= tohtml(_("Quota")) ?> <span class="optional">(<?= tohtml(_("in MB")) ?>)</span>

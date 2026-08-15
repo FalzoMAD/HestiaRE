@@ -452,7 +452,7 @@ function syshealth_repair_system_config() {
 	# Allow users to delete details
 	repair_key 'POLICY_USER_EDIT_DETAILS' 'yes'
 	# Allow users to edit web templates
-	repair_key 'POLICY_USER_EDIT_WEB_TEMPLATES' 'yes'
+	repair_key 'POLICY_USER_EDIT_WEB_TEMPLATES' 'no'
 	# View user logs
 	repair_key 'POLICY_USER_VIEW_LOGS' 'yes'
 	# Allow users to login (read only) when suspended

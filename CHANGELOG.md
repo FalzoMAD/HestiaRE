@@ -14,6 +14,34 @@ opens above it.
 
 ### Changed
 
+- **Edit-user gets the same toolbar treatment as edit-web, and a new order** (#621). The "Advanced
+  Options" button moves into the toolbar next to Save, the fold animates, and a second Save sits at
+  the bottom. Above the fold now: package, SSH access, file manager and docker - the things an admin
+  sets when they open the form. Role, theme, default sort order and PHP CLI version fold away.
+  The move needed the fold to leave the `$offer_admin_fields` wrapper it was nested in, because the
+  sort order is a customer setting and would have become admin-only inside it. SSH access and the CLI
+  version had no gate of their own - they inherited that wrapper - so both now carry it explicitly.
+  Verified from both sides: an admin sees the four fields collapsed and the rest on expand, a
+  customer sees no admin field at all and keeps theme and sort order.
+
+- **Adding a database or a mail account no longer hides anything** (#621). Both forms had an
+  "Advanced Options" fold over two settings (host, charset) and five (quota, aliases, forward, discard,
+  do-not-store). The button took about as much room as the fields it hid, and the mail one gets opened
+  every time anyway. Both folds removed, all fields always shown - which takes Alpine out of those two
+  templates entirely, and with it the `$v_adv` flag whose only job was to re-open the section after a
+  failed submit.
+
+- **The web-domain form is reordered around what people actually change** (#621). PHP version sat
+  behind "Advanced Options", which sat at the bottom of the form - changing it meant scrolling down,
+  unfolding, then scrolling back up to save. Above the fold now: the 503 switch, the backend block
+  (pool and PHP version, one `$offer_backend` gate, kept together), web statistics and SSL.
+  Everything else - proxy cache, domain redirect, bot rate limiting, docker, web template, FastCGI
+  cache, proxy, custom document root, FTP - folds behind the button, which moved into the toolbar
+  next to Save. A second Save sits at the bottom of the form. Certificate PEM blocks now need
+  advanced mode even when SSL is on; the certificate metadata stays visible. The fold animates
+  (`x-collapse`, the plugin was already shipped). Field dependencies are untouched: every block moved
+  whole, with its gate.
+
 - **The web-statistics selector is a checkbox** (#239). The dropdown offered exactly two entries,
   `none` and `awstats`: it was built when `STATS_SYSTEM` could hold a second engine, and the list is
   still assembled as `"none ${STATS_SYSTEM//,/ }"`. A checkbox says the same thing and now sits with
@@ -25,7 +53,6 @@ opens above it.
   and its `v-*` alias are removed - the panel was the only caller, and a future replacement would be
   a replacement, not a third option. The Alpine `x-show` on the authorization block replaces the
   hand-written show/hide listener, which is what that file's own TODO asked for.
-
 
 - **`func/` is now `include/`, and `func/internal/` is dissolved.** The directory holds sourced
   libraries - constants, path anchors, whole subsystems like the nftables renderer - not only
@@ -61,6 +88,30 @@ opens above it.
 
 ### Fixed
 
+- **The bottom Save row is responsive, and its alignment survives translation** (#621). It sits
+  outside `.form-container`, so it never inherited the page gutter: on a phone the full-width button
+  ran edge to edge while the toolbar's kept its 20px margin, which read as docked to one side. The row
+  carries the gutter itself below the breakpoint now, and from 768px it is the compact right-aligned
+  button it is on desktop - `.toolbar-buttons` holds its buttons at full width until 1024px, which is
+  correct inside the toolbar's content-sized column and wrong for a full-width row. The indent that
+  lines it up with "Advanced Options" is **not** a measured number: an invisible copy of the same
+  button reserves the width, because the toolbar's Save is as wide as its translation. Verified in
+  German, where "Speichern" is 107px against "Save"'s 75 and a hard-coded indent would have missed by
+  31: both edges land on 1090.
+
+- **The Docker disable confirmation never appeared** (#621). Turning Docker off for a customer
+  deletes their containers, images and volumes, and the panel is supposed to demand the user name be
+  typed first. Two bugs stacked: the guard registered itself only when the checkbox read as checked
+  at page load, but that box is driven by Alpine's `x-model` and carries no `checked` attribute while
+  the module runs before Alpine - so it unhooked itself exactly when Docker was on. It takes the
+  server's own state through a data attribute now and reads the live one at submit. Underneath that
+  sat a second one: the guard called `preventDefault()`, which does not stop other listeners, and
+  `handleFormSubmit` ends in `mainForm.submit()` - a call that bypasses the submit event. The dialog
+  was built and then thrown away by the navigation half a second later, which is why the visible
+  result was the server's refusal, asking for a user name with no field to type it in. The guard
+  stops the chain now. Verified: the page no longer reloads, the dialog carries its title, the typed
+  confirmation and Cancel, and OK stays disabled until the name matches.
+
 - **The FPM pools pinned a locale that does not exist** (#239 follow-up). All five panel pools set
   `env[LANG] = en_US.UTF-8`, and nothing generates it - none of the four targets has it, they carry
   `C` and `C.utf8`. Every locale-aware child said so: awstats' perl warnings arrived in the panel log
@@ -72,7 +123,6 @@ opens above it.
   pinned value out of the deployed pool and fails when it is not generated, so the assumption is
   verified rather than trusted. Verified through the panel: the same run that produced 280 lines now
   produces none.
-
 
 - **What the installer creates no longer depends on the admin's umask.** deb13 and ub26 ship no
   `UMASK` line in `login.defs`, so 24 paths came out group-writable there and `0644`/`0755` on
