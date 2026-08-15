@@ -14,6 +14,10 @@ opens above it.
 
 ### Changed
 
+- **Edit-user gets the same toolbar treatment as edit-web** (#621). The "Advanced Options" button
+  moves into the toolbar next to Save, the fold animates, and a second Save sits at the bottom. Field
+  order and gating are untouched - that is a separate pass.
+
 - **Adding a database or a mail account no longer hides anything** (#621). Both forms had an
   "Advanced Options" fold over two settings (host, charset) and five (quota, aliases, forward, discard,
   do-not-store). The button took about as much room as the fields it hid, and the mail one gets opened

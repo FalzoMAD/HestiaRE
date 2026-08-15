@@ -24,6 +24,16 @@
 			<?php } ?>
 		</div>
 		<div class="toolbar-buttons">
+			<?php // Sits in the toolbar, outside the form that carries x-data - Alpine scopes by
+			// DOM, not by the form attribute, so this owns the state and the form mirrors it.?>
+			<button
+				x-data="<?= tohtml(json_encode(["adv" => false, "labelOn" => _("Hide Advanced Options"), "labelOff" => _("Advanced Options")], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_THROW_ON_ERROR)) ?>"
+				type="button"
+				class="button button-secondary"
+				x-on:click="adv = !adv; $dispatch('advanced-toggled', adv)"
+				x-text="adv ? labelOn : labelOff">
+				<?= tohtml(_("Advanced Options")) ?>
+			</button>
 			<button type="submit" class="button" form="main-form">
 				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 			</button>
@@ -42,6 +52,7 @@
 			dockerEnabled: <?= tohtml(!empty($v_docker_ip) ? "true" : "false") ?>,
 			showAdvanced: false,
 		}"
+		x-on:advanced-toggled.window="showAdvanced = $event.detail"
 		id="main-form"
 		method="post"
 		name="v_edit_user"
@@ -204,12 +215,7 @@
 				?>
 					</select>
 				</div>
-				<div class="u-mb20">
-					<button x-on:click="showAdvanced = !showAdvanced" type="button" class="button button-secondary">
-						<?= tohtml(_("Advanced Options")) ?>
-					</button>
-				</div>
-				<div x-cloak x-show="showAdvanced">
+				<div x-cloak x-show="showAdvanced" x-collapse>
 					<div class="u-mb10">
 						<label for="v_shell" class="form-label"><?= tohtml(_("SSH Access")) ?></label>
 						<select class="form-select" name="v_shell" id="v_shell">
@@ -288,6 +294,14 @@
 			<?php } ?>
 		</div>
 
+			<?php // Same wrapper the toolbar uses, so this is the identical control, not a lookalike.
+			// Indented by one toolbar button plus its gap so the right edge clears the floating
+			// scroll/shortcut controls; 8px below is the toolbar's own button-to-edge gap.?>
+			<div class="toolbar-buttons u-justify-end" style="padding-right: 83px; margin-bottom: 8px;">
+				<button type="submit" class="button" form="main-form">
+					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
+				</button>
+			</div>
 	</form>
 
 </div>
