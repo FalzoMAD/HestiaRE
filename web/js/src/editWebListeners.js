@@ -1,25 +1,7 @@
 // Simple hide/show input listeners specific to Edit Web Domain form
-// TODO: Replace these with Alpine.js usage consistently
+// TODO: Replace these with Alpine.js usage consistently (the stats toggle already is)
 // NOTE: Some functions use inline styles, as Alpine.js also uses them
 export default function handleEditWebListeners() {
-	// Listen to "Web Statistics" select menu to hide/show
-	// "Statistics Authorization" checkbox and inner fields
-	const statsSelect = document.querySelector('.js-stats-select');
-	const statsAuthContainers = document.querySelectorAll('.js-stats-auth');
-	if (statsSelect && statsAuthContainers.length) {
-		statsSelect.addEventListener('change', () => {
-			if (statsSelect.value === 'none') {
-				statsAuthContainers.forEach((container) => {
-					container.style.display = 'none';
-				});
-			} else {
-				statsAuthContainers.forEach((container) => {
-					container.style.display = 'block';
-				});
-			}
-		});
-	}
-
 	// Listen to "Enable domain redirection" radio items to show
 	// additional inputs if radio with value "custom" is selected
 	document.querySelectorAll('.js-redirect-custom-value').forEach((element) => {

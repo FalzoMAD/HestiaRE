@@ -14,6 +14,19 @@ opens above it.
 
 ### Changed
 
+- **The web-statistics selector is a checkbox** (#239). The dropdown offered exactly two entries,
+  `none` and `awstats`: it was built when `STATS_SYSTEM` could hold a second engine, and the list is
+  still assembled as `"none ${STATS_SYSTEM//,/ }"`. A checkbox says the same thing and now sits with
+  the other switches on the form. It renders only when `STATS_SYSTEM` is set - the value is
+  settable through `h-change-sys-config-value` and no repair block overwrites it, so clearing it
+  hides the control and `post_checkbox()` keeps each domain's stored setting rather than reading the
+  absent key as "off" (#649). The dead "change engine" branch went with it: with one engine left, a
+  non-empty record is always awstats, so "not awstats" was always the delete branch. `h-list-web-stats`
+  and its `v-*` alias are removed - the panel was the only caller, and a future replacement would be
+  a replacement, not a third option. The Alpine `x-show` on the authorization block replaces the
+  hand-written show/hide listener, which is what that file's own TODO asked for.
+
+
 - **`func/` is now `include/`, and `func/internal/` is dissolved.** The directory holds sourced
   libraries - constants, path anchors, whole subsystems like the nftables renderer - not only
   functions, and the one-file `internal/` subdirectory promised a boundary the tree does not
@@ -47,6 +60,19 @@ opens above it.
   different-values -> untouched).
 
 ### Fixed
+
+- **The FPM pools pinned a locale that does not exist** (#239 follow-up). All five panel pools set
+  `env[LANG] = en_US.UTF-8`, and nothing generates it - none of the four targets has it, they carry
+  `C` and `C.utf8`. Every locale-aware child said so: awstats' perl warnings arrived in the panel log
+  at 280 lines per stats run, and phpMyAdmin, Roundcube, SnappyMail and Adminer sat behind the same
+  setting. Pinned to `C.UTF-8` instead, which is built into glibc rather than generated, so it needs
+  no `locales` package and is identical on every target - the panel's own language comes from
+  `LANGUAGE`/gettext, not from `LANG`. Detecting the box's locale was the other option and was
+  rejected for the same reason as the umask: it makes two boxes differ. A smoke check now reads the
+  pinned value out of the deployed pool and fails when it is not generated, so the assumption is
+  verified rather than trusted. Verified through the panel: the same run that produced 280 lines now
+  produces none.
+
 
 - **What the installer creates no longer depends on the admin's umask.** deb13 and ub26 ship no
   `UMASK` line in `login.defs`, so 24 paths came out group-writable there and `0644`/`0755` on

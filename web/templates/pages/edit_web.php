@@ -23,6 +23,7 @@
 <div class="container">
 	<?php
 		$web_x_data = [
+			"statsEnabled" => !in_array(trim((string) $v_stats, "'"), ["", "none"], true),
 			"statsAuthEnabled" => !empty($v_stats_user),
 			"redirectEnabled" => !empty($v_redirect),
 			"sslEnabled" => $v_ssl == "yes",
@@ -103,25 +104,15 @@
 					</div>
 				</div>
 			<?php } ?>
-			<div class="u-mb10">
-				<label for="v_stats" class="form-label"><?= tohtml(_("Web Statistics")) ?></label>
-				<select class="form-select js-stats-select" name="v_stats" id="v_stats">
-					<?php
-						foreach ($stats as $key => $value) {
-							$svalue = "'".$value."'";
-							echo "\t\t\t\t<option value=\"".htmlentities($value)."\"";
-							if (empty($v_stats)) {
-								$v_stats = 'none';
-							}
-							if (($value == $v_stats) || ($svalue == $v_stats)) {
-								echo ' selected' ;
-							}
-							echo ">". htmlentities(_($value)) ."</option>\n";
-						}
-				?>
-				</select>
-			</div>
-			<div class="u-mb10 js-stats-auth" style="<?php if ($v_stats == "none") { ?>display:none<?php } ?>">
+			<?php if ($offer_stats) { ?>
+				<div class="form-check u-mb10">
+					<input x-model="statsEnabled" class="form-check-input" type="checkbox" name="v_stats" id="v_stats" value="awstats">
+					<label for="v_stats">
+						<?= tohtml(_("Web Statistics")) ?>
+					</label>
+				</div>
+			<?php } ?>
+			<div x-cloak x-show="statsEnabled" class="u-mb10">
 				<div class="form-check">
 					<input x-model="statsAuthEnabled" class="form-check-input" type="checkbox" name="v_stats_auth" id="v_stats_auth">
 					<label for="v_stats_auth">
@@ -129,7 +120,7 @@
 					</label>
 				</div>
 			</div>
-			<div class="u-pl30 js-stats-auth">
+			<div x-cloak x-show="statsEnabled" class="u-pl30">
 				<div x-cloak x-show="statsAuthEnabled" name="h-add-web-domain-stats-user">
 					<div class="u-mb10">
 						<label for="v_stats_user" class="form-label"><?= tohtml(_("Username")) ?></label>
