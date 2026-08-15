@@ -48,6 +48,15 @@ opens above it.
 
 ### Fixed
 
+- **What the installer creates no longer depends on the admin's umask.** deb13 and ub26 ship no
+  `UMASK` line in `login.defs`, so 24 paths came out group-writable there and `0644`/`0755` on
+  deb12/ub24 - the same class that made cron silently refuse the Let's Encrypt fallback, which is
+  group-writable-averse. The umask is pinned once in the installer and the updater, so the long tail
+  is deterministic, and anything needing other than that is `chmod`ed at its own site. `firewall/`,
+  `packages/` and `hooks/` join the explicit `chmod 750` line they were missing from - they were
+  created in the same `mkdir` as their siblings but left to the ambient setting. Verified against a
+  002 environment: pinned gives 755/644 where unpinned gives 775/664.
+
 - **The update path caught up with four relocations** (#663 follow-up). `migrate_data_layout` runs on
   every `hestia update` and had drifted behind this week's moves. **Hosting packages** were migrated to
   `$HESTIA/packages`, which no command has read since #663, while `$CONF_DIR/packages` - created only by

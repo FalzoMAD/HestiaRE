@@ -298,6 +298,7 @@ migrate_data_layout() {
 	for d in "$hestia_root/data/packages" "$hestia_root/packages"; do
 		[ -d "$d" ] || continue
 		mkdir -p "$CONF_DIR/packages"
+		chmod 0750 "$CONF_DIR/packages"
 		for f in "$d"/*; do
 			[ -e "$f" ] || continue
 			# never overwrite a definition the admin already has at the new location
