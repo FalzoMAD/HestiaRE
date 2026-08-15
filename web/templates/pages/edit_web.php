@@ -639,7 +639,10 @@
 				<button type="submit" class="button" form="main-form">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</button>
-				<span class="button u-form-actions-spacer" aria-hidden="true">
+				<?php // A span, not a button: a <button> here would be a submit control reachable by Enter.
+				// aria-hidden and tabindex keep it out of the reading order and off the tab path even
+				// if the element ever changes.?>
+				<span class="button u-form-actions-spacer" aria-hidden="true" tabindex="-1">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</span>
 			</div>
