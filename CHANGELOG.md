@@ -14,6 +14,13 @@ opens above it.
 
 ### Changed
 
+- **Adding a database or a mail account no longer hides anything** (#621). Both forms had an
+  "Advanced Options" fold over two settings (host, charset) and five (quota, aliases, forward, discard,
+  do-not-store). The button took about as much room as the fields it hid, and the mail one gets opened
+  every time anyway. Both folds removed, all fields always shown - which takes Alpine out of those two
+  templates entirely, and with it the `$v_adv` flag whose only job was to re-open the section after a
+  failed submit.
+
 - **The web-domain form is reordered around what people actually change** (#621). PHP version sat
   behind "Advanced Options", which sat at the bottom of the form - changing it meant scrolling down,
   unfolding, then scrolling back up to save. Above the fold now: the 503 switch, the backend block
