@@ -634,7 +634,9 @@
 			</div>
 		</div>
 
-			<div class="u-mt10 u-text-right">
+			<?php // Same wrapper the toolbar uses, so the button is the identical control rather than
+			// a lookalike: .toolbar-buttons carries its padding and its per-breakpoint width.?>
+			<div class="toolbar-buttons u-justify-end">
 				<button type="submit" class="button" form="main-form">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</button>
