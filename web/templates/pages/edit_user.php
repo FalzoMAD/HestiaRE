@@ -303,7 +303,7 @@
 			<?php // Same wrapper the toolbar uses, so this is the identical control, not a lookalike.
 			// Indented by one toolbar button plus its gap so the right edge clears the floating
 			// scroll/shortcut controls; 8px below is the toolbar's own button-to-edge gap.?>
-			<div class="toolbar-buttons u-justify-end" style="padding-right: 83px; margin-bottom: 8px;">
+			<div class="toolbar-buttons u-form-actions">
 				<button type="submit" class="button" form="main-form">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</button>

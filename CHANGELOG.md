@@ -90,6 +90,15 @@ opens above it.
 
 ### Fixed
 
+- **The bottom Save row is responsive** (#621). It sits outside `.form-container`, so it never
+  inherited the page gutter: on a phone the full-width button ran edge to edge while the toolbar's
+  kept its 20px margin, which read as docked to one side. The row carries the gutter itself below the
+  breakpoint now, and from 768px it is the compact right-aligned button it is on desktop -
+  `.toolbar-buttons` holds its buttons at full width until 1024px, which is correct inside the
+  toolbar's content-sized column and wrong for a full-width row. Measured at three widths: on a phone
+  the two buttons are pixel-identical, on tablet and desktop the bottom one is 75px wide with its
+  right edge on the "Advanced Options" button above.
+
 - **The Docker disable confirmation never appeared** (#621). Turning Docker off for a customer
   deletes their containers, images and volumes, and the panel is supposed to demand the user name be
   typed first. Two bugs stacked: the guard registered itself only when the checkbox read as checked

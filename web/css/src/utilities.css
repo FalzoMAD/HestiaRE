@@ -73,8 +73,29 @@
 	margin-top: 10px !important;
 }
 
-.u-justify-end {
-	justify-content: flex-end !important;
+/* Bottom action row of a form. From the breakpoint where .toolbar-buttons becomes a flex row it
+   mirrors the toolbar's right-hand column, indented by one button width plus its gap so the right
+   edge clears the floating page controls. Below that breakpoint .toolbar-buttons is not flex and its
+   button is full width - so no indent there either, or it would dock to one side. */
+.u-form-actions {
+	margin-bottom: 8px;
+	/* This row sits outside .form-container, so it does not inherit the page gutter - without these
+	   the full-width mobile button would run edge to edge while the toolbar's keeps its margin. */
+	padding-left: 20px;
+	padding-right: 20px;
+
+	@media (min-width: 768px) {
+		justify-content: flex-end;
+		padding-left: 0;
+		padding-right: 83px;
+
+		/* .toolbar-buttons keeps its buttons at width:100% until 1024px, which is right inside the
+		   toolbar's own content-sized column but full width here. Once this row is right-aligned the
+		   button should be the compact one it becomes on desktop. */
+		& .button {
+			width: auto !important;
+		}
+	}
 }
 
 .u-mt20 {

@@ -639,7 +639,7 @@
 			// "Advanced Options" above, clear of the floating scroll/shortcut controls at the page
 			// edge. The 8px below is the toolbar's own button-to-edge gap, measured - .toolbar-buttons
 			// zeroes its padding-bottom on a last child, which would leave this on the footer rule.?>
-			<div class="toolbar-buttons u-justify-end" style="padding-right: 83px; margin-bottom: 8px;">
+			<div class="toolbar-buttons u-form-actions">
 				<button type="submit" class="button" form="main-form">
 					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 				</button>
