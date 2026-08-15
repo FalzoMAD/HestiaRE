@@ -14,6 +14,18 @@ opens above it.
 
 ### Changed
 
+- **The web-domain form is reordered around what people actually change** (#621). PHP version sat
+  behind "Advanced Options", which sat at the bottom of the form - changing it meant scrolling down,
+  unfolding, then scrolling back up to save. Above the fold now: the 503 switch, the backend block
+  (pool and PHP version, one `$offer_backend` gate, kept together), web statistics and SSL.
+  Everything else - proxy cache, domain redirect, bot rate limiting, docker, web template, FastCGI
+  cache, proxy, custom document root, FTP - folds behind the button, which moved into the toolbar
+  next to Save. A second Save sits at the bottom of the form. Certificate PEM blocks now need
+  advanced mode even when SSL is on; the certificate metadata stays visible. The fold animates
+  (`x-collapse`, the plugin was already shipped). Field dependencies are untouched: every block moved
+  whole, with its gate.
+
+
 - **The web-statistics selector is a checkbox** (#239). The dropdown offered exactly two entries,
   `none` and `awstats`: it was built when `STATS_SYSTEM` could hold a second engine, and the list is
   still assembled as `"none ${STATS_SYSTEM//,/ }"`. A checkbox says the same thing and now sits with

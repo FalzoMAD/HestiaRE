@@ -12,6 +12,16 @@
 			} ?>">
 				<i class="fas fa-trash icon-red"></i><?= tohtml(_("Purge NGINX Cache")) ?>
 			</a>
+			<?php // Sits in the toolbar, outside the form that carries x-data - Alpine scopes by
+			// DOM, not by the form attribute, so this owns the state and the form mirrors it.?>
+			<button
+				x-data="<?= tohtml(json_encode(["adv" => false, "labelOn" => _("Hide Advanced Options"), "labelOff" => _("Advanced Options")], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_THROW_ON_ERROR)) ?>"
+				type="button"
+				class="button button-secondary"
+				x-on:click="adv = !adv; $dispatch('advanced-toggled', adv)"
+				x-text="adv ? labelOn : labelOff">
+				<?= tohtml(_("Advanced Options")) ?>
+			</button>
 <button type="submit" class="button" form="main-form">
 				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 			</button>
@@ -29,6 +39,8 @@
 			"sslEnabled" => $v_ssl == "yes",
 			"letsEncryptEnabled" => $v_letsencrypt == "yes" || $v_letsencrypt == "on",
 			"showCertificates" => !($v_letsencrypt == "yes" || $v_letsencrypt == "on"),
+			"certLabelOn" => _("Hide Certificate"),
+			"certLabelOff" => _("Show Certificate"),
 			"showAdvanced" => false,
 			"nginxCacheEnabled" => $v_nginx_cache == "yes",
 			"proxyCacheEnabled" => $v_proxy_cache == "yes",
@@ -40,6 +52,7 @@
 
 	<form
 		x-data="<?= tohtml(json_encode($web_x_data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_THROW_ON_ERROR)) ?>"
+		x-on:advanced-toggled.window="showAdvanced = $event.detail"
 		id="main-form"
 		name="v_edit_web"
 		method="post"
@@ -86,24 +99,47 @@
 					<?= tohtml(_("Take website temporarily offline (visitors see a maintenance page, HTTP 503)")) ?>
 				</label>
 			</div>
-			<?php if ($offer_proxy_cache) { ?>
-				<div class="form-check u-mb10">
-					<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") {
-						echo "checked";
-					} ?>>
-					<label for="v_proxy_cache_check">
-						<?= tohtml(_("Enable proxy cache")) ?>
-					</label>
-				</div>
-				<div x-cloak x-show="proxyCacheEnabled" id="v_proxy_duration" class="u-pl30">
-					<div class="u-mb10">
-						<label for="v_proxy_cache_duration" class="form-label">
-							<?= tohtml(_("Cache Duration")) ?> <span class="optional">(<?= tohtml(_("For example")) ?>: 30s, 10m or 1d)</span>
-						</label>
-						<input type="text" class="form-control" name="v_proxy_cache_duration" id="v_proxy_cache_duration" value="<?= tohtml(trim($v_proxy_cache_duration, "'")) ?>">
-					</div>
-				</div>
-			<?php } ?>
+					<?php if ($offer_backend) { ?>
+						<?php // profile choice is capacity allocation - a customer would simply pick 'high'?>
+						<?php if ($offer_backend_template) { ?>
+						<div class="u-mb10">
+								<label for="v_backend_template" class="form-label">
+									<?= tohtml(_("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
+								</label>
+							<select class="form-select" name="v_backend_template" id="v_backend_template">
+								<?php
+							foreach ($backend_templates as $key => $value) {
+								echo "\t\t\t\t<option value=\"".tohtml($value)."\"";
+								$svalue = "'".$value."'";
+								if ((!empty($v_backend_template)) && (($value == $v_backend_template) || ($svalue == $v_backend_template))) {
+									echo ' selected' ;
+								}
+								if ((empty($v_backend_template)) && ($value == 'default')) {
+									echo ' selected' ;
+								}
+								echo ">".tohtml($value)."</option>\n";
+							}
+							?>
+							</select>
+						</div>
+						<?php } ?>
+						<div class="u-mb10">
+								<label for="v_php_version" class="form-label"><?= tohtml(_("PHP Version")) ?></label>
+							<select class="form-select" name="v_php_version" id="v_php_version">
+								<?php
+								$v_cur_php = trim($v_php_version, "'");
+						foreach (($php_versions ?: []) as $value) {
+							echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
+							if ($v_cur_php == $value) {
+								echo ' selected';
+							}
+							echo ">PHP " . tohtml($value) . "</option>\n";
+						}
+						echo "\t\t\t\t<option value=\"none\"" . ($v_cur_php == 'none' ? ' selected' : '') . ">" . tohtml(_("None (no PHP)")) . "</option>\n";
+						?>
+							</select>
+						</div>
+					<?php } ?>
 			<?php if ($offer_stats) { ?>
 				<div class="form-check u-mb10">
 					<input x-model="statsEnabled" class="form-check-input" type="checkbox" name="v_stats" id="v_stats" value="awstats">
@@ -136,58 +172,6 @@
 						<div class="u-pos-relative">
 							<input type="text" class="form-control js-password-input" name="v_stats_password" id="v_password" value="<?= tohtml(trim($v_stats_password, "'")) ?>">
 						</div>
-					</div>
-				</div>
-			</div>
-			<div class="form-check u-mb10">
-				<input x-model="redirectEnabled" class="form-check-input" type="checkbox" name="h-redirect-checkbox" id="h-redirect-checkbox">
-				<label for="h-redirect-checkbox">
-					<?= tohtml(_("Enable domain redirection")) ?>
-				</label>
-			</div>
-			<div x-cloak x-show="redirectEnabled" id="v_redirect" class="u-pl30 u-mb10">
-				<div class="form-check">
-					<input class="form-check-input js-redirect-custom-value" type="radio" name="h-redirect" id="h-redirect-radio-1" value="<?= tohtml('www.'.$v_domain) ?>" <?php if ($v_redirect == "www.".$v_domain) {
-						echo 'checked';
-					} ?>>
-					<label for="h-redirect-radio-1">
-						<?= tohtml(sprintf(_("Redirect visitors to %s"), "www." . $v_domain)) ?>
-					</label>
-				</div>
-				<div class="form-check">
-					<input class="form-check-input js-redirect-custom-value" type="radio" name="h-redirect" id="h-redirect-radio-2" value="<?= tohtml($v_domain) ?>" <?php if ($v_redirect == $v_domain) {
-						echo 'checked';
-					} ?>>
-					<label for="h-redirect-radio-2">
-						<?= tohtml(sprintf(_("Redirect visitors to %s"), $v_domain)) ?>
-					</label>
-				</div>
-				<div class="form-check">
-					<input class="form-check-input js-redirect-custom-value" type="radio" name="h-redirect" id="h-redirect-radio-3" value="custom" <?php if (!empty($v_redirect_custom)) {
-						echo 'checked';
-					} ?>>
-					<label for="h-redirect-radio-3">
-						<?= tohtml(_("Redirect visitors to a custom domain or web address")) ?>
-					</label>
-				</div>
-				<div class="u-pl30 js-custom-redirect-fields <?php if (empty($v_redirect_custom)) {
-					echo 'u-hidden';
-				} ?>">
-					<div class="u-mt15 u-mb10">
-						<label for="h-redirect-custom" class="form-label"><?= tohtml(_("Target domain or URL")) ?></label>
-						<input type="text" class="form-control" name="h-redirect-custom" id="h-redirect-custom" value="<?= tohtml($v_redirect_custom) ?>">
-					</div>
-					<div class="u-mb20">
-						<label for="h-redirect-code" class="form-label"><?= tohtml(_("Status code")) ?>:</label>
-						<select class="form-select" name="h-redirect-code" id="h-redirect-code">
-							<?php foreach ($redirect_code_options as $status_code): ?>
-								<option value="<?= tohtml($status_code) ?>" <?php if ((int) $v_redirect_code === (int) $status_code) {
-									echo 'selected="selected"';
-								} ?>>
-								<?= tohtml($status_code) ?>
-							</option>
-							<?php endforeach; ?>
-						</select>
 					</div>
 				</div>
 			</div>
@@ -233,7 +217,9 @@
 					</label>
 				</div>
 				<?php } ?>
-				<div x-cloak x-show="showCertificates" class="js-ssl-details">
+					<?php // Cert data is bulk and rarely touched: SSL stays above the fold, the PEM
+					// blocks only appear in advanced mode (#621)?>
+				<div x-cloak x-show="showCertificates && showAdvanced" class="js-ssl-details">
 					<div class="u-mb10">
 						<label for="ssl_crt" class="form-label">
 							<?= tohtml(_("SSL Certificate")) ?>
@@ -285,17 +271,88 @@
 							<span class="values-list-label"><?= tohtml(_("Issued By")) ?></span>
 							<span class="values-list-value"><?= tohtml($v_ssl_issuer) ?></span>
 						</li>
-						<p x-cloak x-show="letsEncryptEnabled" id="letsinfo">
+						<p x-cloak x-show="letsEncryptEnabled && showAdvanced" id="letsinfo">
 							<button
 								type="button"
 								class="form-link"
 								x-on:click="showCertificates = !showCertificates"
-								x-text="showCertificates ? <?= json_encode(_("Hide Certificate"), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR) ?> : <?= json_encode(_("Show Certificate"), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR) ?>">
+									x-text="showCertificates ? certLabelOn : certLabelOff">
 								<?= tohtml(_("Show Certificate")) ?>
 							</button>
 						</p>
 					</ul>
 				<?php } ?>
+			</div>
+			<div x-cloak x-show="showAdvanced" x-collapse>
+			<?php if ($offer_proxy_cache) { ?>
+				<div class="form-check u-mb10">
+					<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") {
+						echo "checked";
+					} ?>>
+					<label for="v_proxy_cache_check">
+						<?= tohtml(_("Enable proxy cache")) ?>
+					</label>
+				</div>
+				<div x-cloak x-show="proxyCacheEnabled" id="v_proxy_duration" class="u-pl30">
+					<div class="u-mb10">
+						<label for="v_proxy_cache_duration" class="form-label">
+							<?= tohtml(_("Cache Duration")) ?> <span class="optional">(<?= tohtml(_("For example")) ?>: 30s, 10m or 1d)</span>
+						</label>
+						<input type="text" class="form-control" name="v_proxy_cache_duration" id="v_proxy_cache_duration" value="<?= tohtml(trim($v_proxy_cache_duration, "'")) ?>">
+					</div>
+				</div>
+			<?php } ?>
+			<div class="form-check u-mb10">
+				<input x-model="redirectEnabled" class="form-check-input" type="checkbox" name="h-redirect-checkbox" id="h-redirect-checkbox">
+				<label for="h-redirect-checkbox">
+					<?= tohtml(_("Enable domain redirection")) ?>
+				</label>
+			</div>
+			<div x-cloak x-show="redirectEnabled" id="v_redirect" class="u-pl30 u-mb10">
+				<div class="form-check">
+					<input class="form-check-input js-redirect-custom-value" type="radio" name="h-redirect" id="h-redirect-radio-1" value="<?= tohtml('www.'.$v_domain) ?>" <?php if ($v_redirect == "www.".$v_domain) {
+						echo 'checked';
+					} ?>>
+					<label for="h-redirect-radio-1">
+						<?= tohtml(sprintf(_("Redirect visitors to %s"), "www." . $v_domain)) ?>
+					</label>
+				</div>
+				<div class="form-check">
+					<input class="form-check-input js-redirect-custom-value" type="radio" name="h-redirect" id="h-redirect-radio-2" value="<?= tohtml($v_domain) ?>" <?php if ($v_redirect == $v_domain) {
+						echo 'checked';
+					} ?>>
+					<label for="h-redirect-radio-2">
+						<?= tohtml(sprintf(_("Redirect visitors to %s"), $v_domain)) ?>
+					</label>
+				</div>
+				<div class="form-check">
+					<input class="form-check-input js-redirect-custom-value" type="radio" name="h-redirect" id="h-redirect-radio-3" value="custom" <?php if (!empty($v_redirect_custom)) {
+						echo 'checked';
+					} ?>>
+					<label for="h-redirect-radio-3">
+						<?= tohtml(_("Redirect visitors to a custom domain or web address")) ?>
+					</label>
+				</div>
+				<div class="u-pl30 js-custom-redirect-fields <?php if (empty($v_redirect_custom)) {
+					echo 'u-hidden';
+				} ?>">
+					<div class="u-mt15 u-mb10">
+						<label for="h-redirect-custom" class="form-label"><?= tohtml(_("Target domain or URL")) ?></label>
+						<input type="text" class="form-control" name="h-redirect-custom" id="h-redirect-custom" value="<?= tohtml($v_redirect_custom) ?>">
+					</div>
+					<div class="u-mb20">
+						<label for="h-redirect-code" class="form-label"><?= tohtml(_("Status code")) ?>:</label>
+						<select class="form-select" name="h-redirect-code" id="h-redirect-code">
+							<?php foreach ($redirect_code_options as $status_code): ?>
+								<option value="<?= tohtml($status_code) ?>" <?php if ((int) $v_redirect_code === (int) $status_code) {
+									echo 'selected="selected"';
+								} ?>>
+								<?= tohtml($status_code) ?>
+							</option>
+							<?php endforeach; ?>
+						</select>
+					</div>
+				</div>
 			</div>
 			<?php if ($offer_botlimit) { ?>
 				<!-- Layer-B bot throttling, customer-editable: only the families the admin ENABLED are
@@ -381,12 +438,6 @@
 				<?php } ?>
 			</div>
 			<?php } ?>
-			<div class="u-mt15 u-mb20">
-				<button x-on:click="showAdvanced = !showAdvanced" type="button" class="button button-secondary">
-					<?= tohtml(_("Advanced Options")) ?>
-				</button>
-			</div>
-			<div x-cloak x-show="showAdvanced">
 				<?php if (empty($v_docker) && $can_edit_templates) { ?>
 					<?php // These policy gates protect the CUSTOMER from themselves (a pool set to high, a broken
 					// proxy template), so the REAL admin overrides them even while impersonating: adminContext
@@ -434,47 +485,6 @@
 								</label>
 								<input type="text" class="form-control" name="v_nginx_cache_duration" id="v_nginx_cache_duration" value="<?= tohtml(trim($v_nginx_cache_duration, "'")) ?>">
 							</div>
-						</div>
-					<?php } ?>
-					<?php if ($offer_backend) { ?>
-						<?php // profile choice is capacity allocation - a customer would simply pick 'high'?>
-						<?php if ($offer_backend_template) { ?>
-						<div class="u-mb10">
-								<label for="v_backend_template" class="form-label">
-									<?= tohtml(_("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
-								</label>
-							<select class="form-select" name="v_backend_template" id="v_backend_template">
-								<?php
-							foreach ($backend_templates as $key => $value) {
-								echo "\t\t\t\t<option value=\"".tohtml($value)."\"";
-								$svalue = "'".$value."'";
-								if ((!empty($v_backend_template)) && (($value == $v_backend_template) || ($svalue == $v_backend_template))) {
-									echo ' selected' ;
-								}
-								if ((empty($v_backend_template)) && ($value == 'default')) {
-									echo ' selected' ;
-								}
-								echo ">".tohtml($value)."</option>\n";
-							}
-							?>
-							</select>
-						</div>
-						<?php } ?>
-						<div class="u-mb10">
-								<label for="v_php_version" class="form-label"><?= tohtml(_("PHP Version")) ?></label>
-							<select class="form-select" name="v_php_version" id="v_php_version">
-								<?php
-								$v_cur_php = trim($v_php_version, "'");
-						foreach (($php_versions ?: []) as $value) {
-							echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
-							if ($v_cur_php == $value) {
-								echo ' selected';
-							}
-							echo ">PHP " . tohtml($value) . "</option>\n";
-						}
-						echo "\t\t\t\t<option value=\"none\"" . ($v_cur_php == 'none' ? ' selected' : '') . ">" . tohtml(_("None (no PHP)")) . "</option>\n";
-						?>
-							</select>
 						</div>
 					<?php } ?>
 					<?php if ($offer_proxy) { ?>
@@ -623,6 +633,11 @@
 			</div>
 		</div>
 
+			<div class="u-mt20">
+				<button type="submit" class="button" form="main-form">
+					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
+				</button>
+			</div>
 	</form>
 
 </div>
