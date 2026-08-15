@@ -1137,6 +1137,7 @@ is_netmask_format_valid() {
 
 # Proxy extention format validator
 is_extention_format_valid() {
+	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|@|<|>|?|/|\|\"|'|;|%|\`| ]"
 	if [[ "$1" =~ $exclude ]]; then
 		check_result "$E_INVALID" "invalid proxy extention format :: $1"
@@ -1175,6 +1176,7 @@ is_refresh_ipset_format_valid() {
 
 # Common format validator
 is_common_format_valid() {
+	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|<|>|?|/|\|\"|'|;|%|\`| ]"
 	if [[ "$1" =~ $exclude ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
@@ -1211,6 +1213,7 @@ is_common_format_valid() {
 # Common format validator for fields that need spaces
 is_common_format_spaces_valid() {
 	# Block injection chars but allow spaces
+	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|<|>|?|/|\|\"|'|;|%|\`]"
 
 	# Block tabs, newlines, carriage returns
@@ -1294,6 +1297,7 @@ is_no_quote_format() {
 }
 
 is_string_format_valid() {
+	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|<|>|?|/|\|\"|'|;|%|\`]"
 	if [[ "$1" =~ $exclude ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
@@ -1331,6 +1335,7 @@ is_cron_command_valid_format() {
 }
 # Database format validator
 is_database_format_valid() {
+	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="[!|@|#|$|^|&|*|(|)|+|=|{|}|:|,|<|>|?|/|\|\"|'|;|%|\`| ]"
 	if [[ "$1" =~ $exclude ]] || [ 64 -le ${#1} ]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"
@@ -1347,6 +1352,7 @@ is_date_format_valid() {
 
 # Database user validator
 is_dbuser_format_valid() {
+	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="[!|@|#|$|^|&|*|(|)|+|=|{|}|:|,|<|>|?|/|\|\"|'|;|%|\`| ]"
 	if [ 33 -le ${#1} ]; then
 		check_result "$E_INVALID" "mysql username can be up to 32 characters long"
@@ -1528,6 +1534,7 @@ is_object_name_format_valid() {
 }
 # Name validator
 is_name_format_valid() {
+	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="['|\"|<|>]"
 	if [[ "$1" =~ $exclude ]]; then
 		check_result "$E_INVALID" "Invalid $2 contains qoutes (\" or ') :: $1"
@@ -1902,6 +1909,7 @@ no_symlink_chmod() {
 }
 
 format_no_quotes() {
+	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="['|\"]"
 	if [[ "$1" =~ $exclude ]]; then
 		check_result "$E_INVALID" "Invalid $2 contains qoutes (\" or ' or | ) :: $1"

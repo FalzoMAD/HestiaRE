@@ -343,10 +343,16 @@ migrate_data_layout() {
 	fi
 
 	# CrowdSec bouncer lua moved next to its own config (#665); same story as the certificate, the
-	# nginx include that loads it is deployed under /etc and not refreshed.
+	# nginx include that loads it is deployed under /etc and not refreshed. Copied only when the
+	# target is absent, NOT with -f: what sits in the install root is the version from before the
+	# update, so overwriting would replace the freshly shipped bouncer with the old one. Where the
+	# new file is already in place (crowdsec_apply ran), the old copy is only dropped.
 	if [ -d "$hestia_root/lua" ]; then
 		if [ -d /etc/crowdsec/bouncers ]; then
-			cp -f "$hestia_root/lua"/*.lua /etc/crowdsec/bouncers/ 2> /dev/null || true
+			for f in "$hestia_root/lua"/*.lua; do
+				[ -f "$f" ] || continue
+				[ -e "/etc/crowdsec/bouncers/$(basename "$f")" ] || cp -f "$f" /etc/crowdsec/bouncers/
+			done
 			grep -rl "$hestia_root/lua" /etc/nginx 2> /dev/null | while read -r f; do
 				sed -i "s#$hestia_root/lua#/etc/crowdsec/bouncers#g" "$f"
 			done

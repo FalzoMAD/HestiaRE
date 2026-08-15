@@ -48,6 +48,21 @@ opens above it.
 
 ### Fixed
 
+- **The update path caught up with four relocations** (#663 follow-up). `migrate_data_layout` runs on
+  every `hestia update` and had drifted behind this week's moves. **Hosting packages** were migrated to
+  `$HESTIA/packages`, which no command has read since #663, while `$CONF_DIR/packages` - created only by
+  the installer's structure stage - never appeared on an updated box at all. **The pre-split copies of
+  the `sbin/` commands stayed in `bin/`**, which is what the sudo rule grants the panel user NOPASSWD
+  on, so the privilege boundary #209 draws was undone by an update, `h-uninstall-hestia` included. The
+  **panel certificate** and the **crowdsec lua** could not simply be moved either: every consumer config
+  lives under `/etc` and an update never refreshes it, so the deployed references are rewritten in the
+  order copy → rewrite → remove, and the lua is copied only where the target is absent (the install-root
+  copy is the *older* one). The stale `func/` husk is dropped. Verified by reconstructing the pre-move
+  layout on a box and running the migration for real: certificate back at `/etc/ssl/hestia` 0750
+  root:mail with every config rewritten and no residual reference, an admin package adopted while an
+  existing one of the same name was left alone, the four `bin/` duplicates gone with
+  `bin/PROVENANCE.json` untouched, smoke 80/0 afterwards.
+
 - **A configure re-run rewrote admin-created hosting packages** (#663 follow-up). One line under the
   careful "copy per file only when absent", a `sed s/domain.tld/<host>/` ranged over the whole
   `$CONF_DIR/packages/` glob. Before #663 that reached only the install root, which an update replaces
