@@ -80,6 +80,6 @@ rm -rf "/tmp/hestiare-$LATEST"
 # Migrate any legacy $HESTIA/data/* dirs to their $CONF_DIR targets (#148)
 # while the panel is stopped, so the new code never reads the old paths.
 # shellcheck disable=SC1090
-[ -f "$HESTIA/include/helper.sh" ] && . "$HESTIA/include/helper.sh" && migrate_data_layout || true
+[ -f "$HESTIA/include/helper.sh" ] && . "$HESTIA/include/helper.sh" && reapply_outside_tree || true
 systemctl start caddy hestia-php 2>/dev/null || true
 echo "Update complete."

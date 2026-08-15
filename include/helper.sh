@@ -235,15 +235,9 @@ seed_hestia_etc() {
 	unset -f _wcv
 }
 
-# ── re-apply on an existing box what a copy-only update would not ────────────
-# NOT a path migration any more: the $HESTIA/data/* moves are gone, and so are the ones added for
-# this week's relocations. HestiaRE supports at most one minor back, and every relocation
-# (data/, ssl/, packages/, lua/, bin/->sbin/, func/->include/) landed a minor or more ago - there is
-# no box left where any of them can fire. bin/, the conf dirs and include/ are at their final
-# locations, so this is not expected to grow path cases again.
-# What remains are things a `cp -r` of the tree cannot do by itself. Every step is idempotent, so a
-# fresh install runs them as no-ops.
-migrate_data_layout() {
+# ── re-apply what a copy-only update cannot: state outside the install tree ───
+# Idempotent throughout, so a fresh install runs this as a no-op.
+reapply_outside_tree() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
 
 	# theme renames: vestia removed, default->light, flat->light-flat; drop stale files
