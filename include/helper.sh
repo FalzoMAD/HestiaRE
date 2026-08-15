@@ -239,7 +239,7 @@ seed_hestia_etc() {
 # Real move, idempotent (only when old exists + new absent), so fresh installs skip it.
 migrate_data_layout() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
-	local d
+	local d f ssl_new
 
 	# ips + firewall + users -> $CONF_DIR (plain move; backup format is location-agnostic)
 	for d in ips firewall users; do
@@ -284,14 +284,82 @@ migrate_data_layout() {
 		rm -rf "$hestia_root/data/queue"
 	fi
 
-	# packages/templates ship via the tarball; preserve operator-added files (cp -n) then drop old
-	for d in packages templates; do
-		if [ -d "$hestia_root/data/$d" ]; then
-			mkdir -p "$hestia_root/$d"
-			cp -rn "$hestia_root/data/$d/." "$hestia_root/$d/" 2> /dev/null || true
-			rm -rf "$hestia_root/data/$d"
+	# templates ship via the tarball and belong in the install root; preserve operator-added files
+	if [ -d "$hestia_root/data/templates" ]; then
+		mkdir -p "$hestia_root/templates"
+		cp -rn "$hestia_root/data/templates/." "$hestia_root/templates/" 2> /dev/null || true
+		rm -rf "$hestia_root/data/templates"
+	fi
+
+	# packages are instance state since #663, so the target is $CONF_DIR. This used to point at
+	# $hestia_root/packages, which no command reads any more - an update would have parked them at a
+	# dead address while $CONF_DIR/packages, created only by the installer, never appeared at all.
+	# Two possible sources: the pre-#148 data/ dir and the pre-#663 install-root dir.
+	for d in "$hestia_root/data/packages" "$hestia_root/packages"; do
+		[ -d "$d" ] || continue
+		mkdir -p "$CONF_DIR/packages"
+		for f in "$d"/*; do
+			[ -e "$f" ] || continue
+			# never overwrite a definition the admin already has at the new location
+			[ -e "$CONF_DIR/packages/$(basename "$f")" ] || cp -f "$f" "$CONF_DIR/packages/"
+		done
+		rm -rf "$d"
+	done
+
+	# The sbin split (#209) is a privilege boundary: bin/ is what the sudo wildcard grants. An update
+	# only ever copies, so the pre-split duplicates would stay in bin/ and keep the panel user's
+	# NOPASSWD reach on the lifecycle commands - h-uninstall-hestia among them. Derived from what is
+	# actually in sbin/ rather than a list, and keyed on the executable bit so bin/PROVENANCE.json
+	# (a legitimate namesake of sbin/PROVENANCE.json) is not touched.
+	for f in "$hestia_root/sbin"/*; do
+		[ -x "$f" ] && [ -f "$f" ] || continue
+		if [ -f "$hestia_root/bin/$(basename "$f")" ]; then
+			rm -f "$hestia_root/bin/$(basename "$f")"
 		fi
 	done
+
+	# Panel certificate out of the install root (#659). The files can be moved, but every consumer
+	# config lives under /etc and an update never refreshes those - so the deployed references have
+	# to be rewritten too, or the box comes up pointing at a path that no longer exists. Order is
+	# copy -> rewrite -> remove, so at no point does a config name a file that is not there.
+	ssl_new="${HESTIA_SSL:-/etc/ssl/hestia}"
+	if [ -d "$hestia_root/ssl" ]; then
+		mkdir -p "$ssl_new"
+		chown root:mail "$ssl_new" 2> /dev/null || true
+		chmod 0750 "$ssl_new"
+		for f in "$hestia_root/ssl"/*; do
+			[ -f "$f" ] || continue
+			[ -e "$ssl_new/$(basename "$f")" ] || cp -f "$f" "$ssl_new/"
+		done
+		chown root:mail "$ssl_new"/* 2> /dev/null || true
+		chmod 0660 "$ssl_new"/* 2> /dev/null || true
+		for d in /etc/caddy /etc/exim4 /etc/dovecot /etc/proftpd /etc/nginx /etc/apache2 /etc/apparmor.d; do
+			[ -d "$d" ] || continue
+			grep -rl "$hestia_root/ssl" "$d" 2> /dev/null | while read -r f; do
+				sed -i "s#$hestia_root/ssl#$ssl_new#g" "$f"
+			done
+		done
+		rm -rf "$hestia_root/ssl"
+	fi
+
+	# CrowdSec bouncer lua moved next to its own config (#665); same story as the certificate, the
+	# nginx include that loads it is deployed under /etc and not refreshed.
+	if [ -d "$hestia_root/lua" ]; then
+		if [ -d /etc/crowdsec/bouncers ]; then
+			cp -f "$hestia_root/lua"/*.lua /etc/crowdsec/bouncers/ 2> /dev/null || true
+			grep -rl "$hestia_root/lua" /etc/nginx 2> /dev/null | while read -r f; do
+				sed -i "s#$hestia_root/lua#/etc/crowdsec/bouncers#g" "$f"
+			done
+		fi
+		rm -rf "$hestia_root/lua"
+	fi
+
+	# func/ became include/ (#669). Nothing sources the old path, but an update only copies, so the
+	# husk would sit there forever holding a stale copy of every library. Guarded on include/ being
+	# present, so this cannot fire on a tree that never got the new one.
+	if [ -d "$hestia_root/include" ]; then
+		rm -rf "$hestia_root/func"
+	fi
 
 	# theme renames: vestia removed, default->light, flat->light-flat; drop stale files
 	local theme_sed="s/^THEME='vestia'/THEME='light'/; s/^THEME='default'/THEME='light'/; s/^THEME='flat'/THEME='light-flat'/"
