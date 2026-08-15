@@ -61,6 +61,19 @@ opens above it.
 
 ### Fixed
 
+- **The FPM pools pinned a locale that does not exist** (#239 follow-up). All five panel pools set
+  `env[LANG] = en_US.UTF-8`, and nothing generates it - none of the four targets has it, they carry
+  `C` and `C.utf8`. Every locale-aware child said so: awstats' perl warnings arrived in the panel log
+  at 280 lines per stats run, and phpMyAdmin, Roundcube, SnappyMail and Adminer sat behind the same
+  setting. Pinned to `C.UTF-8` instead, which is built into glibc rather than generated, so it needs
+  no `locales` package and is identical on every target - the panel's own language comes from
+  `LANGUAGE`/gettext, not from `LANG`. Detecting the box's locale was the other option and was
+  rejected for the same reason as the umask: it makes two boxes differ. A smoke check now reads the
+  pinned value out of the deployed pool and fails when it is not generated, so the assumption is
+  verified rather than trusted. Verified through the panel: the same run that produced 280 lines now
+  produces none.
+
+
 - **What the installer creates no longer depends on the admin's umask.** deb13 and ub26 ship no
   `UMASK` line in `login.defs`, so 24 paths came out group-writable there and `0644`/`0755` on
   deb12/ub24 - the same class that made cron silently refuse the Let's Encrypt fallback, which is
