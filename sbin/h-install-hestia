@@ -557,12 +557,24 @@ install_mail() {
 		"$BIN/h-add-sys-clamav" >> "$LOG" 2>&1 || true
 	fi
 
-	# Webmailer choice (ROUNDCUBE / TACHYON / NONE)
+	# Webmailer choice (ROUNDCUBE / TACHYON / BOTH / NONE)
 	case "${COMPONENT_MAIL_WEBMAILER:-NONE}" in
 		ROUNDCUBE)
 			wcv "WEBMAIL_SYSTEM" "roundcube"; wcv "WEBMAIL_ALIAS" "webmail"
 			echo "[ * ] Installing Roundcube..."
 			"$BIN/h-add-sys-roundcube" >> "$LOG"
+			;;
+		BOTH)
+			# Roundcube first and fatal like the ROUNDCUBE branch; Tachyon merges itself into
+			# WEBMAIL_SYSTEM ('tachyon,roundcube') and is non-fatal like the TACHYON branch -
+			# a dead download degrades the box to Roundcube-only, loudly, instead of aborting.
+			wcv "WEBMAIL_SYSTEM" "roundcube"; wcv "WEBMAIL_ALIAS" "webmail"
+			echo "[ * ] Installing Roundcube..."
+			"$BIN/h-add-sys-roundcube" >> "$LOG"
+			echo "[ * ] Installing Tachyon..."
+			if ! "$BIN/h-add-sys-tachyon" >> "$LOG" 2>&1; then
+				echo "[ !! ] Tachyon install FAILED - Roundcube stays the only webmail (see $LOG)"
+			fi
 			;;
 		TACHYON)
 			echo "[ * ] Installing Tachyon..."

@@ -56,9 +56,13 @@ format_domain_idn
 #----------------------------------------------------------#
 
 if [ -z "$webmail" ]; then
-	for client in ${WEBMAIL_SYSTEM//,/ }; do
-		webmail="$client"
-	done
+	# Default mirrors the panel (web/add/mail): Roundcube when installed, else the first client.
+	# The old loop took the LAST token, which contradicted the panel's preselect on a two-client box.
+	if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
+		webmail="roundcube"
+	else
+		webmail="${WEBMAIL_SYSTEM%%,*}"
+	fi
 fi
 
 check_args '2' "$#" 'USER DOMAIN [WEBMAIL] [RESTART]'

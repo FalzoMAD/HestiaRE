@@ -26,6 +26,17 @@ opens above it.
   moves to the renamed namespaces (`RainLoop\` -> `Tachyon\`, `SnappyMail\` -> `Tachyon\Util\`).
   No migration for existing SnappyMail installs on purpose (fresh installs only before v1).
 
+- **Both webmailers at once, chosen per mail domain** (#584). The runtime always supported
+  coexistence - `WEBMAIL_SYSTEM` is a token list, each client has its own loopback listener
+  (:8090/:8091) and FPM socket, the panel's per-domain "Webmail Client" select and the vhost
+  proxy chain were already in place. What was missing was the entry path: the wizard gains a
+  BOTH option, the installer installs Roundcube (fatal, like alone) then Tachyon (non-fatal,
+  degrades loudly to Roundcube-only), and the add/delete commands now widen/narrow
+  `COMPONENT_MAIL_WEBMAILER` (second add records BOTH instead of overwriting; deleting one
+  half leaves the other recorded). The CLI default for a new mail domain now matches the
+  panel's documented preselect - Roundcube when installed, else the first client - instead
+  of accidentally taking the last token of the list.
+
 - **Edit-user gets the same toolbar treatment as edit-web, and a new order** (#621). The "Advanced
   Options" button moves into the toolbar next to Save, the fold animates, and a second Save sits at
   the bottom. Above the fold now: package, SSH access, file manager and docker - the things an admin

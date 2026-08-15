@@ -249,6 +249,7 @@
       "options": [
         { "value": "ROUNDCUBE",  "label": "Roundcube",  "description": "Full-featured webmail" },
         { "value": "TACHYON", "label": "Tachyon", "description": "Lightweight webmail (maintained SnappyMail fork)" },
+        { "value": "BOTH",    "label": "Both",    "description": "Roundcube + Tachyon, selectable per mail domain" },
         { "value": "NONE",       "label": "None",       "description": "No webmail client" }
       ],
       "default": {

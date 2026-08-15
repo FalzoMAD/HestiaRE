@@ -193,7 +193,12 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-set_install_component MAIL_WEBMAILER ROUNDCUBE
+# BOTH when the other client was already there: a second add must widen the record, not overwrite it
+if echo "$WEBMAIL_SYSTEM" | grep -qw 'tachyon'; then
+	set_install_component MAIL_WEBMAILER BOTH
+else
+	set_install_component MAIL_WEBMAILER ROUNDCUBE
+fi
 
 $BIN/h-log-action "system" "Info" "Plugins" "Roundcube installed (OS package)."
 # Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).

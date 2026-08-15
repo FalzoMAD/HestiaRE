@@ -98,8 +98,10 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# reset the wizard selection only if Tachyon was the recorded one (don't clobber a secondary)
-if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "TACHYON" ]; then
+# narrow the wizard selection: BOTH loses one half, a sole Tachyon becomes NONE (don't clobber a secondary)
+if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "BOTH" ]; then
+	set_install_component MAIL_WEBMAILER ROUNDCUBE
+elif [ "${COMPONENT_MAIL_WEBMAILER:-}" = "TACHYON" ]; then
 	set_install_component MAIL_WEBMAILER NONE
 fi
 
