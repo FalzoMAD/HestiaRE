@@ -48,6 +48,22 @@ opens above it.
 
 ### Fixed
 
+- **What the installer creates no longer depends on the admin's umask.** deb13 and ub26 ship no
+  `UMASK` line in `login.defs`, so 24 paths came out group-writable there and `0644`/`0755` on
+  deb12/ub24 - the same class that made cron silently refuse the Let's Encrypt fallback, which is
+  group-writable-averse. The umask is pinned once in the installer and the updater, so the long tail
+  is deterministic, and anything needing other than that is `chmod`ed at its own site. `firewall/`,
+  `packages/` and `hooks/` join the explicit `chmod 750` line they were missing from - they were
+  created in the same `mkdir` as their siblings but left to the ambient setting. Verified against a
+  002 environment: pinned gives 755/644 where unpinned gives 775/664.
+
+- **`migrate_data_layout` is gone, `reapply_outside_tree` takes its place** (#663 follow-up). It
+  carried moves for `$HESTIA/data/*` that no release has referenced since v0.13.0, twenty tags back.
+  Update covers at most one minor, and every relocation landed further back than that, so none of
+  them could fire. 159 lines down to 31: what is left is what a `cp -r` of the tree cannot do by
+  itself - theme renames, the panel conf.d rebuild, the profile.d mode, `proc_hardening_apply`,
+  `login_defs_guard` - and the name now says so.
+
 - **A configure re-run rewrote admin-created hosting packages** (#663 follow-up). One line under the
   careful "copy per file only when absent", a `sed s/domain.tld/<host>/` ranged over the whole
   `$CONF_DIR/packages/` glob. Before #663 that reached only the install root, which an update replaces

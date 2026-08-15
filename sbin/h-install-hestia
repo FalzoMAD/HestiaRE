@@ -13,6 +13,14 @@
 
 set -eo pipefail
 
+# The admin's base install decides the ambient umask, and it is not the same everywhere: deb13 and
+# ub26 ship no UMASK line in login.defs, so every file created by a redirect or mkdir here came out
+# group-writable there and 0644/0755 on deb12/ub24. That is not a cosmetic split - cron REFUSES a
+# group-writable file in /etc/cron.d, which is how the LE fallback silently never ran. Pin it, so
+# what we create does not depend on a setting we do not control. Anything needing other than this
+# is chmod'ed explicitly at its own site.
+umask 022
+
 # inherited by all sub-commands so debconf uses the Noninteractive frontend
 export DEBIAN_FRONTEND=noninteractive
 
@@ -687,7 +695,10 @@ init_hestia_structure() {
 		"$CONF_DIR/queue/traffic.pipe" "$CONF_DIR/queue/daily.pipe" \
 		"$HESTIA/log/system.log" "$HESTIA/log/auth.log" \
 		"$HESTIA/log/backup.log" "$HESTIA/log/activity.log"
-	chmod 750 "$HESTIA/conf" "$CONF_DIR/users" "$CONF_DIR/ips" "$HESTIA/log"
+	# Every CONF_DIR data dir, not a subset: firewall/, packages/ and hooks/ were created in the
+	# same mkdir above but left to the umask, so they came out 775 on the boxes without a UMASK line.
+	chmod 750 "$HESTIA/conf" "$CONF_DIR/users" "$CONF_DIR/ips" "$HESTIA/log" \
+		"$CONF_DIR/firewall" "$CONF_DIR/packages" "$CONF_DIR/hooks"
 	chmod -R 750 "$CONF_DIR/queue"
 	chmod 660 /var/log/hestia/* 2>/dev/null || true
 	chmod 770 "$HESTIA/.sessions"

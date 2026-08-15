@@ -235,63 +235,10 @@ seed_hestia_etc() {
 	unset -f _wcv
 }
 
-# ── migrate $HESTIA/data/* to their PATHS.md targets on upgrade ──────────────
-# Real move, idempotent (only when old exists + new absent), so fresh installs skip it.
-migrate_data_layout() {
+# ── re-apply what a copy-only update cannot: state outside the install tree ───
+# Idempotent throughout, so a fresh install runs this as a no-op.
+reapply_outside_tree() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
-	local d
-
-	# ips + firewall + users -> $CONF_DIR (plain move; backup format is location-agnostic)
-	for d in ips firewall users; do
-		if [ -d "$hestia_root/data/$d" ] && [ ! -e "$CONF_DIR/$d" ]; then
-			mkdir -p $CONF_DIR
-			mv "$hestia_root/data/$d" "$CONF_DIR/$d"
-		fi
-	done
-
-	# data/ is fully dissolved - drop the empty husk if nothing else remains.
-	rmdir "$hestia_root/data" 2> /dev/null || true
-
-	# extensions/ dissolved: PSL cache -> file, mail-domain hooks -> $CONF_DIR/hooks
-	if [ -d "$hestia_root/data/extensions" ]; then
-		mkdir -p $CONF_DIR/hooks
-		local h
-		for h in add-mail-domain delete-mail-domain; do
-			if [ -f "$hestia_root/data/extensions/$h.sh" ] && [ ! -e "$CONF_DIR/hooks/$h.sh" ]; then
-				mv "$hestia_root/data/extensions/$h.sh" "$CONF_DIR/hooks/$h.sh"
-			fi
-		done
-		if [ -f "$hestia_root/data/extensions/public_suffix_list.dat" ] && [ ! -e "$CONF_DIR/public_suffix_list.dat" ]; then
-			mv "$hestia_root/data/extensions/public_suffix_list.dat" "$CONF_DIR/public_suffix_list.dat"
-		fi
-		rmdir "$hestia_root/data/extensions" 2> /dev/null || true
-	fi
-
-	# PHP panel sessions -> $HESTIA/.sessions (plain move)
-	if [ -d "$hestia_root/data/sessions" ] && [ ! -e "$hestia_root/.sessions" ]; then
-		mv "$hestia_root/data/sessions" "$hestia_root/.sessions"
-		chmod 770 "$hestia_root/.sessions" 2> /dev/null || true
-	fi
-
-	# Queue holds runtime pipes - recreate fresh at the new location, never copy.
-	if [ -d "$hestia_root/data/queue" ] && [ ! -d "$CONF_DIR/queue" ]; then
-		mkdir -p $CONF_DIR/queue
-		chmod 750 $CONF_DIR/queue
-		local p
-		for p in backup disk webstats restart traffic daily; do
-			[ -e "$CONF_DIR/queue/$p.pipe" ] || touch "$CONF_DIR/queue/$p.pipe"
-		done
-		rm -rf "$hestia_root/data/queue"
-	fi
-
-	# packages/templates ship via the tarball; preserve operator-added files (cp -n) then drop old
-	for d in packages templates; do
-		if [ -d "$hestia_root/data/$d" ]; then
-			mkdir -p "$hestia_root/$d"
-			cp -rn "$hestia_root/data/$d/." "$hestia_root/$d/" 2> /dev/null || true
-			rm -rf "$hestia_root/data/$d"
-		fi
-	done
 
 	# theme renames: vestia removed, default->light, flat->light-flat; drop stale files
 	local theme_sed="s/^THEME='vestia'/THEME='light'/; s/^THEME='default'/THEME='light'/; s/^THEME='flat'/THEME='light-flat'/"
