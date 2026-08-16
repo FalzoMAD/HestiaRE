@@ -73,6 +73,10 @@ rm -rf "$RC_CONFIG_DIR"
 # Remove the logrotate fragment deployed by h-add-sys-roundcube
 rm -f /etc/logrotate.d/roundcube
 
+# the User=caddy drop-ins for the packaged maintenance timers (units are gone with the purge)
+rm -rf /etc/systemd/system/roundcube-gc.service.d /etc/systemd/system/roundcube-cleandb.service.d
+systemctl daemon-reload
+
 # Panel-Caddy teardown: listener + panel route + FPM pool
 rm -f /etc/caddy/webmail-roundcube.conf
 rm -f /etc/caddy/apps/webmail.conf

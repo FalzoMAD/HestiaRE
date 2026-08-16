@@ -466,9 +466,15 @@ _ask_checklist() {
     done
     local selected; selected=$(_wt_checklist "HestiaRE - $id" "$text" "${items[@]}")
     COMP_VALUES["$id"]=$(fn_normalize_list "$selected")
-    # value_join: emit the list with the component's own separator (e.g. "," for token sets)
+    # value_join: emit the list with the component's own separator (e.g. "," for token sets).
+    # Joined over the ELEMENTS, not by substituting spaces in the string - though note the list
+    # pipeline upstream (whiptail tags, fn_normalize_list) is whitespace-tokenized throughout,
+    # so option values must not contain spaces anyway.
     local join; join=$(mq --arg id "$id" '.components[$id].value_join // empty')
-    [ -n "$join" ] && COMP_VALUES["$id"]="${COMP_VALUES[$id]// /$join}"
+    if [ -n "$join" ]; then
+        local -a _lp=(); read -ra _lp <<< "${COMP_VALUES[$id]}"
+        COMP_VALUES["$id"]=$(IFS="$join"; printf '%s' "${_lp[*]:-}")
+    fi
 }
 
 _ask_version_select() {
@@ -551,9 +557,12 @@ fn_fasttrack_value() {
             else
                 COMP_VALUES["$id"]=$(fn_normalize_list "$(fn_component_default "$id" "$INSTALL_PROFILE")")
             fi
-            # same value_join contract as the interactive path
+            # same value_join contract as the interactive path (element join, see _ask_checklist)
             local join; join=$(mq --arg id "$id" '.components[$id].value_join // empty')
-            [ -n "$join" ] && COMP_VALUES["$id"]="${COMP_VALUES[$id]// /$join}"
+            if [ -n "$join" ]; then
+                local -a _lp=(); read -ra _lp <<< "${COMP_VALUES[$id]}"
+                COMP_VALUES["$id"]=$(IFS="$join"; printf '%s' "${_lp[*]:-}")
+            fi
             ;;
         version_select) COMP_VALUES["$id"]=$(fn_component_default "$id" "$INSTALL_PROFILE") ;;
         *)              COMP_VALUES["$id"]=$(fn_component_default "$id" "$INSTALL_PROFILE") ;;

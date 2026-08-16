@@ -181,6 +181,14 @@ cp -f "$HESTIA/share/roundcube/plugins/config_newmail_notifier.inc.php" \
 cp -f "$HESTIA/share/roundcube/plugins/config_zipdownload.inc.php" \
 	"/usr/share/roundcube/plugins/zipdownload/config.inc.php"
 
+# The packaged maintenance timers (gc half-hourly, cleandb daily) run as www-data, which owns
+# none of our caddy-held state - see share/roundcube/systemd-caddy.conf. The cron.d fallback
+# lines stay as shipped: they are no-ops wherever PID1 is systemd, i.e. on every target.
+mkdir -p /etc/systemd/system/roundcube-gc.service.d /etc/systemd/system/roundcube-cleandb.service.d
+cp -f "$HESTIA/share/roundcube/systemd-caddy.conf" /etc/systemd/system/roundcube-gc.service.d/hestia.conf
+cp -f "$HESTIA/share/roundcube/systemd-caddy.conf" /etc/systemd/system/roundcube-cleandb.service.d/hestia.conf
+systemctl daemon-reload
+
 # Ensure log directory exists with correct ownership
 mkdir -p /var/log/roundcube
 chown caddy:caddy /var/log/roundcube
