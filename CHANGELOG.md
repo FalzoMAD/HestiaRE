@@ -39,13 +39,17 @@ opens above it.
 - **Both webmailers at once, chosen per mail domain** (#584). The runtime always supported
   coexistence - `WEBMAIL_SYSTEM` is a token list, each client has its own loopback listener
   (:8090/:8091) and FPM socket, the panel's per-domain "Webmail Client" select and the vhost
-  proxy chain were already in place. What was missing was the entry path: the wizard's "Both"
-  option, and `COMPONENT_MAIL_WEBMAILER` becomes a token set (`ROUNDCUBE,TACHYON`) rather than
-  a BOTH enum - the record and the component now say the same thing in the same shape, and a
-  third client is one more token, not a renamed enum. The installer runs one gated block per
-  client (Roundcube fatal like alone, Tachyon non-fatal and loud, with the recorded component
-  narrowed to the truth on failure); the add/delete commands widen/narrow the set instead of
-  overwriting it. Two write-path fixes that the second client exposed: the CLI default for a
+  proxy chain were already in place. What was missing was the entry path: the wizard question
+  is now a checklist - one row per client, each freely on/off - instead of a radio whose option
+  list would double with every new client (Roundcube preselected everywhere, mailonly preselects
+  both, empty selection = no webmail). `COMPONENT_MAIL_WEBMAILER` is the matching token set
+  (`ROUNDCUBE,TACHYON`, empty = none) rather than a BOTH/NONE enum - the record and the
+  component say the same thing in the same shape, and a third client is one more checklist row
+  and one more token. The generic wizard checklist learned radio's option objects
+  (label/description) and a `value_join` so a component can declare its separator. The
+  installer runs one gated block per client (Roundcube fatal like alone, Tachyon non-fatal and
+  loud, with the recorded component narrowed to the truth on failure); the add/delete commands
+  widen/narrow the set instead of overwriting it. Two write-path fixes that the second client exposed: the CLI default for a
   new mail domain now matches the panel's documented preselect (Roundcube when installed, else
   the first client - a product decision, recorded as such) instead of accidentally taking the
   last token, and unsuspending a mail domain restores the domain's own recorded client instead

@@ -250,21 +250,20 @@
 
     "MAIL_WEBMAILER": {
       "group": "mail",
-      "type": "radio",
-      "question": "Webmail client:",
+      "type": "checklist",
+      "question": "Webmail clients (any, all, or none - selectable per mail domain):",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "options": [
         { "value": "ROUNDCUBE",  "label": "Roundcube",  "description": "Full-featured webmail" },
-        { "value": "TACHYON", "label": "Tachyon", "description": "Lightweight webmail (SnappyMail fork)" },
-        { "value": "ROUNDCUBE,TACHYON", "label": "Both", "description": "Roundcube + Tachyon, selectable per mail domain" },
-        { "value": "NONE",       "label": "None",       "description": "No webmail client" }
+        { "value": "TACHYON", "label": "Tachyon", "description": "Lightweight webmail (SnappyMail fork)" }
       ],
+      "value_join": ",",
       "default": {
         "standard":  "ROUNDCUBE",
         "compact":   "ROUNDCUBE",
         "latest":    "ROUNDCUBE",
         "singlephp": "ROUNDCUBE",
-        "mailonly":  "ROUNDCUBE",
+        "mailonly":  "ROUNDCUBE TACHYON",
         "custom":    null
       },
       "note": "Roundcube/Tachyon are served architecturally via Panel-Caddy+Panel-PHP; the respective web server (nginx/Apache) only acts as a reverse proxy to the webmail subdomain. DKIM runs independently via the existing Exim+OpenSSL mechanism (inherited from HestiaCP upstream, not rspamd dkim_signing)."

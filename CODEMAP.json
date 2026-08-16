@@ -622,7 +622,7 @@
         "install_panel": "Caddy + hestia-php.service",
         "install_web": "nginx + apache2 per WEB_SERVER with port model #247 (BOTH: nginx proxy 80/443 -> apache2 8080/8443; APACHE/NGINX alone: 80/443; Listen per IP via h-add-sys-ip, ports.conf emptied, mod_remoteip for client IP behind proxy), multi-PHP via COMPONENT_PHP_MULTIPHP_VERSIONS when sury_multi, web pool",
         "install_db": "MariaDB (version from COMPONENT_DB_MARIADB_VERSION); phpMyAdmin/PostgreSQL/Redis per components",
-        "install_mail": "exim4, dovecot (version-aware), rspamd (optional), webmailer roundcube/tachyon/both (BOTH: roundcube fatal, tachyon degrades loudly) — only if COMPONENT_MAIL_BLOCK_PRESENT",
+        "install_mail": "exim4, dovecot (version-aware), rspamd (optional), webmailers from the COMPONENT_MAIL_WEBMAILER token set (wizard checklist; roundcube fatal, tachyon degrades loudly, empty = none) — only if COMPONENT_MAIL_BLOCK_PRESENT",
         "install_security": "iptables, ipset; fail2ban (optional); crowdsec (optional, minimal — #123)",
         "install_addons": "proftpd (→ h-add-sys-proftpd) / docker / filemanager per components (#123)",
         "configure_hestia": "sudoers, v-* dangling-symlink prune, SSL cert, admin user, firewall, default domain, crontab; writes .done.configure",

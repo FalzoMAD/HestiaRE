@@ -100,7 +100,7 @@ case ",${COMPONENT_MAIL_WEBMAILER:-}," in
 		if echo "${new_webmail:-}" | grep -qw 'tachyon'; then
 			set_install_component MAIL_WEBMAILER TACHYON
 		else
-			set_install_component MAIL_WEBMAILER NONE
+			set_install_component MAIL_WEBMAILER ""
 		fi
 		;;
 esac
