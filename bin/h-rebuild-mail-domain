@@ -67,10 +67,12 @@ check_hestia_demo_mode
 # Rebuild mail domain configuration
 rebuild_mail_domain_conf
 
-# Rebuild webmail configuration
+# Rebuild webmail configuration. 'mail', not 'web': the WEBMAIL key lives on the mail record -
+# reading the web object always returned '' and made this whole block dead code. Skipped while
+# suspended (add would refuse with E_SUSPENDED); unsuspend re-renders from the record instead.
 if [ -n "$WEB_SYSTEM" ] || [ -n "$PROXY_SYSTEM" ]; then
-	if [ -n "$IMAP_SYSTEM" ]; then
-		WEBMAIL=$(get_object_value 'web' 'DOMAIN' "$domain" "WEBMAIL")
+	if [ -n "$IMAP_SYSTEM" ] && [ "$(get_object_value 'mail' 'DOMAIN' "$domain" '$SUSPENDED')" != 'yes' ]; then
+		WEBMAIL=$(get_object_value 'mail' 'DOMAIN' "$domain" '$WEBMAIL')
 		if [ -n "$WEBMAIL" ]; then
 			$BIN/h-delete-mail-domain-webmail "$user" "$domain" "$restart" 'yes'
 			$BIN/h-add-mail-domain-webmail "$user" "$domain" "$WEBMAIL" "$restart" 'yes'

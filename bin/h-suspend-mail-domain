@@ -54,8 +54,14 @@ if [[ "$MAIL_SYSTEM" =~ exim ]]; then
 	rm -f /etc/$MAIL_SYSTEM/domains/$domain
 fi
 
-# Removing webmail configuration
+# Removing webmail configuration - but round-trip the customer's client choice: delete-webmail
+# wipes the record to '' (its "turned off" semantics), and '' means "unset, next rebuild gets the
+# default" - so without the re-store, suspend+unsuspend silently swapped the chosen client.
+webmail_choice=$(get_object_value 'mail' 'DOMAIN' "$domain" '$WEBMAIL')
 $BIN/h-delete-mail-domain-webmail $user $domain 'yes'
+if [ -n "$webmail_choice" ]; then
+	update_object_value 'mail' 'DOMAIN' "$domain" '$WEBMAIL' "$webmail_choice"
+fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #
