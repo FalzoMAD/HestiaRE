@@ -43,19 +43,23 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Remove packages
+# Remove packages (both DB backend variants listed - only the installed one is purged)
 DEBIAN_FRONTEND=noninteractive apt-get -y purge \
-	roundcube roundcube-core roundcube-mysql roundcube-plugins
+	roundcube roundcube-core roundcube-mysql roundcube-sqlite3 roundcube-plugins
 DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
 
 # INTENTIONAL DATA LOSS: the roundcube DB (UI prefs + contacts, NOT mail - that
 # lives in Dovecot) is dropped; no migration across a delete/re-add cycle.
-db_client="mysql"
-[ -x /usr/bin/mariadb ] && db_client="mariadb"
+if echo "$DB_SYSTEM" | grep -qw 'mysql'; then
+	db_client="mysql"
+	[ -x /usr/bin/mariadb ] && db_client="mariadb"
 
-$db_client -e "DROP DATABASE IF EXISTS \`roundcube\`"
-$db_client -e "DROP USER IF EXISTS 'roundcube'@'localhost'"
-$db_client -e "FLUSH PRIVILEGES"
+	$db_client -e "DROP DATABASE IF EXISTS \`roundcube\`"
+	$db_client -e "DROP USER IF EXISTS 'roundcube'@'localhost'"
+	$db_client -e "FLUSH PRIVILEGES"
+fi
+# the SQLite-backend artefact, if that was the recorded backend
+rm -rf /var/lib/roundcube/db
 
 # Remove credentials file (contains DB password)
 rm -f "$RC_CONFIG_DIR/debian-db.php"

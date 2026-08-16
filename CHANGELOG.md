@@ -36,6 +36,20 @@ opens above it.
   address. No migration for existing SnappyMail installs on purpose (fresh installs only
   before v1).
 
+- **Webmailers no longer require MariaDB - SQLite is the recorded fallback backend** (#584).
+  Deselecting MariaDB in the wizard used to kill the install in the mail stage (Roundcube's
+  DB abort under set -e) or drop Tachyon loudly. Now both add commands decide the backend
+  ONCE at install time and record it in the app's own config, which every later path reads:
+  MySQL when the box has it (unchanged), otherwise SQLite - `roundcube-sqlite3` from the OS
+  repo for Roundcube, Tachyon's own shipped default (`AddressBook.sqlite`) for Tachyon. No
+  second MariaDB source, no extra daemon. A MariaDB added later never flips an existing
+  install (no silent contact-data migration; switching = reinstalling the webmailer), and
+  `hestia update` stays aware of the exception through the artefact: where an app config
+  records sqlite, `h-check-sys-smoke` pins the PHP driver as a hard failure. `php-sqlite3`
+  joins the standard PHP extension set; sqlite3/pdo_sqlite join the curated webmail pool
+  set as optional (a one-minor-back box updating in lacks the package - the smoke check,
+  not confd, owns that failure). Delete commands handle both backends.
+
 - **Both webmailers at once, chosen per mail domain** (#584). The runtime always supported
   coexistence - `WEBMAIL_SYSTEM` is a token list, each client has its own loopback listener
   (:8090/:8091) and FPM socket, the panel's per-domain "Webmail Client" select and the vhost

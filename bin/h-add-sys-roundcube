@@ -32,17 +32,24 @@ fi
 
 if [ -z "$HESTIA" ]; then HESTIA="/usr/local/hestia"; fi
 
-if ! echo "$DB_SYSTEM" | grep -qw 'mysql'; then
-	echo "ERROR: MySQL not available. Installation aborted."
-	exit 2
+# DB backend, decided ONCE here and recorded in the written config (the artefact every
+# later path reads): MySQL when the box has it, otherwise SQLite (roundcube-sqlite3 from
+# the OS repo - one file, no daemon). A MariaDB added later never flips an existing
+# install - no silent data migration; switching means reinstalling the webmailer (#584).
+RC_DB_BACKEND="sqlite"
+RC_DB_PKG="roundcube-sqlite3"
+if echo "$DB_SYSTEM" | grep -qw 'mysql'; then
+	RC_DB_BACKEND="mysql"
+	RC_DB_PKG="roundcube-mysql"
+else
+	echo "NOTE: no MySQL/MariaDB on this box - Roundcube uses the SQLite backend"
 fi
 
 check_hestia_demo_mode
 
-# Already installed?
+# Already installed? config.inc.php is the artefact both backends write.
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube' \
-	&& [ -f "$RC_CONFIG_DIR/config.inc.php" ] \
-	&& [ -f "$RC_CONFIG_DIR/debian-db.php" ]; then
+	&& [ -f "$RC_CONFIG_DIR/config.inc.php" ]; then
 	echo "INFO: Roundcube is already installed and configured."
 	exit 0
 fi
@@ -56,33 +63,34 @@ echo "roundcube-core roundcube/dbconfig-install boolean false" \
 	| debconf-set-selections
 
 DEBIAN_FRONTEND=noninteractive apt-get -y install \
-	roundcube roundcube-mysql roundcube-plugins
+	roundcube "$RC_DB_PKG" roundcube-plugins
 
-# Create dedicated MySQL database and user
-dbpass=$(generate_password)
-db_client="mysql"
-[ -x /usr/bin/mariadb ] && db_client="mariadb"
+if [ "$RC_DB_BACKEND" = "mysql" ]; then
+	# Create dedicated MySQL database and user
+	dbpass=$(generate_password)
+	db_client="mysql"
+	[ -x /usr/bin/mariadb ] && db_client="mariadb"
 
-# bail on a foreign 'roundcube' DB - CREATE IF NOT EXISTS would adopt it and write
-# a mismatched password, leaving a silently-broken config
-if $db_client -e "SHOW DATABASES LIKE 'roundcube'" 2>/dev/null | grep -q 'roundcube'; then
-	echo "ERROR: Database 'roundcube' already exists but is not managed by this HestiaRE instance."
-	echo "       Remove it manually first, or run h-delete-sys-roundcube if it was a previous install."
-	exit 1
-fi
+	# bail on a foreign 'roundcube' DB - CREATE IF NOT EXISTS would adopt it and write
+	# a mismatched password, leaving a silently-broken config
+	if $db_client -e "SHOW DATABASES LIKE 'roundcube'" 2>/dev/null | grep -q 'roundcube'; then
+		echo "ERROR: Database 'roundcube' already exists but is not managed by this HestiaRE instance."
+		echo "       Remove it manually first, or run h-delete-sys-roundcube if it was a previous install."
+		exit 1
+	fi
 
-$db_client -e "CREATE DATABASE IF NOT EXISTS \`roundcube\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" \
-	|| { echo "ERROR: Failed to create roundcube database"; exit 1; }
-$db_client -e "CREATE USER IF NOT EXISTS 'roundcube'@'localhost' IDENTIFIED BY '$dbpass'" \
-	|| { echo "ERROR: Failed to create roundcube database user"; exit 1; }
-$db_client -e "GRANT ALL ON \`roundcube\`.* TO 'roundcube'@'localhost'" \
-	|| { echo "ERROR: Failed to grant roundcube database privileges"; exit 1; }
-$db_client -e "FLUSH PRIVILEGES"
-$db_client roundcube < /usr/share/roundcube/SQL/mysql.initial.sql \
-	|| { echo "ERROR: Failed to initialize roundcube database schema"; exit 1; }
+	$db_client -e "CREATE DATABASE IF NOT EXISTS \`roundcube\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" \
+		|| { echo "ERROR: Failed to create roundcube database"; exit 1; }
+	$db_client -e "CREATE USER IF NOT EXISTS 'roundcube'@'localhost' IDENTIFIED BY '$dbpass'" \
+		|| { echo "ERROR: Failed to create roundcube database user"; exit 1; }
+	$db_client -e "GRANT ALL ON \`roundcube\`.* TO 'roundcube'@'localhost'" \
+		|| { echo "ERROR: Failed to grant roundcube database privileges"; exit 1; }
+	$db_client -e "FLUSH PRIVILEGES"
+	$db_client roundcube < /usr/share/roundcube/SQL/mysql.initial.sql \
+		|| { echo "ERROR: Failed to initialize roundcube database schema"; exit 1; }
 
-# debian-db.php (read by roundcube-core via debian-db-roundcube.php for the DSN)
-cat > "$RC_CONFIG_DIR/debian-db.php" <<'PHP'
+	# debian-db.php (read by roundcube-core via debian-db-roundcube.php for the DSN)
+	cat > "$RC_CONFIG_DIR/debian-db.php" <<'PHP'
 <?php
 $dbtype='mysql';
 $dbserver='localhost';
@@ -93,16 +101,33 @@ $dbpass='_RCPASS_';
 $basepath='/var/lib/roundcube';
 ?>
 PHP
-sed -i "s/_RCPASS_/$dbpass/" "$RC_CONFIG_DIR/debian-db.php"
-chmod 640 "$RC_CONFIG_DIR/debian-db.php"
-chown root:caddy "$RC_CONFIG_DIR/debian-db.php"
+	sed -i "s/_RCPASS_/$dbpass/" "$RC_CONFIG_DIR/debian-db.php"
+	chmod 640 "$RC_CONFIG_DIR/debian-db.php"
+	chown root:caddy "$RC_CONFIG_DIR/debian-db.php"
+else
+	# caddy-owned dir, not just the file: sqlite needs write on the DIRECTORY (journal/wal)
+	mkdir -p /var/lib/roundcube/db
+	chown caddy:caddy /var/lib/roundcube/db
+	chmod 750 /var/lib/roundcube/db
+fi
 
 # Generate encryption key and write main config
 des_key="$(openssl rand -base64 30 | tr -d '/' | cut -c1-24)"
-cat > "$RC_CONFIG_DIR/config.inc.php" <<'PHP'
+if [ "$RC_DB_BACKEND" = "mysql" ]; then
+	cat > "$RC_CONFIG_DIR/config.inc.php" <<'PHP'
 <?php
 // DB connection via Debian package mechanism (/etc/roundcube/debian-db.php)
 include('/etc/roundcube/debian-db-roundcube.php');
+PHP
+else
+	cat > "$RC_CONFIG_DIR/config.inc.php" <<'PHP'
+<?php
+// SQLite backend (no MariaDB on the box when Roundcube was installed). This line IS the
+// recorded backend decision - a later MariaDB install must never rewrite it (#584).
+$config['db_dsnw'] = 'sqlite:////var/lib/roundcube/db/roundcube.db?mode=0640';
+PHP
+fi
+cat >> "$RC_CONFIG_DIR/config.inc.php" <<'PHP'
 
 $config['imap_host'] = 'localhost:143';
 $config['smtp_host'] = 'localhost:587';
