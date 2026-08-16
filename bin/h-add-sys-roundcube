@@ -112,8 +112,15 @@ else
 	# Seed the schema NOW, as caddy, with a hard failure - symmetric to the mysql branch's
 	# mysql.initial.sql import. Roundcube would also self-initialize on the first HTTP hit,
 	# but then the install ends green without anything ever having touched the database,
-	# and the first proof lands on the first customer visit.
-	runuser -u caddy -- php -r '
+	# and the first proof lands on the first customer visit. Seeded with the SAME PHP the
+	# pool serves with (pinned version + the pool's curated ini chain), not whatever CLI php
+	# the PATH offers - the proof must exercise the chain that carries the traffic afterwards.
+	if [ ! -s /etc/php/hestia/php-version ]; then
+		echo "ERROR: no pinned panel PHP (/etc/php/hestia/php-version) - is the panel stage done?"
+		exit 1
+	fi
+	panel_php="php$(cat /etc/php/hestia/php-version)"
+	runuser -u caddy -- env PHP_INI_SCAN_DIR=/etc/php/hestia/fpm/conf.d "$panel_php" -r '
 		$pdo = new PDO("sqlite:/var/lib/roundcube/db/roundcube.db");
 		$pdo->exec(file_get_contents("/usr/share/roundcube/SQL/sqlite.initial.sql"));
 		$n = $pdo->query("SELECT count(*) FROM sqlite_master")->fetchColumn();

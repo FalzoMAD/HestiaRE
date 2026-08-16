@@ -65,20 +65,19 @@ if [ -z "$webmail" ]; then
 	fi
 fi
 
-# The WEBMAIL record's value domain (#584): '' (resolved above), 'disabled', or a KNOWN client
-# name. Known STATICALLY (keep in sync with the shipped clients), not by install state: a client
-# that is merely absent right now - delete/re-add window, backend-switch reinstall - keeps its
-# record, renders degraded via select_webmail_template, and heals when the client returns.
-# Deriving validity from WEBMAIL_SYSTEM instead silently converged every domain of a client to
-# 'disabled' DURING its own reinstall. Only values outside the domain (legacy 'snappymail', a
-# typo) normalize, loudly. Never an abort: rebuild paths feed recorded values back in here.
-case "$webmail" in
-	'' | disabled | roundcube | tachyon) : ;;
-	*)
-		echo "NOTE: unknown webmail client '$webmail' - storing 'disabled' for $domain"
-		webmail="disabled"
-		;;
-esac
+# The WEBMAIL record's value domain (#584): '' (resolved above), 'disabled', or a client from
+# WEBMAIL_KNOWN_CLIENTS (include/main.sh - the one list, smoke-guarded against the shipped
+# templates). Known STATICALLY, not by install state: a client that is merely absent right now
+# - delete/re-add window, backend-switch reinstall - keeps its record, renders degraded via
+# select_webmail_template, and heals when the client returns. Deriving validity from
+# WEBMAIL_SYSTEM instead silently converged every domain of a client to 'disabled' DURING its
+# own reinstall. Only values outside the domain (legacy 'snappymail', a typo) normalize,
+# loudly. Never an abort: rebuild paths feed recorded values back in here.
+if [ -n "$webmail" ] && [ "$webmail" != "disabled" ] \
+	&& ! grep -qwF -- "$webmail" <<< "$WEBMAIL_KNOWN_CLIENTS"; then
+	echo "NOTE: unknown webmail client '$webmail' - storing 'disabled' for $domain"
+	webmail="disabled"
+fi
 
 check_args '2' "$#" 'USER DOMAIN [WEBMAIL] [RESTART]'
 is_format_valid 'user' 'domain' 'restart'

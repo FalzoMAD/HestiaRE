@@ -198,7 +198,15 @@ if [ "$UPDATE" == "no" ]; then
 	fi
 	# Temporarily set the permissions to www-data
 	chown -R www-data:www-data $TX_CONFIG_DIR/
-	php -f $HESTIA/share/tachyon/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT" "$TX_DB_BACKEND"
+	# Same PHP the pool serves with (pinned version + the pool's curated ini chain), not the
+	# PATH's CLI php - install.php loads Tachyon's own framework, so this run must prove the
+	# chain that carries the traffic afterwards.
+	if [ ! -s /etc/php/hestia/php-version ]; then
+		echo "ERROR: no pinned panel PHP (/etc/php/hestia/php-version) - is the panel stage done?"
+		exit 2
+	fi
+	panel_php="php$(cat /etc/php/hestia/php-version)"
+	env PHP_INI_SCAN_DIR=/etc/php/hestia/fpm/conf.d "$panel_php" -f $HESTIA/share/tachyon/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT" "$TX_DB_BACKEND"
 
 	# back to caddy (the FPM pool user); explicit 0750 keeps the data dir caddy-private
 	chown -R caddy:caddy $TX_CONFIG_DIR/
