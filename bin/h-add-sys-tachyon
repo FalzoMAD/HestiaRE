@@ -230,7 +230,8 @@ if [ "$UPDATE" == "no" ]; then
 	systemctl try-restart caddy > /dev/null 2>&1 || true
 
 	# Updating hestia.conf
-	if [ -z "$(grep WEBMAIL_SYSTEM $HESTIA/conf/hestia.conf)" ]; then
+	# anchored: an unanchored grep also matches keys that merely start so
+	if ! grep -q '^WEBMAIL_SYSTEM=' "$HESTIA/conf/hestia.conf"; then
 		$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' 'tachyon'
 	else
 		if [ -z "$(echo "$WEBMAIL_SYSTEM" | grep -w 'tachyon')" ]; then

@@ -109,6 +109,18 @@ else
 	mkdir -p /var/lib/roundcube/db
 	chown caddy:caddy /var/lib/roundcube/db
 	chmod 750 /var/lib/roundcube/db
+	# Seed the schema NOW, as caddy, with a hard failure - symmetric to the mysql branch's
+	# mysql.initial.sql import. Roundcube would also self-initialize on the first HTTP hit,
+	# but then the install ends green without anything ever having touched the database,
+	# and the first proof lands on the first customer visit.
+	runuser -u caddy -- php -r '
+		$pdo = new PDO("sqlite:/var/lib/roundcube/db/roundcube.db");
+		$pdo->exec(file_get_contents("/usr/share/roundcube/SQL/sqlite.initial.sql"));
+		$n = $pdo->query("SELECT count(*) FROM sqlite_master")->fetchColumn();
+		if ($n < 1) { fwrite(STDERR, "no schema objects after import\n"); exit(1); }
+		echo "roundcube sqlite schema: $n objects\n";
+	' || { echo "ERROR: Failed to initialize roundcube sqlite schema"; exit 1; }
+	chmod 640 /var/lib/roundcube/db/roundcube.db
 fi
 
 # Generate encryption key and write main config
@@ -154,7 +166,9 @@ $config['smtp_conn_options'] = ['ssl' => [
 ]];
 PHP
 sed -i "s/_DES_KEY_/$des_key/" "$RC_CONFIG_DIR/config.inc.php"
-chmod 644 "$RC_CONFIG_DIR/config.inc.php"
+# 640 like debian-db.php: the des_key encrypts the IMAP credentials in the session cookie -
+# a secret of the same class as the DB password, and shell customers must not read it.
+chmod 640 "$RC_CONFIG_DIR/config.inc.php"
 chown root:caddy "$RC_CONFIG_DIR/config.inc.php"
 
 # HestiaRE password driver. Extra files in apt-managed dirs survive upgrades -
@@ -197,8 +211,10 @@ chmod 750 /var/log/roundcube
 cp -f "$HESTIA/share/roundcube/logrotate" /etc/logrotate.d/roundcube
 
 # Panel-Caddy delivery: caddy FPM pool behind the :8090 loopback listener; the
-# temp dir must be writable by the pool user (Debian ships it www-data-owned)
-chown caddy:caddy /var/lib/roundcube/temp 2> /dev/null || true
+# temp dir must be writable by the pool user (Debian ships it www-data-owned).
+# Loud on purpose: a swallowed chown here is a webmail that breaks on first upload.
+mkdir -p /var/lib/roundcube/temp
+chown caddy:caddy /var/lib/roundcube/temp || { echo "ERROR: cannot chown roundcube temp dir"; exit 1; }
 cp -f "$HESTIA/share/panel-php/pool.d/roundcube.conf" /etc/php/hestia/fpm/pool.d/roundcube.conf
 systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
 cp -f "$HESTIA/share/panel-caddy/webmail-roundcube.conf" /etc/caddy/webmail-roundcube.conf
@@ -208,8 +224,8 @@ mkdir -p /etc/caddy/apps
 cp -f "$HESTIA/share/panel-caddy/apps/webmail.tpl" /etc/caddy/apps/webmail.conf
 systemctl try-restart caddy > /dev/null 2>&1 || true
 
-# Update hestia.conf
-if [ -z "$(grep WEBMAIL_SYSTEM "$HESTIA/conf/hestia.conf")" ]; then
+# Update hestia.conf (anchored: an unanchored grep also matches keys that merely start so)
+if ! grep -q '^WEBMAIL_SYSTEM=' "$HESTIA/conf/hestia.conf"; then
 	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' 'roundcube'
 elif ! echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	if [ -n "$WEBMAIL_SYSTEM" ]; then

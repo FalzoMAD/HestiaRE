@@ -282,7 +282,10 @@ get_user_owner() {
 	fi
 }
 
-# Random password generator
+# Random password generator. The default matrix (A-Za-z0-9) is deliberately safe on the
+# REPLACEMENT side of sed (no /, &, \) - several callers substitute the result into config
+# files that way (roundcube dbpass/des_key, tachyon). A custom matrix must keep that property
+# or those call sites corrupt their configs silently.
 generate_password() {
 	matrix=$1
 	length=$2
