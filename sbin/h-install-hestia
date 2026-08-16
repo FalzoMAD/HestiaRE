@@ -557,28 +557,37 @@ install_mail() {
 		"$BIN/h-add-sys-clamav" >> "$LOG" 2>&1 || true
 	fi
 
-	# Webmailer choice (ROUNDCUBE / SNAPPYMAIL / NONE)
-	case "${COMPONENT_MAIL_WEBMAILER:-NONE}" in
-		ROUNDCUBE)
-			wcv "WEBMAIL_SYSTEM" "roundcube"; wcv "WEBMAIL_ALIAS" "webmail"
-			echo "[ * ] Installing Roundcube..."
-			"$BIN/h-add-sys-roundcube" >> "$LOG"
-			;;
-		SNAPPYMAIL)
-			echo "[ * ] Installing SnappyMail..."
-			# WEBMAIL_SYSTEM only after the command succeeds: setting it first made the panel
-			# claim a webmail that a failed download had never unpacked (#573). Non-fatal like
-			# the addons above, but loud - the box stays usable, the gap stays visible.
-			if "$BIN/h-add-sys-snappymail" >> "$LOG" 2>&1; then
-				wcv "WEBMAIL_ALIAS" "webmail"
+	# Webmailer choice: COMPONENT_MAIL_WEBMAILER is a token set (ROUNDCUBE and/or TACHYON,
+	# or NONE), not an enum - one gated block per client so a third client is one more block.
+	local wm_rc=no wm_tx=no
+	case ",${COMPONENT_MAIL_WEBMAILER:-NONE}," in *,ROUNDCUBE,*) wm_rc=yes ;; esac
+	case ",${COMPONENT_MAIL_WEBMAILER:-NONE}," in *,TACHYON,*) wm_tx=yes ;; esac
+	if [ "$wm_rc" = yes ]; then
+		wcv "WEBMAIL_SYSTEM" "roundcube"; wcv "WEBMAIL_ALIAS" "webmail"
+		echo "[ * ] Installing Roundcube..."
+		"$BIN/h-add-sys-roundcube" >> "$LOG"
+	fi
+	if [ "$wm_tx" = yes ]; then
+		echo "[ * ] Installing Tachyon..."
+		# WEBMAIL_SYSTEM only after the command succeeds: setting it first made the panel
+		# claim a webmail that a failed download had never unpacked (#573). Non-fatal like
+		# the addons above, but loud - the box stays usable, the gap stays visible.
+		if "$BIN/h-add-sys-tachyon" >> "$LOG" 2>&1; then
+			wcv "WEBMAIL_ALIAS" "webmail"
+		else
+			echo "[ !! ] Tachyon install FAILED - $([ "$wm_rc" = yes ] && echo "Roundcube stays the only webmail" || echo "no webmail configured") (see $LOG)"
+			# The recorded choice must not claim a client the box does not have; the add
+			# commands normalize it on success, only the failure path needs this by hand.
+			if [ "$wm_rc" = yes ]; then
+				set_install_component MAIL_WEBMAILER ROUNDCUBE
 			else
-				echo "[ !! ] SnappyMail install FAILED - no webmail configured (see $LOG)"
+				set_install_component MAIL_WEBMAILER NONE
 			fi
-			;;
-		*)
-			echo "[ * ] No webmailer selected"
-			;;
-	esac
+		fi
+	fi
+	if [ "$wm_rc" = no ] && [ "$wm_tx" = no ]; then
+		echo "[ * ] No webmailer selected"
+	fi
 
 	stage_mark mail
 	echo "[ OK ] mail complete"

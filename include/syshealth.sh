@@ -404,12 +404,12 @@ function syshealth_repair_system_config() {
 	# Presence only, and not repair_key: the delete commands empty this key deliberately, so a repair
 	# keyed on emptiness would advertise a webmail that is no longer installed. When the key is
 	# genuinely absent the value is assembled from what is on disk - both clients, not just
-	# roundcube: a snappymail box with no key was answered with '' and lost its webmail that way.
+	# roundcube: a tachyon box with no key was answered with '' and lost its webmail that way.
 	# Markers taken from the delete commands, which decide the same question.
 	if [[ -z $(check_key_exists 'WEBMAIL_SYSTEM') ]]; then
 		found=""
 		[ -d "/var/lib/roundcube" ] && found="roundcube"
-		[ -f "/var/lib/snappymail/data/VERSION" ] && found="${found:+$found,}snappymail"
+		[ -f "/var/lib/tachyon/data/VERSION" ] && found="${found:+$found,}tachyon"
 		echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_SYSTEM ('$found')"
 		$BIN/h-change-sys-config-value "WEBMAIL_SYSTEM" "$found"
 		unset found

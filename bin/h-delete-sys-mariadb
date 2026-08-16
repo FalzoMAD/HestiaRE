@@ -45,10 +45,10 @@ if [ "${FORCE:-}" != "yes" ]; then
 	u_db_bases=$(grep -o "U_DB_BASES='[0-9]*'" "$HESTIA/conf/mysql.conf" 2> /dev/null | grep -o '[0-9]*' | head -1)
 	live_db=0
 	if [ -f /root/.my.cnf ]; then
-		# exclude system schemas AND app-owned DBs (pma/roundcube/snappymail) — keep
+		# exclude system schemas AND app-owned DBs (pma/roundcube/tachyon) — keep
 		# this safelist in sync if a new bundled app grows its own MySQL DB
 		live_db=$(mariadb -N -e "SHOW DATABASES;" 2> /dev/null \
-			| grep -vxE 'information_schema|performance_schema|mysql|sys|phpmyadmin|roundcube|snappymail' \
+			| grep -vxE 'information_schema|performance_schema|mysql|sys|phpmyadmin|roundcube|tachyon' \
 			| grep -c .)
 		live_db=${live_db:-0}
 	fi

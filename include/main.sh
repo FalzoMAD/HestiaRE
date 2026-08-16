@@ -1016,7 +1016,7 @@ is_login_name_reserved() {
 		# always installed
 		nginx apache2 www-data caddy php mysql mariadb phpmyadmin
 		# standard profile + optional components (h-add-sys-*, h-add-user-*)
-		exim dovecot dovenull rspamd roundcube snappymail crowdsec fail2ban
+		exim dovecot dovenull rspamd roundcube tachyon crowdsec fail2ban
 		docker containerd proftpd ftp clamav postgres postgresql redis opensearch filemanager
 		# MariaDB/MySQL database names, and sudo (that group always has sudo rights)
 		aria aria_log mysql_upgrade ib ib_buffer ddl ddl_recovery performance sudo

@@ -48,11 +48,11 @@ action   = hestia[name=WEB]
 logpath  = /var/log/roundcube/userlogins.log
 maxretry = 5
 
-[snappymail-auth]
+[tachyon-auth]
 enabled  = false
-filter   = hestia-snappymail
+filter   = hestia-tachyon
 action   = hestia[name=WEB]
-logpath  = /var/log/snappymail/fail2ban/auth.txt
+logpath  = /var/log/tachyon/fail2ban/auth.txt
 maxretry = 5
 
 [phpmyadmin-auth]
