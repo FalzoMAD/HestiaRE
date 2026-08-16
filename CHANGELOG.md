@@ -68,9 +68,11 @@ opens above it.
   the first client - a product decision, recorded as such) instead of accidentally taking the
   last token, and unsuspending a mail domain restores the domain's own recorded client instead
   of rewriting it to that same last token. The `WEBMAIL` record's value domain is now decided
-  and enforced on write: `''`, `disabled`, or an installed client token - anything else (a
-  removed client, legacy `snappymail`) is normalized to `disabled` loudly, so rebuilds converge
-  stale records; the render-time degradation stays as the safety net.
+  and enforced on write: `''`, `disabled`, or a KNOWN client name - known statically, not by
+  install state, so a client that is merely absent (its own delete/re-add window, a
+  backend-switch reinstall) keeps its record, renders degraded and heals when it returns.
+  Only values outside the domain (legacy `snappymail`, typos) normalize to `disabled` loudly;
+  the render-time degradation stays as the safety net.
 
 - **Edit-user gets the same toolbar treatment as edit-web, and a new order** (#621). The "Advanced
   Options" button moves into the toolbar next to Save, the fold animates, and a second Save sits at
