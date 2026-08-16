@@ -65,13 +65,23 @@ if [ -z "$webmail" ]; then
 	fi
 fi
 
+# The WEBMAIL record's value domain (#584): '' (resolved above), 'disabled', or an installed
+# client token. Anything else - a removed client, a legacy name like 'snappymail' - becomes
+# 'disabled' here, loudly, so rebuilds converge stale records instead of carrying a dead name
+# forever. Never an abort: the rebuild paths feed recorded values back into this command.
+if [ -n "$webmail" ] && [ "$webmail" != "disabled" ] \
+	&& ! grep -qw "$webmail" <<< "${WEBMAIL_SYSTEM//,/ }"; then
+	echo "NOTE: webmail client '$webmail' is not installed - storing 'disabled' for $domain"
+	webmail="disabled"
+fi
+
 check_args '2' "$#" 'USER DOMAIN [WEBMAIL] [RESTART]'
 is_format_valid 'user' 'domain' 'restart'
 is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
 is_system_enabled "$IMAP_SYSTEM" 'IMAP_SYSTEM'
-# No hard validation of the requested client here: select_webmail_template (below)
-# degrades an empty/uninstalled client to the safe 'disabled' vhost instead of
-# aborting, so a rebuild after a webmailer is removed can never fail (#119).
+# The client was normalized above; select_webmail_template (below) additionally degrades
+# an uninstalled client to the safe 'disabled' vhost at render time, so a rebuild after a
+# webmailer is removed can never fail (#119).
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'mail' 'DOMAIN' "$domain"

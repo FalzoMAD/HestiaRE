@@ -131,8 +131,8 @@ into **five** on that one `hestia` master:
 | `panel.conf` | `hestia` | `/run/hestia-php.sock` | Caddy panel |
 | `phpmyadmin.conf` | `caddy` | `/run/hestia-pma.sock` | Caddy `/phpmyadmin` |
 | `adminer.conf` | `caddy` | `/run/hestia-adminer.sock` | Caddy `/adminer` |
-| `roundcube.conf` | `caddy` | `/run/hestia-webmail-rc.sock` | Caddy `:8090` |
-| `tachyon.conf` | `caddy` | `/run/hestia-webmail-tx.sock` | Caddy `:8091` |
+| `roundcube.conf` | `caddy` | `/run/hestia-webmail-roundcube.sock` | Caddy `:8090` |
+| `tachyon.conf` | `caddy` | `/run/hestia-webmail-tachyon.sock` | Caddy `:8091` |
 
 Plus per-customer pools on the **customer** PHP (`share/php-fpm/multiphp.tpl`,
 `user=%user%`) and the FM pool (delta 5).
@@ -212,7 +212,7 @@ customer `www-data` pool. (`v-add-sys-roundcube` chowns the app tree
 `hestiamail:www-data`.)
 
 **HestiaRE.** Two Caddy **loopback listeners**, each backed by a `caddy` FPM pool:
-Roundcube `http://:8090 bind 127.0.0.1` -> `/run/hestia-webmail-rc.sock`
+Roundcube `http://:8090 bind 127.0.0.1` -> `/run/hestia-webmail-roundcube.sock`
 (`share/panel-caddy/webmail-roundcube.conf:34-52`), Tachyon `:8091`. Customer
 `webmail.<domain>` vhosts become **thin reverse proxies with no docroot** that
 `proxy_pass` to the loopback listener (`share/nginx/webmail/default.tpl:25`,

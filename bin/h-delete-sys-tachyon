@@ -98,12 +98,18 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# narrow the wizard selection: BOTH loses one half, a sole Tachyon becomes NONE (don't clobber a secondary)
-if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "BOTH" ]; then
-	set_install_component MAIL_WEBMAILER ROUNDCUBE
-elif [ "${COMPONENT_MAIL_WEBMAILER:-}" = "TACHYON" ]; then
-	set_install_component MAIL_WEBMAILER NONE
-fi
+# Narrow the component token set: drop our token, an emptied set becomes NONE. Only when the
+# recorded set names us (don't clobber a record about other clients), and rebuilt from the
+# post-strip WEBMAIL_SYSTEM rather than string-edited, so it stays canonical.
+case ",${COMPONENT_MAIL_WEBMAILER:-}," in
+	*,TACHYON,*)
+		if echo "${new_webmail:-}" | grep -qw 'roundcube'; then
+			set_install_component MAIL_WEBMAILER ROUNDCUBE
+		else
+			set_install_component MAIL_WEBMAILER NONE
+		fi
+		;;
+esac
 
 $BIN/h-log-action "system" "Info" "Plugins" "Tachyon removed (Version: $version)."
 

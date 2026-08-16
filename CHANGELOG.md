@@ -14,28 +14,45 @@ opens above it.
 
 ### Changed
 
-- **SnappyMail is replaced by Tachyon, its maintained fork** (#584). SnappyMail upstream is
-  dormant (last release October 2024, maintainer gone) - no security-patch channel for an
+- **SnappyMail is replaced by Tachyon, its fork** (#584). SnappyMail upstream is dormant
+  (last release October 2024, maintainer gone) - no security-patch channel for an
   internet-facing login is disqualifying. Tachyon (kimusan/Tachyon, AGPL like its parent) keeps
   the identical tarball layout, config keys, auth-log format and the plugin ecosystem including
   `change-password-hestia`, so the whole integration carries over as a rename: `h-add-sys-tachyon`
   / `h-delete-sys-tachyon` (no `v-*` symlink - upstream has no such command), `WEBMAIL_SYSTEM`
   value `tachyon`, wizard option `TACHYON`, paths `/var/lib/tachyon` + `/etc/tachyon` +
-  `/var/log/tachyon`, FPM pool socket `hestia-webmail-tx.sock`, fail2ban jail `tachyon-auth`.
-  The `:8091` loopback listener and the webmail vhost chain are unchanged. Our `install.php`
-  moves to the renamed namespaces (`RainLoop\` -> `Tachyon\`, `SnappyMail\` -> `Tachyon\Util\`).
-  No migration for existing SnappyMail installs on purpose (fresh installs only before v1).
+  `/var/log/tachyon`, FPM pool socket `hestia-webmail-tachyon.sock` (Roundcube's renamed to
+  `hestia-webmail-roundcube.sock` for the same spell-the-client-name scheme), fail2ban jail
+  `tachyon-auth`. The `:8091` loopback listener and the webmail vhost chain are unchanged. Our
+  `install.php` moves to the renamed namespaces (`RainLoop\` -> `Tachyon\`, `SnappyMail\` ->
+  `Tachyon\Util\`). What this buys today is the fixes the fork already incorporated plus the
+  possibility of future ones - not a proven maintenance operation: the fork has been quiet
+  since 2026-07-15, and the manifest pin carries a last-verified date so going stale stays
+  visible. The three plugins (change-password, change-password-hestia,
+  add-x-originating-ip-header) are pinned release assets, sha256-verified by `h-add-sys-tachyon`
+  before anything is touched - deliberately not fetched through Tachyon's own
+  `Repository::installPackage`, which reads `packages.json` from the moving master branch at
+  install time and would hand the component that changes system passwords to an unpinned
+  address. No migration for existing SnappyMail installs on purpose (fresh installs only
+  before v1).
 
 - **Both webmailers at once, chosen per mail domain** (#584). The runtime always supported
   coexistence - `WEBMAIL_SYSTEM` is a token list, each client has its own loopback listener
   (:8090/:8091) and FPM socket, the panel's per-domain "Webmail Client" select and the vhost
-  proxy chain were already in place. What was missing was the entry path: the wizard gains a
-  BOTH option, the installer installs Roundcube (fatal, like alone) then Tachyon (non-fatal,
-  degrades loudly to Roundcube-only), and the add/delete commands now widen/narrow
-  `COMPONENT_MAIL_WEBMAILER` (second add records BOTH instead of overwriting; deleting one
-  half leaves the other recorded). The CLI default for a new mail domain now matches the
-  panel's documented preselect - Roundcube when installed, else the first client - instead
-  of accidentally taking the last token of the list.
+  proxy chain were already in place. What was missing was the entry path: the wizard's "Both"
+  option, and `COMPONENT_MAIL_WEBMAILER` becomes a token set (`ROUNDCUBE,TACHYON`) rather than
+  a BOTH enum - the record and the component now say the same thing in the same shape, and a
+  third client is one more token, not a renamed enum. The installer runs one gated block per
+  client (Roundcube fatal like alone, Tachyon non-fatal and loud, with the recorded component
+  narrowed to the truth on failure); the add/delete commands widen/narrow the set instead of
+  overwriting it. Two write-path fixes that the second client exposed: the CLI default for a
+  new mail domain now matches the panel's documented preselect (Roundcube when installed, else
+  the first client - a product decision, recorded as such) instead of accidentally taking the
+  last token, and unsuspending a mail domain restores the domain's own recorded client instead
+  of rewriting it to that same last token. The `WEBMAIL` record's value domain is now decided
+  and enforced on write: `''`, `disabled`, or an installed client token - anything else (a
+  removed client, legacy `snappymail`) is normalized to `disabled` loudly, so rebuilds converge
+  stale records; the render-time degradation stays as the safety net.
 
 - **Edit-user gets the same toolbar treatment as edit-web, and a new order** (#621). The "Advanced
   Options" button moves into the toolbar next to Save, the fold animates, and a second Save sits at

@@ -46,6 +46,22 @@ tx_fetch() {
 	gzip -t "$dest" 2> /dev/null || return 1
 }
 
+# Same fail-before-touch bar as the main tarball, plus a pinned sha256: change-password-hestia
+# changes system passwords, so a swapped release asset must die here, not install. Never via
+# Tachyon's own Repository - that fetches packages.json from the master branch, a moving address.
+tx_fetch_plugin() {
+	local name="$1" dest="$2" ver sum
+	ver=$(manifest_get ".software_versions.tachyon_plugins[\"$name\"].version")
+	sum=$(manifest_get ".software_versions.tachyon_plugins[\"$name\"].sha256")
+	{ [ -n "$ver" ] && [ "$ver" != "null" ] && [ -n "$sum" ] && [ "$sum" != "null" ]; } || return 1
+	wget "https://github.com/kimusan/Tachyon/releases/download/v${tx_v}/${name}-${ver}.tgz" \
+		--timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" || return 1
+	[ -s "$dest" ] || return 1
+	echo "$sum  $dest" | sha256sum -c --quiet - 2> /dev/null || return 1
+}
+
+TX_PLUGINS="change-password change-password-hestia add-x-originating-ip-header"
+
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -105,6 +121,19 @@ if [ "$UPDATE" == "no" ]; then
 		exit 2
 	fi
 
+	# Plugins under the same rule: all fetched and verified before anything is removed.
+	declare -A tx_plugin_tmp
+	for p in $TX_PLUGINS; do
+		tx_plugin_tmp[$p]="$(mktemp -t tachyon-plugin.XXXXXX.tgz)"
+		if ! tx_fetch_plugin "$p" "${tx_plugin_tmp[$p]}"; then
+			rm -f "$tx_tmp"
+			for q in $TX_PLUGINS; do rm -f "${tx_plugin_tmp[$q]}"; done
+			echo "ERROR: could not fetch/verify Tachyon plugin $p (pin in share/manifest.json)"
+			echo "       Installation aborted - nothing was changed."
+			exit 2
+		fi
+	done
+
 	rm -f -r $TX_INSTALL_DIR
 	rm -f -r $TX_CONFIG_DIR
 
@@ -137,6 +166,14 @@ if [ "$UPDATE" == "no" ]; then
 
 	# Create cache folder and set permissions
 	mkdir -p "$TX_CONFIG_DIR/data/_data_/_default_/cache/"
+
+	# Unpack the verified plugins; install.php only writes their config and enables them.
+	mkdir -p "$TX_CONFIG_DIR/data/_data_/_default_/plugins/"
+	for p in $TX_PLUGINS; do
+		tar -xzf "${tx_plugin_tmp[$p]}" -C "$TX_CONFIG_DIR/data/_data_/_default_/plugins/"
+		rm -f "${tx_plugin_tmp[$p]}"
+	done
+
 	chown -R www-data:www-data ./data
 
 	if [ -f '/usr/bin/mariadb' ]; then
@@ -224,9 +261,9 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# BOTH when the other client was already there: a second add must widen the record, not overwrite it
+# The component is a token set: a second add widens it, never overwrites (canonical order RC,TX)
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
-	set_install_component MAIL_WEBMAILER BOTH
+	set_install_component MAIL_WEBMAILER "ROUNDCUBE,TACHYON"
 else
 	set_install_component MAIL_WEBMAILER TACHYON
 fi

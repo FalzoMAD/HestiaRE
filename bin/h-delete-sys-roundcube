@@ -92,12 +92,18 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# narrow the wizard selection: BOTH loses one half, a sole Roundcube becomes NONE (don't clobber a secondary)
-if [ "${COMPONENT_MAIL_WEBMAILER:-}" = "BOTH" ]; then
-	set_install_component MAIL_WEBMAILER TACHYON
-elif [ "${COMPONENT_MAIL_WEBMAILER:-}" = "ROUNDCUBE" ]; then
-	set_install_component MAIL_WEBMAILER NONE
-fi
+# Narrow the component token set: drop our token, an emptied set becomes NONE. Only when the
+# recorded set names us (don't clobber a record about other clients), and rebuilt from the
+# post-strip WEBMAIL_SYSTEM rather than string-edited, so it stays canonical.
+case ",${COMPONENT_MAIL_WEBMAILER:-}," in
+	*,ROUNDCUBE,*)
+		if echo "${new_webmail:-}" | grep -qw 'tachyon'; then
+			set_install_component MAIL_WEBMAILER TACHYON
+		else
+			set_install_component MAIL_WEBMAILER NONE
+		fi
+		;;
+esac
 
 $BIN/h-log-action "system" "Info" "Plugins" "Roundcube removed."
 # Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).

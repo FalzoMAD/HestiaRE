@@ -5,7 +5,14 @@
 
   "software_versions": {
     "$comment": "Release-shipped third-party version pins (#288, replaces install/upgrade/upgrade.conf). Bump per release. Read at runtime via manifest_get() in include/main.sh.",
+    "$comment_tachyon": "3.2.2 pin last verified against kimusan/Tachyon releases on 2026-08-16 (latest; upstream quiet since 2026-07-15). Re-check the date when bumping - a silent fork must be visible here, not assumed alive.",
     "tachyon": "3.2.2",
+    "tachyon_plugins": {
+      "$comment": "Plugin assets from the SAME release tag as the tachyon pin, sha256 over the .tgz. Pinned because change-password-hestia changes system passwords - it must never arrive from a moving address (Tachyon's own Repository::installPackage fetches packages.json from the master branch at install time). h-add-sys-tachyon fetches, verifies and extracts these itself.",
+      "change-password": { "version": "2.38", "sha256": "b3c6364fddf27fc583c730d6f3dba70d99254c5068c099c8678b442a024e0105" },
+      "change-password-hestia": { "version": "2.36", "sha256": "794d545c8868cfa55d03316475b3642c03a373ca1448457110a53ef2fb003af0" },
+      "add-x-originating-ip-header": { "version": "2.0", "sha256": "49a36cb67b0aed75cee0bd8889b4f9c2a3214b4644a135f3e9e11b8ab239ee3b" }
+    },
     "backblaze_b2": "3.6.0",
     "php_supported": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
   },
@@ -248,8 +255,8 @@
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "options": [
         { "value": "ROUNDCUBE",  "label": "Roundcube",  "description": "Full-featured webmail" },
-        { "value": "TACHYON", "label": "Tachyon", "description": "Lightweight webmail (maintained SnappyMail fork)" },
-        { "value": "BOTH",    "label": "Both",    "description": "Roundcube + Tachyon, selectable per mail domain" },
+        { "value": "TACHYON", "label": "Tachyon", "description": "Lightweight webmail (SnappyMail fork)" },
+        { "value": "ROUNDCUBE,TACHYON", "label": "Both", "description": "Roundcube + Tachyon, selectable per mail domain" },
         { "value": "NONE",       "label": "None",       "description": "No webmail client" }
       ],
       "default": {

@@ -3,7 +3,7 @@
 # inside the :8083 site block ahead of the panel catch-all).
 #
 # Deployed to /etc/caddy/apps/webmail.conf by h-add-sys-roundcube; removed by
-# h-delete-sys-roundcube. Shares the panel FPM pool (/run/hestia-webmail-rc.sock)
+# h-delete-sys-roundcube. Shares the panel FPM pool (/run/hestia-webmail-roundcube.sock)
 # with the prefix-less internal listener (127.0.0.1:8090) that the per-domain
 # webmail.<domain> vhosts reverse-proxy to - one pool, two Caddy frontends.
 #
@@ -15,6 +15,6 @@
 redir /webmail /webmail/ 308
 handle_path /webmail/* {
 	root * /var/lib/roundcube/public_html
-	php_fastcgi unix//run/hestia-webmail-rc.sock
+	php_fastcgi unix//run/hestia-webmail-roundcube.sock
 	file_server
 }

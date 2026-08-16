@@ -193,9 +193,9 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# BOTH when the other client was already there: a second add must widen the record, not overwrite it
+# The component is a token set: a second add widens it, never overwrites (canonical order RC,TX)
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'tachyon'; then
-	set_install_component MAIL_WEBMAILER BOTH
+	set_install_component MAIL_WEBMAILER "ROUNDCUBE,TACHYON"
 else
 	set_install_component MAIL_WEBMAILER ROUNDCUBE
 fi

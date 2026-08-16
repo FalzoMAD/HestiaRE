@@ -29,11 +29,12 @@ $oConfig->Set("logs", "auth_logging_filename", "fail2ban/auth.txt");
 $oConfig->Set("logs", "path", "/var/log/tachyon");
 $oConfig->Set("labs", "http_client_ip_check_proxy", true);
 
-// Plugins
+// Plugins are unpacked by h-add-sys-tachyon as pinned, sha256-verified release assets
+// (share/manifest.json tachyon_plugins). Repository::installPackage is deliberately not
+// used: it fetches packages.json from Tachyon's master branch at install time - a moving
+// address - and change-password-hestia is the component that changes system passwords.
+// This file only writes their config and enables them.
 $oConfig->Set("plugins", "enable", "On");
-
-\Tachyon\Util\Repository::installPackage("plugin", "change-password");
-\Tachyon\Util\Repository::installPackage("plugin", "change-password-hestia");
 
 $sFile = APP_PRIVATE_DATA . "configs/plugin-change-password.json";
 if (!file_exists($sFile)) {
@@ -59,7 +60,6 @@ if (!file_exists($sFile)) {
 }
 \Tachyon\Util\Repository::enablePackage("change-password");
 
-\Tachyon\Util\Repository::installPackage("plugin", "add-x-originating-ip-header");
 \Tachyon\Util\Repository::enablePackage("add-x-originating-ip-header");
 $sFile = APP_PRIVATE_DATA . "configs/plugin-add-x-originating-ip-header.json";
 if (!file_exists($sFile)) {
