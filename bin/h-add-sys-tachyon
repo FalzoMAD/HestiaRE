@@ -140,7 +140,7 @@ if [ "$UPDATE" == "no" ]; then
 	mkdir $TX_INSTALL_DIR
 	mkdir $TX_CONFIG_DIR
 
-	cd "$TX_INSTALL_DIR"
+	cd "$TX_INSTALL_DIR" || exit 2
 	mv "$tx_tmp" "${TX_INSTALL_DIR}/${TX_FILE}"
 
 	key=$(openssl rand -hex 4)
@@ -242,16 +242,16 @@ else
 	fi
 
 	version=$(cat $TX_INSTALL_DIR/data/VERSION)
-	cd $TX_INSTALL_DIR
-	mkdir -p /tmp/snappy/
-	tar -xzf "$TX_FILE" -C /tmp/snappy/
-	version_source=$(cat /tmp/snappy/data/VERSION)
+	cd "$TX_INSTALL_DIR" || exit 2
+	tx_peek=$(mktemp -d -t tachyon-peek.XXXXXX)
+	tar -xzf "$TX_FILE" -C "$tx_peek/"
+	version_source=$(cat "$tx_peek/data/VERSION")
 	# check the version in the tarball in case hestia hasn't updated yet
 	if [ "$version" != "$version_source" ]; then
 		tar -xzf ${TX_INSTALL_DIR}/${TX_FILE}
 		rm $TX_INSTALL_DIR/$TX_FILE
 	fi
-	rm -fr /tmp/snappy
+	rm -fr "$tx_peek"
 fi
 
 # re-render mail domains so they pick up the new client immediately
