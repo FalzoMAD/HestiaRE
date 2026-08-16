@@ -12,6 +12,16 @@
 			} ?>">
 				<i class="fas fa-trash icon-red"></i><?= tohtml(_("Purge NGINX Cache")) ?>
 			</a>
+			<?php // Sits in the toolbar, outside the form that carries x-data - Alpine scopes by
+			// DOM, not by the form attribute, so this owns the state and the form mirrors it.?>
+			<button
+				x-data="<?= tohtml(json_encode(["adv" => false, "labelOn" => _("Hide Advanced Options"), "labelOff" => _("Advanced Options")], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_THROW_ON_ERROR)) ?>"
+				type="button"
+				class="button button-secondary"
+				x-on:click="adv = !adv; $dispatch('advanced-toggled', adv)"
+				x-text="adv ? labelOn : labelOff">
+				<?= tohtml(_("Advanced Options")) ?>
+			</button>
 <button type="submit" class="button" form="main-form">
 				<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
 			</button>
@@ -23,11 +33,14 @@
 <div class="container">
 	<?php
 		$web_x_data = [
+			"statsEnabled" => !in_array(trim((string) $v_stats, "'"), ["", "none"], true),
 			"statsAuthEnabled" => !empty($v_stats_user),
 			"redirectEnabled" => !empty($v_redirect),
 			"sslEnabled" => $v_ssl == "yes",
 			"letsEncryptEnabled" => $v_letsencrypt == "yes" || $v_letsencrypt == "on",
 			"showCertificates" => !($v_letsencrypt == "yes" || $v_letsencrypt == "on"),
+			"certLabelOn" => _("Hide Certificate"),
+			"certLabelOff" => _("Show Certificate"),
 			"showAdvanced" => false,
 			"nginxCacheEnabled" => $v_nginx_cache == "yes",
 			"proxyCacheEnabled" => $v_proxy_cache == "yes",
@@ -39,6 +52,7 @@
 
 	<form
 		x-data="<?= tohtml(json_encode($web_x_data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_THROW_ON_ERROR)) ?>"
+		x-on:advanced-toggled.window="showAdvanced = $event.detail"
 		id="main-form"
 		name="v_edit_web"
 		method="post"
@@ -85,43 +99,83 @@
 					<?= tohtml(_("Take website temporarily offline (visitors see a maintenance page, HTTP 503)")) ?>
 				</label>
 			</div>
-			<?php if ($offer_proxy_cache) { ?>
+				<?php if (empty($v_docker) && $can_edit_templates) { ?>
+					<?php // These policy gates protect the CUSTOMER from themselves (a pool set to high, a broken
+					// proxy template), so the REAL admin overrides them even while impersonating: adminContext
+					// is the durable identity (#438), userContext keeps scoping the data. Policy default is
+					// effectively 'no' - protective for customers, invisible to admins.?>
+				<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
+						// share/ and the list is empty, so hide it instead of an empty dropdown (#219/#591)?>
+					<?php if ($offer_web_template) { ?>
+						<div class="u-mb10">
+							<label for="v_template" class="form-label">
+								<?= tohtml(_("Web Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_SYSTEM"])) ?></span>
+							</label>
+							<select class="form-select" name="v_template" id="v_template">
+								<?php
+									foreach ($templates as $key => $value) {
+										echo "\t\t\t\t<option value=\"".htmlentities($value)."\"";
+										$svalue = "'".$value."'";
+										if ((!empty($v_template)) && ($value == $v_template) || ($svalue == $v_template)) {
+											echo ' selected' ;
+										}
+										echo ">".htmlentities($value)."</option>\n";
+									}
+						?>
+							</select>
+						</div>
+					<?php } ?>
+				<?php } ?>
+					<?php if ($offer_backend) { ?>
+						<?php // profile choice is capacity allocation - a customer would simply pick 'high'?>
+						<div class="u-mb10">
+								<label for="v_php_version" class="form-label"><?= tohtml(_("PHP Version")) ?></label>
+							<select class="form-select" name="v_php_version" id="v_php_version">
+								<?php
+								$v_cur_php = trim($v_php_version, "'");
+						foreach (($php_versions ?: []) as $value) {
+							echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
+							if ($v_cur_php == $value) {
+								echo ' selected';
+							}
+							echo ">PHP " . tohtml($value) . "</option>\n";
+						}
+						echo "\t\t\t\t<option value=\"none\"" . ($v_cur_php == 'none' ? ' selected' : '') . ">" . tohtml(_("None (no PHP)")) . "</option>\n";
+						?>
+							</select>
+						</div>
+						<?php if ($offer_backend_template) { ?>
+						<div class="u-mb10">
+								<label for="v_backend_template" class="form-label">
+									<?= tohtml(_("PHP Pool Size")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
+								</label>
+							<select class="form-select" name="v_backend_template" id="v_backend_template">
+								<?php
+							foreach ($backend_templates as $key => $value) {
+								echo "\t\t\t\t<option value=\"".tohtml($value)."\"";
+								$svalue = "'".$value."'";
+								if ((!empty($v_backend_template)) && (($value == $v_backend_template) || ($svalue == $v_backend_template))) {
+									echo ' selected' ;
+								}
+								if ((empty($v_backend_template)) && ($value == 'default')) {
+									echo ' selected' ;
+								}
+								echo ">".tohtml($value)."</option>\n";
+							}
+							?>
+							</select>
+						</div>
+						<?php } ?>
+					<?php } ?>
+			<?php if ($offer_stats) { ?>
 				<div class="form-check u-mb10">
-					<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") {
-						echo "checked";
-					} ?>>
-					<label for="v_proxy_cache_check">
-						<?= tohtml(_("Enable proxy cache")) ?>
+					<input x-model="statsEnabled" class="form-check-input" type="checkbox" name="v_stats" id="v_stats" value="awstats">
+					<label for="v_stats">
+						<?= tohtml(_("Web Statistics")) ?>
 					</label>
 				</div>
-				<div x-cloak x-show="proxyCacheEnabled" id="v_proxy_duration" class="u-pl30">
-					<div class="u-mb10">
-						<label for="v_proxy_cache_duration" class="form-label">
-							<?= tohtml(_("Cache Duration")) ?> <span class="optional">(<?= tohtml(_("For example")) ?>: 30s, 10m or 1d)</span>
-						</label>
-						<input type="text" class="form-control" name="v_proxy_cache_duration" id="v_proxy_cache_duration" value="<?= tohtml(trim($v_proxy_cache_duration, "'")) ?>">
-					</div>
-				</div>
 			<?php } ?>
-			<div class="u-mb10">
-				<label for="v_stats" class="form-label"><?= tohtml(_("Web Statistics")) ?></label>
-				<select class="form-select js-stats-select" name="v_stats" id="v_stats">
-					<?php
-						foreach ($stats as $key => $value) {
-							$svalue = "'".$value."'";
-							echo "\t\t\t\t<option value=\"".htmlentities($value)."\"";
-							if (empty($v_stats)) {
-								$v_stats = 'none';
-							}
-							if (($value == $v_stats) || ($svalue == $v_stats)) {
-								echo ' selected' ;
-							}
-							echo ">". htmlentities(_($value)) ."</option>\n";
-						}
-				?>
-				</select>
-			</div>
-			<div class="u-mb10 js-stats-auth" style="<?php if ($v_stats == "none") { ?>display:none<?php } ?>">
+			<div x-cloak x-show="statsEnabled" class="u-mb10">
 				<div class="form-check">
 					<input x-model="statsAuthEnabled" class="form-check-input" type="checkbox" name="v_stats_auth" id="v_stats_auth">
 					<label for="v_stats_auth">
@@ -129,7 +183,7 @@
 					</label>
 				</div>
 			</div>
-			<div class="u-pl30 js-stats-auth">
+			<div x-cloak x-show="statsEnabled" class="u-pl30">
 				<div x-cloak x-show="statsAuthEnabled" name="h-add-web-domain-stats-user">
 					<div class="u-mb10">
 						<label for="v_stats_user" class="form-label"><?= tohtml(_("Username")) ?></label>
@@ -148,6 +202,115 @@
 					</div>
 				</div>
 			</div>
+			<div class="form-check u-mb10">
+				<input x-model="sslEnabled" class="form-check-input" type="checkbox" name="v_ssl" id="v_ssl">
+				<label for="v_ssl">
+					<?= tohtml(_("Enable SSL for this domain")) ?>
+				</label>
+			</div>
+			<div x-cloak x-show="sslEnabled" class="u-pl30">
+				<div class="form-check u-mb10">
+					<input x-model="letsEncryptEnabled" class="form-check-input js-toggle-lets-encrypt" type="checkbox" name="v_letsencrypt" id="v_letsencrypt">
+					<label for="v_letsencrypt">
+						<?= tohtml(_("Use Let's Encrypt to obtain SSL certificate")) ?>
+					</label>
+				</div>
+				<div class="form-check u-mb10">
+					<input class="form-check-input" type="checkbox" name="v_ssl_forcessl" id="v_ssl_forcessl" <?php if ($v_ssl_forcessl == 'yes') {
+						echo 'checked';
+					} ?>>
+					<label for="v_ssl_forcessl">
+						<?= tohtml(_("Enable automatic HTTPS redirection")) ?>
+					</label>
+				</div>
+				<div class="form-check u-mb20">
+					<input class="form-check-input" type="checkbox" name="v_ssl_hsts" id="ssl_hsts" <?php if ($v_ssl_hsts == 'yes') {
+						echo 'checked';
+					} ?>>
+					<label for="ssl_hsts">
+						<?= tohtml(_("Enable HTTP Strict Transport Security (HSTS)")) ?>
+						<a href="https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security" target="_blank">
+							<i class="fas fa-question-circle"></i>
+						</a>
+					</label>
+				</div>
+				<?php if ($offer_http3) { ?>
+				<div class="form-check u-mb20">
+					<input class="form-check-input" type="checkbox" name="v_http3" id="v_http3" <?php if ($v_http3 == 'yes') {
+						echo 'checked';
+					} ?>>
+					<label for="v_http3">
+						<?= tohtml(_("Enable HTTP/3 (QUIC)")) ?>
+					</label>
+				</div>
+				<?php } ?>
+					<?php // Cert data is bulk and rarely touched: SSL stays above the fold, the PEM
+					// blocks only appear in advanced mode (#621)?>
+				<div x-cloak x-show="showCertificates && showAdvanced" class="js-ssl-details">
+					<div class="u-mb10">
+						<label for="ssl_crt" class="form-label">
+							<?= tohtml(_("SSL Certificate")) ?>
+							<span id="generate-csr"> / <a class="form-link" target="_blank" href="/generate/ssl/?<?= tohtml(http_build_query(["domain" => $v_domain])) ?>"><?= tohtml(_("Generate Self-Signed SSL Certificate")) ?></a></span>
+						</label>
+						<textarea class="form-control u-min-height100 u-console" name="v_ssl_crt" id="ssl_crt"><?= tohtml(trim($v_ssl_crt, "'")) ?></textarea>
+					</div>
+					<div class="u-mb10">
+						<label for="v_ssl_key" class="form-label"><?= tohtml(_("SSL Private Key")) ?></label>
+						<textarea class="form-control u-min-height100 u-console" name="v_ssl_key" id="v_ssl_key"><?= tohtml(trim($v_ssl_key, "'")) ?></textarea>
+					</div>
+					<div class="u-mb20">
+						<label for="v_ssl_ca" class="form-label">
+							<?= tohtml(_("SSL Certificate Authority / Intermediate")) ?> <span class="optional">(<?= tohtml(_("Optional")) ?>)</span>
+						</label>
+						<textarea class="form-control u-min-height100 u-console" name="v_ssl_ca" id="v_ssl_ca"><?= tohtml(trim($v_ssl_ca, "'")) ?></textarea>
+					</div>
+				</div>
+				<?php if ($v_ssl != "no") { ?>
+					<ul class="values-list">
+						<li class="values-list-item">
+							<span class="values-list-label"><?= tohtml(_("Issued To")) ?></span>
+							<span class="values-list-value"><?= tohtml($v_ssl_subject) ?></span>
+						</li>
+						<?php if ($v_ssl_aliases) {
+							$v_ssl_aliases = str_replace(",", ", ", $v_ssl_aliases); ?>
+							<li class="values-list-item">
+								<span class="values-list-label"><?= tohtml(_("Alternate")) ?></span>
+								<span class="values-list-value"><?= tohtml($v_ssl_aliases) ?></span>
+							</li>
+						<?php } ?>
+						<li class="values-list-item">
+							<span class="values-list-label"><?= tohtml(_("Not Before")) ?></span>
+							<span class="values-list-value"><?= tohtml($v_ssl_not_before) ?></span>
+						</li>
+						<li class="values-list-item">
+							<span class="values-list-label"><?= tohtml(_("Not After")) ?></span>
+							<span class="values-list-value"><?= tohtml($v_ssl_not_after) ?></span>
+						</li>
+						<li class="values-list-item">
+							<span class="values-list-label"><?= tohtml(_("Signature")) ?></span>
+							<span class="values-list-value"><?= tohtml($v_ssl_signature) ?></span>
+						</li>
+						<li class="values-list-item">
+							<span class="values-list-label"><?= tohtml(_("Key Size")) ?></span>
+							<span class="values-list-value"><?= tohtml($v_ssl_pub_key) ?></span>
+						</li>
+						<li class="values-list-item">
+							<span class="values-list-label"><?= tohtml(_("Issued By")) ?></span>
+							<span class="values-list-value"><?= tohtml($v_ssl_issuer) ?></span>
+						</li>
+						<p x-cloak x-show="letsEncryptEnabled && showAdvanced" id="letsinfo">
+							<button
+								type="button"
+								class="form-link"
+								x-on:click="showCertificates = !showCertificates"
+									x-text="showCertificates ? certLabelOn : certLabelOff">
+								<?= tohtml(_("Show Certificate")) ?>
+							</button>
+						</p>
+					</ul>
+				<?php } ?>
+			</div>
+			<div x-cloak x-show="showAdvanced" x-collapse>
 			<div class="form-check u-mb10">
 				<input x-model="redirectEnabled" class="form-check-input" type="checkbox" name="h-redirect-checkbox" id="h-redirect-checkbox">
 				<label for="h-redirect-checkbox">
@@ -200,112 +363,35 @@
 					</div>
 				</div>
 			</div>
-			<div class="form-check u-mb10">
-				<input x-model="sslEnabled" class="form-check-input" type="checkbox" name="v_ssl" id="v_ssl">
-				<label for="v_ssl">
-					<?= tohtml(_("Enable SSL for this domain")) ?>
-				</label>
-			</div>
-			<div x-cloak x-show="sslEnabled" class="u-pl30">
 				<div class="form-check u-mb10">
-					<input x-model="letsEncryptEnabled" class="form-check-input js-toggle-lets-encrypt" type="checkbox" name="v_letsencrypt" id="v_letsencrypt">
-					<label for="v_letsencrypt">
-						<?= tohtml(_("Use Let's Encrypt to obtain SSL certificate")) ?>
+					<input x-model="customDocumentRootEnabled" class="form-check-input" type="checkbox" name="v_custom_doc_root_check" id="v_custom_doc_root_check">
+					<label for="v_custom_doc_root_check">
+						<?= tohtml(_("Custom document root")) ?>
 					</label>
 				</div>
-				<div class="form-check u-mb10">
-					<input class="form-check-input" type="checkbox" name="v_ssl_forcessl" id="v_ssl_forcessl" <?php if ($v_ssl_forcessl == 'yes') {
-						echo 'checked';
-					} ?>>
-					<label for="v_ssl_forcessl">
-						<?= tohtml(_("Enable automatic HTTPS redirection")) ?>
-					</label>
-				</div>
-				<div class="form-check u-mb20">
-					<input class="form-check-input" type="checkbox" name="v_ssl_hsts" id="ssl_hsts" <?php if ($v_ssl_hsts == 'yes') {
-						echo 'checked';
-					} ?>>
-					<label for="ssl_hsts">
-						<?= tohtml(_("Enable HTTP Strict Transport Security (HSTS)")) ?>
-						<a href="https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security" target="_blank">
-							<i class="fas fa-question-circle"></i>
-						</a>
-					</label>
-				</div>
-				<?php if ($offer_http3) { ?>
-				<div class="form-check u-mb20">
-					<input class="form-check-input" type="checkbox" name="v_http3" id="v_http3" <?php if ($v_http3 == 'yes') {
-						echo 'checked';
-					} ?>>
-					<label for="v_http3">
-						<?= tohtml(_("Enable HTTP/3 (QUIC)")) ?>
-					</label>
-				</div>
-				<?php } ?>
-				<div x-cloak x-show="showCertificates" class="js-ssl-details">
+				<div x-cloak x-show="customDocumentRootEnabled" id="v_custom_doc_root" class="u-pl30">
 					<div class="u-mb10">
-						<label for="ssl_crt" class="form-label">
-							<?= tohtml(_("SSL Certificate")) ?>
-							<span id="generate-csr"> / <a class="form-link" target="_blank" href="/generate/ssl/?<?= tohtml(http_build_query(["domain" => $v_domain])) ?>"><?= tohtml(_("Generate Self-Signed SSL Certificate")) ?></a></span>
-						</label>
-						<textarea class="form-control u-min-height100 u-console" name="v_ssl_crt" id="ssl_crt"><?= tohtml(trim($v_ssl_crt, "'")) ?></textarea>
+						<label for="h-custom-doc-domain" class="form-label"><?= tohtml(_("Point to")) ?></label>
+						<input type="hidden" class="js-custom-docroot-prepath" name="h-custom-doc-root_prepath" value="<?= tohtml($v_custom_doc_root_prepath) ?>">
+						<select class="form-select js-custom-docroot-domain" name="h-custom-doc-domain" id="h-custom-doc-domain">
+							<?php foreach ($user_domains as $domain): ?>
+							<option value="<?= tohtml($domain) ?>"
+								<?php if ($v_custom_doc_domain === $domain || (empty($v_custom_doc_domain) && $domain === $v_domain)) {
+									echo 'selected="selected"';
+								} ?>>
+								<?= tohtml($domain) ?>
+							</option>
+							<?php endforeach; ?>
+						</select>
 					</div>
 					<div class="u-mb10">
-						<label for="v_ssl_key" class="form-label"><?= tohtml(_("SSL Private Key")) ?></label>
-						<textarea class="form-control u-min-height100 u-console" name="v_ssl_key" id="v_ssl_key"><?= tohtml(trim($v_ssl_key, "'")) ?></textarea>
-					</div>
-					<div class="u-mb20">
-						<label for="v_ssl_ca" class="form-label">
-							<?= tohtml(_("SSL Certificate Authority / Intermediate")) ?> <span class="optional">(<?= tohtml(_("Optional")) ?>)</span>
+						<label for="h-custom-doc-folder" class="form-label">
+							<?= tohtml(_("Directory")) ?> <span class="optional">(<?= tohtml(_("Optional")) ?>)</span>
 						</label>
-						<textarea class="form-control u-min-height100 u-console" name="v_ssl_ca" id="v_ssl_ca"><?= tohtml(trim($v_ssl_ca, "'")) ?></textarea>
+						<input type="text" class="form-control js-custom-docroot-dir" name="h-custom-doc-folder" id="h-custom-doc-folder" value="<?= tohtml(trim($v_custom_doc_folder, "'")) ?>">
+						<small class="js-custom-docroot-hint"></small>
 					</div>
 				</div>
-				<?php if ($v_ssl != "no") { ?>
-					<ul class="values-list">
-						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml(_("Issued To")) ?></span>
-							<span class="values-list-value"><?= tohtml($v_ssl_subject) ?></span>
-						</li>
-						<?php if ($v_ssl_aliases) {
-							$v_ssl_aliases = str_replace(",", ", ", $v_ssl_aliases); ?>
-							<li class="values-list-item">
-								<span class="values-list-label"><?= tohtml(_("Alternate")) ?></span>
-								<span class="values-list-value"><?= tohtml($v_ssl_aliases) ?></span>
-							</li>
-						<?php } ?>
-						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml(_("Not Before")) ?></span>
-							<span class="values-list-value"><?= tohtml($v_ssl_not_before) ?></span>
-						</li>
-						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml(_("Not After")) ?></span>
-							<span class="values-list-value"><?= tohtml($v_ssl_not_after) ?></span>
-						</li>
-						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml(_("Signature")) ?></span>
-							<span class="values-list-value"><?= tohtml($v_ssl_signature) ?></span>
-						</li>
-						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml(_("Key Size")) ?></span>
-							<span class="values-list-value"><?= tohtml($v_ssl_pub_key) ?></span>
-						</li>
-						<li class="values-list-item">
-							<span class="values-list-label"><?= tohtml(_("Issued By")) ?></span>
-							<span class="values-list-value"><?= tohtml($v_ssl_issuer) ?></span>
-						</li>
-						<p x-cloak x-show="letsEncryptEnabled" id="letsinfo">
-							<button
-								type="button"
-								class="form-link"
-								x-on:click="showCertificates = !showCertificates"
-								x-text="showCertificates ? <?= json_encode(_("Hide Certificate"), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR) ?> : <?= json_encode(_("Show Certificate"), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR) ?>">
-								<?= tohtml(_("Show Certificate")) ?>
-							</button>
-						</p>
-					</ul>
-				<?php } ?>
-			</div>
 			<?php if ($offer_botlimit) { ?>
 				<!-- Layer-B bot throttling, customer-editable: only the families the admin ENABLED are
 				     offered, since the server config defines rate zones for those alone. Humans are
@@ -390,42 +476,24 @@
 				<?php } ?>
 			</div>
 			<?php } ?>
-			<div class="u-mt15 u-mb20">
-				<button x-on:click="showAdvanced = !showAdvanced" type="button" class="button button-secondary">
-					<?= tohtml(_("Advanced Options")) ?>
-				</button>
-			</div>
-			<div x-cloak x-show="showAdvanced">
-				<?php if (empty($v_docker) && $can_edit_templates) { ?>
-					<?php // These policy gates protect the CUSTOMER from themselves (a pool set to high, a broken
-					// proxy template), so the REAL admin overrides them even while impersonating: adminContext
-					// is the durable identity (#438), userContext keeps scoping the data. Policy default is
-					// effectively 'no' - protective for customers, invisible to admins.?>
-				<?php // Only selectable in the nginx-only model; on apache-web the vhost renders from
-						// share/ and the list is empty, so hide it instead of an empty dropdown (#219/#591)?>
-					<?php if ($offer_web_template) { ?>
-						<div class="u-mb10">
-							<label for="v_template" class="form-label">
-								<?= tohtml(_("Web Template")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_SYSTEM"])) ?></span>
-							</label>
-							<select class="form-select" name="v_template" id="v_template">
-								<?php
-									foreach ($templates as $key => $value) {
-										echo "\t\t\t\t<option value=\"".htmlentities($value)."\"";
-										$svalue = "'".$value."'";
-										if ((!empty($v_template)) && ($value == $v_template) || ($svalue == $v_template)) {
-											echo ' selected' ;
-										}
-										echo ">".htmlentities($value)."</option>\n";
-									}
-						?>
-							</select>
-						</div>
-					<?php } ?>
-				<?php } ?>
-				<?php // The blocks below are customer-facing (#566 review): PHP version, pool profile and
-					// proxy extensions stay editable for the user; only the template CHOICE above and the
-					// proxy template select below remain admin/policy-gated?>
+			<?php if ($offer_proxy_cache) { ?>
+				<div class="form-check u-mb10">
+					<input x-model="proxyCacheEnabled" class="form-check-input" type="checkbox" name="v_proxy_cache_check" id="v_proxy_cache_check" <?php if ($v_proxy_cache_check == "on") {
+						echo "checked";
+					} ?>>
+					<label for="v_proxy_cache_check">
+						<?= tohtml(_("Enable proxy cache")) ?>
+					</label>
+				</div>
+				<div x-cloak x-show="proxyCacheEnabled" id="v_proxy_duration" class="u-pl30">
+					<div class="u-mb10">
+						<label for="v_proxy_cache_duration" class="form-label">
+							<?= tohtml(_("Cache Duration")) ?> <span class="optional">(<?= tohtml(_("For example")) ?>: 30s, 10m or 1d)</span>
+						</label>
+						<input type="text" class="form-control" name="v_proxy_cache_duration" id="v_proxy_cache_duration" value="<?= tohtml(trim($v_proxy_cache_duration, "'")) ?>">
+					</div>
+				</div>
+			<?php } ?>
 				<?php if ($offer_fastcgi_cache) { ?>
 						<div class="form-check u-mb10">
 							<input x-model="nginxCacheEnabled" class="form-check-input" type="checkbox" name="v_nginx_cache_check" id="v_nginx_cache_check">
@@ -443,47 +511,6 @@
 								</label>
 								<input type="text" class="form-control" name="v_nginx_cache_duration" id="v_nginx_cache_duration" value="<?= tohtml(trim($v_nginx_cache_duration, "'")) ?>">
 							</div>
-						</div>
-					<?php } ?>
-					<?php if ($offer_backend) { ?>
-						<?php // profile choice is capacity allocation - a customer would simply pick 'high'?>
-						<?php if ($offer_backend_template) { ?>
-						<div class="u-mb10">
-								<label for="v_backend_template" class="form-label">
-									<?= tohtml(_("Backend Pool")) ?> <span class="optional"><?= tohtml(strtoupper($_SESSION["WEB_BACKEND"])) ?></span>
-								</label>
-							<select class="form-select" name="v_backend_template" id="v_backend_template">
-								<?php
-							foreach ($backend_templates as $key => $value) {
-								echo "\t\t\t\t<option value=\"".tohtml($value)."\"";
-								$svalue = "'".$value."'";
-								if ((!empty($v_backend_template)) && (($value == $v_backend_template) || ($svalue == $v_backend_template))) {
-									echo ' selected' ;
-								}
-								if ((empty($v_backend_template)) && ($value == 'default')) {
-									echo ' selected' ;
-								}
-								echo ">".tohtml($value)."</option>\n";
-							}
-							?>
-							</select>
-						</div>
-						<?php } ?>
-						<div class="u-mb10">
-								<label for="v_php_version" class="form-label"><?= tohtml(_("PHP Version")) ?></label>
-							<select class="form-select" name="v_php_version" id="v_php_version">
-								<?php
-								$v_cur_php = trim($v_php_version, "'");
-						foreach (($php_versions ?: []) as $value) {
-							echo "\t\t\t\t<option value=\"" . tohtml($value) . "\"";
-							if ($v_cur_php == $value) {
-								echo ' selected';
-							}
-							echo ">PHP " . tohtml($value) . "</option>\n";
-						}
-						echo "\t\t\t\t<option value=\"none\"" . ($v_cur_php == 'none' ? ' selected' : '') . ">" . tohtml(_("None (no PHP)")) . "</option>\n";
-						?>
-							</select>
 						</div>
 					<?php } ?>
 					<?php if ($offer_proxy) { ?>
@@ -528,35 +555,6 @@
 							</div>
 						</div>
 					<?php } ?>
-				<div class="form-check u-mb10">
-					<input x-model="customDocumentRootEnabled" class="form-check-input" type="checkbox" name="v_custom_doc_root_check" id="v_custom_doc_root_check">
-					<label for="v_custom_doc_root_check">
-						<?= tohtml(_("Custom document root")) ?>
-					</label>
-				</div>
-				<div x-cloak x-show="customDocumentRootEnabled" id="v_custom_doc_root" class="u-pl30">
-					<div class="u-mb10">
-						<label for="h-custom-doc-domain" class="form-label"><?= tohtml(_("Point to")) ?></label>
-						<input type="hidden" class="js-custom-docroot-prepath" name="h-custom-doc-root_prepath" value="<?= tohtml($v_custom_doc_root_prepath) ?>">
-						<select class="form-select js-custom-docroot-domain" name="h-custom-doc-domain" id="h-custom-doc-domain">
-							<?php foreach ($user_domains as $domain): ?>
-							<option value="<?= tohtml($domain) ?>"
-								<?php if ($v_custom_doc_domain === $domain || (empty($v_custom_doc_domain) && $domain === $v_domain)) {
-									echo 'selected="selected"';
-								} ?>>
-								<?= tohtml($domain) ?>
-							</option>
-							<?php endforeach; ?>
-						</select>
-					</div>
-					<div class="u-mb10">
-						<label for="h-custom-doc-folder" class="form-label">
-							<?= tohtml(_("Directory")) ?> <span class="optional">(<?= tohtml(_("Optional")) ?>)</span>
-						</label>
-						<input type="text" class="form-control js-custom-docroot-dir" name="h-custom-doc-folder" id="h-custom-doc-folder" value="<?= tohtml(trim($v_custom_doc_folder, "'")) ?>">
-						<small class="js-custom-docroot-hint"></small>
-					</div>
-				</div>
 				<?php if ($offer_ftp) { ?>
 					<div class="form-check u-mb10">
 						<input class="form-check-input js-toggle-ftp-accounts" type="checkbox" name="v_ftp" id="v_ftp" <?php if (!empty($v_ftp_user)) {
@@ -632,6 +630,22 @@
 			</div>
 		</div>
 
+			<?php // Same wrapper the toolbar uses, so this is the identical control, not a lookalike.
+			// Indented by one toolbar button plus its gap (75+8) so the right edge lines up with
+			// "Advanced Options" above, clear of the floating scroll/shortcut controls at the page
+			// edge. The 8px below is the toolbar's own button-to-edge gap, measured - .toolbar-buttons
+			// zeroes its padding-bottom on a last child, which would leave this on the footer rule.?>
+			<div class="toolbar-buttons u-form-actions">
+				<button type="submit" class="button" form="main-form">
+					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
+				</button>
+				<?php // A span, not a button: a <button> here would be a submit control reachable by Enter.
+				// aria-hidden and tabindex keep it out of the reading order and off the tab path even
+				// if the element ever changes.?>
+				<span class="button u-form-actions-spacer" aria-hidden="true" tabindex="-1">
+					<i class="fas fa-floppy-disk icon-purple"></i><?= tohtml(_("Save")) ?>
+				</span>
+			</div>
 	</form>
 
 </div>

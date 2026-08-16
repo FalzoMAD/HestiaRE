@@ -42,7 +42,7 @@ PHP pools all run as `caddy` - because app state (`/var/lib/roundcube` etc.) is
 |---|---|---|---|
 | Panel UI | `hestiaweb` / `hestiaweb` | `caddy` / **`hestia`** | `hestia` owns `/etc/hestia`, `/backup`; may `exec` h-*/v-* |
 | phpMyAdmin / Adminer | `hestiaweb` / **`hestiamail`** | `caddy` / `caddy` | app-login gated |
-| Roundcube / SnappyMail | `hestiaweb` / **`hestiamail`** | `caddy` / `caddy` | pool-user == `caddy:caddy` app state (#234) |
+| Roundcube / Tachyon (upstream: SnappyMail) | `hestiaweb` / **`hestiamail`** | `caddy` / `caddy` | pool-user == `caddy:caddy` app state (#234) |
 | Customer domains | nginx/apache / **the customer** | nginx/apache / **the customer** | kernel UID |
 | File Manager | `hestiaweb` / `hestiaweb` (FileGator in-panel, `ROOT_USER` ctx) | loopback nginx/apache + `caddy` forward_auth / **the customer** | kernel UID (#419) |
 
@@ -131,8 +131,8 @@ into **five** on that one `hestia` master:
 | `panel.conf` | `hestia` | `/run/hestia-php.sock` | Caddy panel |
 | `phpmyadmin.conf` | `caddy` | `/run/hestia-pma.sock` | Caddy `/phpmyadmin` |
 | `adminer.conf` | `caddy` | `/run/hestia-adminer.sock` | Caddy `/adminer` |
-| `roundcube.conf` | `caddy` | `/run/hestia-webmail-rc.sock` | Caddy `:8090` |
-| `snappymail.conf` | `caddy` | `/run/hestia-webmail-sm.sock` | Caddy `:8091` |
+| `roundcube.conf` | `caddy` | `/run/hestia-webmail-roundcube.sock` | Caddy `:8090` |
+| `tachyon.conf` | `caddy` | `/run/hestia-webmail-tachyon.sock` | Caddy `:8091` |
 
 Plus per-customer pools on the **customer** PHP (`share/php-fpm/multiphp.tpl`,
 `user=%user%`) and the FM pool (delta 5).
@@ -212,8 +212,8 @@ customer `www-data` pool. (`v-add-sys-roundcube` chowns the app tree
 `hestiamail:www-data`.)
 
 **HestiaRE.** Two Caddy **loopback listeners**, each backed by a `caddy` FPM pool:
-Roundcube `http://:8090 bind 127.0.0.1` -> `/run/hestia-webmail-rc.sock`
-(`share/panel-caddy/webmail-roundcube.conf:34-52`), SnappyMail `:8091`. Customer
+Roundcube `http://:8090 bind 127.0.0.1` -> `/run/hestia-webmail-roundcube.sock`
+(`share/panel-caddy/webmail-roundcube.conf:34-52`), Tachyon `:8091`. Customer
 `webmail.<domain>` vhosts become **thin reverse proxies with no docroot** that
 `proxy_pass` to the loopback listener (`share/nginx/webmail/default.tpl:25`,
 `share/apache2/webmail/default.tpl:29`), TLS terminating at the vhost with the
@@ -223,8 +223,8 @@ route (`share/panel-caddy/apps/webmail.tpl`).
 Two load-bearing Caddy subtleties: the site address is `http://:8090` + `bind
 127.0.0.1` (a Host in the address would make a proxied `Host: webmail.<domain>` match
 no site -> empty 200); and it is a loopback **port, not a unix socket** (OS Caddy
-2.6.x can't set socket mode for the www-data proxy workers). **SnappyMail is
-root-mount-only** (assets hard-wired to `/snappymail/...`), so it has no `:8083`
+2.6.x can't set socket mode for the www-data proxy workers). **Tachyon is
+root-mount-only** (assets hard-wired to `/tachyon/...`), so it has no `:8083`
 sub-path route - only the `webmail.<domain>` path.
 
 **Why.** App state (`/var/lib/roundcube`) is `caddy`-owned; a `www-data` pool

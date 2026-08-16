@@ -9,6 +9,14 @@
 
 set -eo pipefail
 
+# The admin's base install decides the ambient umask, and it is not the same everywhere: deb13 and
+# ub26 ship no UMASK line in login.defs, so every file created by a redirect or mkdir here came out
+# group-writable there and 0644/0755 on deb12/ub24. That is not a cosmetic split - cron REFUSES a
+# group-writable file in /etc/cron.d, which is how the LE fallback silently never ran. Pin it, so
+# what we create does not depend on a setting we do not control. Anything needing other than this
+# is chmod'ed explicitly at its own site.
+umask 022
+
 HESTIA="${HESTIA:-/usr/local/hestia}"
 CONF_DIR="/etc/hestia"
 SOURCE_CONF="$CONF_DIR/source.conf"
@@ -72,6 +80,6 @@ rm -rf "/tmp/hestiare-$LATEST"
 # Migrate any legacy $HESTIA/data/* dirs to their $CONF_DIR targets (#148)
 # while the panel is stopped, so the new code never reads the old paths.
 # shellcheck disable=SC1090
-[ -f "$HESTIA/include/helper.sh" ] && . "$HESTIA/include/helper.sh" && migrate_data_layout || true
+[ -f "$HESTIA/include/helper.sh" ] && . "$HESTIA/include/helper.sh" && reapply_outside_tree || true
 systemctl start caddy hestia-php 2>/dev/null || true
 echo "Update complete."

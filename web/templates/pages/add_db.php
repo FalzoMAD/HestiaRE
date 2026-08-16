@@ -20,9 +20,6 @@
 <div class="container">
 
 	<form
-		x-data="{
-			showAdvanced: <?= tohtml(empty($v_adv) ? "false" : "true") ?>
-		}"
 		id="main-form"
 		name="v_add_db"
 		method="post"
@@ -101,12 +98,7 @@
 					</label>
 					<input type="email" class="form-control" name="v_db_email" id="v_db_email" value="<?= tohtml(trim($v_db_email, "'")) ?>">
 				</div>
-				<div class="u-mb20">
-					<button x-on:click="showAdvanced = !showAdvanced" type="button" class="button button-secondary">
-						<?= tohtml(_("Advanced Options")) ?>
-					</button>
-				</div>
-				<div x-cloak x-show="showAdvanced">
+				<div>
 					<div class="u-mb10">
 						<label for="v_host" class="form-label"><?= tohtml(_("Host")) ?></label>
 						<select class="form-select" name="v_host" id="v_host">

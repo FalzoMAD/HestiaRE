@@ -170,7 +170,7 @@ cp -f "$HESTIA/share/panel-php/pool.d/roundcube.conf" /etc/php/hestia/fpm/pool.d
 systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
 cp -f "$HESTIA/share/panel-caddy/webmail-roundcube.conf" /etc/caddy/webmail-roundcube.conf
 # :8083/webmail route for admin access without a customer domain. Roundcube-only -
-# SnappyMail is root-mounted and can't run under a sub-path.
+# Tachyon is root-mounted and can't run under a sub-path.
 mkdir -p /etc/caddy/apps
 cp -f "$HESTIA/share/panel-caddy/apps/webmail.tpl" /etc/caddy/apps/webmail.conf
 systemctl try-restart caddy > /dev/null 2>&1 || true
@@ -193,7 +193,12 @@ $BIN/h-update-mail-templates yes > /dev/null 2>&1 || true
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-set_install_component MAIL_WEBMAILER ROUNDCUBE
+# The component is a token set: a second add widens it, never overwrites (canonical order RC,TX)
+if echo "$WEBMAIL_SYSTEM" | grep -qw 'tachyon'; then
+	set_install_component MAIL_WEBMAILER "ROUNDCUBE,TACHYON"
+else
+	set_install_component MAIL_WEBMAILER ROUNDCUBE
+fi
 
 $BIN/h-log-action "system" "Info" "Plugins" "Roundcube installed (OS package)."
 # Re-gate the fail2ban webmail jails now that WEBMAIL_SYSTEM changed (no-op unless fail2ban is active).

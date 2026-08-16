@@ -159,6 +159,10 @@ $v_proxy = $data[$v_domain]["PROXY"];
 $v_proxy_template = $data[$v_domain]["PROXY"];
 $v_proxy_ext = str_replace(",", ", ", $data[$v_domain]["PROXY_EXT"]);
 $v_stats = $data[$v_domain]["STATS"];
+// Two engines became one, so the control is a checkbox and an unchecked box sends no key at
+// all - read through post_checkbox, never $_POST directly (#649). The gate is STATS_SYSTEM:
+// with no engine configured the control is not rendered and the stored value is kept.
+$offer_stats = !empty($_SESSION["STATS_SYSTEM"]);
 $v_stats_user = $data[$v_domain]["STATS_USER"];
 $v_stats_password = "";
 
@@ -269,7 +273,6 @@ if (!empty($v_docker_net)) {
 }
 
 // List web stat engines
-$stats = cli_json("h-list-web-stats json");
 
 // One gate per conditionally rendered control: rendered on it, read on it.
 // Template and pool choices gate on the real identity; the policy can open them to customers.
@@ -294,6 +297,9 @@ $offer_ftp = $_SESSION["FTP_SYSTEM"] == "proftpd";
 
 // Check POST request
 if (!empty($_POST["save"])) {
+	// Read once, before any branch: unchecked is an absent key, so "off" has to be derived from
+	// the gate rather than from the key being missing.
+	$post_stats = post_checkbox("v_stats", $offer_stats, empty($v_stats) ? "none" : "awstats", "awstats", "none");
 	$v_domain = $_POST["v_domain"];
 	if (!in_array($v_domain, $user_domains)) {
 		check_return_code(3, ["Unknown domain"]);
@@ -675,9 +681,9 @@ if (!empty($_POST["save"])) {
 			}
 		}
 
-		if (!empty($v_stats) && $_POST["v_stats"] == $v_stats && empty($_SESSION["error_msg"])) {
+		if (!empty($v_stats) && $post_stats == "awstats" && empty($_SESSION["error_msg"])) {
 			// Update statistics configuration when changing domain aliases
-			$v_stats = quoteshellarg($_POST["v_stats"]);
+			$v_stats = quoteshellarg($post_stats);
 			exec(
 				HESTIA_CMD .
 					"h-change-web-domain-stats " .
@@ -1142,65 +1148,35 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Delete web stats
-	if (!empty($v_stats) && $_POST["v_stats"] == "none" && empty($_SESSION["error_msg"])) {
-		exec(
-			HESTIA_CMD . "h-delete-web-domain-stats " . $user . " " . quoteshellarg($v_domain),
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		$v_stats = "";
-	}
-
-	// Change web stats engine
-	if (!empty($v_stats) && $_POST["v_stats"] != $v_stats && empty($_SESSION["error_msg"])) {
-		$v_stats = quoteshellarg($_POST["v_stats"]);
-		exec(
-			HESTIA_CMD .
-				"h-change-web-domain-stats " .
-				$user .
-				" " .
-				quoteshellarg($v_domain) .
-				" " .
-				$v_stats,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-	}
-
-	// Add web stats
-	if (empty($v_stats) && $_POST["v_stats"] != "none" && empty($_SESSION["error_msg"])) {
-		$v_stats = quoteshellarg($_POST["v_stats"]);
-		exec(
-			HESTIA_CMD .
-				"h-add-web-domain-stats " .
-				$user .
-				" " .
-				quoteshellarg($v_domain) .
-				" " .
-				$v_stats,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-	}
-
-	// Delete web stats authorization
-	if (!empty($v_stats_user) && empty($_POST["v_stats_auth"]) && empty($_SESSION["error_msg"])) {
-		exec(
-			HESTIA_CMD . "h-delete-web-domain-stats-user " . $user . " " . quoteshellarg($v_domain),
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		$v_stats_user = "";
-		$v_stats_password = "";
+	// Stats on or off. There used to be a third branch for switching engine; with awstats the only
+	// one left it could never fire - a non-empty record is awstats, and "not awstats" is "none",
+	// which the delete branch already took.
+	if ($offer_stats && empty($_SESSION["error_msg"])) {
+		if ($post_stats == "none" && !empty($v_stats)) {
+			exec(
+				HESTIA_CMD . "h-delete-web-domain-stats " . $user . " " . quoteshellarg($v_domain),
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			$v_stats = "";
+		}
+		if ($post_stats == "awstats" && empty($v_stats)) {
+			exec(
+				HESTIA_CMD .
+					"h-add-web-domain-stats " .
+					$user .
+					" " .
+					quoteshellarg($v_domain) .
+					" awstats",
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			$v_stats = "awstats";
+		}
 	}
 
 	// Change web stats user or password

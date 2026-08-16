@@ -462,6 +462,30 @@ check_v_symlinks_resolve() {
 	fi
 }
 
+# check_panel_locale - the FPM pools pin env[LANG] so a child does not inherit whatever the admin's
+# base install happens to have. Pinning a locale that is not generated is the same failure with more
+# confidence: every child that touches locale warns, and awstats' perl warnings land in the panel log
+# (that is how this was found). The expected value is READ FROM the deployed pool, not written here,
+# so changing the pin cannot leave the check testing yesterday's value.
+# NOT covered: locales a customer's own PHP or a cron job sets for itself.
+check_panel_locale() {
+	local pool=/etc/php/hestia/fpm/pool.d/panel.conf want
+	if [ ! -f "$pool" ]; then
+		no "panel FPM locale" "$pool missing - nothing pins env[LANG]"
+		return
+	fi
+	want=$(sed -n 's/^env\[LANG\][[:space:]]*=[[:space:]]*//p' "$pool" | tail -n1)
+	if [ -z "$want" ]; then
+		no "panel FPM locale" "no env[LANG] in $pool - the child inherits whatever is around"
+		return
+	fi
+	if locale -a 2> /dev/null | grep -qiFx "$(echo "$want" | tr -d '-' | tr '[:upper:]' '[:lower:]')"; then
+		ok "panel FPM locale $want is generated"
+	else
+		no "panel FPM locale $want is NOT generated" "children warn on every locale-aware call"
+	fi
+}
+
 # check_sbin_not_under_bin - nothing may invoke an sbin command through a bin/ path. The sbin split
 # (#209) moved the panel-PHP wrappers and the lifecycle commands out of the sudo wildcard's reach;
 # callers referencing them as "$BIN/x" kept resolving to a file that is no longer there, and the
@@ -1006,13 +1030,13 @@ fi
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	check_webmail_payload roundcube /etc/roundcube/config.inc.php
-	check_socket /run/hestia-webmail-rc.sock "roundcube FPM"
+	check_socket /run/hestia-webmail-roundcube.sock "roundcube FPM"
 	check_http "http://127.0.0.1:8090/" "roundcube internal listener"
 fi
-if echo "$WEBMAIL_SYSTEM" | grep -qw 'snappymail'; then
-	check_webmail_payload snappymail /etc/snappymail/data/VERSION
-	check_socket /run/hestia-webmail-sm.sock "snappymail FPM"
-	check_http "http://127.0.0.1:8091/" "snappymail internal listener"
+if echo "$WEBMAIL_SYSTEM" | grep -qw 'tachyon'; then
+	check_webmail_payload tachyon /etc/tachyon/data/VERSION
+	check_socket /run/hestia-webmail-tachyon.sock "tachyon FPM"
+	check_http "http://127.0.0.1:8091/" "tachyon internal listener"
 fi
 # redis: user's DB choice or rspamd's always-present Bayes companion
 if is_on "${COMPONENT_DB_REDIS:-}" || [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then
@@ -1099,6 +1123,8 @@ check_xaccel_allowlist "$HESTIA/web"
 check_v_symlinks_resolve
 # an sbin command called through a bin/ path resolves to nothing (the sbin split, #209).
 check_sbin_not_under_bin
+# a pinned locale that is not generated makes every locale-aware child warn.
+check_panel_locale
 # a policy fragment (crowdsec Layer A, bot rate limiting) missing from one template is a silent bypass.
 check_policy_fragment_coverage
 # a cache flag without its zone (or a 0-byte vhost) fails silently until the next reload.

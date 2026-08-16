@@ -1,22 +1,22 @@
 <?php
 
-$_ENV["SNAPPYMAIL_INCLUDE_AS_API"] = true;
-require_once "/var/lib/snappymail/index.php";
+$_ENV["TACHYON_INCLUDE_AS_API"] = true;
+require_once "/var/lib/tachyon/index.php";
 
-$oConfig = \RainLoop\Api::Config();
+$oConfig = \Tachyon\Api::Config();
 
 // Change default login data / key
 $oConfig->Set("security", "admin_login", $argv[1]);
 $oConfig->Set("security", "admin_panel_key", $argv[2]);
-$newPassword = new \SnappyMail\SensitiveString($argv[3]);
+$newPassword = new \Tachyon\Util\SensitiveString($argv[3]);
 $oConfig->SetPassword($newPassword);
 
 // Allow Contacts to be saved in database
 $oConfig->Set("contacts", "enable", "On");
 $oConfig->Set("contacts", "allow_sync", "On");
 $oConfig->Set("contacts", "type", "mysql");
-$oConfig->Set("contacts", "pdo_dsn", "mysql:host=127.0.0.1;port=3306;dbname=snappymail");
-$oConfig->Set("contacts", "pdo_user", "snappymail");
+$oConfig->Set("contacts", "pdo_dsn", "mysql:host=127.0.0.1;port=3306;dbname=tachyon");
+$oConfig->Set("contacts", "pdo_user", "tachyon");
 $oConfig->Set("contacts", "pdo_password", $argv[4]);
 
 // Failed-login logging for the fail2ban webmail jail. auth_logging_filename has no {date} token on
@@ -26,14 +26,15 @@ $oConfig->Set("contacts", "pdo_password", $argv[4]);
 // header; the webmail vhost sets Client-IP to the real client (X-Forwarded-For is clobbered downstream).
 $oConfig->Set("logs", "auth_logging", "On");
 $oConfig->Set("logs", "auth_logging_filename", "fail2ban/auth.txt");
-$oConfig->Set("logs", "path", "/var/log/snappymail");
+$oConfig->Set("logs", "path", "/var/log/tachyon");
 $oConfig->Set("labs", "http_client_ip_check_proxy", true);
 
-// Plugins
+// Plugins are unpacked by h-add-sys-tachyon as pinned, sha256-verified release assets
+// (share/manifest.json tachyon_plugins). Repository::installPackage is deliberately not
+// used: it fetches packages.json from Tachyon's master branch at install time - a moving
+// address - and change-password-hestia is the component that changes system passwords.
+// This file only writes their config and enables them.
 $oConfig->Set("plugins", "enable", "On");
-
-\SnappyMail\Repository::installPackage("plugin", "change-password");
-\SnappyMail\Repository::installPackage("plugin", "change-password-hestia");
 
 $sFile = APP_PRIVATE_DATA . "configs/plugin-change-password.json";
 if (!file_exists($sFile)) {
@@ -49,7 +50,7 @@ if (!file_exists($sFile)) {
 					"hestia_host" => gethostname(),
 					// $argv[5] = $BACKEND_PORT - NOT $argv[4], which is the DB
 					// password (that off-by-one shipped the DB password as the
-					// panel port and broke password changes from SnappyMail, #234)
+					// panel port and broke password changes from the webmailer, #234)
 					"hestia_port" => $argv[5],
 				],
 			],
@@ -57,10 +58,9 @@ if (!file_exists($sFile)) {
 		),
 	);
 }
-\SnappyMail\Repository::enablePackage("change-password");
+\Tachyon\Util\Repository::enablePackage("change-password");
 
-\SnappyMail\Repository::installPackage("plugin", "add-x-originating-ip-header");
-\SnappyMail\Repository::enablePackage("add-x-originating-ip-header");
+\Tachyon\Util\Repository::enablePackage("add-x-originating-ip-header");
 $sFile = APP_PRIVATE_DATA . "configs/plugin-add-x-originating-ip-header.json";
 if (!file_exists($sFile)) {
 	file_put_contents(

@@ -255,9 +255,6 @@ if (!empty($_POST["ok_acc"])) {
 	if (empty($_POST["v_quota"])) {
 		$v_quota = 0;
 	}
-	if (!empty($_POST["v_quota"]) || !empty($_POST["v_aliases"]) || !empty($_POST["v_fwd"])) {
-		$v_adv = "yes";
-	}
 
 	// Add Mail Account
 	if (empty($_SESSION["error_msg"])) {

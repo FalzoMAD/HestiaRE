@@ -404,12 +404,12 @@ function syshealth_repair_system_config() {
 	# Presence only, and not repair_key: the delete commands empty this key deliberately, so a repair
 	# keyed on emptiness would advertise a webmail that is no longer installed. When the key is
 	# genuinely absent the value is assembled from what is on disk - both clients, not just
-	# roundcube: a snappymail box with no key was answered with '' and lost its webmail that way.
+	# roundcube: a tachyon box with no key was answered with '' and lost its webmail that way.
 	# Markers taken from the delete commands, which decide the same question.
 	if [[ -z $(check_key_exists 'WEBMAIL_SYSTEM') ]]; then
 		found=""
 		[ -d "/var/lib/roundcube" ] && found="roundcube"
-		[ -f "/var/lib/snappymail/data/VERSION" ] && found="${found:+$found,}snappymail"
+		[ -f "/var/lib/tachyon/data/VERSION" ] && found="${found:+$found,}tachyon"
 		echo "[ ! ] Adding missing variable to hestia.conf: WEBMAIL_SYSTEM ('$found')"
 		$BIN/h-change-sys-config-value "WEBMAIL_SYSTEM" "$found"
 		unset found
@@ -452,7 +452,7 @@ function syshealth_repair_system_config() {
 	# Allow users to delete details
 	repair_key 'POLICY_USER_EDIT_DETAILS' 'yes'
 	# Allow users to edit web templates
-	repair_key 'POLICY_USER_EDIT_WEB_TEMPLATES' 'yes'
+	repair_key 'POLICY_USER_EDIT_WEB_TEMPLATES' 'no'
 	# View user logs
 	repair_key 'POLICY_USER_VIEW_LOGS' 'yes'
 	# Allow users to login (read only) when suspended
