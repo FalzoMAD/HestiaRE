@@ -638,8 +638,7 @@ fn_ask_components() {
             continue
         fi
 
-        # implicit: fully preset-derived, never asked (the custom preset that turned these
-        # into real questions is gone on purpose, #195 - install.conf by hand is the escape)
+        # implicit: always preset-derived, never asked (escape hatch: hand-written install.conf)
         if [ "$type" = "implicit" ]; then
             COMP_VALUES["$id"]="$(fn_component_default "$id" "$INSTALL_PROFILE")"
             continue

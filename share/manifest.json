@@ -19,7 +19,7 @@
     "php_supported": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
   },
 
-  "$comment_presets": "No custom preset on purpose (#195): the standard path already asks everything relevant and the other presets carry their specialities. A config beyond every preset = write /etc/hestia/install.conf by hand and run h-install-hestia. NOTE for consumers: wizard menu and validation iterate .presets keys verbatim - never put $-comment keys INSIDE the object.",
+  "$comment_presets": "No custom preset on purpose: a config beyond every preset = write /etc/hestia/install.conf by hand and run h-install-hestia. Never put $-comment keys INSIDE .presets - menu and validation iterate its keys verbatim.",
   "presets": {
     "standard":  { "label": "Standard (full hosting + full mail + DB + MultiPHP + addons)" },
     "compact":   { "label": "Compact (nginx only, leaner addon selection)" },
