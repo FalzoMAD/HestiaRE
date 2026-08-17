@@ -302,6 +302,16 @@ fetch_wp_cli_phar() {
 	chmod 755 "$dest"
 }
 
+# The webmail sqlite backend needs its driver in the PANEL pool. Heals the one known ordering
+# gap (package landed after hestia-php-confd built the conf.d, #684) by rebuilding once and
+# reloading; a genuinely missing package stays the caller's hard failure.
+ensure_panel_sqlite_driver() {
+	ls /etc/php/hestia/fpm/conf.d/*-pdo_sqlite.ini > /dev/null 2>&1 && return 0
+	"$HESTIA/sbin/hestia-php-confd" > /dev/null 2>&1
+	systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
+	ls /etc/php/hestia/fpm/conf.d/*-pdo_sqlite.ini > /dev/null 2>&1
+}
+
 # The webmail clients this codebase ships (#584). ONE list on purpose: the write-path value
 # domain (h-add-mail-domain-webmail) reads it, and h-check-sys-smoke asserts every shipped
 # webmail template's client appears here - a third client added by template alone would
