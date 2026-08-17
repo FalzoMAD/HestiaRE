@@ -157,7 +157,7 @@
     "DB_MARIADB": {
       "group": "db",
       "type": "checkbox",
-      "fixed_no_prompt": { "mailonly": true },
+      "fixed_no_prompt": { "mailonly": false },
       "label": "MariaDB",
       "description": "MySQL-compatible DB server (incl. phpMyAdmin)",
       "question": "Install MariaDB?",
@@ -167,9 +167,9 @@
         "latest":    true,
         "singlephp": true,
         "nomail":    true,
-        "mailonly":  true
+        "mailonly":  false
       },
-      "note": "DB server engine. Shown together with DB_POSTGRESQL + DB_REDIS as a shared multi-select screen (group 'db' in grouped_prompts). phpMyAdmin follows implicitly (DB_PHPMYADMIN, type derived)."
+      "note": "DB server engine. Shown together with DB_POSTGRESQL + DB_REDIS as a shared multi-select screen (group 'db' in grouped_prompts). phpMyAdmin follows implicitly (DB_PHPMYADMIN, type derived). Fixed OFF on mailonly since the sqlite webmail backend: the webmailers were the only MySQL consumer in the mail stack. h-add-sys-mariadb retrofits; existing webmailers keep their recorded sqlite backend."
     },
 
     "DB_POSTGRESQL": {

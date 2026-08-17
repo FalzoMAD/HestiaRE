@@ -14,6 +14,12 @@ opens above it.
 
 ### Fixed
 
+- **mailonly no longer force-installs a MariaDB server** (#689). The forced install predated
+  the sqlite webmail backend, whose whole point removed the only MySQL consumer in the mail
+  stack (exim/dovecot/rspamd/fail2ban never spoke MySQL, phpMyAdmin was already off). The
+  webmailers run on sqlite now; h-add-sys-mariadb retrofits a box, existing webmailers keep
+  their recorded backend.
+
 - **The no-MariaDB webmail backend died on a genuinely fresh install** (#684): install_panel
   built the panel pool's conf.d before php-sqlite3 existed (the package only arrived later via
   h-add-web-php, and nothing rebuilds the conf.d), so the strict roundcube sqlite seed failed
