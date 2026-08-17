@@ -883,9 +883,13 @@ install_tools() {
 	if is_on "${COMPONENT_ADDON_COMPOSER:-true}"; then
 		echo "[ * ] Installing composer (system-wide)..."
 		if ! command -v composer > /dev/null 2>&1; then
+			# bounded like every install-path download - the php copy() calls this replaces had
+			# no timeout at all (a dropped SYN was a silent multi-minute hang, #237)
 			local EXPECTED_CHECKSUM ACTUAL_CHECKSUM
-			EXPECTED_CHECKSUM="$(php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");')"
-			php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+			EXPECTED_CHECKSUM="$(curl -fsS --max-time 30 https://composer.github.io/installer.sig)" \
+				|| { echo "ERROR: could not fetch the composer installer signature"; exit 1; }
+			wget https://getcomposer.org/installer --timeout=30 --tries=3 --retry-connrefused --quiet -O composer-setup.php \
+				|| { rm -f composer-setup.php; echo "ERROR: could not download the composer installer"; exit 1; }
 			ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
 			if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
 				rm -f composer-setup.php
@@ -900,15 +904,16 @@ install_tools() {
 			composer self-update --quiet 2>/dev/null || true
 		fi
 	fi
-	echo "[ * ] Installing wp-cli (system-wide)..."
+	echo "[ * ] Installing wp-cli (system-wide, pinned)..."
+	# pinned + sha256-verified release phar (fetch_wp_cli_phar), never the moving gh-pages
+	# build address and never `wp cli update` - a re-run converges to the manifest pin (#237)
 	if ! command -v wp > /dev/null 2>&1; then
-		curl -fsLo /usr/local/bin/wp \
-			https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-		chmod +x /usr/local/bin/wp
+		fetch_wp_cli_phar /usr/local/bin/wp \
+			|| { echo "ERROR: could not fetch/verify the pinned wp-cli phar"; exit 1; }
 		echo "  wp-cli installed"
 	else
-		echo "  wp-cli already present — upgrading"
-		wp --allow-root cli update --quiet 2>/dev/null || true
+		echo "  wp-cli already present — re-pinning"
+		fetch_wp_cli_phar /usr/local/bin/wp || echo "  WARN: could not refresh wp-cli, keeping the present one"
 	fi
 	echo "[ OK ] tools complete"
 }

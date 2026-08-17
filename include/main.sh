@@ -282,6 +282,26 @@ get_user_owner() {
 	fi
 }
 
+# Fetch the wp-cli phar pinned in share/manifest.json (version + sha256) into $1 - never the
+# moving gh-pages build address, never unverified: the phar runs as every customer (#237).
+# Bounded download, leaves no partial file behind; caller owns chown of the destination.
+fetch_wp_cli_phar() {
+	local dest="$1" ver sum tmp
+	ver=$(manifest_get '.software_versions.wp_cli.version')
+	sum=$(manifest_get '.software_versions.wp_cli.sha256')
+	{ [ -n "$ver" ] && [ "$ver" != "null" ] && [ -n "$sum" ] && [ "$sum" != "null" ]; } || return 1
+	tmp=$(mktemp -t wp-cli.XXXXXX.phar) || return 1
+	if ! wget "https://github.com/wp-cli/wp-cli/releases/download/v${ver}/wp-cli-${ver}.phar" \
+		--timeout=30 --tries=3 --retry-connrefused --quiet -O "$tmp" \
+		|| [ ! -s "$tmp" ] \
+		|| ! echo "$sum  $tmp" | sha256sum -c --quiet - 2> /dev/null; then
+		rm -f "$tmp"
+		return 1
+	fi
+	mv -f "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+	chmod 755 "$dest"
+}
+
 # The webmail clients this codebase ships (#584). ONE list on purpose: the write-path value
 # domain (h-add-mail-domain-webmail) reads it, and h-check-sys-smoke asserts every shipped
 # webmail template's client appears here - a third client added by template alone would
