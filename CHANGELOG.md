@@ -36,23 +36,43 @@ opens above it.
   address. No migration for existing SnappyMail installs on purpose (fresh installs only
   before v1).
 
+- **Webmailers no longer require MariaDB - SQLite is the recorded fallback backend** (#584).
+  Deselecting MariaDB in the wizard used to kill the install in the mail stage (Roundcube's
+  DB abort under set -e) or drop Tachyon loudly. Now both add commands decide the backend
+  ONCE at install time and record it in the app's own config, which every later path reads:
+  MySQL when the box has it (unchanged), otherwise SQLite - `roundcube-sqlite3` from the OS
+  repo for Roundcube, Tachyon's own shipped default (`AddressBook.sqlite`) for Tachyon. No
+  second MariaDB source, no extra daemon. A MariaDB added later never flips an existing
+  install (no silent contact-data migration; switching = reinstalling the webmailer), and
+  `hestia update` stays aware of the exception through the artefact: where an app config
+  records sqlite, `h-check-sys-smoke` pins the PHP driver as a hard failure. `php-sqlite3`
+  joins the standard PHP extension set; sqlite3/pdo_sqlite join the curated webmail pool
+  set as optional (a one-minor-back box updating in lacks the package - the smoke check,
+  not confd, owns that failure). Delete commands handle both backends.
+
 - **Both webmailers at once, chosen per mail domain** (#584). The runtime always supported
   coexistence - `WEBMAIL_SYSTEM` is a token list, each client has its own loopback listener
   (:8090/:8091) and FPM socket, the panel's per-domain "Webmail Client" select and the vhost
-  proxy chain were already in place. What was missing was the entry path: the wizard's "Both"
-  option, and `COMPONENT_MAIL_WEBMAILER` becomes a token set (`ROUNDCUBE,TACHYON`) rather than
-  a BOTH enum - the record and the component now say the same thing in the same shape, and a
-  third client is one more token, not a renamed enum. The installer runs one gated block per
-  client (Roundcube fatal like alone, Tachyon non-fatal and loud, with the recorded component
-  narrowed to the truth on failure); the add/delete commands widen/narrow the set instead of
-  overwriting it. Two write-path fixes that the second client exposed: the CLI default for a
+  proxy chain were already in place. What was missing was the entry path: the wizard question
+  is now a checklist - one row per client, each freely on/off - instead of a radio whose option
+  list would double with every new client (Roundcube preselected everywhere, mailonly preselects
+  both, empty selection = no webmail). `COMPONENT_MAIL_WEBMAILER` is the matching token set
+  (`ROUNDCUBE,TACHYON`, empty = none) rather than a BOTH/NONE enum - the record and the
+  component say the same thing in the same shape, and a third client is one more checklist row
+  and one more token. The generic wizard checklist learned radio's option objects
+  (label/description) and a `value_join` so a component can declare its separator. The
+  installer runs one gated block per client (Roundcube fatal like alone, Tachyon non-fatal and
+  loud, with the recorded component narrowed to the truth on failure); the add/delete commands
+  widen/narrow the set instead of overwriting it. Two write-path fixes that the second client exposed: the CLI default for a
   new mail domain now matches the panel's documented preselect (Roundcube when installed, else
   the first client - a product decision, recorded as such) instead of accidentally taking the
   last token, and unsuspending a mail domain restores the domain's own recorded client instead
   of rewriting it to that same last token. The `WEBMAIL` record's value domain is now decided
-  and enforced on write: `''`, `disabled`, or an installed client token - anything else (a
-  removed client, legacy `snappymail`) is normalized to `disabled` loudly, so rebuilds converge
-  stale records; the render-time degradation stays as the safety net.
+  and enforced on write: `''`, `disabled`, or a KNOWN client name - known statically, not by
+  install state, so a client that is merely absent (its own delete/re-add window, a
+  backend-switch reinstall) keeps its record, renders degraded and heals when it returns.
+  Only values outside the domain (legacy `snappymail`, typos) normalize to `disabled` loudly;
+  the render-time degradation stays as the safety net.
 
 - **Edit-user gets the same toolbar treatment as edit-web, and a new order** (#621). The "Advanced
   Options" button moves into the toolbar next to Save, the fold animates, and a second Save sits at

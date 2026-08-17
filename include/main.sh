@@ -282,7 +282,16 @@ get_user_owner() {
 	fi
 }
 
-# Random password generator
+# The webmail clients this codebase ships (#584). ONE list on purpose: the write-path value
+# domain (h-add-mail-domain-webmail) reads it, and h-check-sys-smoke asserts every shipped
+# webmail template's client appears here - a third client added by template alone would
+# otherwise have its records normalized to 'disabled' while everything else works.
+WEBMAIL_KNOWN_CLIENTS='roundcube tachyon'
+
+# Random password generator. The default matrix (A-Za-z0-9) is deliberately safe on the
+# REPLACEMENT side of sed (no /, &, \) - several callers substitute the result into config
+# files that way (roundcube dbpass/des_key, tachyon). A custom matrix must keep that property
+# or those call sites corrupt their configs silently.
 generate_password() {
 	matrix=$1
 	length=$2

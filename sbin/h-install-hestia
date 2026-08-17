@@ -557,11 +557,13 @@ install_mail() {
 		"$BIN/h-add-sys-clamav" >> "$LOG" 2>&1 || true
 	fi
 
-	# Webmailer choice: COMPONENT_MAIL_WEBMAILER is a token set (ROUNDCUBE and/or TACHYON,
-	# or NONE), not an enum - one gated block per client so a third client is one more block.
+	# Webmailer choice: COMPONENT_MAIL_WEBMAILER is a token set (ROUNDCUBE and/or TACHYON;
+	# empty = none), not an enum - one gated block per client so a third client is one more block.
+	# ${:-} equates an explicitly empty value with an absent key ON PURPOSE: both mean "no
+	# webmailer" here, and nothing downstream needs the asked-vs-never-asked distinction.
 	local wm_rc=no wm_tx=no
-	case ",${COMPONENT_MAIL_WEBMAILER:-NONE}," in *,ROUNDCUBE,*) wm_rc=yes ;; esac
-	case ",${COMPONENT_MAIL_WEBMAILER:-NONE}," in *,TACHYON,*) wm_tx=yes ;; esac
+	case ",${COMPONENT_MAIL_WEBMAILER:-}," in *,ROUNDCUBE,*) wm_rc=yes ;; esac
+	case ",${COMPONENT_MAIL_WEBMAILER:-}," in *,TACHYON,*) wm_tx=yes ;; esac
 	if [ "$wm_rc" = yes ]; then
 		wcv "WEBMAIL_SYSTEM" "roundcube"; wcv "WEBMAIL_ALIAS" "webmail"
 		echo "[ * ] Installing Roundcube..."
@@ -581,7 +583,7 @@ install_mail() {
 			if [ "$wm_rc" = yes ]; then
 				set_install_component MAIL_WEBMAILER ROUNDCUBE
 			else
-				set_install_component MAIL_WEBMAILER NONE
+				set_install_component MAIL_WEBMAILER ""
 			fi
 		fi
 	fi
@@ -1011,9 +1013,11 @@ configure_hestia
 install_tools
 finalize_install
 
-# Post-install smoke test — report only, never aborts a completed install (#221).
+# Post-install smoke test — report only, never aborts a completed install (#221). tee'd into the
+# log so a transient failure keeps its NAME: a checker that occasionally goes red without saying
+# which check is the one everybody learns to ignore.
 echo ""
-"$BIN/h-check-sys-smoke" || echo "[ ! ] Smoke test reported failures — review the output above."
+"$BIN/h-check-sys-smoke" 2>&1 | tee -a "$LOG" || echo "[ ! ] Smoke test reported failures — see above (kept in $LOG)."
 
 log_event "$OK" "$ARGUMENTS"
 exit 0

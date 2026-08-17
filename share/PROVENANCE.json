@@ -1820,6 +1820,15 @@
       "note": "basename-matched (path reorg by #119); confirm origin"
     },
     {
+      "path": "roundcube/systemd-caddy.conf",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-16",
+      "divergence": null,
+      "note": "User=caddy drop-in for the packaged roundcube maintenance timers (#584)"
+    },
+    {
       "path": "rspamd/caddy-service.d/rspamd-ctrl.conf",
       "source_type": "eigenbau",
       "upstream_path": null,

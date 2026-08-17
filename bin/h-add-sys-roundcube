@@ -32,17 +32,24 @@ fi
 
 if [ -z "$HESTIA" ]; then HESTIA="/usr/local/hestia"; fi
 
-if ! echo "$DB_SYSTEM" | grep -qw 'mysql'; then
-	echo "ERROR: MySQL not available. Installation aborted."
-	exit 2
+# DB backend, decided ONCE here and recorded in the written config (the artefact every
+# later path reads): MySQL when the box has it, otherwise SQLite (roundcube-sqlite3 from
+# the OS repo - one file, no daemon). A MariaDB added later never flips an existing
+# install - no silent data migration; switching means reinstalling the webmailer (#584).
+RC_DB_BACKEND="sqlite"
+RC_DB_PKG="roundcube-sqlite3"
+if echo "$DB_SYSTEM" | grep -qw 'mysql'; then
+	RC_DB_BACKEND="mysql"
+	RC_DB_PKG="roundcube-mysql"
+else
+	echo "NOTE: no MySQL/MariaDB on this box - Roundcube uses the SQLite backend"
 fi
 
 check_hestia_demo_mode
 
-# Already installed?
+# Already installed? config.inc.php is the artefact both backends write.
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube' \
-	&& [ -f "$RC_CONFIG_DIR/config.inc.php" ] \
-	&& [ -f "$RC_CONFIG_DIR/debian-db.php" ]; then
+	&& [ -f "$RC_CONFIG_DIR/config.inc.php" ]; then
 	echo "INFO: Roundcube is already installed and configured."
 	exit 0
 fi
@@ -56,33 +63,34 @@ echo "roundcube-core roundcube/dbconfig-install boolean false" \
 	| debconf-set-selections
 
 DEBIAN_FRONTEND=noninteractive apt-get -y install \
-	roundcube roundcube-mysql roundcube-plugins
+	roundcube "$RC_DB_PKG" roundcube-plugins
 
-# Create dedicated MySQL database and user
-dbpass=$(generate_password)
-db_client="mysql"
-[ -x /usr/bin/mariadb ] && db_client="mariadb"
+if [ "$RC_DB_BACKEND" = "mysql" ]; then
+	# Create dedicated MySQL database and user
+	dbpass=$(generate_password)
+	db_client="mysql"
+	[ -x /usr/bin/mariadb ] && db_client="mariadb"
 
-# bail on a foreign 'roundcube' DB - CREATE IF NOT EXISTS would adopt it and write
-# a mismatched password, leaving a silently-broken config
-if $db_client -e "SHOW DATABASES LIKE 'roundcube'" 2>/dev/null | grep -q 'roundcube'; then
-	echo "ERROR: Database 'roundcube' already exists but is not managed by this HestiaRE instance."
-	echo "       Remove it manually first, or run h-delete-sys-roundcube if it was a previous install."
-	exit 1
-fi
+	# bail on a foreign 'roundcube' DB - CREATE IF NOT EXISTS would adopt it and write
+	# a mismatched password, leaving a silently-broken config
+	if $db_client -e "SHOW DATABASES LIKE 'roundcube'" 2>/dev/null | grep -q 'roundcube'; then
+		echo "ERROR: Database 'roundcube' already exists but is not managed by this HestiaRE instance."
+		echo "       Remove it manually first, or run h-delete-sys-roundcube if it was a previous install."
+		exit 1
+	fi
 
-$db_client -e "CREATE DATABASE IF NOT EXISTS \`roundcube\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" \
-	|| { echo "ERROR: Failed to create roundcube database"; exit 1; }
-$db_client -e "CREATE USER IF NOT EXISTS 'roundcube'@'localhost' IDENTIFIED BY '$dbpass'" \
-	|| { echo "ERROR: Failed to create roundcube database user"; exit 1; }
-$db_client -e "GRANT ALL ON \`roundcube\`.* TO 'roundcube'@'localhost'" \
-	|| { echo "ERROR: Failed to grant roundcube database privileges"; exit 1; }
-$db_client -e "FLUSH PRIVILEGES"
-$db_client roundcube < /usr/share/roundcube/SQL/mysql.initial.sql \
-	|| { echo "ERROR: Failed to initialize roundcube database schema"; exit 1; }
+	$db_client -e "CREATE DATABASE IF NOT EXISTS \`roundcube\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" \
+		|| { echo "ERROR: Failed to create roundcube database"; exit 1; }
+	$db_client -e "CREATE USER IF NOT EXISTS 'roundcube'@'localhost' IDENTIFIED BY '$dbpass'" \
+		|| { echo "ERROR: Failed to create roundcube database user"; exit 1; }
+	$db_client -e "GRANT ALL ON \`roundcube\`.* TO 'roundcube'@'localhost'" \
+		|| { echo "ERROR: Failed to grant roundcube database privileges"; exit 1; }
+	$db_client -e "FLUSH PRIVILEGES"
+	$db_client roundcube < /usr/share/roundcube/SQL/mysql.initial.sql \
+		|| { echo "ERROR: Failed to initialize roundcube database schema"; exit 1; }
 
-# debian-db.php (read by roundcube-core via debian-db-roundcube.php for the DSN)
-cat > "$RC_CONFIG_DIR/debian-db.php" <<'PHP'
+	# debian-db.php (read by roundcube-core via debian-db-roundcube.php for the DSN)
+	cat > "$RC_CONFIG_DIR/debian-db.php" <<'PHP'
 <?php
 $dbtype='mysql';
 $dbserver='localhost';
@@ -93,16 +101,52 @@ $dbpass='_RCPASS_';
 $basepath='/var/lib/roundcube';
 ?>
 PHP
-sed -i "s/_RCPASS_/$dbpass/" "$RC_CONFIG_DIR/debian-db.php"
-chmod 640 "$RC_CONFIG_DIR/debian-db.php"
-chown root:caddy "$RC_CONFIG_DIR/debian-db.php"
+	sed -i "s/_RCPASS_/$dbpass/" "$RC_CONFIG_DIR/debian-db.php"
+	chmod 640 "$RC_CONFIG_DIR/debian-db.php"
+	chown root:caddy "$RC_CONFIG_DIR/debian-db.php"
+else
+	# caddy-owned dir, not just the file: sqlite needs write on the DIRECTORY (journal/wal)
+	mkdir -p /var/lib/roundcube/db
+	chown caddy:caddy /var/lib/roundcube/db
+	chmod 750 /var/lib/roundcube/db
+	# Seed the schema NOW, as caddy, with a hard failure - symmetric to the mysql branch's
+	# mysql.initial.sql import. Roundcube would also self-initialize on the first HTTP hit,
+	# but then the install ends green without anything ever having touched the database,
+	# and the first proof lands on the first customer visit. Seeded with the SAME PHP the
+	# pool serves with (pinned version + the pool's curated ini chain), not whatever CLI php
+	# the PATH offers - the proof must exercise the chain that carries the traffic afterwards.
+	if [ ! -s /etc/php/hestia/php-version ]; then
+		echo "ERROR: no pinned panel PHP (/etc/php/hestia/php-version) - is the panel stage done?"
+		exit 1
+	fi
+	panel_php="php$(cat /etc/php/hestia/php-version)"
+	runuser -u caddy -- env PHP_INI_SCAN_DIR=/etc/php/hestia/fpm/conf.d "$panel_php" -r '
+		$pdo = new PDO("sqlite:/var/lib/roundcube/db/roundcube.db");
+		$pdo->exec(file_get_contents("/usr/share/roundcube/SQL/sqlite.initial.sql"));
+		$n = $pdo->query("SELECT count(*) FROM sqlite_master")->fetchColumn();
+		if ($n < 1) { fwrite(STDERR, "no schema objects after import\n"); exit(1); }
+		echo "roundcube sqlite schema: $n objects\n";
+	' || { echo "ERROR: Failed to initialize roundcube sqlite schema"; exit 1; }
+	chmod 640 /var/lib/roundcube/db/roundcube.db
+fi
 
 # Generate encryption key and write main config
 des_key="$(openssl rand -base64 30 | tr -d '/' | cut -c1-24)"
-cat > "$RC_CONFIG_DIR/config.inc.php" <<'PHP'
+if [ "$RC_DB_BACKEND" = "mysql" ]; then
+	cat > "$RC_CONFIG_DIR/config.inc.php" <<'PHP'
 <?php
 // DB connection via Debian package mechanism (/etc/roundcube/debian-db.php)
 include('/etc/roundcube/debian-db-roundcube.php');
+PHP
+else
+	cat > "$RC_CONFIG_DIR/config.inc.php" <<'PHP'
+<?php
+// SQLite backend (no MariaDB on the box when Roundcube was installed). This line IS the
+// recorded backend decision - a later MariaDB install must never rewrite it (#584).
+$config['db_dsnw'] = 'sqlite:////var/lib/roundcube/db/roundcube.db?mode=0640';
+PHP
+fi
+cat >> "$RC_CONFIG_DIR/config.inc.php" <<'PHP'
 
 $config['imap_host'] = 'localhost:143';
 $config['smtp_host'] = 'localhost:587';
@@ -129,7 +173,9 @@ $config['smtp_conn_options'] = ['ssl' => [
 ]];
 PHP
 sed -i "s/_DES_KEY_/$des_key/" "$RC_CONFIG_DIR/config.inc.php"
-chmod 644 "$RC_CONFIG_DIR/config.inc.php"
+# 640 like debian-db.php: the des_key encrypts the IMAP credentials in the session cookie -
+# a secret of the same class as the DB password, and shell customers must not read it.
+chmod 640 "$RC_CONFIG_DIR/config.inc.php"
 chown root:caddy "$RC_CONFIG_DIR/config.inc.php"
 
 # HestiaRE password driver. Extra files in apt-managed dirs survive upgrades -
@@ -156,6 +202,14 @@ cp -f "$HESTIA/share/roundcube/plugins/config_newmail_notifier.inc.php" \
 cp -f "$HESTIA/share/roundcube/plugins/config_zipdownload.inc.php" \
 	"/usr/share/roundcube/plugins/zipdownload/config.inc.php"
 
+# The packaged maintenance timers (gc half-hourly, cleandb daily) run as www-data, which owns
+# none of our caddy-held state - see share/roundcube/systemd-caddy.conf. The cron.d fallback
+# lines stay as shipped: they are no-ops wherever PID1 is systemd, i.e. on every target.
+mkdir -p /etc/systemd/system/roundcube-gc.service.d /etc/systemd/system/roundcube-cleandb.service.d
+cp -f "$HESTIA/share/roundcube/systemd-caddy.conf" /etc/systemd/system/roundcube-gc.service.d/hestia.conf
+cp -f "$HESTIA/share/roundcube/systemd-caddy.conf" /etc/systemd/system/roundcube-cleandb.service.d/hestia.conf
+systemctl daemon-reload
+
 # Ensure log directory exists with correct ownership
 mkdir -p /var/log/roundcube
 chown caddy:caddy /var/log/roundcube
@@ -164,8 +218,10 @@ chmod 750 /var/log/roundcube
 cp -f "$HESTIA/share/roundcube/logrotate" /etc/logrotate.d/roundcube
 
 # Panel-Caddy delivery: caddy FPM pool behind the :8090 loopback listener; the
-# temp dir must be writable by the pool user (Debian ships it www-data-owned)
-chown caddy:caddy /var/lib/roundcube/temp 2> /dev/null || true
+# temp dir must be writable by the pool user (Debian ships it www-data-owned).
+# Loud on purpose: a swallowed chown here is a webmail that breaks on first upload.
+mkdir -p /var/lib/roundcube/temp
+chown caddy:caddy /var/lib/roundcube/temp || { echo "ERROR: cannot chown roundcube temp dir"; exit 1; }
 cp -f "$HESTIA/share/panel-php/pool.d/roundcube.conf" /etc/php/hestia/fpm/pool.d/roundcube.conf
 systemctl reload hestia-php 2> /dev/null || systemctl restart hestia-php 2> /dev/null || true
 cp -f "$HESTIA/share/panel-caddy/webmail-roundcube.conf" /etc/caddy/webmail-roundcube.conf
@@ -175,8 +231,8 @@ mkdir -p /etc/caddy/apps
 cp -f "$HESTIA/share/panel-caddy/apps/webmail.tpl" /etc/caddy/apps/webmail.conf
 systemctl try-restart caddy > /dev/null 2>&1 || true
 
-# Update hestia.conf
-if [ -z "$(grep WEBMAIL_SYSTEM "$HESTIA/conf/hestia.conf")" ]; then
+# Update hestia.conf (anchored: an unanchored grep also matches keys that merely start so)
+if ! grep -q '^WEBMAIL_SYSTEM=' "$HESTIA/conf/hestia.conf"; then
 	$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' 'roundcube'
 elif ! echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	if [ -n "$WEBMAIL_SYSTEM" ]; then

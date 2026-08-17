@@ -43,19 +43,23 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Remove packages
+# Remove packages (both DB backend variants listed - only the installed one is purged)
 DEBIAN_FRONTEND=noninteractive apt-get -y purge \
-	roundcube roundcube-core roundcube-mysql roundcube-plugins
+	roundcube roundcube-core roundcube-mysql roundcube-sqlite3 roundcube-plugins
 DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
 
 # INTENTIONAL DATA LOSS: the roundcube DB (UI prefs + contacts, NOT mail - that
 # lives in Dovecot) is dropped; no migration across a delete/re-add cycle.
-db_client="mysql"
-[ -x /usr/bin/mariadb ] && db_client="mariadb"
+if echo "$DB_SYSTEM" | grep -qw 'mysql'; then
+	db_client="mysql"
+	[ -x /usr/bin/mariadb ] && db_client="mariadb"
 
-$db_client -e "DROP DATABASE IF EXISTS \`roundcube\`"
-$db_client -e "DROP USER IF EXISTS 'roundcube'@'localhost'"
-$db_client -e "FLUSH PRIVILEGES"
+	$db_client -e "DROP DATABASE IF EXISTS \`roundcube\`"
+	$db_client -e "DROP USER IF EXISTS 'roundcube'@'localhost'"
+	$db_client -e "FLUSH PRIVILEGES"
+fi
+# the SQLite-backend artefact, if that was the recorded backend
+rm -rf /var/lib/roundcube/db
 
 # Remove credentials file (contains DB password)
 rm -f "$RC_CONFIG_DIR/debian-db.php"
@@ -68,6 +72,10 @@ rm -rf "$RC_CONFIG_DIR"
 
 # Remove the logrotate fragment deployed by h-add-sys-roundcube
 rm -f /etc/logrotate.d/roundcube
+
+# the User=caddy drop-ins for the packaged maintenance timers (units are gone with the purge)
+rm -rf /etc/systemd/system/roundcube-gc.service.d /etc/systemd/system/roundcube-cleandb.service.d
+systemctl daemon-reload
 
 # Panel-Caddy teardown: listener + panel route + FPM pool
 rm -f /etc/caddy/webmail-roundcube.conf
@@ -100,7 +108,7 @@ case ",${COMPONENT_MAIL_WEBMAILER:-}," in
 		if echo "${new_webmail:-}" | grep -qw 'tachyon'; then
 			set_install_component MAIL_WEBMAILER TACHYON
 		else
-			set_install_component MAIL_WEBMAILER NONE
+			set_install_component MAIL_WEBMAILER ""
 		fi
 		;;
 esac
