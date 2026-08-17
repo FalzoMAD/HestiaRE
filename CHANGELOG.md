@@ -12,6 +12,18 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **Adding a subdomain under an SSL domain rendered SSL vhosts without a certificate and took
+  nginx AND apache down** (#683, first tester-reported issue). The subdomain-ownership check
+  parsed the PARENT's record in place and leaked every key (SSL, SSL_HOME, ...) into the add
+  command's namespace; the merged template then kept its SSL block for the new domain before
+  its own record (SSL='no') was written - and the dead vhost also blocked the restart that
+  Let's Encrypt would have needed to fix it. The parse is scoped to a subshell now, only
+  ALLOW_USERS leaves it. Same leak sat in mail-domain add (harmless: renders in child
+  processes) and web-alias add (survived only by ordering luck - it reloads the domain's own
+  record before rendering); both go through the same fixed path.
+
 ### Changed
 
 - **The custom preset is gone** (#195). The standard path already asks everything relevant
