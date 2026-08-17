@@ -7,6 +7,8 @@
     "$comment": "Release-shipped third-party version pins (#288, replaces install/upgrade/upgrade.conf). Bump per release. Read at runtime via manifest_get() in include/main.sh.",
     "$comment_tachyon": "3.2.2 pin last verified against kimusan/Tachyon releases on 2026-08-16 (latest; upstream quiet since 2026-07-15). Re-check the date when bumping - a silent fork must be visible here, not assumed alive.",
     "tachyon": "3.2.2",
+    "$comment_wp_cli": "Pinned GitHub release phar (sha256 over the file), fetched by fetch_wp_cli_phar for the system and every per-user copy - never a moving branch address. No OS package exists; this pin is the only patch channel, bump per release.",
+    "wp_cli": { "version": "2.12.0", "sha256": "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c" },
     "tachyon_plugins": {
       "$comment": "Plugin assets from the SAME release tag as the tachyon pin, sha256 over the .tgz. Pinned because change-password-hestia changes system passwords - it must never arrive from a moving address (Tachyon's own Repository::installPackage fetches packages.json from the master branch at install time). h-add-sys-tachyon fetches, verifies and extracts these itself.",
       "change-password": { "version": "2.38", "sha256": "b3c6364fddf27fc583c730d6f3dba70d99254c5068c099c8678b442a024e0105" },
@@ -317,7 +319,7 @@
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
         "singlephp": "os_package", "nomail": "os_package"
       },
-      "note": "latest uses the upstream installer script (getcomposer.org) instead of the OS package. Backlog: an h-update-sys-composer to switch the source afterwards. Not on mailonly - no customer web to build for; h-add-sys-composer installs it by hand."
+      "note": "source_default picks the channel per preset: os_package (apt-maintained, automatic security backports) everywhere except latest (signed upstream installer, newest composer, no auto-updates). The wizard writes COMPONENT_ADDON_COMPOSER_SOURCE from it (absent = os_package); h-update-sys-composer switches a live box. Not on mailonly - no customer web to build for."
     },
 
     "ADDON_CROWDSEC": {

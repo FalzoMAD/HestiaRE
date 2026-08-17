@@ -14,6 +14,30 @@ opens above it.
 
 ### Changed
 
+- **wp-cli is pinned and verified; the PHP-tooling downloads are bounded** (#237). The wp-cli
+  phar came from the moving gh-pages build address with no checksum - system-wide AND every
+  per-user copy. It is now a manifest pin (version + sha256, tachyon-plugin pattern) fetched by
+  one helper (`fetch_wp_cli_phar`) for all call sites; `wp cli update` is gone from our paths,
+  a re-run converges to the pin. The system-wide composer install loses its unbounded
+  `php copy()` calls (a dropped SYN was a silent multi-minute hang) for bounded wget/curl with
+  named failures; the signed-installer mechanism itself is unchanged. The update path of
+  `h-add-user-composer` actually runs now - `[ -f "$update" ]` asked whether a FILE named
+  "yes" exists, so selfupdate was dead since inheritance. Baseline verified on deb12: both
+  tools system-wide under /usr/local/bin, fully usable by shell customers AND inside the
+  bubblewrap SSH jail (composer require + wp core download proven in-jail), per-user variants
+  incl. aliases work in-jail too.
+
+- **Composer comes from the OS package by default; the source is a per-preset decision with a
+  live switcher** (#237, closes the #208 backlog). The manifest's `source_default` was read by
+  nobody - every install used the upstream installer, whose composer then never updates on a
+  running box. Now the wizard writes `COMPONENT_ADDON_COMPOSER_SOURCE`, `install_tools`
+  branches on it: `os_package` everywhere except the latest preset (apt-maintained, security
+  backports arrive automatically - deb12 ships 2.5.5+deb12u5) vs `upstream_installer` (signed
+  getcomposer.org installer, newest version, no auto-updates). The new `h-update-sys-composer
+  os|upstream` switches a live box: new source installed and verified BEFORE the old one is
+  removed, and the removal is mandatory - /usr/local/bin shadows /usr/bin, a leftover phar
+  would silently mask the OS package. Per-user copies are untouched.
+
 - **SnappyMail is replaced by Tachyon, its fork** (#584). SnappyMail upstream is dormant
   (last release October 2024, maintainer gone) - no security-patch channel for an
   internet-facing login is disqualifying. Tachyon (kimusan/Tachyon, AGPL like its parent) keeps

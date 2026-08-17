@@ -626,7 +626,7 @@
         "install_security": "iptables, ipset; fail2ban (optional); crowdsec (optional, minimal — #123)",
         "install_addons": "proftpd (→ h-add-sys-proftpd) / docker / filemanager per components (#123)",
         "configure_hestia": "sudoers, v-* dangling-symlink prune, SSL cert, admin user, firewall, default domain, crontab; writes .done.configure",
-        "install_tools": "always-installed utilities + selected TOOLS_SELECTION + composer + wp-cli",
+        "install_tools": "always-installed utilities + selected TOOLS_SELECTION + composer (source per COMPONENT_ADDON_COMPOSER_SOURCE: os_package default, upstream_installer on latest; h-update-sys-composer switches live, #208/#237) + wp-cli (manifest-pinned phar via fetch_wp_cli_phar)",
         "finalize_install": "start hestia.service, schedule LE host cert, final apt upgrade, print credentials"
       },
       "sentinel_files": "/etc/hestia/.done.{base,panel,web,db,mail,security,addons,configure} — presence skips that stage (return 0, NOT exit)",

@@ -51,8 +51,10 @@ COMPOSER_DIR="$HOMEDIR/$user/.composer"
 COMPOSER_BIN="$COMPOSER_DIR/composer"
 
 if [ -f "$COMPOSER_BIN" ]; then
-	if [ -f "$update" ]; then
-		user_exec $COMPOSER_BIN selfupdate
+	if [ "$update" = 'yes' ]; then
+		# deliberately upstream-latest regardless of the system source: the copy is the
+		# user's own and composer verifies its signature; timeout keeps it bounded
+		user_exec timeout 300 php "$COMPOSER_BIN" selfupdate
 		exit
 	fi
 	echo "Composer already available"
@@ -76,7 +78,7 @@ COMPOSER_SETUP_FILE=$(mktemp)
 check_result $? "Create temp file"
 chown $user: "$COMPOSER_SETUP_FILE"
 
-signature="$(curl --silent --show-error https://composer.github.io/installer.sig)"
+signature="$(curl --silent --show-error --max-time 30 https://composer.github.io/installer.sig)"
 check_result $? "Download signature"
 
 user_exec wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache https://getcomposer.org/installer --quiet -O "$COMPOSER_SETUP_FILE"
