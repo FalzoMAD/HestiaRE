@@ -796,9 +796,6 @@
 								<option value="sftp">
 									SFTP
 								</option>
-								<option value="b2">
-									Backblaze
-								</option>
 								<option value="rclone">
 									Rclone
 								</option>
@@ -865,44 +862,6 @@
 									name="v_backup_bpath"
 									id="v_backup_bpath"
 									value="<?= tohtml(trim($v_backup_bpath, "'")) ?>"
-								>
-							</div>
-						</div>
-						<div x-cloak x-show="backupType == 'b2'">
-							<div class="u-mb10">
-								<label for="v_backup_bucket" class="form-label">
-									Bucket
-								</label>
-								<input
-									type="text"
-									class="form-control"
-									name="v_backup_bucket"
-									id="v_backup_bucket"
-									value="<?= tohtml(trim($v_backup_bucket, "'")) ?>"
-								>
-							</div>
-							<div class="u-mb10">
-								<label for="v_backup_application_id" class="form-label">
-									Key ID
-								</label>
-								<input
-									type="text"
-									class="form-control"
-									name="v_backup_application_id"
-									id="v_backup_application_id"
-									value="<?= tohtml(trim($v_backup_application_id, "'")) ?>"
-								>
-							</div>
-							<div class="u-mb10">
-								<label for="v_backup_application_key" class="form-label">
-									Application Key
-								</label>
-								<input
-									type="text"
-									class="form-control"
-									name="v_backup_application_key"
-									id="v_backup_application_key"
-									value="<?= tohtml(trim($v_backup_application_key, "'")) ?>"
 								>
 							</div>
 						</div>

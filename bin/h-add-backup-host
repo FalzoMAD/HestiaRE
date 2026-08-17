@@ -3,9 +3,8 @@
 # options: TYPE HOST USERNAME PASSWORD [PATH] [PORT]
 #
 # example: h-add-backup-host sftp backup.acme.com admin 'P4$$w@rD'
-#          h-add-backup-host b2 bucketName keyID applicationKey
 #
-# Add a new remote backup location. Currently SFTP, FTP and Backblaze are supported
+# Add a new remote backup location. Currently SFTP, FTP and rclone are supported
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -27,9 +26,6 @@ password=$(perl -e 'print quotemeta shift(@ARGV)' "${raw_password}")
 path=${5-/backup}
 port=$6
 
-# CPU Architecture
-arch=$(arch)
-
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
@@ -40,13 +36,6 @@ source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
-# Backblaze B2 CLI version (release manifest)
-b2_v=$(manifest_get '.software_versions.backblaze_b2')
-
-# Paths
-b2cli="/usr/local/bin/b2"
-b2lnk="https://github.com/Backblaze/B2_Command_Line_Tool/releases/download/v$b2_v/b2-linux"
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -54,7 +43,7 @@ b2lnk="https://github.com/Backblaze/B2_Command_Line_Tool/releases/download/v$b2_
 if [ "$type" != 'local' ]; then
 	check_args '2' "$#" "TYPE HOST USERNAME PASSWORD [PATH] [PORT]"
 	is_format_valid 'host' 'path' 'port'
-	is_type_valid 'sftp,ftp,b2,rclone' "$type"
+	is_type_valid 'sftp,ftp,rclone' "$type"
 	is_username_format_valid "$user" "username"
 	privatekey="no"
 	if [ -f "$raw_password" ]; then
@@ -73,7 +62,7 @@ if [ "$type" != 'local' ]; then
 		which expect > /dev/null 2>&1
 		check_result $? "expect command not found" "$E_NOTEXIST"
 	fi
-	if [ "$type" != 'b2' ] && [ "$type" != 'rclone' ]; then
+	if [ "$type" != 'rclone' ]; then
 		if ! (is_ip_format_valid "$host" > /dev/null); then
 			host "$host" > /dev/null 2>&1
 			check_result $? "host connection failed" "$E_CONNECT"
@@ -157,38 +146,6 @@ if [ "$type" = 'sftp' ]; then
 	fi
 fi
 
-if [ "$type" = 'b2' ]; then
-	# Download b2 binary
-	if [ ! -f "$b2cli" ]; then
-		if [ "$arch" = 'aarch64' ] || [ "$arch" = 'arm64' ]; then
-			echo "Error: B2 binary for arm64 must be downloaded manually."
-			exit 3
-		else
-			wget -O $b2cli $b2lnk > /dev/null 2>&1
-			chmod +x $b2cli > /dev/null 2>&1
-		fi
-		if [ ! -f "$b2cli" ]; then
-			echo "Error: Binary download failed, b2 doesn't work as expected."
-			exit 3
-		fi
-	fi
-
-	# Validate b2 binary
-	b2version="$(b2 version)"
-	if [[ ! "$b2version" =~ "b2 command line tool" ]]; then
-		echo "Error: Binary download failed, b2 doesn't work as expected."
-		exit 3
-	fi
-
-	b2 clear-account > /dev/null 2>&1
-	b2 authorize-account "$user" "$raw_password" > /dev/null 2>&1
-	b2 ls --long "$host" "$user" > /dev/null 2>&1
-
-	if [ $? -ne 0 ]; then
-		check_result "$E_CONNECT" "b2 failed to verify connection"
-	fi
-fi
-
 if [ "$type" = 'rclone' ]; then
 	curl -s https://rclone.org/install.sh | bash /dev/null > /dev/null 2>&1
 	# Verify account exists
@@ -212,12 +169,6 @@ if [ $type == 'ftp' ] || [ $type = 'sftp' ]; then
 	new_timestamp
 	str="HOST='$host'\nUSERNAME='$user'\nPASSWORD='$password'\nPRIVATEKEY='$privatekey'"
 	str="$str\nBPATH='$path'\nPORT='$port'\nTIME='$time'\nDATE='$date'"
-	echo -e "$str" > $HESTIA/conf/$type.backup.conf
-	chmod 660 $HESTIA/conf/$type.backup.conf
-elif [ $type == 'b2' ]; then
-	new_timestamp
-	str="BUCKET='$host'\nB2_KEYID='$user'\nB2_KEY='$raw_password'"
-	str="$str\nTIME='$time'\nDATE='$date'"
 	echo -e "$str" > $HESTIA/conf/$type.backup.conf
 	chmod 660 $HESTIA/conf/$type.backup.conf
 elif [ $type == "rclone" ]; then
