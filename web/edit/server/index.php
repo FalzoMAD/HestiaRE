@@ -593,7 +593,6 @@ if (!empty($_POST["save"])) {
 	// Update mysql pasword
 	if (empty($_SESSION["error_msg"])) {
 		if (!empty($_POST["v_mysql_password"])) {
-			// false + error_msg when the tempfile fails: never run the command with an empty secret
 			$pw_file = secret_tmpfile($_POST["v_mysql_password"]);
 			if ($pw_file !== false) {
 				exec(

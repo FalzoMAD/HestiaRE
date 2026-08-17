@@ -29,7 +29,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 #----------------------------------------------------------#
 
 check_args '1' "$#" 'HOST [USERNAME] [PASSWORD] [PORT]'
-# secret via /tmp file, not argv - resolve before the value is format-checked (#694)
+# secret via /tmp file, not argv - resolve before the value is format-checked
 is_password_valid
 is_format_valid 'port' 'host' 'password'
 is_username_format_valid "$username" 'username'

@@ -237,11 +237,10 @@ seed_hestia_etc() {
 
 # ── re-apply what a copy-only update cannot: state outside the install tree ───
 # Idempotent throughout, so a fresh install runs this as a no-op.
-# Keep panel argv (passwords!) out of persistent logs (#693). Classic sudo takes
-# "Defaults:hestia !log_allowed" (allowed calls unlogged, denials keep logging); sudo-rs
-# validates no logging option at all, there the rsyslog drop rule is the file-level cure.
-# Only visudo-validated content is ever installed - a broken sudoers bricks the panel.
-# The journald copy remains on sudo-rs; the argv-free h-* secrets API is the complete fix.
+# Keep panel command lines (passwords are passed as arguments) out of persistent logs. Classic
+# sudo takes "!log_allowed" - allowed calls unlogged, denials still logged; sudo-rs accepts no
+# logging option, so there the rsyslog drop rule carries it. Only visudo-validated content is
+# ever installed: a broken sudoers locks the panel out.
 deploy_hestia_sudoers() {
 	local root="${HESTIA:-/usr/local/hestia}" tmp
 	[ -f "$root/share/hestia/sudoers" ] && [ -d /etc/sudoers.d ] || return 0
@@ -251,8 +250,7 @@ deploy_hestia_sudoers() {
 	if visudo -c -f "$tmp" > /dev/null 2>&1; then
 		suppressed="yes"
 	else
-		# The INTERESTING path (sudo-rs): the directive is unavailable, so this flavor keeps
-		# logging argv and depends entirely on the rsyslog rule below. Never silent.
+		# This flavor keeps logging argv and depends entirely on the rsyslog rule - say so.
 		echo "NOTE: this sudo does not accept !log_allowed - relying on the rsyslog drop rule"
 		cp -f "$root/share/hestia/sudoers" "$tmp"
 	fi
@@ -268,7 +266,6 @@ deploy_hestia_sudoers() {
 		dropped="yes"
 	fi
 	# State of both layers in one line - the first thing worth knowing after a distro change.
-	# h-check-sys-smoke asserts the OUTCOME per run; this only names what was applied.
 	echo "  sudoers suppression: $([ "$suppressed" = yes ] && echo active || echo "not supported by this sudo")," \
 		"rsyslog drop rule: $([ "$dropped" = yes ] && echo deployed || echo "rsyslog absent")"
 	if [ "$suppressed" = "no" ] && [ "$dropped" = "no" ]; then

@@ -47,17 +47,11 @@ skip() { echo "[ skip ] $1"; }
 
 # check_source_absent <label> <pattern> <path...> — a vulnerable pattern must not
 # reappear (static regression guard for a security fix). Comment lines excluded.
-# Both suppression layers of #693 can fail silently and per box: a sudo flavor that rejects
-# !log_allowed (sudo-rs), an rsyslog-less host, a distro that changes either. So assert the
-# OUTCOME every run instead of trusting a one-off measurement: push a throwaway marker through
-# an allowed panel call and require that no persistent log file kept it.
-#
-# The sink set is DERIVED, not listed: a control marker written to authpriv shows which files
-# actually receive that facility here. No file receives it (journald-only box) -> skip, because
-# then there is nothing to assert rather than nothing to find. A denied sudo call is NOT usable
-# as the control: with -n sudo bails at the password prompt and logs nothing.
-# Journald is deliberately not asserted - the argv copy there is the documented residue on
-# sudo-rs, closed by the panel's tempfile path (#694), not by these two layers.
+# Whether sudo keeps panel command lines out of the logs depends on the sudo flavor and the
+# distro, so assert the outcome per run: a throwaway marker through an allowed panel call must
+# not survive in any persistent log. The sink set is derived from a control marker written to
+# authpriv - no file receives it (journald-only) means nothing to assert, not nothing found.
+# Covers log FILES only; the journald copy is out of scope here.
 check_sudo_secret_leak() {
 	local probe control f sinks='' leaked=''
 	id hestia > /dev/null 2>&1 || { skip "sudo argv leak (panel user absent)"; return; }

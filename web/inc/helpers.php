@@ -218,16 +218,14 @@ function post_checkbox(string $key, bool $offered, $stored, string $on, string $
 }
 
 /**
- * Hand a secret to an h-* command through a 0600 tempfile instead of argv (#694). The command
- * reads the value via is_password_valid (a /tmp path is replaced by the file's first line), so
- * only the PATH ever reaches the process arguments, sudo's log or /proc/<pid>/cmdline. Pass the
- * returned path where the plaintext used to go and unlink it right after exec. The "/tmp" prefix
- * is required - is_password_valid anchors on ^/tmp/.
+ * Hand a secret to an h-* command through a 0600 tempfile instead of argv: only the path reaches
+ * the process arguments, sudo's log and /proc/<pid>/cmdline. Pass the returned path where the
+ * plaintext would go and unlink it after exec. The "/tmp" prefix is required - is_password_valid
+ * anchors on ^/tmp/.
  *
- * Returns false and sets error_msg instead of throwing: this runs on the save route, where an
- * uncaught exception is a white page instead of "could not save". A shutdown handler removes the
- * file even when the request dies between here and the unlink - otherwise the cleartext would sit
- * in /tmp until someone notices.
+ * Returns false and sets error_msg rather than throwing - this runs on the save route, where an
+ * uncaught exception is a white page. The shutdown handler covers a request that dies before the
+ * unlink, which would otherwise leave the cleartext in /tmp.
  */
 function secret_tmpfile(string $value)
 {
