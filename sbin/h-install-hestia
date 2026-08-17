@@ -568,7 +568,10 @@ install_mail() {
 	case ",${COMPONENT_MAIL_WEBMAILER:-}," in *,ROUNDCUBE,*) wm_rc=yes ;; esac
 	case ",${COMPONENT_MAIL_WEBMAILER:-}," in *,TACHYON,*) wm_tx=yes ;; esac
 	if [ "$wm_rc" = yes ]; then
-		wcv "WEBMAIL_SYSTEM" "roundcube"; wcv "WEBMAIL_ALIAS" "webmail"
+		# No WEBMAIL_SYSTEM pre-seed (the #573 lesson, previously applied only to the tachyon
+		# branch): the command merges the value itself on success. A pre-seeded claim survived
+		# a failed run and made the retry skip on the package's stock config (#684).
+		wcv "WEBMAIL_ALIAS" "webmail"
 		echo "[ * ] Installing Roundcube..."
 		"$BIN/h-add-sys-roundcube" >> "$LOG"
 	fi

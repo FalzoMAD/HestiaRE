@@ -47,9 +47,11 @@ fi
 
 check_hestia_demo_mode
 
-# Already installed? config.inc.php is the artefact both backends write.
+# Already installed? Keyed on the pool conf: it is written LAST, only by this command, and
+# removed by the delete. config.inc.php marks nothing - the OS package ships one of its own,
+# which made a retry after a mid-flow failure skip everything (#684).
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube' \
-	&& [ -f "$RC_CONFIG_DIR/config.inc.php" ]; then
+	&& [ -f /etc/php/hestia/fpm/pool.d/roundcube.conf ]; then
 	echo "INFO: Roundcube is already installed and configured."
 	exit 0
 fi

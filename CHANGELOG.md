@@ -20,8 +20,12 @@ opens above it.
   with "could not find driver" and aborted the install. php-sqlite3 joins the panel package
   list (the panel pool hosts the webmail apps); belt: the sqlite branches of both webmailer
   add commands heal a stale conf.d once via ensure_panel_sqlite_driver before failing hard.
-  Found by the fresh-install rule's favourite gap - the ub24 verification was a resumed
-  install that had staged package and conf.d by hand.
+  The retry after the failure then exposed two more composed defects, both fixed: the
+  installer pre-seeded WEBMAIL_SYSTEM=roundcube before the fatal command (the #573 lesson had
+  only been applied to the tachyon branch), and the already-installed check accepted the OS
+  package's own stock config.inc.php as proof of our install - it keys on the pool conf now,
+  which is written last and only by us. Found by the fresh-install rule's favourite gap - the
+  ub24 verification was a resumed install that had staged package and conf.d by hand.
 
 - **Adding a subdomain under an SSL domain rendered SSL vhosts without a certificate and took
   nginx AND apache down** (#683, first tester-reported issue). The subdomain-ownership check
