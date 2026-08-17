@@ -67,6 +67,12 @@ before=$(wp_user core version 2> /dev/null)
 echo "[ * ] WordPress $before - updating core..."
 wp_user core update --quiet || check_result "$E_UPDATE" "core update failed"
 wp_user core update-db --quiet || check_result "$E_UPDATE" "database schema update failed"
+# Same per-file proof as the install: the update runs WP's own ZIP upgrader (empirically
+# complete, unlike wp-cli's tar extractor), but the asymmetry install-verifies/update-doesn't
+# would be trusted exactly until it breaks. en_US manifest is valid for every site - language
+# packs are decoupled from core files.
+wp_user core verify-checksums --locale=en_US --quiet \
+	|| check_result "$E_UPDATE" "update finished but the on-disk tree does NOT verify against the release manifest"
 
 if [ "$scope" = "all" ]; then
 	echo "[ * ] Updating plugins and themes..."
