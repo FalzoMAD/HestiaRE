@@ -12,7 +12,115 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **WordPress in the web-domain form** (#682 stage 2). A checkbox right under the PHP version
+  installs a managed WordPress; the generated admin credentials appear once in the save message
+  and nowhere else. An installed site gets three actions - admin login, core update, and a
+  delete button behind a typed-domain confirmation - which post to their own small form, so an
+  update or a deletion never carries whatever else the edit form happens to hold. Unticking the
+  checkbox detaches after a plain confirmation: the site keeps running, the panel lets go, and
+  the docroot guard blocks a re-enable, which the dialog says out loud. The gate is one
+  expression for view and POST, and it requires a PHP backend, a MySQL server and no docker
+  proxy on the domain.
+
 ### Fixed
+
+- **The last panel secrets leave argv** (#694, closes it): the backup-host password (sftp/ftp)
+  now travels through the same 0600 tempfile as every other panel secret. With Backblaze gone
+  the b2 application key went with it, so no panel call site passes a secret as a process
+  argument any more - verified by sweep.
+
+- **A save that failed no longer keeps deleting things** (#682 review). Three branches in the
+  web-domain form ran without checking whether an earlier command had already failed: the custom
+  docroot reset, the redirect removal and the FTP account deletion. A user reading "an error
+  occurred" could have lost all three anyway. An unknown domain now ends the request instead of
+  only setting a message - everything below it was still operating on the POST value. Same file:
+  the WordPress deletion is verified server-side against the typed domain (the dialog was proof
+  only in the browser), the offline switch reads through the same gated helper as every other
+  checkbox, the shared mktemp output no longer inherits the previous run's line and a failed
+  mktemp is caught before certificates land in /, and an unchecked force-SSL box no longer
+  writes a PHP warning into the very log we use as evidence.
+
+- **A failed WordPress update now says what state the site is in** (#682). The install can
+  promise "nothing was installed" because it cleans up; the update cannot - the files may
+  already be replaced. Each failure names the running version and the way out (re-run, or the
+  wp core download --force line to repair the tree).
+
+### Removed
+
+- **Backblaze B2 backup backend** (#696). B2 was unused, and dropping it removes an external
+  binary download in the backup path (the b2-linux CLI from GitHub, plus its manifest pin) and
+  the last plaintext-argv secret path (the b2 application key, #694). Gone from h-add-backup-host
+  (b2 branch + CLI download), include/backup.sh (upload/download/rotate), the h-list / h-download
+  / h-delete / h-backup / h-restore branches, the panel (backup type option + form fields), and
+  the manifest. Remaining backends: local, sftp, ftp, rclone, restic. No migration path: a box
+  with a b2 backup host configured is not expected (fresh installs), and the b2.backup.conf would
+  simply be ignored.
+
+### Added
+
+- **WordPress as a panel-managed web-domain option, CLI stage** (#682). `h-add-web-domain-wordpress`
+  installs a complete WordPress into an empty docroot as the customer, via the pinned wp-cli
+  running the domain's own backend PHP: en_US core with checksum verification (localized builds
+  have no reliable sums - the locale, defaulted from the panel user's language, arrives as a
+  language pack), DB through h-add-database, wp-cron disabled in favour of a deterministic
+  customer cron entry, admin = panel user with a generated password shown exactly once.
+  nginx-only switches an untouched default template to wordpress-disable-xmlrpc; both/apache
+  work via .htaccess. `h-delete-web-domain-wordpress` detaches by default (flag only, the site
+  keeps running unmanaged) or deletes (files + DB read from the wp-config artefact + cron entry,
+  template back). `h-update-web-domain-wordpress` runs core+db (the future panel button);
+  plugins/themes only via SCOPE=all on the CLI. New record field `WP` in the key registry and
+  both list commands; every failure path cleans up to "nothing was installed".
+
+### Fixed
+
+- **Panel-set passwords no longer land in cleartext in auth.log** (#693, external report).
+  sudo's default logs every ALLOWED command line - including the argv of h-add-user,
+  h-change-user-password, h-add-mail-account, ... - verbatim to authpriv, a rotating file
+  that ends up in backups; the hidepid hardening cannot reach that channel. Inherited
+  unchanged from upstream (HestiaCP's sudoers has no suppression either). The shipped
+  sudoers is deployed flavor-aware through one helper (installer + update path, always
+  visudo-validated): classic sudo takes `Defaults:hestia !log_allowed` - allowed panel calls
+  write no authpriv line (measured), DENIALS keep logging - while sudo-rs (ubuntu 26.04)
+  validates no logging option at all and gets a targeted rsyslog drop rule for the
+  persistent auth.log instead (deployed everywhere as a second layer). Panel actions stay
+  audited through h-log-action/log_event. Known residue on sudo-rs: the journald copy -
+  which is why taking secrets out of the argv API entirely is the required follow-up. First
+  slice of that follow-up (#694) ships here: panel secrets now travel to the h-* commands
+  through a 0600 tempfile (the `secret_tmpfile` helper; the command reads the value via
+  is_password_valid, so only the /tmp PATH ever reaches argv/sudo-log/proc). Converted the
+  plaintext-argv call sites found in a full sweep - the MySQL root password (edit/server),
+  SMTP relay in three places (edit/server, edit/mail, add/mail) - and closed two command-side
+  gaps (h-change-database-host-password, h-add-sys-smtp-relay) that never read the tempfile.
+  Most call sites already used the tempfile pattern (login, add-user, add-mail-account,
+  add-database, ftp, stats). Still on argv and tracked in #694: the backup-host credentials
+  (sftp/ftp password + b2 application key), whose six branches need per-type verification the
+  fleet cannot give (b2 needs real Backblaze credentials) - the command already resolves a
+  tempfile there, the call-site conversion is the remaining step. Both suppression layers are
+  now asserted per smoke run instead of once by hand: `check_sudo_secret_leak` pushes a
+  throwaway marker through an allowed panel call and requires that no persistent log file kept
+  it. The sink set is derived from a control marker written to authpriv (no such file =
+  journald-only box = skip, not a false green), and the guard was proven by removing the
+  protection: red without it, green with it, on both sudo flavors. `deploy_hestia_sudoers`
+  reports which layer landed, and says so loudly on the interesting path where a sudo flavor
+  rejects the directive. `is_password_valid`/`is_hash_valid` no longer follow a symlink in
+  world-writable /tmp, and the panel helper returns false with an error message instead of
+  throwing on the save route, with a shutdown handler that removes the file even when the
+  request dies before the unlink.
+
+- **The wizard offered Sury's pre-release PHP 8.6, which the installer then refused** (#688).
+  Discovery keyed on package availability alone, while h-add-web-php validates against the
+  release-tested `php_supported` list - two reference sets, no agreement check. The wizard now
+  offers only the intersection, and the two hardcoded fallback lists are gone: the manifest
+  list is the single source (also used when Sury is unreachable). Bumping `php_supported`
+  joins the minor-release pin check.
+
+- **mailonly no longer force-installs a MariaDB server** (#689). The forced install predated
+  the sqlite webmail backend, whose whole point removed the only MySQL consumer in the mail
+  stack (exim/dovecot/rspamd/fail2ban never spoke MySQL, phpMyAdmin was already off). The
+  webmailers run on sqlite now; h-add-sys-mariadb retrofits a box, existing webmailers keep
+  their recorded backend.
 
 - **The no-MariaDB webmail backend died on a genuinely fresh install** (#684): install_panel
   built the panel pool's conf.d before php-sqlite3 existed (the package only arrived later via

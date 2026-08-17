@@ -1,0 +1,245 @@
+#!/bin/bash
+# info: install a panel-managed WordPress into a web domain
+# options: USER DOMAIN [LOCALE] [TITLE]
+#
+# example: h-add-web-domain-wordpress john blog.acme.com
+# example: h-add-web-domain-wordpress john blog.acme.com de_DE "Acme Blog"
+#
+# Everything runs in the customer context via the pinned wp-cli: core download (en_US,
+# checksum-verified - localized builds have no reliable checksums, the locale arrives as a
+# language pack afterwards), config, install. The DB comes through h-add-database (one code
+# path, quota included), credentials live only in the customer's wp-config.php. wp-cron is
+# disabled in favour of a customer cron entry - deterministic instead of pageview-triggered.
+# The WP record field only says "panel-managed"; everything else reads from the artefact.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+locale=$3
+title=$4
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+WP_BIN="/usr/local/bin/wp"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [LOCALE] [TITLE]'
+is_format_valid 'user' 'domain'
+is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+
+if [ -z "$(echo "$DB_SYSTEM" | grep -w 'mysql')" ]; then
+	check_result "$E_NOTEXIST" "WordPress needs a MySQL database (DB_SYSTEM has no mysql)"
+fi
+
+[ -x "$WP_BIN" ] || check_result "$E_NOTEXIST" "wp-cli is not installed ($WP_BIN)"
+
+wp_state=$(get_object_value 'web' 'DOMAIN' "$domain" '$WP')
+[ "$wp_state" = "yes" ] && check_result "$E_EXISTS" "WordPress is already managed for $domain"
+
+docker=$(get_object_value 'web' 'DOMAIN' "$domain" '$DOCKER')
+[ -n "$docker" ] && check_result "$E_FORBIDEN" "$domain is a docker proxy domain"
+
+tpl=$(get_object_value 'web' 'DOMAIN' "$domain" '$TPL')
+[ "$tpl" = "no-php" ] && check_result "$E_FORBIDEN" "$domain has no PHP backend (template no-php)"
+
+# custom docroot has its own owner semantics - a managed install must live in the default path
+custom_docroot=$(get_object_value 'web' 'DOMAIN' "$domain" '$CUSTOM_DOCROOT')
+[ -n "$custom_docroot" ] && check_result "$E_FORBIDEN" "$domain uses a custom docroot"
+
+docroot="$HOMEDIR/$user/web/$domain/public_html"
+[ -d "$docroot" ] || check_result "$E_NOTEXIST" "docroot $docroot does not exist"
+
+# Never install over an existing site: any prior WordPress or any index.php means the
+# docroot is in use (the shipped skeleton has neither).
+if [ -e "$docroot/wp-config.php" ] || [ -e "$docroot/wp-includes" ] || [ -e "$docroot/index.php" ]; then
+	check_result "$E_EXISTS" "docroot is not empty ($domain already serves an application)"
+fi
+
+# needed as the WP admin address below - fail here with a name, not inside core install
+admin_email=$(get_user_value '$CONTACT')
+[ -n "$admin_email" ] || check_result "$E_INVALID" "user $user has no CONTACT email - set one first"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# user_exec children start in OUR cwd; a root-only cwd makes find/tar warn on exit
+cd "$HOMEDIR/$user" || check_result "$E_NOTEXIST" "user homedir missing"
+
+# Locale: explicit argument wins, otherwise the panel user's language (small static map,
+# en_US fallback). The core payload is always the verified en_US build - the locale is
+# added as a language pack below, so a wrong guess costs nothing.
+if [ -z "$locale" ]; then
+	user_lang=$(get_user_value '$LANGUAGE')
+	case "$user_lang" in
+		de) locale="de_DE" ;;
+		en | '') locale="en_US" ;;
+		fr) locale="fr_FR" ;;
+		es) locale="es_ES" ;;
+		it) locale="it_IT" ;;
+		nl) locale="nl_NL" ;;
+		pt) locale="pt_BR" ;;
+		*) locale="en_US" ;;
+	esac
+fi
+[[ "$locale" =~ ^[a-z]{2,3}(_[A-Z]{2})?$ ]] || check_result "$E_INVALID" "invalid locale '$locale'"
+
+[ -n "$title" ] || title="$domain"
+
+# wp-cli runs with the PHP version that serves the domain, not the PATH CLI
+php_ver=$(get_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION')
+wp_php="/usr/bin/php${php_ver:-}"
+[ -x "$wp_php" ] || wp_php="/usr/bin/php"
+
+wp_user() {
+	user_exec env HOME="$HOMEDIR/$user" WP_CLI_PHP="$wp_php" timeout 600 \
+		"$WP_BIN" "$@" --path="$docroot"
+}
+
+# DB name deterministic per domain, inside the user_ prefix convention; the password
+# lives only in wp-config.php afterwards
+db_suffix="wp_$(echo "$domain" | md5sum | cut -c1-8)"
+db_pass=$(generate_password)
+# h-add-database takes the suffix, everything else (incl. h-delete-database) the full name
+db_name="${user}_${db_suffix}"
+db_user="${user}_${db_suffix}"
+# MariaDB caps user names at 80 - fail here with a name, not deep inside h-add-database
+[ ${#db_user} -le 80 ] || check_result "$E_LIMIT" "database user name '$db_user' exceeds 80 characters"
+$BIN/h-add-database "$user" "$db_suffix" "$db_suffix" "$db_pass" > /dev/null
+check_result $? "database creation failed"
+
+cleanup_failed_install() {
+	$BIN/h-delete-database "$user" "$db_name" > /dev/null 2>&1
+	user_exec rm -rf "$docroot/wp-admin" "$docroot/wp-includes" "$docroot/wp-content" 2> /dev/null
+	user_exec find "$docroot" -maxdepth 1 -name "wp-*.php" -delete 2> /dev/null
+	user_exec rm -f "$docroot/index.php" "$docroot/xmlrpc.php" "$docroot/license.txt" "$docroot/readme.html" 2> /dev/null
+}
+
+# Own bounded download + SYSTEM tar, not `wp core download`: wp-cli's PharData extractor
+# silently dropped 25 of 146 php-ai-client files from the 7.0.4 tarball - present in the
+# archive, absent on disk. verify-checksums (api.wordpress.org, per file) stays the proof.
+wp_ver=$(curl -fsS --max-time 30 "https://api.wordpress.org/core/version-check/1.7/" | jq -r '.offers[0].current' 2> /dev/null)
+if ! [[ "$wp_ver" =~ ^[0-9]+\.[0-9.]+$ ]]; then
+	cleanup_failed_install
+	check_result "$E_CONNECT" "could not determine the current WordPress version"
+fi
+echo "[ * ] Downloading WordPress $wp_ver..."
+wp_tmp=$(mktemp -t wordpress.XXXXXX.tar.gz)
+chmod 644 "$wp_tmp"
+if ! wget "https://wordpress.org/wordpress-${wp_ver}.tar.gz" --timeout=60 --tries=3 --retry-connrefused --quiet -O "$wp_tmp" \
+	|| [ ! -s "$wp_tmp" ] \
+	|| ! user_exec tar -xzf "$wp_tmp" --strip-components=1 -C "$docroot" \
+	|| ! wp_user core verify-checksums --locale=en_US --quiet; then
+	rm -f "$wp_tmp"
+	cleanup_failed_install
+	check_result "$E_CONNECT" "WordPress download/verification failed - nothing was installed"
+fi
+rm -f "$wp_tmp"
+
+echo "[ * ] Configuring..."
+# passwords via --prompt from stdin, never argv: /proc/<pid>/cmdline is world-readable
+# where hidepid is off (ours is smoke-guarded on, this removes the class regardless)
+if ! printf '%s\n' "$db_pass" \
+	| wp_user config create --dbname="$db_name" --dbuser="$db_user" --prompt=dbpass --quiet \
+	|| ! wp_user config set DISABLE_WP_CRON true --raw --type=constant --quiet; then
+	cleanup_failed_install
+	check_result "$E_UPDATE" "WordPress configuration failed - nothing was installed"
+fi
+
+# scheme follows the domain's current SSL state; WordPress carries the URL in its options
+scheme="http"
+[ "$(get_object_value 'web' 'DOMAIN' "$domain" '$SSL')" = "yes" ] && scheme="https"
+
+admin_pass=$(generate_password)
+
+echo "[ * ] Installing..."
+if ! printf '%s\n' "$admin_pass" \
+	| wp_user core install --url="$scheme://$domain" --title="$title" \
+		--admin_user="$user" --admin_email="$admin_email" --prompt=admin_password \
+		--skip-email --quiet; then
+	cleanup_failed_install
+	check_result "$E_UPDATE" "WordPress install failed - nothing was installed"
+fi
+
+# locale as a language pack on top of the verified en_US core; a failure only costs the
+# translation, never the install
+if [ "$locale" != "en_US" ]; then
+	wp_user language core install "$locale" --activate --quiet \
+		|| echo "WARN: language pack $locale could not be installed - site stays en_US"
+fi
+
+# nginx-only serves WordPress through its own template (permalinks); both/apache-only work
+# via .htaccess on the default template. Only an untouched 'default' is switched - a custom
+# template choice stays the admin's.
+if [ "$WEB_SYSTEM" = "nginx" ] && [ -z "$PROXY_SYSTEM" ] && [ "$tpl" = "default" ]; then
+	$BIN/h-change-web-domain-tpl "$user" "$domain" "wordpress-disable-xmlrpc" > /dev/null
+	check_result $? "template switch failed"
+fi
+
+# Apache family: seed the canonical (structure-independent) WP .htaccess now. WordPress in a
+# CLI context does not write it (no apache detection), so permalinks flipped via wp-cli would
+# 404 until someone saves them in wp-admin - seeded, they work the moment the option changes.
+if [ "$WEB_SYSTEM" = "apache2" ]; then
+	cat > "$docroot/.htaccess" << 'HTACCESS'
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+HTACCESS
+	chown "$user":"$user" "$docroot/.htaccess"
+	chmod 644 "$docroot/.htaccess"
+fi
+
+# deterministic cron instead of pageview-triggered wp-cron (DISABLE_WP_CRON is set above);
+# absolute paths (cron's default PATH has no /usr/local/bin), and the SAME PHP the domain
+# serves with - the PATH CLI would fatal every 5 minutes on a version-mismatched domain,
+# silenced by --quiet and cron
+$BIN/h-add-cron-job "$user" "*/5" "*" "*" "*" "*" \
+	"env WP_CLI_PHP=$wp_php $WP_BIN cron event run --due-now --path=$docroot --quiet" > /dev/null 2>&1 \
+	|| echo "WARN: could not add the wp-cron entry (CRON quota?) - scheduled WP tasks will not run"
+
+# the record field says only "panel-managed"; add_object_key is idempotent on key presence
+add_object_key "web" 'DOMAIN' "$domain" 'WP' 'LETSENCRYPT'
+update_object_value 'web' 'DOMAIN' "$domain" '$WP' "yes"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Web" "WordPress installed (Domain: $domain, Locale: $locale)."
+log_event "$OK" "$ARGUMENTS"
+
+echo "WordPress installed: $scheme://$domain/"
+echo "  Admin login: $scheme://$domain/wp-login.php"
+echo "  Admin user:  $user"
+echo "  Admin pass:  $admin_pass"
+echo "  (shown once - not stored anywhere)"
+
+exit

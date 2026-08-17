@@ -79,10 +79,6 @@ if [ ! -e "$BACKUP/$backup" ]; then
 		ftp_download "$backup"
 		downloaded='yes'
 	fi
-	if [[ "$BACKUP_SYSTEM" =~ "b2" ]] && [ -z "$downloaded" ]; then
-		b2_download "$backup"
-		downloaded='yes'
-	fi
 	if [[ "$BACKUP_SYSTEM" =~ "rclone" ]] && [ -z "$downloaded" ]; then
 		rclone_download "$backup"
 		downloaded='yes'

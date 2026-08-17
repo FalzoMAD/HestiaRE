@@ -1,0 +1,98 @@
+#!/bin/bash
+# info: update a panel-managed WordPress (core + database)
+# options: USER DOMAIN [SCOPE]
+#
+# example: h-update-web-domain-wordpress john blog.acme.com
+# example: h-update-web-domain-wordpress john blog.acme.com all
+#
+# Default scope is core + database schema - what the panel's update button runs. SCOPE=all
+# additionally updates every plugin and theme (CLI only, a plugin update can change a site's
+# behaviour and belongs in the customer's hands).
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+scope=${3-core}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+WP_BIN="/usr/local/bin/wp"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [core|all]'
+is_format_valid 'user' 'domain'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+
+if [ "$scope" != "core" ] && [ "$scope" != "all" ]; then
+	check_result "$E_INVALID" "SCOPE must be 'core' or 'all'"
+fi
+
+wp_state=$(get_object_value 'web' 'DOMAIN' "$domain" '$WP')
+[ "$wp_state" = "yes" ] || check_result "$E_NOTEXIST" "WordPress is not managed for $domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+docroot="$HOMEDIR/$user/web/$domain/public_html"
+php_ver=$(get_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION')
+wp_php="/usr/bin/php${php_ver:-}"
+[ -x "$wp_php" ] || wp_php="/usr/bin/php"
+
+wp_user() {
+	user_exec env HOME="$HOMEDIR/$user" WP_CLI_PHP="$wp_php" timeout 600 \
+		"$WP_BIN" "$@" --path="$docroot"
+}
+
+before=$(wp_user core version 2> /dev/null)
+echo "[ * ] WordPress $before - updating core..."
+# Unlike the install, a failed update cannot roll back to "nothing happened" - the files may
+# already be replaced. So every message says what state the site is in and what to do next.
+wp_user core update --quiet \
+	|| check_result "$E_UPDATE" "core update failed - the site still serves $before, its files may be partially replaced; re-run this command, or restore the file tree with: wp core download --force --path=$docroot"
+wp_user core update-db --quiet \
+	|| check_result "$E_UPDATE" "core files are updated but the database schema is not - the site may error until this succeeds; re-run this command"
+# Same per-file proof as the install: the update runs WP's own ZIP upgrader (empirically
+# complete, unlike wp-cli's tar extractor), but the asymmetry install-verifies/update-doesn't
+# would be trusted exactly until it breaks. en_US manifest is valid for every site - language
+# packs are decoupled from core files.
+after_ver=$(wp_user core version 2> /dev/null)
+wp_user core verify-checksums --locale=en_US --quiet \
+	|| check_result "$E_UPDATE" "the site runs $after_ver and is reachable, but its files do not match the official checksums - some are missing or altered; repair with: wp core download --force --version=$after_ver --path=$docroot, then run this command again"
+
+if [ "$scope" = "all" ]; then
+	echo "[ * ] Updating plugins and themes..."
+	wp_user plugin update --all --quiet || echo "WARN: at least one plugin update failed"
+	wp_user theme update --all --quiet || echo "WARN: at least one theme update failed"
+fi
+
+echo "WordPress: $before -> $after_ver"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Web" "WordPress updated (Domain: $domain, $before -> $after_ver, scope: $scope)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

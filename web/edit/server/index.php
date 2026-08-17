@@ -170,12 +170,6 @@ foreach ($backup_types as $backup_type) {
 			$v_backup_port = $v_remote_backup[$backup_type]["PORT"] ?? "";
 			$v_backup_bpath = $v_remote_backup[$backup_type]["BPATH"];
 			$v_backup_remote_adv = "yes";
-		} elseif (in_array($backup_type, ["b2"])) {
-			$v_backup_bucket = $v_remote_backup[$backup_type]["BUCKET"];
-			$v_backup_type = $v_remote_backup[$backup_type]["TYPE"];
-			$v_backup_application_id = $v_remote_backup[$backup_type]["B2_KEY_ID"];
-			$v_backup_application_key = "";
-			$v_backup_remote_adv = "yes";
 		} elseif (in_array($backup_type, ["rclone"])) {
 			$v_backup_type = $v_remote_backup[$backup_type]["TYPE"];
 			$v_rclone_host = $v_remote_backup[$backup_type]["HOST"];
@@ -205,15 +199,6 @@ if (empty($v_backup_port)) {
 }
 if (empty($v_backup_bpath)) {
 	$v_backup_bpath = "";
-}
-if (empty($v_backup_bucket)) {
-	$v_backup_bucket = "";
-}
-if (empty($v_backup_application_id)) {
-	$v_backup_application_id = "";
-}
-if (empty($v_backup_application_key)) {
-	$v_backup_application_key = "";
 }
 if (empty($v_backup_remote_adv)) {
 	$v_backup_remote_adv = "";
@@ -593,16 +578,20 @@ if (!empty($_POST["save"])) {
 	// Update mysql pasword
 	if (empty($_SESSION["error_msg"])) {
 		if (!empty($_POST["v_mysql_password"])) {
-			exec(
-				HESTIA_CMD .
-					"h-change-database-host-password mysql localhost root " .
-					quoteshellarg($_POST["v_mysql_password"]),
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			$v_db_adv = "yes";
+			$pw_file = secret_tmpfile($_POST["v_mysql_password"]);
+			if ($pw_file !== false) {
+				exec(
+					HESTIA_CMD .
+						"h-change-database-host-password mysql localhost root " .
+						quoteshellarg($pw_file),
+					$output,
+					$return_var,
+				);
+				unlink($pw_file);
+				check_return_code($return_var, $output);
+				unset($output);
+				$v_db_adv = "yes";
+			}
 		}
 	}
 	if ($offer_mail) {
@@ -642,27 +631,30 @@ if (!empty($_POST["save"])) {
 				$v_smtp_relay = true;
 				$v_smtp_relay_host = quoteshellarg($post_relay_host);
 				$v_smtp_relay_user = quoteshellarg($post_relay_user);
-				$v_smtp_relay_pass = quoteshellarg($post_relay_pass);
+				$relay_pass_file = secret_tmpfile($post_relay_pass);
 				if (!empty($post_relay_port)) {
 					$v_smtp_relay_port = quoteshellarg($post_relay_port);
 				} else {
 					$v_smtp_relay_port = "587";
 				}
-				exec(
-					HESTIA_CMD .
-						"h-add-sys-smtp-relay " .
-						$v_smtp_relay_host .
-						" " .
-						$v_smtp_relay_user .
-						" " .
-						$v_smtp_relay_pass .
-						" " .
-						$v_smtp_relay_port,
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
+				if ($relay_pass_file !== false) {
+					exec(
+						HESTIA_CMD .
+							"h-add-sys-smtp-relay " .
+							$v_smtp_relay_host .
+							" " .
+							$v_smtp_relay_user .
+							" " .
+							quoteshellarg($relay_pass_file) .
+							" " .
+							$v_smtp_relay_port,
+						$output,
+						$return_var,
+					);
+					unlink($relay_pass_file);
+					check_return_code($return_var, $output);
+					unset($output);
+				}
 			}
 		}
 		if ($offer_mail && !isset($_POST["v_smtp_relay"]) && $v_smtp_relay == true) {
@@ -851,37 +843,36 @@ if (!empty($_POST["save"])) {
 
 	// Add remote backup host
 	if (empty($_SESSION["error_msg"])) {
-		if (
-			$v_backup_host == "" &&
-			$v_backup_bucket == "" &&
-			(!empty($_POST["v_backup_host"]) || !empty($_POST["v_backup_bucket"]))
-		) {
+		if ($v_backup_host == "" && !empty($_POST["v_backup_host"])) {
 			if (in_array($_POST["v_backup_type"], ["ftp", "sftp"])) {
 				$v_backup_host = quoteshellarg($_POST["v_backup_host"]);
 				$v_backup_port = quoteshellarg($_POST["v_backup_port"]);
 				$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
 				$v_backup_username = quoteshellarg($_POST["v_backup_username"]);
-				$v_backup_password = quoteshellarg($_POST["v_backup_password"]);
+				$backup_pass_file = secret_tmpfile($_POST["v_backup_password"]);
 				$v_backup_bpath = quoteshellarg($_POST["v_backup_bpath"]);
-				exec(
-					HESTIA_CMD .
-						"h-add-backup-host " .
-						$v_backup_type .
-						" " .
-						$v_backup_host .
-						" " .
-						$v_backup_username .
-						" " .
-						$v_backup_password .
-						" " .
-						$v_backup_bpath .
-						" " .
-						$v_backup_port,
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
+				if ($backup_pass_file !== false) {
+					exec(
+						HESTIA_CMD .
+							"h-add-backup-host " .
+							$v_backup_type .
+							" " .
+							$v_backup_host .
+							" " .
+							$v_backup_username .
+							" " .
+							quoteshellarg($backup_pass_file) .
+							" " .
+							$v_backup_bpath .
+							" " .
+							$v_backup_port,
+						$output,
+						$return_var,
+					);
+					unlink($backup_pass_file);
+					check_return_code($return_var, $output);
+					unset($output);
+				}
 				if (empty($_SESSION["error_msg"])) {
 					$v_backup_host = $_POST["v_backup_host"];
 				}
@@ -899,38 +890,6 @@ if (!empty($_POST["save"])) {
 				}
 				if (empty($_SESSION["error_msg"])) {
 					$v_backup_port = $_POST["v_backup_port"];
-				}
-				$v_backup_new = "yes";
-				$v_backup_adv = "yes";
-				$v_backup_remote_adv = "yes";
-			} elseif (in_array($_POST["v_backup_type"], ["b2"])) {
-				$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
-				$v_backup_bucket = quoteshellarg($_POST["v_backup_bucket"]);
-				$v_backup_application_id = quoteshellarg($_POST["v_backup_application_id"]);
-				$v_backup_application_key = quoteshellarg($_POST["v_backup_application_key"]);
-				exec(
-					HESTIA_CMD .
-						"h-add-backup-host " .
-						$v_backup_type .
-						" " .
-						$v_backup_bucket .
-						" " .
-						$v_backup_application_id .
-						" " .
-						$v_backup_application_key,
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
-				if (empty($_SESSION["error_msg"])) {
-					$v_backup_bucket = quoteshellarg($_POST["v_backup_bucket"]);
-				}
-				if (empty($_SESSION["error_msg"])) {
-					$v_backup_application_id = quoteshellarg($_POST["v_backup_application_id"]);
-				}
-				if (empty($_SESSION["error_msg"])) {
-					$v_backup_application_key = quoteshellarg($_POST["v_backup_application_key"]);
 				}
 				$v_backup_new = "yes";
 				$v_backup_adv = "yes";
@@ -982,27 +941,30 @@ if (!empty($_POST["save"])) {
 				$v_backup_port = quoteshellarg($_POST["v_backup_port"]);
 				$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
 				$v_backup_username = quoteshellarg($_POST["v_backup_username"]);
-				$v_backup_password = quoteshellarg($_POST["v_backup_password"]);
+				$backup_pass_file = secret_tmpfile($_POST["v_backup_password"]);
 				$v_backup_bpath = quoteshellarg($_POST["v_backup_bpath"]);
-				exec(
-					HESTIA_CMD .
-						"h-add-backup-host " .
-						$v_backup_type .
-						" " .
-						$v_backup_host .
-						" " .
-						$v_backup_username .
-						" " .
-						$v_backup_password .
-						" " .
-						$v_backup_bpath .
-						" " .
-						$v_backup_port,
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
+				if ($backup_pass_file !== false) {
+					exec(
+						HESTIA_CMD .
+							"h-add-backup-host " .
+							$v_backup_type .
+							" " .
+							$v_backup_host .
+							" " .
+							$v_backup_username .
+							" " .
+							quoteshellarg($backup_pass_file) .
+							" " .
+							$v_backup_bpath .
+							" " .
+							$v_backup_port,
+						$output,
+						$return_var,
+					);
+					unlink($backup_pass_file);
+					check_return_code($return_var, $output);
+					unset($output);
+				}
 				if (empty($_SESSION["error_msg"])) {
 					$v_backup_host = $_POST["v_backup_host"];
 				}
@@ -1020,37 +982,6 @@ if (!empty($_POST["save"])) {
 				}
 				if (empty($_SESSION["error_msg"])) {
 					$v_backup_port = $_POST["v_backup_port"];
-				}
-				$v_backup_adv = "yes";
-				$v_backup_remote_adv = "yes";
-			} elseif (in_array($_POST["v_backup_type"], ["b2"])) {
-				$v_backup_bucket = quoteshellarg($_POST["v_backup_bucket"]);
-				$v_backup_application_id = quoteshellarg($_POST["v_backup_application_id"]);
-				$v_backup_application_key = quoteshellarg($_POST["v_backup_application_key"]);
-				exec(
-					HESTIA_CMD .
-						"h-add-backup-host " .
-						$v_backup_type .
-						" " .
-						$v_backup_bucket .
-						" " .
-						$v_backup_application_id .
-						" " .
-						$v_backup_application_key,
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
-				$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
-				if (empty($_SESSION["error_msg"])) {
-					$v_backup_bucket = quoteshellarg($_POST["v_backup_bucket"]);
-				}
-				if (empty($_SESSION["error_msg"])) {
-					$v_backup_application_id = quoteshellarg($_POST["v_backup_application_id"]);
-				}
-				if (empty($_SESSION["error_msg"])) {
-					$v_backup_application_key = quoteshellarg($_POST["v_backup_application_key"]);
 				}
 				$v_backup_adv = "yes";
 				$v_backup_remote_adv = "yes";
@@ -1073,27 +1004,30 @@ if (!empty($_POST["save"])) {
 					$v_backup_port = quoteshellarg($_POST["v_backup_port"]);
 					$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
 					$v_backup_username = quoteshellarg($_POST["v_backup_username"]);
-					$v_backup_password = quoteshellarg($_POST["v_backup_password"]);
+					$backup_pass_file = secret_tmpfile($_POST["v_backup_password"]);
 					$v_backup_bpath = quoteshellarg($_POST["v_backup_bpath"]);
-					exec(
-						HESTIA_CMD .
-							"h-add-backup-host " .
-							$v_backup_type .
-							" " .
-							$v_backup_host .
-							" " .
-							$v_backup_username .
-							" " .
-							$v_backup_password .
-							" " .
-							$v_backup_bpath .
-							" " .
-							$v_backup_port,
-						$output,
-						$return_var,
-					);
-					check_return_code($return_var, $output);
-					unset($output);
+					if ($backup_pass_file !== false) {
+						exec(
+							HESTIA_CMD .
+								"h-add-backup-host " .
+								$v_backup_type .
+								" " .
+								$v_backup_host .
+								" " .
+								$v_backup_username .
+								" " .
+								quoteshellarg($backup_pass_file) .
+								" " .
+								$v_backup_bpath .
+								" " .
+								$v_backup_port,
+							$output,
+							$return_var,
+						);
+						unlink($backup_pass_file);
+						check_return_code($return_var, $output);
+						unset($output);
+					}
 					if (empty($_SESSION["error_msg"])) {
 						$v_backup_host = $_POST["v_backup_host"];
 					}
@@ -1111,45 +1045,6 @@ if (!empty($_POST["save"])) {
 					}
 					if (empty($_SESSION["error_msg"])) {
 						$v_backup_port = $_POST["v_backup_port"];
-					}
-					$v_backup_adv = "yes";
-					$v_backup_remote_adv = "yes";
-				}
-			} elseif (in_array($_POST["v_backup_type"], ["b2"])) {
-				if (
-					$_POST["v_backup_bucket"] != $v_backup_bucket ||
-					$_POST["v_backup_application_key"] != $v_backup_application_key ||
-					$_POST["v_backup_application_id"] != $v_backup_application_id
-				) {
-					$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
-					$v_backup_bucket = quoteshellarg($_POST["v_backup_bucket"]);
-					$v_backup_application_id = quoteshellarg($_POST["v_backup_application_id"]);
-					$v_backup_application_key = quoteshellarg($_POST["v_backup_application_key"]);
-					exec(
-						HESTIA_CMD .
-							"h-add-backup-host " .
-							$v_backup_type .
-							" " .
-							$v_backup_bucket .
-							" " .
-							$v_backup_application_id .
-							" " .
-							$v_backup_application_key,
-						$output,
-						$return_var,
-					);
-					check_return_code($return_var, $output);
-					unset($output);
-					if (empty($_SESSION["error_msg"])) {
-						$v_backup_bucket = quoteshellarg($_POST["v_backup_bucket"]);
-					}
-					if (empty($_SESSION["error_msg"])) {
-						$v_backup_application_id = quoteshellarg($_POST["v_backup_application_id"]);
-					}
-					if (empty($_SESSION["error_msg"])) {
-						$v_backup_application_key = quoteshellarg(
-							$_POST["v_backup_application_key"],
-						);
 					}
 					$v_backup_adv = "yes";
 					$v_backup_remote_adv = "yes";
@@ -1182,15 +1077,6 @@ if (!empty($_POST["save"])) {
 			}
 			if (empty($_SESSION["error_msg"])) {
 				$v_backup_bpath = "";
-			}
-			if (empty($_SESSION["error_msg"])) {
-				$v_backup_bucket = "";
-			}
-			if (empty($_SESSION["error_msg"])) {
-				$v_backup_application_id = "";
-			}
-			if (empty($_SESSION["error_msg"])) {
-				$v_backup_application_key = "";
 			}
 			$v_backup_adv = "";
 			$v_backup_remote_adv = "";

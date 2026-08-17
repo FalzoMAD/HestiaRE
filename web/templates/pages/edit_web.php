@@ -47,6 +47,7 @@
 			"proxySupportEnabled" => !empty($v_proxy),
 			"customDocumentRootEnabled" => !empty($v_custom_doc_root),
 			"dockerEnabled" => !empty($v_docker),
+			"wordpressEnabled" => !empty($v_wp),
 		];
 				?>
 
@@ -167,6 +168,39 @@
 						</div>
 						<?php } ?>
 					<?php } ?>
+			<?php if ($offer_wordpress) { ?>
+			<div class="form-check u-mb10">
+				<input x-model="wordpressEnabled" class="form-check-input" type="checkbox" name="v_wordpress" id="v_wordpress"
+					data-wp-installed="<?= tohtml(empty($v_wp) ? "no" : "yes") ?>"
+					data-confirm-title="<?= tohtml(_("Detach WordPress?")) ?>"
+					data-confirm-message="<?= tohtml(_("The site keeps running and its files and database stay untouched - only the panel stops managing it. Re-enabling later is not possible while the document root is in use.")) ?>"
+					data-confirm-label="<?= tohtml(_("Detach")) ?>" <?php if (!empty($v_wp)) {
+						echo "checked";
+					} ?>>
+				<label for="v_wordpress">
+					<?= tohtml(_("WordPress")) ?>
+				</label>
+			</div>
+			<?php # actions exist only for an installed site; they post to their own form, so an update
+					# or a deletion never carries whatever else the edit form happens to hold
+					if (!empty($v_wp)) { ?>
+			<div class="u-pl30 u-mb20">
+				<a href="<?= tohtml(($v_ssl == "yes" ? "https://" : "http://") . $v_domain . "/wp-login.php") ?>" target="_blank" rel="noopener" class="button button-secondary">
+					<i class="fas fa-right-to-bracket"></i><?= tohtml(_("Admin login")) ?>
+				</a>
+				<button type="submit" name="wp_action" value="update" form="wp-action-form" class="button button-secondary">
+					<i class="fas fa-rotate"></i><?= tohtml(_("Update WordPress")) ?>
+				</button>
+				<button type="submit" name="wp_action" value="delete" form="wp-action-form" class="button button-secondary button-danger js-wp-delete"
+					data-confirm-word="<?= tohtml($v_domain) ?>"
+					data-confirm-title="<?= tohtml(_("Delete the WordPress installation?")) ?>"
+					data-confirm-message="<?= tohtml(_("Files and database are removed for good. Type the domain name to confirm.")) ?>"
+					data-confirm-label="<?= tohtml(_("Delete")) ?>">
+					<i class="fas fa-trash"></i><?= tohtml(_("Delete installation")) ?>
+				</button>
+			</div>
+			<?php } ?>
+			<?php } ?>
 			<?php if ($offer_stats) { ?>
 				<div class="form-check u-mb10">
 					<input x-model="statsEnabled" class="form-check-input" type="checkbox" name="v_stats" id="v_stats" value="awstats">
@@ -647,6 +681,13 @@
 				</span>
 			</div>
 	</form>
+
+	<?php if ($offer_wordpress && !empty($v_wp)) { ?>
+	<form id="wp-action-form" method="post" class="u-hidden">
+		<input type="hidden" name="token" value="<?= tohtml($_SESSION["token"]) ?>">
+		<input type="hidden" name="wp_confirm" id="wp_confirm" value="">
+	</form>
+	<?php } ?>
 
 </div>
 

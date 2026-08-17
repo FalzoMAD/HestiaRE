@@ -15,7 +15,7 @@
       "change-password-hestia": { "version": "2.36", "sha256": "794d545c8868cfa55d03316475b3642c03a373ca1448457110a53ef2fb003af0" },
       "add-x-originating-ip-header": { "version": "2.0", "sha256": "49a36cb67b0aed75cee0bd8889b4f9c2a3214b4644a135f3e9e11b8ab239ee3b" }
     },
-    "backblaze_b2": "3.6.0",
+    "$comment_php_supported": "The release-tested PHP set: h-add-web-php validates against it, and the wizard offers only the intersection with Sury's packages - Sury ships pre-release builds, so availability alone offered versions the installer refused (#688). Bump per release.",
     "php_supported": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
   },
 
@@ -157,7 +157,7 @@
     "DB_MARIADB": {
       "group": "db",
       "type": "checkbox",
-      "fixed_no_prompt": { "mailonly": true },
+      "fixed_no_prompt": { "mailonly": false },
       "label": "MariaDB",
       "description": "MySQL-compatible DB server (incl. phpMyAdmin)",
       "question": "Install MariaDB?",
@@ -167,9 +167,9 @@
         "latest":    true,
         "singlephp": true,
         "nomail":    true,
-        "mailonly":  true
+        "mailonly":  false
       },
-      "note": "DB server engine. Shown together with DB_POSTGRESQL + DB_REDIS as a shared multi-select screen (group 'db' in grouped_prompts). phpMyAdmin follows implicitly (DB_PHPMYADMIN, type derived)."
+      "note": "DB server engine. Shown together with DB_POSTGRESQL + DB_REDIS as a shared multi-select screen (group 'db' in grouped_prompts). phpMyAdmin follows implicitly (DB_PHPMYADMIN, type derived). Fixed OFF on mailonly since the sqlite webmail backend: the webmailers were the only MySQL consumer in the mail stack. h-add-sys-mariadb retrofits; existing webmailers keep their recorded sqlite backend."
     },
 
     "DB_POSTGRESQL": {

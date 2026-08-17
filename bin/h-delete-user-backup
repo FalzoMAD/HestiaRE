@@ -54,9 +54,6 @@ fi
 if [[ "$TYPE" =~ "ftp" ]] && [ "$deleted" == "0" ]; then
 	ftp_delete "$backup"
 fi
-if [[ "$TYPE" =~ "b2" ]]; then
-	b2_delete "$user" "$backup"
-fi
 if [[ "$TYPE" =~ "rclone" ]]; then
 	rclone_delete "$backup"
 fi

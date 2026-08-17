@@ -251,6 +251,12 @@ function cli_value($cmd)
 	return $data === null ? $raw : $data;
 }
 
+/**
+ * Record a failed command: sets error_msg, nothing else. It does NOT stop the request - the
+ * caller keeps running, and so does every branch after it. Guard the ones that must not act on
+ * a failed save with empty($_SESSION["error_msg"]), or use check_return_code_redirect where the
+ * request should end. The name reads like "check and act"; it only notes.
+ */
 function check_return_code($return_var, $output)
 {
 	if ($return_var != 0) {

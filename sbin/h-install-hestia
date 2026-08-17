@@ -738,8 +738,8 @@ configure_hestia() {
 
 	echo "[ * ] Configuring Hestia Control Panel..."
 	mkdir -p /etc/sudoers.d
-	cp -f "$HESTIA/share/hestia/sudoers" /etc/sudoers.d/hestia
-	chmod 440 /etc/sudoers.d/hestia
+	# flavor-aware + visudo-validated; shared with the update path
+	deploy_hestia_sudoers
 	cp -f "$HESTIA/share/hestia/logrotate" /etc/logrotate.d/hestia 2>/dev/null || true
 
 	# committed v-* symlinks ship in the tarball; don't blanket-create (orphans native

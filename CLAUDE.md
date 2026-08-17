@@ -243,6 +243,24 @@ prefer deciding by content over deciding by path, since a rename silently change
 an empty or zero reference set fail rather than pass. State in the guard's comment what it does
 **not** cover, so a three-quarter guard is not mistaken for a whole one.
 
+### Every negative proof needs a positive control in the same run
+
+**Showing that something does NOT happen is worthless without showing that something CAN happen.**
+"Refused", "not logged", "not written" and "never reached the log" look identical to "the probe
+never arrived": a login that silently failed, a request that died at the CSRF wall, a branch
+sitting inside a gate that was false, a log channel that writes nowhere. Three green-for-the-wrong-
+reason measurements in one day came from exactly this.
+
+So every such run carries a control that MUST come out positive, and the negative result only
+counts when the control did:
+
+- smuggle a value that must appear (a bandwidth field the form never offers, and it lands)
+- write a marker through the same channel you are grepping (a log line that must show up)
+- flip the same switch the legitimate way once, and see the record change
+
+If the control fails, the verdict is "not verifiable", never "clean". A guard that cannot show
+its own reach is a guard nobody should trust.
+
 ### Fresh-install verification (installer / firewall / fail2ban changes)
 
 Any change to `h-install-hestia`, `include/fail2ban.sh`, the firewall renderer, or the service configs they
@@ -282,6 +300,9 @@ The remote host, the exact API call, use of TOKEN and the test-VM fleet live in
   and refresh the last-verified date in the `$comment`. This is the ONLY patch channel these
   components have — wp-cli has no OS package at all, and Tachyon's fork can go quiet without
   anyone noticing unless the date here forces the question (#237, #584).
+- **Check `php_supported` against Sury**: has a new PHP gone GA? The wizard offers only the
+  intersection of Sury's packages and this list (#688) — a missing bump means the new version
+  is silently never offered, an eager bump offers a beta to customers. Decide here, per release.
 
 ---
 
