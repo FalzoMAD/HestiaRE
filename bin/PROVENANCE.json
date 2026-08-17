@@ -7807,6 +7807,33 @@
       "last_reconciled": "2026-08-12",
       "divergence": null,
       "note": ""
+    },
+    {
+      "path": "h-add-web-domain-wordpress",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-17",
+      "divergence": null,
+      "note": "panel-managed WordPress lifecycle, #682"
+    },
+    {
+      "path": "h-delete-web-domain-wordpress",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-17",
+      "divergence": null,
+      "note": "panel-managed WordPress lifecycle, #682"
+    },
+    {
+      "path": "h-update-web-domain-wordpress",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-17",
+      "divergence": null,
+      "note": "panel-managed WordPress lifecycle, #682"
     }
   ]
 }

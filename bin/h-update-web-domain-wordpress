@@ -1,0 +1,94 @@
+#!/bin/bash
+# info: update a panel-managed WordPress (core + database)
+# options: USER DOMAIN [SCOPE]
+#
+# example: h-update-web-domain-wordpress john blog.acme.com
+# example: h-update-web-domain-wordpress john blog.acme.com all
+#
+# Default scope is core + database schema - what the panel's update button runs. SCOPE=all
+# additionally updates every plugin and theme (CLI only, a plugin update can change a site's
+# behaviour and belongs in the customer's hands).
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+scope=${3-core}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+WP_BIN="/usr/local/bin/wp"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [core|all]'
+is_format_valid 'user' 'domain'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+
+if [ "$scope" != "core" ] && [ "$scope" != "all" ]; then
+	check_result "$E_INVALID" "SCOPE must be 'core' or 'all'"
+fi
+
+wp_state=$(get_object_value 'web' 'DOMAIN' "$domain" '$WP')
+[ "$wp_state" = "yes" ] || check_result "$E_NOTEXIST" "WordPress is not managed for $domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+docroot="$HOMEDIR/$user/web/$domain/public_html"
+php_ver=$(get_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION')
+wp_php="/usr/bin/php${php_ver:-}"
+[ -x "$wp_php" ] || wp_php="/usr/bin/php"
+
+wp_user() {
+	user_exec env HOME="$HOMEDIR/$user" WP_CLI_PHP="$wp_php" timeout 600 \
+		"$WP_BIN" "$@" --path="$docroot"
+}
+
+before=$(wp_user core version 2> /dev/null)
+echo "[ * ] WordPress $before - updating core..."
+wp_user core update --quiet || check_result "$E_UPDATE" "core update failed"
+wp_user core update-db --quiet || check_result "$E_UPDATE" "database schema update failed"
+# Same per-file proof as the install: the update runs WP's own ZIP upgrader (empirically
+# complete, unlike wp-cli's tar extractor), but the asymmetry install-verifies/update-doesn't
+# would be trusted exactly until it breaks. en_US manifest is valid for every site - language
+# packs are decoupled from core files.
+wp_user core verify-checksums --locale=en_US --quiet \
+	|| check_result "$E_UPDATE" "update finished but the on-disk tree does NOT verify against the release manifest"
+
+if [ "$scope" = "all" ]; then
+	echo "[ * ] Updating plugins and themes..."
+	wp_user plugin update --all --quiet || echo "WARN: at least one plugin update failed"
+	wp_user theme update --all --quiet || echo "WARN: at least one theme update failed"
+fi
+
+after=$(wp_user core version 2> /dev/null)
+echo "WordPress: $before -> $after"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Web" "WordPress updated (Domain: $domain, $before -> $after, scope: $scope)."
+log_event "$OK" "$ARGUMENTS"
+
+exit
