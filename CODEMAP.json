@@ -630,7 +630,7 @@
         "finalize_install": "start hestia.service, schedule LE host cert, final apt upgrade, print credentials"
       },
       "sentinel_files": "/etc/hestia/.done.{base,panel,web,db,mail,security,addons,configure} — presence skips that stage (return 0, NOT exit)",
-      "presets": "7 manifest presets (standard/compact/latest/singlephp/nomail/mailonly/custom) drive COMPONENT_* in the wizard; h-install-hestia consumes COMPONENT_* directly (no profile-name dispatch)",
+      "presets": "6 manifest presets (standard/compact/latest/singlephp/nomail/mailonly) drive COMPONENT_* in the wizard; h-install-hestia consumes COMPONENT_* directly (no profile-name dispatch). No custom preset on purpose (#195) - a config beyond every preset = hand-written install.conf",
       "bootstrap_flow": "curl | bash install.sh → OS detect → apt prereqs → download+extract tarball → include/wizard.sh → seed_hestia_etc → sbin/h-install-hestia",
       "release_sources": {
         "github": "https://github.com/FalzoMAD/HestiaRE (default)",

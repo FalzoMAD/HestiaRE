@@ -14,6 +14,14 @@ opens above it.
 
 ### Changed
 
+- **The custom preset is gone** (#195). The standard path already asks everything relevant
+  (web model, DB selection, webmail checklist, addons), and the other presets carry their
+  specialities - custom only re-asked the same questions without defaults, plus the implicit
+  architecture questions nobody should answer ad hoc. A config beyond every preset = write
+  `/etc/hestia/install.conf` by hand and run `h-install-hestia` (the recorded escape hatch).
+  Removes the preset entry, every per-preset `custom` default, the two wizard code paths and
+  the "asked under custom" exception notes; implicit components are now always preset-derived.
+
 - **wp-cli is pinned and verified; the PHP-tooling downloads are bounded** (#237). The wp-cli
   phar came from the moving gh-pages build address with no checksum - system-wide AND every
   per-user copy. It is now a manifest pin (version + sha256, tachyon-plugin pattern) fetched by
