@@ -258,6 +258,14 @@ fn_ask_preset() {
 # Dynamic version discovery
 # ════════════════════════════════════════════════════════════
 
+# The offered set is the INTERSECTION of what Sury ships and what the release supports
+# (manifest php_supported - the same list h-add-web-php validates against). Sury publishes
+# pre-release builds (8.6 before GA), so availability alone offered versions the installer
+# then refused (#688). The manifest list doubles as the no-Sury fallback: one source.
+fn_php_supported_list() {
+    mq '.software_versions.php_supported[]' | sort -Vr | tr '\n' ' ' | sed 's/ $//'
+}
+
 fn_discover_php_versions() {
     echo "[ * ] Adding Sury PHP repository for version discovery..."
     local codename
@@ -265,19 +273,24 @@ fn_discover_php_versions() {
     # Same canonical repo definition the installer's base stage writes, so the
     # later apt-get update in h-install-hestia does not see a conflicting entry.
     if ! command -v add_sury_repo >/dev/null 2>&1 || ! add_sury_repo "$codename"; then
-        echo "[ ! ] Sury repo setup failed - using built-in PHP version list" >&2
-        PHP_VERSIONS_AVAILABLE="8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6"
+        echo "[ ! ] Sury repo setup failed - using the release-supported PHP list" >&2
+        PHP_VERSIONS_AVAILABLE=$(fn_php_supported_list)
         echo "[ * ] Available PHP versions: $PHP_VERSIONS_AVAILABLE"
         return 0
     fi
     DEBIAN_FRONTEND=noninteractive apt-get -qq update >> "$LOG_DIR/install.log" 2>&1
-    PHP_VERSIONS_AVAILABLE=$(apt-cache pkgnames php 2>/dev/null \
+    local sury_versions v filtered=""
+    sury_versions=$(apt-cache pkgnames php 2>/dev/null \
         | grep -E '^php[0-9]+\.[0-9]+-(common|fpm)$' \
         | grep -oE '[0-9]+\.[0-9]+' \
         | sort -Vr | uniq | tr '\n' ' ' | sed 's/ $//' || true)
+    for v in $sury_versions; do
+        case " $(fn_php_supported_list) " in *" $v "*) filtered="$filtered $v" ;; esac
+    done
+    PHP_VERSIONS_AVAILABLE="${filtered# }"
     [ -n "$PHP_VERSIONS_AVAILABLE" ] || {
-        echo "[ ! ] Sury version discovery failed - using built-in fallback list" >&2
-        PHP_VERSIONS_AVAILABLE="8.5 8.4 8.3 8.2 8.1 8.0 7.4 7.3 7.2 7.1 7.0 5.6"
+        echo "[ ! ] Sury version discovery failed - using the release-supported PHP list" >&2
+        PHP_VERSIONS_AVAILABLE=$(fn_php_supported_list)
     }
     echo "[ * ] Available PHP versions: $PHP_VERSIONS_AVAILABLE"
 }

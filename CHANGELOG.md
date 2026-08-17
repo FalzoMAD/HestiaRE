@@ -14,6 +14,15 @@ opens above it.
 
 ### Fixed
 
+- **The wizard offered Sury's pre-release PHP 8.6, which the installer then refused** (#688).
+  Discovery keyed on package availability alone, while h-add-web-php validates against the
+  release-tested `php_supported` list - two reference sets, no agreement check. The wizard now
+  offers only the intersection, and the two hardcoded fallback lists are gone: the manifest
+  list is the single source (also used when Sury is unreachable). Bumping `php_supported`
+  joins the minor-release pin check.
+
+### Fixed
+
 - **mailonly no longer force-installs a MariaDB server** (#689). The forced install predated
   the sqlite webmail backend, whose whole point removed the only MySQL consumer in the mail
   stack (exim/dovecot/rspamd/fail2ban never spoke MySQL, phpMyAdmin was already off). The
