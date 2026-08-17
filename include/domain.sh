@@ -1063,8 +1063,10 @@ is_base_domain_owner() {
 			web=$(grep -F -H -h "DOMAIN='$basedomain'" $CONF_DIR/users/*/web.conf)
 			if [ "$ENFORCE_SUBDOMAIN_OWNERSHIP" = "yes" ]; then
 				if [ -n "$web" ]; then
-					parse_object_kv_list "$web"
-					if [ -z "$ALLOW_USERS" ] || [ "$ALLOW_USERS" != "yes" ]; then
+					# Subshell: this is the PARENT's record - parsed in place, its keys (SSL, ...)
+					# leaked into the caller's vhost rendering. Only ALLOW_USERS leaves this line.
+					allow_users=$(parse_object_kv_list "$web" 2> /dev/null; echo "${ALLOW_USERS:-}")
+					if [ "$allow_users" != "yes" ]; then
 						# an existing $basedomain is fine as long as the current user owns it
 						check=$(is_domain_new "" $basedomain)
 						if [ $? -ne 0 ]; then

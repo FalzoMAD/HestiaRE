@@ -12,6 +12,31 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **The no-MariaDB webmail backend died on a genuinely fresh install** (#684): install_panel
+  built the panel pool's conf.d before php-sqlite3 existed (the package only arrived later via
+  h-add-web-php, and nothing rebuilds the conf.d), so the strict roundcube sqlite seed failed
+  with "could not find driver" and aborted the install. php-sqlite3 joins the panel package
+  list (the panel pool hosts the webmail apps); belt: the sqlite branches of both webmailer
+  add commands heal a stale conf.d once via ensure_panel_sqlite_driver before failing hard.
+  The retry after the failure then exposed two more composed defects, both fixed: the
+  installer pre-seeded WEBMAIL_SYSTEM=roundcube before the fatal command (the #573 lesson had
+  only been applied to the tachyon branch), and the already-installed check accepted the OS
+  package's own stock config.inc.php as proof of our install - it keys on the pool conf now,
+  which is written last and only by us. Found by the fresh-install rule's favourite gap - the
+  ub24 verification was a resumed install that had staged package and conf.d by hand.
+
+- **Adding a subdomain under an SSL domain rendered SSL vhosts without a certificate and took
+  nginx AND apache down** (#683, first tester-reported issue). The subdomain-ownership check
+  parsed the PARENT's record in place and leaked every key (SSL, SSL_HOME, ...) into the add
+  command's namespace; the merged template then kept its SSL block for the new domain before
+  its own record (SSL='no') was written - and the dead vhost also blocked the restart that
+  Let's Encrypt would have needed to fix it. The parse is scoped to a subshell now, only
+  ALLOW_USERS leaves it. Same leak sat in mail-domain add (harmless: renders in child
+  processes) and web-alias add (survived only by ordering luck - it reloads the domain's own
+  record before rendering); both go through the same fixed path.
+
 ### Changed
 
 - **The custom preset is gone** (#195). The standard path already asks everything relevant
