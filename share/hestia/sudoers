@@ -3,4 +3,8 @@
 #
 # Everything the panel must not reach lives in /usr/local/hestia/sbin and is deliberately not named
 # here. Keep it that way - do not widen this rule, and do not add a second one for sbin.
+#
+# Deployed only through deploy_hestia_sudoers: it prepends "Defaults:hestia !log_allowed" where
+# the box's sudo validates it, keeping panel command lines out of auth.log. Do not add it here -
+# sudo-rs rejects the directive and would refuse the whole file.
 hestia   ALL=NOPASSWD:/usr/local/hestia/bin/*

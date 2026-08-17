@@ -216,3 +216,34 @@ function post_checkbox(string $key, bool $offered, $stored, string $on, string $
 	}
 	return empty($_POST[$key]) ? $off : $on;
 }
+
+/**
+ * Hand a secret to an h-* command through a 0600 tempfile instead of argv: only the path reaches
+ * the process arguments, sudo's log and /proc/<pid>/cmdline. Pass the returned path where the
+ * plaintext would go and unlink it after exec. The "/tmp" prefix is required - is_password_valid
+ * anchors on ^/tmp/.
+ *
+ * Returns false and sets error_msg rather than throwing - this runs on the save route, where an
+ * uncaught exception is a white page. The shutdown handler covers a request that dies before the
+ * unlink, which would otherwise leave the cleartext in /tmp.
+ */
+function secret_tmpfile(string $value)
+{
+	$path = @tempnam("/tmp", "hst-sec-");
+	if ($path === false) {
+		$_SESSION["error_msg"] = _("An internal error occurred");
+		return false;
+	}
+	chmod($path, 0600);
+	if (file_put_contents($path, $value . "\n") === false) {
+		@unlink($path);
+		$_SESSION["error_msg"] = _("An internal error occurred");
+		return false;
+	}
+	register_shutdown_function(static function () use ($path) {
+		if (is_file($path)) {
+			@unlink($path);
+		}
+	});
+	return $path;
+}

@@ -237,6 +237,43 @@ seed_hestia_etc() {
 
 # ── re-apply what a copy-only update cannot: state outside the install tree ───
 # Idempotent throughout, so a fresh install runs this as a no-op.
+# Keep panel command lines (passwords are passed as arguments) out of persistent logs. Classic
+# sudo takes "!log_allowed" - allowed calls unlogged, denials still logged; sudo-rs accepts no
+# logging option, so there the rsyslog drop rule carries it. Only visudo-validated content is
+# ever installed: a broken sudoers locks the panel out.
+deploy_hestia_sudoers() {
+	local root="${HESTIA:-/usr/local/hestia}" tmp
+	[ -f "$root/share/hestia/sudoers" ] && [ -d /etc/sudoers.d ] || return 0
+	local suppressed="no" dropped="no"
+	tmp=$(mktemp)
+	{ printf 'Defaults:hestia !log_allowed\n'; cat "$root/share/hestia/sudoers"; } > "$tmp"
+	if visudo -c -f "$tmp" > /dev/null 2>&1; then
+		suppressed="yes"
+	else
+		# This flavor keeps logging argv and depends entirely on the rsyslog rule - say so.
+		echo "NOTE: this sudo does not accept !log_allowed - relying on the rsyslog drop rule"
+		cp -f "$root/share/hestia/sudoers" "$tmp"
+	fi
+	if visudo -c -f "$tmp" > /dev/null 2>&1; then
+		install -m 440 -o root -g root "$tmp" /etc/sudoers.d/hestia
+	else
+		echo "WARN: sudoers does not validate on this box - /etc/sudoers.d/hestia left untouched"
+	fi
+	rm -f "$tmp"
+	if [ -f "$root/share/hestia/rsyslog-sudo-nolog.conf" ] && [ -d /etc/rsyslog.d ]; then
+		cp -f "$root/share/hestia/rsyslog-sudo-nolog.conf" /etc/rsyslog.d/10-hestia-sudo-nolog.conf
+		systemctl try-restart rsyslog > /dev/null 2>&1 || true
+		dropped="yes"
+	fi
+	# State of both layers in one line - the first thing worth knowing after a distro change.
+	echo "  sudoers suppression: $([ "$suppressed" = yes ] && echo active || echo "not supported by this sudo")," \
+		"rsyslog drop rule: $([ "$dropped" = yes ] && echo deployed || echo "rsyslog absent")"
+	if [ "$suppressed" = "no" ] && [ "$dropped" = "no" ]; then
+		echo "WARN: neither layer could be applied - panel command lines (incl. secrets passed" \
+			"as arguments) stay in the system log"
+	fi
+}
+
 reapply_outside_tree() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
 
@@ -252,6 +289,8 @@ reapply_outside_tree() {
 	rm -f "$hestia_root/web/css/src/themes/vestia.css" \
 		"$hestia_root/web/css/src/themes/default.css" \
 		"$hestia_root/web/css/src/themes/flat.css"
+
+	deploy_hestia_sudoers
 
 	# build the isolated panel conf.d - activates the isolation on existing installs
 	if [ -x "$hestia_root/sbin/hestia-php-confd" ] && [ -f /etc/php/hestia/php-version ]; then

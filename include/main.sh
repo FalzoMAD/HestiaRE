@@ -653,9 +653,13 @@ is_object_value_exist() {
 }
 
 # Check if password is transmitted via file
+# Panel convention: a secret arrives as the PATH of a /tmp file so it never enters argv. Value
+# and path space overlap - a password shaped like an existing /tmp path is read as that file.
+# Safe because the caller is already root-equivalent via sudoers; the symlink guard keeps the
+# root-side read honest should the pattern ever move somewhere that is not.
 is_password_valid() {
 	if [[ "$password" =~ ^/tmp/ ]]; then
-		if ! [[ "$password" == *../* ]]; then
+		if ! [[ "$password" == *../* ]] && [ ! -L "$password" ]; then
 			if [ -f "$password" ]; then
 				password="$(head -n1 $password)"
 			fi
@@ -666,7 +670,8 @@ is_password_valid() {
 # Check if hash is transmitted via file
 is_hash_valid() {
 	if [[ "$hash" =~ ^/tmp/ ]]; then
-		if ! [[ "$hash" == *../* ]]; then
+		# symlink guard as in is_password_valid
+		if ! [[ "$hash" == *../* ]] && [ ! -L "$hash" ]; then
 			if [ -f "$hash" ]; then
 				hash="$(head -n1 $hash)"
 			fi
