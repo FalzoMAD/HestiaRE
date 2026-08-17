@@ -1063,8 +1063,13 @@ is_base_domain_owner() {
 			web=$(grep -F -H -h "DOMAIN='$basedomain'" $CONF_DIR/users/*/web.conf)
 			if [ "$ENFORCE_SUBDOMAIN_OWNERSHIP" = "yes" ]; then
 				if [ -n "$web" ]; then
-					parse_object_kv_list "$web"
-					if [ -z "$ALLOW_USERS" ] || [ "$ALLOW_USERS" != "yes" ]; then
+					# Subshell scope: this is the PARENT's record, and parsing it in place leaked
+					# every key (SSL, SSL_HOME, ...) into the caller - h-add-web-domain then
+					# rendered the new domain's vhosts with the parent's SSL state against a
+					# certificate that does not exist, taking nginx AND apache down (#683).
+					# Only ALLOW_USERS ever leaves this line.
+					allow_users=$(parse_object_kv_list "$web" 2> /dev/null; echo "${ALLOW_USERS:-}")
+					if [ "$allow_users" != "yes" ]; then
 						# an existing $basedomain is fine as long as the current user owns it
 						check=$(is_domain_new "" $basedomain)
 						if [ $? -ne 0 ]; then
