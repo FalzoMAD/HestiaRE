@@ -55,6 +55,8 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 docroot="$HOMEDIR/$user/web/$domain/public_html"
+# user_exec children start in OUR cwd; a root-only cwd makes find/tar warn on exit
+cd "$HOMEDIR/$user" || check_result "$E_NOTEXIST" "user homedir missing"
 
 if [ "$mode" = "delete" ]; then
 	# DB name from the artefact, deleted only when it provably belongs to this user's
@@ -64,7 +66,8 @@ if [ "$mode" = "delete" ]; then
 		db_name=$(user_exec env HOME="$HOMEDIR/$user" timeout 60 "$WP_BIN" config get DB_NAME --path="$docroot" 2> /dev/null)
 	fi
 	if [[ "$db_name" =~ ^${user}_wp_[0-9a-f]{8}$ ]]; then
-		$BIN/h-delete-database "$user" "${db_name#"${user}"_}" > /dev/null 2>&1 \
+		# h-delete-database expects the FULL name (the suffix form was a silent no-op)
+		$BIN/h-delete-database "$user" "$db_name" > /dev/null 2>&1 \
 			|| echo "WARN: database $db_name could not be deleted"
 	elif [ -n "$db_name" ]; then
 		echo "NOTE: database '$db_name' does not match the managed naming - left untouched"
