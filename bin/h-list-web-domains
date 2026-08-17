@@ -53,6 +53,7 @@ json_list() {
         "DOCKER_PORT": "'$DOCKER_PORT'",
         "DOCKER_OCTET": "'$DOCKER_OCTET'",
         "LETSENCRYPT": "'$LETSENCRYPT'",
+        "WP": "'$WP'",
         "FTP_USER": "'$FTP_USER'",
         "FTP_PATH": "'$FTP_PATH'",
         "AUTH_USER": "'$AUTH_USER'",

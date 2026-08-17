@@ -12,6 +12,21 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **WordPress as a panel-managed web-domain option, CLI stage** (#682). `h-add-web-domain-wordpress`
+  installs a complete WordPress into an empty docroot as the customer, via the pinned wp-cli
+  running the domain's own backend PHP: en_US core with checksum verification (localized builds
+  have no reliable sums - the locale, defaulted from the panel user's language, arrives as a
+  language pack), DB through h-add-database, wp-cron disabled in favour of a deterministic
+  customer cron entry, admin = panel user with a generated password shown exactly once.
+  nginx-only switches an untouched default template to wordpress-disable-xmlrpc; both/apache
+  work via .htaccess. `h-delete-web-domain-wordpress` detaches by default (flag only, the site
+  keeps running unmanaged) or deletes (files + DB read from the wp-config artefact + cron entry,
+  template back). `h-update-web-domain-wordpress` runs core+db (the future panel button);
+  plugins/themes only via SCOPE=all on the CLI. New record field `WP` in the key registry and
+  both list commands; every failure path cleans up to "nothing was installed".
+
 ### Fixed
 
 - **The wizard offered Sury's pre-release PHP 8.6, which the installer then refused** (#688).

@@ -1,0 +1,107 @@
+#!/bin/bash
+# info: detach or delete a panel-managed WordPress from a web domain
+# options: USER DOMAIN [MODE]
+#
+# example: h-delete-web-domain-wordpress john blog.acme.com
+# example: h-delete-web-domain-wordpress john blog.acme.com delete
+#
+# MODE=detach (default): only the management flag is cleared - files, database, template and
+# the cron entry stay, the site keeps running unmanaged. Re-enabling later fails on the
+# docroot guard by design.
+# MODE=delete: INTENTIONAL DATA LOSS - the WordPress files, its database (read from the
+# customer's wp-config.php, the artefact) and the cron entry are removed, the template goes
+# back to default. Mail, logs and the domain itself stay.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+mode=${3-detach}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+WP_BIN="/usr/local/bin/wp"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [detach|delete]'
+is_format_valid 'user' 'domain'
+is_object_valid 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+
+if [ "$mode" != "detach" ] && [ "$mode" != "delete" ]; then
+	check_result "$E_INVALID" "MODE must be 'detach' or 'delete'"
+fi
+
+wp_state=$(get_object_value 'web' 'DOMAIN' "$domain" '$WP')
+[ "$wp_state" = "yes" ] || check_result "$E_NOTEXIST" "WordPress is not managed for $domain"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+docroot="$HOMEDIR/$user/web/$domain/public_html"
+
+if [ "$mode" = "delete" ]; then
+	# DB name from the artefact, deleted only when it provably belongs to this user's
+	# wp_ naming - a hand-edited wp-config pointing elsewhere is named, not deleted
+	db_name=""
+	if [ -f "$docroot/wp-config.php" ]; then
+		db_name=$(user_exec env HOME="$HOMEDIR/$user" timeout 60 "$WP_BIN" config get DB_NAME --path="$docroot" 2> /dev/null)
+	fi
+	if [[ "$db_name" =~ ^${user}_wp_[0-9a-f]{8}$ ]]; then
+		$BIN/h-delete-database "$user" "${db_name#"${user}"_}" > /dev/null 2>&1 \
+			|| echo "WARN: database $db_name could not be deleted"
+	elif [ -n "$db_name" ]; then
+		echo "NOTE: database '$db_name' does not match the managed naming - left untouched"
+	fi
+
+	# remove the WordPress payload from the docroot (leaves anything foreign alone by
+	# removing the known WP tree, not the directory)
+	user_exec rm -rf "$docroot/wp-admin" "$docroot/wp-includes" "$docroot/wp-content"
+	user_exec find "$docroot" -maxdepth 1 -name "wp-*.php" -delete
+	user_exec rm -f "$docroot/index.php" "$docroot/xmlrpc.php" "$docroot/license.txt" "$docroot/readme.html" "$docroot/.htaccess"
+
+	# cron entry: matched on the docroot path inside our own command line
+	for job in $($BIN/h-list-cron-jobs "$user" plain 2> /dev/null | grep -F "cron event run --due-now --path=$docroot" | cut -f 1); do
+		$BIN/h-delete-cron-job "$user" "$job" > /dev/null 2>&1
+	done
+
+	# template back to default only if it is still ours
+	tpl=$(get_object_value 'web' 'DOMAIN' "$domain" '$TPL')
+	case "$tpl" in
+		wordpress | wordpress-disable-xmlrpc)
+			$BIN/h-change-web-domain-tpl "$user" "$domain" "default" > /dev/null
+			;;
+	esac
+fi
+
+update_object_value 'web' 'DOMAIN' "$domain" '$WP' ""
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+if [ "$mode" = "delete" ]; then
+	$BIN/h-log-action "$user" "Info" "Web" "WordPress deleted (Domain: $domain)."
+else
+	$BIN/h-log-action "$user" "Info" "Web" "WordPress detached (Domain: $domain) - site keeps running unmanaged."
+fi
+log_event "$OK" "$ARGUMENTS"
+
+exit

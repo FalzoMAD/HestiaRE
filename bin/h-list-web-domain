@@ -45,6 +45,7 @@ json_list() {
         "DOCKER_PORT": "'$DOCKER_PORT'",
         "DOCKER_OCTET": "'$DOCKER_OCTET'",
         "LETSENCRYPT": "'$LETSENCRYPT'",
+        "WP": "'$WP'",
         "FTP_USER": "'$FTP_USER'",
         "FTP_PATH": "'$FTP_PATH'",
         "AUTH_USER": "'$AUTH_USER'",
@@ -94,6 +95,9 @@ shell_list() {
 	fi
 	if [ -n "$DOCKER" ]; then
 		echo "DOCKER:           $DOCKER -> .$DOCKER_OCTET:$DOCKER_PORT"
+	fi
+	if [ -n "$WP" ]; then
+		echo "WORDPRESS:        managed"
 	fi
 	echo "TEMPLATE:         $TPL"
 	if [ -n "$WEB_BACKEND" ]; then

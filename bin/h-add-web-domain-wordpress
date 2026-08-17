@@ -1,0 +1,196 @@
+#!/bin/bash
+# info: install a panel-managed WordPress into a web domain
+# options: USER DOMAIN [LOCALE] [TITLE]
+#
+# example: h-add-web-domain-wordpress john blog.acme.com
+# example: h-add-web-domain-wordpress john blog.acme.com de_DE "Acme Blog"
+#
+# Everything runs in the customer context via the pinned wp-cli: core download (en_US,
+# checksum-verified - localized builds have no reliable checksums, the locale arrives as a
+# language pack afterwards), config, install. The DB comes through h-add-database (one code
+# path, quota included), credentials live only in the customer's wp-config.php. wp-cron is
+# disabled in favour of a customer cron entry - deterministic instead of pageview-triggered.
+# The WP record field only says "panel-managed"; everything else reads from the artefact.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+domain=$2
+locale=$3
+title=$4
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+WP_BIN="/usr/local/bin/wp"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER DOMAIN [LOCALE] [TITLE]'
+is_format_valid 'user' 'domain'
+is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+is_object_valid 'web' 'DOMAIN' "$domain"
+is_object_unsuspended 'web' 'DOMAIN' "$domain"
+
+if [ -z "$(echo "$DB_SYSTEM" | grep -w 'mysql')" ]; then
+	check_result "$E_NOTEXIST" "WordPress needs a MySQL database (DB_SYSTEM has no mysql)"
+fi
+
+[ -x "$WP_BIN" ] || check_result "$E_NOTEXIST" "wp-cli is not installed ($WP_BIN)"
+
+wp_state=$(get_object_value 'web' 'DOMAIN' "$domain" '$WP')
+[ "$wp_state" = "yes" ] && check_result "$E_EXISTS" "WordPress is already managed for $domain"
+
+docker=$(get_object_value 'web' 'DOMAIN' "$domain" '$DOCKER')
+[ -n "$docker" ] && check_result "$E_FORBIDEN" "$domain is a docker proxy domain"
+
+tpl=$(get_object_value 'web' 'DOMAIN' "$domain" '$TPL')
+[ "$tpl" = "no-php" ] && check_result "$E_FORBIDEN" "$domain has no PHP backend (template no-php)"
+
+# custom docroot has its own owner semantics - a managed install must live in the default path
+custom_docroot=$(get_object_value 'web' 'DOMAIN' "$domain" '$CUSTOM_DOCROOT')
+[ -n "$custom_docroot" ] && check_result "$E_FORBIDEN" "$domain uses a custom docroot"
+
+docroot="$HOMEDIR/$user/web/$domain/public_html"
+[ -d "$docroot" ] || check_result "$E_NOTEXIST" "docroot $docroot does not exist"
+
+# Never install over an existing site: any prior WordPress or any index.php means the
+# docroot is in use (the shipped skeleton has neither).
+if [ -e "$docroot/wp-config.php" ] || [ -e "$docroot/wp-includes" ] || [ -e "$docroot/index.php" ]; then
+	check_result "$E_EXISTS" "docroot is not empty ($domain already serves an application)"
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Locale: explicit argument wins, otherwise the panel user's language (small static map,
+# en_US fallback). The core payload is always the verified en_US build - the locale is
+# added as a language pack below, so a wrong guess costs nothing.
+if [ -z "$locale" ]; then
+	user_lang=$(get_user_value '$LANGUAGE')
+	case "$user_lang" in
+		de) locale="de_DE" ;;
+		en | '') locale="en_US" ;;
+		fr) locale="fr_FR" ;;
+		es) locale="es_ES" ;;
+		it) locale="it_IT" ;;
+		nl) locale="nl_NL" ;;
+		pt) locale="pt_BR" ;;
+		*) locale="en_US" ;;
+	esac
+fi
+[[ "$locale" =~ ^[a-z]{2,3}(_[A-Z]{2})?$ ]] || check_result "$E_INVALID" "invalid locale '$locale'"
+
+[ -n "$title" ] || title="$domain"
+
+# wp-cli runs with the PHP version that serves the domain, not the PATH CLI
+php_ver=$(get_object_value 'web' 'DOMAIN' "$domain" '$PHP_VERSION')
+wp_php="/usr/bin/php${php_ver:-}"
+[ -x "$wp_php" ] || wp_php="/usr/bin/php"
+
+wp_user() {
+	user_exec env HOME="$HOMEDIR/$user" WP_CLI_PHP="$wp_php" timeout 600 \
+		"$WP_BIN" "$@" --path="$docroot"
+}
+
+# DB name deterministic per domain, inside the user_ prefix convention; the password
+# lives only in wp-config.php afterwards
+db_suffix="wp_$(echo "$domain" | md5sum | cut -c1-8)"
+db_pass=$(generate_password)
+$BIN/h-add-database "$user" "$db_suffix" "$db_suffix" "$db_pass" > /dev/null
+check_result $? "database creation failed"
+db_name="${user}_${db_suffix}"
+db_user="${user}_${db_suffix}"
+
+cleanup_failed_install() {
+	$BIN/h-delete-database "$user" "$db_suffix" > /dev/null 2>&1
+	user_exec rm -rf "$docroot/wp-admin" "$docroot/wp-includes" "$docroot/wp-content" 2> /dev/null
+	user_exec find "$docroot" -maxdepth 1 -name "wp-*.php" -delete 2> /dev/null
+	user_exec rm -f "$docroot/index.php" "$docroot/xmlrpc.php" "$docroot/license.txt" "$docroot/readme.html" 2> /dev/null
+}
+
+echo "[ * ] Downloading WordPress ($locale)..."
+if ! wp_user core download --locale=en_US --quiet \
+	|| ! wp_user core verify-checksums --locale=en_US --quiet; then
+	cleanup_failed_install
+	check_result "$E_CONNECT" "WordPress download/verification failed - nothing was installed"
+fi
+
+echo "[ * ] Configuring..."
+if ! wp_user config create --dbname="$db_name" --dbuser="$db_user" --dbpass="$db_pass" --quiet \
+	|| ! wp_user config set DISABLE_WP_CRON true --raw --type=constant --quiet; then
+	cleanup_failed_install
+	check_result "$E_UPDATE" "WordPress configuration failed - nothing was installed"
+fi
+
+# scheme follows the domain's current SSL state; WordPress carries the URL in its options
+scheme="http"
+[ "$(get_object_value 'web' 'DOMAIN' "$domain" '$SSL')" = "yes" ] && scheme="https"
+
+admin_email=$(get_user_value '$CONTACT')
+admin_pass=$(generate_password)
+
+echo "[ * ] Installing..."
+if ! wp_user core install --url="$scheme://$domain" --title="$title" \
+	--admin_user="$user" --admin_email="$admin_email" --admin_password="$admin_pass" \
+	--skip-email --quiet; then
+	cleanup_failed_install
+	check_result "$E_UPDATE" "WordPress install failed - nothing was installed"
+fi
+
+# locale as a language pack on top of the verified en_US core; a failure only costs the
+# translation, never the install
+if [ "$locale" != "en_US" ]; then
+	wp_user language core install "$locale" --activate --quiet \
+		|| echo "WARN: language pack $locale could not be installed - site stays en_US"
+fi
+
+# nginx-only serves WordPress through its own template (permalinks); both/apache-only work
+# via .htaccess on the default template. Only an untouched 'default' is switched - a custom
+# template choice stays the admin's.
+if [ "$WEB_SYSTEM" = "nginx" ] && [ -z "$PROXY_SYSTEM" ] && [ "$tpl" = "default" ]; then
+	$BIN/h-change-web-domain-tpl "$user" "$domain" "wordpress-disable-xmlrpc" > /dev/null
+	check_result $? "template switch failed"
+fi
+
+# deterministic cron instead of pageview-triggered wp-cron (DISABLE_WP_CRON is set above);
+# absolute paths - cron's default PATH has no /usr/local/bin
+$BIN/h-add-cron-job "$user" "*/5" "*" "*" "*" "*" \
+	"$WP_BIN cron event run --due-now --path=$docroot --quiet" > /dev/null 2>&1 \
+	|| echo "WARN: could not add the wp-cron entry (CRON quota?) - scheduled WP tasks will not run"
+
+# the record field says only "panel-managed"; add_object_key is idempotent on key presence
+add_object_key "web" 'DOMAIN' "$domain" 'WP' 'LETSENCRYPT'
+update_object_value 'web' 'DOMAIN' "$domain" '$WP' "yes"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+$BIN/h-log-action "$user" "Info" "Web" "WordPress installed (Domain: $domain, Locale: $locale)."
+log_event "$OK" "$ARGUMENTS"
+
+echo "WordPress installed: $scheme://$domain/"
+echo "  Admin login: $scheme://$domain/wp-login.php"
+echo "  Admin user:  $user"
+echo "  Admin pass:  $admin_pass"
+echo "  (shown once - not stored anywhere)"
+
+exit
