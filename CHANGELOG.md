@@ -12,6 +12,13 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **The last panel secrets leave argv** (#694, closes it): the backup-host password (sftp/ftp)
+  now travels through the same 0600 tempfile as every other panel secret. With Backblaze gone
+  the b2 application key went with it, so no panel call site passes a secret as a process
+  argument any more - verified by sweep.
+
 ### Removed
 
 - **Backblaze B2 backup backend** (#696). B2 was unused, and dropping it removes an external
