@@ -71,6 +71,7 @@ $v_docker_net = "";
 if (!empty($owner_row["DOCKER_IP"])) {
 	$v_docker_net = preg_replace('/\.\d+$/', "", $owner_row["DOCKER_IP"]);
 }
+$v_wp = $data[$v_domain]["WP"] ?? "";
 $v_docker = $data[$v_domain]["DOCKER"] ?? "";
 $v_docker_port = $data[$v_domain]["DOCKER_PORT"] ?? "";
 $v_docker_octet = $data[$v_domain]["DOCKER_OCTET"] ?? "";
@@ -283,6 +284,11 @@ $offer_docker = !empty($v_docker_net);
 $offer_docker_template = $offer_docker && count($docker_templates) > 1;
 $offer_web_template = empty($v_docker) && $can_edit_templates && is_array($templates) && count($templates) > 0;
 $offer_backend = empty($v_docker) && !empty($_SESSION["WEB_BACKEND"]);
+// WordPress needs a PHP backend and a MySQL server; a docker domain has no docroot to install into
+$offer_wordpress =
+	empty($v_docker) &&
+	!empty($_SESSION["WEB_BACKEND"]) &&
+	str_contains((string) ($_SESSION["DB_SYSTEM"] ?? ""), "mysql");
 $offer_backend_template = $offer_backend && $can_edit_templates;
 $offer_proxy = empty($v_docker) && !empty($_SESSION["PROXY_SYSTEM"]);
 $offer_proxy_template = $offer_proxy && $can_edit_templates && count($proxy_templates ?? []) > 1;
@@ -294,6 +300,43 @@ $offer_http3 =
 		(!empty($_SESSION["PROXY_SYSTEM"]) && $_SESSION["PROXY_SYSTEM"] == "nginx"));
 $offer_botlimit = !empty($botfamilies);
 $offer_ftp = $_SESSION["FTP_SYSTEM"] == "proftpd";
+
+// WordPress update/removal run on their own POST route (own form): they are commands in their
+// own right, and folding them into the save route would tie a destructive action to whatever
+// else the form happens to carry.
+if (!empty($_POST["wp_action"]) && $offer_wordpress && !empty($v_wp)) {
+	verify_csrf($_POST);
+	if ($_POST["wp_action"] === "update") {
+		exec(
+			HESTIA_CMD . "h-update-web-domain-wordpress " . $user . " " . quoteshellarg($v_domain),
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		// the command prints the version transition - the only place it is visible
+		if (empty($_SESSION["error_msg"])) {
+			$_SESSION["ok_msg"] = htmlentities(trim(implode(" ", array_slice((array) $output, -1))));
+		}
+		unset($output);
+	} elseif ($_POST["wp_action"] === "delete") {
+		exec(
+			HESTIA_CMD .
+				"h-delete-web-domain-wordpress " .
+				$user .
+				" " .
+				quoteshellarg($v_domain) .
+				" delete",
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		unset($output);
+		if (empty($_SESSION["error_msg"])) {
+			$v_wp = "";
+			$_SESSION["ok_msg"] = _("WordPress has been deleted.");
+		}
+	}
+}
 
 // Check POST request
 if (!empty($_POST["save"])) {
@@ -1048,6 +1091,42 @@ if (!empty($_POST["save"])) {
 
 	// Docker proxy (#566/#592): enable or retarget re-runs the add command (it updates the
 	// fields and rebuilds); the command itself validates port, octet, duplicates and wildcards
+	// Ticking installs, unticking detaches - deleting is the separate button, never a
+	// side effect of a save. Credentials are printed once by the command and shown once here.
+	$post_wp = post_checkbox("v_wordpress", $offer_wordpress, empty($v_wp) ? "" : "on", "on", "");
+	if (!empty($post_wp) && empty($v_wp) && empty($_SESSION["error_msg"])) {
+		exec(
+			HESTIA_CMD . "h-add-web-domain-wordpress " . $user . " " . quoteshellarg($v_domain),
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		if (empty($_SESSION["error_msg"])) {
+			$v_wp = "yes";
+			// ok_msg is printed as raw HTML - escape first, then break lines. The generated
+			// admin password is in here and is shown exactly once.
+			$_SESSION["ok_msg"] = nl2br(htmlentities(trim(implode("\n", (array) $output))));
+			$restart_web = "yes";
+			$restart_proxy = "yes";
+		}
+		unset($output);
+	} elseif (empty($post_wp) && !empty($v_wp) && empty($_SESSION["error_msg"])) {
+		exec(
+			HESTIA_CMD .
+				"h-delete-web-domain-wordpress " .
+				$user .
+				" " .
+				quoteshellarg($v_domain) .
+				" detach",
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		unset($output);
+		if (empty($_SESSION["error_msg"])) {
+			$v_wp = "";
+		}
+	}
 	if ($offer_docker && empty($_SESSION["error_msg"])) {
 		$post_docker = post_checkbox("v_docker", $offer_docker, empty($v_docker) ? "" : "on", "on", "");
 		// Digits only, then the same ranges the command enforces - so a typo comes back as a
@@ -1729,8 +1808,9 @@ if (!empty($_POST["save"])) {
 		unset($output);
 	}
 
-	// Set success message
-	if (empty($_SESSION["error_msg"])) {
+	// Set success message - but never over a message a command produced for this save: the
+	// WordPress install prints credentials that are shown exactly once.
+	if (empty($_SESSION["error_msg"]) && empty($_SESSION["ok_msg"])) {
 		$_SESSION["ok_msg"] = _("Changes have been saved.");
 		header("Location: /edit/web/?domain=" . $v_domain);
 		exit();

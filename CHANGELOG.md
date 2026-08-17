@@ -12,12 +12,29 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **WordPress in the web-domain form** (#682 stage 2). A checkbox right under the PHP version
+  installs a managed WordPress; the generated admin credentials appear once in the save message
+  and nowhere else. An installed site gets three actions - admin login, core update, and a
+  delete button behind a typed-domain confirmation - which post to their own small form, so an
+  update or a deletion never carries whatever else the edit form happens to hold. Unticking the
+  checkbox detaches after a plain confirmation: the site keeps running, the panel lets go, and
+  the docroot guard blocks a re-enable, which the dialog says out loud. The gate is one
+  expression for view and POST, and it requires a PHP backend, a MySQL server and no docker
+  proxy on the domain.
+
 ### Fixed
 
 - **The last panel secrets leave argv** (#694, closes it): the backup-host password (sftp/ftp)
   now travels through the same 0600 tempfile as every other panel secret. With Backblaze gone
   the b2 application key went with it, so no panel call site passes a secret as a process
   argument any more - verified by sweep.
+
+- **A failed WordPress update now says what state the site is in** (#682). The install can
+  promise "nothing was installed" because it cleans up; the update cannot - the files may
+  already be replaced. Each failure names the running version and the way out (re-run, or the
+  wp core download --force line to repair the tree).
 
 ### Removed
 

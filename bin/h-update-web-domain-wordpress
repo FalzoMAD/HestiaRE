@@ -65,14 +65,19 @@ wp_user() {
 
 before=$(wp_user core version 2> /dev/null)
 echo "[ * ] WordPress $before - updating core..."
-wp_user core update --quiet || check_result "$E_UPDATE" "core update failed"
-wp_user core update-db --quiet || check_result "$E_UPDATE" "database schema update failed"
+# Unlike the install, a failed update cannot roll back to "nothing happened" - the files may
+# already be replaced. So every message says what state the site is in and what to do next.
+wp_user core update --quiet \
+	|| check_result "$E_UPDATE" "core update failed - the site still serves $before, its files may be partially replaced; re-run this command, or restore the file tree with: wp core download --force --path=$docroot"
+wp_user core update-db --quiet \
+	|| check_result "$E_UPDATE" "core files are updated but the database schema is not - the site may error until this succeeds; re-run this command"
 # Same per-file proof as the install: the update runs WP's own ZIP upgrader (empirically
 # complete, unlike wp-cli's tar extractor), but the asymmetry install-verifies/update-doesn't
 # would be trusted exactly until it breaks. en_US manifest is valid for every site - language
 # packs are decoupled from core files.
+after_ver=$(wp_user core version 2> /dev/null)
 wp_user core verify-checksums --locale=en_US --quiet \
-	|| check_result "$E_UPDATE" "update finished but the on-disk tree does NOT verify against the release manifest"
+	|| check_result "$E_UPDATE" "the site runs $after_ver and is reachable, but its files do not match the official checksums - some are missing or altered; repair with: wp core download --force --version=$after_ver --path=$docroot, then run this command again"
 
 if [ "$scope" = "all" ]; then
 	echo "[ * ] Updating plugins and themes..."
@@ -80,15 +85,14 @@ if [ "$scope" = "all" ]; then
 	wp_user theme update --all --quiet || echo "WARN: at least one theme update failed"
 fi
 
-after=$(wp_user core version 2> /dev/null)
-echo "WordPress: $before -> $after"
+echo "WordPress: $before -> $after_ver"
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
 # Logging
-$BIN/h-log-action "$user" "Info" "Web" "WordPress updated (Domain: $domain, $before -> $after, scope: $scope)."
+$BIN/h-log-action "$user" "Info" "Web" "WordPress updated (Domain: $domain, $before -> $after_ver, scope: $scope)."
 log_event "$OK" "$ARGUMENTS"
 
 exit

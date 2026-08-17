@@ -5,6 +5,7 @@ import handleClipboardCopy from './clipboardCopy.js';
 import handleConfirmAction from './confirmAction.js';
 import handleCopyCreds from './copyCreds.js';
 import handleDockerDisableGuard from './dockerDisableGuard.js';
+import handleWordpressGuards from './wordpressGuards.js';
 import handleCronGenerator from './cronGenerator.js';
 import handleDatabaseHints from './databaseHints.js';
 import handleDiscardAllMail from './discardAllMail.js';
@@ -38,6 +39,7 @@ function initListeners() {
 	handleCronGenerator();
 	handleDiscardAllMail();
 	handleDockerDisableGuard();
+	handleWordpressGuards();
 	handleDocRootHint();
 	handleEditWebListeners();
 	handleFormSubmit();
