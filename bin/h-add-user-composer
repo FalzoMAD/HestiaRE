@@ -51,12 +51,9 @@ COMPOSER_DIR="$HOMEDIR/$user/.composer"
 COMPOSER_BIN="$COMPOSER_DIR/composer"
 
 if [ -f "$COMPOSER_BIN" ]; then
-	# value test, not -f: the old `[ -f "$update" ]` asked whether a FILE named "yes" exists,
-	# so the update path never ran (#237)
 	if [ "$update" = 'yes' ]; then
-		# Per-user copies are DELIBERATELY upstream-latest regardless of the system source
-		# (h-update-sys-composer): they live in the user's HOME and composer verifies its own
-		# signature on selfupdate. timeout: bounded like every other tooling download.
+		# deliberately upstream-latest regardless of the system source: the copy is the
+		# user's own and composer verifies its signature; timeout keeps it bounded
 		user_exec timeout 300 php "$COMPOSER_BIN" selfupdate
 		exit
 	fi

@@ -466,10 +466,8 @@ _ask_checklist() {
     done
     local selected; selected=$(_wt_checklist "HestiaRE - $id" "$text" "${items[@]}")
     COMP_VALUES["$id"]=$(fn_normalize_list "$selected")
-    # value_join: emit the list with the component's own separator (e.g. "," for token sets).
-    # Joined over the ELEMENTS, not by substituting spaces in the string - though note the list
-    # pipeline upstream (whiptail tags, fn_normalize_list) is whitespace-tokenized throughout,
-    # so option values must not contain spaces anyway.
+    # value_join: the component's own separator, joined over the elements. The list pipeline
+    # is whitespace-tokenized throughout, so option values must not contain spaces.
     local join; join=$(mq --arg id "$id" '.components[$id].value_join // empty')
     if [ -n "$join" ]; then
         local -a _lp=(); read -ra _lp <<< "${COMP_VALUES[$id]}"
@@ -719,8 +717,8 @@ fn_write_install_conf() {
         echo ""
         echo "# Components"
         for id in "${ids[@]}"; do echo "COMPONENT_${id}=\"${COMP_VALUES[$id]:-}\""; done
-        # Source channel per component where the manifest declares one (source_default, keyed
-        # by preset). No entry for this preset = no line = the installer's own default (#237).
+        # source channel where the manifest declares one (source_default, keyed by preset);
+        # no entry for this preset = no line = the installer's own default
         local src
         for id in "${ids[@]}"; do
             src=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].source_default[$p] // empty')

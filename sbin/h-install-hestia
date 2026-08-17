@@ -872,9 +872,7 @@ configure_hestia() {
 # Stage: tools — utilities, composer, wp-cli
 # ════════════════════════════════════════════════════════════════════════════
 
-# Upstream-installer composer source: signed installer script, sha384 against installer.sig.
-# All downloads bounded - the php copy() calls this replaces had no timeout at all (a dropped
-# SYN was a silent multi-minute hang, #237).
+# Upstream composer source: signed installer script, sha384 against installer.sig, bounded downloads.
 install_composer_upstream() {
 	echo "[ * ] Installing composer (upstream installer)..."
 	if ! command -v composer > /dev/null 2>&1; then
@@ -908,10 +906,8 @@ install_tools() {
 		apt_install_optional "selected tools" $TOOLS_SELECTION || true
 	fi
 	if is_on "${COMPONENT_ADDON_COMPOSER:-true}"; then
-		# Source split (#237/#208): os_package is the default - apt-maintained, security fixes
-		# arrive automatically as distro backports, the channel the upstream phar does not
-		# have. upstream_installer (latest preset, or h-update-sys-composer later) = newest
-		# composer via the signed installer, but no automatic updates afterwards.
+		# os_package default: apt-maintained with automatic security backports; upstream_installer
+		# (latest preset / h-update-sys-composer) = newest composer, no auto-updates afterwards
 		case "${COMPONENT_ADDON_COMPOSER_SOURCE:-os_package}" in
 			upstream_installer) install_composer_upstream ;;
 			*)
@@ -926,8 +922,7 @@ install_tools() {
 		esac
 	fi
 	echo "[ * ] Installing wp-cli (system-wide, pinned)..."
-	# pinned + sha256-verified release phar (fetch_wp_cli_phar), never the moving gh-pages
-	# build address and never `wp cli update` - a re-run converges to the manifest pin (#237)
+	# pinned + verified phar; no `wp cli update` - a re-run converges to the manifest pin
 	if ! command -v wp > /dev/null 2>&1; then
 		fetch_wp_cli_phar /usr/local/bin/wp \
 			|| { echo "ERROR: could not fetch/verify the pinned wp-cli phar"; exit 1; }

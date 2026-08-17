@@ -46,7 +46,7 @@ WPCLI_BIN="$WPCLI_DIR/wp"
 
 if [ -f "$WPCLI_BIN" ]; then
 	if [ "$update" = 'yes' ]; then
-		# re-pin instead of `wp cli update`: the user's copy converges to the manifest pin (#237)
+		# re-pin, not `wp cli update`: the user's copy converges to the manifest pin
 		fetch_wp_cli_phar "$WPCLI_BIN" || check_result "$E_CONNECT" "Download of the pinned wp-cli phar failed"
 		chown $user:$user "$WPCLI_BIN"
 		exit
@@ -61,7 +61,7 @@ fi
 mkdir -p "$WPCLI_DIR"
 chown $user:$user "$WPCLI_DIR"
 
-# pinned + sha256-verified release phar, never the moving gh-pages build address (#237)
+# pinned + sha256-verified release phar - never a moving branch address
 fetch_wp_cli_phar "$WPCLI_BIN" || check_result "$E_CONNECT" "Download of the pinned wp-cli phar failed"
 chown $user:$user "$WPCLI_BIN"
 echo "alias wp=/home/"$user"/.wp-cli/wp" >> /home/$user/.bash_aliases
