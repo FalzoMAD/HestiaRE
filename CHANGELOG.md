@@ -27,6 +27,17 @@ opens above it.
   bubblewrap SSH jail (composer require + wp core download proven in-jail), per-user variants
   incl. aliases work in-jail too.
 
+- **Composer comes from the OS package by default; the source is a per-preset decision with a
+  live switcher** (#237, closes the #208 backlog). The manifest's `source_default` was read by
+  nobody - every install used the upstream installer, whose composer then never updates on a
+  running box. Now the wizard writes `COMPONENT_ADDON_COMPOSER_SOURCE`, `install_tools`
+  branches on it: `os_package` everywhere except the latest preset (apt-maintained, security
+  backports arrive automatically - deb12 ships 2.5.5+deb12u5) vs `upstream_installer` (signed
+  getcomposer.org installer, newest version, no auto-updates). The new `h-update-sys-composer
+  os|upstream` switches a live box: new source installed and verified BEFORE the old one is
+  removed, and the removal is mandatory - /usr/local/bin shadows /usr/bin, a leftover phar
+  would silently mask the OS package. Per-user copies are untouched.
+
 - **SnappyMail is replaced by Tachyon, its fork** (#584). SnappyMail upstream is dormant
   (last release October 2024, maintainer gone) - no security-patch channel for an
   internet-facing login is disqualifying. Tachyon (kimusan/Tachyon, AGPL like its parent) keeps

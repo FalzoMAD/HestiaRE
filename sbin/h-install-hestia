@@ -871,6 +871,33 @@ configure_hestia() {
 # ════════════════════════════════════════════════════════════════════════════
 # Stage: tools — utilities, composer, wp-cli
 # ════════════════════════════════════════════════════════════════════════════
+
+# Upstream-installer composer source: signed installer script, sha384 against installer.sig.
+# All downloads bounded - the php copy() calls this replaces had no timeout at all (a dropped
+# SYN was a silent multi-minute hang, #237).
+install_composer_upstream() {
+	echo "[ * ] Installing composer (upstream installer)..."
+	if ! command -v composer > /dev/null 2>&1; then
+		local EXPECTED_CHECKSUM ACTUAL_CHECKSUM
+		EXPECTED_CHECKSUM="$(curl -fsS --max-time 30 https://composer.github.io/installer.sig)" \
+			|| { echo "ERROR: could not fetch the composer installer signature"; exit 1; }
+		wget https://getcomposer.org/installer --timeout=30 --tries=3 --retry-connrefused --quiet -O composer-setup.php \
+			|| { rm -f composer-setup.php; echo "ERROR: could not download the composer installer"; exit 1; }
+		ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
+		if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+			rm -f composer-setup.php
+			echo "ERROR: Composer installer checksum mismatch" >&2
+			exit 1
+		fi
+		php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+		rm -f composer-setup.php
+		echo "  composer installed"
+	else
+		echo "  composer already present — upgrading"
+		composer self-update --quiet 2>/dev/null || true
+	fi
+}
+
 install_tools() {
 	echo "[ * ] Installing always-installed utilities..."
 	apt_install_optional "admin tools" htop iftop sysstat iotop mc mtr-tiny screen || true
@@ -881,28 +908,22 @@ install_tools() {
 		apt_install_optional "selected tools" $TOOLS_SELECTION || true
 	fi
 	if is_on "${COMPONENT_ADDON_COMPOSER:-true}"; then
-		echo "[ * ] Installing composer (system-wide)..."
-		if ! command -v composer > /dev/null 2>&1; then
-			# bounded like every install-path download - the php copy() calls this replaces had
-			# no timeout at all (a dropped SYN was a silent multi-minute hang, #237)
-			local EXPECTED_CHECKSUM ACTUAL_CHECKSUM
-			EXPECTED_CHECKSUM="$(curl -fsS --max-time 30 https://composer.github.io/installer.sig)" \
-				|| { echo "ERROR: could not fetch the composer installer signature"; exit 1; }
-			wget https://getcomposer.org/installer --timeout=30 --tries=3 --retry-connrefused --quiet -O composer-setup.php \
-				|| { rm -f composer-setup.php; echo "ERROR: could not download the composer installer"; exit 1; }
-			ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
-			if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
-				rm -f composer-setup.php
-				echo "ERROR: Composer installer checksum mismatch" >&2
-				exit 1
-			fi
-			php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
-			rm -f composer-setup.php
-			echo "  composer installed"
-		else
-			echo "  composer already present — upgrading"
-			composer self-update --quiet 2>/dev/null || true
-		fi
+		# Source split (#237/#208): os_package is the default - apt-maintained, security fixes
+		# arrive automatically as distro backports, the channel the upstream phar does not
+		# have. upstream_installer (latest preset, or h-update-sys-composer later) = newest
+		# composer via the signed installer, but no automatic updates afterwards.
+		case "${COMPONENT_ADDON_COMPOSER_SOURCE:-os_package}" in
+			upstream_installer) install_composer_upstream ;;
+			*)
+				echo "[ * ] Installing composer (OS package)..."
+				if dpkg -s composer > /dev/null 2>&1; then
+					echo "  composer OS package already present"
+				else
+					hestia_apt -y install composer \
+						|| { echo "ERROR: composer OS package install failed"; exit 1; }
+				fi
+				;;
+		esac
 	fi
 	echo "[ * ] Installing wp-cli (system-wide, pinned)..."
 	# pinned + sha256-verified release phar (fetch_wp_cli_phar), never the moving gh-pages

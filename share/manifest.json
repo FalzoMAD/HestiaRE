@@ -319,7 +319,7 @@
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
         "singlephp": "os_package", "nomail": "os_package"
       },
-      "note": "REALITY CHECK #237: install_tools always uses the signed upstream installer (getcomposer.org, sha384 against installer.sig); source_default below is read by nobody and the h-add-sys-composer / h-update-sys-composer it once promised were never built. Kept as a recorded open decision: an os_package source per preset would match the OS-repo-first rule but ships older composers. Not on mailonly - no customer web to build for."
+      "note": "Source split, built with #237/#208: source_default below picks the channel per preset - os_package (apt-maintained, security backports arrive automatically) everywhere except latest, which uses the signed upstream installer (getcomposer.org, newest composer, no auto-updates afterwards). The wizard writes COMPONENT_ADDON_COMPOSER_SOURCE from it (absent = os_package); h-update-sys-composer switches a live box either way. Not on mailonly - no customer web to build for."
     },
 
     "ADDON_CROWDSEC": {

@@ -719,6 +719,13 @@ fn_write_install_conf() {
         echo ""
         echo "# Components"
         for id in "${ids[@]}"; do echo "COMPONENT_${id}=\"${COMP_VALUES[$id]:-}\""; done
+        # Source channel per component where the manifest declares one (source_default, keyed
+        # by preset). No entry for this preset = no line = the installer's own default (#237).
+        local src
+        for id in "${ids[@]}"; do
+            src=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].source_default[$p] // empty')
+            [ -n "$src" ] && echo "COMPONENT_${id}_SOURCE=\"${src}\""
+        done
         echo ""
         echo "# Selected utilities (from tools checklist)"
         echo "TOOLS_SELECTION=\"${TOOLS_SELECTION:-}\""
