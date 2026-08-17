@@ -16,6 +16,13 @@ type=$1
 host=$2
 user=$3
 raw_password=$4
+# A /tmp secret file (panel, #694) is resolved to its contents BEFORE quotemeta - otherwise the
+# later is_password_valid sees the escaped path and never reads it. The OPENSSH-key branch below
+# still needs the real file path, so a key file is deliberately left untouched here.
+if [[ "$raw_password" =~ ^/tmp/ ]] && [[ "$raw_password" != *../* ]] && [ -f "$raw_password" ] \
+	&& ! grep -q "OPENSSH PRIVATE" "$raw_password" 2> /dev/null; then
+	raw_password="$(head -n1 "$raw_password")"
+fi
 HIDE=4
 password=$(perl -e 'print quotemeta shift(@ARGV)' "${raw_password}")
 path=${5-/backup}

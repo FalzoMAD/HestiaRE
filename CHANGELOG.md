@@ -40,8 +40,18 @@ opens above it.
   validates no logging option at all and gets a targeted rsyslog drop rule for the
   persistent auth.log instead (deployed everywhere as a second layer). Panel actions stay
   audited through h-log-action/log_event. Known residue on sudo-rs: the journald copy -
-  which is why taking secrets out of the h-* argv API entirely (stdin mode, as the
-  WordPress commands already do) is the required follow-up, not a nice-to-have.
+  which is why taking secrets out of the argv API entirely is the required follow-up. First
+  slice of that follow-up (#694) ships here: panel secrets now travel to the h-* commands
+  through a 0600 tempfile (the `secret_tmpfile` helper; the command reads the value via
+  is_password_valid, so only the /tmp PATH ever reaches argv/sudo-log/proc). Converted the
+  plaintext-argv call sites found in a full sweep - the MySQL root password (edit/server),
+  SMTP relay in three places (edit/server, edit/mail, add/mail) - and closed two command-side
+  gaps (h-change-database-host-password, h-add-sys-smtp-relay) that never read the tempfile.
+  Most call sites already used the tempfile pattern (login, add-user, add-mail-account,
+  add-database, ftp, stats). Still on argv and tracked in #694: the backup-host credentials
+  (sftp/ftp password + b2 application key), whose six branches need per-type verification the
+  fleet cannot give (b2 needs real Backblaze credentials) - the command already resolves a
+  tempfile there, the call-site conversion is the remaining step.
 
 ### Fixed
 

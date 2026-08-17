@@ -903,7 +903,7 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 				$v_smtp_relay = true;
 				$v_smtp_relay_host = quoteshellarg($_POST["v_smtp_relay_host"]);
 				$v_smtp_relay_user = quoteshellarg($_POST["v_smtp_relay_user"]);
-				$v_smtp_relay_pass = quoteshellarg($_POST["v_smtp_relay_pass"]);
+				$relay_pass_file = secret_tmpfile($_POST["v_smtp_relay_pass"]);
 				if (!empty($_POST["v_smtp_relay_port"])) {
 					$v_smtp_relay_port = quoteshellarg($_POST["v_smtp_relay_port"]);
 				} else {
@@ -920,12 +920,13 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 						" " .
 						$v_smtp_relay_user .
 						" " .
-						$v_smtp_relay_pass .
+						quoteshellarg($relay_pass_file) .
 						" " .
 						$v_smtp_relay_port,
 					$output,
 					$return_var,
 				);
+				unlink($relay_pass_file);
 				check_return_code($return_var, $output);
 				unset($output);
 			}

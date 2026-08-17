@@ -593,13 +593,15 @@ if (!empty($_POST["save"])) {
 	// Update mysql pasword
 	if (empty($_SESSION["error_msg"])) {
 		if (!empty($_POST["v_mysql_password"])) {
+			$pw_file = secret_tmpfile($_POST["v_mysql_password"]);
 			exec(
 				HESTIA_CMD .
 					"h-change-database-host-password mysql localhost root " .
-					quoteshellarg($_POST["v_mysql_password"]),
+					quoteshellarg($pw_file),
 				$output,
 				$return_var,
 			);
+			unlink($pw_file);
 			check_return_code($return_var, $output);
 			unset($output);
 			$v_db_adv = "yes";
@@ -642,7 +644,7 @@ if (!empty($_POST["save"])) {
 				$v_smtp_relay = true;
 				$v_smtp_relay_host = quoteshellarg($post_relay_host);
 				$v_smtp_relay_user = quoteshellarg($post_relay_user);
-				$v_smtp_relay_pass = quoteshellarg($post_relay_pass);
+				$relay_pass_file = secret_tmpfile($post_relay_pass);
 				if (!empty($post_relay_port)) {
 					$v_smtp_relay_port = quoteshellarg($post_relay_port);
 				} else {
@@ -655,12 +657,13 @@ if (!empty($_POST["save"])) {
 						" " .
 						$v_smtp_relay_user .
 						" " .
-						$v_smtp_relay_pass .
+						quoteshellarg($relay_pass_file) .
 						" " .
 						$v_smtp_relay_port,
 					$output,
 					$return_var,
 				);
+				unlink($relay_pass_file);
 				check_return_code($return_var, $output);
 				unset($output);
 			}

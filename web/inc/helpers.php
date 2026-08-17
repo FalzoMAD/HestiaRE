@@ -216,3 +216,21 @@ function post_checkbox(string $key, bool $offered, $stored, string $on, string $
 	}
 	return empty($_POST[$key]) ? $off : $on;
 }
+
+/**
+ * Hand a secret to an h-* command through a 0600 tempfile instead of argv (#694). The command
+ * reads the value via is_password_valid (a /tmp path is replaced by the file's first line), so
+ * only the PATH ever reaches the process arguments, sudo's log or /proc/<pid>/cmdline. Pass the
+ * returned path where the plaintext used to go; unlink it right after exec. The "/tmp" prefix is
+ * required - is_password_valid anchors on ^/tmp/.
+ */
+function secret_tmpfile(string $value): string
+{
+	$path = tempnam("/tmp", "hst-sec-");
+	if ($path === false) {
+		throw new RuntimeException("cannot create secret tempfile");
+	}
+	chmod($path, 0600);
+	file_put_contents($path, $value . "\n");
+	return $path;
+}
