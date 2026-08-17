@@ -187,6 +187,26 @@ if [ "$WEB_SYSTEM" = "nginx" ] && [ -z "$PROXY_SYSTEM" ] && [ "$tpl" = "default"
 	check_result $? "template switch failed"
 fi
 
+# Apache family: seed the canonical (structure-independent) WP .htaccess now. WordPress in a
+# CLI context does not write it (no apache detection), so permalinks flipped via wp-cli would
+# 404 until someone saves them in wp-admin - seeded, they work the moment the option changes.
+if [ "$WEB_SYSTEM" = "apache2" ]; then
+	cat > "$docroot/.htaccess" << 'HTACCESS'
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+HTACCESS
+	chown "$user":"$user" "$docroot/.htaccess"
+	chmod 644 "$docroot/.htaccess"
+fi
+
 # deterministic cron instead of pageview-triggered wp-cron (DISABLE_WP_CRON is set above);
 # absolute paths - cron's default PATH has no /usr/local/bin
 $BIN/h-add-cron-job "$user" "*/5" "*" "*" "*" "*" \
