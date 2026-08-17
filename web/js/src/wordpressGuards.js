@@ -50,6 +50,14 @@ export default function handleWordpressGuards() {
 					confirmWord: button.dataset.confirmWord,
 					confirmLabel: button.dataset.confirmLabel,
 					onConfirm: () => {
+						// The dialog only enables its confirm button once the typed word matches,
+						// so reaching this point IS the typed confirmation - hand it to the server,
+						// which checks it again. Without JS the field stays empty and the server
+						// refuses, so the dialog is a condition rather than a courtesy.
+						const field = actionForm.querySelector('#wp_confirm');
+						if (field) {
+							field.value = button.dataset.confirmWord;
+						}
 						button.dataset.wpConfirmed = 'yes';
 						// requestSubmit(button), not submit(): the submitter carries wp_action,
 						// and submit() would drop both it and every other guard on the form

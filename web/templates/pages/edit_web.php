@@ -685,6 +685,7 @@
 	<?php if ($offer_wordpress && !empty($v_wp)) { ?>
 	<form id="wp-action-form" method="post" class="u-hidden">
 		<input type="hidden" name="token" value="<?= tohtml($_SESSION["token"]) ?>">
+		<input type="hidden" name="wp_confirm" id="wp_confirm" value="">
 	</form>
 	<?php } ?>
 
