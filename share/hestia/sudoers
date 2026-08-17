@@ -3,4 +3,10 @@
 #
 # Everything the panel must not reach lives in /usr/local/hestia/sbin and is deliberately not named
 # here. Keep it that way - do not widen this rule, and do not add a second one for sbin.
+#
+# !log_allowed: sudo's default writes every ALLOWED command line - including panel-set passwords
+# in argv (h-add-user, h-change-user-password, ...) - verbatim into auth.log, which rotates and
+# lands in backups; hidepid cannot reach that channel. Panel actions stay audited through
+# h-log-action/log_event. DENIALS keep logging on purpose: an attempt outside bin/* must be seen.
+Defaults:hestia !log_allowed
 hestia   ALL=NOPASSWD:/usr/local/hestia/bin/*

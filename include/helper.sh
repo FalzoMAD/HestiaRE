@@ -253,6 +253,17 @@ reapply_outside_tree() {
 		"$hestia_root/web/css/src/themes/default.css" \
 		"$hestia_root/web/css/src/themes/flat.css"
 
+	# sudoers tracks the release (e.g. !log_allowed keeps panel-set passwords out of auth.log,
+	# #693) - but only a visudo-validated copy may land, a broken sudoers bricks the panel
+	if [ -f "$hestia_root/share/hestia/sudoers" ] && [ -d /etc/sudoers.d ]; then
+		if visudo -c -f "$hestia_root/share/hestia/sudoers" > /dev/null 2>&1; then
+			cp -f "$hestia_root/share/hestia/sudoers" /etc/sudoers.d/hestia
+			chmod 440 /etc/sudoers.d/hestia
+		else
+			echo "WARN: shipped sudoers does not validate - /etc/sudoers.d/hestia left untouched"
+		fi
+	fi
+
 	# build the isolated panel conf.d - activates the isolation on existing installs
 	if [ -x "$hestia_root/sbin/hestia-php-confd" ] && [ -f /etc/php/hestia/php-version ]; then
 		"$hestia_root/sbin/hestia-php-confd" > /dev/null 2>&1 || true

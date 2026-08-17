@@ -29,6 +29,19 @@ opens above it.
 
 ### Fixed
 
+- **Panel-set passwords no longer land in cleartext in auth.log** (#693, external report).
+  sudo's default logs every ALLOWED command line - including the argv of h-add-user,
+  h-change-user-password, h-add-mail-account, ... - verbatim to authpriv, a rotating file
+  that ends up in backups; the hidepid hardening cannot reach that channel. Inherited
+  unchanged from upstream (HestiaCP's sudoers has no suppression either). The shipped
+  sudoers now sets `Defaults:hestia !log_allowed`: allowed panel calls write no authpriv
+  line (measured), DENIALS keep logging (an attempt outside bin/* must be seen), and panel
+  actions stay audited through h-log-action/log_event. The update path re-deploys the
+  sudoers after visudo validation. Follow-up (separate): take secrets out of the h-* argv
+  API entirely via a stdin mode, as the WordPress commands already do.
+
+### Fixed
+
 - **The wizard offered Sury's pre-release PHP 8.6, which the installer then refused** (#688).
   Discovery keyed on package availability alone, while h-add-web-php validates against the
   release-tested `php_supported` list - two reference sets, no agreement check. The wizard now
