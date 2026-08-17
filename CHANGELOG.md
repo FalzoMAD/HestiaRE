@@ -12,12 +12,40 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **WordPress in the web-domain form** (#682 stage 2). A checkbox right under the PHP version
+  installs a managed WordPress; the generated admin credentials appear once in the save message
+  and nowhere else. An installed site gets three actions - admin login, core update, and a
+  delete button behind a typed-domain confirmation - which post to their own small form, so an
+  update or a deletion never carries whatever else the edit form happens to hold. Unticking the
+  checkbox detaches after a plain confirmation: the site keeps running, the panel lets go, and
+  the docroot guard blocks a re-enable, which the dialog says out loud. The gate is one
+  expression for view and POST, and it requires a PHP backend, a MySQL server and no docker
+  proxy on the domain.
+
 ### Fixed
 
 - **The last panel secrets leave argv** (#694, closes it): the backup-host password (sftp/ftp)
   now travels through the same 0600 tempfile as every other panel secret. With Backblaze gone
   the b2 application key went with it, so no panel call site passes a secret as a process
   argument any more - verified by sweep.
+
+- **A save that failed no longer keeps deleting things** (#682 review). Three branches in the
+  web-domain form ran without checking whether an earlier command had already failed: the custom
+  docroot reset, the redirect removal and the FTP account deletion. A user reading "an error
+  occurred" could have lost all three anyway. An unknown domain now ends the request instead of
+  only setting a message - everything below it was still operating on the POST value. Same file:
+  the WordPress deletion is verified server-side against the typed domain (the dialog was proof
+  only in the browser), the offline switch reads through the same gated helper as every other
+  checkbox, the shared mktemp output no longer inherits the previous run's line and a failed
+  mktemp is caught before certificates land in /, and an unchecked force-SSL box no longer
+  writes a PHP warning into the very log we use as evidence.
+
+- **A failed WordPress update now says what state the site is in** (#682). The install can
+  promise "nothing was installed" because it cleans up; the update cannot - the files may
+  already be replaced. Each failure names the running version and the way out (re-run, or the
+  wp core download --force line to repair the tree).
 
 ### Removed
 
