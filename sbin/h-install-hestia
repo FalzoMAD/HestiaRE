@@ -557,11 +557,13 @@ install_mail() {
 		"$BIN/h-add-sys-clamav" >> "$LOG" 2>&1 || true
 	fi
 
-	# Webmailer choice: COMPONENT_MAIL_WEBMAILER is a token set (ROUNDCUBE and/or TACHYON,
-	# or NONE), not an enum - one gated block per client so a third client is one more block.
+	# Webmailer choice: COMPONENT_MAIL_WEBMAILER is a token set (ROUNDCUBE and/or TACHYON;
+	# empty = none), not an enum - one gated block per client so a third client is one more block.
+	# ${:-} equates an explicitly empty value with an absent key ON PURPOSE: both mean "no
+	# webmailer" here, and nothing downstream needs the asked-vs-never-asked distinction.
 	local wm_rc=no wm_tx=no
-	case ",${COMPONENT_MAIL_WEBMAILER:-NONE}," in *,ROUNDCUBE,*) wm_rc=yes ;; esac
-	case ",${COMPONENT_MAIL_WEBMAILER:-NONE}," in *,TACHYON,*) wm_tx=yes ;; esac
+	case ",${COMPONENT_MAIL_WEBMAILER:-}," in *,ROUNDCUBE,*) wm_rc=yes ;; esac
+	case ",${COMPONENT_MAIL_WEBMAILER:-}," in *,TACHYON,*) wm_tx=yes ;; esac
 	if [ "$wm_rc" = yes ]; then
 		wcv "WEBMAIL_SYSTEM" "roundcube"; wcv "WEBMAIL_ALIAS" "webmail"
 		echo "[ * ] Installing Roundcube..."
@@ -581,7 +583,7 @@ install_mail() {
 			if [ "$wm_rc" = yes ]; then
 				set_install_component MAIL_WEBMAILER ROUNDCUBE
 			else
-				set_install_component MAIL_WEBMAILER NONE
+				set_install_component MAIL_WEBMAILER ""
 			fi
 		fi
 	fi
@@ -869,6 +871,31 @@ configure_hestia() {
 # ════════════════════════════════════════════════════════════════════════════
 # Stage: tools — utilities, composer, wp-cli
 # ════════════════════════════════════════════════════════════════════════════
+
+# Upstream composer source: signed installer script, sha384 against installer.sig, bounded downloads.
+install_composer_upstream() {
+	echo "[ * ] Installing composer (upstream installer)..."
+	if ! command -v composer > /dev/null 2>&1; then
+		local EXPECTED_CHECKSUM ACTUAL_CHECKSUM
+		EXPECTED_CHECKSUM="$(curl -fsS --max-time 30 https://composer.github.io/installer.sig)" \
+			|| { echo "ERROR: could not fetch the composer installer signature"; exit 1; }
+		wget https://getcomposer.org/installer --timeout=30 --tries=3 --retry-connrefused --quiet -O composer-setup.php \
+			|| { rm -f composer-setup.php; echo "ERROR: could not download the composer installer"; exit 1; }
+		ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
+		if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+			rm -f composer-setup.php
+			echo "ERROR: Composer installer checksum mismatch" >&2
+			exit 1
+		fi
+		php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+		rm -f composer-setup.php
+		echo "  composer installed"
+	else
+		echo "  composer already present — upgrading"
+		composer self-update --quiet 2>/dev/null || true
+	fi
+}
+
 install_tools() {
 	echo "[ * ] Installing always-installed utilities..."
 	apt_install_optional "admin tools" htop iftop sysstat iotop mc mtr-tiny screen || true
@@ -879,34 +906,30 @@ install_tools() {
 		apt_install_optional "selected tools" $TOOLS_SELECTION || true
 	fi
 	if is_on "${COMPONENT_ADDON_COMPOSER:-true}"; then
-		echo "[ * ] Installing composer (system-wide)..."
-		if ! command -v composer > /dev/null 2>&1; then
-			local EXPECTED_CHECKSUM ACTUAL_CHECKSUM
-			EXPECTED_CHECKSUM="$(php -r 'copy("https://composer.github.io/installer.sig", "php://stdout");')"
-			php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-			ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
-			if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
-				rm -f composer-setup.php
-				echo "ERROR: Composer installer checksum mismatch" >&2
-				exit 1
-			fi
-			php composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
-			rm -f composer-setup.php
-			echo "  composer installed"
-		else
-			echo "  composer already present — upgrading"
-			composer self-update --quiet 2>/dev/null || true
-		fi
+		# os_package default: apt-maintained with automatic security backports; upstream_installer
+		# (latest preset / h-update-sys-composer) = newest composer, no auto-updates afterwards
+		case "${COMPONENT_ADDON_COMPOSER_SOURCE:-os_package}" in
+			upstream_installer) install_composer_upstream ;;
+			*)
+				echo "[ * ] Installing composer (OS package)..."
+				if dpkg -s composer > /dev/null 2>&1; then
+					echo "  composer OS package already present"
+				else
+					hestia_apt -y install composer \
+						|| { echo "ERROR: composer OS package install failed"; exit 1; }
+				fi
+				;;
+		esac
 	fi
-	echo "[ * ] Installing wp-cli (system-wide)..."
+	echo "[ * ] Installing wp-cli (system-wide, pinned)..."
+	# pinned + verified phar; no `wp cli update` - a re-run converges to the manifest pin
 	if ! command -v wp > /dev/null 2>&1; then
-		curl -fsLo /usr/local/bin/wp \
-			https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-		chmod +x /usr/local/bin/wp
+		fetch_wp_cli_phar /usr/local/bin/wp \
+			|| { echo "ERROR: could not fetch/verify the pinned wp-cli phar"; exit 1; }
 		echo "  wp-cli installed"
 	else
-		echo "  wp-cli already present — upgrading"
-		wp --allow-root cli update --quiet 2>/dev/null || true
+		echo "  wp-cli already present — re-pinning"
+		fetch_wp_cli_phar /usr/local/bin/wp || echo "  WARN: could not refresh wp-cli, keeping the present one"
 	fi
 	echo "[ OK ] tools complete"
 }
@@ -1011,9 +1034,11 @@ configure_hestia
 install_tools
 finalize_install
 
-# Post-install smoke test — report only, never aborts a completed install (#221).
+# Post-install smoke test — report only, never aborts a completed install (#221). tee'd into the
+# log so a transient failure keeps its NAME: a checker that occasionally goes red without saying
+# which check is the one everybody learns to ignore.
 echo ""
-"$BIN/h-check-sys-smoke" || echo "[ ! ] Smoke test reported failures — review the output above."
+"$BIN/h-check-sys-smoke" 2>&1 | tee -a "$LOG" || echo "[ ! ] Smoke test reported failures — see above (kept in $LOG)."
 
 log_event "$OK" "$ARGUMENTS"
 exit 0

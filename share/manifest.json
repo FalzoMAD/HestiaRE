@@ -7,6 +7,8 @@
     "$comment": "Release-shipped third-party version pins (#288, replaces install/upgrade/upgrade.conf). Bump per release. Read at runtime via manifest_get() in include/main.sh.",
     "$comment_tachyon": "3.2.2 pin last verified against kimusan/Tachyon releases on 2026-08-16 (latest; upstream quiet since 2026-07-15). Re-check the date when bumping - a silent fork must be visible here, not assumed alive.",
     "tachyon": "3.2.2",
+    "$comment_wp_cli": "Pinned GitHub release phar (sha256 over the file), fetched by fetch_wp_cli_phar for the system and every per-user copy - never a moving branch address. No OS package exists; this pin is the only patch channel, bump per release.",
+    "wp_cli": { "version": "2.12.0", "sha256": "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c" },
     "tachyon_plugins": {
       "$comment": "Plugin assets from the SAME release tag as the tachyon pin, sha256 over the .tgz. Pinned because change-password-hestia changes system passwords - it must never arrive from a moving address (Tachyon's own Repository::installPackage fetches packages.json from the master branch at install time). h-add-sys-tachyon fetches, verifies and extracts these itself.",
       "change-password": { "version": "2.38", "sha256": "b3c6364fddf27fc583c730d6f3dba70d99254c5068c099c8678b442a024e0105" },
@@ -17,14 +19,14 @@
     "php_supported": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
   },
 
+  "$comment_presets": "No custom preset on purpose: a config beyond every preset = write /etc/hestia/install.conf by hand and run h-install-hestia. Never put $-comment keys INSIDE .presets - menu and validation iterate its keys verbatim.",
   "presets": {
     "standard":  { "label": "Standard (full hosting + full mail + DB + MultiPHP + addons)" },
     "compact":   { "label": "Compact (nginx only, leaner addon selection)" },
     "latest":    { "label": "Latest (newest versions, external repos for web/PHP/DB)" },
     "singlephp": { "label": "SinglePHP (OS PHP instead of Sury, lean setup)" },
     "nomail":    { "label": "No-Mail (hosting only, no mail block, Exim send-only)" },
-    "mailonly":  { "label": "Mail-Only (mail stack only, no customer web server)" },
-    "custom":    { "label": "Custom (everything freely selectable, no presets)" }
+    "mailonly":  { "label": "Mail-Only (mail stack only, no customer web server)" }
   },
 
   "pre_questions": [
@@ -86,8 +88,7 @@
         "latest":    "BOTH",
         "singlephp": "NGINX",
         "nomail":    "BOTH",
-        "mailonly":  "NGINX",
-        "custom":    null
+        "mailonly":  "NGINX"
       },
       "fixed_no_prompt": {
         "mailonly": "NGINX"
@@ -103,15 +104,14 @@
         { "value": "os_package",   "label": "OS package",   "description": "Distribution repo (recommended)" },
         { "value": "upstream_repo", "label": "Upstream repo", "description": "Sury-Apache / nginx.org (newer)" }
       ],
-      "description": "OS package vs. external upstream repo (Sury-Apache, nginx.org) for Apache/nginx. Normally not a user question, fully determined by the preset. Exception: under the 'custom' preset (default null) it is asked as a real question.",
+      "description": "OS package vs. external upstream repo (Sury-Apache, nginx.org) for Apache/nginx. Normally not a user question, fully determined by the preset.",
       "default": {
         "standard":  "os_package",
         "compact":   "os_package",
         "latest":    "upstream_repo",
         "singlephp": "os_package",
         "nomail":    "os_package",
-        "mailonly":  "os_package",
-        "custom":    null
+        "mailonly":  "os_package"
       }
     },
 
@@ -119,7 +119,7 @@
       "group": "web",
       "type": "implicit",
       "question": "PHP mode:",
-      "description": "Architecture pre-question: Single-PHP (OS package, no Sury) vs. MultiPHP (Sury repo). Not asked when fixed by the preset (singlephp, mailonly); otherwise derived from the preset. Exception: under the 'custom' preset (default null) it is asked as a real question.",
+      "description": "Architecture pre-question: Single-PHP (OS package, no Sury) vs. MultiPHP (Sury repo). Not asked when fixed by the preset (singlephp, mailonly); otherwise derived from the preset.",
       "options": [
         { "value": "os_single",  "label": "Single PHP", "description": "OS PHP, no Sury repo" },
         { "value": "sury_multi", "label": "MultiPHP",   "description": "Sury repo, multiple versions" }
@@ -130,8 +130,7 @@
         "latest":    "sury_multi",
         "singlephp": "os_single",
         "nomail":    "sury_multi",
-        "mailonly":  "os_single",
-        "custom":    null
+        "mailonly":  "os_single"
       },
       "fixed_no_prompt": {
         "mailonly": "os_single"
@@ -150,8 +149,7 @@
         "standard":  "skip_newest:1,take:3",
         "compact":   "skip_newest:1,take:2",
         "latest":    "take_newest:2",
-        "nomail":    "skip_newest:1,take:3",
-        "custom":    null
+        "nomail":    "skip_newest:1,take:3"
       },
       "note": "install.sh must add the Sury repo as an APT source before this question (incl. apt-get update) to derive the option list via apt-cache madison or similar. No availability guarantee per the Sury maintainer - re-check on every release refresh."
     },
@@ -169,8 +167,7 @@
         "latest":    true,
         "singlephp": true,
         "nomail":    true,
-        "mailonly":  true,
-        "custom":    null
+        "mailonly":  true
       },
       "note": "DB server engine. Shown together with DB_POSTGRESQL + DB_REDIS as a shared multi-select screen (group 'db' in grouped_prompts). phpMyAdmin follows implicitly (DB_PHPMYADMIN, type derived)."
     },
@@ -213,8 +210,7 @@
         "latest":    "12.3",
         "singlephp": "__os__",
         "nomail":    "11.8",
-        "mailonly":  "__os__",
-        "custom":    null
+        "mailonly":  "__os__"
       },
       "note": "Only asked when MariaDB was chosen. Default 11.8; 11.4 stays selectable for Magento 2.4.9. 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime, and fixed on mailonly."
     },
@@ -235,37 +231,34 @@
         { "value": "true",  "label": "Yes", "description": "Dovecot mailboxes + full mail stack" },
         { "value": "false", "label": "No",  "description": "Exim send-only, no mailboxes" }
       ],
-      "description": "Determines whether a mail block exists at all. Normally not a user question - follows directly from the preset. Exception: under the 'custom' preset (default null) it is asked as a real question.",
+      "description": "Determines whether a mail block exists at all. Normally not a user question - follows directly from the preset.",
       "default": {
         "standard":  true,
         "compact":   true,
         "latest":    true,
         "singlephp": true,
         "nomail":    false,
-        "mailonly":  true,
-        "custom":    null
+        "mailonly":  true
       },
       "note": "When false (nomail): Dovecot is dropped entirely, Exim runs as a transactional-only MTA (no mailbox reception). When true: Dovecot is fixed on, no separate on/off toggle."
     },
 
     "MAIL_WEBMAILER": {
       "group": "mail",
-      "type": "radio",
-      "question": "Webmail client:",
+      "type": "checklist",
+      "question": "Webmail clients (any, all, or none - selectable per mail domain):",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
       "options": [
         { "value": "ROUNDCUBE",  "label": "Roundcube",  "description": "Full-featured webmail" },
-        { "value": "TACHYON", "label": "Tachyon", "description": "Lightweight webmail (SnappyMail fork)" },
-        { "value": "ROUNDCUBE,TACHYON", "label": "Both", "description": "Roundcube + Tachyon, selectable per mail domain" },
-        { "value": "NONE",       "label": "None",       "description": "No webmail client" }
+        { "value": "TACHYON", "label": "Tachyon", "description": "Lightweight webmail (SnappyMail fork)" }
       ],
+      "value_join": ",",
       "default": {
         "standard":  "ROUNDCUBE",
         "compact":   "ROUNDCUBE",
         "latest":    "ROUNDCUBE",
         "singlephp": "ROUNDCUBE",
-        "mailonly":  "ROUNDCUBE",
-        "custom":    null
+        "mailonly":  "ROUNDCUBE TACHYON"
       },
       "note": "Roundcube/Tachyon are served architecturally via Panel-Caddy+Panel-PHP; the respective web server (nginx/Apache) only acts as a reverse proxy to the webmail subdomain. DKIM runs independently via the existing Exim+OpenSSL mechanism (inherited from HestiaCP upstream, not rspamd dkim_signing)."
     },
@@ -313,12 +306,12 @@
       "label": "Composer",
       "description": "PHP dependency manager (system-wide)",
       "fixed_no_prompt": { "mailonly": false },
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false, "custom": null },
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false },
       "source_default": {
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
         "singlephp": "os_package", "nomail": "os_package"
       },
-      "note": "latest uses the upstream installer script (getcomposer.org) instead of the OS package. Backlog: an h-update-sys-composer to switch the source afterwards. Not on mailonly - no customer web to build for; h-add-sys-composer installs it by hand."
+      "note": "source_default picks the channel per preset: os_package (apt-maintained, automatic security backports) everywhere except latest (signed upstream installer, newest composer, no auto-updates). The wizard writes COMPONENT_ADDON_COMPOSER_SOURCE from it (absent = os_package); h-update-sys-composer switches a live box. Not on mailonly - no customer web to build for."
     },
 
     "ADDON_CROWDSEC": {
@@ -328,7 +321,7 @@
       "description": "Collaborative intrusion prevention (nginx web protection)",
       "visible_if": "WEB_SERVER != APACHE",
       "fixed_no_prompt": { "mailonly": false },
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false, "custom": null },
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false },
       "note": "nginx-only web protection (Layer-7 bouncer); offered only when nginx is in the model. Independent of Fail2Ban, both can run in parallel. NOT offered on mailonly (fixed_no_prompt) - crowdsec adds little on a box with no customer web; it stays installable by hand via h-add-sys-crowdsec since nginx is the mailonly front."
     },
 
@@ -342,7 +335,7 @@
         { "value": "local", "label": "Local only", "description": "Self-hosted, no telemetry, this server alone" },
         { "value": "mesh", "label": "Fleet mesh", "description": "Local engine, own bans shared across your servers" }
       ],
-      "default": { "standard": "capi", "compact": "capi", "latest": "capi", "singlephp": "capi", "nomail": "capi", "mailonly": "capi", "custom": null },
+      "default": { "standard": "capi", "compact": "capi", "latest": "capi", "singlephp": "capi", "nomail": "capi", "mailonly": "capi" },
       "note": "One radio, not a CAPI question plus a separate mesh toggle: CAPI and mesh are technically orthogonal (different mechanisms, they do combine), but only these three models are supported. 'mesh' implies local - it disables the CAPI online_client - and only arms the mechanism; peers are paired afterwards in the panel (Firewall > Fleet Mesh) or with h-generate-sys-crowdsec-pairing / h-add-sys-crowdsec-peer, and the mesh stays togglable via h-add/delete-sys-crowdsec-mesh. A radio also because a checkbox in the combined addons screen can never see its own visible_if (see fn_ask_group_checklist)."
     },
 
@@ -351,7 +344,7 @@
       "type": "checkbox",
       "label": "Fail2Ban",
       "description": "Brute-force protection (log-based)",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null }
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true }
     },
 
     "ADDON_PROFTPD": {
@@ -359,7 +352,7 @@
       "type": "checkbox",
       "label": "ProFTPD",
       "description": "FTP server",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null }
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true }
     },
 
     "ADDON_RSPAMD": {
@@ -368,7 +361,7 @@
       "label": "rspamd",
       "description": "Spam filter incl. Bayes learning (mail block only; brings a small capped Redis)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "mailonly": true, "custom": null },
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "mailonly": true },
       "note": "Hidden on nomail (no mail block). Pure spam-filter component, NOT responsible for DKIM (see the PANEL_EXIM note). ALWAYS brings a Redis as the Bayes backend: without DB_REDIS hard-limited to 64 MB (share/rspamd/redis-rspamd-limit.conf), with DB_REDIS the general-purpose instance is shared unlimited. h-add-sys-redis must remove the limit (promote), h-delete-sys-redis must restore it instead of uninstalling (demote)."
     },
 
@@ -378,7 +371,7 @@
       "label": "Sieve",
       "description": "Server-side mail filters (mail block only)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
-      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false, "custom": null },
+      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false },
       "note": "Hidden on nomail (no mail block)."
     },
 
@@ -388,7 +381,7 @@
       "label": "ClamAV",
       "description": "Mail antivirus (mail block only; resource-heavy)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
-      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false, "custom": null },
+      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false },
       "note": "Hidden on nomail (no mail block). NEVER preselected - clamd holds the entire signature DB in RAM (~1-2 GB). h-add-sys-clamav sets ANTIVIRUS_SYSTEM=clamav (new mail domains scan by default, opt-out per domain) and arms the exim CLAMD macro ONLY once clamd answers on the socket. The macro uses malware=*/defer_ok = FAIL-OPEN: with a dead clamd, mail is accepted unscanned (availability over security), hence no arming without a live clamd. Delete = saved state (per-domain flags stay, reactivate on reinstall)."
     },
 
@@ -398,7 +391,7 @@
       "label": "Docker",
       "description": "Rootless containers per customer",
       "fixed_no_prompt": { "mailonly": false },
-      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
+      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false },
       "note": "Preset nowhere: real resource footprint, so no automatic activation. Installs the host side only (#389); a customer gets their own daemon via h-add-user-docker. Not on mailonly - nothing to put in front of a container there."
     },
 
@@ -408,7 +401,7 @@
       "label": "FileManager",
       "description": "Web file manager",
       "fixed_no_prompt": { "mailonly": false },
-      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false, "custom": null },
+      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false },
       "note": "Preset nowhere. Not on mailonly: it points at /home/$user, i.e. the raw maildirs - a second way into the mailbox with no IMAP semantics. Exporting them is a real use case, so it stays installable by hand. TODO: PHP version/mode dependencies before production use."
     },
 
@@ -417,7 +410,7 @@
       "type": "checkbox",
       "label": "Utilities",
       "description": "System utilities (opens tool selection)",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true, "custom": null },
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true },
       "opens_followup": "TOOLS_SELECTION",
       "note": "When enabled, the tools follow-up page opens (see the tools section below)."
     }
@@ -441,8 +434,7 @@
         "latest":    ["rsync", "net-tools", "vnstat", "parted", "telnet"],
         "singlephp": ["rsync", "net-tools", "vnstat", "parted", "telnet"],
         "nomail":    ["rsync", "net-tools", "vnstat", "parted", "telnet"],
-        "mailonly":  ["rsync", "net-tools", "vnstat", "parted", "telnet"],
-        "custom":    []
+        "mailonly":  ["rsync", "net-tools", "vnstat", "parted", "telnet"]
       },
       "note": "restic: backend functions (v-backup-user-restic, v-backup-users-restic) already exist in the code, only the package install is missing - higher backlog priority than the other unset tools."
     }

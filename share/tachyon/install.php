@@ -11,13 +11,20 @@ $oConfig->Set("security", "admin_panel_key", $argv[2]);
 $newPassword = new \Tachyon\Util\SensitiveString($argv[3]);
 $oConfig->SetPassword($newPassword);
 
-// Allow Contacts to be saved in database
+// Contacts backend: $argv[6] carries the decision made by h-add-sys-tachyon (mysql when the
+// box has MariaDB, sqlite otherwise). Written explicitly EITHER way so the config is the
+// artefact every later path reads - never re-derived from what the box has at that moment.
 $oConfig->Set("contacts", "enable", "On");
 $oConfig->Set("contacts", "allow_sync", "On");
-$oConfig->Set("contacts", "type", "mysql");
-$oConfig->Set("contacts", "pdo_dsn", "mysql:host=127.0.0.1;port=3306;dbname=tachyon");
-$oConfig->Set("contacts", "pdo_user", "tachyon");
-$oConfig->Set("contacts", "pdo_password", $argv[4]);
+if (($argv[6] ?? "mysql") === "sqlite") {
+	// Tachyon's own default backend: AddressBook.sqlite in the private data dir, no daemon
+	$oConfig->Set("contacts", "type", "sqlite");
+} else {
+	$oConfig->Set("contacts", "type", "mysql");
+	$oConfig->Set("contacts", "pdo_dsn", "mysql:host=127.0.0.1;port=3306;dbname=tachyon");
+	$oConfig->Set("contacts", "pdo_user", "tachyon");
+	$oConfig->Set("contacts", "pdo_password", $argv[4]);
+}
 
 // Failed-login logging for the fail2ban webmail jail. auth_logging_filename has no {date} token on
 // purpose: fail2ban expands a logpath glob once at jail start, so a per-day file would leave the jail

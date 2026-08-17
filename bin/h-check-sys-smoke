@@ -329,6 +329,42 @@ check_webmail_payload() {
 	no "$wm claimed by WEBMAIL_SYSTEM but not installed" "missing $f"
 }
 
+# The SQLite exception (#584): a webmailer installed while MariaDB was deselected records the
+# sqlite backend in its own config. WHERE that artefact says sqlite, the PHP driver must be in
+# the panel pool - confd lists it as optional (an updated one-minor-back box lacks the package),
+# so this is the guard that turns a missing driver into a hard failure exactly where it breaks.
+check_webmail_sqlite_driver() {
+	local wm="$1"
+	if ls /etc/php/hestia/fpm/conf.d/*-sqlite3.ini > /dev/null 2>&1 \
+		&& ls /etc/php/hestia/fpm/conf.d/*-pdo_sqlite.ini > /dev/null 2>&1; then
+		ok "$wm sqlite backend has its PHP driver"
+		return
+	fi
+	no "$wm records the sqlite backend but the panel pool lacks sqlite3/pdo_sqlite" \
+		"install php-sqlite3 for the pinned panel version, then re-run hestia-php-confd"
+}
+
+# The write-path value domain (WEBMAIL_KNOWN_CLIENTS, include/main.sh) is a hand-kept list;
+# this derives the shipped-client set from the webmail templates and asserts coverage - a
+# client added by template alone would have its records normalized to 'disabled' while
+# everything else works. Infrastructure template names are not clients; an empty derived
+# set fails rather than passes.
+check_webmail_value_domain() {
+	local t c found=0 missing=''
+	for t in "$HESTIA"/share/*/webmail/*.tpl; do
+		c=$(basename "$t" .tpl)
+		case "$c" in default | web_system | disabled | default_*) continue ;; esac
+		found=$((found + 1))
+		grep -qwF -- "$c" <<< "$WEBMAIL_KNOWN_CLIENTS" || missing="$missing $c"
+	done
+	if [ "$found" -eq 0 ]; then
+		no "webmail value-domain guard found no client templates" "share/*/webmail/ empty or moved"
+		return
+	fi
+	[ -z "$missing" ] && { ok "webmail value domain covers the shipped client templates"; return; }
+	no "webmail templates outside the value domain:$missing" "extend WEBMAIL_KNOWN_CLIENTS in include/main.sh"
+}
+
 # A web jail must watch the CURRENT web system's dir. After a switch that forgets to re-gate, its logpath
 # points at the old stack - a REAL path, so the "what does a jail watch" guard cannot see it, and the next
 # restart from any cause leaves it watching a stack with no traffic. Compared against the WEB_SYSTEM dir.
@@ -1028,15 +1064,20 @@ if [ -f "$CONF_DIR/crowdsec/mesh.conf" ]; then
 fi
 # adminer/webmail: no own daemon — served by a caddy FPM pool, so check the socket
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
+check_webmail_value_domain
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	check_webmail_payload roundcube /etc/roundcube/config.inc.php
 	check_socket /run/hestia-webmail-roundcube.sock "roundcube FPM"
 	check_http "http://127.0.0.1:8090/" "roundcube internal listener"
+	grep -q "^\$config\['db_dsnw'\] = 'sqlite:" /etc/roundcube/config.inc.php 2> /dev/null \
+		&& check_webmail_sqlite_driver roundcube
 fi
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'tachyon'; then
 	check_webmail_payload tachyon /etc/tachyon/data/VERSION
 	check_socket /run/hestia-webmail-tachyon.sock "tachyon FPM"
 	check_http "http://127.0.0.1:8091/" "tachyon internal listener"
+	grep -A10 '^\[contacts\]' /etc/tachyon/data/_data_/_default_/configs/application.ini 2> /dev/null \
+		| grep -q 'type = "sqlite"' && check_webmail_sqlite_driver tachyon
 fi
 # redis: user's DB choice or rspamd's always-present Bayes companion
 if is_on "${COMPONENT_DB_REDIS:-}" || [ "$ANTISPAM_SYSTEM" = 'rspamd' ]; then

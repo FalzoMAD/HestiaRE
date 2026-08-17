@@ -277,6 +277,11 @@ The remote host, the exact API call, use of TOKEN and the test-VM fleet live in
   `pct`, so it goes stale exactly when the numbers do — it drifted 80 entries out of step once
   (#551) because nobody re-derived it. `eigenbau` is the one curated value; a recompute never
   touches it.
+- **Check the upstream pins in `share/manifest.json`** (`tachyon` + `tachyon_plugins`, `wp_cli`):
+  is there a newer release, and does the pinned one still verify? Bump version + sha256 together
+  and refresh the last-verified date in the `$comment`. This is the ONLY patch channel these
+  components have — wp-cli has no OS package at all, and Tachyon's fork can go quiet without
+  anyone noticing unless the date here forces the question (#237, #584).
 
 ---
 

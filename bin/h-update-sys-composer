@@ -1,0 +1,95 @@
+#!/bin/bash
+# info: switch the system composer source (OS package <-> upstream installer)
+# options: SOURCE
+#
+# example: h-update-sys-composer os
+# example: h-update-sys-composer upstream
+#
+# Switches between the OS package (apt-maintained, automatic security backports) and the signed
+# upstream installer (newest composer, no auto-updates). The new source is installed and verified
+# before the old one is removed; removal is mandatory - /usr/local/bin shadows /usr/bin, a
+# leftover phar would silently mask the OS package. Per-user copies stay untouched.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+source_arg=$1
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+UPSTREAM_BIN="/usr/local/bin/composer"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+if [ "x$(id -u)" != 'x0' ]; then
+	echo "ERROR: h-update-sys-composer can only be executed by the root user"
+	exit 10
+fi
+
+check_args '1' "$#" 'SOURCE (os|upstream)'
+if [ "$source_arg" != 'os' ] && [ "$source_arg" != 'upstream' ]; then
+	check_result "$E_INVALID" "SOURCE must be 'os' or 'upstream'"
+fi
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+if [ "$source_arg" = 'os' ]; then
+	if dpkg -s composer > /dev/null 2>&1 && [ ! -f "$UPSTREAM_BIN" ]; then
+		echo "composer already comes from the OS package"
+		exit 0
+	fi
+	# install before remove: a failed apt run must not leave the box composer-less.
+	# Lock::Timeout: unattended-upgrades commonly holds the apt lock (#480).
+	DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 -qq -y install composer \
+		|| check_result "$E_UPDATE" "composer OS package install failed"
+	rm -f "$UPSTREAM_BIN"
+	set_install_component ADDON_COMPOSER_SOURCE os_package
+	new_source="OS package ($(dpkg-query -W -f '${Version}' composer 2> /dev/null))"
+else
+	if [ -f "$UPSTREAM_BIN" ] && ! dpkg -s composer > /dev/null 2>&1; then
+		echo "composer already comes from the upstream installer"
+		exit 0
+	fi
+	# verify the new source before touching the old (same signed mechanism as install_composer_upstream)
+	sig="$(curl -fsS --max-time 30 https://composer.github.io/installer.sig)" \
+		|| check_result "$E_CONNECT" "could not fetch the composer installer signature"
+	setup_tmp=$(mktemp -t composer-setup.XXXXXX.php)
+	if ! wget https://getcomposer.org/installer --timeout=30 --tries=3 --retry-connrefused --quiet -O "$setup_tmp" \
+		|| [ "$sig" != "$(php -r "echo hash_file('sha384', '$setup_tmp');")" ]; then
+		rm -f "$setup_tmp"
+		check_result "$E_INVALID" "composer installer download/signature verification failed"
+	fi
+	php "$setup_tmp" --quiet --install-dir=/usr/local/bin --filename=composer \
+		|| { rm -f "$setup_tmp"; check_result "$E_UPDATE" "composer upstream install failed"; }
+	rm -f "$setup_tmp"
+	# Mandatory purge: package + phar together is a shadowed state the next admin cannot see;
+	# on failure the phar already serves. No autoremove - it is not scoped to composer.
+	DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 -qq -y purge composer > /dev/null 2>&1 \
+		|| check_result "$E_UPDATE" "composer OS package purge failed - the upstream phar is installed and shadows it; fix the apt state and re-run"
+	set_install_component ADDON_COMPOSER_SOURCE upstream_installer
+	new_source="upstream installer ($("$UPSTREAM_BIN" --no-plugins --version 2> /dev/null | awk '{print $3}'))"
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "System" "Composer source switched to $new_source."
+log_event "$OK" "$ARGUMENTS"
+
+exit

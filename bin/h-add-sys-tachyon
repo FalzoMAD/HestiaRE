@@ -82,9 +82,15 @@ if [ -z "$HOMEDIR" ]; then
 	exit 2
 fi
 
-if [ -z "$(echo "$DB_SYSTEM" | grep -w 'mysql')" ]; then
-	echo "ERROR: Mysql not available. Installation aborted"
-	exit 2
+# Contacts backend, decided ONCE here and recorded in Tachyon's own config (the artefact
+# that every later path reads): MySQL when the box has it, otherwise Tachyon's shipped
+# SQLite default. A MariaDB added later never flips an existing install - no silent
+# contact-data migration; switching means reinstalling the webmailer (#584).
+TX_DB_BACKEND="sqlite"
+if echo "$DB_SYSTEM" | grep -qw 'mysql'; then
+	TX_DB_BACKEND="mysql"
+else
+	echo "NOTE: no MySQL/MariaDB on this box - Tachyon contacts use the SQLite backend"
 fi
 
 # Without it the release URL would resolve to .../download/v/tachyon-.tar.gz and 404.
@@ -176,20 +182,31 @@ if [ "$UPDATE" == "no" ]; then
 
 	chown -R www-data:www-data ./data
 
-	if [ -f '/usr/bin/mariadb' ]; then
-		mariadb -e "CREATE DATABASE tachyon" 2>&1
-		r=$(generate_password)
-		mariadb -e "GRANT ALL ON tachyon.*
-		 TO tachyon@localhost IDENTIFIED BY '$r'"
-	else
-		mysql -e "CREATE DATABASE tachyon" 2>&1
-		r=$(generate_password)
-		mysql -e "GRANT ALL ON tachyon.*
-		 TO tachyon@localhost IDENTIFIED BY '$r'"
+	r=""
+	if [ "$TX_DB_BACKEND" = "mysql" ]; then
+		if [ -f '/usr/bin/mariadb' ]; then
+			mariadb -e "CREATE DATABASE tachyon" 2>&1
+			r=$(generate_password)
+			mariadb -e "GRANT ALL ON tachyon.*
+			 TO tachyon@localhost IDENTIFIED BY '$r'"
+		else
+			mysql -e "CREATE DATABASE tachyon" 2>&1
+			r=$(generate_password)
+			mysql -e "GRANT ALL ON tachyon.*
+			 TO tachyon@localhost IDENTIFIED BY '$r'"
+		fi
 	fi
 	# Temporarily set the permissions to www-data
 	chown -R www-data:www-data $TX_CONFIG_DIR/
-	php -f $HESTIA/share/tachyon/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT"
+	# Same PHP the pool serves with (pinned version + the pool's curated ini chain), not the
+	# PATH's CLI php - install.php loads Tachyon's own framework, so this run must prove the
+	# chain that carries the traffic afterwards.
+	if [ ! -s /etc/php/hestia/php-version ]; then
+		echo "ERROR: no pinned panel PHP (/etc/php/hestia/php-version) - is the panel stage done?"
+		exit 2
+	fi
+	panel_php="php$(cat /etc/php/hestia/php-version)"
+	env PHP_INI_SCAN_DIR=/etc/php/hestia/fpm/conf.d "$panel_php" -f $HESTIA/share/tachyon/install.php "admin_$key" "admin_$suffix" "$admin_password" "$r" "$BACKEND_PORT" "$TX_DB_BACKEND"
 
 	# back to caddy (the FPM pool user); explicit 0750 keeps the data dir caddy-private
 	chown -R caddy:caddy $TX_CONFIG_DIR/
@@ -221,7 +238,8 @@ if [ "$UPDATE" == "no" ]; then
 	systemctl try-restart caddy > /dev/null 2>&1 || true
 
 	# Updating hestia.conf
-	if [ -z "$(grep WEBMAIL_SYSTEM $HESTIA/conf/hestia.conf)" ]; then
+	# anchored: an unanchored grep also matches keys that merely start so
+	if ! grep -q '^WEBMAIL_SYSTEM=' "$HESTIA/conf/hestia.conf"; then
 		$BIN/h-change-sys-config-value 'WEBMAIL_SYSTEM' 'tachyon'
 	else
 		if [ -z "$(echo "$WEBMAIL_SYSTEM" | grep -w 'tachyon')" ]; then

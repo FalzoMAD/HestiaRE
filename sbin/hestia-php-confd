@@ -37,9 +37,12 @@ fpm_optional="opcache curl gmp zip ftp"
 # phpMyAdmin/Adminer: ctype/iconv/fileinfo (php-common) + xml family (php-xml) critical
 fpm_apps_critical="ctype iconv fileinfo simplexml xmlwriter xmlreader"
 fpm_apps_optional="gd bz2 pgsql pdo_pgsql"
-# webmail: intl(IDN), phar(Tachyon plugins), dom(Roundcube renders every page) critical
+# webmail: intl(IDN), phar(Tachyon plugins), dom(Roundcube renders every page) critical.
+# sqlite3/pdo_sqlite carry the no-MariaDB webmail backend (#584) - optional HERE because a
+# one-minor-back box updating in lacks the package; where an app config records the sqlite
+# backend, h-check-sys-smoke pins the driver as a hard failure instead.
 fpm_webmail_critical="intl phar dom"
-fpm_webmail_optional="exif"
+fpm_webmail_optional="exif sqlite3 pdo_sqlite"
 # CLI (sbin/hestia-php): composer + the notification HTML sanitizer (dom). No DB chain, no gettext
 cli_critical="mbstring ctype iconv phar dom"
 cli_optional="curl zip"

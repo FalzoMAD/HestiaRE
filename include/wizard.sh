@@ -244,11 +244,6 @@ fn_ask_preset() {
             echo "Valid presets: $(mq '.presets | keys | join(", ")')" >&2
             exit 1
         }
-        if [ "$INSTALL_PROFILE" = "custom" ]; then
-            FASTTRACK_PRESET=""
-            echo "[ * ] Preset 'custom' - full interactive configuration (no defaults)"
-            return
-        fi
         echo "[ * ] Fasttrack preset: $INSTALL_PROFILE"
         return
     fi
@@ -419,7 +414,7 @@ _ask_checklist() {
     local id="$1" question="$2" default_val="$3"
     local dynamic_source
     dynamic_source=$(mq --arg id "$id" '.components[$id].dynamic_source // empty')
-    local -a all_opts=() default_opts=()
+    local -a all_opts=() all_texts=() default_opts=()
     if [ "$dynamic_source" = "sury_repo_metadata" ]; then
         [ -n "$PHP_VERSIONS_AVAILABLE" ] || fn_discover_php_versions
         read -ra all_opts <<< "$PHP_VERSIONS_AVAILABLE"
@@ -430,7 +425,18 @@ _ask_checklist() {
             [ -n "$selected" ] && read -ra default_opts <<< "$selected"
         fi
     else
-        readarray -t all_opts < <(mq --arg id "$id" '.components[$id].options[]? // empty')
+        # options: plain strings or { value, label, description } - the same contract as radio
+        local opt_value opt_text
+        while IFS=$'\t' read -r opt_value opt_text; do
+            all_opts+=("$opt_value"); all_texts+=("$opt_text")
+        done < <(mq --arg id "$id" '
+            .components[$id].options[]?
+            | if type=="object" then
+                [ .value,
+                  ((.label // .value)
+                   + (if (.description // "") != "" then "  -  " + .description else "" end)) ]
+              else [ ., . ] end
+            | @tsv')
         if [ -n "$default_val" ] && [ "$default_val" != "null" ]; then
             readarray -t default_opts < <(echo "$default_val" | jq -r '.[]?' 2>/dev/null || echo "$default_val" | tr ' ' '\n')
         fi
@@ -447,12 +453,21 @@ _ask_checklist() {
         fi
     fi
     local -a items=()
-    for opt in "${all_opts[@]}"; do
+    local oi
+    for oi in "${!all_opts[@]}"; do
+        local opt="${all_opts[$oi]}"
         local state="OFF"; for d in "${default_opts[@]}"; do [ "$d" = "$opt" ] && state="ON" && break; done
-        items+=("$opt" "$opt" "$state")
+        items+=("$opt" "${all_texts[$oi]:-$opt}" "$state")
     done
     local selected; selected=$(_wt_checklist "HestiaRE - $id" "$text" "${items[@]}")
     COMP_VALUES["$id"]=$(fn_normalize_list "$selected")
+    # value_join: the component's own separator, joined over the elements. The list pipeline
+    # is whitespace-tokenized throughout, so option values must not contain spaces.
+    local join; join=$(mq --arg id "$id" '.components[$id].value_join // empty')
+    if [ -n "$join" ]; then
+        local -a _lp=(); read -ra _lp <<< "${COMP_VALUES[$id]}"
+        COMP_VALUES["$id"]=$(IFS="$join"; printf '%s' "${_lp[*]:-}")
+    fi
 }
 
 _ask_version_select() {
@@ -534,6 +549,12 @@ fn_fasttrack_value() {
                 COMP_VALUES["$id"]=$(fn_normalize_list "$sel")
             else
                 COMP_VALUES["$id"]=$(fn_normalize_list "$(fn_component_default "$id" "$INSTALL_PROFILE")")
+            fi
+            # same value_join contract as the interactive path (element join, see _ask_checklist)
+            local join; join=$(mq --arg id "$id" '.components[$id].value_join // empty')
+            if [ -n "$join" ]; then
+                local -a _lp=(); read -ra _lp <<< "${COMP_VALUES[$id]}"
+                COMP_VALUES["$id"]=$(IFS="$join"; printf '%s' "${_lp[*]:-}")
             fi
             ;;
         version_select) COMP_VALUES["$id"]=$(fn_component_default "$id" "$INSTALL_PROFILE") ;;
@@ -617,15 +638,9 @@ fn_ask_components() {
             continue
         fi
 
-        # implicit: preset default; under custom asked as a real question
+        # implicit: always preset-derived, never asked (escape hatch: hand-written install.conf)
         if [ "$type" = "implicit" ]; then
-            local idefault; idefault=$(fn_component_default "$id" "$INSTALL_PROFILE")
-            if [ "$INSTALL_PROFILE" = "custom" ] && [ -z "$idefault" ] \
-               && [ "$(mq --arg id "$id" '.components[$id] | has("options") | tostring')" = "true" ]; then
-                _ask_radio "$id" "$(mq --arg id "$id" '.components[$id].question // $id')" ""
-            else
-                COMP_VALUES["$id"]="$idefault"
-            fi
+            COMP_VALUES["$id"]="$(fn_component_default "$id" "$INSTALL_PROFILE")"
             continue
         fi
 
@@ -691,6 +706,13 @@ fn_write_install_conf() {
         echo ""
         echo "# Components"
         for id in "${ids[@]}"; do echo "COMPONENT_${id}=\"${COMP_VALUES[$id]:-}\""; done
+        # source channel where the manifest declares one (source_default, keyed by preset);
+        # no entry for this preset = no line = the installer's own default
+        local src
+        for id in "${ids[@]}"; do
+            src=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].source_default[$p] // empty')
+            [ -n "$src" ] && echo "COMPONENT_${id}_SOURCE=\"${src}\""
+        done
         echo ""
         echo "# Selected utilities (from tools checklist)"
         echo "TOOLS_SELECTION=\"${TOOLS_SELECTION:-}\""

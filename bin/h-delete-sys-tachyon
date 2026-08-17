@@ -43,10 +43,8 @@ if [ -z "$HOMEDIR" ]; then
 	exit 2
 fi
 
-if [ -z "$(echo "$DB_SYSTEM" | grep -w 'mysql')" ]; then
-	echo "ERROR: Mysql not available. Uninstallation aborted"
-	exit 2
-fi
+# No MySQL requirement: a SQLite-backed install (no MariaDB on the box) must be removable too.
+# The DB drop below is guarded on its own.
 
 # Get current version
 if [ -f "/var/lib/tachyon/data/VERSION" ]; then
@@ -76,12 +74,16 @@ rm -f -r $TX_LOG
 rm -f /etc/logrotate.d/tachyon
 rm ~/.tachyon
 
-if [ -f '/usr/bin/mariadb' ]; then
-	mariadb -e "DROP DATABASE tachyon" 2>&1
-	mariadb -e "DROP USER tachyon@localhost"
-else
-	mysql -e "DROP DATABASE tachyon" 2>&1
-	mysql -e "DROP USER tachyon@localhost"
+# IF EXISTS covers the SQLite-backed install (no tachyon DB was ever created);
+# the whole block only runs where a MySQL server exists at all.
+if echo "$DB_SYSTEM" | grep -qw 'mysql'; then
+	if [ -f '/usr/bin/mariadb' ]; then
+		mariadb -e "DROP DATABASE IF EXISTS tachyon" 2>&1
+		mariadb -e "DROP USER IF EXISTS tachyon@localhost"
+	else
+		mysql -e "DROP DATABASE IF EXISTS tachyon" 2>&1
+		mysql -e "DROP USER IF EXISTS tachyon@localhost"
+	fi
 fi
 # remove tachyon from WEBMAIL_SYSTEM. Token-based strip (not sed) so no stray
 # commas survive in any position.
@@ -106,7 +108,7 @@ case ",${COMPONENT_MAIL_WEBMAILER:-}," in
 		if echo "${new_webmail:-}" | grep -qw 'roundcube'; then
 			set_install_component MAIL_WEBMAILER ROUNDCUBE
 		else
-			set_install_component MAIL_WEBMAILER NONE
+			set_install_component MAIL_WEBMAILER ""
 		fi
 		;;
 esac

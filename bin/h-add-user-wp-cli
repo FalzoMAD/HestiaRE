@@ -46,7 +46,9 @@ WPCLI_BIN="$WPCLI_DIR/wp"
 
 if [ -f "$WPCLI_BIN" ]; then
 	if [ "$update" = 'yes' ]; then
-		user_exec $WPCLI_BIN cli update --yes
+		# re-pin, not `wp cli update`: the user's copy converges to the manifest pin
+		fetch_wp_cli_phar "$WPCLI_BIN" || check_result "$E_CONNECT" "Download of the pinned wp-cli phar failed"
+		chown $user:$user "$WPCLI_BIN"
 		exit
 	fi
 	check_result "$E_EXISTS" "For user name '$user' WP-CLI already available!"
@@ -59,8 +61,9 @@ fi
 mkdir -p "$WPCLI_DIR"
 chown $user:$user "$WPCLI_DIR"
 
-user_exec wget --tries=3 --timeout=15 --read-timeout=15 --waitretry=3 --no-dns-cache --quiet -O "$WPCLI_BIN" https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-user_exec chmod +x "$WPCLI_BIN"
+# pinned + sha256-verified release phar - never a moving branch address
+fetch_wp_cli_phar "$WPCLI_BIN" || check_result "$E_CONNECT" "Download of the pinned wp-cli phar failed"
+chown $user:$user "$WPCLI_BIN"
 echo "alias wp=/home/"$user"/.wp-cli/wp" >> /home/$user/.bash_aliases
 
 #----------------------------------------------------------#

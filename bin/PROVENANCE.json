@@ -7791,6 +7791,15 @@
       "note": ""
     },
     {
+      "path": "h-update-sys-composer",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-17",
+      "divergence": null,
+      "note": "composer source switcher, #208/#237"
+    },
+    {
       "path": "h-upgrade-sys-mariadb",
       "source_type": "eigenbau",
       "upstream_path": null,
