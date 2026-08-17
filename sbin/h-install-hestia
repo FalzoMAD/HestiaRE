@@ -219,8 +219,11 @@ EOF
 install_panel() {
 	stage_done panel && { echo "[ skip ] panel already configured"; return 0; }
 	echo "[ * ] Installing panel packages (Caddy, PHP $PHP_VER FPM)..."
-	# gd/bz2/pgsql (phpMyAdmin/Adminer) + intl/exif (webmail) installed unconditionally
-	# so the panel PHP is self-contained; wired into the isolated conf.d by hestia-php-confd
+	# gd/bz2/pgsql (phpMyAdmin/Adminer) + intl/exif/sqlite3 (webmail) installed unconditionally
+	# so the panel PHP is self-contained; wired into the isolated conf.d by hestia-php-confd.
+	# sqlite3 must be IN this list: confd builds the conf.d right below, and the same package
+	# arriving later via h-add-web-php never re-runs confd - the no-MariaDB webmail backend
+	# then has no driver and the roundcube seed dies (#684).
 	hestia_apt -y install \
 		caddy \
 		libphp-phpmailer \
@@ -228,7 +231,7 @@ install_panel() {
 		php${PHP_VER}-zip php${PHP_VER}-gmp php${PHP_VER}-mbstring \
 		php${PHP_VER}-opcache php${PHP_VER}-xml \
 		php${PHP_VER}-gd php${PHP_VER}-bz2 php${PHP_VER}-pgsql \
-		php${PHP_VER}-intl php${PHP_VER}-exif
+		php${PHP_VER}-intl php${PHP_VER}-exif php${PHP_VER}-sqlite3
 	echo "[ * ] Configuring panel PHP-FPM..."
 	mkdir -p /etc/php/hestia/fpm/pool.d /etc/php/hestia/cli
 	cp -f "$HESTIA/share/panel-php/php-fpm.conf" /etc/php/hestia/fpm/
