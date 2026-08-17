@@ -849,27 +849,30 @@ if (!empty($_POST["save"])) {
 				$v_backup_port = quoteshellarg($_POST["v_backup_port"]);
 				$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
 				$v_backup_username = quoteshellarg($_POST["v_backup_username"]);
-				$v_backup_password = quoteshellarg($_POST["v_backup_password"]);
+				$backup_pass_file = secret_tmpfile($_POST["v_backup_password"]);
 				$v_backup_bpath = quoteshellarg($_POST["v_backup_bpath"]);
-				exec(
-					HESTIA_CMD .
-						"h-add-backup-host " .
-						$v_backup_type .
-						" " .
-						$v_backup_host .
-						" " .
-						$v_backup_username .
-						" " .
-						$v_backup_password .
-						" " .
-						$v_backup_bpath .
-						" " .
-						$v_backup_port,
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
+				if ($backup_pass_file !== false) {
+					exec(
+						HESTIA_CMD .
+							"h-add-backup-host " .
+							$v_backup_type .
+							" " .
+							$v_backup_host .
+							" " .
+							$v_backup_username .
+							" " .
+							quoteshellarg($backup_pass_file) .
+							" " .
+							$v_backup_bpath .
+							" " .
+							$v_backup_port,
+						$output,
+						$return_var,
+					);
+					unlink($backup_pass_file);
+					check_return_code($return_var, $output);
+					unset($output);
+				}
 				if (empty($_SESSION["error_msg"])) {
 					$v_backup_host = $_POST["v_backup_host"];
 				}
@@ -938,27 +941,30 @@ if (!empty($_POST["save"])) {
 				$v_backup_port = quoteshellarg($_POST["v_backup_port"]);
 				$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
 				$v_backup_username = quoteshellarg($_POST["v_backup_username"]);
-				$v_backup_password = quoteshellarg($_POST["v_backup_password"]);
+				$backup_pass_file = secret_tmpfile($_POST["v_backup_password"]);
 				$v_backup_bpath = quoteshellarg($_POST["v_backup_bpath"]);
-				exec(
-					HESTIA_CMD .
-						"h-add-backup-host " .
-						$v_backup_type .
-						" " .
-						$v_backup_host .
-						" " .
-						$v_backup_username .
-						" " .
-						$v_backup_password .
-						" " .
-						$v_backup_bpath .
-						" " .
-						$v_backup_port,
-					$output,
-					$return_var,
-				);
-				check_return_code($return_var, $output);
-				unset($output);
+				if ($backup_pass_file !== false) {
+					exec(
+						HESTIA_CMD .
+							"h-add-backup-host " .
+							$v_backup_type .
+							" " .
+							$v_backup_host .
+							" " .
+							$v_backup_username .
+							" " .
+							quoteshellarg($backup_pass_file) .
+							" " .
+							$v_backup_bpath .
+							" " .
+							$v_backup_port,
+						$output,
+						$return_var,
+					);
+					unlink($backup_pass_file);
+					check_return_code($return_var, $output);
+					unset($output);
+				}
 				if (empty($_SESSION["error_msg"])) {
 					$v_backup_host = $_POST["v_backup_host"];
 				}
@@ -998,27 +1004,30 @@ if (!empty($_POST["save"])) {
 					$v_backup_port = quoteshellarg($_POST["v_backup_port"]);
 					$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
 					$v_backup_username = quoteshellarg($_POST["v_backup_username"]);
-					$v_backup_password = quoteshellarg($_POST["v_backup_password"]);
+					$backup_pass_file = secret_tmpfile($_POST["v_backup_password"]);
 					$v_backup_bpath = quoteshellarg($_POST["v_backup_bpath"]);
-					exec(
-						HESTIA_CMD .
-							"h-add-backup-host " .
-							$v_backup_type .
-							" " .
-							$v_backup_host .
-							" " .
-							$v_backup_username .
-							" " .
-							$v_backup_password .
-							" " .
-							$v_backup_bpath .
-							" " .
-							$v_backup_port,
-						$output,
-						$return_var,
-					);
-					check_return_code($return_var, $output);
-					unset($output);
+					if ($backup_pass_file !== false) {
+						exec(
+							HESTIA_CMD .
+								"h-add-backup-host " .
+								$v_backup_type .
+								" " .
+								$v_backup_host .
+								" " .
+								$v_backup_username .
+								" " .
+								quoteshellarg($backup_pass_file) .
+								" " .
+								$v_backup_bpath .
+								" " .
+								$v_backup_port,
+							$output,
+							$return_var,
+						);
+						unlink($backup_pass_file);
+						check_return_code($return_var, $output);
+						unset($output);
+					}
 					if (empty($_SESSION["error_msg"])) {
 						$v_backup_host = $_POST["v_backup_host"];
 					}
