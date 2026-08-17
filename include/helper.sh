@@ -237,6 +237,31 @@ seed_hestia_etc() {
 
 # ── re-apply what a copy-only update cannot: state outside the install tree ───
 # Idempotent throughout, so a fresh install runs this as a no-op.
+# Keep panel argv (passwords!) out of persistent logs (#693). Classic sudo takes
+# "Defaults:hestia !log_allowed" (allowed calls unlogged, denials keep logging); sudo-rs
+# validates no logging option at all, there the rsyslog drop rule is the file-level cure.
+# Only visudo-validated content is ever installed - a broken sudoers bricks the panel.
+# The journald copy remains on sudo-rs; the argv-free h-* secrets API is the complete fix.
+deploy_hestia_sudoers() {
+	local root="${HESTIA:-/usr/local/hestia}" tmp
+	[ -f "$root/share/hestia/sudoers" ] && [ -d /etc/sudoers.d ] || return 0
+	tmp=$(mktemp)
+	{ printf 'Defaults:hestia !log_allowed\n'; cat "$root/share/hestia/sudoers"; } > "$tmp"
+	if ! visudo -c -f "$tmp" > /dev/null 2>&1; then
+		cp -f "$root/share/hestia/sudoers" "$tmp"
+	fi
+	if visudo -c -f "$tmp" > /dev/null 2>&1; then
+		install -m 440 -o root -g root "$tmp" /etc/sudoers.d/hestia
+	else
+		echo "WARN: sudoers does not validate on this box - /etc/sudoers.d/hestia left untouched"
+	fi
+	rm -f "$tmp"
+	if [ -d /etc/rsyslog.d ] && [ -f "$root/share/hestia/rsyslog-sudo-nolog.conf" ]; then
+		cp -f "$root/share/hestia/rsyslog-sudo-nolog.conf" /etc/rsyslog.d/10-hestia-sudo-nolog.conf
+		systemctl try-restart rsyslog > /dev/null 2>&1 || true
+	fi
+}
+
 reapply_outside_tree() {
 	local hestia_root="${HESTIA:-/usr/local/hestia}"
 
@@ -253,16 +278,7 @@ reapply_outside_tree() {
 		"$hestia_root/web/css/src/themes/default.css" \
 		"$hestia_root/web/css/src/themes/flat.css"
 
-	# sudoers tracks the release (e.g. !log_allowed keeps panel-set passwords out of auth.log,
-	# #693) - but only a visudo-validated copy may land, a broken sudoers bricks the panel
-	if [ -f "$hestia_root/share/hestia/sudoers" ] && [ -d /etc/sudoers.d ]; then
-		if visudo -c -f "$hestia_root/share/hestia/sudoers" > /dev/null 2>&1; then
-			cp -f "$hestia_root/share/hestia/sudoers" /etc/sudoers.d/hestia
-			chmod 440 /etc/sudoers.d/hestia
-		else
-			echo "WARN: shipped sudoers does not validate - /etc/sudoers.d/hestia left untouched"
-		fi
-	fi
+	deploy_hestia_sudoers
 
 	# build the isolated panel conf.d - activates the isolation on existing installs
 	if [ -x "$hestia_root/sbin/hestia-php-confd" ] && [ -f /etc/php/hestia/php-version ]; then

@@ -34,11 +34,14 @@ opens above it.
   h-change-user-password, h-add-mail-account, ... - verbatim to authpriv, a rotating file
   that ends up in backups; the hidepid hardening cannot reach that channel. Inherited
   unchanged from upstream (HestiaCP's sudoers has no suppression either). The shipped
-  sudoers now sets `Defaults:hestia !log_allowed`: allowed panel calls write no authpriv
-  line (measured), DENIALS keep logging (an attempt outside bin/* must be seen), and panel
-  actions stay audited through h-log-action/log_event. The update path re-deploys the
-  sudoers after visudo validation. Follow-up (separate): take secrets out of the h-* argv
-  API entirely via a stdin mode, as the WordPress commands already do.
+  sudoers is deployed flavor-aware through one helper (installer + update path, always
+  visudo-validated): classic sudo takes `Defaults:hestia !log_allowed` - allowed panel calls
+  write no authpriv line (measured), DENIALS keep logging - while sudo-rs (ubuntu 26.04)
+  validates no logging option at all and gets a targeted rsyslog drop rule for the
+  persistent auth.log instead (deployed everywhere as a second layer). Panel actions stay
+  audited through h-log-action/log_event. Known residue on sudo-rs: the journald copy -
+  which is why taking secrets out of the h-* argv API entirely (stdin mode, as the
+  WordPress commands already do) is the required follow-up, not a nice-to-have.
 
 ### Fixed
 
