@@ -16,6 +16,7 @@
       "add-x-originating-ip-header": { "version": "2.0", "sha256": "49a36cb67b0aed75cee0bd8889b4f9c2a3214b4644a135f3e9e11b8ab239ee3b" }
     },
     "backblaze_b2": "3.6.0",
+    "$comment_php_supported": "The release-tested PHP set: h-add-web-php validates against it, and the wizard offers only the intersection with Sury's packages - Sury ships pre-release builds, so availability alone offered versions the installer refused (#688). Bump per release.",
     "php_supported": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
   },
 
