@@ -244,11 +244,6 @@ fn_ask_preset() {
             echo "Valid presets: $(mq '.presets | keys | join(", ")')" >&2
             exit 1
         }
-        if [ "$INSTALL_PROFILE" = "custom" ]; then
-            FASTTRACK_PRESET=""
-            echo "[ * ] Preset 'custom' - full interactive configuration (no defaults)"
-            return
-        fi
         echo "[ * ] Fasttrack preset: $INSTALL_PROFILE"
         return
     fi
@@ -643,15 +638,9 @@ fn_ask_components() {
             continue
         fi
 
-        # implicit: preset default; under custom asked as a real question
+        # implicit: always preset-derived, never asked (escape hatch: hand-written install.conf)
         if [ "$type" = "implicit" ]; then
-            local idefault; idefault=$(fn_component_default "$id" "$INSTALL_PROFILE")
-            if [ "$INSTALL_PROFILE" = "custom" ] && [ -z "$idefault" ] \
-               && [ "$(mq --arg id "$id" '.components[$id] | has("options") | tostring')" = "true" ]; then
-                _ask_radio "$id" "$(mq --arg id "$id" '.components[$id].question // $id')" ""
-            else
-                COMP_VALUES["$id"]="$idefault"
-            fi
+            COMP_VALUES["$id"]="$(fn_component_default "$id" "$INSTALL_PROFILE")"
             continue
         fi
 
