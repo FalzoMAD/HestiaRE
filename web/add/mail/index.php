@@ -151,31 +151,33 @@ if (!empty($_POST["ok"])) {
 				$v_smtp_relay_host = quoteshellarg($_POST["v_smtp_relay_host"]);
 				$v_smtp_relay_user = quoteshellarg($_POST["v_smtp_relay_user"]);
 				$relay_pass_file = secret_tmpfile($_POST["v_smtp_relay_pass"]);
-				if (!empty($_POST["v_smtp_relay_port"])) {
-					$v_smtp_relay_port = quoteshellarg($_POST["v_smtp_relay_port"]);
-				} else {
-					$v_smtp_relay_port = "587";
+				if ($relay_pass_file !== false) {
+					if (!empty($_POST["v_smtp_relay_port"])) {
+						$v_smtp_relay_port = quoteshellarg($_POST["v_smtp_relay_port"]);
+					} else {
+						$v_smtp_relay_port = "587";
+					}
+					exec(
+						HESTIA_CMD .
+							"h-add-mail-domain-smtp-relay " .
+							$user .
+							" " .
+							$v_domain .
+							" " .
+							$v_smtp_relay_host .
+							" " .
+							$v_smtp_relay_user .
+							" " .
+							quoteshellarg($relay_pass_file) .
+							" " .
+							$v_smtp_relay_port,
+						$output,
+						$return_var,
+					);
+					unlink($relay_pass_file);
+					check_return_code($return_var, $output);
+					unset($output);
 				}
-				exec(
-					HESTIA_CMD .
-						"h-add-mail-domain-smtp-relay " .
-						$user .
-						" " .
-						$v_domain .
-						" " .
-						$v_smtp_relay_host .
-						" " .
-						$v_smtp_relay_user .
-						" " .
-						quoteshellarg($relay_pass_file) .
-						" " .
-						$v_smtp_relay_port,
-					$output,
-					$return_var,
-				);
-				unlink($relay_pass_file);
-				check_return_code($return_var, $output);
-				unset($output);
 			}
 		}
 	}

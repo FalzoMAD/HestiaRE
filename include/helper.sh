@@ -245,9 +245,15 @@ seed_hestia_etc() {
 deploy_hestia_sudoers() {
 	local root="${HESTIA:-/usr/local/hestia}" tmp
 	[ -f "$root/share/hestia/sudoers" ] && [ -d /etc/sudoers.d ] || return 0
+	local suppressed="no" dropped="no"
 	tmp=$(mktemp)
 	{ printf 'Defaults:hestia !log_allowed\n'; cat "$root/share/hestia/sudoers"; } > "$tmp"
-	if ! visudo -c -f "$tmp" > /dev/null 2>&1; then
+	if visudo -c -f "$tmp" > /dev/null 2>&1; then
+		suppressed="yes"
+	else
+		# The INTERESTING path (sudo-rs): the directive is unavailable, so this flavor keeps
+		# logging argv and depends entirely on the rsyslog rule below. Never silent.
+		echo "NOTE: this sudo does not accept !log_allowed - relying on the rsyslog drop rule"
 		cp -f "$root/share/hestia/sudoers" "$tmp"
 	fi
 	if visudo -c -f "$tmp" > /dev/null 2>&1; then
@@ -256,9 +262,18 @@ deploy_hestia_sudoers() {
 		echo "WARN: sudoers does not validate on this box - /etc/sudoers.d/hestia left untouched"
 	fi
 	rm -f "$tmp"
-	if [ -d /etc/rsyslog.d ] && [ -f "$root/share/hestia/rsyslog-sudo-nolog.conf" ]; then
+	if [ -f "$root/share/hestia/rsyslog-sudo-nolog.conf" ] && [ -d /etc/rsyslog.d ]; then
 		cp -f "$root/share/hestia/rsyslog-sudo-nolog.conf" /etc/rsyslog.d/10-hestia-sudo-nolog.conf
 		systemctl try-restart rsyslog > /dev/null 2>&1 || true
+		dropped="yes"
+	fi
+	# State of both layers in one line - the first thing worth knowing after a distro change.
+	# h-check-sys-smoke asserts the OUTCOME per run; this only names what was applied.
+	echo "  sudoers suppression: $([ "$suppressed" = yes ] && echo active || echo "not supported by this sudo")," \
+		"rsyslog drop rule: $([ "$dropped" = yes ] && echo deployed || echo "rsyslog absent")"
+	if [ "$suppressed" = "no" ] && [ "$dropped" = "no" ]; then
+		echo "WARN: neither layer could be applied - panel command lines (incl. secrets passed" \
+			"as arguments) stay in the system log"
 	fi
 }
 

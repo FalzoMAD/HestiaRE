@@ -47,6 +47,47 @@ skip() { echo "[ skip ] $1"; }
 
 # check_source_absent <label> <pattern> <path...> — a vulnerable pattern must not
 # reappear (static regression guard for a security fix). Comment lines excluded.
+# Both suppression layers of #693 can fail silently and per box: a sudo flavor that rejects
+# !log_allowed (sudo-rs), an rsyslog-less host, a distro that changes either. So assert the
+# OUTCOME every run instead of trusting a one-off measurement: push a throwaway marker through
+# an allowed panel call and require that no persistent log file kept it.
+#
+# The sink set is DERIVED, not listed: a control marker written to authpriv shows which files
+# actually receive that facility here. No file receives it (journald-only box) -> skip, because
+# then there is nothing to assert rather than nothing to find. A denied sudo call is NOT usable
+# as the control: with -n sudo bails at the password prompt and logs nothing.
+# Journald is deliberately not asserted - the argv copy there is the documented residue on
+# sudo-rs, closed by the panel's tempfile path (#694), not by these two layers.
+check_sudo_secret_leak() {
+	local probe control f sinks='' leaked=''
+	id hestia > /dev/null 2>&1 || { skip "sudo argv leak (panel user absent)"; return; }
+	command -v logger > /dev/null 2>&1 || { skip "sudo argv leak (no logger to probe with)"; return; }
+	probe="HstProbeArgv$(openssl rand -hex 6)"
+	control="HstProbeSink$(openssl rand -hex 6)"
+
+	logger -p authpriv.notice "$control"
+	runuser -u hestia -- sudo -n "$BIN/h-list-users" list "$probe" > /dev/null 2>&1
+	sleep 1
+
+	for f in /var/log/auth.log /var/log/secure /var/log/syslog /var/log/messages; do
+		[ -f "$f" ] || continue
+		grep -qF "$control" "$f" 2> /dev/null && sinks="$sinks $f"
+	done
+	if [ -z "$sinks" ]; then
+		skip "sudo argv leak (no persistent authpriv file on this box)"
+		return
+	fi
+	for f in $sinks; do
+		grep -qF "$probe" "$f" 2> /dev/null && leaked="$leaked $f"
+	done
+	if [ -n "$leaked" ]; then
+		no "panel command lines persist in the system log:$leaked" \
+			"neither !log_allowed nor the rsyslog drop rule is effective - panel-set secrets land there in cleartext"
+		return
+	fi
+	ok "no panel command line kept in the persistent logs ($(echo $sinks | wc -w) sink(s) checked)"
+}
+
 check_source_absent() {
 	local label="$1" pat="$2"
 	shift 2
@@ -1131,6 +1172,7 @@ check_log_clean "/var/log/hestia-php-fpm.log" "PHP (Fatal|Parse) error|\[emergen
 
 # --- Security invariants (static source gates) ---
 echo "-- security invariants --"
+check_sudo_secret_leak
 # GHSA-fcq6: auth gate must not compare a bare $ROOT_USER (legit: $_SESSION["ROOT_USER"])
 check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$HESTIA/web"
 # GHSA-cr7q: search-object commands must not eval raw conf-field payloads

@@ -51,9 +51,17 @@ opens above it.
   add-database, ftp, stats). Still on argv and tracked in #694: the backup-host credentials
   (sftp/ftp password + b2 application key), whose six branches need per-type verification the
   fleet cannot give (b2 needs real Backblaze credentials) - the command already resolves a
-  tempfile there, the call-site conversion is the remaining step.
-
-### Fixed
+  tempfile there, the call-site conversion is the remaining step. Both suppression layers are
+  now asserted per smoke run instead of once by hand: `check_sudo_secret_leak` pushes a
+  throwaway marker through an allowed panel call and requires that no persistent log file kept
+  it. The sink set is derived from a control marker written to authpriv (no such file =
+  journald-only box = skip, not a false green), and the guard was proven by removing the
+  protection: red without it, green with it, on both sudo flavors. `deploy_hestia_sudoers`
+  reports which layer landed, and says so loudly on the interesting path where a sudo flavor
+  rejects the directive. `is_password_valid`/`is_hash_valid` no longer follow a symlink in
+  world-writable /tmp, and the panel helper returns false with an error message instead of
+  throwing on the save route, with a shutdown handler that removes the file even when the
+  request dies before the unlink.
 
 - **The wizard offered Sury's pre-release PHP 8.6, which the installer then refused** (#688).
   Discovery keyed on package availability alone, while h-add-web-php validates against the
@@ -61,8 +69,6 @@ opens above it.
   offers only the intersection, and the two hardcoded fallback lists are gone: the manifest
   list is the single source (also used when Sury is unreachable). Bumping `php_supported`
   joins the minor-release pin check.
-
-### Fixed
 
 - **mailonly no longer force-installs a MariaDB server** (#689). The forced install predated
   the sqlite webmail backend, whose whole point removed the only MySQL consumer in the mail
