@@ -12,6 +12,17 @@ opens above it.
 
 ## Unreleased
 
+### Removed
+
+- **Backblaze B2 backup backend** (#696). B2 was unused, and dropping it removes an external
+  binary download in the backup path (the b2-linux CLI from GitHub, plus its manifest pin) and
+  the last plaintext-argv secret path (the b2 application key, #694). Gone from h-add-backup-host
+  (b2 branch + CLI download), include/backup.sh (upload/download/rotate), the h-list / h-download
+  / h-delete / h-backup / h-restore branches, the panel (backup type option + form fields), and
+  the manifest. Remaining backends: local, sftp, ftp, rclone, restic. No migration path: a box
+  with a b2 backup host configured is not expected (fresh installs), and the b2.backup.conf would
+  simply be ignored.
+
 ### Added
 
 - **WordPress as a panel-managed web-domain option, CLI stage** (#682). `h-add-web-domain-wordpress`

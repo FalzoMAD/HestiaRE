@@ -77,10 +77,6 @@ if [ ! -e "$BACKUP/$backup" ]; then
 		rclone_download "$backup"
 		downloaded='yes'
 	fi
-	if [[ "$BACKUP_SYSTEM" =~ "b2" ]] && [ -z "$downloaded" ]; then
-		b2_download "$backup"
-		downloaded='yes'
-	fi
 	if [ -z "$downloaded" ]; then
 		subj="Download of $backup failed for $user"
 		$BIN/h-add-user-notification $user "$subj" "<p class'u-text-bold'>Unable to retrieve backup file from remote server.</p><p><span class='u-text-bold'>Error:</span> $backup file doesn't exist in <code>'${BACKUP}'</code> directory.</p>"
