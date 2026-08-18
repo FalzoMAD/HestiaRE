@@ -29,17 +29,12 @@ opens above it.
   record - a domain alias, a notification, a certificate subject, a log line - produced a document
   `json_decode` rejects, and the panel showed an empty page instead of the object. Escaping now
   happens once, in `json_escape` (`include/main.sh`), applied by all 85 emitters. Three listers
-  carried a local half-fix that covered the fields upstream #5585 named and missed the rest;
-  `.gitea/tools/lint-json-emitters.sh` derives both the spliced and the escaped names from the
-  source, so a field added later cannot slip past unescaped - and reports the opposite defect too,
-  a value escaped by hand as well as by the helper, which is how a doubled `\"` reached the panel
-  from five emitters. Alongside it, 17 listers read the record with `read` and no `-r`, so a
-  backslash in any value was eaten before anything was escaped at all.
-
-- **A panel save route can no longer create its own tempfile** (#703).
-  `.gitea/tools/lint-panel-tmpfile.sh` fails on any `exec("mktemp")` outside the helper file, with
-  an empty allowed list: the next save route would otherwise reintroduce the same unchecked path
-  and nothing would notice.
+  carried a local half-fix that covered the fields upstream #5585 named and missed the rest. A hand
+  check on the `docs` branch (`tests/lint/`) derives both the spliced and the escaped names
+  from the source, so a field added later cannot slip past unescaped - and reports the opposite
+  defect too, a value escaped by hand as well as by the helper, which is how a doubled `\"` reached
+  the panel from five emitters. Alongside it, 17 listers read the record with `read` and no `-r`,
+  so a backslash in any value was eaten before anything was escaped at all.
 
 ## v0.16.0 (2026-08-18)
 
