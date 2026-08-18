@@ -829,8 +829,14 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 		# archive uses. Under a different customer name the two differ, so the old check greped a
 		# prefix that could never be there: the fresh branch ran every time, the exists-branch was
 		# unreachable, and a second restore of the same archive appended every record again - two
-		# records became four (#721). Prefix stripping, not sed: sed removed the first occurrence
-		# anywhere in the name.
+		# records became four (#721).
+		#
+		# Computed ONCE, here, and reused for the record below. Two computations of the same name
+		# is how the bug comes back: the old write used `sed s/<old>_//`, which removes the first
+		# occurrence ANYWHERE, so a database called foo_<old>_shop - which the panel cannot create
+		# but a foreign archive can carry - was written as foo_shop while a prefix-stripping check
+		# looked for foo_<old>_shop, and they would never meet again. A name without the expected
+		# prefix at all is fine either way: nothing is stripped, both sides say <user>_<name>.
 		target_db="${user}_${database#"${old_user}_"}"
 		check_config=$(grep -F "DB='$target_db'" $USER_DATA/db.conf)
 
@@ -864,10 +870,9 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 				echo "- Please use the web interface to set a password after the restore process finishes."
 			fi
 
-			DB=$(echo "$DB" | sed -e "s/${old_user}_//")
-			DB="${user}_${DB}"
-			DBUSER=$(echo "$DBUSER" | sed -e "s/${old_user}_//")
-			DBUSER="${user}_${DBUSER}"
+			# The same name the existence check used, not a second derivation of it.
+			DB="$target_db"
+			DBUSER="${user}_${DBUSER#"${old_user}_"}"
 			str="$archived_record"
 			# DB and DBUSER carry the old user prefix into the new one.
 			record_set_field str DB "$DB"
