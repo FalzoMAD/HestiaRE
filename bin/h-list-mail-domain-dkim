@@ -26,8 +26,11 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	echo '{'
+	# The keys come from the RAW file here: json_escape encodes the newlines itself, and running it
+	# over the already-encoded $pem would turn each of its \n into two visible characters.
+	local pem="${pem_raw}" pub="${pub_raw}"
 	json_escape domain pem pub
-	echo -e "\t\"$domain\": {"
+	printf '\t"%s": {\n' "$domain"
 	echo "        \"PEM\": \"$pem\","
 	echo "        \"PUB\": \"$pub\""
 	echo -e "\t}\n}"
@@ -65,11 +68,13 @@ is_object_valid 'mail' 'DOMAIN' "$domain"
 
 # Parsing domain keys
 if [ -e "$USER_DATA/mail/$domain.pem" ]; then
-	pem=$(cat $USER_DATA/mail/$domain.pem | sed ':a;N;$!ba;s/\n/\\n/g')
+	pem_raw=$(cat $USER_DATA/mail/$domain.pem)
+	pem=$(echo "$pem_raw" | sed ':a;N;$!ba;s/\n/\\n/g')
 fi
 
 if [ -e "$USER_DATA/mail/$domain.pub" ]; then
-	pub=$(cat $USER_DATA/mail/$domain.pub | sed ':a;N;$!ba;s/\n/\\n/g')
+	pub_raw=$(cat $USER_DATA/mail/$domain.pub)
+	pub=$(echo "$pub_raw" | sed ':a;N;$!ba;s/\n/\\n/g')
 fi
 
 # Listing data

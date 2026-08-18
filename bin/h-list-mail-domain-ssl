@@ -35,7 +35,7 @@ json_list() {
 	local crt="${crt_raw}" key="${key_raw}" ca="${ca_raw}"
 	json_escape domain crt key ca subj alt_dns before after signature pub_key issuer
 	echo '{'
-	echo -e "\t\"$domain\": {"
+	printf '\t"%s": {\n' "$domain"
 	echo "        \"CRT\": \"$crt\","
 	echo "        \"KEY\": \"$key\","
 	echo "        \"CA\": \"$ca\","

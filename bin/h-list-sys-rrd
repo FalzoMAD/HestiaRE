@@ -58,12 +58,12 @@ json_list() {
 				title="$db_type Usage on $db_host"
 			fi
 			json_escape i type rrd title TIME DATE
-			echo -e "\t\"$i\": {"
-			echo -e "\t\t\"TYPE\": \"$type\"",
-			echo -e "\t\t\"RRD\": \"$rrd\"",
-			echo -e "\t\t\"TITLE\": \"$title\","
-			echo -e "\t\t\"TIME\": \"$TIME\","
-			echo -e "\t\t\"DATE\": \"$DATE\""
+			printf '\t"%s": {\n' "$i"
+			printf '\t\t"TYPE": "%s",\n' "$type"
+			printf '\t\t"RRD": "%s",\n' "$rrd"
+			printf '\t\t"TITLE": "%s",\n' "$title"
+			printf '\t\t"TIME": "%s",\n' "$TIME"
+			printf '\t\t"DATE": "%s"\n' "$DATE"
 			((++i))
 		done
 	done

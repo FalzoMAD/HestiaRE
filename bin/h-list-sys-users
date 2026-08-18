@@ -30,9 +30,9 @@ json_list() {
 	while read user; do
 		json_escape user
 		if [ "$i" -lt "$objects" ]; then
-			echo -e "\t\"$user\","
+			printf '\t"%s",\n' "$user"
 		else
-			echo -e "\t\"$user\""
+			printf '\t"%s"\n' "$user"
 		fi
 		((++i))
 	done < <("$BIN/h-list-users" 'list')

@@ -28,7 +28,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list() {
 	echo '{'
 	json_escape domain entries
-	echo -e "\t\"$domain\": {"
+	printf '\t"%s": {\n' "$domain"
 	echo "        \"RELAY_EXCLUDE\": \"$entries\""
 	echo -e "\t}\n}"
 }

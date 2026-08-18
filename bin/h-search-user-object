@@ -44,15 +44,15 @@ json_list_search() {
 			if [ $i -eq 1 ]; then
 				((++i))
 				json_escape value
-				echo -e "\t\"$value\": {"
+				printf '\t"%s": {\n' "$value"
 			else
 				if [ $i -lt "$fileds_count" ]; then
 					((++i))
 					json_escape field value
-					echo -e "\t\t\"${field//$/}\": \"${value//,/, }\","
+					printf '\t\t"%s": "%s",\n' "${field//$/}" "${value//,/, }"
 				else
 					json_escape field value
-					echo -e "\t\t\"${field//$/}\": \"${value//,/, }\""
+					printf '\t\t"%s": "%s"\n' "${field//$/}" "${value//,/, }"
 					list_data=1
 				fi
 			fi

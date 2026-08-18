@@ -30,9 +30,9 @@ json_list() {
 	for client in ${WEBMAIL_SYSTEM//,/ }; do
 		json_escape client
 		if [ "$i" -ne "$objects" ]; then
-			echo -e "\t\"$client\","
+			printf '\t"%s",\n' "$client"
 		else
-			echo -e "\t\"$client\""
+			printf '\t"%s"\n' "$client"
 		fi
 		((++i))
 	done

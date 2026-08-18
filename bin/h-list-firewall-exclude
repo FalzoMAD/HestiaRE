@@ -31,8 +31,8 @@ json_list() {
 		[ -n "$ip" ] || continue
 		[ "$i" -gt 0 ] && echo -e '\t},'
 		json_escape ip
-		echo -e "\t\"$ip\": {"
-		echo -e "\t\t\"IP\": \"$ip\""
+		printf '\t"%s": {\n' "$ip"
+		printf '\t\t"IP": "%s"\n' "$ip"
 		i=$((i + 1))
 	done < <(grep -v '^\s*$' "$excludes" 2> /dev/null)
 	[ "$i" -gt 0 ] && echo -e '\t}'

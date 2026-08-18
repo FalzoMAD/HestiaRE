@@ -29,9 +29,9 @@ json_list() {
 	for shell in $shells; do
 		json_escape shell
 		if [ "$i" -lt "$sh_counter" ]; then
-			echo -e "\t\"$shell\","
+			printf '\t"%s",\n' "$shell"
 		else
-			echo -e "\t\"$shell\""
+			printf '\t"%s"\n' "$shell"
 		fi
 		((++i))
 	done

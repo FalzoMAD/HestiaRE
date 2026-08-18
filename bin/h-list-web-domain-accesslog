@@ -34,9 +34,9 @@ json_list() {
 		# line containing one already produced JSON the panel could not decode.
 		json_escape str
 		if [ "$i" -lt "$objects" ]; then
-			echo -e "\t\"$str\","
+			printf '\t"%s",\n' "$str"
 		else
-			echo -e "\t\"$str\""
+			printf '\t"%s"\n' "$str"
 		fi
 		((++i))
 	done

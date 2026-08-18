@@ -24,9 +24,9 @@ json_list() {
 	for port in $ports; do
 		json_escape port
 		if [ "$i" -lt "$sh_counter" ]; then
-			echo -e "\t\"$port\","
+			printf '\t"%s",\n' "$port"
 		else
-			echo -e "\t\"$port\""
+			printf '\t"%s"\n' "$port"
 		fi
 		((++i))
 	done
