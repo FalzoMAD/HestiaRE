@@ -14,6 +14,12 @@ opens above it.
 
 ### Security
 
+- **The backup exclusion list is read through the hardened reader** (#706). Three places still used
+  a raw `source` on a file the customer's panel writes, while the fourth already used `source_conf`
+  - the same shape as the upstream advisory that reader exists for. `add_object_key`'s existence
+  check is anchored too: unanchored, a key that is a suffix of one already in the record counted as
+  present and was silently never added.
+
 - **A failing `mktemp` no longer lets the panel write into an unset path** (#703). Thirty save
   routes took `exec("mktemp")` and used `$output[0]` without checking it, so a failure produced an
   empty path: `fopen()` on it aborts the request with a fatal, and the certificate or service
@@ -31,6 +37,19 @@ opens above it.
   are quoted now - unquoted, the archive content word-split and globbed before the parser saw it.
 
 ### Fixed
+
+- **A customer directory with a space in its name no longer aborts the restore** (#706). The restore
+  walked the list of home directories with an unquoted `for`, so `my documents` became two names and
+  the run died on `Can't unpack my user dir container` - after the web, mail and database sections
+  had already been written. The four lists that come out of the archive rather than out of a
+  validator are read line by line now, and the certificate copy globs instead of parsing `ls`, where
+  the domain was also spliced unquoted into a regex and its dots matched any character.
+
+- **Restoring an archive under a different customer name no longer duplicates every database
+  record** (#721). The existence check looked for the archived name while the record carries the
+  renamed one, so it never matched: the fresh branch ran every time, and a second restore of the
+  same archive appended everything again - two records became four. It also meant the branch that
+  protects a database already on the target was unreachable in exactly that case.
 
 - **A record value containing a quote no longer breaks the JSON the panel reads** (#704). The
   `h-*` commands build JSON by string concatenation, so a `"` or a backslash anywhere in a
@@ -58,6 +77,11 @@ opens above it.
   success: the panel showed DKIM on, exim signed nothing, and the published TXT record kept
   announcing a key - so every message failed DKIM rather than merely being unsigned. The restore
   finishes the rest and then exits non-zero naming what did not come back.
+
+- Smaller inherited ones, all in the backup path: a dead `google_download` call left over from the
+  B2 removal, `egrep` in five places, and `sftp_delete` printing the backup name and the remote path
+  on stdout - which the panel showed the customer as part of the error message when a remote delete
+  failed.
 
 ## v0.16.0 (2026-08-18)
 

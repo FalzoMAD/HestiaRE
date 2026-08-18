@@ -457,13 +457,11 @@ sftp_download() {
 }
 
 sftp_delete() {
-	echo "$1"
 	source_conf "$HESTIA/conf/sftp.backup.conf"
 	if [ -z "$PORT" ]; then
 		PORT='22'
 	fi
-	echo $BPATH
-	if [ -z $BPATH ]; then
+	if [ -z "$BPATH" ]; then
 		sftpc "rm $1" > /dev/null 2>&1
 	else
 		sftpc "cd $BPATH" "rm $1" > /dev/null 2>&1

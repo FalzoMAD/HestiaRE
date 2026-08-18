@@ -315,7 +315,7 @@ echo
 
 # Parsing excludes
 if [ -e "$USER_DATA/backup-excludes.conf" ]; then
-	source $USER_DATA/backup-excludes.conf
+	source_conf "$USER_DATA/backup-excludes.conf"
 fi
 
 # WEB domains
@@ -692,7 +692,7 @@ if [ "$USER" != '*' ]; then
 	# Parsing directory exclusions
 	USER=''
 	if [ -e "$USER_DATA/backup-excludes.conf" ]; then
-		source $USER_DATA/backup-excludes.conf
+		source_conf "$USER_DATA/backup-excludes.conf"
 	fi
 	# Built in, not via backup-excludes.conf: that file is the customer's, and dropping this entry
 	# would silently put the whole image store back into every archive. What is dropped depends on
@@ -721,7 +721,7 @@ if [ "$USER" != '*' ]; then
 	set -f
 	i=0
 
-	for udir in $(ls -a | egrep -v "^conf$|^web$|^dns$|^tmp$|^mail$|^\.\.$|^\.$"); do
+	for udir in $(ls -a | grep -E -v "^conf$|^web$|^dns$|^tmp$|^mail$|^\.\.$|^\.$"); do
 		exclusion=$(echo "$USER" | tr ',' '\n' | grep "^$udir$")
 		if [ -z "$exclusion" ]; then
 			((i++))

@@ -85,7 +85,7 @@ echo
 
 # Parsing excludes
 if [ -e "$USER_DATA/backup-excludes.conf" ]; then
-	source $USER_DATA/backup-excludes.conf
+	source_conf "$USER_DATA/backup-excludes.conf"
 fi
 
 # WEB domains
