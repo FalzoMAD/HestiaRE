@@ -24,155 +24,164 @@ if (!empty($_POST["save"])) {
 
 	// Update config
 	if (!empty($_POST["v_config"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Update config1
 	if (empty($_SESSION["error_msg"]) && !empty($_POST["v_config1"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config1"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-1 " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config1"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-1 " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Update config2
 	if (empty($_SESSION["error_msg"]) && !empty($_POST["v_config2"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config2"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-2 " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config2"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-2 " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Update config3
 	if (empty($_SESSION["error_msg"]) && !empty($_POST["v_config3"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config3"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-3 " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config3"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-3 " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Update config4
 	if (empty($_SESSION["error_msg"]) && !empty($_POST["v_config4"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config4"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-4 " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config4"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-4 " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Update config5
 	if (empty($_SESSION["error_msg"]) && !empty($_POST["v_config5"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config5"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-5 " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config5"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-5 " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Update config6
 	if (empty($_SESSION["error_msg"]) && !empty($_POST["v_config6"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config6"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-6 " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config6"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-6 " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Update config7
 	if (empty($_SESSION["error_msg"]) && !empty($_POST["v_config7"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config7"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-7 " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config7"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-7 " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Update config8
 	if (empty($_SESSION["error_msg"]) && !empty($_POST["v_config8"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config8"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-8 " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config8"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " dovecot-8 " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Set success message

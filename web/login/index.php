@@ -189,10 +189,15 @@ function authenticate_user($user, $password, $twofa = "")
 			}
 
 			// Send hash via tmp file
-			$v_hash = exec("mktemp -p /tmp");
-			$fp = fopen($v_hash, "w");
-			fwrite($fp, $hash . "\n");
-			fclose($fp);
+			$v_hash = secret_tmpfile($hash);
+			if ($v_hash === false) {
+				// No file, no login attempt: the old fopen() on an unset path wrote the password
+				// hash into the filesystem root and handed the command an empty argument. Not
+				// logged as a failed login - this is our failure, and the log feeds fail2ban.
+				unset($_SESSION["error_msg"]);
+				sleep(2);
+				return _("Invalid username or password");
+			}
 
 			// Check user hash
 			exec(

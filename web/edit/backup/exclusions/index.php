@@ -93,33 +93,34 @@ if (!empty($_POST["save"])) {
 	$v_userdir_tmp = "USER=" . quoteshellarg($v_userdir_tmp);
 
 	// Create temporary exeption list on a filesystem
-	exec("mktemp", $mktemp_output, $return_var);
-	$tmp = $mktemp_output[0];
-	$fp = fopen($tmp, "w");
-	fwrite(
-		$fp,
-		$v_web_tmp .
-			"\n" .
-			$v_dns_tmp .
-			"\n" .
-			$v_mail_tmp .
-			"\n" .
-			$v_db_tmp .
-			"\n" .
-			$v_userdir_tmp .
-			"\n",
-	);
-	fclose($fp);
-	unset($mktemp_output);
+	$tmp = private_tmpfile();
+	if ($tmp !== false) {
+		$fp = fopen($tmp, "w");
+		fwrite(
+			$fp,
+			$v_web_tmp .
+				"\n" .
+				$v_dns_tmp .
+				"\n" .
+				$v_mail_tmp .
+				"\n" .
+				$v_db_tmp .
+				"\n" .
+				$v_userdir_tmp .
+				"\n",
+		);
+		fclose($fp);
 
-	// Save changes
-	exec(
-		HESTIA_CMD . "h-update-user-backup-exclusions " . $user . " " . $tmp,
-		$output,
-		$return_var,
-	);
-	check_return_code($return_var, $output);
-	unset($output);
+		// Save changes
+		exec(
+			HESTIA_CMD . "h-update-user-backup-exclusions " . $user . " " . $tmp,
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		unset($output);
+		unlink($tmp);
+	}
 
 	// Set success message
 	if (empty($_SESSION["error_msg"])) {
