@@ -28,6 +28,7 @@ json_list() {
 	echo '{'
 	echo -e "\n\t\"mail._domainkey\": {"
 	echo "            \"TTL\": \"3600\","
+	json_escape pub
 	echo "            \"TXT\": \"'v=DKIM1; k=rsa; p=$pub'\""
 	echo -e "\t}\n}"
 }

@@ -57,12 +57,15 @@ json_list() {
 	while read -r str; do
 		[ -z "$str" ] && continue
 		parse_object_kv_list "$str"
+		# BANS first: $PEER is the array key, and escaping it before the lookup would miss the entry.
+		bans="${MESH_SEEN[$PEER]:-0}"
+		json_escape PEER HOST PORT IP PIN bans SUSPENDED TIME DATE
 		echo -n '    "'"$PEER"'": {
         "HOST": "'"$HOST"'",
         "PORT": "'"$PORT"'",
         "IP": "'"$IP"'",
         "PIN": "'"$PIN"'",
-        "BANS": "'"${MESH_SEEN[$PEER]:-0}"'",
+        "BANS": "'"$bans"'",
         "SUSPENDED": "'"$SUSPENDED"'",
         "TIME": "'"$TIME"'",
         "DATE": "'"$DATE"'"

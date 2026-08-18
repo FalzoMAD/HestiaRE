@@ -57,6 +57,7 @@ json_list() {
 				db_host=$(echo $rrd | cut -f 2- -d _)
 				title="$db_type Usage on $db_host"
 			fi
+			json_escape i type rrd title TIME DATE
 			echo -e "\t\"$i\": {"
 			echo -e "\t\t\"TYPE\": \"$type\"",
 			echo -e "\t\t\"RRD\": \"$rrd\"",

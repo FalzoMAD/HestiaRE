@@ -42,6 +42,7 @@ json_list() {
 		if [ -e "$HESTIA/conf/$type.conf" ]; then
 			for str in $(cat $HESTIA/conf/$type.conf); do
 				parse_object_kv_list "$str"
+				json_escape HOST PORT type CHARSETS MAX_DB U_SYS_USERS U_DB_BASES TPL SUSPENDED TIME DATE
 				echo -n '    {
         "HOST": "'$HOST'",
         "PORT": "'$PORT'",

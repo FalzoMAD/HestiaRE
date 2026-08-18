@@ -48,6 +48,7 @@ check_hestia_demo_mode
 # JSON list function
 json_list() {
 	echo '{'
+	json_escape BACKUP TYPE WEB DNS MAIL DB CRON UDIR RUNTIME TIME DATE
 	echo '    "'$BACKUP'": {
 		"TYPE": "'$TYPE'",
 		"WEB": "'$WEB'",

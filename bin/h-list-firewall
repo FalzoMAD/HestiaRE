@@ -30,6 +30,7 @@ json_list() {
 	while read str; do
 		[[ -z "$str" ]] && continue
 		parse_object_kv_list "$str"
+		json_escape RULE ACTION PROTOCOL PORT IP COMMENT SUSPENDED TIME DATE
 		echo -n '    "'$RULE'": {
         "ACTION": "'$ACTION'",
         "PROTOCOL": "'$PROTOCOL'",

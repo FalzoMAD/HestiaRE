@@ -28,6 +28,7 @@ json_list() {
 	objects=$(echo -e "${WEBMAIL_SYSTEM//,/\\n}" | wc -l)
 	echo '['
 	for client in ${WEBMAIL_SYSTEM//,/ }; do
+		json_escape client
 		if [ "$i" -ne "$objects" ]; then
 			echo -e "\t\"$client\","
 		else

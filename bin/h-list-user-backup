@@ -30,6 +30,7 @@ fields="$fields \$RUNTIME \$TIME \$DATE"
 # JSON list function
 json_list() {
 	echo '{'
+	json_escape BACKUP TYPE SIZE WEB DNS MAIL DB CRON UDIR RUNTIME TIME DATE
 	echo '    "'$BACKUP'": {
         "TYPE": "'$TYPE'",
         "SIZE": "'$SIZE'",

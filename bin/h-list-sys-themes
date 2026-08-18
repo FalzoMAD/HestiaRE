@@ -56,6 +56,7 @@ json_list() {
 	i=1
 	echo '['
 	for theme in "${available_themes[@]}"; do
+		json_escape theme
 		if [ "$i" -lt "$theme_count" ]; then
 			echo -e "\t\"$theme\","
 		else

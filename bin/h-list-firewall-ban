@@ -29,6 +29,7 @@ json_list() {
 	echo "{"
 	while read str; do
 		parse_object_kv_list "$str"
+		json_escape IP CHAIN TIME DATE
 		echo -n '    "'$IP'": {
         "IP": "'$IP'",
         "CHAIN": "'$CHAIN'",

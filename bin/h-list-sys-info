@@ -28,6 +28,7 @@ HESTIA_RELEASE=$(grep RELEASE_BRANCH $HESTIA/conf/hestia.conf | cut -d '=' -f2 |
 # JSON list function
 json_list() {
 	echo '{'
+	json_escape HOSTNAME OS VERSION ARCH HESTIA_VERSION HESTIA_RELEASE UPTIME LOADAVERAGE
 	echo '    "sysinfo": {
         "HOSTNAME": "'$HOSTNAME'",
         "OS": "'$OS'",

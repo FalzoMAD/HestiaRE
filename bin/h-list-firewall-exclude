@@ -30,6 +30,7 @@ json_list() {
 	while read -r ip; do
 		[ -n "$ip" ] || continue
 		[ "$i" -gt 0 ] && echo -e '\t},'
+		json_escape ip
 		echo -e "\t\"$ip\": {"
 		echo -e "\t\t\"IP\": \"$ip\""
 		i=$((i + 1))

@@ -27,6 +27,7 @@ json_list() {
 	i=1
 	echo '['
 	for shell in $shells; do
+		json_escape shell
 		if [ "$i" -lt "$sh_counter" ]; then
 			echo -e "\t\"$shell\","
 		else

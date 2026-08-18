@@ -30,7 +30,9 @@ json_list() {
 	objects=$(echo "$lines" | wc -l)
 	echo '['
 	for str in $lines; do
-		str=$(echo "$str" | sed -e 's/"/\\"/g')
+		# json_escape replaces the old sed: that one covered " but not the backslash, so a log
+		# line containing one already produced JSON the panel could not decode.
+		json_escape str
 		if [ "$i" -lt "$objects" ]; then
 			echo -e "\t\"$str\","
 		else

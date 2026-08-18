@@ -28,6 +28,7 @@ json_list() {
 	i=1
 	echo '['
 	while read user; do
+		json_escape user
 		if [ "$i" -lt "$objects" ]; then
 			echo -e "\t\"$user\","
 		else

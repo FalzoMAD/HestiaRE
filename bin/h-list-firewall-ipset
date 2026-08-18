@@ -42,6 +42,7 @@ json_list() {
 	while read str; do
 		[[ -z "$str" ]] && continue
 		parse_object_kv_list "$str"
+		json_escape LISTNAME IP_VERSION AUTOUPDATE SUSPENDED SOURCE TIME DATE
 		echo -n '    "'$LISTNAME'": {
         "IP_VERSION": "'$IP_VERSION'",
         "AUTOUPDATE": "'$AUTOUPDATE'",

@@ -31,6 +31,7 @@ json_list() {
 	echo "{"
 	while read str; do
 		parse_object_kv_list "$str"
+		json_escape NAME SYSTEM STATE CPU MEM RTIME
 		echo -n '    "'$NAME'": {
         "SYSTEM": "'$SYSTEM'",
         "STATE": "'$STATE'",

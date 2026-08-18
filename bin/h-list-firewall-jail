@@ -61,6 +61,7 @@ json_list() {
 	while read -r jail; do
 		jail_row "$jail"
 		[ "$i" -gt 0 ] && echo -e '\t},'
+		json_escape JAIL STATE FAILED FAILED_TOTAL BANNED BANNED_TOTAL LOGPATH
 		echo -e "\t\"$JAIL\": {"
 		echo -e "\t\t\"JAIL\": \"$JAIL\","
 		echo -e "\t\t\"STATE\": \"$STATE\","

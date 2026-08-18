@@ -37,6 +37,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list_ssl() {
 	i='1' # iterator
 	echo '{'
+	json_escape domain crt key csr workdir
 	echo -e "\t\"$domain\": {"
 	echo "        \"CRT\": \"$crt\","
 	echo "        \"KEY\": \"$key\","

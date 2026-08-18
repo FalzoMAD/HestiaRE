@@ -35,9 +35,10 @@ json_list() {
 		fi
 		TOPIC=$(echo "$TOPIC" | sed -e "s/%quote%/'/g")
 		NOTICE=$(echo "$NOTICE" | sed -e "s/%quote%/'/g")
+		json_escape NID TOPIC NOTICE TYPE ACK PRIORITY TIME DATE
 		echo -n '    "'$NID'": {
         "TOPIC": "'$TOPIC'",
-        "NOTICE": "'${NOTICE//\"/\'}'",
+        "NOTICE": "'$NOTICE'",
         "TYPE": "'$TYPE'",
         "ACK": "'$ACK'",
         "PRIORITY": "'$PRIORITY'",

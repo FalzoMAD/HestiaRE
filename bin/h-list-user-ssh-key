@@ -30,6 +30,7 @@ json_list() {
 	for str in $keys; do
 		KEY=$(echo $str | awk '{print $(NF-2)}')
 		ID=$(echo $str | awk '{print $(NF-1)}')
+		json_escape ID KEY
 		echo -n '    "'$ID'": {
         "ID": "'$ID'",
         "KEY": "'$KEY'"

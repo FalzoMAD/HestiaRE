@@ -25,6 +25,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list() {
 	parse_object_kv_list $(echo "$config" | egrep "$keys" \
 		| sed -e "s/[ ]*=/=/" -e "s/=[ ]*/=\'/" -e "s/$/'/")
+	json_escape memory_limit max_execution_time max_input_time upload_max_filesize post_max_size display_errors error_reporting config_path
 	echo '{
     "CONFIG": {
         "memory_limit": "'$memory_limit'",

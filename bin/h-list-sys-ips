@@ -30,6 +30,7 @@ json_list() {
 	i=1
 	while read IP; do
 		source_conf "$CONF_DIR/ips/$IP"
+		json_escape IP OWNER STATUS NAME U_SYS_USERS U_WEB_DOMAINS INTERFACE NETMASK NAT TIME DATE
 		echo -n '    "'$IP'": {
         "OWNER": "'$OWNER'",
         "STATUS": "'$STATUS'",

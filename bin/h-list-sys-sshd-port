@@ -22,6 +22,7 @@ json_list() {
 	i=1
 	echo '['
 	for port in $ports; do
+		json_escape port
 		if [ "$i" -lt "$sh_counter" ]; then
 			echo -e "\t\"$port\","
 		else

@@ -31,6 +31,7 @@ json_list() {
 	while read str; do
 		parse_object_kv_list "$str"
 		CMD=$(echo "$CMD" | sed -e 's/"/\\"/g' -e "s/%quote%/'/g")
+		json_escape JOB MIN HOUR DAY MONTH WDAY CMD SUSPENDED TIME DATE
 		echo -n '    "'$JOB'": {
         "MIN": "'$MIN'",
         "HOUR": "'$HOUR'",

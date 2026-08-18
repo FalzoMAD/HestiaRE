@@ -27,6 +27,7 @@ json_list() {
 	case $type in
 		'sftp' | 'ftp' | 'rclone')
 			echo '{'
+			json_escape type HOST USERNAME PORT BPATH TIME DATE
 			echo '    "'$type'": {
         "HOST": "'$HOST'",
         "USERNAME": "'$USERNAME'",

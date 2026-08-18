@@ -46,6 +46,7 @@ json_list() {
 	total=$(echo "$families" | grep -c .)
 	echo "{"
 	for f in $families; do
+		json_escape f
 		echo -n '    "'"$f"'": {
         "ENABLED": "'"$(fam_field "$f" ENABLED)"'",
         "LENIENT": "'"$(fam_field "$f" LENIENT)"'",

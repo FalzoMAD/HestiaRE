@@ -27,6 +27,7 @@ json_list() {
 	objects=$(echo "$templates" | wc -w)
 	echo '['
 	for template in $templates; do
+		json_escape template
 		if [ "$i" -lt "$objects" ]; then
 			echo -e "\t\"$template\","
 		else

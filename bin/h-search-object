@@ -44,12 +44,15 @@ json_list_search() {
 			value=$(echo "$value" | sed -e 's/"/\\"/g' -e "s/%quote%/'/g")
 			if [ $i -eq 1 ]; then
 				((++i))
+				json_escape value
 				echo -e "\t\"$value\": {"
 			else
 				if [ $i -lt "$fileds_count" ]; then
 					((++i))
+					json_escape field value
 					echo -e "\t\t\"${field//$/}\": \"${value//,/, }\","
 				else
+					json_escape field value
 					echo -e "\t\t\"${field//$/}\": \"${value//,/, }\""
 					list_data=1
 				fi

@@ -26,6 +26,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	echo '{'
+	json_escape domain pem pub
 	echo -e "\t\"$domain\": {"
 	echo "        \"PEM\": \"$pem\","
 	echo "        \"PUB\": \"$pub\""

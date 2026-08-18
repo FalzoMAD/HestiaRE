@@ -30,6 +30,7 @@ json_list() {
 	echo "{"
 	while read str; do
 		parse_object_kv_list "$str"
+		json_escape DOMAIN ANTIVIRUS ANTISPAM REJECT RATE_LIMIT DKIM CATCHALL ACCOUNTS U_DISK SSL SUSPENDED TIME DATE WEBMAIL_ALIAS WEBMAIL
 		echo -n '    "'$DOMAIN'": {
         "ANTIVIRUS": "'$ANTIVIRUS'",
         "ANTISPAM": "'$ANTISPAM'",
