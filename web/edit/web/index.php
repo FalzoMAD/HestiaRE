@@ -286,6 +286,10 @@ $offer_web_template = empty($v_docker) && $can_edit_templates && is_array($templ
 $offer_backend = empty($v_docker) && !empty($_SESSION["WEB_BACKEND"]);
 // rendered unconditionally today - the gate exists so the reader follows the file's rule
 $offer_offline = true;
+// A managed WordPress lives IN the document root - pointing the domain elsewhere would orphan
+// its files, its wp-config artefact and the guards that read them. Redirects stay available:
+// forwarding a domain while the installation waits (migration, move) is a real case.
+$offer_custom_docroot = empty($v_wp);
 // WordPress needs a PHP backend and a MySQL server; a docker domain has no docroot to install into
 $offer_wordpress =
 	empty($v_docker) &&
@@ -1663,7 +1667,12 @@ if (!empty($_POST["save"])) {
 		}
 	}
 	//custom docoot with check box disabled
-	if (!empty($v_custom_doc_root) && empty($_POST["v_custom_doc_root_check"]) && empty($_SESSION["error_msg"])) {
+	if (
+		$offer_custom_docroot &&
+		!empty($v_custom_doc_root) &&
+		empty($_POST["v_custom_doc_root_check"]) &&
+		empty($_SESSION["error_msg"])
+	) {
 		exec(
 			HESTIA_CMD .
 				"h-change-web-domain-docroot " .
@@ -1683,6 +1692,7 @@ if (!empty($_POST["save"])) {
 	}
 
 	if (
+		$offer_custom_docroot &&
 		!empty($_POST["h-custom-doc-domain"]) &&
 		!empty($_POST["v_custom_doc_root_check"]) &&
 		$v_custom_doc_root_prepath . $v_custom_doc_domain . "/public_html" . $v_custom_doc_folder !=

@@ -41,6 +41,13 @@ opens above it.
   checkbox, and an unchecked force-SSL box no longer writes a PHP warning into the very log we
   use as evidence.
 
+- **A managed WordPress hides the custom document root** (#682). Pointing the domain somewhere
+  else would orphan the installation - its files, its wp-config artefact and every guard that
+  reads them - so the control disappears from the form while WordPress is managed, and both POST
+  branches are gated on the same expression, an absent control changing nothing either way. The
+  redirect stays offered on purpose: forwarding a domain while the installation waits is a real
+  case during a migration.
+
 - **Certificate uploads could have been written to the filesystem root** (#682 review). Both SSL
   blocks in the web-domain form created their temporary directory with `exec("mktemp -d")` and
   read `$mktemp_output[0]` unconditionally: on a failure that index is unset, so `$tmpdir` was
