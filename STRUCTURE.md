@@ -406,7 +406,8 @@ decides at render time.
 | `share/web/nginx/` | `$SHARETPL/nginx` | the both-model proxy vhost + `proxy_ip` |
 | `share/web/apache2/` | `$SHARETPL/apache2` | the apache vhost (both models render it) |
 | `share/web/suspend/` | `$SHARETPL/suspend` | admin suspension + customer offline, per role |
-| `share/web/{skel,awstats,unassigned}/`, `share/email/` | | assets, never selectable |
+| `share/web/{skel,awstats,unassigned}/` | | assets, never selectable |
+| `templates/email/` | | notification mail bodies; shipped samples plus admin overrides (#393) |
 
 Two consequences worth knowing before touching this:
 
