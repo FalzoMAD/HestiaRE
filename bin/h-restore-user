@@ -139,6 +139,10 @@ if [ "$?" -ne 0 ]; then
 	check_result "$E_NOTEXIST" "Can't create tmp dir"
 fi
 
+# Parts that did not come back. Collected through the run and reported at the end, so one broken
+# object does not abandon the rest and does not pass as a success either.
+restore_failures=''
+
 # Set default backup source system
 backup_system="hestia"
 backup_mode="gzip"
@@ -427,19 +431,24 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			# field this code has never heard of - today CROWDSEC and BOTLIMIT, tomorrow the next
 			# one - survives a restore without anyone having to remember it.
 			str="$archived_record"
-			record_set_field str DOMAIN "$domain"            # the container name, IDN-normalised
-			record_set_field str IP "$IP"                    # get_user_ip when the archived one is not ours
+			# The container name, IDN-normalised; get_user_ip when the archived address is not ours;
+			# colliding aliases dropped; templates through accept_web_template, whose -http3 mapping
+			# becomes the switch; BACKEND/PHP_VERSION are the #591 resolution (profile and exact
+			# version); FTP_USER carries the old user prefix; U_BANDWIDTH restarts because the
+			# traffic queue counts it again.
+			record_set_field str DOMAIN "$domain"
+			record_set_field str IP "$IP"
 			record_set_field str IP6 "$IP6"
-			record_set_field str ALIAS "$ALIAS"              # colliding aliases dropped
-			record_set_field str TPL "$TPL"                  # accept_web_template mapping
-			record_set_field str PROXY "$PROXY"              # accept_web_template mapping
-			record_set_field str HTTP3 "$HTTP3"              # a mapped -http3 template becomes the switch
-			record_set_field str BACKEND "$BACKEND"          # #591 resolution: pool profile
-			record_set_field str PHP_VERSION "$PHP_VERSION"  # #591 resolution: exact version
-			record_set_field str FTP_USER "$FTP_USER"        # old user prefix -> new one
+			record_set_field str ALIAS "$ALIAS"
+			record_set_field str TPL "$TPL"
+			record_set_field str PROXY "$PROXY"
+			record_set_field str HTTP3 "$HTTP3"
+			record_set_field str BACKEND "$BACKEND"
+			record_set_field str PHP_VERSION "$PHP_VERSION"
+			record_set_field str FTP_USER "$FTP_USER"
 			record_set_field str CUSTOM_DOCROOT "$CUSTOM_DOCROOT"
 			record_set_field str CUSTOM_PHPROOT "$CUSTOM_PHPROOT"
-			record_set_field str U_BANDWIDTH '0'             # the traffic queue counts it again
+			record_set_field str U_BANDWIDTH '0'
 			# SUSPENDED is reset here but NOT in mail, and that divergence is deliberate:
 			# rebuild_mail_domain_conf honours SUSPENDED, rebuild_web_domain_conf has no suspended
 			# branch at all. A web record saying 'yes' over a vhost that is being served would be
@@ -761,7 +770,16 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 				-exec chown $exim_user {} \;
 		fi
 
-		$BIN/h-rebuild-mail-domain $user $domain
+		# The rebuild's exit code used to be discarded, so a mail domain that failed to come back -
+		# a DKIM record with no private key being the case this stage is about - printed its reason
+		# and the restore still ended with success. Collected here and reported at the end, rather
+		# than aborting: the remaining domains are still worth restoring, but the run is not a
+		# success. Only the mail rebuild is wired in so far; the other rebuild calls in this script
+		# still swallow their status.
+		$BIN/h-rebuild-mail-domain "$user" "$domain" 2>&1 | tee -a "$tmpdir/restore.log"
+		if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+			restore_failures="$restore_failures$(printf '\n  mail domain %s was not rebuilt' "$domain")"
+		fi
 
 	done
 
@@ -834,8 +852,9 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 			DBUSER=$(echo "$DBUSER" | sed -e "s/${old_user}_//")
 			DBUSER="${user}_${DBUSER}"
 			str="$archived_record"
-			record_set_field str DB "$DB"          # old user prefix -> new one
-			record_set_field str DBUSER "$DBUSER"  # old user prefix -> new one
+			# DB and DBUSER carry the old user prefix into the new one.
+			record_set_field str DB "$DB"
+			record_set_field str DBUSER "$DBUSER"
 			record_set_field str SUSPENDED 'no'
 			record_set_field str TIME "$(date +%T)"
 			record_set_field str DATE "$(date +%F)"
@@ -1042,7 +1061,12 @@ if [ -d "$HOMEDIR/$user/.companion" ] && [ -x "$BIN/h-add-user-docker" ]; then
 fi
 
 # Sending mail notification
-subj="$user → restore has been completed"
+if [ -n "$restore_failures" ]; then
+	subj="$user → restore finished with failures"
+	echo "The following parts did not come back:$restore_failures" | tee -a $tmpdir/restore.log
+else
+	subj="$user → restore has been completed"
+fi
 cat $tmpdir/restore.log | $SENDMAIL -s "$subj" $email $notify
 
 # Send notification to panel
@@ -1066,6 +1090,12 @@ $BIN/h-update-sys-ip-counters
 # Logging
 $BIN/h-log-action "system" "Info" "Backup" "Restored backup contents (User: $user, Archive: $backup)."
 $BIN/h-log-action "$user" "Info" "Backup" "Restored backup contents (Archive: $backup)."
+
+# A run that lost a part is not a successful run, whatever the individual steps printed.
+if [ -n "$restore_failures" ]; then
+	check_result "$E_PARSING" "restore of $user finished with failures:$restore_failures"
+fi
+
 log_event "$OK" "$ARGUMENTS"
 
 exit
