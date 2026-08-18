@@ -75,7 +75,16 @@ record_set_field() {
 		_pre="${_rec_ref%%" $_key='"*}"
 		_post="${_rec_ref#*" $_key='"}"
 	else
-		_rec_ref="$_rec_ref $_key='$_val'"
+		# No separator in front of the first field: on an empty record the space would produce a
+		# leading blank, which record_line_valid refuses - the two helpers would disagree about
+		# what a valid line is. Not reachable from the restore, which always starts from a record
+		# that already passed the gate, but a helper should not be able to build what the gate
+		# next to it rejects.
+		if [ -z "$_rec_ref" ]; then
+			_rec_ref="$_key='$_val'"
+		else
+			_rec_ref="$_rec_ref $_key='$_val'"
+		fi
 		return
 	fi
 	_post="${_post#*\'}"
