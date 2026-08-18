@@ -429,14 +429,14 @@
         "share/mysql/",
         "share/fail2ban/",
         "templates/",
-        "share/email/",
-        "packages/default.pkg",
-        "packages/system.pkg",
+        "templates/email/",
+        "share/hestia/packages/default.pkg",
+        "share/hestia/packages/system.pkg",
         "share/roundcube/",
         "share/tachyon/",
         "share/dovecot/2.3/",
         "share/dovecot/2.4/",
-        "share/sudo/hestia",
+        "share/hestia/sudoers",
         "share/panel-caddy/Caddyfile",
         "share/panel-caddy/hestia.conf",
         "share/panel-php/hestia-php.service",
@@ -452,7 +452,7 @@
       "web_templates": {
         "nginx": "templates/nginx/ - the nginx-only selection ($WEBTPL/nginx)",
         "php": "templates/php/ - FPM pool profiles ($PHPTPL): default/ondemand/high (#591). The version is its own web.conf field PHP_VERSION now, not encoded in a template - BACKEND holds only the profile, prepare_web_backend reads PHP_VERSION for the version. Per-domain via h-change-web-domain-php ('none' = no pool). Backup carries a HestiaCP-compat BACKEND='PHP-<ver>' plus native PHP_VERSION/PHP_PROFILE; restore prefers native, preflight aborts on a missing version unless RESTORE_PHP_FALLBACK=yes. Pre-#591 socket.tpl/no-php.tpl and generated PHP-X_Y are swept by h-update-web-templates.",
-        "shipped": "share/web/{nginx,apache2,suspend,skel,awstats,unassigned}/ + share/email/ ($SHARETPL) - rendered or copied, never selectable",
+        "shipped": "share/web/{nginx,apache2,suspend,skel,awstats,unassigned}/ ($SHARETPL) - rendered or copied, never selectable; notification mail bodies live in templates/email/ (#393), which an update overwrites but never deletes so an admin override survives",
         "resolution": "include/domain.sh web_template_file - the ROLE picks the directory (proxy -> share/web/<system>/, web -> templates/<system>/ then share/); single source for validators and add_web_config"
       },
       "upstream_ref": {
@@ -462,7 +462,7 @@
         "share/mysql/": "install/deb/mysql/ (moved #119)",
         "share/roundcube/": "install/common/roundcube/ (moved #119/#234)",
         "share/tachyon/": "install/common/snappymail/ (moved #119; SnappyMail replaced by its fork Tachyon #584)",
-        "share/sudo/hestia": "install/common/sudo/ (moved #119/#363)",
+        "share/hestia/sudoers": "install/common/sudo/ (moved #119/#363)",
         "share/dovecot/{2.3,2.4}/": "install/deb/dovecot/ (reimplemented; version-split, 2.4 for deb13/ub26)",
         "share/php-fpm/": "install/deb/php-fpm/ (moved #119/#397; shared www.conf pool removed #397 — per-domain pools only, apache catch-all now Require-all-denied)",
         "share/ssl/": "install/deb/ssl/ (moved #119; cross-service dhparam.pem — nginx + dovecot 2.3/2.4)",
@@ -552,7 +552,7 @@
         "share/panel-php/pool.d/adminer.conf",
         "sbin/hestia-php-fpm",
         "sbin/hestia-php",
-        "ssbin/hestia-php-confd",
+        "sbin/hestia-php-confd",
         "bin/h-change-sys-panel-php",
         "bin/h-delete-web-php"
       ],
@@ -589,7 +589,7 @@
       "entry_points": [
         "install.sh",
         "include/wizard.sh",
-        "ssbin/h-install-hestia"
+        "sbin/h-install-hestia"
       ],
       "directories": [
         "bin/",
@@ -599,10 +599,10 @@
         "install.sh",
         "include/wizard.sh",
         "include/helper.sh",
-        "ssbin/h-install-hestia",
+        "sbin/h-install-hestia",
         "sbin/hestia",
-        "ssbin/h-update-hestia",
-        "ssbin/h-uninstall-hestia",
+        "sbin/h-update-hestia",
+        "sbin/h-uninstall-hestia",
         "bin/h-list-sys-install",
         "VERSION"
       ],
@@ -611,10 +611,10 @@
         "install.sh": "Bootstrap (curl-able): root + OS detect, apt prereqs (curl jq whiptail gnupg ca-certificates — no just), --dev source setup, fetch+extract release tarball, run include/wizard.sh, seed_hestia_etc, hand off to sbin/h-install-hestia.",
         "include/wizard.sh": "Interactive whiptail wizard (bash fallback), manifest-driven: pre-questions + preset + dynamic version discovery + component questions; writes /etc/hestia/install.conf. Runnable standalone (hestia configure).",
         "include/helper.sh": "hestia_apt (spinner + apt log split), load_os_profile (OS_ID/CODENAME/RELEASE/EXIM_USR/BASE_PKGS_EXTRA for deb12/deb13/ub24/ub26), seed_hestia_etc (hestia.env + profile.d + seed hestia.conf).",
-        "ssbin/h-install-hestia": "Non-interactive orchestrator: validates /etc/hestia, sources hestia.env+main.sh+helper.sh+install.conf, runs stages gated by COMPONENT_*. Idempotent via .done.* sentinels (exit→return).",
+        "sbin/h-install-hestia": "Non-interactive orchestrator: validates /etc/hestia, sources hestia.env+main.sh+helper.sh+install.conf, runs stages gated by COMPONENT_*. Idempotent via .done.* sentinels (exit→return).",
         "sbin/hestia": "Umbrella dispatcher: hestia install|configure|update|uninstall|status (no v-* alias).",
-        "ssbin/h-update-hestia": "Update whole distribution from release tarball (+ --check); stops/starts hestia around copy. Does NOT use the legacy h-update-sys-hestia* apt/git updaters (removal tracked in #128).",
-        "ssbin/h-uninstall-hestia": "Conservative uninstall (keeps /home + DBs always; --purge removes packages + /usr/local/hestia + /etc/hestia).",
+        "sbin/h-update-hestia": "Update whole distribution from release tarball (+ --check); stops/starts hestia around copy. Does NOT use the legacy h-update-sys-hestia* apt/git updaters (removal tracked in #128).",
+        "sbin/h-uninstall-hestia": "Conservative uninstall (keeps /home + DBs always; --purge removes packages + /usr/local/hestia + /etc/hestia).",
         "bin/h-list-sys-install": "Status report: version, source, OS, profile, .done.* phases, COMPONENT_*."
       },
       "stages": {
