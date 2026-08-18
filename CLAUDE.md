@@ -288,8 +288,15 @@ The remote host, the exact API call, use of TOKEN and the test-VM fleet live in
 
 ### Before every minor release
 
+- **Merge `dev` into `main` FIRST, then tag.** The tag hangs off that merge commit, so a tag cut
+  before it silently ships the previous state. This has now cost two releases: `v0.13.1` went out
+  byte-identical to its predecessor and the fleet was reinstalled with the very bug it was meant to
+  fix, and `v0.16.0` missed a security fix by twelve hours. Nothing that runs after the tag repairs
+  it - the guard at the end of `.gitea/workflows/mirror-on-release.yml` only makes it loud. Say it
+  out loud *before* the release, not in a PR footnote.
 - Consolidate the `CHANGELOG.md` Unreleased section into the new minor (point releases stay
-  inside the cycle they belong to).
+  inside the cycle they belong to). Archive the uncondensed text on `docs` under
+  `full-changes/CHANGELOG_v0-N.md` before condensing; target density is ~120 lines per section.
 - **Recompute the PROVENANCE manifests** against the current `upstream/hestiacp` snapshot, and
   reseed `source_type` from the fresh numbers. `verbatim`/`derived` is a bucketing of the measured
   `pct`, so it goes stale exactly when the numbers do — it drifted 80 entries out of step once

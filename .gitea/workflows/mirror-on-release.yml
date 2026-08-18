@@ -13,6 +13,8 @@ jobs:
           PUSH_TOKEN:   ${{ secrets.PUSH_TOKEN }}
           SRC_REPO_PATH: ${{ secrets.SRC_REPO_PATH }}
           REPO_SLUG: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           workdir="$(mktemp -d -p /tmp mirror.XXXXXX)"
@@ -39,3 +41,44 @@ jobs:
             'refs/heads/main:refs/heads/main' \
             'refs/heads/upstream/*:refs/heads/upstream/*' \
             'refs/tags/*:refs/tags/*'
+
+          # Guard, deliberately AFTER the push: a tag that misses commits is worth a red run, but
+          # it is not worth withholding the mirror - the release exists either way, and an
+          # unmirrored one is a second problem on top of the first. Same step, because the trap
+          # above removes the clone when this step ends.
+          #
+          # An empty tag is only legitimate on a manual dispatch. On a release event it means the
+          # expression did not resolve - and a guard that skips itself in silence fails open in
+          # exactly the direction it exists to cover, so that case is an error, not a skip.
+          if [ -z "${RELEASE_TAG:-}" ]; then
+            if [ "${EVENT_NAME:-}" = "release" ]; then
+              echo "Release event with an empty tag name - github.event.release.tag_name did not"
+              echo "resolve. Refusing to report a verdict; fix the expression rather than trusting"
+              echo "a check that cannot see its own subject."
+              exit 1
+            fi
+            echo "Manual dispatch, no release tag - nothing to compare."
+            exit 0
+          fi
+          # Both refs must RESOLVE. An unresolvable one yields an empty commit list, and an empty
+          # list is exactly what "all good" looks like - so it fails here rather than passing.
+          for ref in "refs/tags/$RELEASE_TAG" "refs/heads/dev"; do
+            if ! git rev-parse -q --verify "$ref^{commit}" > /dev/null; then
+              echo "Cannot resolve $ref - refusing to report a verdict."
+              exit 1
+            fi
+          done
+          missing=$(git rev-list --count "refs/tags/$RELEASE_TAG..refs/heads/dev")
+          if [ "$missing" -eq 0 ]; then
+            echo "OK: $RELEASE_TAG contains every commit that is on dev."
+            exit 0
+          fi
+          echo "FAIL: $RELEASE_TAG is missing $missing commit(s) that are on dev:"
+          git log --oneline --no-decorate "refs/tags/$RELEASE_TAG..refs/heads/dev"
+          echo
+          echo "The mirror ran - this is about the tag, not the push."
+          echo "Merge dev into main, then move the tag onto that merge commit."
+          echo
+          echo "Not covered: a release deliberately cut from an older point. If that is what this"
+          echo "is, the red run is the false alarm, and the list above says so at a glance."
+          exit 1
