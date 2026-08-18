@@ -764,7 +764,12 @@ add_object_key() {
 	if [[ -z "$lnr" || -z "$5" ]]; then
 		return 1
 	fi
-	if [ -z "$(echo "$object" | grep "$4=")" ]; then
+	# Anchored on a separator, and on the opening quote: unanchored, a key that is a SUFFIX of one
+	# already in the record counted as present and was silently not added - adding LIST to a record
+	# that has DIR_LIST would do nothing at all. Measured today: no key any caller adds is a suffix
+	# of another key in the same record, so this is latent rather than live, and it goes sharp the
+	# moment the registry grows one more name.
+	if [[ "$object" != "$4='"* && "$object" != *" $4='"* ]]; then
 		local varname="${4#\$}"
 		old="${!varname}"
 		sed -i "$lnr s/$5='/$4='' $5='/" "$(_object_conf "$1")"
