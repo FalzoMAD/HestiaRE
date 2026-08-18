@@ -397,6 +397,7 @@
 					</div>
 				</div>
 			</div>
+			<?php if ($offer_custom_docroot) { ?>
 				<div class="form-check u-mb10">
 					<input x-model="customDocumentRootEnabled" class="form-check-input" type="checkbox" name="v_custom_doc_root_check" id="v_custom_doc_root_check">
 					<label for="v_custom_doc_root_check">
@@ -426,6 +427,7 @@
 						<small class="js-custom-docroot-hint"></small>
 					</div>
 				</div>
+			<?php } ?>
 			<?php if ($offer_botlimit) { ?>
 				<!-- Layer-B bot throttling, customer-editable: only the families the admin ENABLED are
 				     offered, since the server config defines rate zones for those alone. Humans are
