@@ -38,9 +38,18 @@ opens above it.
   only setting a message - everything below it was still operating on the POST value. Same file:
   the WordPress deletion is verified server-side against the typed domain (the dialog was proof
   only in the browser), the offline switch reads through the same gated helper as every other
-  checkbox, the shared mktemp output no longer inherits the previous run's line and a failed
-  mktemp is caught before certificates land in /, and an unchecked force-SSL box no longer
-  writes a PHP warning into the very log we use as evidence.
+  checkbox, and an unchecked force-SSL box no longer writes a PHP warning into the very log we
+  use as evidence.
+
+- **Certificate uploads could have been written to the filesystem root** (#682 review). Both SSL
+  blocks in the web-domain form created their temporary directory with `exec("mktemp -d")` and
+  read `$mktemp_output[0]` unconditionally: on a failure that index is unset, so `$tmpdir` was
+  empty and the certificate, key and CA landed in `/` - under the panel user, in a world-readable
+  place, and the command then ran against a path that was not there. The directory now comes from
+  `private_tmpdir()`, which returns false with a message instead of a path, and the whole block is
+  skipped when it does. The helper also chmods 0700, which the inline version never did. Neither
+  block reused its output variable any more either, so a second run cannot inherit the first one's
+  line.
 
 - **A failed WordPress update now says what state the site is in** (#682). The install can
   promise "nothing was installed" because it cleans up; the update cannot - the files may

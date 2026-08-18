@@ -247,3 +247,21 @@ function secret_tmpfile(string $value)
 	});
 	return $path;
 }
+
+/**
+ * Create a private temporary directory for files that must not be world-readable (certificates
+ * on their way to a command). Returns false and sets error_msg when it cannot - as a value, so
+ * the caller has to branch: writing into an unset path puts those files in the filesystem root.
+ */
+function private_tmpdir()
+{
+	$out = [];
+	$rc = 0;
+	exec("mktemp -d", $out, $rc);
+	if ($rc !== 0 || empty($out[0]) || !is_dir($out[0])) {
+		$_SESSION["error_msg"] = _("An internal error occurred");
+		return false;
+	}
+	chmod($out[0], 0700);
+	return $out[0];
+}

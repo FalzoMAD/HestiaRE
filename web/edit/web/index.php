@@ -765,67 +765,64 @@ if (!empty($_POST["save"])) {
 			$v_ssl_key != str_replace("\r\n", "\n", $_POST["v_ssl_key"]) ||
 			$v_ssl_ca != str_replace("\r\n", "\n", $_POST["v_ssl_ca"])
 		) {
-			$mktemp_output = [];
-			exec("mktemp -d", $mktemp_output, $return_var);
-			if ($return_var !== 0 || empty($mktemp_output[0])) {
-				check_return_code(1, ["Could not create a temporary directory"]);
-			}
-			$tmpdir = $mktemp_output[0];
+			$tmpdir = private_tmpdir();
+			if ($tmpdir !== false) {
 
-			// Certificate
-			if (!empty($_POST["v_ssl_crt"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".crt", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
-				fwrite($fp, "\n");
-				fclose($fp);
-			}
+				// Certificate
+				if (!empty($_POST["v_ssl_crt"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".crt", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
+					fwrite($fp, "\n");
+					fclose($fp);
+				}
 
-			// Key
-			if (!empty($_POST["v_ssl_key"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".key", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
-				fwrite($fp, "\n");
-				fclose($fp);
-			}
+				// Key
+				if (!empty($_POST["v_ssl_key"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".key", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
+					fwrite($fp, "\n");
+					fclose($fp);
+				}
 
-			// CA
-			if (!empty($_POST["v_ssl_ca"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".ca", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_ca"]));
-				fwrite($fp, "\n");
-				fclose($fp);
-			}
+				// CA
+				if (!empty($_POST["v_ssl_ca"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".ca", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_ca"]));
+					fwrite($fp, "\n");
+					fclose($fp);
+				}
 
-			exec(
-				HESTIA_CMD .
-					"h-change-web-domain-sslcert " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" " .
-					$tmpdir .
-					" 'no'",
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			$restart_web = "yes";
-			$restart_proxy = "yes";
+				exec(
+					HESTIA_CMD .
+						"h-change-web-domain-sslcert " .
+						$user .
+						" " .
+						quoteshellarg($v_domain) .
+						" " .
+						$tmpdir .
+						" 'no'",
+					$output,
+					$return_var,
+				);
+				check_return_code($return_var, $output);
+				unset($output);
+				$restart_web = "yes";
+				$restart_proxy = "yes";
 
-			extract(web_ssl_vars($user, $v_domain));
+				extract(web_ssl_vars($user, $v_domain));
 
-			// Cleanup certificate tempfiles
-			if (!empty($_POST["v_ssl_crt"])) {
-				unlink($tmpdir . "/" . $v_domain . ".crt");
+				// Cleanup certificate tempfiles
+				if (!empty($_POST["v_ssl_crt"])) {
+					unlink($tmpdir . "/" . $v_domain . ".crt");
+				}
+				if (!empty($_POST["v_ssl_key"])) {
+					unlink($tmpdir . "/" . $v_domain . ".key");
+				}
+				if (!empty($_POST["v_ssl_ca"])) {
+					unlink($tmpdir . "/" . $v_domain . ".ca");
+				}
+				rmdir($tmpdir);
 			}
-			if (!empty($_POST["v_ssl_key"])) {
-				unlink($tmpdir . "/" . $v_domain . ".key");
-			}
-			if (!empty($_POST["v_ssl_ca"])) {
-				unlink($tmpdir . "/" . $v_domain . ".ca");
-			}
-			rmdir($tmpdir);
 		}
 	}
 
@@ -939,67 +936,64 @@ if (!empty($_POST["save"])) {
 			}
 			$_SESSION["error_msg"] = sprintf(_('Field "%s" can not be blank.'), $error_msg);
 		} else {
-			$mktemp_output = [];
-			exec("mktemp -d", $mktemp_output, $return_var);
-			if ($return_var !== 0 || empty($mktemp_output[0])) {
-				check_return_code(1, ["Could not create a temporary directory"]);
-			}
-			$tmpdir = $mktemp_output[0];
+			$tmpdir = private_tmpdir();
+			if ($tmpdir !== false) {
 
-			// Certificate
-			if (!empty($_POST["v_ssl_crt"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".crt", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
-				fclose($fp);
-			}
+				// Certificate
+				if (!empty($_POST["v_ssl_crt"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".crt", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
+					fclose($fp);
+				}
 
-			// Key
-			if (!empty($_POST["v_ssl_key"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".key", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
-				fclose($fp);
-			}
+				// Key
+				if (!empty($_POST["v_ssl_key"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".key", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
+					fclose($fp);
+				}
 
-			// CA
-			if (!empty($_POST["v_ssl_ca"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".ca", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_ca"]));
-				fclose($fp);
-			}
-			//keep using the original value for v_ssl_home
-			exec(
-				HESTIA_CMD .
-					"h-add-web-domain-ssl " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" " .
-					$tmpdir .
-					" " .
-					quoteshellarg($v_ssl_home) .
-					" 'no'",
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			$v_ssl = "yes";
-			$restart_web = "yes";
-			$restart_proxy = "yes";
+				// CA
+				if (!empty($_POST["v_ssl_ca"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".ca", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_ca"]));
+					fclose($fp);
+				}
+				//keep using the original value for v_ssl_home
+				exec(
+					HESTIA_CMD .
+						"h-add-web-domain-ssl " .
+						$user .
+						" " .
+						quoteshellarg($v_domain) .
+						" " .
+						$tmpdir .
+						" " .
+						quoteshellarg($v_ssl_home) .
+						" 'no'",
+					$output,
+					$return_var,
+				);
+				check_return_code($return_var, $output);
+				unset($output);
+				$v_ssl = "yes";
+				$restart_web = "yes";
+				$restart_proxy = "yes";
 
-			extract(web_ssl_vars($user, $v_domain));
+				extract(web_ssl_vars($user, $v_domain));
 
-			// Cleanup certificate tempfiles
-			if (!empty($_POST["v_ssl_crt"])) {
-				unlink($tmpdir . "/" . $v_domain . ".crt");
+				// Cleanup certificate tempfiles
+				if (!empty($_POST["v_ssl_crt"])) {
+					unlink($tmpdir . "/" . $v_domain . ".crt");
+				}
+				if (!empty($_POST["v_ssl_key"])) {
+					unlink($tmpdir . "/" . $v_domain . ".key");
+				}
+				if (!empty($_POST["v_ssl_ca"])) {
+					unlink($tmpdir . "/" . $v_domain . ".ca");
+				}
+				rmdir($tmpdir);
 			}
-			if (!empty($_POST["v_ssl_key"])) {
-				unlink($tmpdir . "/" . $v_domain . ".key");
-			}
-			if (!empty($_POST["v_ssl_ca"])) {
-				unlink($tmpdir . "/" . $v_domain . ".ca");
-			}
-			rmdir($tmpdir);
 		}
 	}
 
