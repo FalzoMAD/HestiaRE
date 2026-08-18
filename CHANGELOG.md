@@ -51,6 +51,19 @@ opens above it.
   same archive appended everything again - two records became four. It also meant the branch that
   protects a database already on the target was unreachable in exactly that case.
 
+- **The two search commands report the record, not an escaped copy of it** (#719).
+  `parse_object_kv_list_non_eval` escaped `"` and `$` on the way in and never undid it, so every
+  value it parsed carried the backslashes: `h-search-object` and `h-search-user-object` emitted
+  `\"` where the record holds `"`. The escaping protected nothing - the data reaches the parser
+  through a quoted expansion and is assigned through another, so neither character is ever
+  re-expanded. The same function also read its pairs through word splitting, which globs, so a
+  record value containing a `*` came back as a filename from the working directory.
+  **The search output changes shape**: it was wrong before, and anyone parsing it gets correct
+  values now. The only consumer in the tree is the panel's search page, where this is plainly a
+  correction; upstream carries the identical escaping, so `v-search-object` and
+  `v-search-user-object` now differ from HestiaCP's output - deliberately, because HestiaCP's is
+  the broken one.
+
 - **A record value containing a quote no longer breaks the JSON the panel reads** (#704). The
   `h-*` commands build JSON by string concatenation, so a `"` or a backslash anywhere in a
   record - a domain alias, a notification, a certificate subject, a log line - produced a document

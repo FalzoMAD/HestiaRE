@@ -429,17 +429,25 @@ is_object_valid() {
 
 # Check if a object string with key values pairs has the correct format and load it afterwards
 parse_object_kv_list_non_eval() {
-	local str
-	local objkv obj_key obj_val
-	local OLD_IFS="$IFS"
+	local str objkv obj_key obj_val
+	local -a pairs=()
 
-	str=${@//$'\n'/ }
-	str=${str//\"/\\\"}
-	str=${str//$/\\$}
-	IFS=$'\n'
+	str=${*//$'\n'/ }
 
 	# Extract and loop trough each key-value pair. (Regex test: https://regex101.com/r/eiMufk/5)
-	for objkv in $(echo "$str" | perl -n -e "while(/\b([a-zA-Z]+[\w]*)='(.*?)'(\s|\$)/g) {print \$1.'='.\$2 . \"\n\" }"); do
+	#
+	# mapfile, not `for objkv in $(...)`: that word splitting also GLOBS, so a record value holding
+	# a * was matched against the working directory and the parsed value came back as a FILENAME.
+	# Reachable where the caller's directory is one a customer writes to.
+	#
+	# The " and $ escaping that used to sit here is gone. It protected nothing - the data reaches
+	# perl through a quoted echo and is assigned through a quoted expansion, so neither character
+	# is ever re-expanded - and it was never undone, so every consumer got a value with backslashes
+	# baked in: the search listers emitted \" where the record holds " (#719).
+	mapfile -t pairs < <(printf '%s\n' "$str" | perl -n -e "while(/\b([a-zA-Z]+[\w]*)='(.*?)'(\s|\$)/g) {print \$1.'='.\$2 . \"\n\" }")
+
+	for objkv in "${pairs[@]}"; do
+		[ -n "$objkv" ] || continue
 
 		if ! [[ "$objkv" =~ ^([[:alnum:]][_[:alnum:]]{0,64}[[:alnum:]])=(\'?[^\']+?\'?)?$ ]]; then
 			check_result "$E_INVALID" "Invalid key value format [$objkv]"
@@ -450,7 +458,6 @@ parse_object_kv_list_non_eval() {
 		declare -g $obj_key="$obj_val"
 
 	done
-	IFS="$OLD_IFS"
 }
 
 # Check if a object string with key values pairs has the correct format and load it afterwards
