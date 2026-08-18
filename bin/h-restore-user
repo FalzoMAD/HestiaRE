@@ -288,8 +288,13 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 	for domain in $domains; do
 		echo -e "$(date "+%F %T") $domain" | tee -a $tmpdir/restore.log
 
-		# Cleanup previous domain keys
-		unset -v DOMAIN IP IP6 ALIAS TPL SSL SSL_HOME SSL_FORCE SSL_HSTS HTTP3 DOCKER DOCKER_PORT DOCKER_OCTET LETSENCRYPT FTP_USER FTP_MD5 FTP_PATH BACKEND PHP_VERSION PHP_PROFILE PROXY PROXY_EXT PROXY_CACHE PROXY_CACHE_DURATION FASTCGI_CACHE FASTCGI_DURATION REDIRECT REDIRECT_CODE STATS STATS_USER STATS_CRYPT U_DISK OFFLINE CUSTOM_DOCROOT CUSTOM_PHPROOT restore_web_effect restore_proxy_effect
+		# Cleanup previous domain keys, derived from the record that set them rather than from a
+		# list. The list was the leak: it never learned CROWDSEC and BOTLIMIT, so a domain that had
+		# them handed them to the next domain in the same run, which had not.
+		for _prev_key in $prev_web_keys; do unset -v "$_prev_key"; done
+		prev_web_keys=''
+		# Not record keys, so not covered above: what this loop derives per domain.
+		unset -v restore_web_effect restore_proxy_effect old_ip check_ip
 
 		# Checking domain existence
 		check_config=$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
@@ -316,7 +321,19 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 
 		# Restoring web.conf
 		if [ -z "$check_config" ]; then
-			parse_object_kv_list $(cat $tmpdir/web/$domain/$backup_system/web.conf)
+			# The archived line is the record. It is read once, gated, and then edited in place -
+			# quoted at the call, because unquoted it would word-split and GLOB before the tokenizer
+			# ever sees it.
+			archived_record=$(head -n1 "$tmpdir/web/$domain/$backup_system/web.conf")
+			if ! record_line_valid "$archived_record"; then
+				rm -rf $tmpdir
+				error="$domain web record is not a KEY='VALUE' line - refusing to restore it"
+				echo "$error" | $SENDMAIL -s "$subj" $email $notify
+				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				check_result "$E_PARSING" "$error"
+			fi
+			prev_web_keys=$(record_keys "$archived_record" | tr '\n' ' ')
+			parse_object_kv_list "$archived_record"
 
 			# Deleting conflicting aliases
 			for dom_alias in ${ALIAS//,/ }; do
@@ -405,21 +422,46 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				HTTP3='yes'
 			fi
 
-			# Merging web.conf keys
-			str="DOMAIN='$domain' IP='$IP' IP6='$IP6' ALIAS='$ALIAS'"
-			str="$str CUSTOM_DOCROOT='$CUSTOM_DOCROOT' CUSTOM_PHPROOT='$CUSTOM_PHPROOT'"
-			str="$str REDIRECT='$REDIRECT' REDIRECT_CODE='$REDIRECT_CODE'"
-			str="$str FASTCGI_CACHE='$FASTCGI_CACHE' FASTCGI_DURATION='$FASTCGI_DURATION'"
-			str="$str PROXY_CACHE='$PROXY_CACHE' PROXY_CACHE_DURATION='$PROXY_CACHE_DURATION'"
-			str="$str TPL='$TPL' SSL='$SSL' SSL_HOME='$SSL_HOME' SSL_HSTS='$SSL_HSTS'"
-			str="$str SSL_FORCE='$SSL_FORCE' HTTP3='$HTTP3' DOCKER='$DOCKER' DOCKER_PORT='$DOCKER_PORT' DOCKER_OCTET='$DOCKER_OCTET' LETSENCRYPT='$LETSENCRYPT' FTP_USER='$FTP_USER'"
-			str="$str FTP_MD5='$FTP_MD5' FTP_PATH='$FTP_PATH'"
-			str="$str BACKEND='$BACKEND' PHP_VERSION='$PHP_VERSION' PROXY='$PROXY'"
-			str="$str PROXY_EXT='$PROXY_EXT' STATS='$STATS'"
-			str="$str STATS_USER='$STATS_USER' STATS_CRYPT='$STATS_CRYPT'"
-			str="$str U_DISK='$U_DISK' U_BANDWIDTH='0' OFFLINE='$OFFLINE' SUSPENDED='no'"
-			str="$str TIME='$(date +%T)' DATE='$(date +%F)'"
-			echo $str >> $USER_DATA/web.conf
+			# Merging web.conf keys. The archived record is the base: everything the box wrote is
+			# kept, and only the fields below are rewritten, each for a named reason. That way a
+			# field this code has never heard of - today CROWDSEC and BOTLIMIT, tomorrow the next
+			# one - survives a restore without anyone having to remember it.
+			str="$archived_record"
+			record_set_field str DOMAIN "$domain"            # the container name, IDN-normalised
+			record_set_field str IP "$IP"                    # get_user_ip when the archived one is not ours
+			record_set_field str IP6 "$IP6"
+			record_set_field str ALIAS "$ALIAS"              # colliding aliases dropped
+			record_set_field str TPL "$TPL"                  # accept_web_template mapping
+			record_set_field str PROXY "$PROXY"              # accept_web_template mapping
+			record_set_field str HTTP3 "$HTTP3"              # a mapped -http3 template becomes the switch
+			record_set_field str BACKEND "$BACKEND"          # #591 resolution: pool profile
+			record_set_field str PHP_VERSION "$PHP_VERSION"  # #591 resolution: exact version
+			record_set_field str FTP_USER "$FTP_USER"        # old user prefix -> new one
+			record_set_field str CUSTOM_DOCROOT "$CUSTOM_DOCROOT"
+			record_set_field str CUSTOM_PHPROOT "$CUSTOM_PHPROOT"
+			record_set_field str U_BANDWIDTH '0'             # the traffic queue counts it again
+			# SUSPENDED is reset here but NOT in mail, and that divergence is deliberate:
+			# rebuild_mail_domain_conf honours SUSPENDED, rebuild_web_domain_conf has no suspended
+			# branch at all. A web record saying 'yes' over a vhost that is being served would be
+			# worse than losing the flag. Reproducing a suspended web domain is its own issue.
+			record_set_field str SUSPENDED 'no'
+			record_set_field str TIME "$(date +%T)"
+			record_set_field str DATE "$(date +%F)"
+			# PHP_PROFILE exists only inside the archive; live records carry it as BACKEND (#591).
+			record_del_field str PHP_PROFILE
+
+			# What did we lose? Derived from the archived record itself, so it cannot shrink to
+			# nothing: anything dropped that is not on the explicit list above is a defect, and it
+			# is said out loud instead of being repaired empty later.
+			restored_keys=" $(record_keys "$str" | tr '\n' ' ')"
+			for _k in $(record_keys "$archived_record"); do
+				case "$_k" in PHP_PROFILE) continue ;; esac
+				case "$restored_keys" in
+					*" $_k "*) : ;;
+					*) echo "Warning!: $domain web record lost key $_k during restore" | tee -a $tmpdir/restore.log ;;
+				esac
+			done
+			echo "$str" >> $USER_DATA/web.conf
 
 			# The old caching template is a switch now: carry the intent over, or the
 			# domain comes back on plain default and the customer loses their cache
@@ -558,9 +600,20 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 			check_result "$E_PARSING" "$error"
 		fi
 
-		# Restoring mail.conf
+		# Restoring mail.conf. Appending the archived line verbatim is the right model - it is what
+		# keeps every field - but until now it went in unchecked. The gate is the only thing added:
+		# no remaps, because rebuild_mail_domain_conf honours SUSPENDED and the mail timestamps are
+		# the archived ones by long-standing behaviour.
 		if [ -z "$check_config" ]; then
-			cat $tmpdir/mail/$domain/$backup_system/mail.conf >> $USER_DATA/mail.conf
+			archived_record=$(head -n1 "$tmpdir/mail/$domain/$backup_system/mail.conf")
+			if ! record_line_valid "$archived_record"; then
+				rm -rf $tmpdir
+				error="$domain mail record is not a KEY='VALUE' line - refusing to restore it"
+				echo "$error" | $SENDMAIL -s "$subj" $email $notify
+				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				check_result "$E_PARSING" "$error"
+			fi
+			echo "$archived_record" >> $USER_DATA/mail.conf
 		fi
 
 		# Restoring DKIM
@@ -758,7 +811,18 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 
 		# Restore database config
 		if [ -z "$check_config" ]; then
-			parse_object_kv_list $(cat $tmpdir/db/$database/$backup_system/db.conf)
+			# Same shape as web: the archived line is the record, only the named fields move.
+			# The hand list here happens to agree with today's key set - which is exactly how the
+			# web one looked before two fields were added and nobody came back to it.
+			archived_record=$(head -n1 "$tmpdir/db/$database/$backup_system/db.conf")
+			if ! record_line_valid "$archived_record"; then
+				rm -rf $tmpdir
+				error="$database db record is not a KEY='VALUE' line - refusing to restore it"
+				echo "$error" | $SENDMAIL -s "$subj" $email $notify
+				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				check_result "$E_PARSING" "$error"
+			fi
+			parse_object_kv_list "$archived_record"
 
 			if [ -z "$MD5" ]; then
 				echo "Warning!: Database ${DB} backup does not contain a password for user ${DBUSER}."
@@ -769,12 +833,21 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 			DB="${user}_${DB}"
 			DBUSER=$(echo "$DBUSER" | sed -e "s/${old_user}_//")
 			DBUSER="${user}_${DBUSER}"
-			str="DB='$DB' DBUSER='$DBUSER' MD5='$MD5' HOST='$HOST'"
-			str="$str TYPE='$TYPE' CHARSET='$CHARSET' U_DISK='$U_DISK'"
-			str="$str SUSPENDED='no' TIME='$(date +%T)' DATE='$(date +%F)'"
-			echo $str >> $USER_DATA/db.conf
+			str="$archived_record"
+			record_set_field str DB "$DB"          # old user prefix -> new one
+			record_set_field str DBUSER "$DBUSER"  # old user prefix -> new one
+			record_set_field str SUSPENDED 'no'
+			record_set_field str TIME "$(date +%T)"
+			record_set_field str DATE "$(date +%F)"
+			for _k in $(record_keys "$archived_record"); do
+				case " $(record_keys "$str" | tr '\n' ' ') " in
+					*" $_k "*) : ;;
+					*) echo "Warning!: $database db record lost key $_k during restore" | tee -a $tmpdir/restore.log ;;
+				esac
+			done
+			echo "$str" >> $USER_DATA/db.conf
 		else
-			parse_object_kv_list $(grep -F "DB='$database'" $USER_DATA/db.conf)
+			parse_object_kv_list "$(grep -F "DB='$database'" $USER_DATA/db.conf)"
 		fi
 
 		# Unzipping database dump

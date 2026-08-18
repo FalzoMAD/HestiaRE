@@ -6,6 +6,95 @@
 #                                                                           #
 #===========================================================================#
 
+#===========================================================================#
+#                     Archived record lines (#705)                          #
+#===========================================================================#
+#
+# The restore takes the record line out of the archive and edits it AS TEXT, rather than parsing
+# it and emitting a fresh one from a list of known keys. That list was the defect: a field it did
+# not know about - the domain's AUTH_USER/AUTH_HASH among them - simply did not come back, and
+# syshealth then re-inserted the key EMPTY, so the record looked healthy afterwards.
+#
+# In place and not re-emitted, because the field ORDER is load-bearing: include/botpolicy.sh reads
+# with `sed -n "s/^DOMAIN='\([^']*\)'.*BOTLIMIT='[^']\+.*/\1/p"`, so DOMAIN has to stay first and
+# BOTLIMIT behind it. A re-emit would also silently normalise whatever the parser does not model.
+#
+# Known limit, and the same one every `grep -F "DOMAIN='$domain'"` in the tree already has: a value
+# containing a literal ' is not representable. record_line_valid rejects such a line rather than
+# letting it through half-parsed.
+
+# Is this line exactly a sequence of KEY='VALUE', separated by single spaces?
+#
+# This gate is what makes the verbatim path safe, and it is not optional. Appending the archived
+# line means a line this box did not write lands in a live *.conf, and the consumers downstream do
+# NOT all go through the (sound) PHP tokenizer: botpolicy and crowdsec read it with sed on quote
+# boundaries, get_object_value with grep/cut, and the h-list-* emitters splice it into JSON.
+#
+# $ stays ALLOWED: MD5, AUTH_HASH and STATS_CRYPT are crypt hashes and carry it as a matter of
+# course. Inside a single-quoted record value it is literal, and no consumer evaluates it.
+#
+# It is also what lets record_set_field find a field by a plain " KEY='" search: with ' banned from
+# every value, that sequence cannot occur inside one.
+record_line_valid() {
+	local _line="$1" _rest _q="'" _dq='"' _bt='`' _bs='\'
+	[ -n "$_line" ] || return 1
+	# A newline would make the "one record per line" assumption a lie for every reader below.
+	[[ "$_line" == *$'\n'* ]] && return 1
+	local _re="^([A-Z][A-Z0-9_]*)=${_q}([^${_q}${_dq}${_bt}${_bs}]*)${_q}( |$)"
+	# Trailing blanks are trimmed rather than rejected: some writers emit one and it carries
+	# nothing. Everything else has to match the grammar exactly.
+	_rest="${_line%"${_line##*[! ]}"}"
+	while [ -n "$_rest" ]; do
+		[[ "$_rest" =~ $_re ]] || return 1
+		_rest="${_rest#"${BASH_REMATCH[0]}"}"
+	done
+	return 0
+}
+
+# The keys of a record line, one per line, in the order they appear.
+record_keys() {
+	grep -o "[A-Z][A-Z0-9_]*='" <<< "$1" | sed "s/='$//"
+}
+
+# record_set_field VAR KEY VALUE - replace KEY's value in the record held in VAR, keeping its
+# position; append the field at the end when it is not there yet.
+record_set_field() {
+	local -n _rec_ref="$1"
+	local _key="$2" _val="$3" _pre _post
+	if [[ "$_rec_ref" == "$_key='"* ]]; then
+		_pre=''
+		_post="${_rec_ref#"$_key='"}"
+	elif [[ "$_rec_ref" == *" $_key='"* ]]; then
+		_pre="${_rec_ref%%" $_key='"*}"
+		_post="${_rec_ref#*" $_key='"}"
+	else
+		_rec_ref="$_rec_ref $_key='$_val'"
+		return
+	fi
+	_post="${_post#*\'}"
+	if [ -z "$_pre" ]; then
+		_rec_ref="$_key='$_val'$_post"
+	else
+		_rec_ref="$_pre $_key='$_val'$_post"
+	fi
+}
+
+# record_del_field VAR KEY - remove KEY from the record held in VAR.
+record_del_field() {
+	local -n _rec_ref="$1"
+	local _key="$2" _pre _post
+	if [[ "$_rec_ref" == "$_key='"* ]]; then
+		_post="${_rec_ref#"$_key='"}"
+		_post="${_post#*\'}"
+		_rec_ref="${_post# }"
+	elif [[ "$_rec_ref" == *" $_key='"* ]]; then
+		_pre="${_rec_ref%%" $_key='"*}"
+		_post="${_rec_ref#*" $_key='"}"
+		_post="${_post#*\'}"
+		_rec_ref="$_pre$_post"
+	fi
+}
+
 # Local storage
 # Defining local storage function
 local_backup() {

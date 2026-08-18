@@ -599,8 +599,15 @@ rebuild_mail_domain_conf() {
 			touch $HOMEDIR/$user/conf/mail/$domain/reject_spam
 		fi
 
-		# Adding dkim
+		# Adding dkim. The missing key is a NAMED failure, not a stderr line: the record says the
+		# domain signs, exim finds no dkim.pem and signs nothing, and the DNS TXT record - which
+		# lives on a nameserver we do not run and nobody edits during a restore - keeps announcing
+		# a key. Every message then fails DKIM instead of merely being unsigned. There is also no
+		# generating a replacement here: a new key would not match the published one either.
 		if [ "$DKIM" = 'yes' ]; then
+			if [ ! -f "$USER_DATA/mail/$domain.pem" ]; then
+				check_result "$E_NOTEXIST" "$domain has DKIM='yes' but no private key ($USER_DATA/mail/$domain.pem); the published TXT record would announce a key nothing signs with"
+			fi
 			cp $USER_DATA/mail/$domain.pem \
 				$HOMEDIR/$user/conf/mail/$domain/dkim.pem
 		fi
