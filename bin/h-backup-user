@@ -437,8 +437,11 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			fi
 		fi
 
-		domain_conf=$(grep -F "DOMAIN='$domain'" $conf)
-		parse_object_kv_list_non_eval domain_conf
+		# No re-parse of the record here. There used to be one, but it passed the VARIABLE NAME
+		# instead of its value, so it parsed the word "domain_conf" - which holds no KEY='VALUE'
+		# pair - and assigned nothing at all (#719). Everything below reads what
+		# get_domain_values already set at the top of this iteration, which is where $SSL comes
+		# from - and $SSL decides whether this domain's certificate goes into the archive.
 
 		# No template/ copy in the archive: neither HestiaRE nor HestiaCP reads it back on
 		# restore, and it was the only place the template tree layout was baked into the

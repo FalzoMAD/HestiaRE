@@ -182,8 +182,9 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			fi
 		fi
 
-		domain_conf=$(grep -F "DOMAIN='$domain'" $conf)
-		parse_object_kv_list_non_eval domain_conf
+		# No re-parse of the record here - see h-backup-user: the call that used to sit here
+		# passed the variable NAME and assigned nothing (#719). $SSL below comes from
+		# get_domain_values at the top of the iteration.
 
 		# No template/ copy in the archive (see h-backup-user)
 
