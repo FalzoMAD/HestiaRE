@@ -132,6 +132,263 @@ record_del_field() {
 	fi
 }
 
+#===========================================================================#
+#                        Reading an archive (#707)                          #
+#===========================================================================#
+#
+# The restore used to find out what an archive holds while it was already writing, and what it
+# could not do it did not say at all: a dns/ member was ignored in silence, and a whole section was
+# skipped without a word when this box has no such subsystem - after which the run reported success.
+#
+# So: read the archive ONCE, up front, and describe it. backup_probe collects what is IN the
+# archive; backup_report compares that against THIS host and says what will be lost. Two functions
+# because the first is about the file alone and is the same everywhere, while the second only makes
+# sense against a particular box.
+#
+# Everything is derived from the archive and from this host's own state - nothing is a list kept in
+# step by hand. That is the whole point: a list is what made the restore lose fields in the first
+# place.
+
+# backup_probe ARCHIVE WORKDIR - describe an archive. Sets PROBE_* and extracts the record members
+# into WORKDIR, so the caller can read them without unpacking the archive again.
+backup_probe() {
+	local _arc="$1" _wd="$2" _members _dir
+
+	PROBE_CONTAINER='hestia'
+	PROBE_MODE='gzip'
+	PROBE_WEB='' PROBE_MAIL='' PROBE_DB='' PROBE_UDIR='' PROBE_DNS=''
+	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM=''
+	PROBE_ORIGIN='' PROBE_RECORDS="$_wd"
+
+	[ -f "$_arc" ] || return 1
+	_members=$(tar -tf "$_arc" 2> /dev/null) || return 1
+	[ -n "$_members" ] || return 1
+
+	# Feature detection, never a marker: a HestiaCP archive and every HestiaRE archive written so far
+	# carry no origin line at all, so anything that keyed on one would be deciding by its absence.
+	grep -qx './vesta/' <<< "$_members" || grep -qx './vesta' <<< "$_members" && PROBE_CONTAINER='vesta'
+	grep -qx './.zstd' <<< "$_members" && PROBE_MODE='zstd'
+
+	# Object names come from the member paths, one pass per subsystem rather than one tar per
+	# object: the archive is compressed, and per-object extraction would walk it N times.
+	#
+	# One name per LINE, never space separated: a customer directory can be called "my documents",
+	# and a register that splits on spaces is exactly what made the restore abort on one (#706).
+	PROBE_WEB=$(sed -n 's|^\./web/\([^/]*\)/'"$PROBE_CONTAINER"'/web\.conf$|\1|p' <<< "$_members" | sort -u)
+	PROBE_MAIL=$(sed -n 's|^\./mail/\([^/]*\)/'"$PROBE_CONTAINER"'/mail\.conf$|\1|p' <<< "$_members" | sort -u)
+	PROBE_DB=$(sed -n 's|^\./db/\([^/]*\)/'"$PROBE_CONTAINER"'/db\.conf$|\1|p' <<< "$_members" | sort -u)
+	# Two expressions, not one alternation: | is the delimiter here, so \| inside the pattern is an
+	# escaped delimiter and matched nothing at all - the list came back empty and the report would
+	# have said the archive carries no customer directories.
+	PROBE_UDIR=$(sed -n -e 's|^\./user_dir/\(.*\)\.tar\.gz$|\1|p' -e 's|^\./user_dir/\(.*\)\.tar\.zst$|\1|p' \
+		<<< "$_members" | sort -u)
+	# dns/ is the one we never write and never restore. Zones by NAME, because for somebody moving
+	# off HestiaCP the count is not the answer to the question they are actually asking.
+	PROBE_DNS=$(sed -n 's|^\./dns/\([^/]*\)/.*|\1|p' <<< "$_members" | sort -u)
+	grep -qx "\./cron/cron\.conf" <<< "$_members" && PROBE_CRON='yes'
+	PROBE_PACKAGES=$(sed -n "s|^\./$PROBE_CONTAINER/packages/\(.*\)\.pkg$|\1|p" <<< "$_members" | sort -u)
+
+	# One extraction for every record member there is. --wildcards needs the pattern quoted, and a
+	# pattern that matches nothing is not an error here: an archive without a mail section is a fact
+	# to report, not a failure to read.
+	mkdir -p "$_wd" || return 1
+	tar -xf "$_arc" -C "$_wd" --wildcards --no-wildcards-match-slash \
+		"./$PROBE_CONTAINER/user.conf" "./$PROBE_CONTAINER/web-system" "./$PROBE_CONTAINER/origin" \
+		2> /dev/null || true
+	tar -xf "$_arc" -C "$_wd" --wildcards \
+		"./$PROBE_CONTAINER/packages/*" "./web/*/$PROBE_CONTAINER/web.conf" \
+		"./mail/*/$PROBE_CONTAINER/mail.conf" "./db/*/$PROBE_CONTAINER/db.conf" \
+		"./cron/cron.conf" 2> /dev/null || true
+
+	_dir="$_wd/$PROBE_CONTAINER"
+	if [ -f "$_dir/web-system" ]; then
+		PROBE_WEB_SYSTEM=$(sed -n "s/.*WEB_SYSTEM='\([^']*\)'.*/\1/p" "$_dir/web-system")
+		PROBE_PROXY_SYSTEM=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$_dir/web-system")
+	fi
+	[ -f "$_dir/origin" ] && PROBE_ORIGIN=$(head -n1 "$_dir/origin")
+	return 0
+}
+
+# backup_report_count LIST - how many entries a probe list holds (it is newline separated, and an
+# empty string is zero entries, not one).
+backup_report_count() {
+	[ -n "$1" ] || { echo 0; return; }
+	grep -c . <<< "$1"
+}
+
+# Keys this host itself can put into a KIND record. Three sources, all derived, because each alone
+# shrinks in a way that would make the report lie:
+#
+#   - the registry, which is behind reality by design (CROWDSEC and BOTLIMIT are not in it yet)
+#   - the live records on this box, which only show what some customer HAPPENS to use right now -
+#     on a box where no domain has a bot limit, BOTLIMIT would read as a foreign field
+#   - the keys the commands themselves can add, which is the only source that does not depend on
+#     the current population
+#
+# PHP_PROFILE is named as archive-only rather than unknown: it exists in an archive and never in a
+# live record (#591), and the restore drops it on purpose - the one place that says so is the remap
+# table in h-restore-user, and this is the second.
+backup_local_keys() {
+	local _kind="$1" _f
+	{
+		syshealth_known_keys "$_kind" 2> /dev/null | tr ' ' '\n'
+		for _f in "$CONF_DIR"/users/*/"$_kind.conf"; do
+			[ -f "$_f" ] || continue
+			grep -o "[A-Z][A-Z0-9_]*='" "$_f" | sed "s/='$//"
+		done
+		# What any command on this box could add to such a record, independent of who uses it today.
+		grep -ho "add_object_key[^#]*'\([A-Z][A-Z0-9_]*\)'[[:space:]]*'" "$BIN"/h-* 2> /dev/null \
+			| grep -o "'[A-Z][A-Z0-9_]*'" | tr -d "'"
+		[ "$_kind" = web ] && echo PHP_PROFILE
+	} 2> /dev/null | sed '/^$/d' | sort -u
+}
+
+# backup_report - what this host will NOT be able to restore from the probed archive.
+#
+# Every line is derived: from the archive, from this host's config, and from the record keys both
+# sides actually use. An empty report is PRINTED, never left as silence - "nothing falls away" and
+# "the probe read nothing" have to be distinguishable, and they were not before.
+backup_report() {
+	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys
+
+	echo "-- ARCHIVE --"
+	printf '   container %s, %s compressed\n' "$PROBE_CONTAINER" "$PROBE_MODE"
+	printf '   objects: %s web, %s mail, %s database, %s customer director%s, cron %s\n' \
+		"$(backup_report_count "$PROBE_WEB")" "$(backup_report_count "$PROBE_MAIL")" \
+		"$(backup_report_count "$PROBE_DB")" "$(backup_report_count "$PROBE_UDIR")" \
+		"$([ "$(backup_report_count "$PROBE_UDIR")" = 1 ] && echo y || echo ies)" "$PROBE_CRON"
+	if [ -n "$PROBE_ORIGIN" ]; then
+		printf '   origin: %s\n' "$PROBE_ORIGIN"
+	else
+		printf '   origin: not stated - recognised by its contents\n'
+	fi
+
+	echo "-- WHAT THIS HOST CANNOT RESTORE --"
+
+	# DNS is the one the migration case asks about, so the zones are named rather than counted.
+	if [ -n "$PROBE_DNS" ]; then
+		_found=1
+		printf '   %s DNS zone(s), which this host does not serve at all (#58) - the records are in\n' \
+			"$(backup_report_count "$PROBE_DNS")"
+		printf '   the archive and stay there, nothing here reads them:\n'
+		sed 's/^/      /' <<< "$PROBE_DNS"
+	fi
+
+	# A section whose subsystem this host does not have is dropped in full. With the object count,
+	# because "mail is skipped" and "your 40 mail domains are skipped" are different sentences.
+	for _n in web:WEB_SYSTEM:PROBE_WEB mail:MAIL_SYSTEM:PROBE_MAIL db:DB_SYSTEM:PROBE_DB cron:CRON_SYSTEM:PROBE_CRON; do
+		_obj="${_n%%:*}"
+		_rec="${_n#*:}"
+		_keys="${_rec#*:}"
+		_rec="${_rec%%:*}"
+		[ -n "${!_rec}" ] && continue
+		if [ "$_obj" = cron ]; then
+			[ "$PROBE_CRON" = 'yes' ] || continue
+			_found=1
+			printf '   the cron section, because this host has no CRON_SYSTEM\n'
+		else
+			_n=$(backup_report_count "${!_keys}")
+			[ "$_n" -gt 0 ] || continue
+			_found=1
+			printf '   %s %s object(s), because this host has no %s\n' "$_n" "$_obj" "$_rec"
+		fi
+	done
+
+	[ "$_found" -eq 0 ] && printf '   nothing - every object in this archive has a home on this host\n'
+
+	echo "-- WHAT WILL BE REWRITTEN --"
+	_found=0
+
+	# The web model decides how the vhosts are rendered; a different one on the archive side means
+	# custom includes may not apply. This is the #120 banner, moved to before the first write.
+	if [ -n "$PROBE_WEB" ]; then
+		if [ -z "$PROBE_WEB_SYSTEM" ]; then
+			_found=1
+			printf '   web model unknown (archive predates it) - review the restored vhosts by hand\n'
+		elif [ "$PROBE_WEB_SYSTEM" != "$WEB_SYSTEM" ] || [ "$PROBE_PROXY_SYSTEM" != "$PROXY_SYSTEM" ]; then
+			_found=1
+			printf '   web model %s/%s -> %s/%s, so custom includes may not apply\n' \
+				"${PROBE_WEB_SYSTEM:-none}" "${PROBE_PROXY_SYSTEM:-none}" \
+				"${WEB_SYSTEM:-none}" "${PROXY_SYSTEM:-none}"
+		fi
+	fi
+
+	# Templates and PHP versions, per web record. accept_web_template is asked, not re-implemented -
+	# a second copy of the mapping table is a second thing to keep in step.
+	_missing=''
+	while IFS= read -r _obj; do
+		[ -n "$_obj" ] || continue
+		_rec=$(head -n1 "$(backup_record_file web "$_obj")" 2> /dev/null) || continue
+		[ -n "$_rec" ] || continue
+		for _n in TPL:web PROXY:proxy; do
+			_tpl=$(sed -n "s/.*[[:space:]]${_n%%:*}='\([^']*\)'.*/\1/p" <<< " $_rec")
+			[ -n "$_tpl" ] || continue
+			read -r _eff _ < <(accept_web_template "${_n#*:}" "$_tpl" 2> /dev/null)
+			[ "$_eff" = "$_tpl" ] && continue
+			_found=1
+			printf '   %s: %s template %s -> %s\n' "$_obj" "${_n#*:}" "$_tpl" "$_eff"
+		done
+		_ver=$(sed -n "s/.*PHP_VERSION='\([^']*\)'.*/\1/p" <<< "$_rec")
+		[ -z "$_ver" ] && _ver=$(sed -n "s/.*BACKEND='PHP-\([0-9]*\)_\([0-9]*\)'.*/\1.\2/p" <<< "$_rec")
+		{ [ -z "$_ver" ] || [ "$_ver" = 'none' ]; } && continue
+		[[ " $($BIN/h-list-sys-php plain 2> /dev/null | tr '\n' ' ') " == *" $_ver "* ]] || _missing="$_missing $_ver"
+	done <<< "$PROBE_WEB"
+	if [ -n "$_missing" ]; then
+		_found=1
+		printf '   PHP %s is not installed here - those domains would move to the default (%s)\n' \
+			"$(tr ' ' '\n' <<< "$_missing" | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ $//')" \
+			"$(multiphp_default_version 2> /dev/null)"
+	fi
+
+	# Record keys this host neither knows nor writes. Three-way, so our own newer fields do not read
+	# as foreign: archived, minus the registry, minus what this box puts in its own records.
+	for _n in web mail db; do
+		_hostkeys=" $(backup_local_keys "$_n" | tr '\n' ' ') "
+		_unknown=''
+		_keys="PROBE_${_n^^}"
+		while IFS= read -r _obj; do
+			[ -n "$_obj" ] || continue
+			_rec=$(head -n1 "$(backup_record_file "$_n" "$_obj")" 2> /dev/null) || continue
+			while IFS= read -r _tpl; do
+				[ -n "$_tpl" ] || continue
+				[[ "$_hostkeys" == *" $_tpl "* ]] && continue
+				[[ " $_unknown " == *" $_tpl "* ]] && continue
+				_unknown="$_unknown $_tpl"
+			done < <(record_keys "$_rec")
+		done <<< "${!_keys}"
+		if [ -n "$_unknown" ]; then
+			_found=1
+			printf '   %s records carry key(s) this host does not use:%s\n' "$_n" "$_unknown"
+		fi
+	done
+
+	# Package limits from a box that has subsystems this one does not (HestiaCP's DNS_DOMAINS and
+	# friends). Derived by comparing key sets, so a future divergence shows up without an edit here.
+	for _pkg in $PROBE_PACKAGES; do
+		[ -f "$PROBE_RECORDS/$PROBE_CONTAINER/packages/$_pkg.pkg" ] || continue
+		_local=" $(cat "$CONF_DIR/packages/"*.pkg 2> /dev/null | grep -o "^[A-Z][A-Z0-9_]*=" | tr -d '=' | sort -u | tr '\n' ' ') "
+		_unknown=$(grep -o "^[A-Z][A-Z0-9_]*=" "$PROBE_RECORDS/$PROBE_CONTAINER/packages/$_pkg.pkg" | tr -d '=' | sort -u \
+			| while IFS= read -r _tpl; do [[ "$_local" == *" $_tpl "* ]] || printf ' %s' "$_tpl"; done)
+		if [ -n "$_unknown" ]; then
+			_found=1
+			printf '   package %s sets limit(s) this host has no subsystem for:%s\n' "$_pkg" "$_unknown"
+		fi
+	done
+
+	[ "$_found" -eq 0 ] && printf '   nothing - every value comes back exactly as it was archived\n'
+	return 0
+}
+
+# backup_record_file KIND OBJECT - the extracted record of one object, or nothing.
+backup_record_file() {
+	case "$1" in
+		web) echo "$PROBE_RECORDS/web/$2/$PROBE_CONTAINER/web.conf" ;;
+		mail) echo "$PROBE_RECORDS/mail/$2/$PROBE_CONTAINER/mail.conf" ;;
+		db) echo "$PROBE_RECORDS/db/$2/$PROBE_CONTAINER/db.conf" ;;
+		user) echo "$PROBE_RECORDS/$PROBE_CONTAINER/user.conf" ;;
+	esac
+}
+
 # Local storage
 # Defining local storage function
 local_backup() {

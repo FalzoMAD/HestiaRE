@@ -143,18 +143,20 @@ fi
 # object does not abandon the rest and does not pass as a success either.
 restore_failures=''
 
-# Set default backup source system
-backup_system="hestia"
-backup_mode="gzip"
-
-# Check if it is a Vesta backup
-if tar -tf "$BACKUP/$backup" ./vesta > /dev/null 2>&1; then
-	backup_system="vesta"
+# Read the archive once, before anything is written, and say what this host will not be able to
+# restore from it (#707). Until now the answers came out DURING the run - a dns/ member ignored in
+# silence, a whole section skipped without a word on a box that has no such subsystem, a template
+# rewritten on stderr after the record was already appended - and the run then reported success.
+#
+# The probe also replaces the two tar passes that used to detect the container and the codec.
+if ! backup_probe "$BACKUP/$backup" "$tmpdir/.probe"; then
+	rm -rf "$tmpdir"
+	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	check_result "$E_PARSING" "$backup cannot be read as a backup archive"
 fi
-
-if tar -tf "$BACKUP/$backup" ./.zstd > /dev/null 2>&1; then
-	backup_mode="zstd"
-fi
+backup_system="$PROBE_CONTAINER"
+backup_mode="$PROBE_MODE"
+backup_report | tee -a "$tmpdir/restore.log"
 
 # Restoring user account
 if [ "$create_user" = 'yes' ]; then

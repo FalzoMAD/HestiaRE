@@ -5371,6 +5371,15 @@
       "note": ""
     },
     {
+      "path": "h-list-backup-contents",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-18",
+      "divergence": null,
+      "note": "Reads the archive file rather than the backup.conf record, so an archive placed by hand - a HestiaCP one - can be inspected before a restore touches anything (#707)."
+    },
+    {
       "path": "h-list-user-backup",
       "source_type": "derived",
       "upstream_path": "bin/v-list-user-backup",

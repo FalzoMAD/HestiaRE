@@ -1,0 +1,122 @@
+#!/bin/bash
+# info: list the contents of a backup archive
+# options: USER ARCHIVE [FORMAT]
+#
+# example: h-list-backup-contents admin admin.2026-08-18_03-31-30.tar
+#
+# This function reads the archive FILE, not the backup.conf record, and reports what it holds and
+# what this host would not be able to restore from it. An archive that was put into /backup by hand
+# - a HestiaCP one, say - has no record anywhere, so h-list-user-backup cannot see it at all; this
+# command can, which is what makes a migration inspectable before the first write.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+backup=$2
+format=${3-shell}
+
+# Define backup dir
+if [ -z "$BACKUP" ]; then
+	BACKUP=/backup
+fi
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# shellcheck source=/usr/local/hestia/include/domain.sh
+source $HESTIA/include/domain.sh
+# shellcheck source=/usr/local/hestia/include/syshealth.sh
+source $HESTIA/include/syshealth.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+json_list() {
+	json_escape backup PROBE_CONTAINER PROBE_MODE PROBE_CRON PROBE_WEB_SYSTEM PROBE_PROXY_SYSTEM PROBE_ORIGIN
+	echo '{'
+	echo '    "'$backup'": {
+        "CONTAINER": "'$PROBE_CONTAINER'",
+        "MODE": "'$PROBE_MODE'",
+        "WEB_SYSTEM": "'$PROBE_WEB_SYSTEM'",
+        "PROXY_SYSTEM": "'$PROBE_PROXY_SYSTEM'",
+        "ORIGIN": "'$PROBE_ORIGIN'",
+        "CRON": "'$PROBE_CRON'",'
+	# The lists are newline separated on purpose - a customer directory may be called "my documents"
+	local kind list
+	for kind in WEB MAIL DB UDIR DNS PACKAGES; do
+		list="PROBE_$kind"
+		echo -n '        "'$kind'": ['
+		local first=1 item
+		while IFS= read -r item; do
+			[ -n "$item" ] || continue
+			[ "$first" = 1 ] || echo -n ', '
+			first=0
+			json_item="$item"
+			json_escape json_item
+			echo -n '"'$json_item'"'
+		done <<< "${!list}"
+		echo '],'
+	done
+	echo '        "READABLE": "yes"
+    }
+}'
+}
+
+shell_list() {
+	backup_report
+}
+
+plain_list() {
+	local kind list item
+	for kind in WEB MAIL DB UDIR DNS PACKAGES; do
+		list="PROBE_$kind"
+		while IFS= read -r item; do
+			[ -n "$item" ] || continue
+			printf '%s\t%s\n' "${kind,,}" "$item"
+		done <<< "${!list}"
+	done
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER ARCHIVE [FORMAT]'
+is_format_valid 'user' 'backup'
+is_object_valid 'user' 'USER' "$user"
+
+if [ ! -f "$BACKUP/$backup" ]; then
+	check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '${BACKUP}' folder"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Read-only throughout: the workdir holds the extracted records and nothing else, and it goes away
+# on every exit path - including the ones check_result takes.
+probedir=$(mktemp -d -p "${BACKUP_TEMP:-$BACKUP}" -t probe.XXXXXX) || check_result "$E_NOTEXIST" "Can't create tmp dir"
+trap 'rm -rf "$probedir"' EXIT
+
+if ! backup_probe "$BACKUP/$backup" "$probedir"; then
+	check_result "$E_PARSING" "$backup cannot be read as a backup archive"
+fi
+
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

@@ -12,6 +12,20 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **A backup archive can be inspected before a restore touches anything** (#707).
+  `h-list-backup-contents` reads the archive FILE rather than the `backup.conf` record, so an
+  archive put into `/backup` by hand - a HestiaCP one - can be looked at at all; until now nothing
+  could see it. The same report runs as the restore's preflight, before the first write.
+
+  It answers what the restore used to answer only by doing it, or not at all: DNS zones **by name**,
+  because that is the question somebody moving off HestiaCP is actually asking; sections that would
+  be dropped in full because this host has no such subsystem, **with the object count**; templates
+  and PHP versions that will be rewritten; record keys and package limits this host has no use for.
+  An empty report is printed in words - "nothing falls away" and "the probe read nothing" had no
+  way of looking different before.
+
 ### Security
 
 - **The backup exclusion list is read through the hardened reader** (#706). Three places still used
