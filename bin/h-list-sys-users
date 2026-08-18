@@ -27,7 +27,7 @@ json_list() {
 	objects=$("$BIN/h-list-users" 'list' | wc -w)
 	i=1
 	echo '['
-	while read user; do
+	while read -r user; do
 		json_escape user
 		if [ "$i" -lt "$objects" ]; then
 			printf '\t"%s",\n' "$user"

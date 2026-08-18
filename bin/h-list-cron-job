@@ -26,6 +26,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	echo "{"
+	local CMD="$CMD_RAW"
 	json_escape job MIN HOUR DAY MONTH WDAY CMD JOB SUSPENDED TIME DATE
 	echo -n '    "'$job'": {
         "MIN": "'$MIN'",
@@ -92,8 +93,12 @@ fi
 # Parsing cron job
 parse_object_kv_list "$cron_line"
 
-# Replacing quoted and backslahed text
-CMD=$(echo "$CMD" | sed -e 's/"/\\"/g' -e "s/%quote%/'/g")
+# %quote% is the storage encoding for ' (the record delimiter); every format needs it decoded.
+CMD_RAW="${CMD//%quote%/\'}"
+# The " escaping belongs to JSON alone. It stays here for shell/plain/csv, which have always
+# printed the value this way, while json_list takes CMD_RAW and lets json_escape do the whole
+# encoding - in front of json_escape this line doubled every escape it had already made.
+CMD=$(echo "$CMD_RAW" | sed -e 's/"/\\"/g')
 
 # Listing data
 case $format in

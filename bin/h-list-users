@@ -25,7 +25,7 @@ format=${1-shell}
 json_list() {
 	echo '{'
 	i=1
-	while read USER; do
+	while read -r USER; do
 		if [ ! -f "$CONF_DIR/users/$USER/user.conf" ]; then
 			continue
 		fi

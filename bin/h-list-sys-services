@@ -29,7 +29,7 @@ json_list() {
 	i=1
 	objects=$(echo -e "$data" | grep NAME | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		parse_object_kv_list "$str"
 		json_escape NAME SYSTEM STATE CPU MEM RTIME
 		echo -n '    "'$NAME'": {

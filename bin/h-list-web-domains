@@ -28,7 +28,7 @@ json_list() {
 	i=1
 	objects=$(grep DOMAIN $USER_DATA/web.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		parse_object_kv_list "$str"
 		# Set correct document root path
 		if [ -n "$CUSTOM_DOCROOT" ]; then

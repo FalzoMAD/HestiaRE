@@ -26,6 +26,11 @@
 # a name no json_escape call can cover, because there is nothing to escape in place - it has to be
 # assigned to a variable first.
 #
+# It also reports the opposite defect, DOUBLE escaping: several emitters carried a hand-rolled
+# `sed s/"/\\"/g` from before there was a helper, and left in front of json_escape the two stack -
+# the record holds ", the panel decodes \". Decoding %quote% is deliberately NOT flagged: that is
+# the storage encoding for the record delimiter and every output format needs it.
+#
 # LOCAL / MANUAL, not a CI gate - it needs python3, and the Gitea runner host is kept to
 # git + shellcheck + shfmt with no language runtime (same reason as lint-codemap.sh). Run it when
 # you touch an h-list-* emitter.
@@ -63,6 +68,29 @@ REGION_A = re.compile(r"\"'[^']*'\"")
 # A command substitution cannot be escaped in place, so it has to be named first. Reported under
 # this pseudo-name, which no json_escape call can ever cover - that is the point.
 SUBST = "<command substitution>"
+
+# A hand-rolled quote or backslash escape. Harmless on its own - the non-JSON formats want it - but
+# in front of json_escape the two stack and the panel decodes \" where the record holds ". Decoding
+# %quote% is NOT this: that is the storage encoding for the record delimiter and every format needs
+# it. Written as a list so a new spelling is one line.
+HANDESC = [
+    re.compile(r"""s/"/\\\\"/"""),          # sed -e 's/"/\\"/g'
+    re.compile(r"""s/\\\\/\\\\\\\\/"""),  # sed -e 's/\\/\\\\/g'
+    re.compile(r"""//\\?"/\\\\"""),        # ${v//\"/\\"}
+]
+ASSIGN = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)=")
+
+
+def hand_escapes(line, top_level_only=False):
+    """The name a line assigns from a hand-rolled quote/backslash escape, else None.
+
+    top_level_only skips indented lines: an escape inside shell_list/csv_list belongs to that
+    format alone and never reaches the JSON path.
+    """
+    m = ASSIGN.match(line)
+    if not m or (top_level_only and m.group(1)):
+        return None
+    return m.group(2) if any(r.search(line) for r in HANDESC) else None
 
 
 def splices_a(line):
@@ -121,6 +149,19 @@ def splices_c(line):
     return out
 
 
+def covered_pairs(spliced, covered, escaped_here, top_escapes, local_names):
+    """Names this emitter both escapes by hand and hands to json_escape."""
+    out = []
+    for name in spliced:
+        if name not in covered:
+            continue
+        if name in escaped_here:
+            out.append((name, (escaped_here[name], name)))
+        elif name in top_escapes and name not in local_names:
+            out.append((name, (top_escapes[name], name)))
+    return out
+
+
 findings = []
 emitters = 0
 
@@ -171,12 +212,25 @@ for path in sorted(glob.glob("bin/h-*")):
         top_level.add(len(regions))
         regions.append((a, b))
 
+    # A quote escape at TOP level counts too, but only for a name the emitter does not rebuild
+    # locally - that local copy is exactly how the cron-job lister keeps the escape for its shell
+    # output while json_escape does the whole encoding for JSON.
+    top_escapes = {}
+    for n, line in enumerate(lines):
+        if any(a <= n <= b for a, b in regions):
+            continue
+        name = hand_escapes(line, top_level_only=True)
+        if name:
+            top_escapes[name] = n + 1
+
     for ri, (a, b) in enumerate(regions):
         emitters += 1
         # A top-level emitter has no function to hold its json_escape call, so the whole file's
         # calls count for it.
         covered = set(covered_file) if ri in top_level else set()
         spliced = {}
+        escaped_here = {}
+        local_names = set()
         stmt = None
         for n in range(max(a, 0), min(b + 1, len(lines))):
             line = lines[n]
@@ -190,12 +244,21 @@ for path in sorted(glob.glob("bin/h-*")):
             if m:
                 covered.update(m.group(1).split())
                 continue
+            name = hand_escapes(line)
+            if name:
+                escaped_here[name] = n + 1
+            lm = re.match(r"^\s*local\s+([A-Za-z_][A-Za-z0-9_]*)=", line)
+            if lm:
+                local_names.add(lm.group(1))
             if STMT.match(line):
                 stmt = n
             if stmt is None:
                 continue
             for name in splices_a(line) + splices_b(line) + splices_c(line):
                 spliced.setdefault(name, n + 1)
+        for name, ln in sorted(covered_pairs(spliced, covered, escaped_here, top_escapes, local_names)):
+            findings.append(f"{path}:{ln[0]}: {ln[1]} is escaped by hand before json_escape - "
+                            "drop the hand escape, json_escape does the whole encoding")
         for name, ln in sorted(spliced.items(), key=lambda kv: kv[1]):
             if name == SUBST:
                 findings.append(f"{path}:{ln}: a command substitution is spliced into JSON - assign it to a variable and escape that")
@@ -211,8 +274,9 @@ if emitters == 0:
     print("[ FAIL ] no JSON emitter found in bin/ - the detection is broken, not the tree")
     sys.exit(2)
 if findings:
-    print(f"[ FAIL ] {len(findings)} unescaped splice(s) across {emitters} JSON emitter(s) in bin/")
-    print("  Add the name to the json_escape call inside the emitting function.")
+    print(f"[ FAIL ] {len(findings)} finding(s) across {emitters} JSON emitter(s) in bin/")
+    print("  A value spliced but not escaped: add the name to the json_escape call.")
+    print("  A value escaped by hand as well: drop the hand escape, json_escape does the whole encoding.")
     sys.exit(1)
 print(f"[ OK ] {emitters} JSON emitter(s) in bin/, every spliced value escaped")
 PY

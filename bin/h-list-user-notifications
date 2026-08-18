@@ -28,7 +28,7 @@ json_list() {
 	i=1
 	objects=$(grep NID $USER_DATA/notifications.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		parse_object_kv_list "$str"
 		if [ "$PRIORITY" = '' ]; then
 			PRIORITY='0'

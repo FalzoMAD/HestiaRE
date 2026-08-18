@@ -35,7 +35,6 @@ json_list() {
 		LEVEL=$(echo "$str" | cut -f 8 -d \')
 		CATEGORY=$(echo "$str" | cut -f 10 -d \')
 		MESSAGE=$(echo "$str" | cut -f 12 -d \')
-		MESSAGE=${MESSAGE//\"/\\\"}
 		json_escape ID DATE TIME LEVEL CATEGORY MESSAGE
 		echo -n '    "'$ID'": {
         "DATE": "'$DATE'",

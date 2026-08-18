@@ -27,7 +27,7 @@ json_list() {
 	i=1
 	objects=$(grep IP $CONF_DIR/firewall/banlist.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		parse_object_kv_list "$str"
 		json_escape IP CHAIN TIME DATE
 		echo -n '    "'$IP'": {
