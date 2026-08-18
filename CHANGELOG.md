@@ -58,6 +58,11 @@ opens above it.
   through a quoted expansion and is assigned through another, so neither character is ever
   re-expanded. The same function also read its pairs through word splitting, which globs, so a
   record value containing a `*` came back as a filename from the working directory.
+  **The search output changes shape**: it was wrong before, and anyone parsing it gets correct
+  values now. The only consumer in the tree is the panel's search page, where this is plainly a
+  correction; upstream carries the identical escaping, so `v-search-object` and
+  `v-search-user-object` now differ from HestiaCP's output - deliberately, because HestiaCP's is
+  the broken one.
 
 - **A record value containing a quote no longer breaks the JSON the panel reads** (#704). The
   `h-*` commands build JSON by string concatenation, so a `"` or a backslash anywhere in a
