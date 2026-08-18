@@ -295,8 +295,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		# Cleanup previous domain keys, derived from the record that set them rather than from a
 		# list. The list was the leak: it never learned CROWDSEC and BOTLIMIT, so a domain that had
 		# them handed them to the next domain in the same run, which had not.
-		for _prev_key in $prev_web_keys; do unset -v "$_prev_key"; done
-		prev_web_keys=''
+		restore_forget_record prev_web_keys
 		# Not record keys, so not covered above: what this loop derives per domain.
 		unset -v restore_web_effect restore_proxy_effect old_ip check_ip
 
@@ -336,8 +335,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
 				check_result "$E_PARSING" "$error"
 			fi
-			prev_web_keys=$(record_keys "$archived_record" | tr '\n' ' ')
-			parse_object_kv_list "$archived_record"
+			restore_parse_record prev_web_keys "$archived_record"
 
 			# Deleting conflicting aliases
 			for dom_alias in ${ALIAS//,/ }; do
@@ -452,7 +450,8 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			# SUSPENDED is reset here but NOT in mail, and that divergence is deliberate:
 			# rebuild_mail_domain_conf honours SUSPENDED, rebuild_web_domain_conf has no suspended
 			# branch at all. A web record saying 'yes' over a vhost that is being served would be
-			# worse than losing the flag. Reproducing a suspended web domain is its own issue.
+			# worse than losing the flag - it would look locked in the panel and not be. Giving
+			# the web rebuild that branch, and then keeping the archived value, is #720.
 			record_set_field str SUSPENDED 'no'
 			record_set_field str TIME "$(date +%T)"
 			record_set_field str DATE "$(date +%F)"
@@ -811,8 +810,12 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 	for database in $databases; do
 		echo -e "$(date "+%F %T") $database" | tee -a $tmpdir/restore.log
 
-		# Cleanup previous config keys
-		unset -v DB DBUSER MD5 HOST TYPE CHARSET U_DISK
+		# Cleanup previous config keys, derived from the record that set them. The hand list this
+		# replaces had the defect of every hand list: it never learned a new key. It also missed
+		# the branch below that parses the LIVE record of a database already on the target, so a
+		# stale MD5 from that one suppressed the "backup contains no password" warning for the
+		# next database whose archive really had none.
+		restore_forget_record prev_db_keys
 
 		# Checking database existence
 		check_config=$(grep -F "DB='$database'" $USER_DATA/db.conf)
@@ -840,7 +843,7 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
 				check_result "$E_PARSING" "$error"
 			fi
-			parse_object_kv_list "$archived_record"
+			restore_parse_record prev_db_keys "$archived_record"
 
 			if [ -z "$MD5" ]; then
 				echo "Warning!: Database ${DB} backup does not contain a password for user ${DBUSER}."
@@ -866,7 +869,7 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 			done
 			echo "$str" >> $USER_DATA/db.conf
 		else
-			parse_object_kv_list "$(grep -F "DB='$database'" $USER_DATA/db.conf)"
+			restore_parse_record prev_db_keys "$(grep -F "DB='$database'" $USER_DATA/db.conf)"
 		fi
 
 		# Unzipping database dump

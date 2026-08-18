@@ -37,6 +37,7 @@
 # every value, that sequence cannot occur inside one.
 record_line_valid() {
 	local _line="$1" _rest _q="'" _dq='"' _bt='`' _bs='\'
+	local -A _seen_key=()
 	[ -n "$_line" ] || return 1
 	# A newline would make the "one record per line" assumption a lie for every reader below.
 	[[ "$_line" == *$'\n'* ]] && return 1
@@ -46,6 +47,12 @@ record_line_valid() {
 	_rest="${_line%"${_line##*[! ]}"}"
 	while [ -n "$_rest" ]; do
 		[[ "$_rest" =~ $_re ]] || return 1
+		# A repeated key is refused, because the readers disagree about which one wins: the
+		# tokenizer's eval keeps the LAST assignment, sed and grep -o take the FIRST match, and
+		# record_set_field rewrites the first occurrence only. One line, two truths - and the
+		# difference is invisible in the panel, which is what makes it worth refusing outright.
+		[ -z "${_seen_key[${BASH_REMATCH[1]}]:-}" ] || return 1
+		_seen_key[${BASH_REMATCH[1]}]=1
 		_rest="${_rest#"${BASH_REMATCH[0]}"}"
 	done
 	return 0
@@ -77,6 +84,27 @@ record_set_field() {
 	else
 		_rec_ref="$_pre $_key='$_val'$_post"
 	fi
+}
+
+# restore_parse_record KEYVAR LINE - parse a record into the environment and remember, in KEYVAR,
+# which keys it set.
+#
+# The cleanup between two objects has to be derived from whatever LAST parsed, at EVERY parse site
+# in the loop. Maintaining it on only one branch is the same defect one level up: it reads as
+# complete and silently covers less the moment another branch parses a record - and the db loop
+# does exactly that for a database that already exists on the target.
+restore_parse_record() {
+	local -n _keys_ref="$1"
+	_keys_ref="$(record_keys "$2" | tr '\n' ' ')"
+	parse_object_kv_list "$2"
+}
+
+# restore_forget_record KEYVAR - unset every key the last record set, then clear the register.
+restore_forget_record() {
+	local -n _keys_ref="$1"
+	local _k
+	for _k in $_keys_ref; do unset -v "$_k"; done
+	_keys_ref=''
 }
 
 # record_del_field VAR KEY - remove KEY from the record held in VAR.
