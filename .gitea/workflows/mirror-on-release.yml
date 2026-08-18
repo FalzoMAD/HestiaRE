@@ -47,12 +47,6 @@ jobs:
           # unmirrored one is a second problem on top of the first. Same step, because the trap
           # above removes the clone when this step ends.
           #
-          # The trap it guards: the tag hangs off the dev->main MERGE, so the merge has to happen
-          # BEFORE tagging. Twice now a tag was cut while the fix was still only on dev - v0.13.1
-          # (2026-08-03) shipped byte-identical to its predecessor and the fleet was reinstalled
-          # with the very bug it was meant to fix, and v0.16.0 (2026-08-17) missed a security fix
-          # by twelve hours. Nothing that runs after the tag can repair that; this only makes it
-          # loud within a minute instead of at the next verification round.
           # An empty tag is only legitimate on a manual dispatch. On a release event it means the
           # expression did not resolve - and a guard that skips itself in silence fails open in
           # exactly the direction it exists to cover, so that case is an error, not a skip.
