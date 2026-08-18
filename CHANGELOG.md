@@ -14,7 +14,7 @@ opens above it.
 
 _Nothing yet._
 
-## v0.16.0 (2026-08-17)
+## v0.16.0 (2026-08-18)
 
 Closes the webmail replacement (#584), WordPress as a domain option (#682), the panel form
 reordering (#621) and the read-side hardening of the panel (#578/#649).
