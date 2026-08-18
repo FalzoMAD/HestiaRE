@@ -599,8 +599,22 @@ rebuild_mail_domain_conf() {
 			touch $HOMEDIR/$user/conf/mail/$domain/reject_spam
 		fi
 
-		# Adding dkim
+		# Adding dkim. The missing key is a NAMED failure, not a stderr line: the record says the
+		# domain signs, exim finds no dkim.pem and signs nothing, and the DNS TXT record - which
+		# lives on a nameserver we do not run and nobody edits during a restore - keeps announcing
+		# a key. Every message then fails DKIM instead of merely being unsigned. There is also no
+		# generating a replacement here: a new key would not match the published one either.
+		#
+		# check_result ENDS the calling script, so what this costs depends on the caller, measured:
+		# h-rebuild-mail-domain returns non-zero for that one domain; h-rebuild-mail-domains runs
+		# each domain as its own process, so the loop continues and only the broken one is skipped
+		# (that command now reports the failure instead of exiting 0); h-restore-user collects it
+		# and finishes the rest. Nothing aborts a run halfway - deliberately, because on a live box
+		# the drift is one domain and the other domains still need their rebuild.
 		if [ "$DKIM" = 'yes' ]; then
+			if [ ! -f "$USER_DATA/mail/$domain.pem" ]; then
+				check_result "$E_NOTEXIST" "$domain has DKIM='yes' but no private key ($USER_DATA/mail/$domain.pem); the published TXT record would announce a key nothing signs with"
+			fi
 			cp $USER_DATA/mail/$domain.pem \
 				$HOMEDIR/$user/conf/mail/$domain/dkim.pem
 		fi

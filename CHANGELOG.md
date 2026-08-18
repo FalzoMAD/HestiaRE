@@ -22,6 +22,14 @@ opens above it.
   login route is covered too - it wrote the password hash the same way. The backup exclusion list
   also stopped leaving its tempfile behind.
 
+- **An archived record is checked before it is trusted** (#705). Appending the archived line
+  verbatim is what preserves the fields, but it also puts a line this box did not write into a live
+  config, and not every reader goes through the tokenizer - some parse with `sed` on quote
+  boundaries, and the listers splice into JSON. A record must now be exactly `KEY='VALUE'`, with the
+  quote, backslash, backtick, doublequote and newline refused; `$` stays allowed because the crypt
+  hashes carry it. Mail records were appended with no check at all before. The three archive parses
+  are quoted now - unquoted, the archive content word-split and globbed before the parser saw it.
+
 ### Fixed
 
 - **A record value containing a quote no longer breaks the JSON the panel reads** (#704). The
@@ -35,6 +43,21 @@ opens above it.
   defect too, a value escaped by hand as well as by the helper, which is how a doubled `\"` reached
   the panel from five emitters. Alongside it, 17 listers read the record with `read` and no `-r`,
   so a backslash in any value was eaten before anything was escaped at all.
+
+- **A restored web domain keeps every field it had** (#705). The restore rebuilt the record from a
+  hand-written list of keys, so anything the list did not know simply did not come back: the
+  domain's `AUTH_USER`/`AUTH_HASH` - its password protection - along with `WP`, `DIR_LIST`,
+  `CROWDSEC` and `BOTLIMIT`. The repair pass then re-inserted those keys empty, so the record looked
+  healthy afterwards and the page was open. It only fires when the domain is new on the target,
+  which is exactly migration and disaster recovery. The archived line is the record now, edited in
+  place, with only named fields rewritten - a field added later survives without anyone remembering
+  it. The same applies to the database record.
+
+- **A DKIM record without its private key is now a named failure** (#705). An archive whose record
+  says `DKIM='yes'` but carries no `.pem` left a `cp` error on stderr while the restore reported
+  success: the panel showed DKIM on, exim signed nothing, and the published TXT record kept
+  announcing a key - so every message failed DKIM rather than merely being unsigned. The restore
+  finishes the rest and then exits non-zero naming what did not come back.
 
 ## v0.16.0 (2026-08-18)
 
