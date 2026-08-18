@@ -29,10 +29,11 @@ json_list() {
 	echo '['
 	echo -e "\t\"en\","
 	for lang in $languages; do
+		json_escape lang
 		if [ "$i" -lt "$objects" ]; then
-			echo -e "\t\"$lang\","
+			printf '\t"%s",\n' "$lang"
 		else
-			echo -e "\t\"$lang\""
+			printf '\t"%s"\n' "$lang"
 		fi
 		((++i))
 	done

@@ -29,6 +29,7 @@ json_list() {
 	i=1
 	for IP in $ips; do
 		source_conf "$CONF_DIR/ips/$IP"
+		json_escape IP OWNER STATUS NAME NAT
 		echo -n '    "'$IP'": {
         "OWNER": "'$OWNER'",
         "STATUS": "'$STATUS'",

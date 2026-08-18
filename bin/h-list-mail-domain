@@ -27,6 +27,8 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list() {
 	parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/mail.conf)
 	echo '{'
+	webmail_addr="$WEBMAIL_ALIAS.$domain"
+	json_escape webmail_addr DOMAIN ANTIVIRUS ANTISPAM DKIM CATCHALL ACCOUNTS RATE_LIMIT REJECT U_DISK SSL LETSENCRYPT SUSPENDED TIME DATE WEBMAIL_ALIAS WEBMAIL U_SMTP_RELAY U_SMTP_RELAY_HOST U_SMTP_RELAY_PORT U_SMTP_RELAY_USERNAME U_SPAM_SCORE U_SPAM_REJECT_SCORE U_SPAM_SUBJECT_TAG
 	echo '    "'$DOMAIN'": {
         "ANTIVIRUS": "'$ANTIVIRUS'",
         "ANTISPAM": "'$ANTISPAM'",
@@ -41,7 +43,7 @@ json_list() {
         "SUSPENDED": "'$SUSPENDED'",
         "TIME": "'$TIME'",
         "DATE": "'$DATE'",
-        "WEBMAIL_ALIAS": "'$WEBMAIL_ALIAS.$domain'",
+        "WEBMAIL_ALIAS": "'$webmail_addr'",
         "WEBMAIL":"'$WEBMAIL'",
         "U_SMTP_RELAY":"'$U_SMTP_RELAY'",
         "U_SMTP_RELAY_HOST":"'$U_SMTP_RELAY_HOST'",

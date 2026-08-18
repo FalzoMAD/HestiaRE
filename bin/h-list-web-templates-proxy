@@ -27,10 +27,11 @@ json_list() {
 	i=1
 	echo '['
 	for template in $templates; do
+		json_escape template
 		if [ "$i" -lt "$objects" ]; then
-			echo -e "\t\"$template\","
+			printf '\t"%s",\n' "$template"
 		else
-			echo -e "\t\"$template\""
+			printf '\t"%s"\n' "$template"
 		fi
 		((++i))
 	done

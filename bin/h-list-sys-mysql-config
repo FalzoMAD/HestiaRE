@@ -26,6 +26,7 @@ json_list() {
 	str=$(echo "$config" | egrep "$keys" \
 		| sed -e "s/[ ]*=/=/" -e "s/=[ ]*/=\'/" -e "s/$/'/")
 	parse_object_kv_list "$str"
+	json_escape max_user_connections max_connections wait_timeout interactive_timeout max_allowed_packet config_path
 	echo '{
     "CONFIG": {
         "max_user_connections": "'$max_user_connections'",

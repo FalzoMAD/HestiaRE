@@ -229,17 +229,35 @@ function post_checkbox(string $key, bool $offered, $stored, string $on, string $
  */
 function secret_tmpfile(string $value)
 {
-	$path = @tempnam("/tmp", "hst-sec-");
+	$path = private_tmpfile("hst-sec-");
 	if ($path === false) {
-		$_SESSION["error_msg"] = _("An internal error occurred");
 		return false;
 	}
-	chmod($path, 0600);
 	if (file_put_contents($path, $value . "\n") === false) {
 		@unlink($path);
 		$_SESSION["error_msg"] = _("An internal error occurred");
 		return false;
 	}
+	return $path;
+}
+
+/**
+ * Create an empty 0600 tempfile for content that is written by the caller (a service config on
+ * its way to an h-* command). Returns false and sets error_msg when it cannot - as a value, so
+ * the caller has to branch: fopen() on an unset path writes into the filesystem root, under the
+ * panel user and world-readable, and the command then runs against a path that does not exist.
+ *
+ * The shutdown handler covers a request that dies before the caller's own unlink; a caller that
+ * never unlinks at all is covered too.
+ */
+function private_tmpfile(string $prefix = "hst-tmp-")
+{
+	$path = @tempnam("/tmp", $prefix);
+	if ($path === false) {
+		$_SESSION["error_msg"] = _("An internal error occurred");
+		return false;
+	}
+	chmod($path, 0600);
 	register_shutdown_function(static function () use ($path) {
 		if (is_file($path)) {
 			@unlink($path);

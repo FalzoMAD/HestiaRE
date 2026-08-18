@@ -28,16 +28,17 @@ json_list() {
 	i=1
 	objects=$(grep NID $USER_DATA/notifications.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		parse_object_kv_list "$str"
 		if [ "$PRIORITY" = '' ]; then
 			PRIORITY='0'
 		fi
 		TOPIC=$(echo "$TOPIC" | sed -e "s/%quote%/'/g")
 		NOTICE=$(echo "$NOTICE" | sed -e "s/%quote%/'/g")
+		json_escape NID TOPIC NOTICE TYPE ACK PRIORITY TIME DATE
 		echo -n '    "'$NID'": {
         "TOPIC": "'$TOPIC'",
-        "NOTICE": "'${NOTICE//\"/\'}'",
+        "NOTICE": "'$NOTICE'",
         "TYPE": "'$TYPE'",
         "ACK": "'$ACK'",
         "PRIORITY": "'$PRIORITY'",

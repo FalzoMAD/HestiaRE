@@ -30,6 +30,7 @@ json_list() {
 	echo "{"
 	while read -r str; do
 		parse_object_kv_list "$str"
+		json_escape BACKUP TYPE SIZE WEB DNS MAIL DB CRON UDIR RUNTIME TIME DATE
 		echo -n '    "'$BACKUP'": {
         "TYPE": "'$TYPE'",
         "SIZE": "'$SIZE'",

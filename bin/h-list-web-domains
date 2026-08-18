@@ -28,7 +28,7 @@ json_list() {
 	i=1
 	objects=$(grep DOMAIN $USER_DATA/web.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		parse_object_kv_list "$str"
 		# Set correct document root path
 		if [ -n "$CUSTOM_DOCROOT" ]; then
@@ -36,6 +36,7 @@ json_list() {
 		else
 			DOCROOT="$HOMEDIR/$user/web/$DOMAIN/public_html/"
 		fi
+		json_escape DOMAIN IP IP6 DOCROOT U_DISK U_BANDWIDTH TPL ALIAS STATS STATS_USER SSL SSL_HOME HTTP3 DOCKER DOCKER_PORT DOCKER_OCTET LETSENCRYPT WP FTP_USER FTP_PATH AUTH_USER BACKEND PHP_VERSION PROXY PROXY_EXT SUSPENDED TIME DATE
 		echo -n '    "'$DOMAIN'": {
         "IP": "'$IP'",
         "IP6": "'$IP6'",

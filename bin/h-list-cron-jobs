@@ -28,9 +28,12 @@ json_list() {
 	i=1
 	objects=$(grep JOB $USER_DATA/cron.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		parse_object_kv_list "$str"
-		CMD=$(echo "$CMD" | sed -e 's/"/\\"/g' -e "s/%quote%/'/g")
+		# %quote% is the storage encoding for ' (the record delimiter), so it is decoded for every
+		# format; the " escaping that used to sit here is json_escape's job and doubled up with it.
+		CMD="${CMD//%quote%/\'}"
+		json_escape JOB MIN HOUR DAY MONTH WDAY CMD SUSPENDED TIME DATE
 		echo -n '    "'$JOB'": {
         "MIN": "'$MIN'",
         "HOUR": "'$HOUR'",

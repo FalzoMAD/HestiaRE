@@ -39,9 +39,10 @@ json_list() {
 	i=1
 	objects=$(grep LISTNAME $CONF_DIR/firewall/ipset.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		[[ -z "$str" ]] && continue
 		parse_object_kv_list "$str"
+		json_escape LISTNAME IP_VERSION AUTOUPDATE SUSPENDED SOURCE TIME DATE
 		echo -n '    "'$LISTNAME'": {
         "IP_VERSION": "'$IP_VERSION'",
         "AUTOUPDATE": "'$AUTOUPDATE'",

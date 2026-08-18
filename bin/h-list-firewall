@@ -27,9 +27,10 @@ json_list() {
 	i=1
 	objects=$(grep RULE $CONF_DIR/firewall/rules.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		[[ -z "$str" ]] && continue
 		parse_object_kv_list "$str"
+		json_escape RULE ACTION PROTOCOL PORT IP COMMENT SUSPENDED TIME DATE
 		echo -n '    "'$RULE'": {
         "ACTION": "'$ACTION'",
         "PROTOCOL": "'$PROTOCOL'",

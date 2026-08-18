@@ -1540,50 +1540,51 @@ if (!empty($_POST["save"])) {
 			$v_ssl_crt != str_replace("\r\n", "\n", $_POST["v_ssl_crt"]) ||
 			$v_ssl_key != str_replace("\r\n", "\n", $_POST["v_ssl_key"])
 		) {
-			exec("mktemp -d", $mktemp_output, $return_var);
-			$tmpdir = $mktemp_output[0];
+			$tmpdir = private_tmpdir();
+			if ($tmpdir !== false) {
 
-			// Certificate
-			if (!empty($_POST["v_ssl_crt"])) {
-				$fp = fopen($tmpdir . "/certificate.crt", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
-				fwrite($fp, "\n");
-				fclose($fp);
+				// Certificate
+				if (!empty($_POST["v_ssl_crt"])) {
+					$fp = fopen($tmpdir . "/certificate.crt", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
+					fwrite($fp, "\n");
+					fclose($fp);
+				}
+
+				// Key
+				if (!empty($_POST["v_ssl_key"])) {
+					$fp = fopen($tmpdir . "/certificate.key", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
+					fwrite($fp, "\n");
+					fclose($fp);
+				}
+
+				exec(HESTIA_CMD . "h-change-sys-hestia-ssl " . $tmpdir, $output, $return_var);
+				check_return_code($return_var, $output);
+				unset($output);
+
+				// List ssl certificate info
+				$ssl_str = cli_json("h-list-sys-hestia-ssl json");
+				$v_ssl_crt = $ssl_str["HESTIA"]["CRT"];
+				$v_ssl_key = $ssl_str["HESTIA"]["KEY"];
+				$v_ssl_ca = $ssl_str["HESTIA"]["CA"];
+				$v_ssl_subject = $ssl_str["HESTIA"]["SUBJECT"];
+				$v_ssl_aliases = $ssl_str["HESTIA"]["ALIASES"];
+				$v_ssl_not_before = $ssl_str["HESTIA"]["NOT_BEFORE"];
+				$v_ssl_not_after = $ssl_str["HESTIA"]["NOT_AFTER"];
+				$v_ssl_signature = $ssl_str["HESTIA"]["SIGNATURE"];
+				$v_ssl_pub_key = $ssl_str["HESTIA"]["PUB_KEY"];
+				$v_ssl_issuer = $ssl_str["HESTIA"]["ISSUER"];
+
+				// Cleanup certificate tempfiles
+				if (file_exists($tmpdir . "/certificate.crt")) {
+					unlink($tmpdir . "/certificate.crt");
+				}
+				if (file_exists($tmpdir . "/certificate.key")) {
+					unlink($tmpdir . "/certificate.key");
+				}
+				rmdir($tmpdir);
 			}
-
-			// Key
-			if (!empty($_POST["v_ssl_key"])) {
-				$fp = fopen($tmpdir . "/certificate.key", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
-				fwrite($fp, "\n");
-				fclose($fp);
-			}
-
-			exec(HESTIA_CMD . "h-change-sys-hestia-ssl " . $tmpdir, $output, $return_var);
-			check_return_code($return_var, $output);
-			unset($output);
-
-			// List ssl certificate info
-			$ssl_str = cli_json("h-list-sys-hestia-ssl json");
-			$v_ssl_crt = $ssl_str["HESTIA"]["CRT"];
-			$v_ssl_key = $ssl_str["HESTIA"]["KEY"];
-			$v_ssl_ca = $ssl_str["HESTIA"]["CA"];
-			$v_ssl_subject = $ssl_str["HESTIA"]["SUBJECT"];
-			$v_ssl_aliases = $ssl_str["HESTIA"]["ALIASES"];
-			$v_ssl_not_before = $ssl_str["HESTIA"]["NOT_BEFORE"];
-			$v_ssl_not_after = $ssl_str["HESTIA"]["NOT_AFTER"];
-			$v_ssl_signature = $ssl_str["HESTIA"]["SIGNATURE"];
-			$v_ssl_pub_key = $ssl_str["HESTIA"]["PUB_KEY"];
-			$v_ssl_issuer = $ssl_str["HESTIA"]["ISSUER"];
-
-			// Cleanup certificate tempfiles
-			if (file_exists($tmpdir . "/certificate.crt")) {
-				unlink($tmpdir . "/certificate.crt");
-			}
-			if (file_exists($tmpdir . "/certificate.key")) {
-				unlink($tmpdir . "/certificate.key");
-			}
-			rmdir($tmpdir);
 		}
 	}
 

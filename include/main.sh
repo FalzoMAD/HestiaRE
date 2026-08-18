@@ -686,6 +686,41 @@ is_dir_symlink() {
 	fi
 }
 
+# Escape the named variables IN PLACE for splicing into a JSON string literal. The h-list-*
+# emitters build their JSON by concatenation, so a record value carrying a " or a backslash
+# produces a document the panel cannot json_decode - the same class as upstream #5585 at the
+# certificate listers. Escaping belongs here, at the one definition, not in each emitter.
+#
+# In place and by name because the alternative is a subshell per field: a 300-domain listing
+# would fork twelve thousand times. Pure parameter expansion, no external process.
+#
+# Only the emitters may call this - it destroys the raw value, so never call it before a
+# shell_list or before a value is used for anything but the JSON output.
+json_escape() {
+	local _n _v _c _out
+	for _n in "$@"; do
+		_v="${!_n}"
+		_v="${_v//\\/\\\\}"
+		_v="${_v//\"/\\\"}"
+		_v="${_v//$'\t'/\\t}"
+		_v="${_v//$'\r'/\\r}"
+		_v="${_v//$'\n'/\\n}"
+		# JSON forbids every raw control character, not just the three with a short form. Rare
+		# enough to pay for a per-character loop only when one is actually present.
+		if [[ "$_v" == *[$'\x01'-$'\x1f']* ]]; then
+			_out=''
+			while IFS= read -r -n1 -d '' _c; do
+				if [[ "$_c" == [$'\x01'-$'\x1f'] ]]; then
+					printf -v _c '\\u%04x' "'$_c"
+				fi
+				_out+="$_c"
+			done < <(printf '%s' "$_v")
+			_v="$_out"
+		fi
+		printf -v "$_n" '%s' "$_v"
+	done
+}
+
 # Get object value
 get_object_value() {
 	object=$(grep -F "$2='$3'" "$(_object_conf "$1")")

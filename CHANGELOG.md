@@ -12,7 +12,29 @@ opens above it.
 
 ## Unreleased
 
-_Nothing yet._
+### Security
+
+- **A failing `mktemp` no longer lets the panel write into an unset path** (#703). Thirty save
+  routes took `exec("mktemp")` and used `$output[0]` without checking it, so a failure produced an
+  empty path: `fopen()` on it aborts the request with a fatal, and the certificate or service
+  config the route was about to hand to the CLI is gone with it. They now go through
+  `private_tmpfile()` / `private_tmpdir()`, which return `false` and make the caller branch. The
+  login route is covered too - it wrote the password hash the same way. The backup exclusion list
+  also stopped leaving its tempfile behind.
+
+### Fixed
+
+- **A record value containing a quote no longer breaks the JSON the panel reads** (#704). The
+  `h-*` commands build JSON by string concatenation, so a `"` or a backslash anywhere in a
+  record - a domain alias, a notification, a certificate subject, a log line - produced a document
+  `json_decode` rejects, and the panel showed an empty page instead of the object. Escaping now
+  happens once, in `json_escape` (`include/main.sh`), applied by all 85 emitters. Three listers
+  carried a local half-fix that covered the fields upstream #5585 named and missed the rest. A hand
+  check on the `docs` branch (`tests/lint/`) derives both the spliced and the escaped names
+  from the source, so a field added later cannot slip past unescaped - and reports the opposite
+  defect too, a value escaped by hand as well as by the helper, which is how a doubled `\"` reached
+  the panel from five emitters. Alongside it, 17 listers read the record with `read` and no `-r`,
+  so a backslash in any value was eaten before anything was escaped at all.
 
 ## v0.16.0 (2026-08-18)
 

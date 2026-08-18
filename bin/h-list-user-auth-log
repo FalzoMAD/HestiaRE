@@ -35,6 +35,7 @@ json_list() {
 		USER_AGENT=$(echo "$str" | cut -f 12 -d \')
 		SESSION=$(echo "$str" | cut -f 14 -d \')
 		ACTIVE=$(echo "$str" | cut -f 16 -d \')
+		json_escape i DATE TIME IP ACTION STATUS USER_AGENT SESSION ACTIVE
 		echo -n '    "'$i'": {
             "DATE": "'$DATE'",
             "TIME": "'$TIME'",

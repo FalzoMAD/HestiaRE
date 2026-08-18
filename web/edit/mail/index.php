@@ -664,73 +664,74 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			$v_ssl_key != str_replace("\r\n", "\n", $_POST["v_ssl_key"]) ||
 			$v_ssl_ca != str_replace("\r\n", "\n", $_POST["v_ssl_ca"])
 		) {
-			exec("mktemp -d", $mktemp_output, $return_var);
-			$tmpdir = $mktemp_output[0];
+			$tmpdir = private_tmpdir();
+			if ($tmpdir !== false) {
 
-			// Certificate
-			if (!empty($_POST["v_ssl_crt"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".crt", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
-				fwrite($fp, "\n");
-				fclose($fp);
-			}
+				// Certificate
+				if (!empty($_POST["v_ssl_crt"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".crt", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
+					fwrite($fp, "\n");
+					fclose($fp);
+				}
 
-			// Key
-			if (!empty($_POST["v_ssl_key"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".key", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
-				fwrite($fp, "\n");
-				fclose($fp);
-			}
+				// Key
+				if (!empty($_POST["v_ssl_key"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".key", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
+					fwrite($fp, "\n");
+					fclose($fp);
+				}
 
-			// CA
-			if (!empty($_POST["v_ssl_ca"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".ca", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_ca"]));
-				fwrite($fp, "\n");
-				fclose($fp);
-			}
+				// CA
+				if (!empty($_POST["v_ssl_ca"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".ca", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_ca"]));
+					fwrite($fp, "\n");
+					fclose($fp);
+				}
 
-			exec(
-				HESTIA_CMD .
-					"h-change-mail-domain-sslcert " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" " .
-					$tmpdir .
-					" 'no'",
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			$restart_web = "yes";
-			$restart_proxy = "yes";
+				exec(
+					HESTIA_CMD .
+						"h-change-mail-domain-sslcert " .
+						$user .
+						" " .
+						quoteshellarg($v_domain) .
+						" " .
+						$tmpdir .
+						" 'no'",
+					$output,
+					$return_var,
+				);
+				check_return_code($return_var, $output);
+				unset($output);
+				$restart_web = "yes";
+				$restart_proxy = "yes";
 
-			$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
-			$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
-			$v_ssl_key = $ssl_str[$v_domain]["KEY"];
-			$v_ssl_ca = $ssl_str[$v_domain]["CA"];
-			$v_ssl_subject = $ssl_str[$v_domain]["SUBJECT"];
-			$v_ssl_aliases = $ssl_str[$v_domain]["ALIASES"];
-			$v_ssl_not_before = $ssl_str[$v_domain]["NOT_BEFORE"];
-			$v_ssl_not_after = $ssl_str[$v_domain]["NOT_AFTER"];
-			$v_ssl_signature = $ssl_str[$v_domain]["SIGNATURE"];
-			$v_ssl_pub_key = $ssl_str[$v_domain]["PUB_KEY"];
-			$v_ssl_issuer = $ssl_str[$v_domain]["ISSUER"];
+				$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
+				$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
+				$v_ssl_key = $ssl_str[$v_domain]["KEY"];
+				$v_ssl_ca = $ssl_str[$v_domain]["CA"];
+				$v_ssl_subject = $ssl_str[$v_domain]["SUBJECT"];
+				$v_ssl_aliases = $ssl_str[$v_domain]["ALIASES"];
+				$v_ssl_not_before = $ssl_str[$v_domain]["NOT_BEFORE"];
+				$v_ssl_not_after = $ssl_str[$v_domain]["NOT_AFTER"];
+				$v_ssl_signature = $ssl_str[$v_domain]["SIGNATURE"];
+				$v_ssl_pub_key = $ssl_str[$v_domain]["PUB_KEY"];
+				$v_ssl_issuer = $ssl_str[$v_domain]["ISSUER"];
 
-			// Cleanup certificate tempfiles
-			if (!empty($_POST["v_ssl_crt"])) {
-				unlink($tmpdir . "/" . $v_domain . ".crt");
+				// Cleanup certificate tempfiles
+				if (!empty($_POST["v_ssl_crt"])) {
+					unlink($tmpdir . "/" . $v_domain . ".crt");
+				}
+				if (!empty($_POST["v_ssl_key"])) {
+					unlink($tmpdir . "/" . $v_domain . ".key");
+				}
+				if (!empty($_POST["v_ssl_ca"])) {
+					unlink($tmpdir . "/" . $v_domain . ".ca");
+				}
+				rmdir($tmpdir);
 			}
-			if (!empty($_POST["v_ssl_key"])) {
-				unlink($tmpdir . "/" . $v_domain . ".key");
-			}
-			if (!empty($_POST["v_ssl_ca"])) {
-				unlink($tmpdir . "/" . $v_domain . ".ca");
-			}
-			rmdir($tmpdir);
 		}
 	}
 
@@ -824,70 +825,71 @@ if (!empty($_POST["save"]) && !empty($_GET["domain"]) && empty($_GET["account"])
 			}
 			$_SESSION["error_msg"] = sprintf(_('Field "%s" can not be blank.'), $error_msg);
 		} else {
-			exec("mktemp -d", $mktemp_output, $return_var);
-			$tmpdir = $mktemp_output[0];
+			$tmpdir = private_tmpdir();
+			if ($tmpdir !== false) {
 
-			// Certificate
-			if (!empty($_POST["v_ssl_crt"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".crt", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
-				fclose($fp);
-			}
+				// Certificate
+				if (!empty($_POST["v_ssl_crt"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".crt", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_crt"]));
+					fclose($fp);
+				}
 
-			// Key
-			if (!empty($_POST["v_ssl_key"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".key", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
-				fclose($fp);
-			}
+				// Key
+				if (!empty($_POST["v_ssl_key"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".key", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_key"]));
+					fclose($fp);
+				}
 
-			// CA
-			if (!empty($_POST["v_ssl_ca"])) {
-				$fp = fopen($tmpdir . "/" . $v_domain . ".ca", "w");
-				fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_ca"]));
-				fclose($fp);
-			}
-			exec(
-				HESTIA_CMD .
-					"h-add-mail-domain-ssl " .
-					$user .
-					" " .
-					quoteshellarg($v_domain) .
-					" " .
-					$tmpdir .
-					" 'no'",
-				$output,
-				$return_var,
-			);
-			check_return_code($return_var, $output);
-			unset($output);
-			$v_ssl = "yes";
-			$restart_web = "yes";
-			$restart_proxy = "yes";
+				// CA
+				if (!empty($_POST["v_ssl_ca"])) {
+					$fp = fopen($tmpdir . "/" . $v_domain . ".ca", "w");
+					fwrite($fp, str_replace("\r\n", "\n", $_POST["v_ssl_ca"]));
+					fclose($fp);
+				}
+				exec(
+					HESTIA_CMD .
+						"h-add-mail-domain-ssl " .
+						$user .
+						" " .
+						quoteshellarg($v_domain) .
+						" " .
+						$tmpdir .
+						" 'no'",
+					$output,
+					$return_var,
+				);
+				check_return_code($return_var, $output);
+				unset($output);
+				$v_ssl = "yes";
+				$restart_web = "yes";
+				$restart_proxy = "yes";
 
-			$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
-			$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
-			$v_ssl_key = $ssl_str[$v_domain]["KEY"];
-			$v_ssl_ca = $ssl_str[$v_domain]["CA"];
-			$v_ssl_subject = $ssl_str[$v_domain]["SUBJECT"];
-			$v_ssl_aliases = $ssl_str[$v_domain]["ALIASES"];
-			$v_ssl_not_before = $ssl_str[$v_domain]["NOT_BEFORE"];
-			$v_ssl_not_after = $ssl_str[$v_domain]["NOT_AFTER"];
-			$v_ssl_signature = $ssl_str[$v_domain]["SIGNATURE"];
-			$v_ssl_pub_key = $ssl_str[$v_domain]["PUB_KEY"];
-			$v_ssl_issuer = $ssl_str[$v_domain]["ISSUER"];
+				$ssl_str = cli_json("h-list-mail-domain-ssl " . $user . " " . quoteshellarg($v_domain) . " json");
+				$v_ssl_crt = $ssl_str[$v_domain]["CRT"];
+				$v_ssl_key = $ssl_str[$v_domain]["KEY"];
+				$v_ssl_ca = $ssl_str[$v_domain]["CA"];
+				$v_ssl_subject = $ssl_str[$v_domain]["SUBJECT"];
+				$v_ssl_aliases = $ssl_str[$v_domain]["ALIASES"];
+				$v_ssl_not_before = $ssl_str[$v_domain]["NOT_BEFORE"];
+				$v_ssl_not_after = $ssl_str[$v_domain]["NOT_AFTER"];
+				$v_ssl_signature = $ssl_str[$v_domain]["SIGNATURE"];
+				$v_ssl_pub_key = $ssl_str[$v_domain]["PUB_KEY"];
+				$v_ssl_issuer = $ssl_str[$v_domain]["ISSUER"];
 
-			// Cleanup certificate tempfiles
-			if (!empty($_POST["v_ssl_crt"])) {
-				unlink($tmpdir . "/" . $v_domain . ".crt");
+				// Cleanup certificate tempfiles
+				if (!empty($_POST["v_ssl_crt"])) {
+					unlink($tmpdir . "/" . $v_domain . ".crt");
+				}
+				if (!empty($_POST["v_ssl_key"])) {
+					unlink($tmpdir . "/" . $v_domain . ".key");
+				}
+				if (!empty($_POST["v_ssl_ca"])) {
+					unlink($tmpdir . "/" . $v_domain . ".ca");
+				}
+				rmdir($tmpdir);
 			}
-			if (!empty($_POST["v_ssl_key"])) {
-				unlink($tmpdir . "/" . $v_domain . ".key");
-			}
-			if (!empty($_POST["v_ssl_ca"])) {
-				unlink($tmpdir . "/" . $v_domain . ".ca");
-			}
-			rmdir($tmpdir);
 		}
 	}
 
