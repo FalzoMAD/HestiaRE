@@ -21,6 +21,11 @@
 #   B   \"$VAR\"                     value spliced into a double-quoted echo -e line
 #   C   printf '..."%s"...' "$var"   value passed as a %s argument inside a JSON literal
 #
+# Two things it has to do to keep that reach, both learned the hard way here: join backslash
+# continuations (printf arguments live on the next line), and report a command substitution under
+# a name no json_escape call can cover, because there is nothing to escape in place - it has to be
+# assigned to a variable first.
+#
 # LOCAL / MANUAL, not a CI gate - it needs python3, and the Gitea runner host is kept to
 # git + shellcheck + shfmt with no language runtime (same reason as lint-codemap.sh). Run it when
 # you touch an h-list-* emitter.
@@ -55,10 +60,16 @@ NAME = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
 # A  region: "'...'"  - the emitted quote, then shell-quoted splice, then the emitted quote.
 REGION_A = re.compile(r"\"'[^']*'\"")
 
+# A command substitution cannot be escaped in place, so it has to be named first. Reported under
+# this pseudo-name, which no json_escape call can ever cover - that is the point.
+SUBST = "<command substitution>"
+
 
 def splices_a(line):
     out = []
     for m in REGION_A.finditer(line):
+        if "$(" in m.group(0):
+            out.append(SUBST)
         for n in NAME.finditer(m.group(0)):
             out.append(n.group(1))
     return out
@@ -74,6 +85,10 @@ def splices_b(line):
             depth += 1
             i += 2
             continue
+        if line.startswith("$(", i) and depth % 2 == 1:
+            out.append(SUBST)
+            i += 2
+            continue
         if line[i] == "$" and depth % 2 == 1:
             m = NAME.match(line, i)
             if m:
@@ -84,15 +99,26 @@ def splices_b(line):
     return out
 
 
-def splices_c(stmt):
-    """printf whose format string carries "%s": every argument is a JSON value."""
-    if not stmt.lstrip().startswith("printf"):
+PRINTF = re.compile(r"""^\s*printf\s+(?:'([^']*)'|"((?:[^"\\\\]|\\\\.)*)")(.*)$""")
+
+
+def splices_c(line):
+    """printf whose format carries "%s": every argument lands inside a JSON string literal.
+
+    Every argument is reported, not only the ones a quoted %s consumes - mapping positions to
+    conversions exactly would be a second parser, and escaping an argument that did not need it
+    is a no-op. A command substitution among them is reported as such: it has no name to escape.
+    """
+    m = PRINTF.match(line)
+    if not m:
         return []
-    if '"%s"' not in stmt and '\\"%s\\"' not in stmt:
+    fmt = m.group(1) if m.group(1) is not None else m.group(2)
+    args = m.group(3)
+    if '"%s"' not in fmt and '\\"%s\\"' not in fmt:
         return []
-    # arguments are whatever follows the format string; take every expansion after it
-    body = stmt.split("\n", 1)[-1] if "\n" in stmt else ""
-    return [m.group(1) for m in NAME.finditer(body)]
+    out = [SUBST] if "$(" in args else []
+    out += [x.group(1) for x in NAME.finditer(args)]
+    return out
 
 
 findings = []
@@ -154,6 +180,12 @@ for path in sorted(glob.glob("bin/h-*")):
         stmt = None
         for n in range(max(a, 0), min(b + 1, len(lines))):
             line = lines[n]
+            # A backslash-continued statement is one logical line: printf arguments often sit on
+            # the next one, and reading only the first would hide every value it splices.
+            k = n
+            while line.rstrip().endswith("\\") and k + 1 < len(lines):
+                k += 1
+                line = line.rstrip()[:-1] + " " + lines[k].strip()
             m = ESCAPE.match(line)
             if m:
                 covered.update(m.group(1).split())
@@ -165,7 +197,9 @@ for path in sorted(glob.glob("bin/h-*")):
             for name in splices_a(line) + splices_b(line) + splices_c(line):
                 spliced.setdefault(name, n + 1)
         for name, ln in sorted(spliced.items(), key=lambda kv: kv[1]):
-            if name not in covered:
+            if name == SUBST:
+                findings.append(f"{path}:{ln}: a command substitution is spliced into JSON - assign it to a variable and escape that")
+            elif name not in covered:
                 findings.append(f"{path}:{ln}: {name} is spliced into JSON but never passed to json_escape")
 
 seen = set()

@@ -46,14 +46,22 @@ json_list() {
 	total=$(echo "$families" | grep -c .)
 	echo "{"
 	for f in $families; do
-		json_escape f
+		# Named first, then escaped: a command substitution cannot be escaped in place, and MATCH
+		# is an admin-supplied regex - the one field here that carries backslashes as a matter of course.
+		enabled=$(fam_field "$f" ENABLED)
+		lenient=$(fam_field "$f" LENIENT)
+		strict=$(fam_field "$f" STRICT)
+		match=$(fam_field "$f" MATCH)
+		burst=$(fam_field "$f" BURST)
+		nodelay=$(fam_field "$f" NODELAY)
+		json_escape f enabled lenient strict match burst nodelay
 		echo -n '    "'"$f"'": {
-        "ENABLED": "'"$(fam_field "$f" ENABLED)"'",
-        "LENIENT": "'"$(fam_field "$f" LENIENT)"'",
-        "STRICT": "'"$(fam_field "$f" STRICT)"'",
-        "MATCH": "'"$(fam_field "$f" MATCH)"'",
-        "BURST": "'"$(fam_field "$f" BURST)"'",
-        "NODELAY": "'"$(fam_field "$f" NODELAY)"'"
+        "ENABLED": "'"$enabled"'",
+        "LENIENT": "'"$lenient"'",
+        "STRICT": "'"$strict"'",
+        "MATCH": "'"$match"'",
+        "BURST": "'"$burst"'",
+        "NODELAY": "'"$nodelay"'"
     }'
 		[ "$i" -lt "$total" ] && echo ',' || echo
 		((i++))

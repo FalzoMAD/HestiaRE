@@ -28,7 +28,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list() {
 	echo '{'
 	webmail_addr="$WEBMAIL_ALIAS.$domain"
-	json_escape webmail_addr account ALIAS FWD FWD_ONLY AUTOREPLY QUOTA RATE_LIMIT U_DISK SUSPENDED TIME DATE WEBMAIL_ALIAS
+	json_escape webmail_addr account ALIAS FWD FWD_ONLY AUTOREPLY QUOTA RATE_LIMIT U_DISK SUSPENDED TIME DATE
 	echo '    "'$account'": {
         "ALIAS": "'$ALIAS'",
         "FWD": "'$FWD'",

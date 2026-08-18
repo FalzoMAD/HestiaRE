@@ -42,6 +42,7 @@ json_list() {
 		[ -n "$ip" ] || continue
 		[ "$first" = 1 ] || echo ','
 		first=0
+		json_escape ip scen id until
 		printf '    "%s": {\n        "IP": "%s",\n        "SCENARIO": "%s",\n        "ID": "%s",\n        "UNTIL": "%s"\n    }' \
 			"$ip" "$ip" "$scen" "$id" "$until"
 	done < <(cs_rows)
