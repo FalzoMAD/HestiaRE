@@ -37,6 +37,22 @@ member_name_ok() {
 	return 0
 }
 
+# db_replace DB DUMP - make DB hold exactly what DUMP holds. Drop and recreate rather than load on
+# top: --add-drop-table only replaces the tables the dump CARRIES, so a table the archive predates
+# would survive and leave a schema that never existed. Grants live outside the schema and survive
+# the drop (measured). One derivation, two readers - the restore and the rollback below.
+db_replace() {
+	mysql -e "DROP DATABASE IF EXISTS \`$1\`; CREATE DATABASE \`$1\`" 2> /dev/null || return 1
+	backup_decompress "$2" | mysql "$1" 2> /dev/null
+}
+
+# note WHAT - remember a thing that did not come back, for the closing line and the exit status.
+note() {
+	echo "Warning!: $1"
+	problems="$problems
+  - $1"
+}
+
 # What restoring COMPONENT would replace on THIS host, as one line for the consent question.
 component_targets() {
 	local _item _out=''
@@ -141,6 +157,7 @@ tmpdir=$(mktemp -p "${BACKUP_TEMP:-$BACKUP}" -d) || check_result "$E_NOTEXIST" "
 trap 'rm -rf "$tmpdir"' EXIT
 chmod 700 "$tmpdir"
 
+problems=''
 echo "-- SERVER RESTORE --"
 while IFS= read -r component; do
 	[ -n "$component" ] || continue
@@ -159,30 +176,37 @@ while IFS= read -r component; do
 				db=$(basename "$part")
 				db="${db%.mysql.sql.*}"
 				if ! member_name_ok "$db"; then
-					echo "Warning!: $component: $db is not a database member name - skipped"
+					note "$component: $db is not a database member name - skipped, $db untouched"
 					continue
 				fi
 				if [ -z "$DB_SYSTEM" ] || ! command -v mysql > /dev/null 2>&1; then
-					echo "Warning!: $component: no database engine on this host for $db - skipped"
+					note "$component: no database engine on this host - $db not restored"
 					continue
 				fi
 				# The dump must be whole BEFORE the target is dropped. Without this the codec's
 				# exit status is all we would have, and that is not the dump's.
 				if ! backup_dump_complete "$part"; then
-					echo "Warning!: $component: the dump of $db is truncated - $db left untouched"
+					note "$component: the dump of $db is truncated - $db left untouched"
 					continue
 				fi
-				# Dropped and recreated, not loaded on top: --add-drop-table only replaces the
-				# tables the dump CARRIES, so a table the archive predates would survive a restore
-				# and leave a schema that never existed. Measured; grants live outside the schema
-				# and survive the drop.
-				if ! mysql -e "DROP DATABASE IF EXISTS \`$db\`; CREATE DATABASE \`$db\`" 2> /dev/null; then
-					echo "Warning!: $component: database $db could not be reset - left untouched"
-					continue
+				# A complete dump can still fail to load - a trigger, a charset - and the target is
+				# dropped by then, so it ends up neither old nor new (measured: 17 tables became 5).
+				# Hence a copy of the live state first. The usual reason to restore a database is
+				# that it is broken, so failing to copy it does not block the restore; it removes
+				# the way back, and that is said rather than discovered afterwards.
+				rollback="$tmpdir/rollback.$db.sql.$(backup_codec_suffix)"
+				if ! { mysqldump --add-drop-table --routines --triggers --single-transaction "$db" 2> /dev/null \
+					| backup_compress > "$rollback" && backup_dump_complete "$rollback"; }; then
+					rollback=''
+					echo "Warning!: $component: no rollback copy of $db could be taken - a failed load cannot be undone"
 				fi
-				backup_decompress "$part" | mysql "$db" 2> /dev/null \
-					&& echo "$(date '+%F %T') $component: database $db" \
-					|| echo "Warning!: $component: database $db was not loaded"
+				if db_replace "$db" "$part"; then
+					echo "$(date '+%F %T') $component: database $db"
+				elif [ -n "$rollback" ] && db_replace "$db" "$rollback"; then
+					note "$component: database $db did not load - rolled back to the state before this run"
+				else
+					note "$component: database $db did not load and could not be rolled back - it is now INCOMPLETE, not what it was"
+				fi
 				;;
 			*.tar.gz | *.tar.zst)
 				seen=$((seen + 1))
@@ -192,28 +216,28 @@ while IFS= read -r component; do
 				name=$(basename "$part")
 				name="${name%.tar.*}"
 				if ! member_name_ok "$name"; then
-					echo "Warning!: $component: $name is not a component member name - skipped"
+					note "$component: $name is not a component member name - skipped"
 					continue
 				fi
 				mapfile -t places < <(tr ' ' '\n' <<< "${items[$component]}" | sed -n "s|^dir:\(.*/$name\)$|\1|p")
 				if [ "${#places[@]}" -eq 0 ]; then
-					echo "Warning!: $component: no place on this host for $name - skipped"
+					note "$component: no place on this host for $name - not restored"
 					continue
 				fi
 				# Refuse rather than pick: two dirs of one name means the mapping stopped being one
 				# to one, and unpacking into the wrong one of them is silent.
 				if [ "${#places[@]}" -gt 1 ]; then
-					echo "Warning!: $component: $name matches ${#places[@]} places on this host - skipped"
+					note "$component: $name matches ${#places[@]} places on this host - not restored"
 					continue
 				fi
 				dest="${places[0]}"
 				backup_decompress "$part" | tar -xf - -C "$(dirname "$dest")" \
 					&& echo "$(date '+%F %T') $component: $dest" \
-					|| echo "Warning!: $component: $dest was not unpacked"
+					|| note "$component: $dest was not unpacked and may be incomplete"
 				;;
 		esac
 	done
-	[ "$seen" -gt 0 ] || echo "Warning!: $component: the archive holds nothing under this component that this host can read"
+	[ "$seen" -gt 0 ] || note "$component: the archive holds nothing under this component that this host can read"
 done < <(printf '%s\n' "$approved")
 
 #----------------------------------------------------------#
@@ -221,6 +245,16 @@ done < <(printf '%s\n' "$approved")
 #----------------------------------------------------------#
 
 $BIN/h-log-action "system" "Info" "Backup" "Server components restored from $archive: $(tr '\n' ' ' <<< "$approved")."
+
+# A run that half restored a component used to end in success, so a caller saw none of the warnings
+# above. What did not come back is repeated once at the end and carried into the exit status.
+if [ -n "$problems" ]; then
+	echo
+	echo "Not everything came back:$problems"
+	log_event "$E_PARSING" "$ARGUMENTS"
+	exit "$E_PARSING"
+fi
+
 log_event "$OK" "$ARGUMENTS"
 
 exit

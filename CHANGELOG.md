@@ -26,7 +26,11 @@ opens above it.
   actually lose, and without a terminal the consent has to arrive in the argument or nothing is
   written. A database is dropped and recreated rather than loaded on top, because a table the
   archive predates would otherwise survive into a schema that never existed; a dump that did not
-  finish is refused before the target is touched, on the way in as well as on the way out. What a
+  finish is refused before the target is touched, on the way in as well as on the way out, and a
+  copy of the live database is taken first so that a load which fails for some other reason is
+  rolled back instead of leaving a half-built schema. A run that did not restore everything says so
+  in a closing summary and ends in a failing exit status, rather than reporting success with the
+  detail buried in warnings. What a
   box can back up is derived from what it actually has, never from a fixed list - a target without a
   database engine produces a webmail component of directories and no dumps. The archive is root's
   alone at 0600, because `/etc/roundcube` carries the `des_key` and the database password.
