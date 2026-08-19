@@ -630,9 +630,17 @@ local_backup() {
 
 	rm -f $BACKUP/$user.$backup_new_date.tar
 
-	# Checking retention
+	# Checking retention. An adopted archive is the operator's own file - a migration source they put
+	# there - and it carries a date in its name like any other, so the rotation below would take it
+	# first. Excluded by NAME from the records, not by age.
 	backup_list=$(ls -lrt $BACKUP/ | awk '{print $9}' | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
-	backups_count=$(echo "$backup_list" | wc -l)
+	if [ -s "$USER_DATA/backup.conf" ]; then
+		while IFS= read -r _adopted; do
+			[ -n "$_adopted" ] || continue
+			backup_list=$(grep -vxF -- "$_adopted" <<< "$backup_list")
+		done < <(grep -E "(^| )ADOPTED='yes'( |$)" "$USER_DATA/backup.conf" | sed -n "s/^BACKUP='\([^']*\)'.*/\1/p")
+	fi
+	backups_count=$(grep -c . <<< "$backup_list")
 	if [ "$BACKUPS" -le "$backups_count" ]; then
 		backups_rm_number=$((backups_count - BACKUPS + 1))
 

@@ -1,0 +1,157 @@
+#!/bin/bash
+# info: register an archive that is already in the backup folder
+# options: USER ARCHIVE
+#
+# example: h-add-user-backup alpha alpha.2026-08-19_05-46-38.tar
+#
+# An archive put into the backup folder by hand - a HestiaCP one, say - has no record anywhere, so
+# the panel cannot see it and the restore dialog cannot offer it. This writes that record, and it
+# writes it from the ARCHIVE's own members rather than from its name: the name is a claim, the
+# members are the finding.
+#
+# ARCHIVE is a basename. There is no path argument on purpose - this runs as root and reads the
+# file, so a command that takes a path would be a read oracle. The name is validated, resolved only
+# as $BACKUP/$ARCHIVE, and the result has to still be inside that directory, which is what catches
+# a symlink planted there.
+#
+# The record is marked ADOPTED so nothing rotates the operator's own file away: the nightly run
+# prunes by age, and the migration source would go first.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user=$1
+archive=$2
+
+if [ -z "$BACKUP" ]; then
+	BACKUP=/backup
+fi
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER ARCHIVE'
+is_format_valid 'user'
+# By value, not by name: this argument is called archive, and is_format_valid resolves 'backup' to a
+# variable of that name. Same validator either way - the one #661 hardened, and it allows no slash.
+is_object_format_valid "$archive" 'backup'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+
+# Perform verification if read-only mode is enabled
+check_hestia_demo_mode
+
+if [ ! -f "$BACKUP/$archive" ]; then
+	check_result "$E_NOTEXIST" "$archive doesn't exist in '$BACKUP'"
+fi
+
+# Second line under the name validator: -f follows a symlink, and $BACKUP is overridable from the
+# environment, so the file this runs on has to resolve back into the backup directory.
+archive_real=$(realpath -e -- "$BACKUP/$archive" 2> /dev/null)
+backup_real=$(realpath -e -- "$BACKUP" 2> /dev/null)
+if [ -z "$archive_real" ] || [ -z "$backup_real" ] || [ "${archive_real%/*}" != "$backup_real" ]; then
+	check_result "$E_INVALID" "$archive does not resolve to a file inside '$BACKUP'"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+probedir=$(mktemp -d -p "${BACKUP_TEMP:-$BACKUP}" -t adopt.XXXXXX) || check_result "$E_NOTEXIST" "Can't create tmp dir"
+trap 'rm -rf "$probedir"' EXIT
+
+if ! backup_probe "$BACKUP/$archive" "$probedir"; then
+	check_result "$E_PARSING" "$archive cannot be read as a backup archive"
+fi
+if [ "$PROBE_VESTA" = 'yes' ]; then
+	check_result "$E_PARSING" "$archive is a Vesta archive - HestiaRE restores HestiaCP and HestiaRE archives only"
+fi
+
+# Every field out of the members. The record field IS a comma list, so an object whose own name
+# carries a comma cannot be represented in it - joining it anyway turns one entry into two and the
+# panel offers a name that is not in the archive. Named and left out instead. A space is fine: the
+# value is quoted and only commas separate.
+#
+# Called plainly and not inside $( ), because the register below is a global and a subshell would
+# swallow it.
+adopt_skipped=''
+adopt_list() {
+	local _item
+	ADOPT_LIST=''
+	while IFS= read -r _item; do
+		[ -n "$_item" ] || continue
+		if [ "${_item#*,}" != "$_item" ]; then
+			adopt_skipped="$adopt_skipped $_item"
+			continue
+		fi
+		ADOPT_LIST="$ADOPT_LIST,$_item"
+	done <<< "$1"
+	ADOPT_LIST="${ADOPT_LIST#,}"
+}
+# stat, not du -m: -m is a GNU extension, and the size is a byte count either way.
+size=$((($(stat -c %s "$BACKUP/$archive") + 1048575) / 1048576))
+
+adopt_list "$PROBE_WEB"
+web_list="$ADOPT_LIST"
+adopt_list "$PROBE_DNS"
+dns_list="$ADOPT_LIST"
+adopt_list "$PROBE_MAIL"
+mail_list="$ADOPT_LIST"
+adopt_list "$PROBE_DB"
+db_list="$ADOPT_LIST"
+adopt_list "$PROBE_UDIR"
+udir_list="$ADOPT_LIST"
+
+backup_str="BACKUP='$archive'"
+backup_str="$backup_str TYPE='$BACKUP_SYSTEM' SIZE='$size'"
+backup_str="$backup_str WEB='$web_list'"
+backup_str="$backup_str DNS='$dns_list'"
+backup_str="$backup_str MAIL='$mail_list'"
+backup_str="$backup_str DB='$db_list'"
+backup_str="$backup_str CRON='$([ "$PROBE_CRON" = 'yes' ] && echo 1)'"
+backup_str="$backup_str UDIR='$udir_list'"
+backup_str="$backup_str WEB_SYSTEM='$PROBE_WEB_SYSTEM' PROXY_SYSTEM='$PROBE_PROXY_SYSTEM'"
+backup_str="$backup_str ADOPTED='yes' RUNTIME='0'"
+backup_str="$backup_str TIME='$(stat -c %y "$BACKUP/$archive" | cut -f2 -d\  | cut -f1 -d.)'"
+backup_str="$backup_str DATE='$(stat -c %y "$BACKUP/$archive" | cut -f1 -d\ )'"
+
+# The same gate the restore uses before it trusts an archived line: this one is built here, but it
+# is built out of archive content.
+if ! record_line_valid "$backup_str"; then
+	check_result "$E_INVALID" "$archive holds an object name that cannot be written to a record"
+fi
+
+touch $USER_DATA/backup.conf
+sed -i "/BACKUP='$archive'/d" $USER_DATA/backup.conf
+echo "$backup_str" >> $USER_DATA/backup.conf
+chmod 660 $USER_DATA/backup.conf
+
+# Said out loud: a whole restore still brings these back - the restore reads the archive's members,
+# not this list - but they cannot be picked individually in the panel.
+if [ -n "$adopt_skipped" ]; then
+	echo "Warning!: name(s) carrying a comma are not in the record and cannot be selected singly:$adopt_skipped"
+fi
+
+U_BACKUPS=$(grep -c BACKUP $USER_DATA/backup.conf)
+update_user_value "$user" '$U_BACKUPS' "$U_BACKUPS"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "Backup" "Archive adopted (User: $user, Archive: $archive)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

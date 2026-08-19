@@ -793,6 +793,7 @@
         "bin/h-restore-cron-job",
         "bin/h-schedule-user-backup",
         "bin/h-schedule-user-restore",
+        "bin/h-add-user-backup",
         "bin/h-list-backup-contents",
         "bin/h-list-user-backup",
         "bin/h-list-user-backups",

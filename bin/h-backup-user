@@ -842,8 +842,22 @@ backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 
-# Removing old backups
-tail -n $BACKUPS $USER_DATA/backup.conf > $USER_DATA/backup.conf_
+# Removing old backups. Adopted records are kept whatever their age: they point at a file this
+# rotation does not own, and dropping the record would hide the archive from the panel again.
+#
+# In place, in FILE ORDER - the listers print the file as it stands, so pulling the adopted lines to
+# the front would reorder what the panel shows. ADOPTED is matched as a whole field, not as a
+# substring anywhere in the line.
+awk -v keep="$BACKUPS" '
+	/(^| )ADOPTED='"'"'yes'"'"'( |$)/ { next }
+	{ n++ }
+	END { print n }
+' $USER_DATA/backup.conf > $USER_DATA/backup.count_
+awk -v keep="$BACKUPS" -v total="$(cat $USER_DATA/backup.count_)" '
+	/(^| )ADOPTED='"'"'yes'"'"'( |$)/ { print; next }
+	{ i++; if (i > total - keep) print }
+' $USER_DATA/backup.conf > $USER_DATA/backup.conf_
+rm -f $USER_DATA/backup.count_
 mv -f $USER_DATA/backup.conf_ $USER_DATA/backup.conf
 chmod 660 $USER_DATA/backup.conf
 chmod 660 $BACKUP/$user.log
