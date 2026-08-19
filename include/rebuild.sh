@@ -381,15 +381,19 @@ rebuild_web_domain_conf() {
 		fi
 	fi
 
-	# http3 is capability-gated, so it reconciles silently from the HTTP3 field rather than via a
-	# delete+add of the loudly-refusing command (#613): the fragment appears only where nginx can
-	# serve it, and is dropped where it cannot, without erroring per domain in a batch rebuild
+	# THREE writers run while suspended too, and they are outside the block above on purpose. What
+	# separates them from the switches inside it: each derives its fragment from the record and
+	# writes or removes it, so none can refuse and none can leave the record saying something the
+	# disk does not. http3 is additionally capability-gated (#613), which is why it reconciles here
+	# rather than through a delete+add of the loudly-refusing command.
+	#
+	# The suspend templates take part: they include the bot-limit and CrowdSec fragments and the
+	# forced-SSL one. The http3 fragment they do NOT include, so while suspended it is kept in step
+	# but unused, and the normal template picks it up again on unsuspend.
 	apply_web_http3_config
 
-	# Re-render the per-domain fragments from the domain flags (both self-guard + write nothing
-	# when unset): CrowdSec Layer A (ban -> 403, nginx-only) + the server-native Layer-B bot
-	# rate-limit (nginx.botlimit.conf / botlimit.apache2.conf). Both are rendered while suspended
-	# too - the suspend template includes the bot-limit fragment.
+	# CrowdSec Layer A (ban -> 403, nginx-only) + the server-native Layer-B bot rate-limit
+	# (nginx.botlimit.conf / botlimit.apache2.conf). Both self-guard and write nothing when unset.
 	type crowdsec_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/include/crowdsec.sh
 	crowdsec_render_domain_fragment "$user" "$domain"
 	type botpolicy_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/include/botpolicy.sh
