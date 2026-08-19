@@ -26,6 +26,14 @@ opens above it.
   An empty report is printed in words - "nothing falls away" and "the probe read nothing" had no
   way of looking different before.
 
+- **A database whose engine this host does not run is named, and skipped instead of fatal** (#707).
+  `DB_SYSTEM` is a comma list - a HestiaCP box routinely carries `pgsql,mysql` - and the import was
+  a `case` over the type with no default branch, so a postgres dump on a MariaDB-only host took the
+  whole run down at that object. Measured against a real HestiaCP archive: three web domains and two
+  mail domains were already written, and the second database, every cron job and the entire home
+  directory never arrived. The preflight names it before the first write, and the restore finishes
+  everything else and then exits non-zero saying what did not come back.
+
 ### Security
 
 - **The backup exclusion list is read through the hardened reader** (#706). Three places still used

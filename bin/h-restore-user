@@ -820,6 +820,21 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 		[ -n "$database" ] || continue
 		echo -e "$(date "+%F %T") $database" | tee -a $tmpdir/restore.log
 
+		# The engine, decided before anything is unpacked. The import below is a case over TYPE with
+		# no default branch, so a pgsql dump on a host without postgres fell into the pgsql arm and
+		# died there - and it dies mid-run: measured against a real HestiaCP archive, three web
+		# domains and two mail domains were already written, and the second database, every cron job
+		# and the whole home directory never arrived. Named as a failure and skipped, so the rest of
+		# the archive still comes back and the run still ends non-zero.
+		db_type=$(backup_db_type "$database")
+		if ! backup_db_type_supported "$db_type"; then
+			echo "Warning!: $database is a ${db_type:-unknown} database, which this host does not run - skipped" \
+				| tee -a $tmpdir/restore.log
+			restore_failures="$restore_failures$(printf '\n  database %s (no %s engine on this host)' \
+				"$database" "${db_type:-unknown}")"
+			continue
+		fi
+
 		# Cleanup previous config keys, derived from the record that set them. The hand list this
 		# replaces had the defect of every hand list: it never learned a new key. It also missed
 		# the branch below that parses the LIVE record of a database already on the target, so a

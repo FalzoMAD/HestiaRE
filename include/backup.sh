@@ -298,6 +298,21 @@ backup_report() {
 		fi
 	done
 
+	# One level finer than the section check above: this host may have a DB_SYSTEM and still not the
+	# engine a particular database was dumped from. Measured against a real HestiaCP archive - a
+	# pgsql database on a mysql-only host took the whole restore down at that object, after the web
+	# and mail sections were already written.
+	if [ -n "$DB_SYSTEM" ]; then
+		while IFS= read -r _obj; do
+			[ -n "$_obj" ] || continue
+			_eff=$(backup_db_type "$_obj")
+			backup_db_type_supported "$_eff" && continue
+			_found=1
+			printf '   database %s, a %s dump, and this host runs %s\n' \
+				"$_obj" "${_eff:-unknown}" "$DB_SYSTEM"
+		done <<< "$PROBE_DB"
+	fi
+
 	[ "$_found" -eq 0 ] && printf '   nothing - every object in this archive has a home on this host\n'
 
 	echo "-- WHAT WILL BE REWRITTEN --"
@@ -381,6 +396,23 @@ backup_report() {
 
 	[ "$_found" -eq 0 ] && printf '   nothing - every value comes back exactly as it was archived\n'
 	return 0
+}
+
+# backup_db_type OBJECT - the engine a database record asks for (mysql, pgsql), or nothing.
+backup_db_type() {
+	local _rec
+	_rec=$(head -n1 "$(backup_record_file db "$1")" 2> /dev/null) || return 0
+	sed -n "s/.*[[:space:]]TYPE='\([^']*\)'.*/\1/p" <<< " $_rec"
+}
+
+# backup_db_type_supported TYPE - can this host serve that engine at all?
+#
+# DB_SYSTEM is a COMMA LIST, not a single value: a HestiaCP box routinely carries 'pgsql,mysql'
+# while this one has just one of them. Asking only whether DB_SYSTEM is set answers a different
+# question and says yes to a postgres dump on a box with no postgres.
+backup_db_type_supported() {
+	[ -n "$1" ] || return 1
+	[[ ",${DB_SYSTEM}," == *",$1,"* ]]
 }
 
 # backup_record_file KIND OBJECT - the extracted record of one object, or nothing.
