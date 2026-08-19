@@ -1413,12 +1413,16 @@ is_no_quote_format() {
 #
 # CLOSED character set, not a deny list. The value is spliced into the queue line that
 # h-update-sys-queue runs through bash as root, and a deny list holds only as long as the quoting
-# around it does - it was a too-wide allowed set that let a pipe reach that line once. The space is
-# in on purpose: a home entry can be called "my documents", and inside the quoted argument it is a
-# character like any other.
+# around it does - it was a too-wide allowed set that let a pipe reach that line once.
+#
+# A literal space is in, because a home entry can be called "my documents". A TAB is not, although
+# it is just as legal in a filename: tar prints it escaped in the member listing the restore matches
+# against, so such a selector is accepted and then silently selects nothing. Refusing it says so.
 is_selector_format_valid() {
-	if [ -n "$1" ] && ! [[ "$1" =~ ^[-._,*[:alnum:][:blank:]]+$ ]]; then
-		check_result "$E_INVALID" "invalid $2 format :: only letters, digits and - . _ , * are allowed"
+	# In a variable: an unquoted space inside [[ =~ ]] would split the pattern into two words.
+	local _re='^[-._,* [:alnum:]]+$'
+	if [ -n "$1" ] && ! [[ "$1" =~ $_re ]]; then
+		check_result "$E_INVALID" "invalid $2 format :: only letters, digits, spaces and - . _ , * are allowed"
 	fi
 }
 

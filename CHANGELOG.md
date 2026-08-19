@@ -75,7 +75,9 @@ opens above it.
   went in. Not exploitable: they land inside single quotes and the one character that ends those was
   already refused. But a deny list holds only as long as the quoting around it does, and it was a
   too-wide allowed set that put a pipe on that line once before. A home entry with a space still
-  passes, because `my documents` is a name a customer can really have.
+  passes, because `my documents` is a name a customer can really have; one with a tab is refused,
+  because `tar` prints that escaped in the listing the restore matches against, so such a selector
+  used to be accepted and then quietly select nothing.
 
 
 - **The backup exclusion list is read through the hardened reader** (#706). Three places still used
