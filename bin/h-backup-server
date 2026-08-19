@@ -84,8 +84,16 @@ while IFS= read -r component; do
 				;;
 			db:mysql:*)
 				db="${item##*:}"
-				mysqldump --routines --triggers --single-transaction "$db" 2> /dev/null \
-					| backup_compress > "$dest/$db.mysql.sql.$(backup_codec_suffix)"
+				dump="$dest/$db.mysql.sql.$(backup_codec_suffix)"
+				# --add-drop-table spelled out although --opt implies it: a [mysqldump] section
+				# with skip-opt turns it off, and a dump that only adds tables restores as a merge.
+				mysqldump --add-drop-table --routines --triggers --single-transaction "$db" 2> /dev/null \
+					| backup_compress > "$dump"
+				# A half-written dump is worse than none: the restore drops the target before it
+				# loads. Refuse the whole archive rather than ship one component that lies.
+				if ! backup_dump_complete "$dump"; then
+					check_result "$E_PARSING" "the dump of database $db did not finish - no archive written"
+				fi
 				echo "$(date '+%F %T') $component: database $db"
 				;;
 		esac

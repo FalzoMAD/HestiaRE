@@ -163,6 +163,17 @@ backup_decompress() {
 	esac
 }
 
+# backup_dump_complete FILE - does this compressed dump end in mysqldump's completion marker?
+#
+# The exit status of `mysqldump | compress > file` is the COMPRESSOR's, so a dump that died halfway
+# writes a truncated file and reports success. Measured: a killed dump has no trailing marker. Read
+# before loading as well as after writing, because the restore drops the target first - a truncated
+# dump must never be what a DROP is followed by.
+backup_dump_complete() {
+	[ -s "$1" ] || return 1
+	backup_decompress "$1" 2> /dev/null | tail -n 2 | grep -q '^-- Dump completed'
+}
+
 # backup_origin_field KEY - one field out of the probed origin line, or nothing.
 #
 # NOT read with parse_object_kv_list: that assigns into the caller's scope, and VERSION and
@@ -474,15 +485,17 @@ backup_db_type_supported() {
 # Consenting to a section implies the account, and no OTHER section.
 RESTORE_CONSENT_TOKENS='all web mail db cron udir leftovers php-fallback'
 
-# restore_consent_parse LIST - validate a comma list against the closed set and remember it. An
-# unknown token is refused, never dropped: a silently ignored typo authorises less than it looks.
+# restore_consent_parse LIST [TOKENSET] - validate a comma list against a closed set and remember
+# it. An unknown token is refused, never dropped: a silently ignored typo authorises less than it
+# looks. TOKENSET is a parameter because the server restore consents to COMPONENTS, not to sections;
+# same mechanism and same wording, a different closed set.
 restore_consent_parse() {
-	local _item
+	local _item _set="${2:-$RESTORE_CONSENT_TOKENS}"
 	RESTORE_CONSENT=' '
 	[ -n "$1" ] || return 0
 	for _item in ${1//,/ }; do
 		[ -n "$_item" ] || continue
-		case " $RESTORE_CONSENT_TOKENS " in
+		case " $_set " in
 			*" $_item "*) RESTORE_CONSENT="$RESTORE_CONSENT$_item " ;;
 			*) return 1 ;;
 		esac

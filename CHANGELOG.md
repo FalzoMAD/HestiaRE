@@ -20,7 +20,13 @@ opens above it.
   packages and the firewall sources. `h-backup-server` takes them, `h-list-server-backups` shows what
   each archive holds, and `h-restore-server` puts back the components that are named. There is
   deliberately no whole-archive verb: restoring all of it would overwrite the configuration of a
-  running host in one step, so a run without a component refuses before it writes anything. What a
+  running host in one step, so a run without a component refuses before it writes anything. Naming a
+  component says which live state to replace, not that replacing it is intended, so each one is
+  consented to before the first write - the question names the paths and databases this host would
+  actually lose, and without a terminal the consent has to arrive in the argument or nothing is
+  written. A database is dropped and recreated rather than loaded on top, because a table the
+  archive predates would otherwise survive into a schema that never existed; a dump that did not
+  finish is refused before the target is touched, on the way in as well as on the way out. What a
   box can back up is derived from what it actually has, never from a fixed list - a target without a
   database engine produces a webmail component of directories and no dumps. The archive is root's
   alone at 0600, because `/etc/roundcube` carries the `des_key` and the database password.
