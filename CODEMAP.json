@@ -793,6 +793,7 @@
         "bin/h-restore-cron-job",
         "bin/h-schedule-user-backup",
         "bin/h-schedule-user-restore",
+        "bin/h-list-backup-contents",
         "bin/h-list-user-backup",
         "bin/h-list-user-backups",
         "bin/h-delete-user-backup",
@@ -809,7 +810,9 @@
         "$USER_DATA/notifications.conf and auth.log - open, see #713",
         "htpasswd - not archived at all; the AUTH_USER/AUTH_HASH record fields are the only source"
       ],
-      "plan": "backup-restore-plan.md on the docs branch; umbrella issue #240, stages #703-#713 + #342"
+      "plan": "backup-restore-plan.md on the docs branch; umbrella issue #240, stages #703-#713 + #342",
+      "probe": "#707: the archive is read ONCE before anything is written. backup_probe (include/backup.sh) describes what is IN the file - container, codec, object names per subsystem, dns zones, packages - and extracts the record members so nothing has to unpack it a second time; backup_report compares that against THIS host and says what will be lost or rewritten. Two functions because the first is about the file alone and the second only means anything against a particular box. Everything is derived, including the set of record keys this host itself can write, which is the registry plus the live records plus what any add_object_key call in bin/ could add - each of those three alone shrinks in a way that would make the report lie. An empty report is PRINTED, never left as silence.",
+      "probe_consumers": "bin/h-list-backup-contents (reads the FILE, so an archive with no backup.conf record - a HestiaCP one placed by hand - is inspectable at all), and the preflight in h-restore-user. The panel dialog is the third, still to come. One wording, one function, so the three cannot drift."
     }
   },
   "service_matrix": {

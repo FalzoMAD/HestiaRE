@@ -1,0 +1,157 @@
+#!/bin/bash
+# info: list the contents of a backup archive
+# options: USER ARCHIVE [FORMAT]
+#
+# example: h-list-backup-contents admin admin.2026-08-18_03-31-30.tar
+#
+# This function reads the archive FILE, not the backup.conf record, and reports what it holds and
+# what this host would not be able to restore from it. An archive that was put into /backup by hand
+# - a HestiaCP one, say - has no record anywhere, so h-list-user-backup cannot see it at all; this
+# command can, which is what makes a migration inspectable before the first write.
+#
+# TRUST BOUNDARY. Unlike h-list-user-backup this does NOT scope by $USER_DATA - it reads a path under
+# $BACKUP and extracts record members as root - and it deliberately does not require the user to
+# exist, because on a migration it does not. What holds the line instead:
+#
+#   - the archive name is a basename: is_object_format_valid allows no '/', so $BACKUP/$backup
+#     cannot leave the directory, and the containment check below says so a second time in code
+#   - $BACKUP is root-owned 0755, so nobody else can plant a symlink in it
+#   - the only non-root caller is the panel process, and it reaches h-* only through a route it
+#     builds itself; no route calls this command yet
+#
+# The moment a panel dialog does call it (#709 / stage 3), it needs a per-user scope of its own -
+# listing somebody else's archive is a disclosure even when the file itself stays unreadable.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Argument definition
+user=$1
+backup=$2
+format=${3-shell}
+
+# Define backup dir
+if [ -z "$BACKUP" ]; then
+	BACKUP=/backup
+fi
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# shellcheck source=/usr/local/hestia/include/domain.sh
+source $HESTIA/include/domain.sh
+# shellcheck source=/usr/local/hestia/include/syshealth.sh
+source $HESTIA/include/syshealth.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# printf with %s, never a value spliced into an echo argument: unquoted there, the shell splits and
+# globs it after json_escape has run, and what a glob substitutes never passed the escaper (#728).
+json_list() {
+	local kind list first item json_item
+	json_escape backup PROBE_MODE PROBE_VESTA PROBE_CRON PROBE_WEB_SYSTEM PROBE_PROXY_SYSTEM PROBE_ORIGIN
+	echo '{'
+	printf '    "%s": {\n' "$backup"
+	printf '        "MODE": "%s",\n' "$PROBE_MODE"
+	printf '        "VESTA": "%s",\n' "$PROBE_VESTA"
+	printf '        "WEB_SYSTEM": "%s",\n' "$PROBE_WEB_SYSTEM"
+	printf '        "PROXY_SYSTEM": "%s",\n' "$PROBE_PROXY_SYSTEM"
+	printf '        "ORIGIN": "%s",\n' "$PROBE_ORIGIN"
+	printf '        "CRON": "%s",\n' "$PROBE_CRON"
+	# The lists are newline separated on purpose - a home entry may be called "my documents"
+	for kind in WEB MAIL DB UDIR DNS PACKAGES; do
+		list="PROBE_$kind"
+		printf '        "%s": [' "$kind"
+		first=1
+		while IFS= read -r item; do
+			[ -n "$item" ] || continue
+			[ "$first" = 1 ] || printf ', '
+			first=0
+			json_item="$item"
+			json_escape json_item
+			printf '"%s"' "$json_item"
+		done <<< "${!list}"
+		echo '],'
+	done
+	echo '        "READABLE": "yes"
+    }
+}'
+}
+
+shell_list() {
+	backup_report
+}
+
+plain_list() {
+	local kind list item
+	# Said in every format. The object lists of a Vesta archive are empty because they are derived
+	# from ./hestia, so without this line plain would answer a refused archive with silence - the one
+	# output that is indistinguishable from an archive holding nothing.
+	if [ "$PROBE_VESTA" = 'yes' ]; then
+		printf 'vesta\trefused\n'
+		return
+	fi
+	for kind in WEB MAIL DB UDIR DNS PACKAGES; do
+		list="PROBE_$kind"
+		while IFS= read -r item; do
+			[ -n "$item" ] || continue
+			printf '%s\t%s\n' "${kind,,}" "$item"
+		done <<< "${!list}"
+	done
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER ARCHIVE [FORMAT]'
+is_format_valid 'user' 'backup'
+# The name is validated but NOT required to exist. The migration case - a HestiaCP archive dropped
+# into /backup, looked at before anything is written - is precisely the case where it does not, and
+# h-restore-user handles that too (it reads is_object_valid instead of letting it abort, and creates
+# the account). Requiring it here refused the one situation this command was written for. Nothing is
+# lost by dropping it: existence was all it checked, never that the archive belongs to that user.
+
+if [ ! -f "$BACKUP/$backup" ]; then
+	check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '${BACKUP}' folder"
+fi
+
+# Second line under the name validator, in code rather than in a comment: the file this command
+# opens as root must sit inside the backup directory. `-f` above follows a symlink, so the existence
+# test alone would not say that, and $BACKUP itself is overridable from the environment.
+archive_real=$(realpath -e -- "$BACKUP/$backup" 2> /dev/null)
+backup_real=$(realpath -e -- "$BACKUP" 2> /dev/null)
+if [ -z "$archive_real" ] || [ -z "$backup_real" ] || [ "${archive_real%/*}" != "$backup_real" ]; then
+	check_result "$E_INVALID" "$backup does not resolve to a file inside '${BACKUP}'"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Read-only throughout: the workdir holds the extracted records and nothing else, and it goes away
+# on every exit path - including the ones check_result takes.
+probedir=$(mktemp -d -p "${BACKUP_TEMP:-$BACKUP}" -t probe.XXXXXX) || check_result "$E_NOTEXIST" "Can't create tmp dir"
+trap 'rm -rf "$probedir"' EXIT
+
+if ! backup_probe "$BACKUP/$backup" "$probedir"; then
+	check_result "$E_PARSING" "$backup cannot be read as a backup archive"
+fi
+
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

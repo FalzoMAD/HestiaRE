@@ -12,6 +12,36 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **A backup archive can be inspected before a restore touches anything** (#707).
+  `h-list-backup-contents` reads the archive FILE rather than the `backup.conf` record, so an
+  archive put into `/backup` by hand - a HestiaCP one - can be looked at at all; until now nothing
+  could see it. The same report runs as the restore's preflight, before the first write.
+
+  It answers what the restore used to answer only by doing it, or not at all: DNS zones **by name**,
+  because that is the question somebody moving off HestiaCP is actually asking; sections that would
+  be dropped in full because this host has no such subsystem, **with the object count**; templates
+  and PHP versions that will be rewritten; record keys and package limits this host has no use for.
+  An empty report is printed in words - "nothing falls away" and "the probe read nothing" had no
+  way of looking different before.
+
+- **A database whose engine this host does not run is named, and skipped instead of fatal** (#707).
+  `DB_SYSTEM` is a comma list - a HestiaCP box routinely carries `pgsql,mysql` - and the import was
+  a `case` over the type with no default branch, so a postgres dump on a MariaDB-only host took the
+  whole run down at that object. Measured against a real HestiaCP archive: three web domains and two
+  mail domains were already written, and the second database, every cron job and the entire home
+  directory never arrived. The preflight names it before the first write, and the restore finishes
+  everything else and then exits non-zero saying what did not come back.
+
+### Removed
+
+- **Vesta archives are refused instead of half-supported** (#707). The restore carried a container
+  variable through twenty-six path joins and a `sed` over `cron.conf` so that a `./vesta` archive
+  could be read - a permanent constraint on every path in the restore, for a panel that has not
+  produced an archive in years. The container is a constant now, and a Vesta archive is detected,
+  named in the report and refused before the first write.
+
 ### Security
 
 - **The backup exclusion list is read through the hardened reader** (#706). Three places still used
