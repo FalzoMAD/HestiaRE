@@ -116,20 +116,34 @@ record_del_field() {
 # outright rather than threaded through every path join, so this is a constant.
 BACKUP_CONTAINER='hestia'
 
-# QUEUE_JOB - the fixed text that identifies THIS job's own line in a queue pipe. Each command that
-# can be queued sets it once; the abort paths below use it instead of matching on the customer name.
+# QUEUE_JOB - the fixed text identifying a queued job: command plus the arguments that distinguish
+# it. Set once per queueable command.
+#
+# IT MUST END AT A WORD BOUNDARY - a closing quote or a blank. It is matched as a PREFIX, so a value
+# ending mid-token would also match a longer one: `h-download-backup u a.tar` matches the line for
+# `a.tar.gz` too. That is the unanchored-prefix trap add_object_key had. queue_drop_job appends the
+# blank rather than trusting each caller to remember.
 QUEUE_JOB=''
 
-# queue_drop_job PIPE - remove this job's own line, and only that one.
+# queue_drop_job PIPE - remove the first line this job's prefix matches.
 #
-# The old form was `sed -i "/ $user /d"`, which deletes EVERY line carrying the name: a restore that
-# aborted took the same customer's queued backup with it, and the second job never ran and never
-# said so. Fixed-string matching, first hit only, and the name is no longer a regex.
+# The first MATCH, not provably this process's own line: two restores of the same archive for the
+# same customer differ only in their selectors and share a prefix. They are the same work, so
+# removing either is right - but it is a prefix match, not an identity.
+#
+# The old form deleted EVERY line carrying the customer name. Since a restore's arguments are quoted
+# in the queue line, that pattern never matched the restore itself and hit the customer's queued
+# BACKUP instead: the backup vanished, the restore stayed and failed again on every tick.
+#
+# Removing a line does not stop it running in the pass that is already going: sed -i writes a new
+# inode and the running bash finishes the one it opened. Measured, and benign now that a job only
+# ever removes its own line.
 queue_drop_job() {
-	local _pipe="$1" _n
-	[ -n "$QUEUE_JOB" ] || return 0
+	local _pipe="$1" _job="$QUEUE_JOB" _n
+	[ -n "$_job" ] || return 0
 	[ -f "$_pipe" ] || return 0
-	_n=$(grep -nF -m1 -- "$QUEUE_JOB" "$_pipe" 2> /dev/null | cut -d: -f1)
+	case "$_job" in *"'" | *" ") ;; *) _job="$_job " ;; esac
+	_n=$(grep -nF -m1 -- "$_job" "$_pipe" 2> /dev/null | cut -d: -f1)
 	[ -n "$_n" ] || return 0
 	sed -i "${_n}d" "$_pipe"
 }
