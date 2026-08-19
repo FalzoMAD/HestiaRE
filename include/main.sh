@@ -1409,6 +1409,19 @@ is_no_quote_format() {
 	fi
 }
 
+# A restore selector: empty, '*', 'no'/'yes', or a comma list of object names.
+#
+# CLOSED character set, not a deny list. The value is spliced into the queue line that
+# h-update-sys-queue runs through bash as root, and a deny list holds only as long as the quoting
+# around it does - it was a too-wide allowed set that let a pipe reach that line once. The space is
+# in on purpose: a home entry can be called "my documents", and inside the quoted argument it is a
+# character like any other.
+is_selector_format_valid() {
+	if [ -n "$1" ] && ! [[ "$1" =~ ^[-._,*[:alnum:][:blank:]]+$ ]]; then
+		check_result "$E_INVALID" "invalid $2 format :: only letters, digits and - . _ , * are allowed"
+	fi
+}
+
 is_string_format_valid() {
 	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|<|>|?|/|\|\"|'|;|%|\`]"
