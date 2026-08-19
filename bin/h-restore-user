@@ -1,11 +1,17 @@
 #!/bin/bash
 # info: restore user
-# options: USER BACKUP [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR] [NOTIFY]
+# options: USER BACKUP [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR] [NOTIFY] [CONSENT]
 #
 # example: h-restore-user admin 2019-04-22_01-00-00.tar
+# example: h-restore-user admin 2019-04-22_01-00-00.tar '' '' '' '' '' '' no all
 #
 # This function for restoring user from backup. To be able to restore the backup,
 # the archive needs to be placed in /backup.
+#
+# CONSENT is a comma list from a closed set - all, web, mail, db, cron, udir, php-fallback - and
+# says which sections this run may write. It is only needed where nobody can be asked: with a
+# terminal the run prompts per section, and naming specific objects in a selector is itself the
+# consent for that section. Without it the run stops before it has written anything (#707).
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -21,6 +27,7 @@ db=$6
 cron=$7
 udir=$8
 notify=${9-no}
+consent=${10}
 
 # Define backup dir
 if [ -z "$BACKUP" ]; then
@@ -53,7 +60,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-args_usage='USER BACKUP [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR] [NOTIFY]'
+args_usage='USER BACKUP [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR] [NOTIFY] [CONSENT]'
 check_args '2' "$#" "$args_usage"
 is_format_valid 'user' 'backup'
 
@@ -166,6 +173,84 @@ if [ "$PROBE_VESTA" = 'yes' ]; then
 	check_result "$E_PARSING" "$backup is a Vesta archive - HestiaRE restores HestiaCP and HestiaRE archives only"
 fi
 
+# ---------------------------------------------------------------------------------------------
+# Plan, then consent, then write (#707 stage 2b).
+#
+# Everything below this point writes. Everything above it reads. The old PHP gate sat INSIDE the
+# web section, so refusing it left the account, its data directory and its home behind - a customer
+# that exists but holds nothing, which somebody then has to remove by hand. The question moved here,
+# in front of the first write, and it grew to cover every section rather than one field.
+#
+# The web restore list is derived here too, once, because the consent question about PHP versions
+# has to be about exactly the domains this run would touch. Deriving it twice is how a gate and the
+# section it guards come to disagree.
+# ---------------------------------------------------------------------------------------------
+
+# Creating web domain restore list
+backup_domains=$(tar -tf $BACKUP/$backup | grep "^./web")
+if [ "$backup_mode" = "zstd" ]; then
+	backup_domains=$(echo "$backup_domains" | grep domain_data.tar.zst)
+else
+	backup_domains=$(echo "$backup_domains" | grep domain_data.tar.gz)
+fi
+backup_domains=$(echo "$backup_domains" | cut -f 3 -d /)
+if [ -z "$web" ] || [ "$web" = '*' ]; then
+	domains="$backup_domains"
+else
+	echo "$web" | tr ',' '\n' > $tmpdir/selected.txt
+	domains=$(echo "$backup_domains" | grep -E -x -f $tmpdir/selected.txt)
+fi
+
+if ! restore_consent_parse "$consent"; then
+	rm -rf "$tmpdir"
+	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	check_result "$E_INVALID" "unknown consent token in '$consent' - allowed: ${RESTORE_CONSENT_TOKENS// /, }"
+fi
+# The two environment variables stay honoured: RESTORE_PHP_FALLBACK is documented in #591 and named
+# in the message this gate used to print, and a run that already said yes to it must not start
+# asking again. They are a CLI convenience only - nothing puts them on a queue line.
+[ "$RESTORE_ASSUME_YES" = 'yes' ] && RESTORE_CONSENT="$RESTORE_CONSENT""all "
+[ "$RESTORE_PHP_FALLBACK" = 'yes' ] && RESTORE_CONSENT="$RESTORE_CONSENT""php-fallback "
+
+restore_refused=''
+# Each section: is it switched off, is it selected (which IS the consent), or does it need asking.
+# The subsystem check is the same one the section itself makes, so a section this host cannot serve
+# is never asked about - the report already said it will be dropped.
+for _sec in web:WEB_SYSTEM:PROBE_WEB mail:MAIL_SYSTEM:PROBE_MAIL db:DB_SYSTEM:PROBE_DB \
+	cron:CRON_SYSTEM:PROBE_CRON udir::PROBE_UDIR; do
+	_name="${_sec%%:*}"
+	_rest="${_sec#*:}"
+	_sys="${_rest%%:*}"
+	_objs="${_rest#*:}"
+	_sel="${!_name}"
+	[ "$_sel" = 'no' ] && continue
+	[ -z "$_sys" ] || [ -n "${!_sys}" ] || continue
+	[ -n "${!_objs}" ] && [ "${!_objs}" != 'no' ] || continue
+	restore_consent_selector "$_sel" && continue
+	restore_consent_ask "$_name" "Restore the $_name section of $backup into $user?" \
+		|| restore_refused="$restore_refused $_name"
+done
+
+# The PHP fallback is a consent like the others, decided here from the probe rather than in the
+# middle of the web section: a domain whose version is missing lands on the system default, and
+# that is a change to what the customer runs.
+php_missing=''
+if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ] && [ -n "$domains" ]; then
+	php_missing=$(backup_php_missing "$domains")
+	if [ -n "$php_missing" ]; then
+		restore_consent_ask 'php-fallback' \
+			"PHP $php_missing is not installed here. Move those domains to the default ($(multiphp_default_version))?" \
+			|| restore_refused="$restore_refused php-fallback"
+	fi
+fi
+restore_consent_has 'php-fallback' && RESTORE_PHP_FALLBACK='yes'
+
+if [ -n "$restore_refused" ]; then
+	rm -rf "$tmpdir"
+	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	check_result "$E_INVALID" "no consent for:$restore_refused - nothing was written. Name them in the CONSENT argument (or 'all'), select the objects to restore, or answer the prompt on a terminal"
+fi
+
 # Restoring user account
 if [ "$create_user" = 'yes' ]; then
 
@@ -241,61 +326,6 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		fi
 	else
 		echo "Warning!: backup web model unknown (pre-#120 archive); review the restored web configs manually." | tee -a "$tmpdir/restore.log"
-	fi
-
-	# Creating web domain restore list
-	backup_domains=$(tar -tf $BACKUP/$backup | grep "^./web")
-	if [ "$backup_mode" = "zstd" ]; then
-		backup_domains=$(echo "$backup_domains" | grep domain_data.tar.zst)
-	else
-		backup_domains=$(echo "$backup_domains" | grep domain_data.tar.gz)
-	fi
-	backup_domains=$(echo "$backup_domains" | cut -f 3 -d /)
-	if [ -z "$web" ] || [ "$web" = '*' ]; then
-		domains="$backup_domains"
-	else
-		echo "$web" | tr ',' '\n' > $tmpdir/selected.txt
-		domains=$(echo "$backup_domains" | grep -E -x -f $tmpdir/selected.txt)
-	fi
-
-	# PHP version preflight (#591): the archive names the version each web domain must run. A host
-	# missing that version would abort mid-restore (no pool dir) or land the domain on the wrong
-	# version. Report before the first write; substitute the system default only on an explicit
-	# choice (RESTORE_PHP_FALLBACK=yes, or a yes at the interactive prompt), never silently. The pool
-	# PROFILE is deliberately not preflighted: an unknown profile falls back to default gracefully
-	# (cosmetic pool tuning), whereas a missing interpreter is fatal.
-	if [ -n "$WEB_BACKEND" ]; then
-		php_installed=" $($BIN/h-list-sys-php plain | tr '\n' ' ')"
-		php_missing=''
-		# One tar pass for every record, not one per domain - the archive is zstd, so per-domain
-		# extraction would decompress it N times before the restore even starts.
-		tar -xf "$BACKUP/$backup" -C "$tmpdir" --wildcards "./web/*/$BACKUP_CONTAINER/web.conf" 2> /dev/null
-		for pf_dom in $domains; do
-			pf_rec=$(cat "$tmpdir/web/$pf_dom/$BACKUP_CONTAINER/web.conf" 2> /dev/null)
-			pf_ver=$(sed -n "s/.*PHP_VERSION='\([^']*\)'.*/\1/p" <<< "$pf_rec")
-			[ -z "$pf_ver" ] && pf_ver=$(sed -n "s/.*BACKEND='PHP-\([0-9]*\)_\([0-9]*\)'.*/\1.\2/p" <<< "$pf_rec")
-			{ [ -z "$pf_ver" ] || [ "$pf_ver" = 'none' ]; } && continue
-			[[ "$php_installed" == *" $pf_ver "* ]] || php_missing="$php_missing $pf_ver"
-		done
-		php_missing=$(echo "$php_missing" | tr ' ' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ')
-		if [ -n "$php_missing" ]; then
-			msg="archived PHP version(s) not installed on this host: ${php_missing% }"
-			if [ "$RESTORE_PHP_FALLBACK" = 'yes' ]; then
-				echo "Warning: $msg - using the system default ($(multiphp_default_version))." | tee -a "$tmpdir/restore.log"
-			elif [ -t 0 ]; then
-				read -r -p "$msg. Restore mapping them to the system default ($(multiphp_default_version))? [y/N] " pf_ans
-				if [ "$pf_ans" != 'y' ] && [ "$pf_ans" != 'Y' ]; then
-					rm -rf "$tmpdir"
-					sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
-					check_result "$E_NOTEXIST" "$msg"
-				fi
-				RESTORE_PHP_FALLBACK='yes'
-			else
-				rm -rf "$tmpdir"
-				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
-				check_result "$E_NOTEXIST" "$msg (install them, or re-run with RESTORE_PHP_FALLBACK=yes)"
-			fi
-		fi
 	fi
 
 	# Restoring web domain. The list comes from the archive's member paths, not from a validator,

@@ -363,14 +363,11 @@ backup_report() {
 		fi
 	fi
 
-	# Templates and PHP versions, per web record. accept_web_template is asked, not re-implemented -
-	# a second copy of the mapping table is a second thing to keep in step.
-	#
-	# The installed PHP list is read ONCE. It is the same answer for every domain, and an archive with
-	# forty web domains otherwise forks h-list-sys-php forty times in a preflight that runs before
-	# every restore.
-	_missing=''
-	_installed=" $($BIN/h-list-sys-php plain 2> /dev/null | tr '\n' ' ') "
+	# Templates per web record. accept_web_template is asked, not re-implemented - a second copy of
+	# the mapping table is a second thing to keep in step. The PHP versions come from
+	# backup_php_missing for the same reason: the consent step asks about exactly that set, and two
+	# copies of the loop is how a report and a gate come to disagree about the same archive.
+	_missing=$(backup_php_missing "$PROBE_WEB")
 	while IFS= read -r _obj; do
 		[ -n "$_obj" ] || continue
 		_rec=$(head -n1 "$(backup_record_file web "$_obj")" 2> /dev/null) || continue
@@ -386,16 +383,11 @@ backup_report() {
 			_found=1
 			printf '   %s: %s template %s -> %s\n' "$_obj" "${_n#*:}" "$_tpl" "$_eff"
 		done
-		_ver=$(sed -n "s/.*PHP_VERSION='\([^']*\)'.*/\1/p" <<< "$_rec")
-		[ -z "$_ver" ] && _ver=$(sed -n "s/.*BACKEND='PHP-\([0-9]*\)_\([0-9]*\)'.*/\1.\2/p" <<< "$_rec")
-		{ [ -z "$_ver" ] || [ "$_ver" = 'none' ]; } && continue
-		[[ "$_installed" == *" $_ver "* ]] || _missing="$_missing $_ver"
 	done <<< "$PROBE_WEB"
 	if [ -n "$_missing" ]; then
 		_found=1
 		printf '   PHP %s is not installed here - those domains would move to the default (%s)\n' \
-			"$(tr ' ' '\n' <<< "$_missing" | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ $//')" \
-			"$(multiphp_default_version 2> /dev/null)"
+			"$_missing" "$(multiphp_default_version 2> /dev/null)"
 	fi
 
 	# Record keys this host neither knows nor writes. Three-way, so our own newer fields do not read
@@ -452,6 +444,114 @@ backup_db_type() {
 backup_db_type_supported() {
 	[ -n "$1" ] || return 1
 	[[ ",${DB_SYSTEM}," == *",$1,"* ]]
+}
+
+#===========================================================================#
+#                          Consent to write (#707)                          #
+#===========================================================================#
+#
+# A restore writes, and until now the only question it asked sat INSIDE the web section - so a
+# refusal left the account, its data directory and its home behind: a half-made customer that the
+# operator then had to clean up by hand. Consent is collected before the first write now, and the
+# run either has it for everything it plans to do or it has not started.
+#
+# Three ways to give it, checked in this order:
+#
+#   - a SELECTOR names what to restore. The selection IS the consent for that section: the operator
+#     already said which object, and the panel's per-object restore link keeps working unchanged.
+#   - a CONSENT argument: a comma list from a CLOSED SET. An argument, deliberately, not an
+#     environment prefix - the queue line is run by bash, and an env prefix in front of it would put
+#     operator input into an executed command line, which is the GHSA-2xw3 class this same file
+#     already validates against (#661). A closed set rather than a character class for the same
+#     reason: #661 was a validator whose "allowed characters" quietly included a pipe.
+#   - a prompt, and only with a TTY on standard input.
+#
+# With none of them the run stops before it has written anything - in the queue and in the panel
+# there is nobody to ask, and guessing is what made the old gate leave a half-made customer behind.
+#
+# Consenting to any section implies the account: a cron-only restore still needs the customer to
+# exist. What it does not imply is any OTHER section.
+
+# Every token that may appear in a CONSENT list. 'all' is every section plus the php fallback.
+RESTORE_CONSENT_TOKENS='all web mail db cron udir php-fallback'
+
+# restore_consent_parse LIST - validate a comma list against the closed set and remember it.
+# An unknown token is refused rather than ignored: a typo that reads as "no consent" would abort
+# a run the operator meant to authorise, and a typo that is silently dropped is worse.
+restore_consent_parse() {
+	local _item
+	RESTORE_CONSENT=' '
+	[ -n "$1" ] || return 0
+	for _item in ${1//,/ }; do
+		[ -n "$_item" ] || continue
+		case " $RESTORE_CONSENT_TOKENS " in
+			*" $_item "*) RESTORE_CONSENT="$RESTORE_CONSENT$_item " ;;
+			*) return 1 ;;
+		esac
+	done
+	return 0
+}
+
+# restore_consent_has TOKEN - was this named, directly or through 'all'?
+#
+# 'all' covers the SECTIONS and deliberately not php-fallback. Moving a customer's domains onto a
+# different PHP version is not "restore everything", it is a change to what they run - #591 exists
+# because that used to happen silently. It has to be named, from the panel too.
+restore_consent_has() {
+	[ "$1" = 'php-fallback' ] || case "${RESTORE_CONSENT:- }" in
+		*" all "*) return 0 ;;
+	esac
+	case "${RESTORE_CONSENT:- }" in
+		*" $1 "*) return 0 ;;
+	esac
+	return 1
+}
+
+# restore_consent_selector SELECTOR - does this selector name specific objects?
+#
+# Empty and '*' both mean "the whole section", which is the case that needs asking. 'no' means the
+# section is off entirely and nothing is asked about it at all.
+restore_consent_selector() {
+	case "$1" in
+		'' | '*' | 'no') return 1 ;;
+		*) return 0 ;;
+	esac
+}
+
+# restore_consent_ask TOKEN QUESTION - 0 if this run may write TOKEN, 1 if not.
+restore_consent_ask() {
+	local _ans
+	restore_consent_has "$1" && return 0
+	# A prompt only where somebody can answer it. `read` on a queue's stdin would consume the next
+	# line of the pipe file, which is the following restore.
+	if [ -t 0 ]; then
+		read -r -p "$2 [y/N] " _ans
+		case "$_ans" in
+			y | Y) RESTORE_CONSENT="$RESTORE_CONSENT$1 "; return 0 ;;
+		esac
+	fi
+	return 1
+}
+
+# backup_php_missing DOMAIN-LIST - archived PHP versions this host does not have, sorted, one line.
+#
+# One derivation, two readers: the report prints it for the whole archive, the consent step asks
+# about the domains this run would actually touch. The list is a parameter rather than a default,
+# because those two sets differ the moment a selector is given and the caller is the one that knows
+# which it means. Two copies of this loop is how a report and a gate come to disagree.
+backup_php_missing() {
+	local _list="$1" _dom _rec _ver _missing='' _installed
+	[ -n "$WEB_BACKEND" ] || return 0
+	_installed=" $($BIN/h-list-sys-php plain 2> /dev/null | tr '\n' ' ') "
+	while IFS= read -r _dom; do
+		[ -n "$_dom" ] || continue
+		_rec=$(head -n1 "$(backup_record_file web "$_dom")" 2> /dev/null) || continue
+		_ver=$(sed -n "s/.*PHP_VERSION='\([^']*\)'.*/\1/p" <<< "$_rec")
+		[ -z "$_ver" ] && _ver=$(sed -n "s/.*BACKEND='PHP-\([0-9]*\)_\([0-9]*\)'.*/\1.\2/p" <<< "$_rec")
+		{ [ -z "$_ver" ] || [ "$_ver" = 'none' ]; } && continue
+		[[ "$_installed" == *" $_ver "* ]] || _missing="$_missing $_ver"
+	done <<< "$_list"
+	tr ' ' '\n' <<< "$_missing" | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ $//'
 }
 
 # backup_record_file KIND OBJECT - the extracted record of one object, or nothing.
