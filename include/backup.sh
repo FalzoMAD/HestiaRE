@@ -367,7 +367,8 @@ backup_report() {
 	# the mapping table is a second thing to keep in step. The PHP versions come from
 	# backup_php_missing for the same reason: the consent step asks about exactly that set, and two
 	# copies of the loop is how a report and a gate come to disagree about the same archive.
-	_missing=$(backup_php_missing "$PROBE_WEB")
+	backup_php_missing "$PROBE_WEB"
+	_missing="$BACKUP_PHP_MISSING"
 	while IFS= read -r _obj; do
 		[ -n "$_obj" ] || continue
 		_rec=$(head -n1 "$(backup_record_file web "$_obj")" 2> /dev/null) || continue
@@ -533,25 +534,44 @@ restore_consent_ask() {
 	return 1
 }
 
-# backup_php_missing DOMAIN-LIST - archived PHP versions this host does not have, sorted, one line.
+# backup_php_missing DOMAIN-LIST - sets BACKUP_PHP_MISSING (archived PHP versions this host does not
+# have, sorted) and BACKUP_PHP_UNREADABLE (domains whose archived record could not be read).
 #
 # One derivation, two readers: the report prints it for the whole archive, the consent step asks
 # about the domains this run would actually touch. The list is a parameter rather than a default,
 # because those two sets differ the moment a selector is given and the caller is the one that knows
 # which it means. Two copies of this loop is how a report and a gate come to disagree.
+#
+# Results come back in globals rather than on stdout, and that is not a style choice: as
+# `x=$(backup_php_missing ...)` the whole function ran in a SUBSHELL, so the unreadable-record
+# register it sets never reached the caller and the check could not fire once. Measured that way -
+# an archive with the record deleted walked straight past the gate and died later, inside the web
+# section, with the account already created.
 backup_php_missing() {
-	local _list="$1" _dom _rec _ver _missing='' _installed
+	local _list="$1" _dom _rec _ver _missing='' _installed _file
+	BACKUP_PHP_UNREADABLE=''
+	BACKUP_PHP_MISSING=''
 	[ -n "$WEB_BACKEND" ] || return 0
 	_installed=" $($BIN/h-list-sys-php plain 2> /dev/null | tr '\n' ' ') "
 	while IFS= read -r _dom; do
 		[ -n "$_dom" ] || continue
-		_rec=$(head -n1 "$(backup_record_file web "$_dom")" 2> /dev/null) || continue
+		# The records come from backup_probe, which extracted them before anything was written.
+		# A record that is NOT there is a broken assumption, not a domain without a version: read
+		# as the latter it would report "nothing missing" and wave the run through onto the default
+		# PHP - the exact shape of silent fallback this whole stage exists to remove. Collected by
+		# name so the caller can refuse rather than proceed on an answer nobody computed.
+		_file=$(backup_record_file web "$_dom")
+		if [ ! -s "$_file" ]; then
+			BACKUP_PHP_UNREADABLE="$BACKUP_PHP_UNREADABLE $_dom"
+			continue
+		fi
+		_rec=$(head -n1 "$_file")
 		_ver=$(sed -n "s/.*PHP_VERSION='\([^']*\)'.*/\1/p" <<< "$_rec")
 		[ -z "$_ver" ] && _ver=$(sed -n "s/.*BACKEND='PHP-\([0-9]*\)_\([0-9]*\)'.*/\1.\2/p" <<< "$_rec")
 		{ [ -z "$_ver" ] || [ "$_ver" = 'none' ]; } && continue
 		[[ "$_installed" == *" $_ver "* ]] || _missing="$_missing $_ver"
 	done <<< "$_list"
-	tr ' ' '\n' <<< "$_missing" | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ $//'
+	BACKUP_PHP_MISSING=$(tr ' ' '\n' <<< "$_missing" | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ $//')
 }
 
 # backup_record_file KIND OBJECT - the extracted record of one object, or nothing.

@@ -201,6 +201,9 @@ else
 	domains=$(echo "$backup_domains" | grep -E -x -f $tmpdir/selected.txt)
 fi
 
+# The queue cleanup below is the one this file has always used, and it is not line-exact: it matches
+# on the customer name, so two queued restores for the same customer would both go. Pre-existing and
+# left alone here - naming it rather than half-fixing it inside a consent change (#733).
 if ! restore_consent_parse "$consent"; then
 	rm -rf "$tmpdir"
 	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
@@ -209,6 +212,11 @@ fi
 # The two environment variables stay honoured: RESTORE_PHP_FALLBACK is documented in #591 and named
 # in the message this gate used to print, and a run that already said yes to it must not start
 # asking again. They are a CLI convenience only - nothing puts them on a queue line.
+#
+# RESTORE_ASSUME_YES maps to 'all', which means it does NOT cover php-fallback - the name promises
+# more than it gives, so it is said here as well as at restore_consent_has. Answering yes to every
+# section is not the same as agreeing that a customer's domains change PHP version, and an operator
+# who wants that has RESTORE_PHP_FALLBACK, which says so.
 [ "$RESTORE_ASSUME_YES" = 'yes' ] && RESTORE_CONSENT="$RESTORE_CONSENT""all "
 [ "$RESTORE_PHP_FALLBACK" = 'yes' ] && RESTORE_CONSENT="$RESTORE_CONSENT""php-fallback "
 
@@ -236,7 +244,18 @@ done
 # that is a change to what the customer runs.
 php_missing=''
 if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ] && [ -n "$domains" ]; then
-	php_missing=$(backup_php_missing "$domains")
+	# Called plainly, NOT in a command substitution: the unreadable-record register is a global, and
+	# in a subshell it would never reach this scope - which is exactly how the check below sat there
+	# unable to fire.
+	backup_php_missing "$domains"
+	php_missing="$BACKUP_PHP_MISSING"
+	# A record the probe did not extract means the question was never really asked. Refuse rather
+	# than accept an empty answer as "nothing is missing".
+	if [ -n "$BACKUP_PHP_UNREADABLE" ]; then
+		rm -rf "$tmpdir"
+		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		check_result "$E_PARSING" "no archived web record for:$BACKUP_PHP_UNREADABLE - cannot tell which PHP version they need"
+	fi
 	if [ -n "$php_missing" ]; then
 		restore_consent_ask 'php-fallback' \
 			"PHP $php_missing is not installed here. Move those domains to the default ($(multiphp_default_version))?" \
