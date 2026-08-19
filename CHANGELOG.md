@@ -120,6 +120,13 @@ opens above it.
 
 ### Fixed
 
+- **The directory-listing switch stopped printing a `sed` error on every rebuild** (#731). It patched
+  the SSL vhost as a second file, which the merged template has not produced since both blocks moved
+  into one - so every unsuspend and every restore of an SSL domain wrote a "cannot read
+  apache2.ssl.conf" line to stderr while doing the right thing. The one `sed` already covers both
+  blocks; the second only runs where a legacy pair actually exists.
+
+
 - **Suspending a web domain no longer switches its forced HTTPS and HSTS off for good** (#720). The
   rebuild re-renders those switches by calling delete and then add. The add half refuses on a
   suspended domain, the delete half has already written `no` into the record - so a suspend printed
