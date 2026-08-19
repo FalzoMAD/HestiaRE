@@ -30,12 +30,12 @@ json_list() {
 	for IP in $ips; do
 		source_conf "$CONF_DIR/ips/$IP"
 		json_escape IP OWNER STATUS NAME NAT
-		echo -n '    "'$IP'": {
-        "OWNER": "'$OWNER'",
-        "STATUS": "'$STATUS'",
-        "NAME": "'$NAME'",
-        "NAT": "'$NAT'"
-        }'
+		printf '    "%s": {\n' "$IP"
+		printf '        "OWNER": "%s",\n' "$OWNER"
+		printf '        "STATUS": "%s",\n' "$STATUS"
+		printf '        "NAME": "%s",\n' "$NAME"
+		printf '        "NAT": "%s"\n' "$NAT"
+		printf '        }'
 		if [ "$i" -lt "$ip_count" ]; then
 			echo ','
 		else

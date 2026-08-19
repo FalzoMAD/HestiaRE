@@ -61,7 +61,7 @@ is_object_unsuspended 'web' 'DOMAIN' "$domain"
 get_domain_values 'web'
 
 # Load domain data
-parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)"
 
 # Set ssl installation to yes
 add_ssl="yes"

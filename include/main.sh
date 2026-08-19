@@ -429,7 +429,7 @@ is_object_valid() {
 
 # Check if a object string with key values pairs has the correct format and load it afterwards
 parse_object_kv_list_non_eval() {
-	local str objkv obj_key obj_val
+	local str objkv obj_key obj_val out rc
 	local -a pairs=()
 
 	str=${*//$'\n'/ }
@@ -444,7 +444,20 @@ parse_object_kv_list_non_eval() {
 	# perl through a quoted echo and is assigned through a quoted expansion, so neither character
 	# is ever re-expanded - and it was never undone, so every consumer got a value with backslashes
 	# baked in: the search listers emitted \" where the record holds " (#719).
-	mapfile -t pairs < <(printf '%s\n' "$str" | perl -n -e "while(/\b([a-zA-Z]+[\w]*)='(.*?)'(\s|\$)/g) {print \$1.'='.\$2 . \"\n\" }")
+	#
+	# Captured first and the status checked, rather than read straight through a process
+	# substitution, whose exit status is not observable. Measured: with perl off the PATH the
+	# substitution form returned 0 and set NOTHING - the caller then read whatever was in those
+	# variables before. The sibling parser is loud in the same situation (its check_result on the
+	# php exit status fires), and two parsers that disagree about failure is the asymmetry worth
+	# removing. Not reachable on a supported target - perl-base is priority required on all four -
+	# but "unreachable" is the reason it would never have been noticed.
+	out=$(printf '%s\n' "$str" | perl -n -e "while(/\b([a-zA-Z]+[\w]*)='(.*?)'(\s|\$)/g) {print \$1.'='.\$2 . \"\n\" }")
+	rc=$?
+	if [ "$rc" -ne 0 ]; then
+		check_result "$E_PARSING" "record could not be tokenised [$str]"
+	fi
+	mapfile -t pairs <<< "$out"
 
 	for objkv in "${pairs[@]}"; do
 		[ -n "$objkv" ] || continue
@@ -609,6 +622,11 @@ EOPHP
 	eval "$validated_output"
 }
 
+# QUOTE THE ARGUMENT. Both parsers are safe on what they receive, but an unquoted `$(grep ...)` is
+# split and GLOBBED by the shell before either of them sees a character: a record holding MIN='*'
+# picks up any file named MIN='...' in the working directory and the parsed value becomes that
+# filename. Reachable wherever a customer chooses the directory a h-* runs in. Unquoted also
+# collapses runs of whitespace inside a value, so TPL='two  spaces' comes back with one.
 parse_object_kv_list() {
 	_parse_object_kv_list_php "$@"
 }
@@ -703,6 +721,12 @@ is_dir_symlink() {
 #
 # Only the emitters may call this - it destroys the raw value, so never call it before a
 # shell_list or before a value is used for anything but the JSON output.
+#
+# EMIT WITH printf AND %s, never by splicing into an echo argument (#728). `echo '"K": "'$V'"'`
+# leaves the escaped value unquoted, so the shell splits and globs it AFTER this function ran:
+# whitespace runs collapse, and a value holding a * is replaced by filenames from the working
+# directory - text that never passed through here at all, so a filename with a " in it opens a
+# second JSON key. printf takes the value as an argument and none of that applies.
 json_escape() {
 	local _n _v _c _out
 	for _n in "$@"; do
@@ -738,7 +762,7 @@ get_object_value() {
 }
 
 get_object_values() {
-	parse_object_kv_list $(grep -F "$2='$3'" "$(_object_conf "$1")")
+	parse_object_kv_list "$(grep -F "$2='$3'" "$(_object_conf "$1")")"
 }
 
 # Update object value

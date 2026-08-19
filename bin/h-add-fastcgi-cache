@@ -53,7 +53,7 @@ check_hestia_demo_mode
 #----------------------------------------------------------#
 
 # Load domain data
-parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)"
 
 # Check that nginx is not in proxy mode
 if [ "$WEB_SYSTEM" != 'nginx' ]; then

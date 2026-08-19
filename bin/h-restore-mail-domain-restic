@@ -59,7 +59,7 @@ if [ ! -f "$tmpdir/backup.conf" ]; then
 fi
 
 domains=""
-parse_object_kv_list $(cat "$tmpdir/backup.conf")
+parse_object_kv_list "$(cat "$tmpdir/backup.conf")"
 # Both values are comma-separated, so they have to be split on commas: with the default IFS the
 # whole list stayed one element and the loop below tried to restore a "domain" literally named
 # "a.de,b.de". Restore IFS immediately so nothing downstream inherits it.

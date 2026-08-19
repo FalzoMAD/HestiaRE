@@ -32,17 +32,17 @@ json_list() {
 	while read -r str; do
 		parse_object_kv_list "$str"
 		json_escape ACCOUNT ALIAS FWD FWD_ONLY AUTOREPLY QUOTA U_DISK SUSPENDED TIME DATE
-		echo -n '    "'$ACCOUNT'": {
-        "ALIAS": "'$ALIAS'",
-        "FWD": "'$FWD'",
-        "FWD_ONLY": "'$FWD_ONLY'",
-        "AUTOREPLY": "'$AUTOREPLY'",
-        "QUOTA": "'$QUOTA'",
-        "U_DISK": "'$U_DISK'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+		printf '    "%s": {\n' "$ACCOUNT"
+		printf '        "ALIAS": "%s",\n' "$ALIAS"
+		printf '        "FWD": "%s",\n' "$FWD"
+		printf '        "FWD_ONLY": "%s",\n' "$FWD_ONLY"
+		printf '        "AUTOREPLY": "%s",\n' "$AUTOREPLY"
+		printf '        "QUOTA": "%s",\n' "$QUOTA"
+		printf '        "U_DISK": "%s",\n' "$U_DISK"
+		printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s"\n' "$DATE"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

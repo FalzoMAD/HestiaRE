@@ -25,16 +25,16 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list() {
 	echo '{'
 	json_escape RULE ACTION PROTOCOL PORT IP COMMENT SUSPENDED TIME DATE
-	echo '    "'$RULE'": {
-        "ACTION": "'$ACTION'",
-        "PROTOCOL": "'$PROTOCOL'",
-        "PORT": "'$PORT'",
-        "IP": "'$IP'",
-        "COMMENT": "'$COMMENT'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+	printf '    "%s": {\n' "$RULE"
+	printf '        "ACTION": "%s",\n' "$ACTION"
+	printf '        "PROTOCOL": "%s",\n' "$PROTOCOL"
+	printf '        "PORT": "%s",\n' "$PORT"
+	printf '        "IP": "%s",\n' "$IP"
+	printf '        "COMMENT": "%s",\n' "$COMMENT"
+	printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+	printf '        "TIME": "%s",\n' "$TIME"
+	printf '        "DATE": "%s"\n' "$DATE"
+	echo '    }'
 	echo '}'
 }
 
@@ -75,7 +75,7 @@ is_object_valid "$CONF_DIR/firewall/rules" 'RULE' "$rule"
 #----------------------------------------------------------#
 
 # Parsing rules
-parse_object_kv_list $(grep "RULE='$rule'" $CONF_DIR/firewall/rules.conf)
+parse_object_kv_list "$(grep "RULE='$rule'" $CONF_DIR/firewall/rules.conf)"
 
 # Listing data
 case $format in

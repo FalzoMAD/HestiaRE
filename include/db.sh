@@ -417,7 +417,7 @@ is_dbhost_new() {
 
 # Get database values
 get_database_values() {
-	parse_object_kv_list $(grep -F "DB='$database'" $USER_DATA/db.conf)
+	parse_object_kv_list "$(grep -F "DB='$database'" $USER_DATA/db.conf)"
 }
 
 # Change MySQL database password

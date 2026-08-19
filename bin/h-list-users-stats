@@ -28,29 +28,29 @@ json_list() {
 	while read -r str; do
 		parse_object_kv_list "$str"
 		json_escape DATE TIME PACKAGE IP_OWNED DISK_QUOTA U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB BANDWIDTH U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DOMAINS U_MAIL_DKIM U_MAIL_ACCOUNTS U_DATABASES U_CRON_JOBS U_BACKUPS U_USERS
-		echo -n '    "'$DATE'": {
-        "TIME": "'$TIME'",
-        "PACKAGE": "'$PACKAGE'",
-        "IP_OWNED": "'$IP_OWNED'",
-        "DISK_QUOTA": "'$DISK_QUOTA'",
-        "U_DISK": "'$U_DISK'",
-        "U_DISK_DIRS": "'$U_DISK_DIRS'",
-        "U_DISK_WEB": "'$U_DISK_WEB'",
-        "U_DISK_MAIL": "'$U_DISK_MAIL'",
-        "U_DISK_DB": "'$U_DISK_DB'",
-        "BANDWIDTH": "'$BANDWIDTH'",
-        "U_BANDWIDTH": "'$U_BANDWIDTH'",
-        "U_WEB_DOMAINS": "'$U_WEB_DOMAINS'",
-        "U_WEB_SSL": "'$U_WEB_SSL'",
-        "U_WEB_ALIASES": "'$U_WEB_ALIASES'",
-        "U_MAIL_DOMAINS": "'$U_MAIL_DOMAINS'",
-        "U_MAIL_DKIM": "'$U_MAIL_DKIM'",
-        "U_MAIL_ACCOUNTS": "'$U_MAIL_ACCOUNTS'",
-        "U_DATABASES": "'$U_DATABASES'",
-        "U_CRON_JOBS": "'$U_CRON_JOBS'",
-        "U_BACKUPS": "'$U_BACKUPS'",
-        "U_USERS": "'$U_USERS'"
-    }'
+		printf '    "%s": {\n' "$DATE"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "PACKAGE": "%s",\n' "$PACKAGE"
+		printf '        "IP_OWNED": "%s",\n' "$IP_OWNED"
+		printf '        "DISK_QUOTA": "%s",\n' "$DISK_QUOTA"
+		printf '        "U_DISK": "%s",\n' "$U_DISK"
+		printf '        "U_DISK_DIRS": "%s",\n' "$U_DISK_DIRS"
+		printf '        "U_DISK_WEB": "%s",\n' "$U_DISK_WEB"
+		printf '        "U_DISK_MAIL": "%s",\n' "$U_DISK_MAIL"
+		printf '        "U_DISK_DB": "%s",\n' "$U_DISK_DB"
+		printf '        "BANDWIDTH": "%s",\n' "$BANDWIDTH"
+		printf '        "U_BANDWIDTH": "%s",\n' "$U_BANDWIDTH"
+		printf '        "U_WEB_DOMAINS": "%s",\n' "$U_WEB_DOMAINS"
+		printf '        "U_WEB_SSL": "%s",\n' "$U_WEB_SSL"
+		printf '        "U_WEB_ALIASES": "%s",\n' "$U_WEB_ALIASES"
+		printf '        "U_MAIL_DOMAINS": "%s",\n' "$U_MAIL_DOMAINS"
+		printf '        "U_MAIL_DKIM": "%s",\n' "$U_MAIL_DKIM"
+		printf '        "U_MAIL_ACCOUNTS": "%s",\n' "$U_MAIL_ACCOUNTS"
+		printf '        "U_DATABASES": "%s",\n' "$U_DATABASES"
+		printf '        "U_CRON_JOBS": "%s",\n' "$U_CRON_JOBS"
+		printf '        "U_BACKUPS": "%s",\n' "$U_BACKUPS"
+		printf '        "U_USERS": "%s"\n' "$U_USERS"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

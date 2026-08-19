@@ -43,14 +43,14 @@ json_list() {
 		[[ -z "$str" ]] && continue
 		parse_object_kv_list "$str"
 		json_escape LISTNAME IP_VERSION AUTOUPDATE SUSPENDED SOURCE TIME DATE
-		echo -n '    "'$LISTNAME'": {
-        "IP_VERSION": "'$IP_VERSION'",
-        "AUTOUPDATE": "'$AUTOUPDATE'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "SOURCE": "'$SOURCE'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+		printf '    "%s": {\n' "$LISTNAME"
+		printf '        "IP_VERSION": "%s",\n' "$IP_VERSION"
+		printf '        "AUTOUPDATE": "%s",\n' "$AUTOUPDATE"
+		printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+		printf '        "SOURCE": "%s",\n' "$SOURCE"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s"\n' "$DATE"
+		printf '    }'
 		[[ "$i" -lt "$objects" ]] && echo ',' || echo
 		((i++))
 	done < <(cat $CONF_DIR/firewall/ipset.conf)

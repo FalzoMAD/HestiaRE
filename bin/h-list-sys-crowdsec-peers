@@ -60,16 +60,16 @@ json_list() {
 		# BANS first: $PEER is the array key, and escaping it before the lookup would miss the entry.
 		bans="${MESH_SEEN[$PEER]:-0}"
 		json_escape PEER HOST PORT IP PIN bans SUSPENDED TIME DATE
-		echo -n '    "'"$PEER"'": {
-        "HOST": "'"$HOST"'",
-        "PORT": "'"$PORT"'",
-        "IP": "'"$IP"'",
-        "PIN": "'"$PIN"'",
-        "BANS": "'"$bans"'",
-        "SUSPENDED": "'"$SUSPENDED"'",
-        "TIME": "'"$TIME"'",
-        "DATE": "'"$DATE"'"
-    }'
+		printf '    "%s": {\n' "$PEER"
+		printf '        "HOST": "%s",\n' "$HOST"
+		printf '        "PORT": "%s",\n' "$PORT"
+		printf '        "IP": "%s",\n' "$IP"
+		printf '        "PIN": "%s",\n' "$PIN"
+		printf '        "BANS": "%s",\n' "$bans"
+		printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s"\n' "$DATE"
+		printf '    }'
 		[[ "$i" -lt "$objects" ]] && echo ',' || echo
 		((i++))
 	done < "$MESH_PEERS_CONF"

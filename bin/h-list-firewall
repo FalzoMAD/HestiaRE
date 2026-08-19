@@ -31,16 +31,16 @@ json_list() {
 		[[ -z "$str" ]] && continue
 		parse_object_kv_list "$str"
 		json_escape RULE ACTION PROTOCOL PORT IP COMMENT SUSPENDED TIME DATE
-		echo -n '    "'$RULE'": {
-        "ACTION": "'$ACTION'",
-        "PROTOCOL": "'$PROTOCOL'",
-        "PORT": "'$PORT'",
-        "IP": "'$IP'",
-        "COMMENT": "'$COMMENT'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+		printf '    "%s": {\n' "$RULE"
+		printf '        "ACTION": "%s",\n' "$ACTION"
+		printf '        "PROTOCOL": "%s",\n' "$PROTOCOL"
+		printf '        "PORT": "%s",\n' "$PORT"
+		printf '        "IP": "%s",\n' "$IP"
+		printf '        "COMMENT": "%s",\n' "$COMMENT"
+		printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s"\n' "$DATE"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

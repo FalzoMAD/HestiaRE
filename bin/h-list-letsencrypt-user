@@ -26,13 +26,13 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list() {
 	echo '{'
 	json_escape user EMAIL EXPONENT MODULUS THUMB KID
-	echo '    "'$user'": {
-        "EMAIL": "'$EMAIL'",
-        "EXPONENT": "'$EXPONENT'",
-        "MODULUS": "'$MODULUS'",
-        "THUMB": "'$THUMB'",
-        "KID": "'$KID'"
-    }'
+	printf '    "%s": {\n' "$user"
+	printf '        "EMAIL": "%s",\n' "$EMAIL"
+	printf '        "EXPONENT": "%s",\n' "$EXPONENT"
+	printf '        "MODULUS": "%s",\n' "$MODULUS"
+	printf '        "THUMB": "%s",\n' "$THUMB"
+	printf '        "KID": "%s"\n' "$KID"
+	echo '    }'
 	echo '}'
 }
 

@@ -50,6 +50,22 @@ opens above it.
   check is anchored too: unanchored, a key that is a suffix of one already in the record counted as
   present and was silently never added.
 
+- **The listers print their values with `printf`, not by splicing them into an `echo`** (#728). The
+  JSON emitters built their output as one big quoted string with `'$VAR'` holes, which leaves the
+  value unquoted - so the shell split and globbed it *after* `json_escape` had run. Whitespace runs
+  inside a value collapsed, and a value holding a `*` was replaced by the filenames in the working
+  directory: text that never went through the escaper, so a filename containing a `"` opens a
+  second key in the document. 53 emitters, 693 values. Where a lister happened to have set
+  `IFS=$'\n'` for an unrelated loop it was inert - by luck, not by design.
+
+- **A record is quoted on its way into the parser, at every call site** (#723). Forty-six `h-*` and
+  helper calls handed the record over unquoted, so the shell split and globbed it before either
+  parser saw a character: a cron record holding `MIN='*'` picked up any file named `MIN='...'` in
+  the working directory and the parsed value became that filename. A customer only has to create
+  one such file in a directory an admin later runs a command from. Two of the forty-six are shared
+  helpers - `get_object_values` and `get_domain_values`, the latter with 42 calling files. Unquoted
+  also collapsed runs of whitespace inside a value.
+
 - **A failing `mktemp` no longer lets the panel write into an unset path** (#703). Thirty save
   routes took `exec("mktemp")` and used `$output[0]` without checking it, so a failure produced an
   empty path: `fopen()` on it aborts the request with a fatal, and the certificate or service

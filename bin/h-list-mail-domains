@@ -31,22 +31,22 @@ json_list() {
 	while read -r str; do
 		parse_object_kv_list "$str"
 		json_escape DOMAIN ANTIVIRUS ANTISPAM REJECT RATE_LIMIT DKIM CATCHALL ACCOUNTS U_DISK SSL SUSPENDED TIME DATE WEBMAIL_ALIAS WEBMAIL
-		echo -n '    "'$DOMAIN'": {
-        "ANTIVIRUS": "'$ANTIVIRUS'",
-        "ANTISPAM": "'$ANTISPAM'",
-        "REJECT": "'$REJECT'",
-        "RATE_LIMIT": "'$RATE_LIMIT'",
-        "DKIM": "'$DKIM'",
-        "CATCHALL": "'$CATCHALL'",
-        "ACCOUNTS": "'$ACCOUNTS'",
-        "U_DISK": "'$U_DISK'",
-        "SSL": "'$SSL'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'",
-        "WEBMAIL_ALIAS": "'$WEBMAIL_ALIAS'",
-        "WEBMAIL": "'$WEBMAIL'"
-    }'
+		printf '    "%s": {\n' "$DOMAIN"
+		printf '        "ANTIVIRUS": "%s",\n' "$ANTIVIRUS"
+		printf '        "ANTISPAM": "%s",\n' "$ANTISPAM"
+		printf '        "REJECT": "%s",\n' "$REJECT"
+		printf '        "RATE_LIMIT": "%s",\n' "$RATE_LIMIT"
+		printf '        "DKIM": "%s",\n' "$DKIM"
+		printf '        "CATCHALL": "%s",\n' "$CATCHALL"
+		printf '        "ACCOUNTS": "%s",\n' "$ACCOUNTS"
+		printf '        "U_DISK": "%s",\n' "$U_DISK"
+		printf '        "SSL": "%s",\n' "$SSL"
+		printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s",\n' "$DATE"
+		printf '        "WEBMAIL_ALIAS": "%s",\n' "$WEBMAIL_ALIAS"
+		printf '        "WEBMAIL": "%s"\n' "$WEBMAIL"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

@@ -28,15 +28,15 @@ json_list() {
 		'sftp' | 'ftp' | 'rclone')
 			echo '{'
 			json_escape type HOST USERNAME PORT BPATH TIME DATE
-			echo '    "'$type'": {
-        "HOST": "'$HOST'",
-        "USERNAME": "'$USERNAME'",
-        "PORT": "'$PORT'",
-        "TYPE": "'$type'",
-        "BPATH": "'$BPATH'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+			printf '    "%s": {\n' "$type"
+			printf '        "HOST": "%s",\n' "$HOST"
+			printf '        "USERNAME": "%s",\n' "$USERNAME"
+			printf '        "PORT": "%s",\n' "$PORT"
+			printf '        "TYPE": "%s",\n' "$type"
+			printf '        "BPATH": "%s",\n' "$BPATH"
+			printf '        "TIME": "%s",\n' "$TIME"
+			printf '        "DATE": "%s"\n' "$DATE"
+			echo '    }'
 			echo '}'
 			;;
 	esac

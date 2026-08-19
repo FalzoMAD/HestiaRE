@@ -59,7 +59,7 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)"
 
 # rebuild the compact "fam:level,fam:level" field without this family, then append unless 'off'
 new=''
