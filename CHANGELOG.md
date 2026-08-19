@@ -149,6 +149,13 @@ opens above it.
   read is named as a failure instead of abandoning the rest. Inherited: HestiaCP 1.10.3 does the
   same.
 
+- **Removing CrowdSec no longer leaves its domains answering 500** (#743). The uninstall took away
+  the bouncer and the init config and left every per-domain fragment behind, still calling
+  `require("hestia_bouncer")` - and since the directive keeps parsing while the lua module is
+  installed, `nginx -t` stayed green and the reload put the breakage live on the spot. The fragments
+  go with it now, found in the tree rather than from the records, because one can outlive the other.
+  The records keep their `yes`, so reinstalling brings the protection back.
+
 - **A domain carrying `CROWDSEC='yes'` no longer breaks the whole nginx config on a box without
   CrowdSec** (#741). The per-domain fragment was written from the record and gated only on the web
   model, so an nginx that has no bouncer got a `rewrite_by_lua_block` it cannot parse - and that

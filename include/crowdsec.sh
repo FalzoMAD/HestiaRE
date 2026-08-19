@@ -270,5 +270,11 @@ crowdsec_render_domain_fragment() {
 # Remove the nginx-side wiring (leaves the engine + /etc/crowdsec saved state).
 crowdsec_remove_nginx() {
 	rm -f /etc/nginx/conf.d/crowdsec_init.conf /etc/crowdsec/bouncers/hestia_bouncer.lua
+	# The per-domain fragments call require("hestia_bouncer"), the file just removed. Left behind they
+	# answer 500 on every request, and the reload below would put that live immediately - nginx -t
+	# still passes, because the directive parses as long as the lua module is installed. Found from
+	# the tree rather than from the records: a fragment can outlive the record that asked for it.
+	find "${HOMEDIR:-/home}" -mindepth 5 -maxdepth 5 -path '*/conf/web/*' -name 'nginx.crowdsec.conf' \
+		-delete 2> /dev/null
 	nginx -t > /dev/null 2>&1 && { systemctl reload nginx > /dev/null 2>&1 || true; }
 }
