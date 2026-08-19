@@ -246,6 +246,27 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ] && [ -n "$domains" ]; then
 fi
 restore_consent_has 'php-fallback' && RESTORE_PHP_FALLBACK='yes'
 
+# Handing the unrestorable parts to the customer writes their data - dumps, mail spools - into their
+# home, so it is a section like any other and asks like one.
+#
+# Only on a whole-archive restore. A run that names objects was asked for those; carrying out the
+# rest of the archive is not what it was asked for, and it would make the h-restore-* wrappers stop
+# on any archive that happens to hold a DNS zone.
+LEFTOVERS_PATTERNS=''
+leftovers_partial=''
+if restore_consent_selector "$web" || restore_consent_selector "$mail" \
+	|| restore_consent_selector "$db" || restore_consent_selector "$cron" \
+	|| restore_consent_selector "$udir"; then
+	leftovers_partial='yes'
+else
+	backup_leftovers_plan
+fi
+if [ -n "$LEFTOVERS_PATTERNS" ]; then
+	restore_consent_ask 'leftovers' \
+		"Carry what this host cannot restore into $HOMEDIR/$user/restore-leftovers/?" \
+		|| restore_refused="$restore_refused leftovers"
+fi
+
 if [ -n "$restore_refused" ]; then
 	rm -rf "$tmpdir"
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
@@ -298,6 +319,27 @@ if [ "$create_user" = 'yes' ]; then
 	# Creates the account with a freshly allocated uid, before anything is unpacked, so
 	# tar can resolve the archived owner name onto it.
 	rebuild_user_conf
+fi
+
+# What this host cannot restore, handed over rather than left inside the archive. Timestamped, so a
+# second restore does not overwrite the first.
+echo -e "\n-- LEFTOVERS --" | tee -a $tmpdir/restore.log
+if [ -n "$leftovers_partial" ]; then
+	# Not the same sentence as an archive with nothing in it: this run was asked for named objects,
+	# and the rest of the archive may well hold things this host cannot restore.
+	echo "$(date '+%F %T') skipped - this run restored named objects only" | tee -a $tmpdir/restore.log
+elif [ -z "$LEFTOVERS_PATTERNS" ]; then
+	# Printed, never silence: "nothing to hand over" and "the export never ran" have to look different.
+	echo "$(date '+%F %T') nothing to hand over - this host can restore everything in the archive" \
+		| tee -a $tmpdir/restore.log
+else
+	leftovers_dir="$HOMEDIR/$user/restore-leftovers/$(date '+%F_%H-%M-%S')"
+	if backup_leftovers_export "$BACKUP/$backup" "$leftovers_dir" "$user"; then
+		echo "$LEFTOVERS_SUMMARY" | sed '/^$/d;s|^|'"$(date '+%F %T')"' |' | tee -a $tmpdir/restore.log
+		echo "$(date '+%F %T') -> $leftovers_dir" | tee -a $tmpdir/restore.log
+	else
+		restore_failures="$restore_failures$(printf '\n  the parts this host cannot restore could not be handed over')"
+	fi
 fi
 
 # Unpacking pam container

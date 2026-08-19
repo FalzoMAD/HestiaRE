@@ -163,7 +163,7 @@ backup_probe() {
 
 	PROBE_MODE='gzip'
 	PROBE_VESTA='no'
-	PROBE_WEB='' PROBE_MAIL='' PROBE_DB='' PROBE_UDIR='' PROBE_DNS=''
+	PROBE_WEB='' PROBE_MAIL='' PROBE_DB='' PROBE_UDIR='' PROBE_DNS='' PROBE_TPL=''
 	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM=''
 	PROBE_ORIGIN='' PROBE_RECORDS="$_wd"
 
@@ -191,6 +191,8 @@ backup_probe() {
 	# dns/ is the one we never write and never restore. Zones by NAME, because for somebody moving
 	# off HestiaCP the count is not the answer to the question they are actually asking.
 	PROBE_DNS=$(sed -n 's|^\./dns/\([^/]*\)/.*|\1|p' <<< "$_members" | sort -u)
+	# Custom templates: archived by HestiaCP, never read back here, so they are a loss to name.
+	PROBE_TPL=$(sed -n 's|^\./web/\([^/]*\)/template/.*|\1|p' <<< "$_members" | sort -u)
 	grep -qx "\./cron/cron\.conf" <<< "$_members" && PROBE_CRON='yes'
 	PROBE_PACKAGES=$(sed -n "s|^\./$BACKUP_CONTAINER/packages/\(.*\)\.pkg$|\1|p" <<< "$_members" | sort -u)
 
@@ -300,6 +302,12 @@ backup_report() {
 			"$(backup_report_count "$PROBE_DNS")"
 		printf '   the archive and stay there, nothing here reads them:\n'
 		sed 's/^/      /' <<< "$PROBE_DNS"
+	fi
+
+	if [ -n "$PROBE_TPL" ]; then
+		_found=1
+		printf '   custom web template(s) for %s domain(s) - this host renders from its own set\n' \
+			"$(backup_report_count "$PROBE_TPL")"
 	fi
 
 	# A section this host has no subsystem for is dropped in full. With the count: "mail is skipped"
@@ -445,7 +453,7 @@ backup_db_type_supported() {
 # quietly admitted a pipe once.
 #
 # Consenting to a section implies the account, and no OTHER section.
-RESTORE_CONSENT_TOKENS='all web mail db cron udir php-fallback'
+RESTORE_CONSENT_TOKENS='all web mail db cron udir leftovers php-fallback'
 
 # restore_consent_parse LIST - validate a comma list against the closed set and remember it. An
 # unknown token is refused, never dropped: a silently ignored typo authorises less than it looks.
@@ -529,6 +537,60 @@ backup_php_missing() {
 		[[ "$_installed" == *" $_ver "* ]] || _missing="$_missing $_ver"
 	done <<< "$_list"
 	BACKUP_PHP_MISSING=$(tr ' ' '\n' <<< "$_missing" | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ $//')
+}
+
+# What the restore cannot put back but the archive still holds. Same derivation as the loss report,
+# so the two cannot drift: whatever the report names is either carried out here or has a reason
+# printed next to it (a rewritten template is a remap, not a loss - nothing to hand over).
+#
+# Sets LEFTOVERS_PATTERNS (tar wildcards) and LEFTOVERS_SUMMARY (one line each).
+backup_leftovers_plan() {
+	local _obj _eff
+	LEFTOVERS_PATTERNS=''
+	LEFTOVERS_SUMMARY=''
+	_lo() { LEFTOVERS_PATTERNS="$LEFTOVERS_PATTERNS$1"$'\n'; LEFTOVERS_SUMMARY="$LEFTOVERS_SUMMARY$2"$'\n'; }
+
+	[ -n "$PROBE_DNS" ] && _lo './dns/*' "$(backup_report_count "$PROBE_DNS") DNS zone(s), records and zone files"
+	[ -n "$PROBE_TPL" ] && _lo './web/*/template/*' "custom web template(s) for $(backup_report_count "$PROBE_TPL") domain(s)"
+
+	[ -z "$WEB_SYSTEM" ] && [ -n "$PROBE_WEB" ] && _lo './web/*' "$(backup_report_count "$PROBE_WEB") web object(s), no WEB_SYSTEM here"
+	[ -z "$MAIL_SYSTEM" ] && [ -n "$PROBE_MAIL" ] && _lo './mail/*' "$(backup_report_count "$PROBE_MAIL") mail object(s), no MAIL_SYSTEM here"
+	[ "$PROBE_CRON" = 'yes' ] && [ -z "$CRON_SYSTEM" ] && _lo './cron/*' "the cron section, no CRON_SYSTEM here"
+
+	if [ -z "$DB_SYSTEM" ]; then
+		[ -n "$PROBE_DB" ] && _lo './db/*' "$(backup_report_count "$PROBE_DB") database(s), no DB_SYSTEM here"
+	else
+		# Per object: a host can have a DB_SYSTEM and still not the engine one dump was taken from.
+		while IFS= read -r _obj; do
+			[ -n "$_obj" ] || continue
+			_eff=$(backup_db_type "$_obj")
+			backup_db_type_supported "$_eff" && continue
+			_lo "./db/$_obj/*" "database $_obj, a ${_eff:-nameless} dump this host cannot load"
+		done <<< "$PROBE_DB"
+	fi
+	unset -f _lo
+}
+
+# backup_leftovers_export ARCHIVE DEST - hand over what the plan named. Prints what it did.
+#
+# The destination is the customer's, 0700, and never under web/ - these are their database dumps and
+# mail spools, not something a vhost may serve.
+backup_leftovers_export() {
+	local _arc="$1" _dest="$2" _owner="$3" _pat _n=0
+	[ -n "$LEFTOVERS_PATTERNS" ] || return 0
+	mkdir -p "$_dest" || return 1
+	while IFS= read -r _pat; do
+		[ -n "$_pat" ] || continue
+		tar -xf "$_arc" -C "$_dest" --wildcards "$_pat" 2> /dev/null && _n=$((_n + 1))
+	done <<< "$LEFTOVERS_PATTERNS"
+	backup_report > "$_dest/loss-report.txt" 2> /dev/null
+	# The parent too: mkdir -p made it as root, and a root-owned directory in the customer's home is
+	# one they cannot clear out themselves.
+	chown "$_owner:$_owner" "$(dirname "$_dest")"
+	chmod 0700 "$(dirname "$_dest")"
+	chown -R "$_owner:$_owner" "$_dest"
+	chmod -R u=rwX,go= "$_dest"
+	return 0
 }
 
 # backup_record_file KIND OBJECT - the extracted record of one object, or nothing.
