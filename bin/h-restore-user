@@ -263,7 +263,7 @@ else
 fi
 if [ -n "$LEFTOVERS_PATTERNS" ]; then
 	restore_consent_ask 'leftovers' \
-		"Carry what this host cannot restore into $HOMEDIR/$user/restore-leftovers/?" \
+		"Carry what this host cannot restore into $HOMEDIR/$user/leftovers/?" \
 		|| restore_refused="$restore_refused leftovers"
 fi
 
@@ -333,7 +333,7 @@ elif [ -z "$LEFTOVERS_PATTERNS" ]; then
 	echo "$(date '+%F %T') nothing to hand over - this host can restore everything in the archive" \
 		| tee -a $tmpdir/restore.log
 else
-	leftovers_dir="$HOMEDIR/$user/restore-leftovers/$(date '+%F_%H-%M-%S')"
+	leftovers_dir="$HOMEDIR/$user/leftovers/$(date '+%F_%H-%M-%S')"
 	if backup_leftovers_export "$BACKUP/$backup" "$leftovers_dir" "$user"; then
 		echo "$LEFTOVERS_SUMMARY" | sed '/^$/d;s|^|'"$(date '+%F %T')"' |' | tee -a $tmpdir/restore.log
 		echo "$(date '+%F %T') -> $leftovers_dir" | tee -a $tmpdir/restore.log
