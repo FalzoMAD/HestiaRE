@@ -84,6 +84,19 @@ opens above it.
 
 ### Fixed
 
+- **Suspending a web domain no longer switches its forced HTTPS and HSTS off for good** (#720). The
+  rebuild re-renders those switches by calling delete and then add. The add half refuses on a
+  suspended domain, the delete half has already written `no` into the record - so a suspend printed
+  four `is suspended` errors and left the domain with `SSL_FORCE='no'`, `SSL_HSTS='no'`, no proxy or
+  FastCGI cache and, in a restore, no FTP account. Unsuspending did not bring any of it back: the
+  domain came out of a suspension no longer redirecting to HTTPS. A suspended domain renders the
+  suspend template, which includes the existing fragments unchanged, so the rebuild leaves them
+  alone until the domain is unsuspended.
+
+- **A domain that was suspended when it was archived comes back suspended** (#720). The restore
+  forced `SUSPENDED='no'`, so a locked domain was served again the moment it was restored. It keeps
+  the archived value now; `SUSPENDED_WEB` is recounted from the records as before.
+
 - **A customer directory with a space in its name no longer aborts the restore** (#706). The restore
   walked the list of home directories with an unquoted `for`, so `my documents` became two names and
   the run died on `Can't unpack my user dir container` - after the web, mail and database sections

@@ -344,44 +344,60 @@ rebuild_web_domain_conf() {
 		fi
 	fi
 
-	# Refresh HTTPS redirection if previously enabled
-	if [ "$SSL_FORCE" = 'yes' ]; then
-		$BIN/h-delete-web-domain-ssl-force $user $domain no yes
-		$BIN/h-add-web-domain-ssl-force $user $domain no yes
+	# The switches below re-render their fragment by calling delete and then add. Every add half
+	# refuses on a suspended domain (is_object_unsuspended) while the delete half has ALREADY
+	# written 'no' into the record - so suspending a domain silently turned its forced HTTPS and
+	# its HSTS off, printed "is suspended", and unsuspending did not bring either back. A suspended
+	# domain renders the suspend template, which includes the fragments that are there unchanged
+	# (IncludeOptional .../forcessl.conf*), so the correct move is to leave them alone until the
+	# domain is unsuspended - the unsuspend rebuild re-renders them with the record intact.
+	if [ "$SUSPENDED" != 'yes' ]; then
+		# Refresh HTTPS redirection if previously enabled
+		if [ "$SSL_FORCE" = 'yes' ]; then
+			$BIN/h-delete-web-domain-ssl-force $user $domain no yes
+			$BIN/h-add-web-domain-ssl-force $user $domain no yes
+		fi
+
+		if [ "$SSL_HSTS" = 'yes' ]; then
+			$BIN/h-delete-web-domain-ssl-hsts $user $domain no yes
+			$BIN/h-add-web-domain-ssl-hsts $user $domain no yes
+		fi
+
+		if [ "$FASTCGI_CACHE" = 'yes' ]; then
+			$BIN/h-delete-fastcgi-cache $user $domain
+			$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
+		fi
+		# gated on the proxy role: in a proxyless model the flag stays recorded but inert
+		if [ "$PROXY_CACHE" = 'yes' ] && [ "$PROXY_SYSTEM" = 'nginx' ]; then
+			$BIN/h-delete-web-domain-cache $user $domain
+			$BIN/h-add-web-domain-cache $user $domain "$PROXY_CACHE_DURATION"
+		fi
+
+		# Re-apply directory listing (apache Options -Indexes flip lives only in the
+		# regenerated vhost, so without this the rebuild resets it to the template default).
+		# The suspend template hardcodes -Indexes, so there is nothing to re-apply there either.
+		if [ "$DIR_LIST" = 'yes' ]; then
+			$BIN/h-change-web-domain-dirlist $user $domain on no yes
+		fi
 	fi
 
-	if [ "$SSL_HSTS" = 'yes' ]; then
-		$BIN/h-delete-web-domain-ssl-hsts $user $domain no yes
-		$BIN/h-add-web-domain-ssl-hsts $user $domain no yes
-	fi
-
-	# http3 is capability-gated, so it reconciles silently from the HTTP3 field rather than via a
-	# delete+add of the loudly-refusing command (#613): the fragment appears only where nginx can
-	# serve it, and is dropped where it cannot, without erroring per domain in a batch rebuild
+	# THREE writers run while suspended too, and they are outside the block above on purpose. What
+	# separates them from the switches inside it: each derives its fragment from the record and
+	# writes or removes it, so none can refuse and none can leave the record saying something the
+	# disk does not. http3 is additionally capability-gated (#613), which is why it reconciles here
+	# rather than through a delete+add of the loudly-refusing command.
+	#
+	# The suspend templates take part: they include the bot-limit and CrowdSec fragments and the
+	# forced-SSL one. The http3 fragment they do NOT include, so while suspended it is kept in step
+	# but unused, and the normal template picks it up again on unsuspend.
 	apply_web_http3_config
-	if [ "$FASTCGI_CACHE" = 'yes' ]; then
-		$BIN/h-delete-fastcgi-cache $user $domain
-		$BIN/h-add-fastcgi-cache $user $domain "$FASTCGI_DURATION"
-	fi
-	# gated on the proxy role: in a proxyless model the flag stays recorded but inert
-	if [ "$PROXY_CACHE" = 'yes' ] && [ "$PROXY_SYSTEM" = 'nginx' ]; then
-		$BIN/h-delete-web-domain-cache $user $domain
-		$BIN/h-add-web-domain-cache $user $domain "$PROXY_CACHE_DURATION"
-	fi
 
-	# Re-render the per-domain fragments from the domain flags (both self-guard + write nothing
-	# when unset): CrowdSec Layer A (ban -> 403, nginx-only) + the server-native Layer-B bot
-	# rate-limit (nginx.botlimit.conf / botlimit.apache2.conf).
+	# CrowdSec Layer A (ban -> 403, nginx-only) + the server-native Layer-B bot rate-limit
+	# (nginx.botlimit.conf / botlimit.apache2.conf). Both self-guard and write nothing when unset.
 	type crowdsec_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/include/crowdsec.sh
 	crowdsec_render_domain_fragment "$user" "$domain"
 	type botpolicy_render_domain_fragment > /dev/null 2>&1 || source $HESTIA/include/botpolicy.sh
 	botpolicy_render_domain_fragment "$user" "$domain"
-
-	# Re-apply directory listing (apache Options -Indexes flip lives only in the
-	# regenerated vhost, so without this the rebuild resets it to the template default)
-	if [ "$DIR_LIST" = 'yes' ]; then
-		$BIN/h-change-web-domain-dirlist $user $domain on no yes
-	fi
 
 	# Adding proxy configuration (merged template renders both blocks into one .conf, #593)
 	if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
@@ -441,8 +457,13 @@ rebuild_web_domain_conf() {
 	else
 		shell=$FTP_SHELL
 	fi
+	# Same delete-then-add shape as the switches above, and the same outcome while suspended:
+	# h-delete-web-domain-ftp strips the account from the record and h-add-web-domain-ftp then
+	# refuses, so a restored suspended domain came back with FTP_USER empty and no account. Skipped
+	# here, the record keeps the account and the unsuspend rebuild creates it (the loop fires on
+	# absence from /etc/passwd, which is exactly the state it is in).
 	for ftp_user in ${FTP_USER//:/ }; do
-		if [ -z "$(grep ^$ftp_user: /etc/passwd)" ]; then
+		if [ "$SUSPENDED" != 'yes' ] && [ -z "$(grep ^$ftp_user: /etc/passwd)" ]; then
 			position=$(echo $FTP_USER | tr ':' '\n' | grep -n '' \
 				| grep ":$ftp_user$" | cut -f 1 -d:)
 			ftp_path=$(echo $FTP_PATH | tr ':' '\n' | grep -n '' \
