@@ -429,7 +429,7 @@ is_object_valid() {
 
 # Check if a object string with key values pairs has the correct format and load it afterwards
 parse_object_kv_list_non_eval() {
-	local str objkv obj_key obj_val
+	local str objkv obj_key obj_val out rc
 	local -a pairs=()
 
 	str=${*//$'\n'/ }
@@ -444,7 +444,20 @@ parse_object_kv_list_non_eval() {
 	# perl through a quoted echo and is assigned through a quoted expansion, so neither character
 	# is ever re-expanded - and it was never undone, so every consumer got a value with backslashes
 	# baked in: the search listers emitted \" where the record holds " (#719).
-	mapfile -t pairs < <(printf '%s\n' "$str" | perl -n -e "while(/\b([a-zA-Z]+[\w]*)='(.*?)'(\s|\$)/g) {print \$1.'='.\$2 . \"\n\" }")
+	#
+	# Captured first and the status checked, rather than read straight through a process
+	# substitution, whose exit status is not observable. Measured: with perl off the PATH the
+	# substitution form returned 0 and set NOTHING - the caller then read whatever was in those
+	# variables before. The sibling parser is loud in the same situation (its check_result on the
+	# php exit status fires), and two parsers that disagree about failure is the asymmetry worth
+	# removing. Not reachable on a supported target - perl-base is priority required on all four -
+	# but "unreachable" is the reason it would never have been noticed.
+	out=$(printf '%s\n' "$str" | perl -n -e "while(/\b([a-zA-Z]+[\w]*)='(.*?)'(\s|\$)/g) {print \$1.'='.\$2 . \"\n\" }")
+	rc=$?
+	if [ "$rc" -ne 0 ]; then
+		check_result "$E_PARSING" "record could not be tokenised [$str]"
+	fi
+	mapfile -t pairs <<< "$out"
 
 	for objkv in "${pairs[@]}"; do
 		[ -n "$objkv" ] || continue
