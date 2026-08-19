@@ -27,17 +27,17 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list() {
 	echo '{'
 	json_escape database DB DBUSER HOST TYPE CHARSET U_DISK SUSPENDED TIME DATE
-	echo '    "'$database'": {
-        "DATABASE": "'$DB'",
-        "DBUSER": "'$DBUSER'",
-        "HOST": "'$HOST'",
-        "TYPE": "'$TYPE'",
-        "CHARSET": "'$CHARSET'",
-        "U_DISK": "'$U_DISK'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+	printf '    "%s": {\n' "$database"
+	printf '        "DATABASE": "%s",\n' "$DB"
+	printf '        "DBUSER": "%s",\n' "$DBUSER"
+	printf '        "HOST": "%s",\n' "$HOST"
+	printf '        "TYPE": "%s",\n' "$TYPE"
+	printf '        "CHARSET": "%s",\n' "$CHARSET"
+	printf '        "U_DISK": "%s",\n' "$U_DISK"
+	printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+	printf '        "TIME": "%s",\n' "$TIME"
+	printf '        "DATE": "%s"\n' "$DATE"
+	echo '    }'
 	echo '}'
 }
 

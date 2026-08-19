@@ -28,18 +28,18 @@ json_list() {
 	echo "{"
 	local CMD="$CMD_RAW"
 	json_escape job MIN HOUR DAY MONTH WDAY CMD JOB SUSPENDED TIME DATE
-	echo -n '    "'$job'": {
-        "MIN": "'$MIN'",
-        "HOUR": "'$HOUR'",
-        "DAY": "'$DAY'",
-        "MONTH": "'$MONTH'",
-        "WDAY": "'$WDAY'",
-        "CMD": "'$CMD'",
-        "JOB": "'$JOB'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+	printf '    "%s": {\n' "$job"
+	printf '        "MIN": "%s",\n' "$MIN"
+	printf '        "HOUR": "%s",\n' "$HOUR"
+	printf '        "DAY": "%s",\n' "$DAY"
+	printf '        "MONTH": "%s",\n' "$MONTH"
+	printf '        "WDAY": "%s",\n' "$WDAY"
+	printf '        "CMD": "%s",\n' "$CMD"
+	printf '        "JOB": "%s",\n' "$JOB"
+	printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+	printf '        "TIME": "%s",\n' "$TIME"
+	printf '        "DATE": "%s"\n' "$DATE"
+	printf '    }'
 	echo
 	echo '}'
 }

@@ -25,14 +25,14 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list() {
 	echo '{'
 	json_escape REPO SNAPSHOTS KEEP_DAILY KEEP_WEEKLY KEEP_MONTHLY KEEP_YEARLY
-	echo '    "restic": {
-	"REPO": "'$REPO'",
-	"SNAPSHOTS": "'$SNAPSHOTS'",
-	"KEEP_DAILY": "'$KEEP_DAILY'",
-	"KEEP_WEEKLY": "'$KEEP_WEEKLY'",
-	"KEEP_MONTHLY": "'$KEEP_MONTHLY'",
-	"KEEP_YEARLY": "'$KEEP_YEARLY'"
-	}'
+	echo '    "restic": {'
+	printf '	"REPO": "%s",\n' "$REPO"
+	printf '	"SNAPSHOTS": "%s",\n' "$SNAPSHOTS"
+	printf '	"KEEP_DAILY": "%s",\n' "$KEEP_DAILY"
+	printf '	"KEEP_WEEKLY": "%s",\n' "$KEEP_WEEKLY"
+	printf '	"KEEP_MONTHLY": "%s",\n' "$KEEP_MONTHLY"
+	printf '	"KEEP_YEARLY": "%s"\n' "$KEEP_YEARLY"
+	echo '	}'
 	echo '}'
 }
 

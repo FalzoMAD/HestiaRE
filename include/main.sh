@@ -708,6 +708,12 @@ is_dir_symlink() {
 #
 # Only the emitters may call this - it destroys the raw value, so never call it before a
 # shell_list or before a value is used for anything but the JSON output.
+#
+# EMIT WITH printf AND %s, never by splicing into an echo argument (#728). `echo '"K": "'$V'"'`
+# leaves the escaped value unquoted, so the shell splits and globs it AFTER this function ran:
+# whitespace runs collapse, and a value holding a * is replaced by filenames from the working
+# directory - text that never passed through here at all, so a filename with a " in it opens a
+# second JSON key. printf takes the value as an argument and none of that applies.
 json_escape() {
 	local _n _v _c _out
 	for _n in "$@"; do

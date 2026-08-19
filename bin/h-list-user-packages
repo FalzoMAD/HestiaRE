@@ -29,28 +29,28 @@ json_list() {
 		PACKAGE=${package/.pkg/}
 		source_conf "$CONF_DIR/packages/$PACKAGE.pkg"
 		json_escape PACKAGE WEB_TEMPLATE PROXY_TEMPLATE WEB_DOMAINS WEB_ALIASES MAIL_DOMAINS MAIL_ACCOUNTS DATABASES CRON_JOBS DISK_QUOTA CPU_QUOTA DOCKER_LIMIT CPU_QUOTA_PERIOD MEMORY_LIMIT SWAP_LIMIT BANDWIDTH SHELL BACKUPS TIME DATE
-		echo -n '    "'$PACKAGE'": {
-        "WEB_TEMPLATE": "'$WEB_TEMPLATE'",
-        "PROXY_TEMPLATE": "'$PROXY_TEMPLATE'",
-        "WEB_DOMAINS": "'$WEB_DOMAINS'",
-        "WEB_ALIASES": "'$WEB_ALIASES'",
-        "MAIL_DOMAINS": "'$MAIL_DOMAINS'",
-        "MAIL_ACCOUNTS": "'$MAIL_ACCOUNTS'",
-        "DATABASES": "'$DATABASES'",
-        "CRON_JOBS": "'$CRON_JOBS'",
-        "DISK_QUOTA": "'$DISK_QUOTA'",
-        "CPU_QUOTA":"'$CPU_QUOTA'",
-        "DOCKER_LIMIT":"'$DOCKER_LIMIT'",
-        "CPU_QUOTA_PERIOD":"'$CPU_QUOTA_PERIOD'",
-        "MEMORY_LIMIT":"'$MEMORY_LIMIT'",
-        "SWAP_LIMIT":"'$SWAP_LIMIT'",
-        "DOCKER_LIMIT":"'$DOCKER_LIMIT'",
-        "BANDWIDTH": "'$BANDWIDTH'",
-        "SHELL": "'$SHELL'",
-        "BACKUPS": "'$BACKUPS'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+		printf '    "%s": {\n' "$PACKAGE"
+		printf '        "WEB_TEMPLATE": "%s",\n' "$WEB_TEMPLATE"
+		printf '        "PROXY_TEMPLATE": "%s",\n' "$PROXY_TEMPLATE"
+		printf '        "WEB_DOMAINS": "%s",\n' "$WEB_DOMAINS"
+		printf '        "WEB_ALIASES": "%s",\n' "$WEB_ALIASES"
+		printf '        "MAIL_DOMAINS": "%s",\n' "$MAIL_DOMAINS"
+		printf '        "MAIL_ACCOUNTS": "%s",\n' "$MAIL_ACCOUNTS"
+		printf '        "DATABASES": "%s",\n' "$DATABASES"
+		printf '        "CRON_JOBS": "%s",\n' "$CRON_JOBS"
+		printf '        "DISK_QUOTA": "%s",\n' "$DISK_QUOTA"
+		printf '        "CPU_QUOTA":"%s",\n' "$CPU_QUOTA"
+		printf '        "DOCKER_LIMIT":"%s",\n' "$DOCKER_LIMIT"
+		printf '        "CPU_QUOTA_PERIOD":"%s",\n' "$CPU_QUOTA_PERIOD"
+		printf '        "MEMORY_LIMIT":"%s",\n' "$MEMORY_LIMIT"
+		printf '        "SWAP_LIMIT":"%s",\n' "$SWAP_LIMIT"
+		printf '        "DOCKER_LIMIT":"%s",\n' "$DOCKER_LIMIT"
+		printf '        "BANDWIDTH": "%s",\n' "$BANDWIDTH"
+		printf '        "SHELL": "%s",\n' "$SHELL"
+		printf '        "BACKUPS": "%s",\n' "$BACKUPS"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s"\n' "$DATE"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

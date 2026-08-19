@@ -55,14 +55,14 @@ json_list() {
 		burst=$(fam_field "$f" BURST)
 		nodelay=$(fam_field "$f" NODELAY)
 		json_escape f enabled lenient strict match burst nodelay
-		echo -n '    "'"$f"'": {
-        "ENABLED": "'"$enabled"'",
-        "LENIENT": "'"$lenient"'",
-        "STRICT": "'"$strict"'",
-        "MATCH": "'"$match"'",
-        "BURST": "'"$burst"'",
-        "NODELAY": "'"$nodelay"'"
-    }'
+		printf '    "%s": {\n' "$f"
+		printf '        "ENABLED": "%s",\n' "$enabled"
+		printf '        "LENIENT": "%s",\n' "$lenient"
+		printf '        "STRICT": "%s",\n' "$strict"
+		printf '        "MATCH": "%s",\n' "$match"
+		printf '        "BURST": "%s",\n' "$burst"
+		printf '        "NODELAY": "%s"\n' "$nodelay"
+		printf '    }'
 		[ "$i" -lt "$total" ] && echo ',' || echo
 		((i++))
 	done

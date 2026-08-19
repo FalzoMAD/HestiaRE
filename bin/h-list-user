@@ -24,70 +24,70 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	json_escape USER NAME PACKAGE DOCKER_IP DOCKER_LIMIT WEB_TEMPLATE BACKEND_TEMPLATE PROXY_TEMPLATE WEB_DOMAINS WEB_ALIASES MAIL_DOMAINS MAIL_ACCOUNTS DATABASES CRON_JOBS DISK_QUOTA BANDWIDTH HOME SHELL BACKUPS CONTACT CRON_REPORTS RKEY TWOFA QRCODE ROLE SUSPENDED SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON IP_AVAIL IP_OWNED U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DOMAINS U_MAIL_DKIM U_MAIL_ACCOUNTS U_DATABASES U_CRON_JOBS U_BACKUPS BACKUPS_INCREMENTAL LANGUAGE THEME NOTIFICATIONS PREF_UI_SORT FILE_MANAGER LOGIN_DISABLED LOGIN_USE_IPLIST LOGIN_ALLOW_IPS PHPCLI TIME DATE
-	echo '{
-    "'$USER'": {
-        "NAME": "'$NAME'",
-        "PACKAGE": "'$PACKAGE'",
-        "DOCKER_IP": "'$DOCKER_IP'",
-        "DOCKER_LIMIT": "'$DOCKER_LIMIT'",
-        "WEB_TEMPLATE": "'$WEB_TEMPLATE'",
-        "BACKEND_TEMPLATE": "'$BACKEND_TEMPLATE'",
-        "PROXY_TEMPLATE": "'$PROXY_TEMPLATE'",
-        "WEB_DOMAINS": "'$WEB_DOMAINS'",
-        "WEB_ALIASES": "'$WEB_ALIASES'",
-        "MAIL_DOMAINS": "'$MAIL_DOMAINS'",
-        "MAIL_ACCOUNTS": "'$MAIL_ACCOUNTS'",
-        "DATABASES": "'$DATABASES'",
-        "CRON_JOBS": "'$CRON_JOBS'",
-        "DISK_QUOTA": "'$DISK_QUOTA'",
-        "BANDWIDTH": "'$BANDWIDTH'",
-        "HOME": "'$HOME'",
-        "SHELL": "'$SHELL'",
-        "BACKUPS": "'$BACKUPS'",
-        "CONTACT": "'$CONTACT'",
-        "CRON_REPORTS": "'$CRON_REPORTS'",
-        "RKEY": "'$RKEY'",
-        "TWOFA": "'$TWOFA'",
-        "QRCODE": "'$QRCODE'",
-        "ROLE": "'$ROLE'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "SUSPENDED_USERS": "'$SUSPENDED_USERS'",
-        "SUSPENDED_WEB": "'$SUSPENDED_WEB'",
-        "SUSPENDED_MAIL": "'$SUSPENDED_MAIL'",
-        "SUSPENDED_DB": "'$SUSPENDED_DB'",
-        "SUSPENDED_CRON": "'$SUSPENDED_CRON'",
-        "IP_AVAIL": "'$IP_AVAIL'",
-        "IP_OWNED": "'$IP_OWNED'",
-        "U_USERS": "'$U_USERS'",
-        "U_DISK": "'$U_DISK'",
-        "U_DISK_DIRS": "'$U_DISK_DIRS'",
-        "U_DISK_WEB": "'$U_DISK_WEB'",
-        "U_DISK_MAIL": "'$U_DISK_MAIL'",
-        "U_DISK_DB": "'$U_DISK_DB'",
-        "U_BANDWIDTH": "'$U_BANDWIDTH'",
-        "U_WEB_DOMAINS": "'$U_WEB_DOMAINS'",
-        "U_WEB_SSL": "'$U_WEB_SSL'",
-        "U_WEB_ALIASES": "'$U_WEB_ALIASES'",
-        "U_MAIL_DOMAINS": "'$U_MAIL_DOMAINS'",
-        "U_MAIL_DKIM": "'$U_MAIL_DKIM'",
-        "U_MAIL_ACCOUNTS": "'$U_MAIL_ACCOUNTS'",
-        "U_DATABASES": "'$U_DATABASES'",
-        "U_CRON_JOBS": "'$U_CRON_JOBS'",
-        "U_BACKUPS": "'$U_BACKUPS'",
-        "BACKUPS_INCREMENTAL": "'$BACKUPS_INCREMENTAL'",
-        "LANGUAGE": "'$LANGUAGE'",
-        "THEME": "'$THEME'",
-        "NOTIFICATIONS": "'$NOTIFICATIONS'",
-        "PREF_UI_SORT": "'$PREF_UI_SORT'",
-        "FILE_MANAGER": "'$FILE_MANAGER'",
-        "LOGIN_DISABLED": "'$LOGIN_DISABLED'",
-        "LOGIN_USE_IPLIST": "'$LOGIN_USE_IPLIST'",
-        "LOGIN_ALLOW_IPS": "'$LOGIN_ALLOW_IPS'",
-        "PHPCLI": "'$PHPCLI'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-        }
-}'
+	echo '{'
+	printf '    "%s": {\n' "$USER"
+	printf '        "NAME": "%s",\n' "$NAME"
+	printf '        "PACKAGE": "%s",\n' "$PACKAGE"
+	printf '        "DOCKER_IP": "%s",\n' "$DOCKER_IP"
+	printf '        "DOCKER_LIMIT": "%s",\n' "$DOCKER_LIMIT"
+	printf '        "WEB_TEMPLATE": "%s",\n' "$WEB_TEMPLATE"
+	printf '        "BACKEND_TEMPLATE": "%s",\n' "$BACKEND_TEMPLATE"
+	printf '        "PROXY_TEMPLATE": "%s",\n' "$PROXY_TEMPLATE"
+	printf '        "WEB_DOMAINS": "%s",\n' "$WEB_DOMAINS"
+	printf '        "WEB_ALIASES": "%s",\n' "$WEB_ALIASES"
+	printf '        "MAIL_DOMAINS": "%s",\n' "$MAIL_DOMAINS"
+	printf '        "MAIL_ACCOUNTS": "%s",\n' "$MAIL_ACCOUNTS"
+	printf '        "DATABASES": "%s",\n' "$DATABASES"
+	printf '        "CRON_JOBS": "%s",\n' "$CRON_JOBS"
+	printf '        "DISK_QUOTA": "%s",\n' "$DISK_QUOTA"
+	printf '        "BANDWIDTH": "%s",\n' "$BANDWIDTH"
+	printf '        "HOME": "%s",\n' "$HOME"
+	printf '        "SHELL": "%s",\n' "$SHELL"
+	printf '        "BACKUPS": "%s",\n' "$BACKUPS"
+	printf '        "CONTACT": "%s",\n' "$CONTACT"
+	printf '        "CRON_REPORTS": "%s",\n' "$CRON_REPORTS"
+	printf '        "RKEY": "%s",\n' "$RKEY"
+	printf '        "TWOFA": "%s",\n' "$TWOFA"
+	printf '        "QRCODE": "%s",\n' "$QRCODE"
+	printf '        "ROLE": "%s",\n' "$ROLE"
+	printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+	printf '        "SUSPENDED_USERS": "%s",\n' "$SUSPENDED_USERS"
+	printf '        "SUSPENDED_WEB": "%s",\n' "$SUSPENDED_WEB"
+	printf '        "SUSPENDED_MAIL": "%s",\n' "$SUSPENDED_MAIL"
+	printf '        "SUSPENDED_DB": "%s",\n' "$SUSPENDED_DB"
+	printf '        "SUSPENDED_CRON": "%s",\n' "$SUSPENDED_CRON"
+	printf '        "IP_AVAIL": "%s",\n' "$IP_AVAIL"
+	printf '        "IP_OWNED": "%s",\n' "$IP_OWNED"
+	printf '        "U_USERS": "%s",\n' "$U_USERS"
+	printf '        "U_DISK": "%s",\n' "$U_DISK"
+	printf '        "U_DISK_DIRS": "%s",\n' "$U_DISK_DIRS"
+	printf '        "U_DISK_WEB": "%s",\n' "$U_DISK_WEB"
+	printf '        "U_DISK_MAIL": "%s",\n' "$U_DISK_MAIL"
+	printf '        "U_DISK_DB": "%s",\n' "$U_DISK_DB"
+	printf '        "U_BANDWIDTH": "%s",\n' "$U_BANDWIDTH"
+	printf '        "U_WEB_DOMAINS": "%s",\n' "$U_WEB_DOMAINS"
+	printf '        "U_WEB_SSL": "%s",\n' "$U_WEB_SSL"
+	printf '        "U_WEB_ALIASES": "%s",\n' "$U_WEB_ALIASES"
+	printf '        "U_MAIL_DOMAINS": "%s",\n' "$U_MAIL_DOMAINS"
+	printf '        "U_MAIL_DKIM": "%s",\n' "$U_MAIL_DKIM"
+	printf '        "U_MAIL_ACCOUNTS": "%s",\n' "$U_MAIL_ACCOUNTS"
+	printf '        "U_DATABASES": "%s",\n' "$U_DATABASES"
+	printf '        "U_CRON_JOBS": "%s",\n' "$U_CRON_JOBS"
+	printf '        "U_BACKUPS": "%s",\n' "$U_BACKUPS"
+	printf '        "BACKUPS_INCREMENTAL": "%s",\n' "$BACKUPS_INCREMENTAL"
+	printf '        "LANGUAGE": "%s",\n' "$LANGUAGE"
+	printf '        "THEME": "%s",\n' "$THEME"
+	printf '        "NOTIFICATIONS": "%s",\n' "$NOTIFICATIONS"
+	printf '        "PREF_UI_SORT": "%s",\n' "$PREF_UI_SORT"
+	printf '        "FILE_MANAGER": "%s",\n' "$FILE_MANAGER"
+	printf '        "LOGIN_DISABLED": "%s",\n' "$LOGIN_DISABLED"
+	printf '        "LOGIN_USE_IPLIST": "%s",\n' "$LOGIN_USE_IPLIST"
+	printf '        "LOGIN_ALLOW_IPS": "%s",\n' "$LOGIN_ALLOW_IPS"
+	printf '        "PHPCLI": "%s",\n' "$PHPCLI"
+	printf '        "TIME": "%s",\n' "$TIME"
+	printf '        "DATE": "%s"\n' "$DATE"
+	echo '        }'
+	echo '}'
 }
 
 # SHELL list function

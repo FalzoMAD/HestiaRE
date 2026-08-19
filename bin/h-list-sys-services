@@ -32,13 +32,13 @@ json_list() {
 	while read -r str; do
 		parse_object_kv_list "$str"
 		json_escape NAME SYSTEM STATE CPU MEM RTIME
-		echo -n '    "'$NAME'": {
-        "SYSTEM": "'$SYSTEM'",
-        "STATE": "'$STATE'",
-        "CPU": "'$CPU'",
-        "MEM": "'$MEM'",
-        "RTIME": "'$RTIME'"
-    }'
+		printf '    "%s": {\n' "$NAME"
+		printf '        "SYSTEM": "%s",\n' "$SYSTEM"
+		printf '        "STATE": "%s",\n' "$STATE"
+		printf '        "CPU": "%s",\n' "$CPU"
+		printf '        "MEM": "%s",\n' "$MEM"
+		printf '        "RTIME": "%s"\n' "$RTIME"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

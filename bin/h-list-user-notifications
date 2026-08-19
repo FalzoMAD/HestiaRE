@@ -36,15 +36,15 @@ json_list() {
 		TOPIC=$(echo "$TOPIC" | sed -e "s/%quote%/'/g")
 		NOTICE=$(echo "$NOTICE" | sed -e "s/%quote%/'/g")
 		json_escape NID TOPIC NOTICE TYPE ACK PRIORITY TIME DATE
-		echo -n '    "'$NID'": {
-        "TOPIC": "'$TOPIC'",
-        "NOTICE": "'$NOTICE'",
-        "TYPE": "'$TYPE'",
-        "ACK": "'$ACK'",
-        "PRIORITY": "'$PRIORITY'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+		printf '    "%s": {\n' "$NID"
+		printf '        "TOPIC": "%s",\n' "$TOPIC"
+		printf '        "NOTICE": "%s",\n' "$NOTICE"
+		printf '        "TYPE": "%s",\n' "$TYPE"
+		printf '        "ACK": "%s",\n' "$ACK"
+		printf '        "PRIORITY": "%s",\n' "$PRIORITY"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s"\n' "$DATE"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

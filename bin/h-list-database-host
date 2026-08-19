@@ -29,19 +29,19 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list() {
 	echo '{'
 	json_escape HOST PORT type CHARSETS MAX_DB U_SYS_USERS U_DB_BASES TPL SUSPENDED TIME DATE
-	echo '    "'$HOST'": {
-        "HOST": "'$HOST'",
-        "PORT": "'$PORT'",
-        "TYPE": "'$type'",
-        "CHARSETS": "'$CHARSETS'",
-        "MAX_DB": "'$MAX_DB'",
-        "U_SYS_USERS": "'$U_SYS_USERS'",
-        "U_DB_BASES": "'$U_DB_BASES'",
-        "TPL": "'$TPL'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+	printf '    "%s": {\n' "$HOST"
+	printf '        "HOST": "%s",\n' "$HOST"
+	printf '        "PORT": "%s",\n' "$PORT"
+	printf '        "TYPE": "%s",\n' "$type"
+	printf '        "CHARSETS": "%s",\n' "$CHARSETS"
+	printf '        "MAX_DB": "%s",\n' "$MAX_DB"
+	printf '        "U_SYS_USERS": "%s",\n' "$U_SYS_USERS"
+	printf '        "U_DB_BASES": "%s",\n' "$U_DB_BASES"
+	printf '        "TPL": "%s",\n' "$TPL"
+	printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+	printf '        "TIME": "%s",\n' "$TIME"
+	printf '        "DATE": "%s"\n' "$DATE"
+	echo '    }'
 	echo '}'
 }
 

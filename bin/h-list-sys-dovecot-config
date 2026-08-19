@@ -24,19 +24,19 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	json_escape config_path config_path1 config_path2 config_path3 config_path4 config_path5 config_path6 config_path7 config_path8
-	echo '{
-    "CONFIG": {
-        "config_path": "'$config_path'",
-        "config_path1": "'$config_path1'",
-        "config_path2": "'$config_path2'",
-        "config_path3": "'$config_path3'",
-        "config_path4": "'$config_path4'",
-        "config_path5": "'$config_path5'",
-        "config_path6": "'$config_path6'",
-        "config_path7": "'$config_path7'",
-        "config_path8": "'$config_path8'"
-        }
-}'
+	echo '{'
+	echo '    "CONFIG": {'
+	printf '        "config_path": "%s",\n' "$config_path"
+	printf '        "config_path1": "%s",\n' "$config_path1"
+	printf '        "config_path2": "%s",\n' "$config_path2"
+	printf '        "config_path3": "%s",\n' "$config_path3"
+	printf '        "config_path4": "%s",\n' "$config_path4"
+	printf '        "config_path5": "%s",\n' "$config_path5"
+	printf '        "config_path6": "%s",\n' "$config_path6"
+	printf '        "config_path7": "%s",\n' "$config_path7"
+	printf '        "config_path8": "%s"\n' "$config_path8"
+	echo '        }'
+	echo '}'
 }
 
 # SHELL list function
