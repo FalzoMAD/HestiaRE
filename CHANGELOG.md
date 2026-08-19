@@ -42,6 +42,23 @@ opens above it.
   produced an archive in years. The container is a constant now, and a Vesta archive is detected,
   named in the report and refused before the first write.
 
+### Added
+
+- **A restore asks before it writes, section by section** (#707). The only question it used to ask
+  sat inside the web section, so refusing it left the account, its data directory and its home
+  behind - a customer that exists and holds nothing. Consent is collected before the first write
+  now, and the run either has it for everything it plans to do or it has not started at all. Naming
+  objects in a selector is itself the consent for that section, so the panel's per-object restore
+  and the four `h-restore-*` wrappers work exactly as before; with a terminal the run prompts per
+  section; and where nobody can be asked - the queue, the panel - the consent travels as a `CONSENT`
+  argument from a closed set (`all`, the five sections, `php-fallback`). An argument rather than an
+  environment prefix, because the queue line is executed by bash and an env prefix in front of it
+  would put operator input into a command line (#661). Sections this host cannot serve are never
+  asked about; the report already says they will be dropped.
+
+  `all` deliberately does **not** cover `php-fallback`: moving a customer's domains onto a different
+  PHP version is not "restore everything", and #591 exists because that used to happen quietly.
+
 ### Security
 
 - **The backup exclusion list is read through the hardened reader** (#706). Three places still used
