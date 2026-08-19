@@ -172,14 +172,15 @@ backup_probe() {
 	# Object names come from the member paths, one pass per subsystem rather than one tar per
 	# object: the archive is compressed, and per-object extraction would walk it N times.
 	#
-	# One name per LINE, never space separated: a customer directory can be called "my documents",
-	# and a register that splits on spaces is exactly what made the restore abort on one (#706).
+	# One name per LINE, never space separated: a home entry can be called "my documents", and a
+	# register that splits on spaces is exactly what made the restore abort on one (#706).
 	PROBE_WEB=$(sed -n 's|^\./web/\([^/]*\)/'"$PROBE_CONTAINER"'/web\.conf$|\1|p' <<< "$_members" | sort -u)
 	PROBE_MAIL=$(sed -n 's|^\./mail/\([^/]*\)/'"$PROBE_CONTAINER"'/mail\.conf$|\1|p' <<< "$_members" | sort -u)
 	PROBE_DB=$(sed -n 's|^\./db/\([^/]*\)/'"$PROBE_CONTAINER"'/db\.conf$|\1|p' <<< "$_members" | sort -u)
 	# Two expressions, not one alternation: | is the delimiter here, so \| inside the pattern is an
 	# escaped delimiter and matched nothing at all - the list came back empty and the report would
-	# have said the archive carries no customer directories.
+	# have said the archive carries no home entries. Greedy \(.*\) on purpose, so a name with a dot
+	# of its own survives: a real archive carried geekbench_claim.url.tar.zst.
 	PROBE_UDIR=$(sed -n -e 's|^\./user_dir/\(.*\)\.tar\.gz$|\1|p' -e 's|^\./user_dir/\(.*\)\.tar\.zst$|\1|p' \
 		<<< "$_members" | sort -u)
 	# dns/ is the one we never write and never restore. Zones by NAME, because for somebody moving
@@ -253,7 +254,10 @@ backup_report() {
 
 	echo "-- ARCHIVE --"
 	printf '   container %s, %s compressed\n' "$PROBE_CONTAINER" "$PROBE_MODE"
-	printf '   objects: %s web, %s mail, %s database, %s customer director%s, cron %s\n' \
+	# "home entries", not directories: h-backup-user walks `ls -a` of the home, so the archive holds
+	# plain files too - a real HestiaCP archive listed .bashrc, .profile and geekbench_claim.url
+	# next to the directories.
+	printf '   objects: %s web, %s mail, %s database, %s home entr%s, cron %s\n' \
 		"$(backup_report_count "$PROBE_WEB")" "$(backup_report_count "$PROBE_MAIL")" \
 		"$(backup_report_count "$PROBE_DB")" "$(backup_report_count "$PROBE_UDIR")" \
 		"$([ "$(backup_report_count "$PROBE_UDIR")" = 1 ] && echo y || echo ies)" "$PROBE_CRON"
