@@ -21,7 +21,9 @@ opens above it.
   these run in WAL mode and a plain copy taken mid-transaction can lose commits that are already
   durable. On the way back the archived file is verified whole before the live one is touched at
   all, so a damaged archive leaves the running webmail alone, and the replacement is a single
-  rename that carries the existing owner and mode.
+  rename that carries the existing owner and mode. Where the `sqlite3` client is absent the restore
+  declines rather than installing something it cannot check - unlike a database too broken to dump,
+  a missing client is a prerequisite one `apt` away.
 
 ### Added
 

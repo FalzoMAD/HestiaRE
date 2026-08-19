@@ -228,7 +228,16 @@ while IFS= read -r component; do
 				sqlite_ok "$dest.restore"
 				case $? in
 					0) ;;
-					2) echo "Warning!: $component: sqlite3 is missing, $name is installed unverified" ;;
+					2)
+						# The backup side may go on without the client because it cannot destroy
+						# anything; here it would replace a working store with something nobody
+						# could check. And unlike a database that is too broken to dump, the missing
+						# client is a prerequisite somebody can install - refusing costs one apt,
+						# installing blind can cost the store.
+						note "$component: sqlite3 is missing, so $name cannot be checked before it replaces a live store - install sqlite3 and run this again"
+						rm -f "$dest.restore"
+						continue
+						;;
 					*)
 						note "$component: the archived $name is not a whole sqlite database - $name left untouched"
 						rm -f "$dest.restore"

@@ -89,13 +89,21 @@ while IFS= read -r component; do
 				;;
 			sqlite:*)
 				src="${item#sqlite:}"
+				# Not everything named *.db in the store directory is a store. A stray file must not
+				# be able to stop the whole archive - that reaction belongs to a real store that
+				# cannot be secured, not to a foreign file with a matching suffix.
+				if ! sqlite_is_db "$src"; then
+					echo "Warning!: $component: $src is not a sqlite database - not backed up"
+					continue
+				fi
 				snap="$tmpdir/.stage/snap.db"
 				sqlite_snapshot "$src" "$snap"
 				case $? in
 					0) ;;
 					2)
-						# No client: copy it anyway - some backup beats none - but never silently,
-						# because the copy may have missed commits that are already durable.
+						# No client: copy it anyway - some backup beats none, and the original is
+						# untouched either way - but never silently, because the copy may have
+						# missed commits that are already durable.
 						cp -f -- "$src" "$snap" 2> /dev/null \
 							&& echo "Warning!: $component: sqlite3 is missing, $src copied without a consistency guarantee"
 						;;

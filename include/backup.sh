@@ -675,6 +675,15 @@ sqlite_snapshot() {
 	sqlite_ok "$2"
 }
 
+# sqlite_is_db FILE - does this carry sqlite's file header? Answers "is this ours at all" without
+# the client, so a foreign .db lying in the store directory can be named and passed over instead of
+# being mistaken for a store that failed.
+sqlite_is_db() {
+	# 15 bytes, not the header's full 16: the 16th is the NUL terminator, and a command substitution
+	# drops it with a warning on stderr. Comparing the 15 printable ones is the same test, quietly.
+	[ "$(head -c 15 -- "$1" 2> /dev/null)" = 'SQLite format 3' ]
+}
+
 # sqlite_ok FILE - is this a sqlite database that reads back whole? The analogue of the dump
 # completeness gate, and the reason the restore can verify BEFORE it overwrites anything.
 sqlite_ok() {
