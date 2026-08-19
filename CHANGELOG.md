@@ -140,6 +140,15 @@ opens above it.
 
 ### Fixed
 
+- **A domain carrying `CROWDSEC='yes'` no longer breaks the whole nginx config on a box without
+  CrowdSec** (#741). The per-domain fragment was written from the record and gated only on the web
+  model, so an nginx that has no bouncer got a `rewrite_by_lua_block` it cannot parse - and that
+  invalidates the entire configuration, not the one domain. Nothing looks wrong until something
+  reloads, at which point every site on the box is affected. The fragment is now intent *and*
+  capability, decided by the artefact the CrowdSec apply step installs; the record keeps its `yes`,
+  so moving back to a CrowdSec box restores the protection. Reachable on any rebuild, and the normal
+  way in is a restore between two HestiaRE hosts with different addons.
+
 - **The directory-listing switch stopped printing a `sed` error on every rebuild** (#731). It patched
   the SSL vhost as a second file, which the merged template has not produced since both blocks moved
   into one - so every unsuspend and every restore of an SSL domain wrote a "cannot read

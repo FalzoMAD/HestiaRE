@@ -244,8 +244,10 @@ crowdsec_render_domain_fragment() {
 	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
 
 	local frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf"
-	# apache-only never runs CrowdSec; make sure no stale Layer-A fragment lingers.
-	if [ "$sys" != "nginx" ]; then
+	# The field is intent, the fragment is intent AND capability: an nginx without the bouncer either
+	# cannot parse the directive at all - invalidating the WHOLE config - or answers 500 per request.
+	# Keyed on the artefact the apply step installs; leftovers of a removal go at the next rebuild (#743).
+	if [ "$sys" != "nginx" ] || [ ! -f /etc/nginx/conf.d/crowdsec_init.conf ]; then
 		rm -f "$frag"
 		return 0
 	fi
