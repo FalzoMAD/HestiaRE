@@ -116,6 +116,24 @@ record_del_field() {
 # outright rather than threaded through every path join, so this is a constant.
 BACKUP_CONTAINER='hestia'
 
+# QUEUE_JOB - the fixed text that identifies THIS job's own line in a queue pipe. Each command that
+# can be queued sets it once; the abort paths below use it instead of matching on the customer name.
+QUEUE_JOB=''
+
+# queue_drop_job PIPE - remove this job's own line, and only that one.
+#
+# The old form was `sed -i "/ $user /d"`, which deletes EVERY line carrying the name: a restore that
+# aborted took the same customer's queued backup with it, and the second job never ran and never
+# said so. Fixed-string matching, first hit only, and the name is no longer a regex.
+queue_drop_job() {
+	local _pipe="$1" _n
+	[ -n "$QUEUE_JOB" ] || return 0
+	[ -f "$_pipe" ] || return 0
+	_n=$(grep -nF -m1 -- "$QUEUE_JOB" "$_pipe" 2> /dev/null | cut -d: -f1)
+	[ -n "$_n" ] || return 0
+	sed -i "${_n}d" "$_pipe"
+}
+
 # The origin line's format number. One definition for the writer and the reader.
 BACKUP_ORIGIN_FORMAT='1'
 
@@ -556,7 +574,7 @@ local_backup() {
 	if [ "$disk_usage" -ge "$BACKUP_DISK_LIMIT" ]; then
 		rm -rf $tmpdir
 		rm -f $BACKUP/$user.log
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "Not enough disk space" | $SENDMAIL -s "$subj" "$email" "yes"
 		check_result "$E_DISK" "Not enough dsk space"
 	fi
@@ -591,7 +609,7 @@ ftp_backup() {
 	if [ ! -e "$HESTIA/conf/ftp.backup.conf" ]; then
 		error="ftp.backup.conf doesn't exist"
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_NOTEXIST"
 		return "$E_NOTEXIST"
@@ -609,7 +627,7 @@ ftp_backup() {
 	if [ -z "$HOST" ] || [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
 		error="Can't parse ftp backup configuration"
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_PARSING"
 		return "$E_PARSING"
@@ -624,7 +642,7 @@ ftp_backup() {
 	if [ -n "$ferror" ]; then
 		error="Error: can't login to ftp ftp://$USERNAME@$HOST"
 		echo "$error" | $SENDMAIL -s "$subj" $email $notify
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_CONNECT"
 		return "$E_CONNECT"
@@ -642,7 +660,7 @@ ftp_backup() {
 	if [ -n "$ftp_result" ]; then
 		error="Can't create ftp backup folder ftp://$HOST$BPATH"
 		echo "$error" | $SENDMAIL -s "$subj" $email $notify
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_FTP"
 		return "$E_FTP"
@@ -872,7 +890,7 @@ sftp_backup() {
 	if [ ! -e "$HESTIA/conf/sftp.backup.conf" ]; then
 		error="Can't open sftp.backup.conf"
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_NOTEXIST"
 		return "$E_NOTEXIST"
@@ -890,7 +908,7 @@ sftp_backup() {
 	if [ -z "$HOST" ] || [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
 		error="Can't parse sftp backup configuration"
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_PARSING"
 		return "$E_PARSING"
@@ -915,7 +933,7 @@ sftp_backup() {
 			$E_FTP) error="Can't create temp folder on sftp $HOST" ;;
 		esac
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$rc"
 		return "$rc"

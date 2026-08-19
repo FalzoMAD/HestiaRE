@@ -126,6 +126,13 @@ opens above it.
   apache2.ssl.conf" line to stderr while doing the right thing. The one `sed` already covers both
   blocks; the second only runs where a legacy pair actually exists.
 
+- **A queued job removes its own line, not every line naming the customer** (#733). The cleanup on
+  every abort path matched ` <customer> `, and since the scheduler quotes a restore's arguments the
+  pattern never matched the restore's own line - it matched the customer's queued *backup* instead.
+  So a refused restore deleted the backup that was waiting and left itself in the queue to fail
+  again on every tick, both without a word. The line is now located as fixed text by command,
+  customer and archive, and only the first hit is removed.
+
 
 - **Suspending a web domain no longer switches its forced HTTPS and HSTS off for good** (#720). The
   rebuild re-renders those switches by calling delete and then add. The add half refuses on a
