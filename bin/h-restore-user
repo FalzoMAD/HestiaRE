@@ -113,7 +113,7 @@ fi
 disk_usage=$(df $BACKUP | tail -n1 | tr ' ' '\n' | grep % | cut -f 1 -d %)
 if [ "$disk_usage" -ge "$BACKUP_DISK_LIMIT" ]; then
 	echo "Error: Not enough disk space" | $SENDMAIL -s "$subj" $email $notify
-	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_DISK" "Not enough disk space"
 fi
 
@@ -126,7 +126,7 @@ while [ "$la" -ge "$BACKUP_LA_LIMIT" ]; do
 	if [ "$i" -ge "15" ]; then
 		la_error="LoadAverage $la is above threshold"
 		echo "Error: $la_error" | $SENDMAIL -s "$subj" $email $notify
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		check_result "$E_LA" "$la_error"
 	fi
 	la=$(cat /proc/loadavg | cut -f 1 -d ' ' | cut -f 1 -d '.')
@@ -141,7 +141,7 @@ fi
 tmpdir=$(mktemp -p $BACKUP_TEMP -d)
 if [ "$?" -ne 0 ]; then
 	echo "Can't create tmp dir $tmpdir" | $SENDMAIL -s "$subj" $email $notify
-	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "Can't create tmp dir"
 fi
 
@@ -149,11 +149,16 @@ fi
 # object does not abandon the rest and does not pass as a success either.
 restore_failures=''
 
+# This run's own queue line, for the abort paths: command, customer and archive, matched as fixed
+# text. Two queued restores of the same archive for the same customer are the same job, so removing
+# either is right; a queued BACKUP for that customer is not, and used to go with it.
+QUEUE_JOB="h-restore-user '$user' '$backup'"
+
 # Read the archive once, before anything is written, and say what this host will not be able to
 # restore from it. Answers that come out DURING a run arrive after the write they were about.
 if ! backup_probe "$BACKUP/$backup" "$tmpdir/.probe"; then
 	rm -rf "$tmpdir"
-	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_PARSING" "$backup cannot be read as a backup archive"
 fi
 backup_mode="$PROBE_MODE"
@@ -163,7 +168,7 @@ backup_report | tee -a "$tmpdir/restore.log"
 # join in this file, for a panel that has not produced an archive in years.
 if [ "$PROBE_VESTA" = 'yes' ]; then
 	rm -rf "$tmpdir"
-	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_PARSING" "$backup is a Vesta archive - HestiaRE restores HestiaCP and HestiaRE archives only"
 fi
 
@@ -192,7 +197,7 @@ fi
 # customer both go. Pre-existing, tracked in #733.
 if ! restore_consent_parse "$consent"; then
 	rm -rf "$tmpdir"
-	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_INVALID" "unknown consent token in '$consent' - allowed: ${RESTORE_CONSENT_TOKENS// /, }"
 fi
 # CLI convenience only - nothing puts these on a queue line. RESTORE_ASSUME_YES maps to 'all' and
@@ -230,7 +235,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ] && [ -n "$domains" ]; then
 	# read the empty answer as "nothing is missing".
 	if [ -n "$BACKUP_PHP_UNREADABLE" ]; then
 		rm -rf "$tmpdir"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		check_result "$E_PARSING" "no archived web record for:$BACKUP_PHP_UNREADABLE - cannot tell which PHP version they need"
 	fi
 	if [ -n "$php_missing" ]; then
@@ -243,7 +248,7 @@ restore_consent_has 'php-fallback' && RESTORE_PHP_FALLBACK='yes'
 
 if [ -n "$restore_refused" ]; then
 	rm -rf "$tmpdir"
-	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_INVALID" "no consent for:$restore_refused - nothing was written. Name them in the CONSENT argument (or 'all'), select the objects to restore, or answer the prompt on a terminal"
 fi
 
@@ -264,7 +269,7 @@ if [ "$create_user" = 'yes' ]; then
 	if [ "$?" -ne 0 ]; then
 		rm -rf $tmpdir
 		echo "Can't unpack user container" | $SENDMAIL -s "$subj" $email $notify
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		check_result "$E_PARSING" "Can't unpack user container"
 	fi
 
@@ -301,7 +306,7 @@ tar xf $BACKUP/$backup -C $tmpdir ./pam
 if [ "$?" -ne 0 ]; then
 	rm -rf $tmpdir
 	echo "Can't unpack PAM container" | $SENDMAIL -s "$subj" $email $notify
-	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_PARSING" "Can't unpack PAM container"
 fi
 old_user=$(cut -f 1 -d : $tmpdir/pam/passwd)
@@ -347,7 +352,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				rm -rf $tmpdir
 				error="$domain belongs to another user"
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
 			fi
 		fi
@@ -358,7 +363,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			rm -rf $tmpdir
 			error="Can't unpack $domain web container"
 			echo "$error" | $SENDMAIL -s "$subj" $email $notify
-			sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
 			check_result "$E_PARSING" "$error"
 		fi
 
@@ -372,7 +377,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				rm -rf $tmpdir
 				error="$domain web record is not a KEY='VALUE' line - refusing to restore it"
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
 			fi
 			restore_parse_record prev_web_keys "$archived_record"
@@ -565,7 +570,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			rm -rf $tmpdir
 			error="Can't unpack $domain data tarball"
 			echo "$error" | $SENDMAIL -s "$subj" $email $notify
-			sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
 			check_result "$E_PARSING" "$error"
 		fi
 
@@ -579,7 +584,8 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		rebuild_web_domain_conf
 	done 3< <(printf '%s\n' "$domains")
 
-	# Adding user to traffic queue
+	# Adding user to traffic queue. Deleting by name is right HERE: this drops any older entry for
+	# the customer before adding one, it is not a job cleaning up after itself.
 	sed -i "/ $user /d" $CONF_DIR/queue/traffic.pipe
 	echo "$BIN/h-update-web-domains-traff $user" >> $CONF_DIR/queue/traffic.pipe
 
@@ -631,7 +637,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 				rm -rf $tmpdir
 				error="$domain belongs to another user"
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
 			fi
 		fi
@@ -643,7 +649,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 			rm -rf $tmpdir
 			error="Can't unpack $domain mail container"
 			echo "$error" | $SENDMAIL -s "$subj" $email $notify
-			sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
 			check_result "$E_PARSING" "$error"
 		fi
 
@@ -657,7 +663,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 				rm -rf $tmpdir
 				error="$domain mail record is not a KEY='VALUE' line - refusing to restore it"
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
 			fi
 			echo "$archived_record" >> $USER_DATA/mail.conf
@@ -778,7 +784,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 					rm -rf $tmpdir
 					error="Can't unpack $domain mail account container"
 					echo "$error" | $SENDMAIL -s "$subj" $email $notify
-					sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+					queue_drop_job "$CONF_DIR/queue/backup.pipe"
 					check_result "$E_PARSING" "$error"
 				fi
 
@@ -793,7 +799,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 					rm -rf $tmpdir
 					error="Can't unpack $domain mail account container"
 					echo "$error" | $SENDMAIL -s "$subj" $email $notify
-					sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+					queue_drop_job "$CONF_DIR/queue/backup.pipe"
 					check_result "$E_PARSING" "$error"
 				fi
 
@@ -889,7 +895,7 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 			rm -rf $tmpdir
 			error="Can't unpack $database database container"
 			echo "$error" | $SENDMAIL -s "$subj" $email $notify
-			sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
 			check_result "$E_PARSING" "$error"
 		fi
 
@@ -901,7 +907,7 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 				rm -rf $tmpdir
 				error="$database db record is not a KEY='VALUE' line - refusing to restore it"
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
 			fi
 			restore_parse_record prev_db_keys "$archived_record"
@@ -966,7 +972,7 @@ if [ "$cron" != 'no' ] && [ -n "$CRON_SYSTEM" ]; then
 		rm -rf $tmpdir
 		error="Can't unpack cron container"
 		echo "$error" | $SENDMAIL -s "$subj" $email $notify
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		check_result "$E_PARSING" "$error"
 	fi
 
@@ -1028,7 +1034,7 @@ if [ "$udir" != 'no' ]; then
 				rm -rf $tmpdir
 				error="Can't unpack $user_dir user dir container"
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
 			fi
 
@@ -1042,7 +1048,7 @@ if [ "$udir" != 'no' ]; then
 					rm -rf $tmpdir
 					error="Can't stop the docker companion of $user - restore would unpack over a live daemon"
 					echo "$error" | $SENDMAIL -s "$subj" $email $notify
-					sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+					queue_drop_job "$CONF_DIR/queue/backup.pipe"
 					check_result "$E_PARSING" "$error"
 				fi
 				if [ $backup_mode = 'zstd' ]; then
@@ -1054,7 +1060,7 @@ if [ "$udir" != 'no' ]; then
 					rm -rf $tmpdir
 					error="Can't unpack $user_dir user dir container"
 					echo "$error" | $SENDMAIL -s "$subj" $email $notify
-					sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+					queue_drop_job "$CONF_DIR/queue/backup.pipe"
 					check_result "$E_PARSING" "$error"
 				fi
 				continue
@@ -1075,7 +1081,7 @@ if [ "$udir" != 'no' ]; then
 				rm -rf $tmpdir
 				error="Can't unpack $user_dir user dir container"
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
 			fi
 

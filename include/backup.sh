@@ -28,10 +28,8 @@ record_line_valid() {
 	_rest="${_line%"${_line##*[! ]}"}"
 	while [ -n "$_rest" ]; do
 		[[ "$_rest" =~ $_re ]] || return 1
-		# A repeated key is refused, because the readers disagree about which one wins: the
-		# tokenizer's eval keeps the LAST assignment, sed and grep -o take the FIRST match, and
-		# record_set_field rewrites the first occurrence only. One line, two truths - and the
-		# difference is invisible in the panel, which is what makes it worth refusing outright.
+		# A repeated key is refused: the readers disagree about which wins - eval keeps the last,
+		# sed and grep -o the first - so one line would carry two truths, invisibly.
 		[ -z "${_seen_key[${BASH_REMATCH[1]}]:-}" ] || return 1
 		_seen_key[${BASH_REMATCH[1]}]=1
 		_rest="${_rest#"${BASH_REMATCH[0]}"}"
@@ -116,14 +114,34 @@ record_del_field() {
 # outright rather than threaded through every path join, so this is a constant.
 BACKUP_CONTAINER='hestia'
 
+# The text identifying a queued job - command plus the arguments that tell it apart. One per
+# queueable command.
+QUEUE_JOB=''
+
+# queue_drop_job PIPE - remove the first line QUEUE_JOB prefixes.
+#
+# A prefix, not an identity: two restores of one archive for one customer differ only in their
+# selectors, and either may go. The prefix must end at a word boundary or it also matches a longer
+# token (a.tar would take a.tar.gz, u1 would take u12), so it is padded here rather than left to
+# each caller.
+#
+# Deleting a line does not stop it running in the pass already under way: sed -i writes a new inode
+# and the running bash finishes the one it opened.
+queue_drop_job() {
+	local _pipe="$1" _job="$QUEUE_JOB" _n
+	[ -n "$_job" ] || return 0
+	[ -f "$_pipe" ] || return 0
+	case "$_job" in *"'" | *" ") ;; *) _job="$_job " ;; esac
+	_n=$(grep -nF -m1 -- "$_job" "$_pipe" 2> /dev/null | cut -d: -f1)
+	[ -n "$_n" ] || return 0
+	sed -i "${_n}d" "$_pipe"
+}
+
 # The origin line's format number. One definition for the writer and the reader.
 BACKUP_ORIGIN_FORMAT='1'
 
-# backup_write_origin PATH - state who produced this archive.
-#
-# A KEY='VALUE' line like every record, so the same grammar and the same readers apply. Additive:
-# web-system stays the preferred source for the web model, and this never becomes the thing a
-# restore decides by.
+# backup_write_origin PATH - state who produced this archive. Forensics only: web-system stays the
+# source for the web model, and nothing detects by this.
 backup_write_origin() {
 	printf "PRODUCER='hestiare' VERSION='%s' FORMAT='%s' BACKUP_MODE='%s' CREATED='%s'\n" \
 		"${VERSION//\'/}" "$BACKUP_ORIGIN_FORMAT" "${BACKUP_MODE//\'/}" "$(date '+%F %T')" > "$1"
@@ -131,11 +149,9 @@ backup_write_origin() {
 
 # backup_origin_field KEY - one field out of the probed origin line, or nothing.
 #
-# Same grammar as a record, but deliberately NOT read with parse_object_kv_list: that assigns into
-# the caller's scope, and two of the five field names - VERSION and BACKUP_MODE - are live config
-# variables here. Parsing the marker would let archive content overwrite them, which is the marker
-# deciding something through the back door. The leading space makes the first field match too, and
-# no field name is a space-delimited suffix of another, so a plain match is exact.
+# NOT read with parse_object_kv_list: that assigns into the caller's scope, and VERSION and
+# BACKUP_MODE are live config variables here - the marker would decide something through the back
+# door. The leading space lets the first field match; no field name is a suffix of another.
 backup_origin_field() {
 	sed -n "s/.*[[:space:]]$1='\([^']*\)'.*/\1/p" <<< " $PROBE_ORIGIN"
 }
@@ -250,8 +266,8 @@ backup_report() {
 		"$(backup_report_count "$PROBE_WEB")" "$(backup_report_count "$PROBE_MAIL")" \
 		"$(backup_report_count "$PROBE_DB")" "$(backup_report_count "$PROBE_UDIR")" \
 		"$([ "$(backup_report_count "$PROBE_UDIR")" = 1 ] && echo y || echo ies)" "$PROBE_CRON"
-	# The origin line describes, it never decides: where it disagrees with what the members show,
-	# the members are what the restore acts on, and the disagreement is worth seeing.
+	# The origin line describes, never decides: on a disagreement the members are what the restore
+	# acts on, and the disagreement is worth printing.
 	if [ -n "$PROBE_ORIGIN" ]; then
 		_o_mode=$(backup_origin_field BACKUP_MODE)
 		_o_fmt=$(backup_origin_field FORMAT)
@@ -266,8 +282,7 @@ backup_report() {
 			printf '   origin format %s, this host knows %s - read as far as the members allow\n' \
 				"$_o_fmt" "$BACKUP_ORIGIN_FORMAT"
 		fi
-		# A producer nobody here writes is exactly what a forensic marker is for. Still no decision:
-		# it is said, and the members are what the restore acts on.
+		# A producer nobody here writes is what a forensic marker is for. Said, not acted on.
 		_o_who=$(backup_origin_field PRODUCER)
 		if [ "$_o_who" != 'hestiare' ]; then
 			printf '   origin names a producer this host does not write: %s\n' "${_o_who:-none at all}"
@@ -412,25 +427,24 @@ backup_db_type() {
 	sed -n "s/.*[[:space:]]TYPE='\([^']*\)'.*/\1/p" <<< " $_rec"
 }
 
-# backup_db_type_supported TYPE - can this host serve that engine at all? DB_SYSTEM is a COMMA
-# LIST ('pgsql,mysql' on a HestiaCP box), so asking whether it is merely set says yes to a postgres
-# dump on a box with no postgres.
+# backup_db_type_supported TYPE - can this host serve that engine? DB_SYSTEM is a COMMA LIST
+# ('pgsql,mysql' on a HestiaCP box), so asking whether it is merely set says yes to a postgres dump
+# on a box without postgres.
 backup_db_type_supported() {
 	[ -n "$1" ] || return 1
 	[[ ",${DB_SYSTEM}," == *",$1,"* ]]
 }
 
-# Consent to write. A restore either has it for everything it plans to do, or it has not started:
-# a gate that sits inside a section leaves a half-made customer behind when it refuses.
+# Consent to write. A restore either has it for everything it plans, or it has not started: a gate
+# inside a section leaves a half-made customer behind when it refuses.
 #
-# Three ways to give it: a SELECTOR naming objects (the selection IS the consent for that section),
-# a CONSENT argument, or a prompt where there is a TTY. An argument and not an environment prefix,
-# because the queue line is run by bash and an env prefix there is operator input inside an executed
-# command line (GHSA-2xw3). A closed set and not a character class, because a character class is
-# what quietly admitted a pipe once.
+# Three ways: a SELECTOR naming objects (the selection IS the consent for that section), a CONSENT
+# argument, or a prompt where there is a TTY. An argument and not an environment prefix, because the
+# queue line is run by bash and an env prefix there is operator input inside an executed command
+# line (GHSA-2xw3); a closed set and not a character class, because a character class is what
+# quietly admitted a pipe once.
 #
-# Consenting to a section implies the account - a cron-only restore still needs the customer - and
-# implies no OTHER section.
+# Consenting to a section implies the account, and no OTHER section.
 RESTORE_CONSENT_TOKENS='all web mail db cron udir php-fallback'
 
 # restore_consent_parse LIST - validate a comma list against the closed set and remember it. An
@@ -449,10 +463,9 @@ restore_consent_parse() {
 	return 0
 }
 
-# restore_consent_has TOKEN - named directly, or through 'all'?
-#
-# 'all' covers the SECTIONS and deliberately not php-fallback: moving a customer's domains onto a
-# different PHP version is a change to what they run, not part of "restore everything".
+# restore_consent_has TOKEN - named directly, or through 'all'? 'all' covers the SECTIONS and
+# deliberately not php-fallback: moving a customer's domains onto another PHP version is a change to
+# what they run, not part of "restore everything".
 restore_consent_has() {
 	[ "$1" = 'php-fallback' ] || case "${RESTORE_CONSENT:- }" in
 		*" all "*) return 0 ;;
@@ -490,11 +503,10 @@ restore_consent_ask() {
 # and BACKUP_PHP_UNREADABLE (domains whose archived record could not be read).
 #
 # One derivation, two readers: the report asks about the whole archive, the consent step about the
-# domains this run would touch. The list is a parameter, not a default, because only the caller
-# knows which of the two it means.
+# domains this run would touch - so the list is a parameter, not a default.
 #
-# Results in globals, NOT on stdout: inside `x=$(...)` the function runs in a subshell and the
-# unreadable-record register never reaches the caller, which leaves the check below unable to fire.
+# Results in globals, NOT on stdout: inside `x=$(...)` this runs in a subshell and the unreadable
+# register never reaches the caller, leaving the check that reads it unable to fire.
 backup_php_missing() {
 	local _list="$1" _dom _rec _ver _missing='' _installed _file
 	BACKUP_PHP_UNREADABLE=''
@@ -504,8 +516,7 @@ backup_php_missing() {
 	while IFS= read -r _dom; do
 		[ -n "$_dom" ] || continue
 		# A record that is not there is a broken assumption, not a domain without a version: read as
-		# the latter it reports "nothing missing" and waves the run onto the default PHP. Collected
-		# by name so the caller can refuse rather than act on an answer nobody computed.
+		# the latter it reports "nothing missing" and waves the run onto the default PHP.
 		_file=$(backup_record_file web "$_dom")
 		if [ ! -s "$_file" ]; then
 			BACKUP_PHP_UNREADABLE="$BACKUP_PHP_UNREADABLE $_dom"
@@ -556,7 +567,7 @@ local_backup() {
 	if [ "$disk_usage" -ge "$BACKUP_DISK_LIMIT" ]; then
 		rm -rf $tmpdir
 		rm -f $BACKUP/$user.log
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "Not enough disk space" | $SENDMAIL -s "$subj" "$email" "yes"
 		check_result "$E_DISK" "Not enough dsk space"
 	fi
@@ -591,7 +602,7 @@ ftp_backup() {
 	if [ ! -e "$HESTIA/conf/ftp.backup.conf" ]; then
 		error="ftp.backup.conf doesn't exist"
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_NOTEXIST"
 		return "$E_NOTEXIST"
@@ -609,7 +620,7 @@ ftp_backup() {
 	if [ -z "$HOST" ] || [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
 		error="Can't parse ftp backup configuration"
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_PARSING"
 		return "$E_PARSING"
@@ -624,7 +635,7 @@ ftp_backup() {
 	if [ -n "$ferror" ]; then
 		error="Error: can't login to ftp ftp://$USERNAME@$HOST"
 		echo "$error" | $SENDMAIL -s "$subj" $email $notify
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_CONNECT"
 		return "$E_CONNECT"
@@ -642,7 +653,7 @@ ftp_backup() {
 	if [ -n "$ftp_result" ]; then
 		error="Can't create ftp backup folder ftp://$HOST$BPATH"
 		echo "$error" | $SENDMAIL -s "$subj" $email $notify
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_FTP"
 		return "$E_FTP"
@@ -872,7 +883,7 @@ sftp_backup() {
 	if [ ! -e "$HESTIA/conf/sftp.backup.conf" ]; then
 		error="Can't open sftp.backup.conf"
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_NOTEXIST"
 		return "$E_NOTEXIST"
@@ -890,7 +901,7 @@ sftp_backup() {
 	if [ -z "$HOST" ] || [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
 		error="Can't parse sftp backup configuration"
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$E_PARSING"
 		return "$E_PARSING"
@@ -915,7 +926,7 @@ sftp_backup() {
 			$E_FTP) error="Can't create temp folder on sftp $HOST" ;;
 		esac
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"
-		sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "$error"
 		errorcode="$rc"
 		return "$rc"
