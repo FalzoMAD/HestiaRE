@@ -130,6 +130,12 @@ backup_write_origin() {
 }
 
 # backup_origin_field KEY - one field out of the probed origin line, or nothing.
+#
+# Same grammar as a record, but deliberately NOT read with parse_object_kv_list: that assigns into
+# the caller's scope, and two of the five field names - VERSION and BACKUP_MODE - are live config
+# variables here. Parsing the marker would let archive content overwrite them, which is the marker
+# deciding something through the back door. The leading space makes the first field match too, and
+# no field name is a space-delimited suffix of another, so a plain match is exact.
 backup_origin_field() {
 	sed -n "s/.*[[:space:]]$1='\([^']*\)'.*/\1/p" <<< " $PROBE_ORIGIN"
 }
@@ -229,7 +235,7 @@ backup_local_keys() {
 # read nothing" have to look different.
 backup_report() {
 	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys _installed
-	local _o_mode _o_fmt
+	local _o_mode _o_fmt _o_who
 
 	echo "-- ARCHIVE --"
 	printf '   %s compressed\n' "$PROBE_MODE"
@@ -259,6 +265,12 @@ backup_report() {
 		if [ -n "$_o_fmt" ] && [ "$_o_fmt" != "$BACKUP_ORIGIN_FORMAT" ]; then
 			printf '   origin format %s, this host knows %s - read as far as the members allow\n' \
 				"$_o_fmt" "$BACKUP_ORIGIN_FORMAT"
+		fi
+		# A producer nobody here writes is exactly what a forensic marker is for. Still no decision:
+		# it is said, and the members are what the restore acts on.
+		_o_who=$(backup_origin_field PRODUCER)
+		if [ "$_o_who" != 'hestiare' ]; then
+			printf '   origin names a producer this host does not write: %s\n' "${_o_who:-none at all}"
 		fi
 	else
 		printf '   origin: not stated - recognised by its contents\n'
