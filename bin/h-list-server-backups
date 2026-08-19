@@ -1,0 +1,85 @@
+#!/bin/bash
+# info: list server backups and what each one holds
+# options: [FORMAT]
+#
+# example: h-list-server-backups
+#
+# Reads the archives in the backup folder rather than a record: a server backup belongs to the box,
+# so there is no per-customer conf to register it in, and the members are the finding anyway.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+format=${1-shell}
+
+if [ -z "$BACKUP" ]; then
+	BACKUP=/backup
+fi
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+components_of() { tar -tf "$1" 2> /dev/null | sed -n 's|^\./server/\([^/]*\)/.*|\1|p' | sort -u | tr '\n' ',' | sed 's/,$//'; }
+origin_of() { tar -xOf "$1" ./hestia/origin 2> /dev/null | head -n1; }
+# MB like every other lister, but rounded up: a 110 KB archive is not "0 MB", which reads as empty.
+size_mb() { echo $((($(stat -c %s "$1") + 1048575) / 1048576)); }
+
+json_list() {
+	local first=1
+	echo '{'
+	for a in "$BACKUP"/server.*.tar; do
+		[ -f "$a" ] || continue
+		name=$(basename "$a")
+		size=$(size_mb "$a")
+		comp=$(components_of "$a")
+		date=$(stat -c %y "$a" | cut -f1 -d' ')
+		time=$(stat -c %y "$a" | cut -f2 -d' ' | cut -f1 -d.)
+		json_escape name comp date time
+		[ "$first" = 1 ] || echo '    },'
+		first=0
+		printf '    "%s": {\n' "$name"
+		printf '        "SIZE": "%s",\n' "$size"
+		printf '        "COMPONENTS": "%s",\n' "$comp"
+		printf '        "TIME": "%s",\n' "$time"
+		printf '        "DATE": "%s"\n' "$date"
+	done
+	[ "$first" = 1 ] || echo '    }'
+	echo '}'
+}
+
+plain_list() {
+	for a in "$BACKUP"/server.*.tar; do
+		[ -f "$a" ] || continue
+		printf '%s\t%s\t%s\n' "$(basename "$a")" "$(size_mb "$a")" "$(components_of "$a")"
+	done
+}
+
+shell_list() {
+	for a in "$BACKUP"/server.*.tar; do
+		[ -f "$a" ] || continue
+		printf '%s\n' "$(basename "$a")"
+		printf '   %s MB, components: %s\n' "$(size_mb "$a")" "$(components_of "$a")"
+		printf '   origin: %s\n' "$(origin_of "$a")"
+	done
+}
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
+esac
+
+exit

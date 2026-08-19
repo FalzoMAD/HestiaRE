@@ -147,6 +147,33 @@ backup_write_origin() {
 		"${VERSION//\'/}" "$BACKUP_ORIGIN_FORMAT" "${BACKUP_MODE//\'/}" "$(date '+%F %T')" > "$1"
 }
 
+# The codec follows BACKUP_MODE when writing, but the member's own suffix when reading: an archive
+# written on a zstd box gets restored on whatever box holds it, whose mode is none of its business.
+backup_codec_suffix() {
+	if [ "$BACKUP_MODE" = 'zstd' ]; then echo 'zst'; else echo 'gz'; fi
+}
+# -q on both: pzstd reports every file's size on stderr, which in a restore log reads like an error.
+backup_compress() {
+	if [ "$BACKUP_MODE" = 'zstd' ]; then pzstd -q -"${BACKUP_GZIP:-4}" -; else gzip -"${BACKUP_GZIP:-4}" -; fi
+}
+backup_decompress() {
+	case "$1" in
+		*.zst) pzstd -q -dc -- "$1" ;;
+		*) gzip -dc -- "$1" ;;
+	esac
+}
+
+# backup_dump_complete FILE - does this compressed dump end in mysqldump's completion marker?
+#
+# The exit status of `mysqldump | compress > file` is the COMPRESSOR's, so a dump that died halfway
+# writes a truncated file and reports success. Measured: a killed dump has no trailing marker. Read
+# before loading as well as after writing, because the restore drops the target first - a truncated
+# dump must never be what a DROP is followed by.
+backup_dump_complete() {
+	[ -s "$1" ] || return 1
+	backup_decompress "$1" 2> /dev/null | tail -n 2 | grep -q '^-- Dump completed'
+}
+
 # backup_origin_field KEY - one field out of the probed origin line, or nothing.
 #
 # NOT read with parse_object_kv_list: that assigns into the caller's scope, and VERSION and
@@ -219,7 +246,10 @@ backup_probe() {
 # backup_report_count LIST - how many entries a probe list holds (it is newline separated, and an
 # empty string is zero entries, not one).
 backup_report_count() {
-	[ -n "$1" ] || { echo 0; return; }
+	[ -n "$1" ] || {
+		echo 0
+		return
+	}
 	grep -c . <<< "$1"
 }
 
@@ -455,15 +485,17 @@ backup_db_type_supported() {
 # Consenting to a section implies the account, and no OTHER section.
 RESTORE_CONSENT_TOKENS='all web mail db cron udir leftovers php-fallback'
 
-# restore_consent_parse LIST - validate a comma list against the closed set and remember it. An
-# unknown token is refused, never dropped: a silently ignored typo authorises less than it looks.
+# restore_consent_parse LIST [TOKENSET] - validate a comma list against a closed set and remember
+# it. An unknown token is refused, never dropped: a silently ignored typo authorises less than it
+# looks. TOKENSET is a parameter because the server restore consents to COMPONENTS, not to sections;
+# same mechanism and same wording, a different closed set.
 restore_consent_parse() {
-	local _item
+	local _item _set="${2:-$RESTORE_CONSENT_TOKENS}"
 	RESTORE_CONSENT=' '
 	[ -n "$1" ] || return 0
 	for _item in ${1//,/ }; do
 		[ -n "$_item" ] || continue
-		case " $RESTORE_CONSENT_TOKENS " in
+		case " $_set " in
 			*" $_item "*) RESTORE_CONSENT="$RESTORE_CONSENT$_item " ;;
 			*) return 1 ;;
 		esac
@@ -501,7 +533,10 @@ restore_consent_ask() {
 	if [ -t 0 ]; then
 		read -r -p "$2 [y/N] " _ans
 		case "$_ans" in
-			y | Y) RESTORE_CONSENT="$RESTORE_CONSENT$1 "; return 0 ;;
+			y | Y)
+				RESTORE_CONSENT="$RESTORE_CONSENT$1 "
+				return 0
+				;;
 		esac
 	fi
 	return 1
@@ -551,7 +586,10 @@ backup_leftovers_plan() {
 	# Each line is <mode>TAB<pattern>. 'w' means tar may read it as a wildcard, 'x' means literally.
 	# Only OUR patterns are wildcards; anything carrying a name out of the archive is literal, or a
 	# database called x* extracts xyz along with it - measured, and xyz was one this host can restore.
-	_lo() { LEFTOVERS_PATTERNS="$LEFTOVERS_PATTERNS$1"$'\t'"$2"$'\n'; LEFTOVERS_SUMMARY="$LEFTOVERS_SUMMARY$3"$'\n'; }
+	_lo() {
+		LEFTOVERS_PATTERNS="$LEFTOVERS_PATTERNS$1"$'\t'"$2"$'\n'
+		LEFTOVERS_SUMMARY="$LEFTOVERS_SUMMARY$3"$'\n'
+	}
 
 	[ -n "$PROBE_DNS" ] && _lo w './dns/*' "$(backup_report_count "$PROBE_DNS") DNS zone(s), records and zone files"
 	[ -n "$PROBE_TPL" ] && _lo w './web/*/template/*' "custom web template(s) for $(backup_report_count "$PROBE_TPL") domain(s)"
@@ -612,6 +650,64 @@ backup_leftovers_export() {
 	chown -R "$_owner:$_owner" "$_dest"
 	chmod -R u=rwX,go= "$_dest"
 	[ -z "$LEFTOVERS_FAILED" ]
+}
+
+#===========================================================================#
+#                     Server backup (#710)                                  #
+#===========================================================================#
+#
+# State that belongs to the box rather than to one customer, so no per-user archive can own it: the
+# webmail databases hold every mailbox's identities and settings in ONE table set, and copying that
+# into a customer's tar would hand them the other customers' rows.
+#
+# Components are derived from what this box actually has, so a server archive describes the box it
+# came from rather than a fixed list somebody has to keep in step.
+
+# server_components - one line per component this host can back up: NAME<TAB>WHAT
+#
+# WHAT is a space separated list of items, each either  dir:<path>  or  db:<engine>:<name>.
+server_components() {
+	local _wm _items
+
+	_items=''
+	# Only the webmail actually installed: WEBMAIL_SYSTEM is a comma list and either side may be off.
+	for _wm in ${WEBMAIL_SYSTEM//,/ }; do
+		case "$_wm" in
+			roundcube)
+				[ -d /etc/roundcube ] && _items="$_items dir:/etc/roundcube"
+				backup_db_exists mysql roundcube && _items="$_items db:mysql:roundcube"
+				;;
+			tachyon | snappymail)
+				[ -d /etc/tachyon/data ] && _items="$_items dir:/etc/tachyon/data"
+				backup_db_exists mysql tachyon && _items="$_items db:mysql:tachyon"
+				;;
+		esac
+	done
+	[ -n "$_items" ] && printf 'webmail\t%s\n' "${_items# }"
+
+	[ -f "$HESTIA/conf/hestia.conf" ] && printf 'hestia\tdir:%s\n' "$HESTIA/conf/hestia.conf"
+	[ -d "$CONF_DIR/packages" ] && printf 'packages\tdir:%s\n' "$CONF_DIR/packages"
+
+	_items=''
+	[ -d "$CONF_DIR/firewall" ] && _items="$_items dir:$CONF_DIR/firewall"
+	[ -d /etc/fail2ban/jail.d ] && _items="$_items dir:/etc/fail2ban/jail.d"
+	[ -n "$_items" ] && printf 'firewall\t%s\n' "${_items# }"
+	return 0
+}
+
+# backup_db_exists ENGINE NAME - is that database here? Asked, not assumed from a config key.
+backup_db_exists() {
+	case "$1" in
+		mysql) mysql -N -e 'SHOW DATABASES' 2> /dev/null | grep -qxF "$2" ;;
+		*) return 1 ;;
+	esac
+}
+
+# server_component_items NAME - the items of one component, or nothing if this box has no such one.
+server_component_items() {
+	server_components | while IFS=$'\t' read -r _n _i; do
+		[ "$_n" = "$1" ] && printf '%s\n' "$_i"
+	done
 }
 
 # backup_record_file KIND OBJECT - the extracted record of one object, or nothing.

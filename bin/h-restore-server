@@ -1,0 +1,260 @@
+#!/bin/bash
+# info: restore selected components of a server backup
+# options: ARCHIVE COMPONENT[,COMPONENT...] [CONSENT]
+#
+# example: h-restore-server server.2026-08-19_18-00-00.tar webmail
+# example: h-restore-server server.2026-08-19_18-00-00.tar webmail,packages all
+#
+# There is deliberately NO whole-archive verb. A server backup describes the box, so putting all of
+# it back would overwrite the configuration of a running host - every customer at once, and not the
+# kind of mistake anyone undoes. A component has to be named, or the run refuses before it writes.
+#
+# Naming a component says WHICH live state to replace, not that replacing it is intended, so each
+# one is consented to before the first write - by answering the question, or by naming the component
+# (or 'all') in CONSENT. Without a terminal there is nobody to ask and the run writes nothing.
+#
+# ARCHIVE is a basename: this reads as root, so a path argument would be a read oracle. Resolved
+# only inside the backup folder, and checked to still be there afterwards.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+archive=$1
+components=$2
+consent=$3
+
+# A member name comes out of the archive and is then used to look something up - a directory in this
+# host's item list, or a database identifier. So it has to be a plain ASCII basename.
+#
+# Deliberately NOT is_object_format_valid: that exits, so one crafted member would abort a run that
+# should merely skip it, and its [[:alnum:]] is locale dependent - the wrong property for a string
+# spliced into a sed pattern and an SQL identifier. Stricter here on purpose, not accidentally.
+member_name_ok() {
+	case "$1" in
+		'' | .* | *[!A-Za-z0-9._-]*) return 1 ;;
+	esac
+	return 0
+}
+
+# db_replace DB DUMP - make DB hold exactly what DUMP holds. Drop and recreate rather than load on
+# top: --add-drop-table only replaces the tables the dump CARRIES, so a table the archive predates
+# would survive and leave a schema that never existed. Grants live outside the schema and survive
+# the drop (measured). One derivation, two readers - the restore and the rollback below.
+db_replace() {
+	mysql -e "DROP DATABASE IF EXISTS \`$1\`; CREATE DATABASE \`$1\`" 2> /dev/null || return 1
+	backup_decompress "$2" | mysql "$1" 2> /dev/null
+}
+
+# note WHAT - remember a thing that did not come back, for the closing line and the exit status.
+note() {
+	echo "Warning!: $1"
+	problems="$problems
+  - $1"
+}
+
+# What restoring COMPONENT would replace on THIS host, as one line for the consent question.
+component_targets() {
+	local _item _out=''
+	while IFS= read -r _item; do
+		case "$_item" in
+			dir:*) _out="$_out, ${_item#dir:}" ;;
+			db:mysql:*) _out="$_out, database ${_item##*:}" ;;
+		esac
+	done < <(tr ' ' '\n' <<< "$1")
+	printf '%s' "${_out#, }"
+}
+
+if [ -z "$BACKUP" ]; then
+	BACKUP=/backup
+fi
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'ARCHIVE COMPONENT[,COMPONENT...] [CONSENT]'
+is_object_format_valid "$archive" 'backup'
+check_hestia_demo_mode
+
+if [ ! -f "$BACKUP/$archive" ]; then
+	check_result "$E_NOTEXIST" "$archive doesn't exist in '$BACKUP'"
+fi
+archive_real=$(realpath -e -- "$BACKUP/$archive" 2> /dev/null)
+backup_real=$(realpath -e -- "$BACKUP" 2> /dev/null)
+if [ -z "$archive_real" ] || [ -z "$backup_real" ] || [ "${archive_real%/*}" != "$backup_real" ]; then
+	check_result "$E_INVALID" "$archive does not resolve to a file inside '$BACKUP'"
+fi
+
+in_archive=$(tar -tf "$BACKUP/$archive" 2> /dev/null | sed -n 's|^\./server/\([^/]*\)/.*|\1|p' | sort -u)
+if [ -z "$in_archive" ]; then
+	check_result "$E_PARSING" "$archive holds no server components"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+selected=''
+for c in ${components//,/ }; do
+	[ -n "$c" ] || continue
+	is_object_format_valid "$c" 'component'
+	if ! grep -qxF "$c" <<< "$in_archive"; then
+		check_result "$E_NOTEXIST" "$archive holds no component $c - it has: $(tr '\n' ' ' <<< "$in_archive")"
+	fi
+	selected="$selected$c"$'\n'
+done
+if [ -z "$selected" ]; then
+	check_result "$E_INVALID" "name at least one component - a server backup is never restored whole"
+fi
+
+# Consent (C.5), for the same reason the user restore has it, only the stakes are higher: naming a
+# component says WHICH live state to replace, not that replacing it is intended - and the webmail
+# component carries the identities, address books and settings of every mailbox on the box. So the
+# question is asked BEFORE the first write, for every selected component, and it names the paths and
+# databases this host would actually lose. Without a terminal there is nobody to ask: the consent
+# has to arrive in the argument, or the run ends having written nothing.
+if ! restore_consent_parse "$consent" "all $(tr '\n' ' ' <<< "$in_archive")"; then
+	check_result "$E_INVALID" "consent must be a comma list of components, or 'all'"
+fi
+
+declare -A items=()
+approved=''
+# A plain `for` over the validated names, as the user restore does, and NOT a `while read` fed by a
+# process substitution: that makes the loop's stdin the fifo, so the terminal check is false and the
+# question is never put - a refusal that looks identical to a considered no.
+for component in $selected; do
+	# Once per component, not once per member: server_components asks the database engine what
+	# exists, so calling it per member is a query per member.
+	items[$component]=$(server_component_items "$component")
+	# The database clause only where there is one - a warning that does not apply to what is being
+	# asked about teaches the reader to skim the ones that do.
+	dbnote=''
+	case "${items[$component]}" in *db:*) dbnote=' (databases are dropped and recreated)' ;; esac
+	if restore_consent_ask "$component" \
+		"$component replaces the live $(component_targets "${items[$component]}") on this box$dbnote. Replace?"; then
+		approved="$approved$component"$'\n'
+	else
+		echo "Skipped $component: no consent given"
+	fi
+done
+
+if [ -z "$approved" ]; then
+	check_result "$E_INVALID" "no component was consented to - nothing has been written"
+fi
+
+tmpdir=$(mktemp -p "${BACKUP_TEMP:-$BACKUP}" -d) || check_result "$E_NOTEXIST" "Can't create tmp dir"
+trap 'rm -rf "$tmpdir"' EXIT
+chmod 700 "$tmpdir"
+
+problems=''
+echo "-- SERVER RESTORE --"
+while IFS= read -r component; do
+	[ -n "$component" ] || continue
+	# One component at a time, by exact member: the name came out of the archive, so it is never a
+	# wildcard here.
+	tar -xf "$BACKUP/$archive" -C "$tmpdir" --no-wildcards "./server/$component" 2> /dev/null
+	# Counted, because a loop that recognises nothing otherwise looks exactly like a clean run: the
+	# glob skips dot members, tar may have written nothing, a codec may be one we do not read.
+	seen=0
+	for part in "$tmpdir/server/$component"/*; do
+		[ -e "$part" ] || continue
+		# Both codecs on read whatever this box writes - the archive may come from a zstd box.
+		case "$part" in
+			*.mysql.sql.gz | *.mysql.sql.zst)
+				seen=$((seen + 1))
+				db=$(basename "$part")
+				db="${db%.mysql.sql.*}"
+				if ! member_name_ok "$db"; then
+					note "$component: $db is not a database member name - skipped, $db untouched"
+					continue
+				fi
+				if [ -z "$DB_SYSTEM" ] || ! command -v mysql > /dev/null 2>&1; then
+					note "$component: no database engine on this host - $db not restored"
+					continue
+				fi
+				# The dump must be whole BEFORE the target is dropped. Without this the codec's
+				# exit status is all we would have, and that is not the dump's.
+				if ! backup_dump_complete "$part"; then
+					note "$component: the dump of $db is truncated - $db left untouched"
+					continue
+				fi
+				# A complete dump can still fail to load - a trigger, a charset - and the target is
+				# dropped by then, so it ends up neither old nor new (measured: 17 tables became 5).
+				# Hence a copy of the live state first. The usual reason to restore a database is
+				# that it is broken, so failing to copy it does not block the restore; it removes
+				# the way back, and that is said rather than discovered afterwards.
+				rollback="$tmpdir/rollback.$db.sql.$(backup_codec_suffix)"
+				if ! { mysqldump --add-drop-table --routines --triggers --single-transaction "$db" 2> /dev/null \
+					| backup_compress > "$rollback" && backup_dump_complete "$rollback"; }; then
+					rollback=''
+					echo "Warning!: $component: no rollback copy of $db could be taken - a failed load cannot be undone"
+				fi
+				if db_replace "$db" "$part"; then
+					echo "$(date '+%F %T') $component: database $db"
+				elif [ -n "$rollback" ] && db_replace "$db" "$rollback"; then
+					note "$component: database $db did not load - rolled back to the state before this run"
+				else
+					note "$component: database $db did not load and could not be rolled back - it is now INCOMPLETE, not what it was"
+				fi
+				;;
+			*.tar.gz | *.tar.zst)
+				seen=$((seen + 1))
+				# THIS host's item list picks the destination, never the archive: an archive that
+				# named its own absolute paths would be a write primitive. The member name only
+				# looks one up.
+				name=$(basename "$part")
+				name="${name%.tar.*}"
+				if ! member_name_ok "$name"; then
+					note "$component: $name is not a component member name - skipped"
+					continue
+				fi
+				mapfile -t places < <(tr ' ' '\n' <<< "${items[$component]}" | sed -n "s|^dir:\(.*/$name\)$|\1|p")
+				if [ "${#places[@]}" -eq 0 ]; then
+					note "$component: no place on this host for $name - not restored"
+					continue
+				fi
+				# Refuse rather than pick: two dirs of one name means the mapping stopped being one
+				# to one, and unpacking into the wrong one of them is silent.
+				if [ "${#places[@]}" -gt 1 ]; then
+					note "$component: $name matches ${#places[@]} places on this host - not restored"
+					continue
+				fi
+				dest="${places[0]}"
+				backup_decompress "$part" | tar -xf - -C "$(dirname "$dest")" \
+					&& echo "$(date '+%F %T') $component: $dest" \
+					|| note "$component: $dest was not unpacked and may be incomplete"
+				;;
+		esac
+	done
+	[ "$seen" -gt 0 ] || note "$component: the archive holds nothing under this component that this host can read"
+done < <(printf '%s\n' "$approved")
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "Backup" "Server components restored from $archive: $(tr '\n' ' ' <<< "$approved")."
+
+# A run that half restored a component used to end in success, so a caller saw none of the warnings
+# above. What did not come back is repeated once at the end and carried into the exit status.
+if [ -n "$problems" ]; then
+	echo
+	echo "Not everything came back:$problems"
+	log_event "$E_PARSING" "$ARGUMENTS"
+	exit "$E_PARSING"
+fi
+
+log_event "$OK" "$ARGUMENTS"
+
+exit

@@ -14,6 +14,27 @@ opens above it.
 
 ### Added
 
+- **The state that belongs to the box has its own backup** (#710). The webmail databases hold every
+  mailbox's identities, address books and settings in one table set, so no per-customer archive can
+  carry them without carrying other customers' rows; the same is true of `hestia.conf`, the hosting
+  packages and the firewall sources. `h-backup-server` takes them, `h-list-server-backups` shows what
+  each archive holds, and `h-restore-server` puts back the components that are named. There is
+  deliberately no whole-archive verb: restoring all of it would overwrite the configuration of a
+  running host in one step, so a run without a component refuses before it writes anything. Naming a
+  component says which live state to replace, not that replacing it is intended, so each one is
+  consented to before the first write - the question names the paths and databases this host would
+  actually lose, and without a terminal the consent has to arrive in the argument or nothing is
+  written. A database is dropped and recreated rather than loaded on top, because a table the
+  archive predates would otherwise survive into a schema that never existed; a dump that did not
+  finish is refused before the target is touched, on the way in as well as on the way out, and a
+  copy of the live database is taken first so that a load which fails for some other reason is
+  rolled back instead of leaving a half-built schema. A run that did not restore everything says so
+  in a closing summary and ends in a failing exit status, rather than reporting success with the
+  detail buried in warnings. What a
+  box can back up is derived from what it actually has, never from a fixed list - a target without a
+  database engine produces a webmail component of directories and no dumps. The archive is root's
+  alone at 0600, because `/etc/roundcube` carries the `des_key` and the database password.
+
 - **An archive put into the backup folder by hand becomes visible to the panel** (#709).
   `h-add-user-backup` writes the `backup.conf` record a foreign archive never had, and writes it
   from the archive's own members rather than from its name - the name is a claim, the members are
