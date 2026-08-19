@@ -14,6 +14,16 @@ opens above it.
 
 ### Fixed
 
+- **The config repair worked against a smaller key set than the code writes** (#711). Every field a
+  command stores with `add_object_key` or `update_object_value` has to be in `syshealth_known_keys`,
+  or the repair functions call a record healthy while fields they never heard of are missing from
+  it - and `sanitize_config_file`, which clears exactly those keys between two objects, leaves the
+  rest of them set, so one domain's value can be read while another is being processed. Web records
+  gain `CROWDSEC`, `BOTLIMIT`, `ALLOW_USERS` and `LETSENCRYPT_FAIL_COUNT`; mail records gain
+  `LETSENCRYPT_FAIL_COUNT`, the six `U_SMTP_RELAY*` and the five `U_SPAM_*` fields. A value that is
+  already set is never touched, and an empty one is inert for every one of these fields - checked
+  per field rather than by analogy.
+
 - **The webmail store on a box without a database engine was not backed up** (#710). Where there is
   no engine, Roundcube keeps every mailbox's identities, address books and settings in a SQLite file
   under `/var/lib/roundcube/db/` - which is exactly the state the server backup exists for, and the
