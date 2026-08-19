@@ -57,8 +57,13 @@ fi
 if [[ "$TYPE" =~ "rclone" ]]; then
 	rclone_delete "$backup"
 fi
-if [[ "$TYPE" =~ "local" ]]; then
+# An adopted archive is the operator's own file, put into the backup folder by hand. Forgetting the
+# record is this command's job; deleting a migration source is not.
+if [[ "$TYPE" =~ "local" ]] && [ "$ADOPTED" != 'yes' ]; then
 	rm -f "$backup_folder/$2"
+fi
+if [ "$ADOPTED" = 'yes' ]; then
+	echo "$2 was adopted - the record is gone, the file is still in $backup_folder"
 fi
 
 # Deleting backup

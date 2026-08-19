@@ -14,6 +14,15 @@ opens above it.
 
 ### Added
 
+- **An archive put into the backup folder by hand becomes visible to the panel** (#709).
+  `h-add-user-backup` writes the `backup.conf` record a foreign archive never had, and writes it
+  from the archive's own members rather than from its name - the name is a claim, the members are
+  the finding. Until now a HestiaCP archive could only be restored from the command line, and
+  nothing said so. It takes a basename and no path, resolves only inside the backup folder, and the
+  record is marked `ADOPTED`: the nightly rotation prunes by age and would otherwise take the
+  migration source first, and deleting the entry now forgets the record while leaving the operator's
+  file where they put it.
+
 - **What a restore cannot put back is handed to the customer instead of left in the archive** (#708).
   DNS zones with their records and rendered zone files, custom web templates, and the raw members of
   any section this host has no subsystem for - a database dump this box cannot load among them - land

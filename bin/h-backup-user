@@ -842,8 +842,12 @@ backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 
-# Removing old backups
-tail -n $BACKUPS $USER_DATA/backup.conf > $USER_DATA/backup.conf_
+# Removing old backups. Adopted records are kept whatever their age: they point at a file this
+# rotation does not own, and dropping the record would hide the archive from the panel again.
+{
+	grep "ADOPTED='yes'" $USER_DATA/backup.conf
+	grep -v "ADOPTED='yes'" $USER_DATA/backup.conf | tail -n $BACKUPS
+} > $USER_DATA/backup.conf_ 2> /dev/null
 mv -f $USER_DATA/backup.conf_ $USER_DATA/backup.conf
 chmod 660 $USER_DATA/backup.conf
 chmod 660 $BACKUP/$user.log

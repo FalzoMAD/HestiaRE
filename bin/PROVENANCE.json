@@ -5371,6 +5371,15 @@
       "note": ""
     },
     {
+      "path": "h-add-user-backup",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-19",
+      "divergence": null,
+      "note": "Registers an archive already in the backup folder from its own members, so a HestiaCP one placed by hand becomes visible to the panel; the record is marked ADOPTED and is exempt from rotation (#709)."
+    },
+    {
       "path": "h-list-backup-contents",
       "source_type": "eigenbau",
       "upstream_path": null,
