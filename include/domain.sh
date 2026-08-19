@@ -688,7 +688,7 @@ is_mail_new() {
 	check_als=$(awk -F "ALIAS='" '{print $2}' $USER_DATA/mail/$domain.conf)
 	match=$(echo "$check_als" | cut -f 1 -d "'" | grep $1)
 	if [ -n "$match" ]; then
-		parse_object_kv_list $(grep "ALIAS='$match'" $USER_DATA/mail/$domain.conf)
+		parse_object_kv_list "$(grep "ALIAS='$match'" $USER_DATA/mail/$domain.conf)"
 		check_als=$(echo ",$ALIAS," | grep ",$1,")
 		if [ -n "$check_als" ]; then
 			check_result "$E_EXISTS" "mail alias $1 already exists"
@@ -978,7 +978,7 @@ is_domain_new() {
 }
 
 get_domain_values() {
-	parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/$1.conf)
+	parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/$1.conf)"
 }
 
 #----------------------------------------------------------#

@@ -63,7 +63,7 @@ restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" dump "$snaps
 old_uid=$(cut -f 3 -d : $tmpdir/passwd)
 
 domains=""
-parse_object_kv_list $(cat $tmpdir/backup.conf)
+parse_object_kv_list "$(cat $tmpdir/backup.conf)"
 # Split on commas without leaking IFS: it stayed ',' for the rest of the script, so every later
 # word split collapsed - that is how the generated nginx conf came out wrong. And iterate the
 # array itself: "$domains" is element 0, so a user with several domains had all but the first
@@ -101,7 +101,7 @@ for domain in "${domains[@]}"; do
 
 		# Restoring web.conf
 		if [ -z "$check_config" ]; then
-			parse_object_kv_list $(cat $tmpdir/home/$user/backup/web/$domain/hestia/web.conf)
+			parse_object_kv_list "$(cat $tmpdir/home/$user/backup/web/$domain/hestia/web.conf)"
 
 			# Deleting conflicting aliases
 			for dom_alias in ${ALIAS//,/ }; do

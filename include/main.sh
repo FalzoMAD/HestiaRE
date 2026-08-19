@@ -609,6 +609,11 @@ EOPHP
 	eval "$validated_output"
 }
 
+# QUOTE THE ARGUMENT. Both parsers are safe on what they receive, but an unquoted `$(grep ...)` is
+# split and GLOBBED by the shell before either of them sees a character: a record holding MIN='*'
+# picks up any file named MIN='...' in the working directory and the parsed value becomes that
+# filename. Reachable wherever a customer chooses the directory a h-* runs in. Unquoted also
+# collapses runs of whitespace inside a value, so TPL='two  spaces' comes back with one.
 parse_object_kv_list() {
 	_parse_object_kv_list_php "$@"
 }
@@ -738,7 +743,7 @@ get_object_value() {
 }
 
 get_object_values() {
-	parse_object_kv_list $(grep -F "$2='$3'" "$(_object_conf "$1")")
+	parse_object_kv_list "$(grep -F "$2='$3'" "$(_object_conf "$1")")"
 }
 
 # Update object value

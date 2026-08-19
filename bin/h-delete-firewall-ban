@@ -51,7 +51,7 @@ if [ "$chain" == "ALL" ]; then
 		exit
 	fi
 	grep "IP='$ip_cidr' CHAIN='" $conf | while read -r line; do
-		parse_object_kv_list $line
+		parse_object_kv_list "$line"
 
 		# sip is escaped for the SED PATTERN only - unbanip given 10.0.0.0\/8 would simply never find it.
 		sip=$(echo "$IP" | sed "s|/|\\\/|g")

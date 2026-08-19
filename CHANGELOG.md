@@ -50,6 +50,14 @@ opens above it.
   check is anchored too: unanchored, a key that is a suffix of one already in the record counted as
   present and was silently never added.
 
+- **A record is quoted on its way into the parser, at every call site** (#723). Forty-six `h-*` and
+  helper calls handed the record over unquoted, so the shell split and globbed it before either
+  parser saw a character: a cron record holding `MIN='*'` picked up any file named `MIN='...'` in
+  the working directory and the parsed value became that filename. A customer only has to create
+  one such file in a directory an admin later runs a command from. Two of the forty-six are shared
+  helpers - `get_object_values` and `get_domain_values`, the latter with 42 calling files. Unquoted
+  also collapsed runs of whitespace inside a value.
+
 - **A failing `mktemp` no longer lets the panel write into an unset path** (#703). Thirty save
   routes took `exec("mktemp")` and used `$output[0]` without checking it, so a failure produced an
   empty path: `fopen()` on it aborts the request with a fatal, and the certificate or service

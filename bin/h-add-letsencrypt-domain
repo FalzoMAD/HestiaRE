@@ -147,7 +147,7 @@ if [ -n "$mail" ]; then
 		aliases="$WEBMAIL_ALIAS.$root_domain"
 	fi
 else
-	parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+	parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)"
 
 	domain_redirect="$REDIRECT"
 	if [[ -n "$domain_redirect" ]]; then

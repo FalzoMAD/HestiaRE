@@ -89,7 +89,7 @@ source_conf $HESTIA/conf/restic.conf
 
 restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json dump $snapshot /home/$user/backup/backup.conf > /home/$user/tmp/backup.conf
 
-parse_object_kv_list $(cat /home/$user/tmp/backup.conf)
+parse_object_kv_list "$(cat /home/$user/tmp/backup.conf)"
 
 rm /home/$user/tmp/backup.conf
 # Listing data

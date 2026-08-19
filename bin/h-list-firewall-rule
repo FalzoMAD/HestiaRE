@@ -75,7 +75,7 @@ is_object_valid "$CONF_DIR/firewall/rules" 'RULE' "$rule"
 #----------------------------------------------------------#
 
 # Parsing rules
-parse_object_kv_list $(grep "RULE='$rule'" $CONF_DIR/firewall/rules.conf)
+parse_object_kv_list "$(grep "RULE='$rule'" $CONF_DIR/firewall/rules.conf)"
 
 # Listing data
 case $format in

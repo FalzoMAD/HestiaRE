@@ -55,7 +55,7 @@ if [ ! -f "$tmpdir/backup.conf" ]; then
 	fi
 fi
 
-parse_object_kv_list $(cat "$tmpdir/backup.conf")
+parse_object_kv_list "$(cat "$tmpdir/backup.conf")"
 
 # IFS was left at ',' for the rest of the script; restore it right after the split. The loop
 # relied on that leak to split $DB, so iterate the array instead.
@@ -77,14 +77,14 @@ for db in "${databases[@]}"; do
 			if [ "$?" -ne 0 ]; then
 				check_result "$E_NOTEXIST" "Unable to download user data"
 			fi
-			parse_object_kv_list $(cat "$tmpdir/db.conf")
+			parse_object_kv_list "$(cat "$tmpdir/db.conf")"
 			# @todo add support for renaming user
 			str="DB='$DB' DBUSER='$DBUSER' MD5='$MD5' HOST='$HOST'"
 			str="$str TYPE='$TYPE' CHARSET='$CHARSET' U_DISK='$U_DISK'"
 			str="$str SUSPENDED='no' TIME='$(date +%T)' DATE='$(date +%F)'"
 			echo "$str" >> $USER_DATA/db.conf
 		else
-			parse_object_kv_list $(grep -F "DB='$db'" $USER_DATA/db.conf)
+			parse_object_kv_list "$(grep -F "DB='$db'" $USER_DATA/db.conf)"
 		fi
 
 		# Download databse

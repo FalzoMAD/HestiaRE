@@ -99,7 +99,7 @@ database_set_default_ports
 #----------------------------------------------------------#
 
 # Parsing hosts
-parse_object_kv_list $(grep "HOST='$host'" $HESTIA/conf/$type.conf)
+parse_object_kv_list "$(grep "HOST='$host'" $HESTIA/conf/$type.conf)"
 
 # Listing data
 case $format in

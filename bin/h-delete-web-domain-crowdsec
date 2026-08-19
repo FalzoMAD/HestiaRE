@@ -41,7 +41,7 @@ check_hestia_demo_mode
 #                       Action                             #
 #----------------------------------------------------------#
 
-parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)"
 
 update_object_value 'web' 'DOMAIN' "$domain" '$CROWDSEC' 'no'
 

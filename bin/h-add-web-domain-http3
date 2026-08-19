@@ -58,7 +58,7 @@ check_hestia_demo_mode
 # grep -F: the domain is a literal, not a regex, so a.b.com cannot match aXb.com (#594) - and here
 # the record supplies SSL, IP and HTTP3, i.e. both gates and the fragment's IP
 # shellcheck disable=SC2046  # word splitting carries the record into KEY='v' tokens
-parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)"
 
 # http3 is a TLS transport, so it needs the SSL vhost to exist
 if [ "$SSL" != 'yes' ]; then
