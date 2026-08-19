@@ -42,16 +42,6 @@ opens above it.
   directory never arrived. The preflight names it before the first write, and the restore finishes
   everything else and then exits non-zero saying what did not come back.
 
-### Removed
-
-- **Vesta archives are refused instead of half-supported** (#707). The restore carried a container
-  variable through twenty-six path joins and a `sed` over `cron.conf` so that a `./vesta` archive
-  could be read - a permanent constraint on every path in the restore, for a panel that has not
-  produced an archive in years. The container is a constant now, and a Vesta archive is detected,
-  named in the report and refused before the first write.
-
-### Added
-
 - **A restore asks before it writes, section by section** (#707). The only question it used to ask
   sat inside the web section, so refusing it left the account, its data directory and its home
   behind - a customer that exists and holds nothing. Consent is collected before the first write
@@ -117,6 +107,14 @@ opens above it.
   quote, backslash, backtick, doublequote and newline refused; `$` stays allowed because the crypt
   hashes carry it. Mail records were appended with no check at all before. The three archive parses
   are quoted now - unquoted, the archive content word-split and globbed before the parser saw it.
+
+### Removed
+
+- **Vesta archives are refused instead of half-supported** (#707). The restore carried a container
+  variable through twenty-six path joins and a `sed` over `cron.conf` so that a `./vesta` archive
+  could be read - a permanent constraint on every path in the restore, for a panel that has not
+  produced an archive in years. The container is a constant now, and a Vesta archive is detected,
+  named in the report and refused before the first write.
 
 ### Fixed
 
