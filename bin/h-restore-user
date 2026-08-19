@@ -453,12 +453,10 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			record_set_field str CUSTOM_DOCROOT "$CUSTOM_DOCROOT"
 			record_set_field str CUSTOM_PHPROOT "$CUSTOM_PHPROOT"
 			record_set_field str U_BANDWIDTH '0'
-			# SUSPENDED is reset here but NOT in mail, and that divergence is deliberate:
-			# rebuild_mail_domain_conf honours SUSPENDED, rebuild_web_domain_conf has no suspended
-			# branch at all. A web record saying 'yes' over a vhost that is being served would be
-			# worse than losing the flag - it would look locked in the panel and not be. Giving
-			# the web rebuild that branch, and then keeping the archived value, is #720.
-			record_set_field str SUSPENDED 'no'
+			# SUSPENDED is NOT rewritten: prepare_web_domain_values renders the suspend vhost from
+			# the flag, and every writer of a vhost goes through it, so a restored 'yes' is served
+			# as locked rather than only looking locked in the panel (#720). SUSPENDED_WEB is
+			# recounted from the records by h-update-user-counters at the end of the run.
 			record_set_field str TIME "$(date +%T)"
 			record_set_field str DATE "$(date +%F)"
 			# PHP_PROFILE exists only inside the archive; live records carry it as BACKEND (#591).
