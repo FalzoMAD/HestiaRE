@@ -247,6 +247,19 @@ is_system_enabled() {
 }
 
 # User package check
+# package_key_value KEY - what this customer's own package file says for KEY, or nothing.
+#
+# The same file h-add-user seeds a new user.conf from, so this is that source of truth read again -
+# not a second opinion. KEY comes from the registry, never from input.
+package_key_value() {
+	local _pkg
+	[ -f "$USER_DATA/user.conf" ] || return 1
+	_pkg=$(sed -n "s/^PACKAGE='\(.*\)'$/\1/p" "$USER_DATA/user.conf" | head -n1)
+	[ -n "$_pkg" ] || return 1
+	[ -f "$CONF_DIR/packages/$_pkg.pkg" ] || return 1
+	sed -n "s/^$1='\(.*\)'$/\1/p" "$CONF_DIR/packages/$_pkg.pkg" | head -n1
+}
+
 is_package_full() {
 	case "$1" in
 		WEB_DOMAINS) used=$(wc -l $USER_DATA/web.conf) ;;
@@ -258,6 +271,22 @@ is_package_full() {
 	esac
 	used=$(echo "$used" | cut -f 1 -d \ )
 	limit=$(grep "^$1=" $USER_DATA/user.conf | cut -f 2 -d \')
+	# An absent or unreadable limit is a broken record, not a limit of zero - but that is how
+	# [[ n -ge "" ]] reads it, so every request was refused with a message blaming the customer's
+	# package. Measured on a user.conf with WEB_DOMAINS removed: h-add-web-domain answered
+	# "WEB_DOMAINS limit is reached" with no domains at all. Ask the package file, which is where
+	# the value came from; if that cannot answer either, a defect in the record must not present
+	# itself as a limit the customer has hit.
+	case "$limit" in
+		'unlimited') ;;
+		'' | *[!0-9]*)
+			limit=$(package_key_value "$1")
+			case "$limit" in
+				'unlimited' | *[!0-9]*) return 0 ;;
+				'') return 0 ;;
+			esac
+			;;
+	esac
 	if [ "$1" = WEB_ALIASES ]; then
 		# Used is always calculated with the new alias added
 		if [ "$limit" != 'unlimited' ] && [[ "$used" -gt "$limit" ]]; then

@@ -14,6 +14,26 @@ opens above it.
 
 ### Fixed
 
+- **A customer whose `user.conf` lost a package limit was locked out of their own package** (#711).
+  An absent or empty limit is not a limit of zero, but that is how the comparison read it, so every
+  attempt to add a web domain, mail domain, database or cron job was refused with a message blaming
+  the customer's package - measured, with no domains at all. The limit is now taken from the
+  customer's package file when the record cannot answer, and a defect in the record never presents
+  itself as a limit somebody has hit. `user.conf` repair seeds real values from that same package
+  file instead of inserting empty ones, and says so rather than guessing when the package is gone.
+
+- **`user.conf` could end up with the same key twice** (#711). The repair that ran before the
+  generic one addressed its insert with a bare `/MAIL_ACCOUNTS/`, which also matches
+  `U_MAIL_ACCOUNTS`, so `RATE_LIMIT` was written after both - and `FILE_MANAGER` after both of
+  those. Which value then won depended on the reader: `source_conf` keeps the last, `grep | head -1`
+  the first. The two repairs are now one.
+
+- **A user's login shell could be set from the caller's environment** (#711). Where the record had
+  no `SHELL`, the rebuild fell back to the ambient `$SHELL`, and where that was unset `grep -w ""`
+  matched every line of `/etc/shells` - handing `# /etc/shells: valid login shells` to `useradd`.
+  The shell now comes from the record, falls back to a named default off the curated allowlist, and
+  can never be a comment line.
+
 - **The config repair worked against a smaller key set than the code writes** (#711). Every field a
   command stores with `add_object_key` or `update_object_value` has to be in `syshealth_known_keys`,
   or the repair functions call a record healthy while fields they never heard of are missing from
