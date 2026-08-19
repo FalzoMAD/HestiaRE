@@ -277,6 +277,10 @@ echo -e "$(date "+%F %T") $user.conf" | tee -a $BACKUP/$user.log
 cp -r $USER_DATA/user.conf $tmpdir/hestia/
 # Record the web model in the archive so a cross-model restore can warn (#120)
 echo "WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'" > $tmpdir/hestia/web-system
+# Who wrote this file. Forensics only - nothing detects by it, because no archive written before
+# today carries one and a HestiaCP archive never will. Where it disagrees with what the members
+# actually show, the members win and the report says so.
+backup_write_origin "$tmpdir/hestia/origin"
 cp -r $USER_DATA/ssl $tmpdir/hestia/
 
 # The user's hosting package, so a restore onto a box that never had it can recreate it (#663). The

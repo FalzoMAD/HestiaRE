@@ -116,6 +116,24 @@ record_del_field() {
 # outright rather than threaded through every path join, so this is a constant.
 BACKUP_CONTAINER='hestia'
 
+# The origin line's format number. One definition for the writer and the reader.
+BACKUP_ORIGIN_FORMAT='1'
+
+# backup_write_origin PATH - state who produced this archive.
+#
+# A KEY='VALUE' line like every record, so the same grammar and the same readers apply. Additive:
+# web-system stays the preferred source for the web model, and this never becomes the thing a
+# restore decides by.
+backup_write_origin() {
+	printf "PRODUCER='hestiare' VERSION='%s' FORMAT='%s' BACKUP_MODE='%s' CREATED='%s'\n" \
+		"${VERSION//\'/}" "$BACKUP_ORIGIN_FORMAT" "${BACKUP_MODE//\'/}" "$(date '+%F %T')" > "$1"
+}
+
+# backup_origin_field KEY - one field out of the probed origin line, or nothing.
+backup_origin_field() {
+	sed -n "s/.*[[:space:]]$1='\([^']*\)'.*/\1/p" <<< " $PROBE_ORIGIN"
+}
+
 # backup_probe ARCHIVE WORKDIR - describe an archive. Sets PROBE_* and extracts the record members
 # into WORKDIR, so the caller can read them without unpacking the archive again.
 backup_probe() {
@@ -211,6 +229,7 @@ backup_local_keys() {
 # read nothing" have to look different.
 backup_report() {
 	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys _installed
+	local _o_mode _o_fmt
 
 	echo "-- ARCHIVE --"
 	printf '   %s compressed\n' "$PROBE_MODE"
@@ -225,8 +244,22 @@ backup_report() {
 		"$(backup_report_count "$PROBE_WEB")" "$(backup_report_count "$PROBE_MAIL")" \
 		"$(backup_report_count "$PROBE_DB")" "$(backup_report_count "$PROBE_UDIR")" \
 		"$([ "$(backup_report_count "$PROBE_UDIR")" = 1 ] && echo y || echo ies)" "$PROBE_CRON"
+	# The origin line describes, it never decides: where it disagrees with what the members show,
+	# the members are what the restore acts on, and the disagreement is worth seeing.
 	if [ -n "$PROBE_ORIGIN" ]; then
-		printf '   origin: %s\n' "$PROBE_ORIGIN"
+		_o_mode=$(backup_origin_field BACKUP_MODE)
+		_o_fmt=$(backup_origin_field FORMAT)
+		printf '   origin: %s %s, format %s, written %s\n' \
+			"$(backup_origin_field PRODUCER)" "$(backup_origin_field VERSION)" \
+			"${_o_fmt:-?}" "$(backup_origin_field CREATED)"
+		if [ -n "$_o_mode" ] && [ "$_o_mode" != "$PROBE_MODE" ]; then
+			printf '   origin says %s compression, the archive is %s - the contents decide\n' \
+				"$_o_mode" "$PROBE_MODE"
+		fi
+		if [ -n "$_o_fmt" ] && [ "$_o_fmt" != "$BACKUP_ORIGIN_FORMAT" ]; then
+			printf '   origin format %s, this host knows %s - read as far as the members allow\n' \
+				"$_o_fmt" "$BACKUP_ORIGIN_FORMAT"
+		fi
 	else
 		printf '   origin: not stated - recognised by its contents\n'
 	fi

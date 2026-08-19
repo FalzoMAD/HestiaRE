@@ -14,6 +14,14 @@ opens above it.
 
 ### Added
 
+- **An archive says who wrote it** (#707). `hestia/origin` carries producer, version, format,
+  compression mode and timestamp, and the report prints them. It is forensics, never detection:
+  no archive written before today has one and a HestiaCP archive never will, so anything keying on
+  it would be deciding by its absence. Where it disagrees with the members - it claims gzip and the
+  archive is zstd - the members are what the restore acts on and the report says both. Verified
+  inert in the other direction on a real HestiaCP 1.10.3 box: a HestiaRE archive restores there
+  cleanly and the extra member is ignored.
+
 - **A backup archive can be inspected before a restore touches anything** (#707).
   `h-list-backup-contents` reads the archive FILE rather than the `backup.conf` record, so an
   archive put into `/backup` by hand - a HestiaCP one - can be looked at at all; until now nothing
