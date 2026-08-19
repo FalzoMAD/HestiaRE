@@ -731,7 +731,10 @@ if [ "$USER" != '*' ]; then
 	set -f
 	i=0
 
-	for udir in $(ls -a | grep -E -v "^conf$|^web$|^dns$|^tmp$|^mail$|^\.\.$|^\.$"); do
+	# leftovers is what a previous restore handed over; archiving it would grow the archive over every
+	# roundtrip. A reserved name in the home from here on, like conf/web/mail/tmp - and in this fixed
+	# list rather than in backup-excludes.conf, which the customer can edit.
+	for udir in $(ls -a | grep -E -v "^conf$|^web$|^dns$|^tmp$|^mail$|^leftovers$|^\.\.$|^\.$"); do
 		exclusion=$(echo "$USER" | tr ',' '\n' | grep "^$udir$")
 		if [ -z "$exclusion" ]; then
 			((i++))

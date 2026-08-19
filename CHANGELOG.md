@@ -14,6 +14,19 @@ opens above it.
 
 ### Added
 
+- **What a restore cannot put back is handed to the customer instead of left in the archive** (#708).
+  DNS zones with their records and rendered zone files, custom web templates, and the raw members of
+  any section this host has no subsystem for - a database dump this box cannot load among them - land
+  in `~/leftovers/<timestamp>/`, owned by the customer at 0700, with the loss report beside them. A
+  dump in hand is somewhere else in minutes; inside an archive it has to be found first. `leftovers`
+  joins `conf`, `web`, `mail`, `tmp` and `dns` as a reserved name in the home: a directory a customer
+  had under that name before would stop being archived.
+
+  Same derivation as the loss report, so the two cannot drift, and the same consent rules as every
+  other section. "Nothing to hand over" is printed rather than left as silence, and a run that named
+  objects says so instead - it was asked for those, not for the rest of the archive. The directory is
+  on the backup's fixed exclusion list, so it does not grow into the next archive.
+
 - **An archive says who wrote it** (#707). `hestia/origin` carries producer, version, format,
   compression mode and timestamp, and the report prints them. It is forensics, never detection:
   no archive written before today has one and a HestiaCP archive never will, so anything keying on

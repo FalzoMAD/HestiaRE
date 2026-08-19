@@ -209,8 +209,11 @@ fi
 restore_refused=''
 # Per section: switched off, selected (which IS the consent), or asked. A section this host has no
 # subsystem for is never asked about - the report already said it will be dropped.
-for _sec in web:WEB_SYSTEM:PROBE_WEB mail:MAIL_SYSTEM:PROBE_MAIL db:DB_SYSTEM:PROBE_DB \
-	cron:CRON_SYSTEM:PROBE_CRON udir::PROBE_UDIR; do
+# One list, read twice - here and by the whole-archive test further down. A sixth section added to
+# only one of them would make a run that names just that section look like a full one.
+restore_sections='web:WEB_SYSTEM:PROBE_WEB mail:MAIL_SYSTEM:PROBE_MAIL db:DB_SYSTEM:PROBE_DB
+cron:CRON_SYSTEM:PROBE_CRON udir::PROBE_UDIR'
+for _sec in $restore_sections; do
 	_name="${_sec%%:*}"
 	_rest="${_sec#*:}"
 	_sys="${_rest%%:*}"
@@ -245,6 +248,25 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ] && [ -n "$domains" ]; then
 	fi
 fi
 restore_consent_has 'php-fallback' && RESTORE_PHP_FALLBACK='yes'
+
+# Handing the unrestorable parts to the customer writes their data - dumps, mail spools - into their
+# home, so it is a section like any other and asks like one.
+#
+# Only on a whole-archive restore. A run that names objects was asked for those; carrying out the
+# rest of the archive is not what it was asked for, and it would make the h-restore-* wrappers stop
+# on any archive that happens to hold a DNS zone.
+LEFTOVERS_PATTERNS=''
+leftovers_partial=''
+for _sec in $restore_sections; do
+	_name="${_sec%%:*}"
+	restore_consent_selector "${!_name}" && leftovers_partial='yes'
+done
+[ -n "$leftovers_partial" ] || backup_leftovers_plan
+if [ -n "$LEFTOVERS_PATTERNS" ]; then
+	restore_consent_ask 'leftovers' \
+		"Carry what this host cannot restore into $HOMEDIR/$user/leftovers/?" \
+		|| restore_refused="$restore_refused leftovers"
+fi
 
 if [ -n "$restore_refused" ]; then
 	rm -rf "$tmpdir"
@@ -298,6 +320,31 @@ if [ "$create_user" = 'yes' ]; then
 	# Creates the account with a freshly allocated uid, before anything is unpacked, so
 	# tar can resolve the archived owner name onto it.
 	rebuild_user_conf
+fi
+
+# What this host cannot restore, handed over rather than left inside the archive. Timestamped, so a
+# second restore does not overwrite the first.
+echo -e "\n-- LEFTOVERS --" | tee -a $tmpdir/restore.log
+if [ -n "$leftovers_partial" ]; then
+	# Not the same sentence as an archive with nothing in it: this run was asked for named objects,
+	# and the rest of the archive may well hold things this host cannot restore.
+	echo "$(date '+%F %T') skipped - this run restored named objects only" | tee -a $tmpdir/restore.log
+elif [ -z "$LEFTOVERS_PATTERNS" ]; then
+	# Printed, never silence: "nothing to hand over" and "the export never ran" have to look different.
+	echo "$(date '+%F %T') nothing to hand over - this host can restore everything in the archive" \
+		| tee -a $tmpdir/restore.log
+else
+	leftovers_dir="$HOMEDIR/$user/leftovers/$(date '+%F_%H-%M-%S')"
+	backup_leftovers_export "$BACKUP/$backup" "$leftovers_dir" "$user"
+	# What LANDED, not what was planned: the two differ exactly when something went wrong, and that
+	# is the moment the log must not claim the plan.
+	[ -n "$LEFTOVERS_DONE" ] \
+		&& echo "$LEFTOVERS_DONE" | sed '/^$/d;s|^|'"$(date '+%F %T')"' |' | tee -a $tmpdir/restore.log
+	if [ -n "$LEFTOVERS_FAILED" ]; then
+		echo "$LEFTOVERS_FAILED" | sed '/^$/d;s|^|'"$(date '+%F %T')"' NOT handed over: |' | tee -a $tmpdir/restore.log
+		restore_failures="$restore_failures$(printf '\n  not handed over:%s' "$(tr '\n' ';' <<< "$LEFTOVERS_FAILED" | sed 's/;$//;s/;/, /g')")"
+	fi
+	[ -n "$LEFTOVERS_DONE" ] && echo "$(date '+%F %T') -> $leftovers_dir" | tee -a $tmpdir/restore.log
 fi
 
 # Unpacking pam container
