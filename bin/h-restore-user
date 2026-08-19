@@ -1049,17 +1049,13 @@ if [ "$udir" != 'no' ]; then
 	# Unpacking user dir container
 	if [ -n "$(tar -tf $BACKUP/$backup | grep './user_dir')" ]; then
 
-		# Creating user dir restore list
-		backup_dirs=$(tar -tf $BACKUP/$backup | grep "^./user_dir")
-		if [ $backup_mode = 'zstd' ]; then
-			backup_dirs=$(echo "$backup_dirs" | grep tar.zst)
-			backup_dirs=$(echo "$backup_dirs" | cut -f 3 -d /)
-			backup_dirs=$(echo "$backup_dirs" | sed "s/.tar.zst//")
-		else
-			backup_dirs=$(echo "$backup_dirs" | grep tar.gz)
-			backup_dirs=$(echo "$backup_dirs" | cut -f 3 -d /)
-			backup_dirs=$(echo "$backup_dirs" | sed "s/.tar.gz//")
-		fi
+		# The names come from the directory the container unpacked into, NOT from `tar -t`. That
+		# prints a name carrying a backslash or a tab ESCAPED, and the per-entry extraction then
+		# asked for a file that is not there - which took the whole section down, including the
+		# entries that were fine. One pass over a compressed archive instead of one per entry, too.
+		tar xf "$BACKUP/$backup" -C "$tmpdir" --no-wildcards "./user_dir" 2> /dev/null
+		backup_dirs=$(cd "$tmpdir/user_dir" 2> /dev/null && find . -maxdepth 1 -type f -printf '%f\n' \
+			| sed -e 's/\.tar\.zst$//' -e 's/\.tar\.gz$//' | sort)
 		if [ -z "$udir" ] || [ "$udir" = '*' ]; then
 			user_dirs="$backup_dirs"
 		else
@@ -1073,16 +1069,16 @@ if [ "$udir" != 'no' ]; then
 			[ -n "$user_dir" ] || continue
 			echo -e "$(date "+%F %T") $user_dir" | tee -a $tmpdir/restore.log
 			if [ $backup_mode = 'zstd' ]; then
-				tar xf "$BACKUP/$backup" -C "$tmpdir" --no-wildcards "./user_dir/$user_dir.tar.zst"
+				udir_container="$tmpdir/user_dir/$user_dir.tar.zst"
 			else
-				tar xf "$BACKUP/$backup" -C "$tmpdir" --no-wildcards "./user_dir/$user_dir.tar.gz"
+				udir_container="$tmpdir/user_dir/$user_dir.tar.gz"
 			fi
-			if [ "$?" -ne 0 ]; then
-				rm -rf $tmpdir
-				error="Can't unpack $user_dir user dir container"
-				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				queue_drop_job "$CONF_DIR/queue/backup.pipe"
-				check_result "$E_PARSING" "$error"
+			# One entry that cannot be read is named and skipped; it used to abandon the section, so
+			# everything after it in the loop stayed behind as well.
+			if [ ! -f "$udir_container" ]; then
+				echo "Warning!: no container for home entry $user_dir - skipped" | tee -a $tmpdir/restore.log
+				restore_failures="$restore_failures$(printf '\n  home entry %s (no container in the archive)' "$user_dir")"
+				continue
 			fi
 
 			# The companion home belongs to the companion, not the customer: the customer has
@@ -1099,16 +1095,13 @@ if [ "$udir" != 'no' ]; then
 					check_result "$E_PARSING" "$error"
 				fi
 				if [ $backup_mode = 'zstd' ]; then
-					tar -I pzstd -xpf "$tmpdir/user_dir/$user_dir.tar.zst" -C "$HOMEDIR/$user"
+					tar -I pzstd -xpf "$udir_container" -C "$HOMEDIR/$user"
 				else
-					tar -xpzf "$tmpdir/user_dir/$user_dir.tar.gz" -C "$HOMEDIR/$user"
+					tar -xpzf "$udir_container" -C "$HOMEDIR/$user"
 				fi
 				if [ "$?" -ne 0 ]; then
-					rm -rf $tmpdir
-					error="Can't unpack $user_dir user dir container"
-					echo "$error" | $SENDMAIL -s "$subj" $email $notify
-					queue_drop_job "$CONF_DIR/queue/backup.pipe"
-					check_result "$E_PARSING" "$error"
+					echo "Warning!: can't unpack home entry $user_dir - skipped" | tee -a $tmpdir/restore.log
+					restore_failures="$restore_failures$(printf '\n  home entry %s (container could not be unpacked)' "$user_dir")"
 				fi
 				continue
 			fi
@@ -1116,20 +1109,14 @@ if [ "$udir" != 'no' ]; then
 			chown "$user" "$tmpdir/user_dir"
 			chown "$user" "$HOMEDIR/$user"
 			[ -e "$HOMEDIR/$user/$user_dir" ] && chown "$user" "$HOMEDIR/$user/$user_dir"
-			if [ $backup_mode = 'zstd' ]; then
-				$BIN/h-extract-fs-archive "$user" "$tmpdir/user_dir/$user_dir.tar.zst" "$HOMEDIR/$user"
-			else
-				$BIN/h-extract-fs-archive "$user" "$tmpdir/user_dir/$user_dir.tar.gz" "$HOMEDIR/$user"
-			fi
+			$BIN/h-extract-fs-archive "$user" "$udir_container" "$HOMEDIR/$user"
 			cmdstatus="$?"
 			# home stays user-owned: the pam_namespace jail needs no root flip
 			chown "$user:$user" "$HOMEDIR/$user"
 			if [ "$cmdstatus" -ne 0 ]; then
-				rm -rf $tmpdir
-				error="Can't unpack $user_dir user dir container"
-				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				queue_drop_job "$CONF_DIR/queue/backup.pipe"
-				check_result "$E_PARSING" "$error"
+				echo "Warning!: can't unpack home entry $user_dir - skipped" | tee -a $tmpdir/restore.log
+				restore_failures="$restore_failures$(printf '\n  home entry %s (container could not be unpacked)' "$user_dir")"
+				continue
 			fi
 
 			# Quoted: $user_dir comes out of the archive, and unquoted a name with a space split
