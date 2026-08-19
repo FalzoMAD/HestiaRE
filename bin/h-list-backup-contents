@@ -37,29 +37,31 @@ source $HESTIA/include/syshealth.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
+# printf with %s, never a value spliced into an echo argument: unquoted there, the shell splits and
+# globs it after json_escape has run, and what a glob substitutes never passed the escaper (#728).
 json_list() {
-	json_escape backup PROBE_CONTAINER PROBE_MODE PROBE_CRON PROBE_WEB_SYSTEM PROBE_PROXY_SYSTEM PROBE_ORIGIN
+	local kind list first item json_item
+	json_escape backup PROBE_MODE PROBE_VESTA PROBE_CRON PROBE_WEB_SYSTEM PROBE_PROXY_SYSTEM PROBE_ORIGIN
 	echo '{'
-	echo '    "'$backup'": {
-        "CONTAINER": "'$PROBE_CONTAINER'",
-        "MODE": "'$PROBE_MODE'",
-        "WEB_SYSTEM": "'$PROBE_WEB_SYSTEM'",
-        "PROXY_SYSTEM": "'$PROBE_PROXY_SYSTEM'",
-        "ORIGIN": "'$PROBE_ORIGIN'",
-        "CRON": "'$PROBE_CRON'",'
-	# The lists are newline separated on purpose - a customer directory may be called "my documents"
-	local kind list
+	printf '    "%s": {\n' "$backup"
+	printf '        "MODE": "%s",\n' "$PROBE_MODE"
+	printf '        "VESTA": "%s",\n' "$PROBE_VESTA"
+	printf '        "WEB_SYSTEM": "%s",\n' "$PROBE_WEB_SYSTEM"
+	printf '        "PROXY_SYSTEM": "%s",\n' "$PROBE_PROXY_SYSTEM"
+	printf '        "ORIGIN": "%s",\n' "$PROBE_ORIGIN"
+	printf '        "CRON": "%s",\n' "$PROBE_CRON"
+	# The lists are newline separated on purpose - a home entry may be called "my documents"
 	for kind in WEB MAIL DB UDIR DNS PACKAGES; do
 		list="PROBE_$kind"
-		echo -n '        "'$kind'": ['
-		local first=1 item
+		printf '        "%s": [' "$kind"
+		first=1
 		while IFS= read -r item; do
 			[ -n "$item" ] || continue
-			[ "$first" = 1 ] || echo -n ', '
+			[ "$first" = 1 ] || printf ', '
 			first=0
 			json_item="$item"
 			json_escape json_item
-			echo -n '"'$json_item'"'
+			printf '"%s"' "$json_item"
 		done <<< "${!list}"
 		echo '],'
 	done

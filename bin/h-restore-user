@@ -154,9 +154,17 @@ if ! backup_probe "$BACKUP/$backup" "$tmpdir/.probe"; then
 	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
 	check_result "$E_PARSING" "$backup cannot be read as a backup archive"
 fi
-backup_system="$PROBE_CONTAINER"
 backup_mode="$PROBE_MODE"
 backup_report | tee -a "$tmpdir/restore.log"
+
+# Refused before the first write. Vesta support was one variable threaded through twenty path joins
+# plus a sed over cron.conf, kept alive for a panel nothing has produced an archive from in years -
+# a permanent constraint on the restore for a case that cannot occur. Detected, named, refused.
+if [ "$PROBE_VESTA" = 'yes' ]; then
+	rm -rf "$tmpdir"
+	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	check_result "$E_PARSING" "$backup is a Vesta archive - HestiaRE restores HestiaCP and HestiaRE archives only"
+fi
 
 # Restoring user account
 if [ "$create_user" = 'yes' ]; then
@@ -171,7 +179,7 @@ if [ "$create_user" = 'yes' ]; then
 	echo -e "$(date "+%F %T") $user" | tee -a $tmpdir/restore.log
 
 	# Unpacking user container
-	tar xf "$BACKUP/$backup" -C "$tmpdir" --no-wildcards "./$backup_system" 2> /dev/null
+	tar xf "$BACKUP/$backup" -C "$tmpdir" --no-wildcards "./$BACKUP_CONTAINER" 2> /dev/null
 	if [ "$?" -ne 0 ]; then
 		rm -rf $tmpdir
 		echo "Can't unpack user container" | $SENDMAIL -s "$subj" $email $notify
@@ -181,16 +189,16 @@ if [ "$create_user" = 'yes' ]; then
 
 	# Restoring user.conf
 	mkdir $USER_DATA
-	cp $tmpdir/$backup_system/user.conf $USER_DATA/
-	cp -r $tmpdir/$backup_system/ssl $USER_DATA/ > /dev/null 2>&1
-	cp $tmpdir/$backup_system/backup-excludes.conf $USER_DATA/ > /dev/null 2>&1
+	cp $tmpdir/$BACKUP_CONTAINER/user.conf $USER_DATA/
+	cp -r $tmpdir/$BACKUP_CONTAINER/ssl $USER_DATA/ > /dev/null 2>&1
+	cp $tmpdir/$BACKUP_CONTAINER/backup-excludes.conf $USER_DATA/ > /dev/null 2>&1
 
 	# The user's hosting package, if the archive carried one (#663). ADD ONLY: a package of that name
 	# already on this box is left exactly as it is, even if its values differ - the admin owns the
 	# target definition, and a restore may never rewrite it. Without this a custom package missing on
 	# the target left the user pointing at a .pkg that is not there.
-	if [ -d "$tmpdir/$backup_system/packages" ]; then
-		for _pkg in "$tmpdir/$backup_system/packages/"*; do
+	if [ -d "$tmpdir/$BACKUP_CONTAINER/packages" ]; then
+		for _pkg in "$tmpdir/$BACKUP_CONTAINER/packages/"*; do
 			[ -e "$_pkg" ] || continue
 			_dest="$CONF_DIR/packages/$(basename "$_pkg")"
 			if [ -e "$_dest" ]; then
@@ -225,9 +233,9 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 
 	# Cross-model restore banner (#120): the web configs are regenerated for THIS host's
 	# model; if the archive was made under a different model, custom includes may not apply.
-	if [ -f "$tmpdir/$backup_system/web-system" ]; then
-		bk_web=$(sed -n "s/.*WEB_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$backup_system/web-system")
-		bk_proxy=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$backup_system/web-system")
+	if [ -f "$tmpdir/$BACKUP_CONTAINER/web-system" ]; then
+		bk_web=$(sed -n "s/.*WEB_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$BACKUP_CONTAINER/web-system")
+		bk_proxy=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$BACKUP_CONTAINER/web-system")
 		if [ "$bk_web" != "$WEB_SYSTEM" ] || [ "$bk_proxy" != "$PROXY_SYSTEM" ]; then
 			echo "Warning!: backup web model (WEB_SYSTEM='$bk_web' PROXY_SYSTEM='$bk_proxy') differs from this host (WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'); web configs are regenerated for this host - review any custom nginx/apache includes." | tee -a "$tmpdir/restore.log"
 		fi
@@ -261,9 +269,9 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		php_missing=''
 		# One tar pass for every record, not one per domain - the archive is zstd, so per-domain
 		# extraction would decompress it N times before the restore even starts.
-		tar -xf "$BACKUP/$backup" -C "$tmpdir" --wildcards "./web/*/$backup_system/web.conf" 2> /dev/null
+		tar -xf "$BACKUP/$backup" -C "$tmpdir" --wildcards "./web/*/$BACKUP_CONTAINER/web.conf" 2> /dev/null
 		for pf_dom in $domains; do
-			pf_rec=$(cat "$tmpdir/web/$pf_dom/$backup_system/web.conf" 2> /dev/null)
+			pf_rec=$(cat "$tmpdir/web/$pf_dom/$BACKUP_CONTAINER/web.conf" 2> /dev/null)
 			pf_ver=$(sed -n "s/.*PHP_VERSION='\([^']*\)'.*/\1/p" <<< "$pf_rec")
 			[ -z "$pf_ver" ] && pf_ver=$(sed -n "s/.*BACKEND='PHP-\([0-9]*\)_\([0-9]*\)'.*/\1.\2/p" <<< "$pf_rec")
 			{ [ -z "$pf_ver" ] || [ "$pf_ver" = 'none' ]; } && continue
@@ -333,7 +341,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			# The archived line is the record. It is read once, gated, and then edited in place -
 			# quoted at the call, because unquoted it would word-split and GLOB before the tokenizer
 			# ever sees it.
-			archived_record=$(head -n1 "$tmpdir/web/$domain/$backup_system/web.conf")
+			archived_record=$(head -n1 "$tmpdir/web/$domain/$BACKUP_CONTAINER/web.conf")
 			if ! record_line_valid "$archived_record"; then
 				rm -rf $tmpdir
 				error="$domain web record is not a KEY='VALUE' line - refusing to restore it"
@@ -413,8 +421,8 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				# Globs rather than parsing ls: the names are archive-controlled, and the old
 				# form also spliced $domain unquoted into a grep -E pattern, where its dots are
 				# wildcards - a.b.com's certificate would be copied for aXb.com.
-				if [ -f "$tmpdir/web/$domain/$backup_system/$domain.crt" ]; then
-					for crt in "$tmpdir/web/$domain/$backup_system/$domain."{crt,key,ca,pem}; do
+				if [ -f "$tmpdir/web/$domain/$BACKUP_CONTAINER/$domain.crt" ]; then
+					for crt in "$tmpdir/web/$domain/$BACKUP_CONTAINER/$domain."{crt,key,ca,pem}; do
 						[ -f "$crt" ] || continue
 						cp -f "$crt" "$USER_DATA/ssl/"
 					done
@@ -622,7 +630,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		# no remaps, because rebuild_mail_domain_conf honours SUSPENDED and the mail timestamps are
 		# the archived ones by long-standing behaviour.
 		if [ -z "$check_config" ]; then
-			archived_record=$(head -n1 "$tmpdir/mail/$domain/$backup_system/mail.conf")
+			archived_record=$(head -n1 "$tmpdir/mail/$domain/$BACKUP_CONTAINER/mail.conf")
 			if ! record_line_valid "$archived_record"; then
 				rm -rf $tmpdir
 				error="$domain mail record is not a KEY='VALUE' line - refusing to restore it"
@@ -634,9 +642,9 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		fi
 
 		# Restoring DKIM
-		if [ -e "$tmpdir/mail/$domain/$backup_system/$domain.pem" ]; then
-			cp -f $tmpdir/mail/$domain/$backup_system/$domain.pem $USER_DATA/mail/
-			cp -f $tmpdir/mail/$domain/$backup_system/$domain.pub $USER_DATA/mail/
+		if [ -e "$tmpdir/mail/$domain/$BACKUP_CONTAINER/$domain.pem" ]; then
+			cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/$domain.pem $USER_DATA/mail/
+			cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/$domain.pub $USER_DATA/mail/
 		fi
 
 		# Restore SSL
@@ -651,12 +659,12 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 			fi
 
 			# Add certificate to Hestia user configuration data directory
-			if [ -f $tmpdir/mail/$domain/$backup_system/ssl/$domain.crt ]; then
-				cp -f $tmpdir/mail/$domain/$backup_system/ssl/$domain.crt $USER_DATA/ssl/mail.$domain.crt
-				cp -f $tmpdir/mail/$domain/$backup_system/ssl/$domain.key $USER_DATA/ssl/mail.$domain.key
-				cp -f $tmpdir/mail/$domain/$backup_system/ssl/$domain.crt $USER_DATA/ssl/mail.$domain.pem
-				if [ -e "$tmpdir/mail/$domain/$backup_system/ssl/$domain.ca" ]; then
-					cp -f $tmpdir/mail/$domain/$backup_system/ssl/$domain.ca $USER_DATA/ssl/mail.$domain.ca
+			if [ -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/ssl/$domain.crt ]; then
+				cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/ssl/$domain.crt $USER_DATA/ssl/mail.$domain.crt
+				cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/ssl/$domain.key $USER_DATA/ssl/mail.$domain.key
+				cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/ssl/$domain.crt $USER_DATA/ssl/mail.$domain.pem
+				if [ -e "$tmpdir/mail/$domain/$BACKUP_CONTAINER/ssl/$domain.ca" ]; then
+					cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/ssl/$domain.ca $USER_DATA/ssl/mail.$domain.ca
 					echo >> $USER_DATA/ssl/mail.$domain.pem
 					cat $USER_DATA/ssl/mail.$domain.ca >> $USER_DATA/ssl/mail.$domain.pem
 				fi
@@ -727,7 +735,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		fi
 
 		# Restoring email accounts
-		cp -f $tmpdir/mail/$domain/$backup_system/$domain.conf $USER_DATA/mail/
+		cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/$domain.conf $USER_DATA/mail/
 
 		domain_idn=$domain
 		format_domain_idn
@@ -872,7 +880,7 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 			# Same shape as web: the archived line is the record, only the named fields move.
 			# The hand list here happens to agree with today's key set - which is exactly how the
 			# web one looked before two fields were added and nobody came back to it.
-			archived_record=$(head -n1 "$tmpdir/db/$database/$backup_system/db.conf")
+			archived_record=$(head -n1 "$tmpdir/db/$database/$BACKUP_CONTAINER/db.conf")
 			if ! record_line_valid "$archived_record"; then
 				rm -rf $tmpdir
 				error="$database db record is not a KEY='VALUE' line - refusing to restore it"
@@ -952,11 +960,6 @@ if [ "$cron" != 'no' ] && [ -n "$CRON_SYSTEM" ]; then
 		echo -e "$(date "+%F %T") $jobs cron job" | tee -a $tmpdir/restore.log
 	else
 		echo -e "$(date "+%F %T") $jobs cron jobs" | tee -a $tmpdir/restore.log
-	fi
-
-	# Replace paths from vesta to hestia
-	if [ "$backup_system" == 'vesta' ] && [ "$user" == "$ROOT_USER" ]; then
-		sed -i 's/vesta/hestia/g' $tmpdir/cron/cron.conf
 	fi
 
 	# Restoring cron jobs
@@ -1060,10 +1063,14 @@ if [ "$udir" != 'no' ]; then
 				check_result "$E_PARSING" "$error"
 			fi
 
-			# Re-chowning files if uid differs
+			# Re-chowning files if uid differs. Quoted: $user_dir comes out of the archive, and #706
+			# fixed the loop that reads it without fixing this consumer inside it - on the real
+			# HestiaCP archive the pass ran as `find /home/alpha/my documents` and errored out, so
+			# for that entry the repair simply did not happen. Harmless there because the unpack
+			# resolves ownership by name, which is exactly what makes it easy to miss.
 			if [ "$old_uid" -ne "$new_uid" ]; then
-				find $HOMEDIR/$user/$user_dir -user $old_uid \
-					-exec chown -h $user:$user {} \;
+				find "$HOMEDIR/$user/$user_dir" -user "$old_uid" \
+					-exec chown -h "$user:$user" {} \;
 			fi
 		done 3< <(printf '%s\n' "$user_dirs")
 	fi

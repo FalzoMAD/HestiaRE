@@ -149,13 +149,18 @@ record_del_field() {
 # step by hand. That is the whole point: a list is what made the restore lose fields in the first
 # place.
 
+# The one container directory an archive may carry its records in. Vesta wrote './vesta' here and
+# the inherited code threaded the choice through twenty path joins; HestiaRE restores only './hestia'
+# and refuses the other outright, so this is a constant and the paths below say so.
+BACKUP_CONTAINER='hestia'
+
 # backup_probe ARCHIVE WORKDIR - describe an archive. Sets PROBE_* and extracts the record members
 # into WORKDIR, so the caller can read them without unpacking the archive again.
 backup_probe() {
 	local _arc="$1" _wd="$2" _members _dir
 
-	PROBE_CONTAINER='hestia'
 	PROBE_MODE='gzip'
+	PROBE_VESTA='no'
 	PROBE_WEB='' PROBE_MAIL='' PROBE_DB='' PROBE_UDIR='' PROBE_DNS=''
 	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM=''
 	PROBE_ORIGIN='' PROBE_RECORDS="$_wd"
@@ -166,7 +171,13 @@ backup_probe() {
 
 	# Feature detection, never a marker: a HestiaCP archive and every HestiaRE archive written so far
 	# carry no origin line at all, so anything that keyed on one would be deciding by its absence.
-	grep -qx './vesta/' <<< "$_members" || grep -qx './vesta' <<< "$_members" && PROBE_CONTAINER='vesta'
+	#
+	# Vesta is detected only in order to REFUSE it, and the refusal is the caller's to make - a probe
+	# describes, it does not decide. Written as an if: an unparenthesised `a || b && c` is one appended
+	# alternative away from silently changing meaning, and this file argues against exactly that class.
+	if grep -qx './vesta/' <<< "$_members" || grep -qx './vesta' <<< "$_members"; then
+		PROBE_VESTA='yes'
+	fi
 	grep -qx './.zstd' <<< "$_members" && PROBE_MODE='zstd'
 
 	# Object names come from the member paths, one pass per subsystem rather than one tar per
@@ -174,9 +185,9 @@ backup_probe() {
 	#
 	# One name per LINE, never space separated: a home entry can be called "my documents", and a
 	# register that splits on spaces is exactly what made the restore abort on one (#706).
-	PROBE_WEB=$(sed -n 's|^\./web/\([^/]*\)/'"$PROBE_CONTAINER"'/web\.conf$|\1|p' <<< "$_members" | sort -u)
-	PROBE_MAIL=$(sed -n 's|^\./mail/\([^/]*\)/'"$PROBE_CONTAINER"'/mail\.conf$|\1|p' <<< "$_members" | sort -u)
-	PROBE_DB=$(sed -n 's|^\./db/\([^/]*\)/'"$PROBE_CONTAINER"'/db\.conf$|\1|p' <<< "$_members" | sort -u)
+	PROBE_WEB=$(sed -n 's|^\./web/\([^/]*\)/'"$BACKUP_CONTAINER"'/web\.conf$|\1|p' <<< "$_members" | sort -u)
+	PROBE_MAIL=$(sed -n 's|^\./mail/\([^/]*\)/'"$BACKUP_CONTAINER"'/mail\.conf$|\1|p' <<< "$_members" | sort -u)
+	PROBE_DB=$(sed -n 's|^\./db/\([^/]*\)/'"$BACKUP_CONTAINER"'/db\.conf$|\1|p' <<< "$_members" | sort -u)
 	# Two expressions, not one alternation: | is the delimiter here, so \| inside the pattern is an
 	# escaped delimiter and matched nothing at all - the list came back empty and the report would
 	# have said the archive carries no home entries. Greedy \(.*\) on purpose, so a name with a dot
@@ -187,21 +198,21 @@ backup_probe() {
 	# off HestiaCP the count is not the answer to the question they are actually asking.
 	PROBE_DNS=$(sed -n 's|^\./dns/\([^/]*\)/.*|\1|p' <<< "$_members" | sort -u)
 	grep -qx "\./cron/cron\.conf" <<< "$_members" && PROBE_CRON='yes'
-	PROBE_PACKAGES=$(sed -n "s|^\./$PROBE_CONTAINER/packages/\(.*\)\.pkg$|\1|p" <<< "$_members" | sort -u)
+	PROBE_PACKAGES=$(sed -n "s|^\./$BACKUP_CONTAINER/packages/\(.*\)\.pkg$|\1|p" <<< "$_members" | sort -u)
 
 	# One extraction for every record member there is. --wildcards needs the pattern quoted, and a
 	# pattern that matches nothing is not an error here: an archive without a mail section is a fact
 	# to report, not a failure to read.
 	mkdir -p "$_wd" || return 1
 	tar -xf "$_arc" -C "$_wd" --wildcards --no-wildcards-match-slash \
-		"./$PROBE_CONTAINER/user.conf" "./$PROBE_CONTAINER/web-system" "./$PROBE_CONTAINER/origin" \
+		"./$BACKUP_CONTAINER/user.conf" "./$BACKUP_CONTAINER/web-system" "./$BACKUP_CONTAINER/origin" \
 		2> /dev/null || true
 	tar -xf "$_arc" -C "$_wd" --wildcards \
-		"./$PROBE_CONTAINER/packages/*" "./web/*/$PROBE_CONTAINER/web.conf" \
-		"./mail/*/$PROBE_CONTAINER/mail.conf" "./db/*/$PROBE_CONTAINER/db.conf" \
+		"./$BACKUP_CONTAINER/packages/*" "./web/*/$BACKUP_CONTAINER/web.conf" \
+		"./mail/*/$BACKUP_CONTAINER/mail.conf" "./db/*/$BACKUP_CONTAINER/db.conf" \
 		"./cron/cron.conf" 2> /dev/null || true
 
-	_dir="$_wd/$PROBE_CONTAINER"
+	_dir="$_wd/$BACKUP_CONTAINER"
 	if [ -f "$_dir/web-system" ]; then
 		PROBE_WEB_SYSTEM=$(sed -n "s/.*WEB_SYSTEM='\([^']*\)'.*/\1/p" "$_dir/web-system")
 		PROBE_PROXY_SYSTEM=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$_dir/web-system")
@@ -231,6 +242,14 @@ backup_report_count() {
 # table in h-restore-user, and this is the second.
 backup_local_keys() {
 	local _kind="$1" _f
+	# If the user directory itself is not there, the second source did not find "no keys" - it looked
+	# in the wrong place, and the caller would get a smaller reference set with no sign of it. Measured
+	# per source on a live box: the registry knows neither CROWDSEC nor BOTLIMIT, and the live records
+	# only know them once some domain actually uses one, so a silently missing source really does
+	# change the answer. Loud, not silent.
+	if [ ! -d "$CONF_DIR/users" ]; then
+		echo "Warning!: $CONF_DIR/users is not there - the live-record key source read nothing" >&2
+	fi
 	{
 		syshealth_known_keys "$_kind" 2> /dev/null | tr ' ' '\n'
 		for _f in "$CONF_DIR"/users/*/"$_kind.conf"; do
@@ -250,10 +269,19 @@ backup_local_keys() {
 # sides actually use. An empty report is PRINTED, never left as silence - "nothing falls away" and
 # "the probe read nothing" have to be distinguishable, and they were not before.
 backup_report() {
-	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys
+	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys _installed
 
 	echo "-- ARCHIVE --"
-	printf '   container %s, %s compressed\n' "$PROBE_CONTAINER" "$PROBE_MODE"
+	printf '   %s compressed\n' "$PROBE_MODE"
+	# Said here, and refused by the caller - the restore aborts on it before the first write. Nothing
+	# below is printed for one: every object count is derived from the ./hestia container, so a Vesta
+	# archive would show 0 web, 0 mail and then "nothing falls away" about a file we will not read at
+	# all. An empty report has to mean the archive is clean, never that the probe looked in the wrong
+	# place.
+	if [ "$PROBE_VESTA" = 'yes' ]; then
+		printf '   VESTA archive - HestiaRE does not restore these, and this one will be refused\n'
+		return 0
+	fi
 	# "home entries", not directories: h-backup-user walks `ls -a` of the home, so the archive holds
 	# plain files too - a real HestiaCP archive listed .bashrc, .profile and geekbench_claim.url
 	# next to the directories.
@@ -334,7 +362,12 @@ backup_report() {
 
 	# Templates and PHP versions, per web record. accept_web_template is asked, not re-implemented -
 	# a second copy of the mapping table is a second thing to keep in step.
+	#
+	# The installed PHP list is read ONCE. It is the same answer for every domain, and an archive with
+	# forty web domains otherwise forks h-list-sys-php forty times in a preflight that runs before
+	# every restore.
 	_missing=''
+	_installed=" $($BIN/h-list-sys-php plain 2> /dev/null | tr '\n' ' ') "
 	while IFS= read -r _obj; do
 		[ -n "$_obj" ] || continue
 		_rec=$(head -n1 "$(backup_record_file web "$_obj")" 2> /dev/null) || continue
@@ -343,6 +376,9 @@ backup_report() {
 			_tpl=$(sed -n "s/.*[[:space:]]${_n%%:*}='\([^']*\)'.*/\1/p" <<< " $_rec")
 			[ -n "$_tpl" ] || continue
 			read -r _eff _ < <(accept_web_template "${_n#*:}" "$_tpl" 2> /dev/null)
+			# An empty answer is not a remap to nothing: report only a real replacement, so a role
+			# this model does not have cannot produce a "proxy template caching -> " line.
+			[ -n "$_eff" ] || continue
 			[ "$_eff" = "$_tpl" ] && continue
 			_found=1
 			printf '   %s: %s template %s -> %s\n' "$_obj" "${_n#*:}" "$_tpl" "$_eff"
@@ -350,7 +386,7 @@ backup_report() {
 		_ver=$(sed -n "s/.*PHP_VERSION='\([^']*\)'.*/\1/p" <<< "$_rec")
 		[ -z "$_ver" ] && _ver=$(sed -n "s/.*BACKEND='PHP-\([0-9]*\)_\([0-9]*\)'.*/\1.\2/p" <<< "$_rec")
 		{ [ -z "$_ver" ] || [ "$_ver" = 'none' ]; } && continue
-		[[ " $($BIN/h-list-sys-php plain 2> /dev/null | tr '\n' ' ') " == *" $_ver "* ]] || _missing="$_missing $_ver"
+		[[ "$_installed" == *" $_ver "* ]] || _missing="$_missing $_ver"
 	done <<< "$PROBE_WEB"
 	if [ -n "$_missing" ]; then
 		_found=1
@@ -384,9 +420,9 @@ backup_report() {
 	# Package limits from a box that has subsystems this one does not (HestiaCP's DNS_DOMAINS and
 	# friends). Derived by comparing key sets, so a future divergence shows up without an edit here.
 	for _pkg in $PROBE_PACKAGES; do
-		[ -f "$PROBE_RECORDS/$PROBE_CONTAINER/packages/$_pkg.pkg" ] || continue
+		[ -f "$PROBE_RECORDS/$BACKUP_CONTAINER/packages/$_pkg.pkg" ] || continue
 		_local=" $(cat "$CONF_DIR/packages/"*.pkg 2> /dev/null | grep -o "^[A-Z][A-Z0-9_]*=" | tr -d '=' | sort -u | tr '\n' ' ') "
-		_unknown=$(grep -o "^[A-Z][A-Z0-9_]*=" "$PROBE_RECORDS/$PROBE_CONTAINER/packages/$_pkg.pkg" | tr -d '=' | sort -u \
+		_unknown=$(grep -o "^[A-Z][A-Z0-9_]*=" "$PROBE_RECORDS/$BACKUP_CONTAINER/packages/$_pkg.pkg" | tr -d '=' | sort -u \
 			| while IFS= read -r _tpl; do [[ "$_local" == *" $_tpl "* ]] || printf ' %s' "$_tpl"; done)
 		if [ -n "$_unknown" ]; then
 			_found=1
@@ -418,10 +454,10 @@ backup_db_type_supported() {
 # backup_record_file KIND OBJECT - the extracted record of one object, or nothing.
 backup_record_file() {
 	case "$1" in
-		web) echo "$PROBE_RECORDS/web/$2/$PROBE_CONTAINER/web.conf" ;;
-		mail) echo "$PROBE_RECORDS/mail/$2/$PROBE_CONTAINER/mail.conf" ;;
-		db) echo "$PROBE_RECORDS/db/$2/$PROBE_CONTAINER/db.conf" ;;
-		user) echo "$PROBE_RECORDS/$PROBE_CONTAINER/user.conf" ;;
+		web) echo "$PROBE_RECORDS/web/$2/$BACKUP_CONTAINER/web.conf" ;;
+		mail) echo "$PROBE_RECORDS/mail/$2/$BACKUP_CONTAINER/mail.conf" ;;
+		db) echo "$PROBE_RECORDS/db/$2/$BACKUP_CONTAINER/db.conf" ;;
+		user) echo "$PROBE_RECORDS/$BACKUP_CONTAINER/user.conf" ;;
 	esac
 }
 
