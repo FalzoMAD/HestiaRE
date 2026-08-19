@@ -79,20 +79,49 @@ if [ "$PROBE_VESTA" = 'yes' ]; then
 	check_result "$E_PARSING" "$archive is a Vesta archive - HestiaRE restores HestiaCP and HestiaRE archives only"
 fi
 
-# Every field out of the members. A comma list, and the probe lists are newline separated because a
-# home entry may carry a space - which the record cannot, so such an entry is named in the log
-# instead of quietly corrupting the line.
-list() { tr '\n' ',' <<< "$1" | sed 's/,$//'; }
-size=$(du -shm "$BACKUP/$archive" | cut -f1)
+# Every field out of the members. The record field IS a comma list, so an object whose own name
+# carries a comma cannot be represented in it - joining it anyway turns one entry into two and the
+# panel offers a name that is not in the archive. Named and left out instead. A space is fine: the
+# value is quoted and only commas separate.
+#
+# Called plainly and not inside $( ), because the register below is a global and a subshell would
+# swallow it.
+adopt_skipped=''
+adopt_list() {
+	local _item
+	ADOPT_LIST=''
+	while IFS= read -r _item; do
+		[ -n "$_item" ] || continue
+		if [ "${_item#*,}" != "$_item" ]; then
+			adopt_skipped="$adopt_skipped $_item"
+			continue
+		fi
+		ADOPT_LIST="$ADOPT_LIST,$_item"
+	done <<< "$1"
+	ADOPT_LIST="${ADOPT_LIST#,}"
+}
+# stat, not du -m: -m is a GNU extension, and the size is a byte count either way.
+size=$((($(stat -c %s "$BACKUP/$archive") + 1048575) / 1048576))
+
+adopt_list "$PROBE_WEB"
+web_list="$ADOPT_LIST"
+adopt_list "$PROBE_DNS"
+dns_list="$ADOPT_LIST"
+adopt_list "$PROBE_MAIL"
+mail_list="$ADOPT_LIST"
+adopt_list "$PROBE_DB"
+db_list="$ADOPT_LIST"
+adopt_list "$PROBE_UDIR"
+udir_list="$ADOPT_LIST"
 
 backup_str="BACKUP='$archive'"
 backup_str="$backup_str TYPE='$BACKUP_SYSTEM' SIZE='$size'"
-backup_str="$backup_str WEB='$(list "$PROBE_WEB")'"
-backup_str="$backup_str DNS='$(list "$PROBE_DNS")'"
-backup_str="$backup_str MAIL='$(list "$PROBE_MAIL")'"
-backup_str="$backup_str DB='$(list "$PROBE_DB")'"
+backup_str="$backup_str WEB='$web_list'"
+backup_str="$backup_str DNS='$dns_list'"
+backup_str="$backup_str MAIL='$mail_list'"
+backup_str="$backup_str DB='$db_list'"
 backup_str="$backup_str CRON='$([ "$PROBE_CRON" = 'yes' ] && echo 1)'"
-backup_str="$backup_str UDIR='$(list "$PROBE_UDIR")'"
+backup_str="$backup_str UDIR='$udir_list'"
 backup_str="$backup_str WEB_SYSTEM='$PROBE_WEB_SYSTEM' PROXY_SYSTEM='$PROBE_PROXY_SYSTEM'"
 backup_str="$backup_str ADOPTED='yes' RUNTIME='0'"
 backup_str="$backup_str TIME='$(stat -c %y "$BACKUP/$archive" | cut -f2 -d\  | cut -f1 -d.)'"
@@ -108,6 +137,12 @@ touch $USER_DATA/backup.conf
 sed -i "/BACKUP='$archive'/d" $USER_DATA/backup.conf
 echo "$backup_str" >> $USER_DATA/backup.conf
 chmod 660 $USER_DATA/backup.conf
+
+# Said out loud: a whole restore still brings these back - the restore reads the archive's members,
+# not this list - but they cannot be picked individually in the panel.
+if [ -n "$adopt_skipped" ]; then
+	echo "Warning!: name(s) carrying a comma are not in the record and cannot be selected singly:$adopt_skipped"
+fi
 
 U_BACKUPS=$(grep -c BACKUP $USER_DATA/backup.conf)
 update_user_value "$user" '$U_BACKUPS' "$U_BACKUPS"

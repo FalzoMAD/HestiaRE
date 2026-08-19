@@ -638,7 +638,7 @@ local_backup() {
 		while IFS= read -r _adopted; do
 			[ -n "$_adopted" ] || continue
 			backup_list=$(grep -vxF -- "$_adopted" <<< "$backup_list")
-		done < <(grep "ADOPTED='yes'" "$USER_DATA/backup.conf" | sed -n "s/^BACKUP='\([^']*\)'.*/\1/p")
+		done < <(grep -E "(^| )ADOPTED='yes'( |$)" "$USER_DATA/backup.conf" | sed -n "s/^BACKUP='\([^']*\)'.*/\1/p")
 	fi
 	backups_count=$(grep -c . <<< "$backup_list")
 	if [ "$BACKUPS" -le "$backups_count" ]; then
