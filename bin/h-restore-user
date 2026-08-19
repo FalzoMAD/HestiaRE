@@ -836,10 +836,13 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 		# the archive still comes back and the run still ends non-zero.
 		db_type=$(backup_db_type "$database")
 		if ! backup_db_type_supported "$db_type"; then
-			echo "Warning!: $database is a ${db_type:-unknown} database, which this host does not run - skipped" \
-				| tee -a $tmpdir/restore.log
-			restore_failures="$restore_failures$(printf '\n  database %s (no %s engine on this host)' \
-				"$database" "${db_type:-unknown}")"
+			if [ -n "$db_type" ]; then
+				db_why="this host does not run $db_type"
+			else
+				db_why="its record names no engine at all"
+			fi
+			echo "Warning!: $database skipped - $db_why" | tee -a $tmpdir/restore.log
+			restore_failures="$restore_failures$(printf '\n  database %s (%s)' "$database" "$db_why")"
 			continue
 		fi
 

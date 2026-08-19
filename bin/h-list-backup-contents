@@ -8,6 +8,19 @@
 # what this host would not be able to restore from it. An archive that was put into /backup by hand
 # - a HestiaCP one, say - has no record anywhere, so h-list-user-backup cannot see it at all; this
 # command can, which is what makes a migration inspectable before the first write.
+#
+# TRUST BOUNDARY. Unlike h-list-user-backup this does NOT scope by $USER_DATA - it reads a path under
+# $BACKUP and extracts record members as root - and it deliberately does not require the user to
+# exist, because on a migration it does not. What holds the line instead:
+#
+#   - the archive name is a basename: is_object_format_valid allows no '/', so $BACKUP/$backup
+#     cannot leave the directory, and the containment check below says so a second time in code
+#   - $BACKUP is root-owned 0755, so nobody else can plant a symlink in it
+#   - the only non-root caller is the panel process, and it reaches h-* only through a route it
+#     builds itself; no route calls this command yet
+#
+# The moment a panel dialog does call it (#709 / stage 3), it needs a per-user scope of its own -
+# listing somebody else's archive is a disclosure even when the file itself stays unreadable.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -76,6 +89,13 @@ shell_list() {
 
 plain_list() {
 	local kind list item
+	# Said in every format. The object lists of a Vesta archive are empty because they are derived
+	# from ./hestia, so without this line plain would answer a refused archive with silence - the one
+	# output that is indistinguishable from an archive holding nothing.
+	if [ "$PROBE_VESTA" = 'yes' ]; then
+		printf 'vesta\trefused\n'
+		return
+	fi
 	for kind in WEB MAIL DB UDIR DNS PACKAGES; do
 		list="PROBE_$kind"
 		while IFS= read -r item; do
@@ -99,6 +119,15 @@ is_format_valid 'user' 'backup'
 
 if [ ! -f "$BACKUP/$backup" ]; then
 	check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '${BACKUP}' folder"
+fi
+
+# Second line under the name validator, in code rather than in a comment: the file this command
+# opens as root must sit inside the backup directory. `-f` above follows a symlink, so the existence
+# test alone would not say that, and $BACKUP itself is overridable from the environment.
+archive_real=$(realpath -e -- "$BACKUP/$backup" 2> /dev/null)
+backup_real=$(realpath -e -- "$BACKUP" 2> /dev/null)
+if [ -z "$archive_real" ] || [ -z "$backup_real" ] || [ "${archive_real%/*}" != "$backup_real" ]; then
+	check_result "$E_INVALID" "$backup does not resolve to a file inside '${BACKUP}'"
 fi
 
 #----------------------------------------------------------#

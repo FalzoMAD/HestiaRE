@@ -336,8 +336,11 @@ backup_report() {
 			_eff=$(backup_db_type "$_obj")
 			backup_db_type_supported "$_eff" && continue
 			_found=1
-			printf '   database %s, a %s dump, and this host runs %s\n' \
-				"$_obj" "${_eff:-unknown}" "$DB_SYSTEM"
+			if [ -n "$_eff" ]; then
+				printf '   database %s, a %s dump, and this host runs %s\n' "$_obj" "$_eff" "$DB_SYSTEM"
+			else
+				printf '   database %s, whose record names no engine at all\n' "$_obj"
+			fi
 		done <<< "$PROBE_DB"
 	fi
 
