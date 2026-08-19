@@ -12,6 +12,19 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **The webmail store on a box without a database engine was not backed up** (#710). Where there is
+  no engine, Roundcube keeps every mailbox's identities, address books and settings in a SQLite file
+  under `/var/lib/roundcube/db/` - which is exactly the state the server backup exists for, and the
+  only one it was missing. It is snapshotted with SQLite's own `.backup` rather than copied, because
+  these run in WAL mode and a plain copy taken mid-transaction can lose commits that are already
+  durable. On the way back the archived file is verified whole before the live one is touched at
+  all, so a damaged archive leaves the running webmail alone, and the replacement is a single
+  rename that carries the existing owner and mode. Where the `sqlite3` client is absent the restore
+  declines rather than installing something it cannot check - unlike a database too broken to dump,
+  a missing client is a prerequisite one `apt` away.
+
 ### Added
 
 - **The state that belongs to the box has its own backup** (#710). The webmail databases hold every
