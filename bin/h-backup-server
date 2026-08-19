@@ -5,6 +5,8 @@
 # example: h-backup-server
 # example: h-backup-server webmail
 #
+# The webmail store may be mysql or the sqlite fallback; both hold the same thing and both are taken.
+#
 # The webmail databases hold every mailbox's identities, address books and settings in one table
 # set, so no per-customer archive can carry them without carrying other customers' rows. Same for
 # hestia.conf, the hosting packages and the firewall sources: they describe the box.
@@ -65,6 +67,9 @@ trap 'rm -rf "$tmpdir"' EXIT
 chmod 700 "$tmpdir"
 
 mkdir -p "$tmpdir/hestia"
+# Staging for anything that must be built before it is packed. Inside tmpdir so the trap takes it,
+# but removed before the tar so a leftover can never become an archive member.
+mkdir -p "$tmpdir/.stage"
 backup_write_origin "$tmpdir/hestia/origin"
 
 echo "-- SERVER BACKUP --"
@@ -80,6 +85,24 @@ while IFS= read -r component; do
 				# --numeric-owner nowhere, as everywhere else here: the restore resolves by name.
 				tar -cf - -C "$(dirname "$src")" "$(basename "$src")" 2> /dev/null \
 					| backup_compress > "$dest/$(basename "$src").tar.$(backup_codec_suffix)"
+				echo "$(date '+%F %T') $component: $src"
+				;;
+			sqlite:*)
+				src="${item#sqlite:}"
+				snap="$tmpdir/.stage/snap.db"
+				sqlite_snapshot "$src" "$snap"
+				case $? in
+					0) ;;
+					2)
+						# No client: copy it anyway - some backup beats none - but never silently,
+						# because the copy may have missed commits that are already durable.
+						cp -f -- "$src" "$snap" 2> /dev/null \
+							&& echo "Warning!: $component: sqlite3 is missing, $src copied without a consistency guarantee"
+						;;
+					*) check_result "$E_PARSING" "the sqlite snapshot of $src failed - no archive written" ;;
+				esac
+				backup_compress < "$snap" > "$dest/$(basename "$src").sqlite.$(backup_codec_suffix)"
+				rm -f "$snap"
 				echo "$(date '+%F %T') $component: $src"
 				;;
 			db:mysql:*)
@@ -101,6 +124,7 @@ while IFS= read -r component; do
 done < <(printf '%s\n' "$wanted")
 
 archive="$BACKUP/server.$stamp.tar"
+rm -rf "$tmpdir/.stage"
 tar -cf "$archive" -C "$tmpdir" .
 # The archive carries the webmail secrets, so it is root's alone - unlike a user archive, which the
 # customer may fetch.

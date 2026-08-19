@@ -208,6 +208,51 @@ while IFS= read -r component; do
 					note "$component: database $db did not load and could not be rolled back - it is now INCOMPLETE, not what it was"
 				fi
 				;;
+			*.sqlite.gz | *.sqlite.zst)
+				seen=$((seen + 1))
+				name=$(basename "$part")
+				name="${name%.sqlite.*}"
+				if ! member_name_ok "$name"; then
+					note "$component: $name is not a sqlite member name - skipped"
+					continue
+				fi
+				mapfile -t places < <(tr ' ' '\n' <<< "${items[$component]}" | sed -n "s|^sqlite:\(.*/$name\)$|\1|p")
+				if [ "${#places[@]}" -ne 1 ]; then
+					note "$component: ${#places[@]} places on this host for the sqlite file $name - not restored"
+					continue
+				fi
+				dest="${places[0]}"
+				# Verified BEFORE the live file is touched, so there is nothing to roll back: unlike
+				# a dump, a sqlite database can be read whole without being installed first.
+				backup_decompress "$part" > "$dest.restore" 2> /dev/null
+				sqlite_ok "$dest.restore"
+				case $? in
+					0) ;;
+					2) echo "Warning!: $component: sqlite3 is missing, $name is installed unverified" ;;
+					*)
+						note "$component: the archived $name is not a whole sqlite database - $name left untouched"
+						rm -f "$dest.restore"
+						continue
+						;;
+				esac
+				# The owner is the webmail's, not root's, and the live file is the one that knows it.
+				if [ -f "$dest" ]; then
+					chown --reference="$dest" "$dest.restore" 2> /dev/null
+					chmod --reference="$dest" "$dest.restore" 2> /dev/null
+				else
+					chown --reference="$(dirname "$dest")" "$dest.restore" 2> /dev/null
+					chmod 640 "$dest.restore" 2> /dev/null
+				fi
+				# One rename, so the file is never half replaced under a running webmail. The stale
+				# wal/shm belong to the database that was here and would be read against the new one.
+				if mv -f "$dest.restore" "$dest" 2> /dev/null; then
+					rm -f "$dest-wal" "$dest-shm"
+					echo "$(date '+%F %T') $component: $dest"
+				else
+					note "$component: $dest could not be replaced"
+					rm -f "$dest.restore"
+				fi
+				;;
 			*.tar.gz | *.tar.zst)
 				seen=$((seen + 1))
 				# THIS host's item list picks the destination, never the archive: an archive that

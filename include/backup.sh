@@ -663,11 +663,30 @@ backup_leftovers_export() {
 # Components are derived from what this box actually has, so a server archive describes the box it
 # came from rather than a fixed list somebody has to keep in step.
 
+# sqlite_snapshot FILE DEST - a consistent copy of a live sqlite database.
+#
+# Not a file copy: these run in WAL mode (measured), so a copy taken mid transaction can miss
+# commits that are already durable, or tear. .backup is sqlite's own answer and checkpoints for us.
+# Without the client there is no way to do it right - the copy is still taken, because some backup
+# beats none, but the caller is told the guarantee is gone.
+sqlite_snapshot() {
+	command -v sqlite3 > /dev/null 2>&1 || return 2
+	sqlite3 "$1" ".backup '$2'" 2> /dev/null || return 1
+	sqlite_ok "$2"
+}
+
+# sqlite_ok FILE - is this a sqlite database that reads back whole? The analogue of the dump
+# completeness gate, and the reason the restore can verify BEFORE it overwrites anything.
+sqlite_ok() {
+	command -v sqlite3 > /dev/null 2>&1 || return 2
+	[ "$(sqlite3 "$1" 'PRAGMA integrity_check' 2> /dev/null | head -1)" = 'ok' ]
+}
+
 # server_components - one line per component this host can back up: NAME<TAB>WHAT
 #
-# WHAT is a space separated list of items, each either  dir:<path>  or  db:<engine>:<name>.
+# WHAT is a space separated list of items:  dir:<path> | db:<engine>:<name> | sqlite:<file>.
 server_components() {
-	local _wm _items
+	local _wm _items _f
 
 	_items=''
 	# Only the webmail actually installed: WEBMAIL_SYSTEM is a comma list and either side may be off.
@@ -676,6 +695,13 @@ server_components() {
 			roundcube)
 				[ -d /etc/roundcube ] && _items="$_items dir:/etc/roundcube"
 				backup_db_exists mysql roundcube && _items="$_items db:mysql:roundcube"
+				# The sqlite fallback (#584) is the store on a box with no engine, and it holds the
+				# same thing the mysql one does - every mailbox's identities, address books and
+				# settings. Found by looking, so a box that uses both is covered twice rather than
+				# by whichever DSN a config parse would have picked.
+				for _f in /var/lib/roundcube/db/*.db; do
+					[ -f "$_f" ] && _items="$_items sqlite:$_f"
+				done
 				;;
 			tachyon | snappymail)
 				[ -d /etc/tachyon/data ] && _items="$_items dir:/etc/tachyon/data"
