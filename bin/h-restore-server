@@ -1,0 +1,141 @@
+#!/bin/bash
+# info: restore selected components of a server backup
+# options: ARCHIVE COMPONENT[,COMPONENT...]
+#
+# example: h-restore-server server.2026-08-19_18-00-00.tar webmail
+#
+# There is deliberately NO whole-archive verb. A server backup describes the box, so putting all of
+# it back would overwrite the configuration of a running host - every customer at once, and not the
+# kind of mistake anyone undoes. A component has to be named, or the run refuses before it writes.
+#
+# ARCHIVE is a basename: this reads as root, so a path argument would be a read oracle. Resolved
+# only inside the backup folder, and checked to still be there afterwards.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+archive=$1
+components=$2
+
+if [ -z "$BACKUP" ]; then
+	BACKUP=/backup
+fi
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'ARCHIVE COMPONENT[,COMPONENT...]'
+is_object_format_valid "$archive" 'backup'
+check_hestia_demo_mode
+
+if [ ! -f "$BACKUP/$archive" ]; then
+	check_result "$E_NOTEXIST" "$archive doesn't exist in '$BACKUP'"
+fi
+archive_real=$(realpath -e -- "$BACKUP/$archive" 2> /dev/null)
+backup_real=$(realpath -e -- "$BACKUP" 2> /dev/null)
+if [ -z "$archive_real" ] || [ -z "$backup_real" ] || [ "${archive_real%/*}" != "$backup_real" ]; then
+	check_result "$E_INVALID" "$archive does not resolve to a file inside '$BACKUP'"
+fi
+
+in_archive=$(tar -tf "$BACKUP/$archive" 2> /dev/null | sed -n 's|^\./server/\([^/]*\)/.*|\1|p' | sort -u)
+if [ -z "$in_archive" ]; then
+	check_result "$E_PARSING" "$archive holds no server components"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+selected=''
+for c in ${components//,/ }; do
+	[ -n "$c" ] || continue
+	is_object_format_valid "$c" 'component'
+	if ! grep -qxF "$c" <<< "$in_archive"; then
+		check_result "$E_NOTEXIST" "$archive holds no component $c - it has: $(tr '\n' ' ' <<< "$in_archive")"
+	fi
+	selected="$selected$c"$'\n'
+done
+if [ -z "$selected" ]; then
+	check_result "$E_INVALID" "name at least one component - a server backup is never restored whole"
+fi
+
+tmpdir=$(mktemp -p "${BACKUP_TEMP:-$BACKUP}" -d) || check_result "$E_NOTEXIST" "Can't create tmp dir"
+trap 'rm -rf "$tmpdir"' EXIT
+chmod 700 "$tmpdir"
+
+echo "-- SERVER RESTORE --"
+while IFS= read -r component; do
+	[ -n "$component" ] || continue
+	# One component at a time, by exact member: the name came out of the archive, so it is never a
+	# wildcard here.
+	tar -xf "$BACKUP/$archive" -C "$tmpdir" --no-wildcards "./server/$component" 2> /dev/null
+	# Counted, because a loop that recognises nothing otherwise looks exactly like a clean run: the
+	# glob skips dot members, tar may have written nothing, a codec may be one we do not read.
+	seen=0
+	for part in "$tmpdir/server/$component"/*; do
+		[ -e "$part" ] || continue
+		# Both codecs on read whatever this box writes - the archive may come from a zstd box.
+		case "$part" in
+			*.mysql.sql.gz | *.mysql.sql.zst)
+				seen=$((seen + 1))
+				db=$(basename "$part")
+				db="${db%.mysql.sql.*}"
+				backup_decompress "$part" | mysql "$db" 2> /dev/null \
+					&& echo "$(date '+%F %T') $component: database $db" \
+					|| echo "Warning!: $component: database $db was not loaded"
+				;;
+			*.tar.gz | *.tar.zst)
+				seen=$((seen + 1))
+				# THIS host's item list picks the destination, never the archive: an archive that
+				# named its own absolute paths would be a write primitive. The member name only
+				# looks one up, so it has to be a plain basename - a regex metacharacter in it
+				# would match a directory it was not, and a leading dot is no name of ours.
+				name=$(basename "$part")
+				name="${name%.tar.*}"
+				case "$name" in
+					'' | .* | *[!A-Za-z0-9._-]*)
+						echo "Warning!: $component: $name is not a component member name - skipped"
+						continue
+						;;
+				esac
+				mapfile -t places < <(server_component_items "$component" | tr ' ' '\n' | sed -n "s|^dir:\(.*/$name\)$|\1|p")
+				if [ "${#places[@]}" -eq 0 ]; then
+					echo "Warning!: $component: no place on this host for $name - skipped"
+					continue
+				fi
+				# Refuse rather than pick: two dirs of one name means the mapping stopped being one
+				# to one, and unpacking into the wrong one of them is silent.
+				if [ "${#places[@]}" -gt 1 ]; then
+					echo "Warning!: $component: $name matches ${#places[@]} places on this host - skipped"
+					continue
+				fi
+				dest="${places[0]}"
+				backup_decompress "$part" | tar -xf - -C "$(dirname "$dest")" \
+					&& echo "$(date '+%F %T') $component: $dest" \
+					|| echo "Warning!: $component: $dest was not unpacked"
+				;;
+		esac
+	done
+	[ "$seen" -gt 0 ] || echo "Warning!: $component: the archive holds nothing under this component that this host can read"
+done < <(printf '%s\n' "$selected")
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "Backup" "Server components restored from $archive: ${components}."
+log_event "$OK" "$ARGUMENTS"
+
+exit

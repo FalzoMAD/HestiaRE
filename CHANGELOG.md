@@ -14,6 +14,17 @@ opens above it.
 
 ### Added
 
+- **The state that belongs to the box has its own backup** (#710). The webmail databases hold every
+  mailbox's identities, address books and settings in one table set, so no per-customer archive can
+  carry them without carrying other customers' rows; the same is true of `hestia.conf`, the hosting
+  packages and the firewall sources. `h-backup-server` takes them, `h-list-server-backups` shows what
+  each archive holds, and `h-restore-server` puts back the components that are named. There is
+  deliberately no whole-archive verb: restoring all of it would overwrite the configuration of a
+  running host in one step, so a run without a component refuses before it writes anything. What a
+  box can back up is derived from what it actually has, never from a fixed list - a target without a
+  database engine produces a webmail component of directories and no dumps. The archive is root's
+  alone at 0600, because `/etc/roundcube` carries the `des_key` and the database password.
+
 - **An archive put into the backup folder by hand becomes visible to the panel** (#709).
   `h-add-user-backup` writes the `backup.conf` record a foreign archive never had, and writes it
   from the archive's own members rather than from its name - the name is a claim, the members are

@@ -1,0 +1,110 @@
+#!/bin/bash
+# info: back up the state that belongs to the box, not to a customer
+# options: [COMPONENT...]
+#
+# example: h-backup-server
+# example: h-backup-server webmail
+#
+# The webmail databases hold every mailbox's identities, address books and settings in one table
+# set, so no per-customer archive can carry them without carrying other customers' rows. Same for
+# hestia.conf, the hosting packages and the firewall sources: they describe the box.
+#
+# Named components take only those; with none, everything this box has. What it HAS is derived -
+# a webmail that is not installed produces no component rather than an empty one.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+if [ -z "$BACKUP" ]; then
+	BACKUP=/backup
+fi
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_hestia_demo_mode
+
+available=$(server_components | cut -f1)
+if [ -z "$available" ]; then
+	check_result "$E_NOTEXIST" "this host has none of the components a server backup carries"
+fi
+
+wanted="$available"
+if [ "$#" -gt 0 ]; then
+	wanted=''
+	for arg in "$@"; do
+		is_object_format_valid "$arg" 'component'
+		if ! grep -qxF "$arg" <<< "$available"; then
+			check_result "$E_NOTEXIST" "no component $arg on this host - have: $(tr '\n' ' ' <<< "$available")"
+		fi
+		wanted="$wanted$arg"$'\n'
+	done
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+stamp=$(date +%F_%H-%M-%S)
+tmpdir=$(mktemp -p "${BACKUP_TEMP:-$BACKUP}" -d) || check_result "$E_NOTEXIST" "Can't create tmp dir"
+trap 'rm -rf "$tmpdir"' EXIT
+# 0700 from the start: /etc/roundcube carries des_key and the database password, so the tree is
+# never world readable, not even for the moment between writing and packing.
+chmod 700 "$tmpdir"
+
+mkdir -p "$tmpdir/hestia"
+backup_write_origin "$tmpdir/hestia/origin"
+
+echo "-- SERVER BACKUP --"
+while IFS= read -r component; do
+	[ -n "$component" ] || continue
+	dest="$tmpdir/server/$component"
+	mkdir -p "$dest"
+	while IFS= read -r item; do
+		[ -n "$item" ] || continue
+		case "$item" in
+			dir:*)
+				src="${item#dir:}"
+				# --numeric-owner nowhere, as everywhere else here: the restore resolves by name.
+				tar -cf - -C "$(dirname "$src")" "$(basename "$src")" 2> /dev/null \
+					| backup_compress > "$dest/$(basename "$src").tar.$(backup_codec_suffix)"
+				echo "$(date '+%F %T') $component: $src"
+				;;
+			db:mysql:*)
+				db="${item##*:}"
+				mysqldump --routines --triggers --single-transaction "$db" 2> /dev/null \
+					| backup_compress > "$dest/$db.mysql.sql.$(backup_codec_suffix)"
+				echo "$(date '+%F %T') $component: database $db"
+				;;
+		esac
+	done < <(tr ' ' '\n' <<< "$(server_component_items "$component")")
+done < <(printf '%s\n' "$wanted")
+
+archive="$BACKUP/server.$stamp.tar"
+tar -cf "$archive" -C "$tmpdir" .
+# The archive carries the webmail secrets, so it is root's alone - unlike a user archive, which the
+# customer may fetch.
+chown root:root "$archive"
+chmod 600 "$archive"
+echo "$(date '+%F %T') -> $archive ($(($(stat -c %s "$archive") / 1024)) KB)"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Info" "Backup" "Server backup created ($(basename "$archive"))."
+log_event "$OK" "$ARGUMENTS"
+
+exit
