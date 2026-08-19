@@ -6,35 +6,16 @@
 #                                                                           #
 #===========================================================================#
 
-#===========================================================================#
-#                     Archived record lines (#705)                          #
-#===========================================================================#
-#
-# The restore takes the record line out of the archive and edits it AS TEXT, rather than parsing
-# it and emitting a fresh one from a list of known keys. That list was the defect: a field it did
-# not know about - the domain's AUTH_USER/AUTH_HASH among them - simply did not come back, and
-# syshealth then re-inserted the key EMPTY, so the record looked healthy afterwards.
-#
-# In place and not re-emitted, because the field ORDER is load-bearing: include/botpolicy.sh reads
-# with `sed -n "s/^DOMAIN='\([^']*\)'.*BOTLIMIT='[^']\+.*/\1/p"`, so DOMAIN has to stay first and
-# BOTLIMIT behind it. A re-emit would also silently normalise whatever the parser does not model.
-#
-# Known limit, and the same one every `grep -F "DOMAIN='$domain'"` in the tree already has: a value
-# containing a literal ' is not representable. record_line_valid rejects such a line rather than
-# letting it through half-parsed.
+# Archived record lines are edited AS TEXT, never re-emitted from a list of known keys: a list
+# silently drops fields it has not heard of, and the field ORDER is load-bearing (botpolicy.sh
+# matches DOMAIN first, BOTLIMIT behind it). A value with a literal ' is not representable.
 
 # Is this line exactly a sequence of KEY='VALUE', separated by single spaces?
 #
-# This gate is what makes the verbatim path safe, and it is not optional. Appending the archived
-# line means a line this box did not write lands in a live *.conf, and the consumers downstream do
-# NOT all go through the (sound) PHP tokenizer: botpolicy and crowdsec read it with sed on quote
-# boundaries, get_object_value with grep/cut, and the h-list-* emitters splice it into JSON.
-#
-# $ stays ALLOWED: MD5, AUTH_HASH and STATS_CRYPT are crypt hashes and carry it as a matter of
-# course. Inside a single-quoted record value it is literal, and no consumer evaluates it.
-#
-# It is also what lets record_set_field find a field by a plain " KEY='" search: with ' banned from
-# every value, that sequence cannot occur inside one.
+# Not optional: the archived line lands in a live *.conf, and not every reader goes through the PHP
+# tokenizer - botpolicy and crowdsec parse it with sed on quote boundaries, get_object_value with
+# grep/cut, the listers splice it into JSON. $ stays allowed, the crypt hashes carry it. Banning '
+# is also what lets record_set_field find a field by a plain " KEY='" search.
 record_line_valid() {
 	local _line="$1" _rest _q="'" _dq='"' _bt='`' _bs='\'
 	local -A _seen_key=()
@@ -75,11 +56,8 @@ record_set_field() {
 		_pre="${_rec_ref%%" $_key='"*}"
 		_post="${_rec_ref#*" $_key='"}"
 	else
-		# No separator in front of the first field: on an empty record the space would produce a
-		# leading blank, which record_line_valid refuses - the two helpers would disagree about
-		# what a valid line is. Not reachable from the restore, which always starts from a record
-		# that already passed the gate, but a helper should not be able to build what the gate
-		# next to it rejects.
+		# No separator in front of the first field: a leading blank is what record_line_valid
+		# refuses, and a helper must not be able to build what the gate beside it rejects.
 		if [ -z "$_rec_ref" ]; then
 			_rec_ref="$_key='$_val'"
 		else
@@ -95,13 +73,10 @@ record_set_field() {
 	fi
 }
 
-# restore_parse_record KEYVAR LINE - parse a record into the environment and remember, in KEYVAR,
-# which keys it set.
+# restore_parse_record KEYVAR LINE - parse a record and remember, in KEYVAR, which keys it set.
 #
-# The cleanup between two objects has to be derived from whatever LAST parsed, at EVERY parse site
-# in the loop. Maintaining it on only one branch is the same defect one level up: it reads as
-# complete and silently covers less the moment another branch parses a record - and the db loop
-# does exactly that for a database that already exists on the target.
+# The cleanup between two objects is derived from what LAST parsed, at every parse site: a hand
+# list covers less the moment another branch parses a record, and reads as complete either way.
 restore_parse_record() {
 	local -n _keys_ref="$1"
 	_keys_ref="$(record_keys "$2" | tr '\n' ' ')"
@@ -132,26 +107,13 @@ record_del_field() {
 	fi
 }
 
-#===========================================================================#
-#                        Reading an archive (#707)                          #
-#===========================================================================#
-#
-# The restore used to find out what an archive holds while it was already writing, and what it
-# could not do it did not say at all: a dns/ member was ignored in silence, and a whole section was
-# skipped without a word when this box has no such subsystem - after which the run reported success.
-#
-# So: read the archive ONCE, up front, and describe it. backup_probe collects what is IN the
-# archive; backup_report compares that against THIS host and says what will be lost. Two functions
-# because the first is about the file alone and is the same everywhere, while the second only makes
-# sense against a particular box.
-#
-# Everything is derived from the archive and from this host's own state - nothing is a list kept in
-# step by hand. That is the whole point: a list is what made the restore lose fields in the first
-# place.
+# Read the archive ONCE, before anything is written. backup_probe collects what is IN the archive
+# and gives the same answer everywhere; backup_report compares that against THIS host and says what
+# will be lost. Everything is derived from the archive and from this host's own state - a list kept
+# in step by hand is what made the restore lose fields silently.
 
-# The one container directory an archive may carry its records in. Vesta wrote './vesta' here and
-# the inherited code threaded the choice through twenty path joins; HestiaRE restores only './hestia'
-# and refuses the other outright, so this is a constant and the paths below say so.
+# The one container directory an archive may carry its records in. Vesta's './vesta' is refused
+# outright rather than threaded through every path join, so this is a constant.
 BACKUP_CONTAINER='hestia'
 
 # backup_probe ARCHIVE WORKDIR - describe an archive. Sets PROBE_* and extracts the record members
@@ -169,29 +131,21 @@ backup_probe() {
 	_members=$(tar -tf "$_arc" 2> /dev/null) || return 1
 	[ -n "$_members" ] || return 1
 
-	# Feature detection, never a marker: a HestiaCP archive and every HestiaRE archive written so far
-	# carry no origin line at all, so anything that keyed on one would be deciding by its absence.
-	#
-	# Vesta is detected only in order to REFUSE it, and the refusal is the caller's to make - a probe
-	# describes, it does not decide. Written as an if: an unparenthesised `a || b && c` is one appended
-	# alternative away from silently changing meaning, and this file argues against exactly that class.
+	# Feature detection, never a marker: no archive written so far carries an origin line, so keying
+	# on one would be deciding by its absence. Vesta is detected only in order to REFUSE it, and the
+	# refusal is the caller's - a probe describes, it does not decide.
 	if grep -qx './vesta/' <<< "$_members" || grep -qx './vesta' <<< "$_members"; then
 		PROBE_VESTA='yes'
 	fi
 	grep -qx './.zstd' <<< "$_members" && PROBE_MODE='zstd'
 
-	# Object names come from the member paths, one pass per subsystem rather than one tar per
-	# object: the archive is compressed, and per-object extraction would walk it N times.
-	#
-	# One name per LINE, never space separated: a home entry can be called "my documents", and a
-	# register that splits on spaces is exactly what made the restore abort on one (#706).
+	# Names from the member paths, one pass per subsystem: the archive is compressed, so per-object
+	# extraction would walk it N times. One name per LINE - a home entry can be called "my documents".
 	PROBE_WEB=$(sed -n 's|^\./web/\([^/]*\)/'"$BACKUP_CONTAINER"'/web\.conf$|\1|p' <<< "$_members" | sort -u)
 	PROBE_MAIL=$(sed -n 's|^\./mail/\([^/]*\)/'"$BACKUP_CONTAINER"'/mail\.conf$|\1|p' <<< "$_members" | sort -u)
 	PROBE_DB=$(sed -n 's|^\./db/\([^/]*\)/'"$BACKUP_CONTAINER"'/db\.conf$|\1|p' <<< "$_members" | sort -u)
-	# Two expressions, not one alternation: | is the delimiter here, so \| inside the pattern is an
-	# escaped delimiter and matched nothing at all - the list came back empty and the report would
-	# have said the archive carries no home entries. Greedy \(.*\) on purpose, so a name with a dot
-	# of its own survives: a real archive carried geekbench_claim.url.tar.zst.
+	# Two expressions, not one alternation: | is the delimiter, so \| inside the pattern would be an
+	# escaped delimiter and match nothing. Greedy \(.*\) so a name with a dot of its own survives.
 	PROBE_UDIR=$(sed -n -e 's|^\./user_dir/\(.*\)\.tar\.gz$|\1|p' -e 's|^\./user_dir/\(.*\)\.tar\.zst$|\1|p' \
 		<<< "$_members" | sort -u)
 	# dns/ is the one we never write and never restore. Zones by NAME, because for somebody moving
@@ -200,9 +154,8 @@ backup_probe() {
 	grep -qx "\./cron/cron\.conf" <<< "$_members" && PROBE_CRON='yes'
 	PROBE_PACKAGES=$(sed -n "s|^\./$BACKUP_CONTAINER/packages/\(.*\)\.pkg$|\1|p" <<< "$_members" | sort -u)
 
-	# One extraction for every record member there is. --wildcards needs the pattern quoted, and a
-	# pattern that matches nothing is not an error here: an archive without a mail section is a fact
-	# to report, not a failure to read.
+	# One extraction for every record member. A pattern that matches nothing is not an error: an
+	# archive without a mail section is a fact to report, not a failure to read.
 	mkdir -p "$_wd" || return 1
 	tar -xf "$_arc" -C "$_wd" --wildcards --no-wildcards-match-slash \
 		"./$BACKUP_CONTAINER/user.conf" "./$BACKUP_CONTAINER/web-system" "./$BACKUP_CONTAINER/origin" \
@@ -228,25 +181,15 @@ backup_report_count() {
 	grep -c . <<< "$1"
 }
 
-# Keys this host itself can put into a KIND record. Three sources, all derived, because each alone
-# shrinks in a way that would make the report lie:
-#
-#   - the registry, which is behind reality by design (CROWDSEC and BOTLIMIT are not in it yet)
-#   - the live records on this box, which only show what some customer HAPPENS to use right now -
-#     on a box where no domain has a bot limit, BOTLIMIT would read as a foreign field
-#   - the keys the commands themselves can add, which is the only source that does not depend on
-#     the current population
-#
-# PHP_PROFILE is named as archive-only rather than unknown: it exists in an archive and never in a
-# live record (#591), and the restore drops it on purpose - the one place that says so is the remap
-# table in h-restore-user, and this is the second.
+# Keys this host can put into a KIND record. Three sources, because each alone shrinks in a way
+# that makes the report lie: the registry lags reality, the live records show only what a customer
+# HAPPENS to use right now, and what the commands can add is the only population-independent one.
+# PHP_PROFILE is archive-only by design and named here so it does not read as unknown.
 backup_local_keys() {
 	local _kind="$1" _f
-	# If the user directory itself is not there, the second source did not find "no keys" - it looked
-	# in the wrong place, and the caller would get a smaller reference set with no sign of it. Measured
-	# per source on a live box: the registry knows neither CROWDSEC nor BOTLIMIT, and the live records
-	# only know them once some domain actually uses one, so a silently missing source really does
-	# change the answer. Loud, not silent.
+	# A missing user directory is not "no keys" - it is the wrong place, and the caller would get a
+	# smaller reference set with no sign of it. The registry knows neither CROWDSEC nor BOTLIMIT, so
+	# a silently absent source really does change the answer.
 	if [ ! -d "$CONF_DIR/users" ]; then
 		echo "Warning!: $CONF_DIR/users is not there - the live-record key source read nothing" >&2
 	fi
@@ -263,28 +206,21 @@ backup_local_keys() {
 	} 2> /dev/null | sed '/^$/d' | sort -u
 }
 
-# backup_report - what this host will NOT be able to restore from the probed archive.
-#
-# Every line is derived: from the archive, from this host's config, and from the record keys both
-# sides actually use. An empty report is PRINTED, never left as silence - "nothing falls away" and
-# "the probe read nothing" have to be distinguishable, and they were not before.
+# backup_report - what this host will NOT be able to restore from the probed archive. Every line is
+# derived. An empty report is PRINTED, never left as silence: "nothing falls away" and "the probe
+# read nothing" have to look different.
 backup_report() {
 	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys _installed
 
 	echo "-- ARCHIVE --"
 	printf '   %s compressed\n' "$PROBE_MODE"
-	# Said here, and refused by the caller - the restore aborts on it before the first write. Nothing
-	# below is printed for one: every object count is derived from the ./hestia container, so a Vesta
-	# archive would show 0 web, 0 mail and then "nothing falls away" about a file we will not read at
-	# all. An empty report has to mean the archive is clean, never that the probe looked in the wrong
-	# place.
+	# Nothing below is printed for a Vesta archive: every count is derived from ./hestia, so it would
+	# read 0 web, 0 mail and then "nothing falls away" about a file this host will not read at all.
 	if [ "$PROBE_VESTA" = 'yes' ]; then
 		printf '   VESTA archive - HestiaRE does not restore these, and this one will be refused\n'
 		return 0
 	fi
-	# "home entries", not directories: h-backup-user walks `ls -a` of the home, so the archive holds
-	# plain files too - a real HestiaCP archive listed .bashrc, .profile and geekbench_claim.url
-	# next to the directories.
+	# "home entries", not directories: h-backup-user walks `ls -a`, so plain files are in there too.
 	printf '   objects: %s web, %s mail, %s database, %s home entr%s, cron %s\n' \
 		"$(backup_report_count "$PROBE_WEB")" "$(backup_report_count "$PROBE_MAIL")" \
 		"$(backup_report_count "$PROBE_DB")" "$(backup_report_count "$PROBE_UDIR")" \
@@ -297,7 +233,7 @@ backup_report() {
 
 	echo "-- WHAT THIS HOST CANNOT RESTORE --"
 
-	# DNS is the one the migration case asks about, so the zones are named rather than counted.
+	# Named rather than counted: for a migration this is the question actually being asked.
 	if [ -n "$PROBE_DNS" ]; then
 		_found=1
 		printf '   %s DNS zone(s), which this host does not serve at all (#58) - the records are in\n' \
@@ -306,8 +242,8 @@ backup_report() {
 		sed 's/^/      /' <<< "$PROBE_DNS"
 	fi
 
-	# A section whose subsystem this host does not have is dropped in full. With the object count,
-	# because "mail is skipped" and "your 40 mail domains are skipped" are different sentences.
+	# A section this host has no subsystem for is dropped in full. With the count: "mail is skipped"
+	# and "your 40 mail domains are skipped" are different sentences.
 	for _n in web:WEB_SYSTEM:PROBE_WEB mail:MAIL_SYSTEM:PROBE_MAIL db:DB_SYSTEM:PROBE_DB cron:CRON_SYSTEM:PROBE_CRON; do
 		_obj="${_n%%:*}"
 		_rec="${_n#*:}"
@@ -326,10 +262,8 @@ backup_report() {
 		fi
 	done
 
-	# One level finer than the section check above: this host may have a DB_SYSTEM and still not the
-	# engine a particular database was dumped from. Measured against a real HestiaCP archive - a
-	# pgsql database on a mysql-only host took the whole restore down at that object, after the web
-	# and mail sections were already written.
+	# Finer than the section check above: a host can have a DB_SYSTEM and still not the engine one
+	# database was dumped from, and the import has no default branch to survive that.
 	if [ -n "$DB_SYSTEM" ]; then
 		while IFS= read -r _obj; do
 			[ -n "$_obj" ] || continue
@@ -349,8 +283,7 @@ backup_report() {
 	echo "-- WHAT WILL BE REWRITTEN --"
 	_found=0
 
-	# The web model decides how the vhosts are rendered; a different one on the archive side means
-	# custom includes may not apply. This is the #120 banner, moved to before the first write.
+	# A different web model on the archive side means custom includes may not apply.
 	if [ -n "$PROBE_WEB" ]; then
 		if [ -z "$PROBE_WEB_SYSTEM" ]; then
 			_found=1
@@ -363,10 +296,8 @@ backup_report() {
 		fi
 	fi
 
-	# Templates per web record. accept_web_template is asked, not re-implemented - a second copy of
-	# the mapping table is a second thing to keep in step. The PHP versions come from
-	# backup_php_missing for the same reason: the consent step asks about exactly that set, and two
-	# copies of the loop is how a report and a gate come to disagree about the same archive.
+	# accept_web_template is asked, not re-implemented, and the PHP versions come from
+	# backup_php_missing: a second copy of either is how a report and a gate come to disagree.
 	backup_php_missing "$PROBE_WEB"
 	_missing="$BACKUP_PHP_MISSING"
 	while IFS= read -r _obj; do
@@ -377,8 +308,7 @@ backup_report() {
 			_tpl=$(sed -n "s/.*[[:space:]]${_n%%:*}='\([^']*\)'.*/\1/p" <<< " $_rec")
 			[ -n "$_tpl" ] || continue
 			read -r _eff _ < <(accept_web_template "${_n#*:}" "$_tpl" 2> /dev/null)
-			# An empty answer is not a remap to nothing: report only a real replacement, so a role
-			# this model does not have cannot produce a "proxy template caching -> " line.
+			# An empty answer is not a remap to nothing: a role this model lacks must print no line.
 			[ -n "$_eff" ] || continue
 			[ "$_eff" = "$_tpl" ] && continue
 			_found=1
@@ -391,8 +321,8 @@ backup_report() {
 			"$_missing" "$(multiphp_default_version 2> /dev/null)"
 	fi
 
-	# Record keys this host neither knows nor writes. Three-way, so our own newer fields do not read
-	# as foreign: archived, minus the registry, minus what this box puts in its own records.
+	# Record keys this host neither knows nor writes - three-way, so our own newer fields do not read
+	# as foreign.
 	for _n in web mail db; do
 		_hostkeys=" $(backup_local_keys "$_n" | tr '\n' ' ') "
 		_unknown=''
@@ -413,8 +343,8 @@ backup_report() {
 		fi
 	done
 
-	# Package limits from a box that has subsystems this one does not (HestiaCP's DNS_DOMAINS and
-	# friends). Derived by comparing key sets, so a future divergence shows up without an edit here.
+	# Package limits from a box with subsystems this one lacks. Derived by comparing key sets, so a
+	# future divergence shows up without an edit here.
 	for _pkg in $PROBE_PACKAGES; do
 		[ -f "$PROBE_RECORDS/$BACKUP_CONTAINER/packages/$_pkg.pkg" ] || continue
 		_local=" $(cat "$CONF_DIR/packages/"*.pkg 2> /dev/null | grep -o "^[A-Z][A-Z0-9_]*=" | tr -d '=' | sort -u | tr '\n' ' ') "
@@ -437,48 +367,29 @@ backup_db_type() {
 	sed -n "s/.*[[:space:]]TYPE='\([^']*\)'.*/\1/p" <<< " $_rec"
 }
 
-# backup_db_type_supported TYPE - can this host serve that engine at all?
-#
-# DB_SYSTEM is a COMMA LIST, not a single value: a HestiaCP box routinely carries 'pgsql,mysql'
-# while this one has just one of them. Asking only whether DB_SYSTEM is set answers a different
-# question and says yes to a postgres dump on a box with no postgres.
+# backup_db_type_supported TYPE - can this host serve that engine at all? DB_SYSTEM is a COMMA
+# LIST ('pgsql,mysql' on a HestiaCP box), so asking whether it is merely set says yes to a postgres
+# dump on a box with no postgres.
 backup_db_type_supported() {
 	[ -n "$1" ] || return 1
 	[[ ",${DB_SYSTEM}," == *",$1,"* ]]
 }
 
-#===========================================================================#
-#                          Consent to write (#707)                          #
-#===========================================================================#
+# Consent to write. A restore either has it for everything it plans to do, or it has not started:
+# a gate that sits inside a section leaves a half-made customer behind when it refuses.
 #
-# A restore writes, and until now the only question it asked sat INSIDE the web section - so a
-# refusal left the account, its data directory and its home behind: a half-made customer that the
-# operator then had to clean up by hand. Consent is collected before the first write now, and the
-# run either has it for everything it plans to do or it has not started.
+# Three ways to give it: a SELECTOR naming objects (the selection IS the consent for that section),
+# a CONSENT argument, or a prompt where there is a TTY. An argument and not an environment prefix,
+# because the queue line is run by bash and an env prefix there is operator input inside an executed
+# command line (GHSA-2xw3). A closed set and not a character class, because a character class is
+# what quietly admitted a pipe once.
 #
-# Three ways to give it, checked in this order:
-#
-#   - a SELECTOR names what to restore. The selection IS the consent for that section: the operator
-#     already said which object, and the panel's per-object restore link keeps working unchanged.
-#   - a CONSENT argument: a comma list from a CLOSED SET. An argument, deliberately, not an
-#     environment prefix - the queue line is run by bash, and an env prefix in front of it would put
-#     operator input into an executed command line, which is the GHSA-2xw3 class this same file
-#     already validates against (#661). A closed set rather than a character class for the same
-#     reason: #661 was a validator whose "allowed characters" quietly included a pipe.
-#   - a prompt, and only with a TTY on standard input.
-#
-# With none of them the run stops before it has written anything - in the queue and in the panel
-# there is nobody to ask, and guessing is what made the old gate leave a half-made customer behind.
-#
-# Consenting to any section implies the account: a cron-only restore still needs the customer to
-# exist. What it does not imply is any OTHER section.
-
-# Every token that may appear in a CONSENT list. 'all' is every section plus the php fallback.
+# Consenting to a section implies the account - a cron-only restore still needs the customer - and
+# implies no OTHER section.
 RESTORE_CONSENT_TOKENS='all web mail db cron udir php-fallback'
 
-# restore_consent_parse LIST - validate a comma list against the closed set and remember it.
-# An unknown token is refused rather than ignored: a typo that reads as "no consent" would abort
-# a run the operator meant to authorise, and a typo that is silently dropped is worse.
+# restore_consent_parse LIST - validate a comma list against the closed set and remember it. An
+# unknown token is refused, never dropped: a silently ignored typo authorises less than it looks.
 restore_consent_parse() {
 	local _item
 	RESTORE_CONSENT=' '
@@ -493,11 +404,10 @@ restore_consent_parse() {
 	return 0
 }
 
-# restore_consent_has TOKEN - was this named, directly or through 'all'?
+# restore_consent_has TOKEN - named directly, or through 'all'?
 #
-# 'all' covers the SECTIONS and deliberately not php-fallback. Moving a customer's domains onto a
-# different PHP version is not "restore everything", it is a change to what they run - #591 exists
-# because that used to happen silently. It has to be named, from the panel too.
+# 'all' covers the SECTIONS and deliberately not php-fallback: moving a customer's domains onto a
+# different PHP version is a change to what they run, not part of "restore everything".
 restore_consent_has() {
 	[ "$1" = 'php-fallback' ] || case "${RESTORE_CONSENT:- }" in
 		*" all "*) return 0 ;;
@@ -508,10 +418,8 @@ restore_consent_has() {
 	return 1
 }
 
-# restore_consent_selector SELECTOR - does this selector name specific objects?
-#
-# Empty and '*' both mean "the whole section", which is the case that needs asking. 'no' means the
-# section is off entirely and nothing is asked about it at all.
+# restore_consent_selector SELECTOR - does it name specific objects? Empty and '*' mean the whole
+# section, which is the case that needs asking; 'no' means the section is off.
 restore_consent_selector() {
 	case "$1" in
 		'' | '*' | 'no') return 1 ;;
@@ -523,8 +431,7 @@ restore_consent_selector() {
 restore_consent_ask() {
 	local _ans
 	restore_consent_has "$1" && return 0
-	# A prompt only where somebody can answer it. `read` on a queue's stdin would consume the next
-	# line of the pipe file, which is the following restore.
+	# A prompt only where somebody can answer: `read` on a queue's stdin eats the next pipe line.
 	if [ -t 0 ]; then
 		read -r -p "$2 [y/N] " _ans
 		case "$_ans" in
@@ -534,19 +441,15 @@ restore_consent_ask() {
 	return 1
 }
 
-# backup_php_missing DOMAIN-LIST - sets BACKUP_PHP_MISSING (archived PHP versions this host does not
-# have, sorted) and BACKUP_PHP_UNREADABLE (domains whose archived record could not be read).
+# backup_php_missing DOMAIN-LIST - sets BACKUP_PHP_MISSING (archived PHP versions this host lacks)
+# and BACKUP_PHP_UNREADABLE (domains whose archived record could not be read).
 #
-# One derivation, two readers: the report prints it for the whole archive, the consent step asks
-# about the domains this run would actually touch. The list is a parameter rather than a default,
-# because those two sets differ the moment a selector is given and the caller is the one that knows
-# which it means. Two copies of this loop is how a report and a gate come to disagree.
+# One derivation, two readers: the report asks about the whole archive, the consent step about the
+# domains this run would touch. The list is a parameter, not a default, because only the caller
+# knows which of the two it means.
 #
-# Results come back in globals rather than on stdout, and that is not a style choice: as
-# `x=$(backup_php_missing ...)` the whole function ran in a SUBSHELL, so the unreadable-record
-# register it sets never reached the caller and the check could not fire once. Measured that way -
-# an archive with the record deleted walked straight past the gate and died later, inside the web
-# section, with the account already created.
+# Results in globals, NOT on stdout: inside `x=$(...)` the function runs in a subshell and the
+# unreadable-record register never reaches the caller, which leaves the check below unable to fire.
 backup_php_missing() {
 	local _list="$1" _dom _rec _ver _missing='' _installed _file
 	BACKUP_PHP_UNREADABLE=''
@@ -555,11 +458,9 @@ backup_php_missing() {
 	_installed=" $($BIN/h-list-sys-php plain 2> /dev/null | tr '\n' ' ') "
 	while IFS= read -r _dom; do
 		[ -n "$_dom" ] || continue
-		# The records come from backup_probe, which extracted them before anything was written.
-		# A record that is NOT there is a broken assumption, not a domain without a version: read
-		# as the latter it would report "nothing missing" and wave the run through onto the default
-		# PHP - the exact shape of silent fallback this whole stage exists to remove. Collected by
-		# name so the caller can refuse rather than proceed on an answer nobody computed.
+		# A record that is not there is a broken assumption, not a domain without a version: read as
+		# the latter it reports "nothing missing" and waves the run onto the default PHP. Collected
+		# by name so the caller can refuse rather than act on an answer nobody computed.
 		_file=$(backup_record_file web "$_dom")
 		if [ ! -s "$_file" ]; then
 			BACKUP_PHP_UNREADABLE="$BACKUP_PHP_UNREADABLE $_dom"
