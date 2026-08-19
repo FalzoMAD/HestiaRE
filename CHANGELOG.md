@@ -140,6 +140,15 @@ opens above it.
 
 ### Fixed
 
+- **A home entry whose name carries a backslash or a tab comes back** (#736). The restore built its
+  list of home entries from `tar -t`, which prints such names *escaped*, and then asked for a file
+  under the escaped name - so the unpack failed and took the whole section with it, including the
+  entries that were fine. A customer creates that state themselves, with one folder copied out of a
+  Windows share, and it only shows when the restore is needed. The names come from the directory the
+  container unpacked into now, which cannot disagree with itself, and a single entry that cannot be
+  read is named as a failure instead of abandoning the rest. Inherited: HestiaCP 1.10.3 does the
+  same.
+
 - **A domain carrying `CROWDSEC='yes'` no longer breaks the whole nginx config on a box without
   CrowdSec** (#741). The per-domain fragment was written from the record and gated only on the web
   model, so an nginx that has no bouncer got a `rewrite_by_lua_block` it cannot parse - and that
