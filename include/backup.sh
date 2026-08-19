@@ -548,24 +548,27 @@ backup_leftovers_plan() {
 	local _obj _eff
 	LEFTOVERS_PATTERNS=''
 	LEFTOVERS_SUMMARY=''
-	_lo() { LEFTOVERS_PATTERNS="$LEFTOVERS_PATTERNS$1"$'\n'; LEFTOVERS_SUMMARY="$LEFTOVERS_SUMMARY$2"$'\n'; }
+	# Each line is <mode>TAB<pattern>. 'w' means tar may read it as a wildcard, 'x' means literally.
+	# Only OUR patterns are wildcards; anything carrying a name out of the archive is literal, or a
+	# database called x* extracts xyz along with it - measured, and xyz was one this host can restore.
+	_lo() { LEFTOVERS_PATTERNS="$LEFTOVERS_PATTERNS$1"$'\t'"$2"$'\n'; LEFTOVERS_SUMMARY="$LEFTOVERS_SUMMARY$3"$'\n'; }
 
-	[ -n "$PROBE_DNS" ] && _lo './dns/*' "$(backup_report_count "$PROBE_DNS") DNS zone(s), records and zone files"
-	[ -n "$PROBE_TPL" ] && _lo './web/*/template/*' "custom web template(s) for $(backup_report_count "$PROBE_TPL") domain(s)"
+	[ -n "$PROBE_DNS" ] && _lo w './dns/*' "$(backup_report_count "$PROBE_DNS") DNS zone(s), records and zone files"
+	[ -n "$PROBE_TPL" ] && _lo w './web/*/template/*' "custom web template(s) for $(backup_report_count "$PROBE_TPL") domain(s)"
 
-	[ -z "$WEB_SYSTEM" ] && [ -n "$PROBE_WEB" ] && _lo './web/*' "$(backup_report_count "$PROBE_WEB") web object(s), no WEB_SYSTEM here"
-	[ -z "$MAIL_SYSTEM" ] && [ -n "$PROBE_MAIL" ] && _lo './mail/*' "$(backup_report_count "$PROBE_MAIL") mail object(s), no MAIL_SYSTEM here"
-	[ "$PROBE_CRON" = 'yes' ] && [ -z "$CRON_SYSTEM" ] && _lo './cron/*' "the cron section, no CRON_SYSTEM here"
+	[ -z "$WEB_SYSTEM" ] && [ -n "$PROBE_WEB" ] && _lo w './web/*' "$(backup_report_count "$PROBE_WEB") web object(s), no WEB_SYSTEM here"
+	[ -z "$MAIL_SYSTEM" ] && [ -n "$PROBE_MAIL" ] && _lo w './mail/*' "$(backup_report_count "$PROBE_MAIL") mail object(s), no MAIL_SYSTEM here"
+	[ "$PROBE_CRON" = 'yes' ] && [ -z "$CRON_SYSTEM" ] && _lo w './cron/*' "the cron section, no CRON_SYSTEM here"
 
 	if [ -z "$DB_SYSTEM" ]; then
-		[ -n "$PROBE_DB" ] && _lo './db/*' "$(backup_report_count "$PROBE_DB") database(s), no DB_SYSTEM here"
+		[ -n "$PROBE_DB" ] && _lo w './db/*' "$(backup_report_count "$PROBE_DB") database(s), no DB_SYSTEM here"
 	else
 		# Per object: a host can have a DB_SYSTEM and still not the engine one dump was taken from.
 		while IFS= read -r _obj; do
 			[ -n "$_obj" ] || continue
 			_eff=$(backup_db_type "$_obj")
 			backup_db_type_supported "$_eff" && continue
-			_lo "./db/$_obj/*" "database $_obj, a ${_eff:-nameless} dump this host cannot load"
+			_lo x "./db/$_obj" "database $_obj, a ${_eff:-nameless} dump this host cannot load"
 		done <<< "$PROBE_DB"
 	fi
 	unset -f _lo
@@ -576,12 +579,30 @@ backup_leftovers_plan() {
 # The destination is the customer's, 0700, and never under web/ - these are their database dumps and
 # mail spools, not something a vhost may serve.
 backup_leftovers_export() {
-	local _arc="$1" _dest="$2" _owner="$3" _pat _n=0
+	local _arc="$1" _dest="$2" _owner="$3" _mode _pat _why _before _after _i=0
+	LEFTOVERS_DONE=''
+	LEFTOVERS_FAILED=''
 	[ -n "$LEFTOVERS_PATTERNS" ] || return 0
 	mkdir -p "$_dest" || return 1
-	while IFS= read -r _pat; do
+	while IFS=$'\t' read -r _mode _pat; do
 		[ -n "$_pat" ] || continue
-		tar -xf "$_arc" -C "$_dest" --wildcards "$_pat" 2> /dev/null && _n=$((_n + 1))
+		_i=$((_i + 1))
+		_why=$(sed -n "${_i}p" <<< "$LEFTOVERS_SUMMARY")
+		# Counted, not trusted: tar's exit status does not say whether anything landed, so a plan
+		# entry that produced no file would otherwise be reported as carried out with only the
+		# report in the directory.
+		_before=$(find "$_dest" -type f 2> /dev/null | wc -l)
+		if [ "$_mode" = 'w' ]; then
+			tar -xf "$_arc" -C "$_dest" --wildcards "$_pat" 2> /dev/null
+		else
+			tar -xf "$_arc" -C "$_dest" --no-wildcards "$_pat" 2> /dev/null
+		fi
+		_after=$(find "$_dest" -type f 2> /dev/null | wc -l)
+		if [ "$_after" -gt "$_before" ]; then
+			LEFTOVERS_DONE="$LEFTOVERS_DONE$_why"$'\n'
+		else
+			LEFTOVERS_FAILED="$LEFTOVERS_FAILED$_why"$'\n'
+		fi
 	done <<< "$LEFTOVERS_PATTERNS"
 	backup_report > "$_dest/loss-report.txt" 2> /dev/null
 	# The parent too: mkdir -p made it as root, and a root-owned directory in the customer's home is
@@ -590,7 +611,7 @@ backup_leftovers_export() {
 	chmod 0700 "$(dirname "$_dest")"
 	chown -R "$_owner:$_owner" "$_dest"
 	chmod -R u=rwX,go= "$_dest"
-	return 0
+	[ -z "$LEFTOVERS_FAILED" ]
 }
 
 # backup_record_file KIND OBJECT - the extracted record of one object, or nothing.
