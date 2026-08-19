@@ -69,6 +69,17 @@ opens above it.
 
 ### Security
 
+- **A restore selector reaches the queue through a closed character set** (#707). The five selectors
+  are spliced into the line `h-update-sys-queue` runs through `bash` as root, and they only had a
+  deny list of three characters in front of them - a pipe, a semicolon, a backtick and a `$(` all
+  went in. Not exploitable: they land inside single quotes and the one character that ends those was
+  already refused. But a deny list holds only as long as the quoting around it does, and it was a
+  too-wide allowed set that put a pipe on that line once before. A home entry with a space still
+  passes, because `my documents` is a name a customer can really have; one with a tab is refused,
+  because `tar` prints that escaped in the listing the restore matches against, so such a selector
+  used to be accepted and then quietly select nothing.
+
+
 - **The backup exclusion list is read through the hardened reader** (#706). Three places still used
   a raw `source` on a file the customer's panel writes, while the fourth already used `source_conf`
   - the same shape as the upstream advisory that reader exists for. `add_object_key`'s existence
