@@ -1054,7 +1054,8 @@ if [ "$udir" != 'no' ]; then
 		# asked for a file that is not there - which took the whole section down, including the
 		# entries that were fine. One pass over a compressed archive instead of one per entry, too.
 		tar xf "$BACKUP/$backup" -C "$tmpdir" --no-wildcards "./user_dir" 2> /dev/null
-		backup_dirs=$(cd "$tmpdir/user_dir" 2> /dev/null && find . -maxdepth 1 -type f -printf '%f\n' \
+		backup_dirs=$(cd "$tmpdir/user_dir" 2> /dev/null \
+			&& find . -maxdepth 1 -type f \( -name '*.tar.zst' -o -name '*.tar.gz' \) -printf '%f\n' \
 			| sed -e 's/\.tar\.zst$//' -e 's/\.tar\.gz$//' | sort)
 		if [ -z "$udir" ] || [ "$udir" = '*' ]; then
 			user_dirs="$backup_dirs"
@@ -1073,8 +1074,9 @@ if [ "$udir" != 'no' ]; then
 			else
 				udir_container="$tmpdir/user_dir/$user_dir.tar.gz"
 			fi
-			# One entry that cannot be read is named and skipped; it used to abandon the section, so
-			# everything after it in the loop stayed behind as well.
+			# One entry that cannot be read is named and the loop goes on; it used to abandon the
+			# section, so everything after it stayed behind as well. Nothing was written for this
+			# one, so "skipped" is the whole truth here - the two exits below are not.
 			if [ ! -f "$udir_container" ]; then
 				echo "Warning!: no container for home entry $user_dir - skipped" | tee -a $tmpdir/restore.log
 				restore_failures="$restore_failures$(printf '\n  home entry %s (no container in the archive)' "$user_dir")"
@@ -1099,9 +1101,13 @@ if [ "$udir" != 'no' ]; then
 				else
 					tar -xpzf "$udir_container" -C "$HOMEDIR/$user"
 				fi
+				# Failing here can mean tar stopped part way, so the entry is not reliably restored
+				# and not reliably untouched either. Nothing is removed: over an existing home that
+				# would delete data the archive was only meant to add to. Said as it is, because
+				# "skipped" would claim more than is known.
 				if [ "$?" -ne 0 ]; then
-					echo "Warning!: can't unpack home entry $user_dir - skipped" | tee -a $tmpdir/restore.log
-					restore_failures="$restore_failures$(printf '\n  home entry %s (container could not be unpacked)' "$user_dir")"
+					echo "Warning!: unpacking home entry $user_dir failed - whatever it wrote is left as it is" | tee -a $tmpdir/restore.log
+					restore_failures="$restore_failures$(printf '\n  home entry %s (unpacking failed, anything written is left as it is)' "$user_dir")"
 				fi
 				continue
 			fi
@@ -1114,8 +1120,8 @@ if [ "$udir" != 'no' ]; then
 			# home stays user-owned: the pam_namespace jail needs no root flip
 			chown "$user:$user" "$HOMEDIR/$user"
 			if [ "$cmdstatus" -ne 0 ]; then
-				echo "Warning!: can't unpack home entry $user_dir - skipped" | tee -a $tmpdir/restore.log
-				restore_failures="$restore_failures$(printf '\n  home entry %s (container could not be unpacked)' "$user_dir")"
+				echo "Warning!: unpacking home entry $user_dir failed - whatever it wrote is left as it is" | tee -a $tmpdir/restore.log
+				restore_failures="$restore_failures$(printf '\n  home entry %s (unpacking failed, anything written is left as it is)' "$user_dir")"
 				continue
 			fi
 
