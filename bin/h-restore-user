@@ -271,9 +271,7 @@ fi
 if [ -n "$restore_refused" ]; then
 	rm -rf "$tmpdir"
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
-	# The tokens that were actually refused, not a generic hint at 'all': 'all' covers the sections
-	# and deliberately not php-fallback, so pointing at it while complaining about php-fallback sent
-	# the operator in a circle.
+	# The tokens actually refused: 'all' covers the sections and deliberately not php-fallback.
 	restore_suggest=$(tr ' ' ',' <<< "${restore_refused# }")
 	check_result "$E_INVALID" "no consent for:$restore_refused - nothing was written. Pass CONSENT='$restore_suggest', select the objects to restore, or answer the prompt on a terminal. 'all' stands for the sections and deliberately not for php-fallback, which moves a customer's domains onto another PHP version."
 fi
@@ -367,12 +365,6 @@ new_uid=$(grep "^$user:" /etc/passwd | cut -f 3 -d :)
 # Restoring web domains
 if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 	echo -e "\n-- WEB --" | tee -a $tmpdir/restore.log
-
-	# The cross-model banner that used to stand here is gone, not moved: backup_report already says
-	# it, from the probe, before anything is written. This copy read ./hestia/web-system off the
-	# disk - a member only unpacked when the account is created - so a restore over an existing
-	# customer called a native archive "pre-#120" and stayed silent about a model that really did
-	# differ. Two reports of one fact are two chances to disagree.
 
 	# Restoring web domain. The list comes from the archive's member paths, not from a validator,
 	# so a member with a space in its name would split into two - and one of the halves could match
@@ -985,8 +977,7 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 
 		# Unzipping database dump
 		if [ $backup_mode = 'zstd' ]; then
-			# -q like everywhere else: pzstd prints every file's size on stderr, and in the middle
-			# of a restore log that reads like an error.
+			# -q: pzstd reports every file's size on stderr, which reads like an error here.
 			pzstd -q -d $tmpdir/db/$database/$database.*.sql.zst
 		else
 			gzip -d $tmpdir/db/$database/$database.*.sql.gz

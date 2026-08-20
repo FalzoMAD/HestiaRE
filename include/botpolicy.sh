@@ -137,8 +137,8 @@ botpolicy_apply() {
 # reference and `nginx -t` fails - which would block the next reload for every domain on the box.
 # botpolicy_family_enabled FAMILY - does this host know the family and have it switched on?
 #
-# A family that is gone or disabled has no zone in the server config, so a fragment naming it makes
-# `nginx -t` fail for the whole box. Asked by the renderer and by the restore's loss report.
+# A family that is gone or disabled has no zone in the server config, so a fragment naming it fails
+# `nginx -t` for the whole box. Asked from here by both the renderer and the restore's report.
 botpolicy_family_enabled() {
 	[ "$(get_object_value "$CONF_DIR/botfamilies" 'FAMILY' "$1" '$ENABLED' 2> /dev/null)" = 'yes' ]
 }

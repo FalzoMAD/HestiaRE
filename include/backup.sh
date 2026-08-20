@@ -341,13 +341,9 @@ backup_report() {
 			"$(backup_report_count "$PROBE_TPL")"
 	fi
 
-	# Protections a domain asks for that this host cannot render. The field itself survives the
-	# restore - it is the customer's setting and takes effect if the module arrives later - but a
-	# protection that is silently inactive belongs in the report. Both questions are asked of the
-	# renderers' own predicates, so the report cannot claim a capability the renderer disagrees with.
-	# Sourced only if the file is there. This function's whole job is to be honest BEFORE anything
-	# is written, so it must not be the thing that dies on an installation missing an optional
-	# module - the question then simply goes unasked.
+	# Protections a domain asks for that this host cannot render. The setting survives the restore
+	# on purpose, so only the report can say that it does nothing here. Asked of the renderers' own
+	# predicates, and only where the module is present - this must not be what dies without one.
 	[ -f "$HESTIA/include/crowdsec.sh" ] && { type crowdsec_domain_capable > /dev/null 2>&1 || source "$HESTIA/include/crowdsec.sh"; }
 	[ -f "$HESTIA/include/botpolicy.sh" ] && { type botpolicy_family_enabled > /dev/null 2>&1 || source "$HESTIA/include/botpolicy.sh"; }
 	_prot=''
@@ -362,8 +358,7 @@ backup_report() {
 		fi
 		_bl=$(sed -n "s/.*BOTLIMIT='\([^']*\)'.*/\1/p" <<< "$_rec")
 		type botpolicy_family_enabled > /dev/null 2>&1 || continue
-		# Split on the comma, and only on the comma. An unquoted ${_bl//,/ } would also glob, and a
-		# '*' in a foreign archive's BOTLIMIT would expand against the working directory.
+		# Split on the comma and only there: unquoted, a '*' would glob against the cwd.
 		IFS=',' read -r -a _bl_list <<< "$_bl"
 		for _e in "${_bl_list[@]}"; do
 			[ -n "$_e" ] || continue

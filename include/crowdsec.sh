@@ -239,12 +239,11 @@ crowdsec_l3_teardown() {
 
 # The per-domain Layer-A ban check, into the public nginx vhost dir - nginx-only, apache has no CrowdSec.
 # Removed when off, so the vhost's `include ...nginx.crowdsec.conf*;` glob is a no-op for that domain.
-# crowdsec_domain_capable - can a per-domain fragment do anything on this host?
+# crowdsec_domain_capable - can a per-domain fragment do anything here?
 #
-# The field is intent, this is capability: an nginx without the bouncer either cannot parse the
-# directive at all - invalidating the WHOLE config - or answers 500 per request. Keyed on the
-# artefact the apply step installs. Asked by the renderer below and by the restore's loss report,
-# from here rather than spelled out twice.
+# The field is intent, this is capability: an nginx without the bouncer either fails to parse the
+# directive, invalidating the whole config, or answers 500 per request. Keyed on the artefact the
+# apply step installs, and asked from here by both the renderer and the restore's report.
 crowdsec_domain_capable() {
 	local sys
 	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
@@ -255,7 +254,7 @@ crowdsec_render_domain_fragment() {
 	local user="$1" domain="$2"
 
 	local frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf"
-	# Leftovers of a removal go at the next rebuild (#743).
+	# Leftovers of a removal go at the next rebuild.
 	if ! crowdsec_domain_capable; then
 		rm -f "$frag"
 		return 0
