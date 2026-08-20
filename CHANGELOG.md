@@ -20,7 +20,9 @@ opens above it.
   next deletion took it to 0, which is what the panel and the counter check then showed. Disk usage
   carried the same shape, claiming one database's usage as all of it. A command that touches one
   object no longer claims a total; the plural form owns the counting and the disk queue owns the
-  usage.
+  usage. The counter check now also watches the suspended mirrors, which are derivable from the
+  records like the rest and were the one group in its exclusion list without a reason - so a value
+  knocked out of step becomes visible instead of waiting for somebody to rebuild the customer.
 
 - **A PostgreSQL database came back from a restore with its password destroyed** (#752). The rows
   all returned and the customer's application could no longer connect, which reads as a broken app
