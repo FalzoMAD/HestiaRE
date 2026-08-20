@@ -341,6 +341,15 @@ backup_report() {
 			"$(backup_report_count "$PROBE_TPL")"
 	fi
 
+	# Webmail settings and address books are not in here and never were: they sit in one table set
+	# per box, shared by every mailbox, so the server backup carries them. Said whenever the archive
+	# has mail domains, because "my contacts are gone" after a restore is otherwise a surprise.
+	if [ -n "$PROBE_MAIL" ]; then
+		_found=1
+		printf '   webmail settings and address books for %s mail domain(s) - they are shared per box, so they travel in the server backup and not in this archive\n' \
+			"$(backup_report_count "$PROBE_MAIL")"
+	fi
+
 	# Protections a domain asks for that this host cannot render. The setting survives the restore
 	# on purpose, so only the report can say that it does nothing here. Asked of the renderers' own
 	# predicates, and only where the module is present - this must not be what dies without one.

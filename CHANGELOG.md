@@ -29,6 +29,22 @@ opens above it.
   account kept it - and a name carrying the prefix in the middle lost it from there instead. Each
   entry is converted on its own now, anchored at the front, the way the database name already was.
 
+- **A restore dropped the customer's panel notifications and login history without a word** (#713).
+  The backup copied a fixed list of names out of the customer's data directory, and a list only
+  ever covers the files that existed when it was written - `notifications.conf` and `auth.log`
+  never made it in. Both sides now walk the directory and skip a named set instead, each entry with
+  its reason next to it, so the next file added there travels by default rather than by amendment.
+  The customer's restic repository password stays out, and so do the records the sections rebuild
+  themselves.
+
+- **The restore report says that webmail settings and address books are not in the archive** (#713).
+  They live in one table set per box, shared by every mailbox, so the server backup carries them -
+  but silence on the point made "my contacts are gone" a discovery for after the restore.
+
+- Smaller: a new account no longer gets an empty `dns` directory and `dns.conf` for a subsystem that
+  was removed, and a MySQL password statement can no longer survive from one database into the next
+  in a rebuild loop (#713).
+
 - **A restore under a different customer name pointed the site's password protection into the old
   customer's home** (#756). The `.htaccess` fragments travel inside the archive with an absolute
   path written into them, and the rebuild only wrote its own when none was there - which after a
