@@ -218,15 +218,14 @@ function syshealth_repair_web_config() {
 # Not add_object_key: that one edits a single-line record in place, while user.conf is one key per
 # line. Inserted before TIME= rather than appended, so the key never sits on the last line - a record
 # without a TIME= line gains nothing, the known limit of this shape (#433).
-# syshealth_user_key_default KEY - the value a missing key should be given, in REPLY.
+# syshealth_user_key_default KEY - the value a missing key should get, in REPLY.
 #
-# Returns 1 when the key must NOT be inserted: it belongs to the package block but this customer's
-# package file could not answer. Inserting it empty would be worse than leaving it out, because an
-# empty limit reads as zero (see is_package_full) and locks the customer out of their own package.
+# Returns 1 when the key must NOT be inserted: it belongs to the package block and this customer's
+# package cannot answer. Empty is worse than absent there - an empty limit reads as zero and locks
+# the customer out of their own package (is_package_full).
 #
-# Membership in the package block is read off default.pkg rather than listed here, so a package
-# gaining a field does not need this function to be edited. The named defaults below are the ones no
-# package file carries; they mirror the record h-add-user writes.
+# Block membership is read off default.pkg rather than listed, so a package gaining a field needs no
+# edit here. The named defaults are the ones no package file carries; they mirror h-add-user.
 syshealth_user_key_default() {
 	local _key="$1"
 	REPLY=$(package_key_value "$_key")
@@ -251,15 +250,13 @@ syshealth_repair_user_config() {
 
 	for key in $(read_kv_config_file 'user'); do
 		grep -q "^${key}='" "$USER_DATA/user.conf" && continue
-		# A real default, not ''. The package block carries the customer's limits, and an empty
-		# limit is not "no limit" to any reader - it is zero.
+		# A real default, not '': an empty limit is zero to every reader, not "no limit".
 		if ! syshealth_user_key_default "$key"; then
 			missing="$missing $key"
 			continue
 		fi
-		# The value ends up inside KEY='...' on a line of its own. A quote would close that early
-		# and turn the rest into a second field, a newline would make it a second line - either way
-		# a record two readers disagree about, which is the defect this function exists to remove.
+		# The value lands inside KEY='...' on its own line: a quote closes it early, a newline
+		# splits it, and either way two readers disagree about the record.
 		case "$REPLY" in
 			*"'"* | *$'\n'*)
 				echo "Warning!: the package value for $key cannot be written as a record field - left out"
@@ -270,10 +267,9 @@ syshealth_repair_user_config() {
 	done
 	[ -z "$missing" ] || echo "Warning!: package '$(sed -n "s/^PACKAGE='\(.*\)'$/\1/p" "$USER_DATA/user.conf" | head -n1)' cannot supply${missing} - left out rather than guessed"
 
-	# Read once, written once. Also the pass that removes a key appearing twice: earlier repairs
-	# addressed their inserts with bare sed patterns, so /MAIL_ACCOUNTS/ also matched
-	# U_MAIL_ACCOUNTS and boxes carry two RATE_LIMIT lines to this day. Those do not go away on
-	# their own - the loop above skips a key that is present, however often it is present.
+	# Also the pass that drops a key appearing twice: bare sed addresses put it there
+	# (/MAIL_ACCOUNTS/ matches U_MAIL_ACCOUNTS too), and the loop above skips a key that is
+	# present however often it is present, so those lines never leave on their own.
 	mapfile -t lines < "$USER_DATA/user.conf"
 	declare -A _cnt=() _last=()
 	for i in "${!lines[@]}"; do
@@ -285,14 +281,12 @@ syshealth_repair_user_config() {
 	for key in "${!_cnt[@]}"; do
 		[ "${_cnt[$key]}" -gt 1 ] || continue
 		seen_dup="$seen_dup $key"
-		# The last one wins because source_conf does, and source_conf is what nearly every reader
-		# uses; the grep | head -1 readers were seeing the other one, which is the ambiguity itself.
+		# The last wins because source_conf does, and that is what nearly every reader uses.
 		echo "Warning!: user.conf had ${_cnt[$key]} lines for $key - keeping line $((_last[$key] + 1)), the value source_conf was already using"
 	done
 
-	# One rewrite: drop the earlier copies of a duplicated key, then insert what is missing before
-	# TIME=. printf, never sed's i command - the value is data here, and sed would eat a backslash
-	# in it and need the text escaped for the command's own syntax on top.
+	# printf, never sed's i command: the value is data here, and i eats a backslash in it and wants
+	# the text escaped for its own syntax on top.
 	if [ -n "$seen_dup" ] || [ ${#add[@]} -gt 0 ]; then
 		{
 			for i in "${!lines[@]}"; do
@@ -310,14 +304,14 @@ syshealth_repair_user_config() {
 				esac
 				printf '%s\n' "$line"
 			done
-			# No TIME= line: append rather than lose them (#433 names that shape).
+			# No TIME= line: append rather than lose them.
 			for pending in "${add[@]}"; do printf '%s\n' "$pending"; done
 		} > "$USER_DATA/user.conf.repair" && mv -f "$USER_DATA/user.conf.repair" "$USER_DATA/user.conf"
 		chmod 660 "$USER_DATA/user.conf"
 	fi
-	# Sourced last, not before the loop: sanitize_config_file clears the keys from the environment,
-	# so re-reading first would load the pre-repair state and leave every key inserted below unset as
-	# a shell variable. Callers testing ${KEY+x} would then get the opposite of what the file says.
+	# Sourced last: sanitize_config_file cleared these from the environment, so reading before the
+	# repair would leave every key it just inserted unset as a shell variable, and a caller testing
+	# ${KEY+x} would get the opposite of what the file says.
 	source_conf "$USER_DATA/user.conf"
 }
 

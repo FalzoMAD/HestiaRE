@@ -247,10 +247,9 @@ is_system_enabled() {
 }
 
 # User package check
-# package_key_value KEY - what this customer's own package file says for KEY, or nothing.
-#
-# The same file h-add-user seeds a new user.conf from, so this is that source of truth read again -
-# not a second opinion. KEY comes from the registry, never from input.
+# package_key_value KEY - what this customer's package file says for KEY, or nothing. The same file
+# h-add-user seeds a new user.conf from, so it is not a second opinion. KEY reaches a sed pattern,
+# so it comes from the registry, never from input.
 package_key_value() {
 	local _pkg
 	[ -f "$USER_DATA/user.conf" ] || return 1
@@ -271,12 +270,9 @@ is_package_full() {
 	esac
 	used=$(echo "$used" | cut -f 1 -d \ )
 	limit=$(grep "^$1=" $USER_DATA/user.conf | cut -f 2 -d \')
-	# An absent or unreadable limit is a broken record, not a limit of zero - but that is how
-	# [[ n -ge "" ]] reads it, so every request was refused with a message blaming the customer's
-	# package. Measured on a user.conf with WEB_DOMAINS removed: h-add-web-domain answered
-	# "WEB_DOMAINS limit is reached" with no domains at all. Ask the package file, which is where
-	# the value came from; if that cannot answer either, a defect in the record must not present
-	# itself as a limit the customer has hit.
+	# An absent limit is a broken record, not a limit of zero - but [[ n -ge "" ]] reads it as one
+	# and refuses every request with a message blaming the customer's package. Ask the package file
+	# instead, which is where the value came from.
 	case "$limit" in
 		'unlimited') ;;
 		'' | *[!0-9]*)
@@ -284,11 +280,9 @@ is_package_full() {
 			case "$limit" in
 				'unlimited') return 0 ;;
 				'' | *[!0-9]*)
-					# Said, not swallowed. This is the safe direction for the customer and the
-					# wrong one for the operator: a package with a typo would otherwise switch the
-					# limit off for everyone on it and look completely normal doing so. The rule
-					# this whole change follows is that a defect must not present itself as a
-					# normal state - which cuts both ways.
+					# Not enforcing is the safe direction for the customer and an invisible one
+					# for the operator: one typo in a package would silently unlimit everyone on
+					# it. So it is said.
 					echo "Warning!: neither user.conf nor the package gives a usable $1 limit - not enforcing one"
 					return 0
 					;;
@@ -335,10 +329,7 @@ fetch_wp_cli_phar() {
 		rm -f "$tmp"
 		return 1
 	fi
-	mv -f "$tmp" "$dest" || {
-		rm -f "$tmp"
-		return 1
-	}
+	mv -f "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
 	chmod 755 "$dest"
 }
 
