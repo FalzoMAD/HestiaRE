@@ -260,8 +260,9 @@ backup_report_count() {
 backup_local_keys() {
 	local _kind="$1" _f
 	# A missing user directory is not "no keys" - it is the wrong place, and the caller would get a
-	# smaller reference set with no sign of it. The registry knows neither CROWDSEC nor BOTLIMIT, so
-	# a silently absent source really does change the answer.
+	# smaller reference set with no sign of it. The other two sources cannot stand in for it: the
+	# registry only knows what this version compiled in, and the command sweep only what a command
+	# can add.
 	if [ ! -d "$CONF_DIR/users" ]; then
 		echo "Warning!: $CONF_DIR/users is not there - the live-record key source read nothing" >&2
 	fi
