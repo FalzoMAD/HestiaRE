@@ -14,6 +14,26 @@ opens above it.
 
 ### Fixed
 
+- **A restore over an existing customer called a fresh archive "pre-#120" and said nothing about a
+  web model that really did differ** (#753). The banner inside the run read a member that is only
+  unpacked when the account is created, so on the most common path it never saw it. It is gone
+  rather than repaired: the preflight report already carries the same sentence, from the probe, and
+  before anything is written - two reports of one fact are two chances to disagree.
+
+- **The consent error pointed at a token that could not satisfy it** (#755). Refusing on
+  `php-fallback` while suggesting `all` sent the operator in a circle, because `all` deliberately
+  does not cover it. The message now names the tokens that were actually refused, says what `all`
+  stands for, and the command's own example no longer teaches the form that does not work.
+
+- **A restored domain kept its CrowdSec or bot-limit setting on a host that cannot render it, and
+  the report called the archive fully restorable** (#755). Those protections survive as settings on
+  purpose - they take effect if the module arrives later - but silence made an inactive protection
+  look like a live one. The report names them, asking the renderers' own capability checks rather
+  than a second copy of the condition.
+
+- Smaller: a zstd database dump no longer prints its size into the middle of the restore log, where
+  it read like an error (#755).
+
 - **A PostgreSQL database came back from a restore with its password destroyed** (#752). The rows
   all returned and the customer's application could no longer connect, which reads as a broken app
   rather than as a restore - and on a same-box restore nothing said a word. The hash was being
