@@ -54,15 +54,8 @@ case $TYPE in
 	pgsql) rebuild_pgsql_database ;;
 esac
 
-U_DISK_DB=$((U_DISK_DB + U_DISK))
-U_DATABASES=$((U_DATABASES + 1))
-if [ "$SUSPENDED" = 'yes' ]; then
-	SUSPENDED_DB=$((SUSPENDED_DB + 1))
-fi
-
-update_user_value "$user" '$SUSPENDED_DB' "$SUSPENDED_DB"
-update_user_value "$user" '$U_DATABASES' "$U_DATABASES"
-update_user_value "$user" '$U_DISK_DB' "$U_DISK_DB"
+# No counter is written here: this rebuilds ONE database, and the totals are per customer. The
+# plural form owns the counting, the disk queue owns U_DISK_DB.
 
 #----------------------------------------------------------#
 #                       Hestia                             #

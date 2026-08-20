@@ -815,9 +815,10 @@ check_web_templates_resolvable() {
 	fi
 }
 
-# check_object_counters - the record-derived U_* counters against a recount, using the
-# same derivation rules as h-update-user-counters. Not covered, deliberately: U_DISK*/
-# U_BANDWIDTH (measured, not derivable from records), U_USERS and the SUSPENDED_* mirrors.
+# check_object_counters - the record-derived counters against a recount, using the same
+# derivation rules as h-update-user-counters. Not covered, deliberately: U_DISK*/U_BANDWIDTH
+# (measured, not derivable from records) and U_USERS (an admin-wide count, not one of this
+# user's records).
 check_object_counters() {
 	local u ud stored drift=0 first="" checked=0 ipf ip real
 	_ctr() {
@@ -847,6 +848,12 @@ check_object_counters() {
 		_ctr U_DATABASES "$(_cnt . "$ud/db.conf")"
 		_ctr U_CRON_JOBS "$(_cnt . "$ud/cron.conf")"
 		_ctr U_BACKUPS "$(_cnt . "$ud/backup.conf")"
+		# The suspended mirrors, by the same rule the recount uses. Nothing else watches them: no
+		# recount runs on a schedule, only h-rebuild-user and h-update-user-counters, on demand.
+		_ctr SUSPENDED_WEB "$(_cnt "SUSPENDED='yes'" "$ud/web.conf")"
+		_ctr SUSPENDED_MAIL "$(_cnt "SUSPENDED='yes'" "$ud/mail.conf")"
+		_ctr SUSPENDED_DB "$(_cnt "SUSPENDED='yes'" "$ud/db.conf")"
+		_ctr SUSPENDED_CRON "$(_cnt "SUSPENDED='yes'" "$ud/cron.conf")"
 	done
 	# Records store the ADDRESS THE DOMAIN ANSWERS ON, which behind NAT is the public
 	# one, while the ip file is named after the local address - so both count here, or
