@@ -836,6 +836,8 @@ rebuild_mail_domain_conf() {
 # Rebuild MySQL
 rebuild_mysql_database() {
 	mysql_connect $HOST
+	# Cleared per call: only one branch sets it, so it would carry into the next database.
+	query2=''
 	# Before the CREATE USERs: only "was this user already here" tells a kept credential from one
 	# that never arrived.
 	dbuser_existed=$(mysql_query "SELECT COUNT(*) FROM mysql.user WHERE User='$DBUSER'" 2> /dev/null | tail -n1)

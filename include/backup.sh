@@ -114,6 +114,17 @@ record_del_field() {
 # outright rather than threaded through every path join, so this is a constant.
 BACKUP_CONTAINER='hestia'
 
+# BACKUP_USER_DATA_CORE - entries of a customer's data directory that travel in NEITHER direction.
+# One list for both sides; the restore adds its own on top, so it can never reject less than the
+# backup withholds.
+#
+#   web|mail|db|cron.conf, mail  the sections rebuild these per object
+#   backup.conf                  a box's own list of archives
+#   dns.conf, dns                the subsystem is gone
+#   restic.conf                  a repository password
+#   auth.log                     login IPs, browser fingerprints and session ids
+BACKUP_USER_DATA_CORE='web.conf mail.conf db.conf cron.conf mail backup.conf dns.conf dns restic.conf auth.log'
+
 # The text identifying a queued job - command plus the arguments that tell it apart. One per
 # queueable command.
 QUEUE_JOB=''
@@ -339,6 +350,14 @@ backup_report() {
 		_found=1
 		printf '   custom web template(s) for %s domain(s) - this host renders from its own set\n' \
 			"$(backup_report_count "$PROBE_TPL")"
+	fi
+
+	# Webmail settings and address books sit in one table set per box, shared by every mailbox, so
+	# the server backup carries them. Said whenever the archive has mail domains.
+	if [ -n "$PROBE_MAIL" ]; then
+		_found=1
+		printf '   webmail settings and address books for %s mail domain(s) - shared per box, so the server backup carries them\n' \
+			"$(backup_report_count "$PROBE_MAIL")"
 	fi
 
 	# Protections a domain asks for that this host cannot render. The setting survives the restore

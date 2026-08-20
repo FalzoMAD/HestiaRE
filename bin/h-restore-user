@@ -301,7 +301,19 @@ if [ "$create_user" = 'yes' ]; then
 	mkdir $USER_DATA
 	cp $tmpdir/$BACKUP_CONTAINER/user.conf $USER_DATA/
 	cp -r $tmpdir/$BACKUP_CONTAINER/ssl $USER_DATA/ > /dev/null 2>&1
-	cp $tmpdir/$BACKUP_CONTAINER/backup-excludes.conf $USER_DATA/ > /dev/null 2>&1
+
+	# Everything else the container holds. Skipped: BACKUP_USER_DATA_CORE, plus what this side does
+	# itself - user.conf and ssl above, packages below, web-system and origin, which describe the
+	# archive. A superset on purpose: this is the side that takes in foreign archives.
+	for _entry in "$tmpdir/$BACKUP_CONTAINER"/*; do
+		[ -e "$_entry" ] || continue
+		_name=$(basename "$_entry")
+		[[ " $BACKUP_USER_DATA_CORE user.conf ssl packages web-system origin " == *" $_name "* ]] && continue
+		# Out of the archive and joined onto a path we write to: a plain basename or nothing.
+		case "$_name" in '' | .* | */* | *[!A-Za-z0-9._-]*) continue ;; esac
+		cp -r "$_entry" "$USER_DATA/" \
+			|| echo "Warning!: $_name from the archive could not be written to the data directory" | tee -a $tmpdir/restore.log
+	done
 
 	# The user's hosting package, if the archive carried one. ADD ONLY: a package of that name
 	# already on this box is left exactly as it is, even if its values differ - the admin owns the
