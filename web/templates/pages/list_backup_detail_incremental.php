@@ -118,7 +118,6 @@
 		<?php }
 				} ?>
 
-
 		<?php
 				$db = explode(',', $data['snapshot']['DB']);
 			foreach ($db as $key) {

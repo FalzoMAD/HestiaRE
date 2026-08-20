@@ -40,7 +40,7 @@ check_hestia_demo_mode
 # Delete system exclusion
 if [ -z "$system" ]; then
 	WEB=''
-		MAIL=''
+	MAIL=''
 	DB=''
 	CRON=''
 	USER=''
@@ -53,6 +53,9 @@ else
 		DB) DB='' ;;
 		CRON) CRON='' ;;
 		USER) USER='' ;;
+		# Named, not ignored: without this an unknown name rewrote the file unchanged and reported
+		# success, so a typo and a deletion looked the same from the outside.
+		*) check_result "$E_INVALID" "no such exclusion type '$system' - one of: WEB MAIL DB CRON USER" ;;
 	esac
 fi
 
