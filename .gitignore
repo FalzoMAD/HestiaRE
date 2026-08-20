@@ -6,8 +6,7 @@
 *.bz2
 *.deb
 
-# Run artefacts. Driving an h-* command or a test from the repo root drops its log here, and one
-# already reached a PR that way. Nothing tracked ends in .log, so this masks no real file.
+# test logfiles
 *.log
 
 # Editors
@@ -25,8 +24,7 @@
 # Composer
 composer.phar
 
-# Ad-hoc lint tooling: run against a checkout, never part of the build. Caches carry absolute paths
-# and tool versions, and a tracked one would also land in the release tarball.
+# Ad-hoc lint tooling
 .php-cs-fixer.cache
 .phpstan.cache
 .phpunit.result.cache
