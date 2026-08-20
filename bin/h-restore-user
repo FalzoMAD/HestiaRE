@@ -359,6 +359,13 @@ else
 		restore_failures="$restore_failures$(printf '\n  not handed over:%s' "$(tr '\n' ';' <<< "$LEFTOVERS_FAILED" | sed 's/;$//;s/;/, /g')")"
 	fi
 	[ -n "$LEFTOVERS_DONE" ] && echo "$(date '+%F %T') -> $leftovers_dir" | tee -a $tmpdir/restore.log
+	# Handing the objects to the customer is the friendly half; the status has to carry the rest.
+	# Otherwise a queue reads three missing databases as a restore that worked, while one missing
+	# database - the same loss, reached by another branch - already ends the run in red.
+	while IFS= read -r _degraded; do
+		[ -n "$_degraded" ] || continue
+		restore_failures="$restore_failures$(printf '\n  %s - handed over instead of restored' "$_degraded")"
+	done <<< "$LEFTOVERS_DEGRADED"
 fi
 
 # Unpacking pam container
@@ -1197,8 +1204,12 @@ if [ -d "$HOMEDIR/$user/.companion" ] && [ -x "$BIN/h-add-user-docker" ]; then
 			-exec chown -h "$new_companion" {} \;
 	fi
 
-	"$BIN/h-add-user-docker" "$user" >> $tmpdir/restore.log 2>&1 \
-		|| echo "Warning!: could not re-enable Docker for $user - see the log above." | tee -a $tmpdir/restore.log
+	if ! "$BIN/h-add-user-docker" "$user" >> $tmpdir/restore.log 2>&1; then
+		echo "Warning!: could not re-enable Docker for $user - see the log above." | tee -a $tmpdir/restore.log
+		# The customer had docker and does not have it here, which is the same kind of loss as a
+		# section this box cannot take.
+		restore_failures="$restore_failures$(printf '\n  docker for %s (could not be re-enabled on this host)' "$user")"
+	fi
 fi
 
 # Sending mail notification
