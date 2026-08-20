@@ -895,7 +895,13 @@ rebuild_pgsql_database() {
 		exit "$E_CONNECT"
 	fi
 
-	query="CREATE ROLE $DBUSER"
+	# WITH LOGIN, as add_pgsql_database has always written it: bare CREATE ROLE defaults to NOLOGIN,
+	# so a restored database was unreachable whatever its password said - and that is why the empty
+	# password below went unnoticed for so long. The ALTER repairs roles the old form left behind;
+	# a role that exists only to serve this database is always meant to be able to log in.
+	query="CREATE ROLE $DBUSER WITH LOGIN"
+	psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+	query="ALTER ROLE $DBUSER WITH LOGIN"
 	psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
 
 	# An empty hash is the absence of a password, not a password. Writing it replaced a working

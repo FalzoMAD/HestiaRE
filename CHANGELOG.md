@@ -14,6 +14,22 @@ opens above it.
 
 ### Fixed
 
+- **A PostgreSQL database came back from a restore with its password destroyed** (#752). The rows
+  all returned and the customer's application could no longer connect, which reads as a broken app
+  rather than as a restore - and on a same-box restore nothing said a word. The hash was being
+  parsed out of `psql`'s aligned table: the backup took the first line, which is the column
+  heading, and the create and password-change paths filtered for `md5`, which matches no SCRAM
+  hash at all. Every pgsql record was therefore written with an empty password, and the rebuild
+  wrote that emptiness into `pg_authid`. The hash is now read as a value, an empty one never
+  replaces a credential that works, and the run says when it kept one. The same guard covers MySQL,
+  which was only safe because its own read path happened to work.
+
+- **A restored PostgreSQL role could not log in at all** (#752). The rebuild created it with a bare
+  `CREATE ROLE`, which is `NOLOGIN` in PostgreSQL - so a restored database was unreachable whatever
+  its password said, and that is why the empty password went unnoticed for so long. Roles are
+  created with `LOGIN` as they always were on the add path, and existing ones left behind by the
+  old form are repaired in place.
+
 - **A customer whose `user.conf` lost a package limit was locked out of their own package** (#711).
   An absent or empty limit is not a limit of zero, but that is how the comparison read it, so every
   attempt to add a web domain, mail domain, database or cron job was refused with a message blaming
