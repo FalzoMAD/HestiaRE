@@ -469,14 +469,22 @@ rebuild_web_domain_conf() {
 	# the only source, the two files are derived from it - in both directions.
 	htpasswd="$HOMEDIR/$user/conf/web/$domain/htpasswd"
 	docroot="$HOMEDIR/$user/web/$domain/public_html"
+	nginx_htaccess="$HOMEDIR/$user/conf/web/$domain/nginx.conf_htaccess"
+	nginx_shtaccess="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_htaccess"
+	apache_htaccess="$HOMEDIR/$user/conf/web/$domain/apache2.conf_htaccess"
+	apache_shtaccess="$HOMEDIR/$user/conf/web/$domain/apache2.ssl.conf_htaccess"
 	if [ "$WEB_SYSTEM" = "nginx" ] || [ "$PROXY_SYSTEM" = "nginx" ]; then
-		htaccess="$HOMEDIR/$user/conf/web/$domain/nginx.conf_htaccess"
-		shtaccess="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_htaccess"
+		htaccess="$nginx_htaccess"
+		shtaccess="$nginx_shtaccess"
+		stale_htaccess="$apache_htaccess"
+		stale_shtaccess="$apache_shtaccess"
 		htaccess_want="auth_basic  \"$domain password access\";
 auth_basic_user_file    $htpasswd;"
 	else
-		htaccess="$HOMEDIR/$user/conf/web/$domain/apache2.conf_htaccess"
-		shtaccess="$HOMEDIR/$user/conf/web/$domain/apache2.ssl.conf_htaccess"
+		htaccess="$apache_htaccess"
+		shtaccess="$apache_shtaccess"
+		stale_htaccess="$nginx_htaccess"
+		stale_shtaccess="$nginx_shtaccess"
 		htaccess_want="<Directory $docroot>
     AuthUserFile $htpasswd
     AuthName \"$domain access\"
@@ -484,6 +492,11 @@ auth_basic_user_file    $htpasswd;"
     Require valid-user
 </Directory>"
 	fi
+
+	# The pair belonging to the other web server is inert here, so nothing notices that it still
+	# names the home the archive was made under - until the model is switched at runtime (#120) and
+	# it becomes the live one. Dropped rather than left for that day.
+	rm -f "$stale_htaccess" "$stale_shtaccess"
 
 	if [ -n "$AUTH_USER" ]; then
 		# The record's accounts and only those. Appending to a restored file would keep an account
