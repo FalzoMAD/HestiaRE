@@ -804,6 +804,10 @@ rebuild_mail_domain_conf() {
 # Rebuild MySQL
 rebuild_mysql_database() {
 	mysql_connect $HOST
+	# Before the CREATE USERs: only "was this user already here" tells a kept credential from one
+	# that never arrived.
+	dbuser_existed=$(mysql_query "SELECT COUNT(*) FROM mysql.user WHERE User='$DBUSER'" 2> /dev/null | tail -n1)
+	[ "$dbuser_existed" = '0' ] && dbuser_existed=''
 	mysql_query "CREATE DATABASE \`$DB\` CHARACTER SET $CHARSET" > /dev/null
 	if [ "$mysql_fork" = "mysql" ]; then
 		# mysql
@@ -849,9 +853,18 @@ rebuild_mysql_database() {
 	fi
 	mysql_query "GRANT ALL ON \`$DB\`.* TO \`$DBUSER\`@\`%\`" > /dev/null
 	mysql_query "GRANT ALL ON \`$DB\`.* TO \`$DBUSER\`@localhost" > /dev/null
-	mysql_query "$query" > /dev/null
-	if [ ! -z "$query2" ]; then
-		mysql_query "$query2" > /dev/null
+	# An empty hash would blank a working password; mysql survives today only because its own read
+	# path happens to work. Guards an EXISTING credential - CREATE USER above is IF NOT EXISTS.
+	if [ -n "$MD5" ]; then
+		mysql_query "$query" > /dev/null
+		if [ ! -z "$query2" ]; then
+			mysql_query "$query2" > /dev/null
+		fi
+	elif [ -n "$dbuser_existed" ]; then
+		echo "Warning!: $DB carries no password for $DBUSER - the one on this host is kept unchanged"
+	else
+		echo "Warning!: $DB has no password for $DBUSER on this host - the data is back, but nothing can connect to it until a password is set"
+		REBUILD_DB_UNUSABLE="$REBUILD_DB_UNUSABLE $DB"
 	fi
 	mysql_query "FLUSH PRIVILEGES" > /dev/null
 }
@@ -886,11 +899,33 @@ rebuild_pgsql_database() {
 		exit "$E_CONNECT"
 	fi
 
-	query="CREATE ROLE $DBUSER"
-	psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+	# Asked before anything is created: afterwards the two cases look identical, and "kept
+	# unchanged" on a host where the role was just made claims a credential that never existed.
+	role_existed=$(psql_value "SELECT 1 FROM pg_authid WHERE rolname='$DBUSER'")
 
-	query="UPDATE pg_authid SET rolpassword='$MD5' WHERE rolname='$DBUSER'"
-	psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+	if [ -n "$MD5" ]; then
+		# Bare CREATE ROLE is NOLOGIN, so a restored database was unreachable whatever its password
+		# said. Granted only together with a password: a passwordless login role would be open
+		# wherever pg_hba.conf carries a trust line, which nothing here can read. The ALTER repairs
+		# roles the old bare form left behind.
+		query="CREATE ROLE $DBUSER WITH LOGIN"
+		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+		query="ALTER ROLE $DBUSER WITH LOGIN"
+		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+		# Through psql_query's temp file, never -c: a SCRAM verifier is credential-equivalent and
+		# argv is readable through /proc. The only statement here that carries a secret.
+		psql_query "UPDATE pg_authid SET rolpassword='$MD5' WHERE rolname='$DBUSER'" > /dev/null
+	else
+		# An empty hash is the absence of a password: it may neither replace a working one nor pose as one.
+		query="CREATE ROLE $DBUSER"
+		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+		if [ -n "$role_existed" ]; then
+			echo "Warning!: $DB carries no password for $DBUSER - the one on this host is kept unchanged"
+		else
+			echo "Warning!: $DB has no password for $DBUSER on this host - the data is back, but nothing can connect to it until a password is set"
+			REBUILD_DB_UNUSABLE="$REBUILD_DB_UNUSABLE $DB"
+		fi
+	fi
 
 	query="CREATE DATABASE $DB OWNER $DBUSER"
 	if [ "$TPL" = 'template0' ]; then

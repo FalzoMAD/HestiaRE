@@ -6,6 +6,9 @@
 *.bz2
 *.deb
 
+# test logfiles
+*.log
+
 # Editors
 .vs/
 .nova/
@@ -21,8 +24,7 @@
 # Composer
 composer.phar
 
-# Ad-hoc lint tooling: run against a checkout, never part of the build. Caches carry absolute paths
-# and tool versions, and a tracked one would also land in the release tarball.
+# Ad-hoc lint tooling
 .php-cs-fixer.cache
 .phpstan.cache
 .phpunit.result.cache

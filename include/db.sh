@@ -175,6 +175,19 @@ psql_query() {
 	rm -f $sql_tmp
 }
 
+# psql_value QUERY - the value of a one-column, one-row SELECT, nothing else.
+#
+# Not psql_query: that prints the aligned table, and get_pgsql_disk_usage parses exactly that shape.
+# Reading a value out of it lost every pgsql password - `head -n1` is the column HEADING, and a
+# `grep md5` filter matches no SCRAM hash. -tAX: no heading, no padding, no .psqlrc.
+psql_value() {
+	local _tmp
+	_tmp=$(mktemp)
+	echo "$1" > "$_tmp"
+	psql -h "$HOST" -U "$USER" -p "$PORT" -tAX -f "$_tmp" 2> /dev/null | head -n1
+	rm -f "$_tmp"
+}
+
 psql_dump() {
 	pg_dump -h $HOST -U $USER -p $PORT -c --inserts -O -x -f $1 $2 2> /tmp/e.psql
 	if [ '0' -ne "$?" ]; then
@@ -370,7 +383,7 @@ add_pgsql_database() {
 	psql_query "$query" > /dev/null
 
 	query="SELECT rolpassword FROM pg_authid WHERE rolname='$dbuser'"
-	md5=$(psql_query "$query" | grep md5 | cut -f 2 -d \ )
+	md5=$(psql_value "$query")
 }
 
 add_mysql_database_temp_user() {
@@ -499,7 +512,7 @@ change_pgsql_password() {
 	psql_query "$query" > /dev/null
 
 	query="SELECT rolpassword FROM pg_authid WHERE rolname='$DBUSER'"
-	md5=$(psql_query "$query" | grep md5 | cut -f 2 -d \ )
+	md5=$(psql_value "$query")
 }
 
 # Delete MySQL database
@@ -562,7 +575,7 @@ dump_pgsql_database() {
 	psql_dump $dump $database
 
 	query="SELECT rolpassword FROM pg_authid WHERE rolname='$DBUSER'"
-	md5=$(psql_query "$query" | head -n1 | cut -f 2 -d \ )
+	md5=$(psql_value "$query")
 	pw_str="UPDATE pg_authid SET rolpassword='$md5' WHERE rolname='$DBUSER'"
 	gr_str="GRANT ALL PRIVILEGES ON DATABASE $database to '$DBUSER'"
 	echo -e "$pw_str\n$gr_str" >> $grants

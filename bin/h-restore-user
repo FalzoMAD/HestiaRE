@@ -994,6 +994,8 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 
 		# Importing database dump
 		database_dump="$tmpdir/db/$database/$database.$TYPE.sql"
+		# Reset per database, or the report names every database after the first one that lacked one.
+		REBUILD_DB_UNUSABLE=''
 		case $TYPE in
 			mysql)
 				delete_mysql_database
@@ -1006,6 +1008,11 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 				import_pgsql_database $database_dump
 				;;
 		esac
+		# Rows back, nothing able to connect: a degraded result, not a line to find in the log later.
+		# Only the fresh-host case reaches here - where a password was kept, it stays a warning.
+		if [ -n "$REBUILD_DB_UNUSABLE" ]; then
+			restore_failures="$restore_failures$(printf '\n  database %s (restored without a password - set one before the application can connect)' "$target_db")"
+		fi
 	done 3< <(printf '%s\n' "$databases")
 fi
 
