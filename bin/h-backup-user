@@ -297,15 +297,10 @@ if [ -n "$pkg_name" ] && [ -e "$CONF_DIR/packages/$pkg_name.pkg" ]; then
 	echo -e "$(date "+%F %T") package $pkg_name" | tee -a $BACKUP/$user.log
 fi
 
-# The rest of the customer's data directory, taken from what is in it rather than from a list of
-# names. A list only ever covers the files that existed when it was written: notifications.conf was
-# never in it, so a restore silently dropped the customer's panel notifications. What never travels
-# is BACKUP_USER_DATA_CORE, defined once in include/backup.sh and read by the restore as well;
-# user.conf and ssl are already copied above.
-#
-# Dotfiles are deliberately not enumerated: nothing in the panel writes one here, and on the way
-# back a leading dot is exactly what the member-name rule rejects - carrying one would only mean
-# losing it later. Said out loud if one ever turns up, rather than skipped in silence.
+# The rest of the customer's data directory, from what is in it rather than from a list of names.
+# BACKUP_USER_DATA_CORE says what never travels; user.conf and ssl are copied above. Dotfiles are
+# not enumerated - the restore's member-name rule rejects a leading dot, so carrying one would only
+# lose it later - and one that turns up is named rather than skipped in silence.
 _hidden=$(find "$USER_DATA" -maxdepth 1 -name '.*' ! -name '.' 2> /dev/null | wc -l)
 [ "$_hidden" -gt 0 ] \
 	&& echo "Warning!: $_hidden hidden file(s) in the data directory are not backed up" | tee -a $BACKUP/$user.log

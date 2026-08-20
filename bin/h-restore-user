@@ -302,20 +302,14 @@ if [ "$create_user" = 'yes' ]; then
 	cp $tmpdir/$BACKUP_CONTAINER/user.conf $USER_DATA/
 	cp -r $tmpdir/$BACKUP_CONTAINER/ssl $USER_DATA/ > /dev/null 2>&1
 
-	# Everything else the container holds, skipping BACKUP_USER_DATA_CORE - the same list the backup
-	# withholds, defined once in include/backup.sh - plus what this side handles itself: user.conf
-	# and ssl above, packages below, and web-system/origin, which describe the archive rather than
-	# the customer. The restore rejects a superset on purpose: it is the side that takes in foreign
-	# archives, and #709 lets an operator drop one into the backup folder by hand.
-	#
-	# Dotfiles are not enumerated, matching the backup: the name rule below rejects a leading dot
-	# anyway, so listing them would only look like coverage.
+	# Everything else the container holds. Skipped: BACKUP_USER_DATA_CORE, plus what this side does
+	# itself - user.conf and ssl above, packages below, web-system and origin, which describe the
+	# archive. A superset on purpose: this is the side that takes in foreign archives.
 	for _entry in "$tmpdir/$BACKUP_CONTAINER"/*; do
 		[ -e "$_entry" ] || continue
 		_name=$(basename "$_entry")
 		[[ " $BACKUP_USER_DATA_CORE user.conf ssl packages web-system origin " == *" $_name "* ]] && continue
-		# The name comes out of the archive and is then joined onto a path we write to. A plain
-		# basename, or it is not copied - stricter than the archive needs, on purpose.
+		# Out of the archive and joined onto a path we write to: a plain basename or nothing.
 		case "$_name" in '' | .* | */* | *[!A-Za-z0-9._-]*) continue ;; esac
 		cp -r "$_entry" "$USER_DATA/" \
 			|| echo "Warning!: $_name from the archive could not be written to the data directory" | tee -a $tmpdir/restore.log
