@@ -462,49 +462,62 @@ rebuild_web_domain_conf() {
 		fi
 	done
 
-	# Adding http auth protection
-	htaccess="$HOMEDIR/$user/conf/web/$domain/htaccess"
+	# Http auth protection, rebuilt from the record every time and never kept as found. Both files
+	# travel inside the archive with the SOURCE customer's home written into them, so a restore
+	# under a different name left the protection pointing at another customer's password file: 403
+	# where that path does not exist, and somebody else's credential where it does. The record is
+	# the only source, the two files are derived from it - in both directions.
 	htpasswd="$HOMEDIR/$user/conf/web/$domain/htpasswd"
 	docroot="$HOMEDIR/$user/web/$domain/public_html"
-	for auth_user in ${AUTH_USER//:/ }; do
-		# Parsing auth user variables
-		position=$(echo $AUTH_USER | tr ':' '\n' | grep -n '' \
-			| grep ":$auth_user$" | cut -f 1 -d:)
-		auth_hash=$(echo $AUTH_HASH | tr ':' '\n' | grep -n '' \
-			| grep "^$position:" | cut -f 2 -d :)
+	if [ "$WEB_SYSTEM" = "nginx" ] || [ "$PROXY_SYSTEM" = "nginx" ]; then
+		htaccess="$HOMEDIR/$user/conf/web/$domain/nginx.conf_htaccess"
+		shtaccess="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_htaccess"
+		htaccess_want="auth_basic  \"$domain password access\";
+auth_basic_user_file    $htpasswd;"
+	else
+		htaccess="$HOMEDIR/$user/conf/web/$domain/apache2.conf_htaccess"
+		shtaccess="$HOMEDIR/$user/conf/web/$domain/apache2.ssl.conf_htaccess"
+		htaccess_want="<Directory $docroot>
+    AuthUserFile $htpasswd
+    AuthName \"$domain access\"
+    AuthType Basic
+    Require valid-user
+</Directory>"
+	fi
 
-		# Adding http auth user
-		touch $htpasswd
-		sed -i "/^$auth_user:/d" $htpasswd
-		echo "$auth_user:$auth_hash" >> $htpasswd
-
-		# Adding htaccess password protection
-		if [ "$WEB_SYSTEM" = "nginx" ] || [ "$PROXY_SYSTEM" = "nginx" ]; then
-			htaccess="$HOMEDIR/$user/conf/web/$domain/nginx.conf_htaccess"
-			shtaccess="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_htaccess"
-			if [ ! -f "$htaccess" ]; then
-				echo "auth_basic  \"$domain password access\";" > $htaccess
-				echo "auth_basic_user_file    $htpasswd;" >> $htaccess
-				ln -s $htaccess $shtaccess
-				restart_required='yes'
-			fi
-		else
-			htaccess="$HOMEDIR/$user/conf/web/$domain/apache2.conf_htaccess"
-			shtaccess="$HOMEDIR/$user/conf/web/$domain/apache2.ssl.conf_htaccess"
-			if [ ! -f "$htaccess" ]; then
-				echo "<Directory $docroot>" > $htaccess
-				echo "    AuthUserFile $htpasswd" >> $htaccess
-				echo "    AuthName \"$domain access\"" >> $htaccess
-				echo "    AuthType Basic" >> $htaccess
-				echo "    Require valid-user" >> $htaccess
-				echo "</Directory>" >> $htaccess
-				ln -s $htaccess $shtaccess
-				restart_required='yes'
-			fi
+	if [ -n "$AUTH_USER" ]; then
+		# The record's accounts and only those. Appending to a restored file would keep an account
+		# the record no longer knows - a credential nobody can see in the panel.
+		htpasswd_want=''
+		for auth_user in ${AUTH_USER//:/ }; do
+			position=$(echo $AUTH_USER | tr ':' '\n' | grep -n '' \
+				| grep ":$auth_user$" | cut -f 1 -d:)
+			auth_hash=$(echo $AUTH_HASH | tr ':' '\n' | grep -n '' \
+				| grep "^$position:" | cut -f 2 -d :)
+			htpasswd_want="${htpasswd_want:+$htpasswd_want$'\n'}$auth_user:$auth_hash"
+		done
+		# Compared before writing, so a rebuild that changes nothing does not restart the web server.
+		if [ "$htpasswd_want" != "$(cat "$htpasswd" 2> /dev/null)" ]; then
+			printf '%s\n' "$htpasswd_want" > "$htpasswd"
+			restart_required='yes'
 		fi
-		chmod 644 $htpasswd $htaccess
-		chgrp $user $htpasswd $htaccess
-	done
+		if [ "$htaccess_want" != "$(cat "$htaccess" 2> /dev/null)" ]; then
+			printf '%s\n' "$htaccess_want" > "$htaccess"
+			restart_required='yes'
+		fi
+		if [ "$(readlink "$shtaccess" 2> /dev/null)" != "$htaccess" ]; then
+			ln -sfn "$htaccess" "$shtaccess"
+			restart_required='yes'
+		fi
+		chmod 644 "$htpasswd" "$htaccess"
+		chgrp "$user" "$htpasswd" "$htaccess"
+	elif [ -e "$htaccess" ] || [ -e "$shtaccess" ] || [ -e "$htpasswd" ]; then
+		# The record names no account, so the protection is not this domain's. Left in place it
+		# would either gate the site with a password the panel cannot show or, after a rename,
+		# break it outright - and h-delete-web-domain-httpauth removes exactly these three.
+		rm -f "$htaccess" "$shtaccess" "$htpasswd"
+		restart_required='yes'
+	fi
 
 	# domain folder permissions: DOMAINDIR_WRITABLE: default-val:no source:hestia.conf
 	DOMAINDIR_MODE=551
