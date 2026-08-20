@@ -462,49 +462,81 @@ rebuild_web_domain_conf() {
 		fi
 	done
 
-	# Adding http auth protection
-	htaccess="$HOMEDIR/$user/conf/web/$domain/htaccess"
+	# Http auth, derived from the record on every rebuild. The archive carries both files with an
+	# absolute path inside them, so keeping one points the protection at whatever home made it.
 	htpasswd="$HOMEDIR/$user/conf/web/$domain/htpasswd"
 	docroot="$HOMEDIR/$user/web/$domain/public_html"
-	for auth_user in ${AUTH_USER//:/ }; do
-		# Parsing auth user variables
-		position=$(echo $AUTH_USER | tr ':' '\n' | grep -n '' \
-			| grep ":$auth_user$" | cut -f 1 -d:)
-		auth_hash=$(echo $AUTH_HASH | tr ':' '\n' | grep -n '' \
-			| grep "^$position:" | cut -f 2 -d :)
+	nginx_htaccess="$HOMEDIR/$user/conf/web/$domain/nginx.conf_htaccess"
+	nginx_shtaccess="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_htaccess"
+	apache_htaccess="$HOMEDIR/$user/conf/web/$domain/apache2.conf_htaccess"
+	apache_shtaccess="$HOMEDIR/$user/conf/web/$domain/apache2.ssl.conf_htaccess"
+	if [ "$WEB_SYSTEM" = "nginx" ] || [ "$PROXY_SYSTEM" = "nginx" ]; then
+		htaccess="$nginx_htaccess"
+		shtaccess="$nginx_shtaccess"
+		stale_htaccess="$apache_htaccess"
+		stale_shtaccess="$apache_shtaccess"
+		htaccess_want="auth_basic  \"$domain password access\";
+auth_basic_user_file    $htpasswd;"
+	else
+		htaccess="$apache_htaccess"
+		shtaccess="$apache_shtaccess"
+		stale_htaccess="$nginx_htaccess"
+		stale_shtaccess="$nginx_shtaccess"
+		htaccess_want="<Directory $docroot>
+    AuthUserFile $htpasswd
+    AuthName \"$domain access\"
+    AuthType Basic
+    Require valid-user
+</Directory>"
+	fi
 
-		# Adding http auth user
-		touch $htpasswd
-		sed -i "/^$auth_user:/d" $htpasswd
-		echo "$auth_user:$auth_hash" >> $htpasswd
+	# The other web server's pair is inert here, so a wrong path in it stays unnoticed until the
+	# model is switched.
+	rm -f "$stale_htaccess" "$stale_shtaccess"
 
-		# Adding htaccess password protection
-		if [ "$WEB_SYSTEM" = "nginx" ] || [ "$PROXY_SYSTEM" = "nginx" ]; then
-			htaccess="$HOMEDIR/$user/conf/web/$domain/nginx.conf_htaccess"
-			shtaccess="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_htaccess"
-			if [ ! -f "$htaccess" ]; then
-				echo "auth_basic  \"$domain password access\";" > $htaccess
-				echo "auth_basic_user_file    $htpasswd;" >> $htaccess
-				ln -s $htaccess $shtaccess
-				restart_required='yes'
+	if [ -n "$AUTH_USER" ]; then
+		# The record's accounts and only those: appending keeps one the panel cannot show.
+		htpasswd_want=''
+		auth_nohash=''
+		for auth_user in ${AUTH_USER//:/ }; do
+			position=$(echo $AUTH_USER | tr ':' '\n' | grep -n '' \
+				| grep ":$auth_user$" | cut -f 1 -d:)
+			auth_hash=$(echo $AUTH_HASH | tr ':' '\n' | grep -n '' \
+				| grep "^$position:" | cut -f 2 -d :)
+			# The two lists are joined by position and can arrive out of step. A line with no hash
+			# never matches, and this file is the only source - writing it shuts the domain.
+			if [ -z "$auth_hash" ]; then
+				auth_nohash="$auth_nohash $auth_user"
+				continue
 			fi
-		else
-			htaccess="$HOMEDIR/$user/conf/web/$domain/apache2.conf_htaccess"
-			shtaccess="$HOMEDIR/$user/conf/web/$domain/apache2.ssl.conf_htaccess"
-			if [ ! -f "$htaccess" ]; then
-				echo "<Directory $docroot>" > $htaccess
-				echo "    AuthUserFile $htpasswd" >> $htaccess
-				echo "    AuthName \"$domain access\"" >> $htaccess
-				echo "    AuthType Basic" >> $htaccess
-				echo "    Require valid-user" >> $htaccess
-				echo "</Directory>" >> $htaccess
-				ln -s $htaccess $shtaccess
-				restart_required='yes'
-			fi
+			htpasswd_want="${htpasswd_want:+$htpasswd_want$'\n'}$auth_user:$auth_hash"
+		done
+		[ -n "$auth_nohash" ] \
+			&& echo "Warning!: $domain: the record names http auth account(s)$auth_nohash with no password hash - left out of the password file, which is otherwise kept as it is"
+
+		# Paths only, so it is safe to correct even when no account can be written - the archive
+		# delivers a usable password file at the right place.
+		if [ "$htaccess_want" != "$(cat "$htaccess" 2> /dev/null)" ]; then
+			printf '%s\n' "$htaccess_want" > "$htaccess"
+			restart_required='yes'
 		fi
-		chmod 644 $htpasswd $htaccess
-		chgrp $user $htpasswd $htaccess
-	done
+		if [ "$(readlink "$shtaccess" 2> /dev/null)" != "$htaccess" ]; then
+			ln -sfn "$htaccess" "$shtaccess"
+			restart_required='yes'
+		fi
+		# Only where the record can fill it. Compared first, so an idle rebuild causes no restart.
+		if [ -n "$htpasswd_want" ] && [ "$htpasswd_want" != "$(cat "$htpasswd" 2> /dev/null)" ]; then
+			printf '%s\n' "$htpasswd_want" > "$htpasswd"
+			restart_required='yes'
+		fi
+		chmod 644 "$htaccess"
+		chgrp "$user" "$htaccess"
+		[ -e "$htpasswd" ] && chmod 644 "$htpasswd" && chgrp "$user" "$htpasswd"
+	elif [ -e "$htaccess" ] || [ -e "$shtaccess" ] || [ -e "$htpasswd" ]; then
+		# The record names no account, so neither file belongs to this domain.
+		rm -f "$htaccess" "$shtaccess" "$htpasswd"
+		restart_required='yes'
+	fi
 
 	# domain folder permissions: DOMAINDIR_WRITABLE: default-val:no source:hestia.conf
 	DOMAINDIR_MODE=551
