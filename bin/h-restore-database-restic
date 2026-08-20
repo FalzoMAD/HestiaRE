@@ -105,14 +105,17 @@ for db in "${databases[@]}"; do
 		# Restore and rebuild
 		echo "- Restore database: $db (Type: $TYPE)"
 		database_dump="$tmpdir/$db.$TYPE.sql"
+		# The name this loop is on, not the argument the command was called with: $database holds
+		# the whole DATABASE argument, which may be a comma list, while $db is the one being
+		# restored. They coincide for a single database, which is why it never showed.
 		case $TYPE in
 			mysql)
-				delete_mysql_database
+				delete_mysql_database "$db"
 				rebuild_mysql_database
 				import_mysql_database $database_dump
 				;;
 			pgsql)
-				delete_pgsql_database
+				delete_pgsql_database "$db"
 				rebuild_pgsql_database
 				import_pgsql_database $database_dump
 				;;

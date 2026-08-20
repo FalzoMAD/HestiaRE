@@ -515,8 +515,23 @@ change_pgsql_password() {
 	md5=$(psql_value "$query")
 }
 
+# db_is_owned_by_user DB - is this database one of the customer whose data directory is in play?
+#
+# Asked by the delete functions themselves, not by their callers. On the restore path the name in
+# $database is the one out of the ARCHIVE, so a restore under a different customer name dropped the
+# SOURCE customer's live database on the same box - and reported success. A guard placed in the
+# callers is missing again at the next caller.
+db_is_owned_by_user() {
+	[ -n "$1" ] && grep -qF "DB='$1'" "$USER_DATA/db.conf" 2> /dev/null
+}
+
 # Delete MySQL database
 delete_mysql_database() {
+	local database="${1:-$database}"
+	if ! db_is_owned_by_user "$database"; then
+		echo "Error: $database is not a database of $user - refusing to drop it"
+		return 1
+	fi
 	mysql_connect $HOST
 
 	query="DROP DATABASE \`$database\`"
@@ -535,10 +550,18 @@ delete_mysql_database() {
 		query="DROP USER '$DBUSER'@'localhost'"
 		mysql_query "$query" > /dev/null
 	fi
+	# Explicit, so a non-zero return means the guard refused and nothing else. Without it the status
+	# is whatever the last REVOKE happened to give, which no caller could have read as an answer.
+	return 0
 }
 
 # Delete PostgreSQL database
 delete_pgsql_database() {
+	local database="${1:-$database}"
+	if ! db_is_owned_by_user "$database"; then
+		echo "Error: $database is not a database of $user - refusing to drop it"
+		return 1
+	fi
 	psql_connect $HOST
 
 	query="REVOKE ALL PRIVILEGES ON DATABASE $database FROM $DBUSER"
@@ -553,6 +576,8 @@ delete_pgsql_database() {
 		query="DROP ROLE $DBUSER"
 		psql_query "$query" > /dev/null
 	fi
+	# Explicit, for the same reason as on the mysql side.
+	return 0
 }
 
 # Dump MySQL database
