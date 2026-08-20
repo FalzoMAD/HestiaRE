@@ -14,19 +14,6 @@ opens above it.
 
 ### Fixed
 
-- **A restore under a different customer name pointed the site's password protection into the old
-  customer's home** (#756). The `.htaccess` fragments travel inside the archive with an absolute
-  path written into them, and the rebuild only wrote its own when none was there - which after a
-  restore is never. Where that path did not exist the domain answered 403 even with the right
-  password; where it did, the site was gated by **another customer's** password file. Both files
-  are now derived from the record on every rebuild, so they name the customer who actually owns the
-  domain, and an account the record no longer knows is dropped from the file instead of living on
-  in it. An account the record names but carries no hash for is named and left out rather than
-  written as a line that can never match - the password file is now the only source, so a bad line
-  in it would be the whole truth and would shut the domain. Where the record names no account at all, the fragments go rather than staying behind, and
-  the pair belonging to the web server this host does not run is dropped too - it is inert until
-  the web model is switched, and then it is not.
-
 - **A PostgreSQL database came back from a restore with its password destroyed** (#752). The rows
   all returned and the customer's application could no longer connect, which reads as a broken app
   rather than as a restore - and on a same-box restore nothing said a word. The hash was being

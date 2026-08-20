@@ -462,11 +462,8 @@ rebuild_web_domain_conf() {
 		fi
 	done
 
-	# Http auth protection, rebuilt from the record every time and never kept as found. Both files
-	# travel inside the archive with the SOURCE customer's home written into them, so a restore
-	# under a different name left the protection pointing at another customer's password file: 403
-	# where that path does not exist, and somebody else's credential where it does. The record is
-	# the only source, the two files are derived from it - in both directions.
+	# Http auth, derived from the record on every rebuild. The archive carries both files with an
+	# absolute path inside them, so keeping one points the protection at whatever home made it.
 	htpasswd="$HOMEDIR/$user/conf/web/$domain/htpasswd"
 	docroot="$HOMEDIR/$user/web/$domain/public_html"
 	nginx_htaccess="$HOMEDIR/$user/conf/web/$domain/nginx.conf_htaccess"
@@ -493,14 +490,12 @@ auth_basic_user_file    $htpasswd;"
 </Directory>"
 	fi
 
-	# The pair belonging to the other web server is inert here, so nothing notices that it still
-	# names the home the archive was made under - until the model is switched at runtime (#120) and
-	# it becomes the live one. Dropped rather than left for that day.
+	# The other web server's pair is inert here, so a wrong path in it stays unnoticed until the
+	# model is switched.
 	rm -f "$stale_htaccess" "$stale_shtaccess"
 
 	if [ -n "$AUTH_USER" ]; then
-		# The record's accounts and only those. Appending to a restored file would keep an account
-		# the record no longer knows - a credential nobody can see in the panel.
+		# The record's accounts and only those: appending keeps one the panel cannot show.
 		htpasswd_want=''
 		auth_nohash=''
 		for auth_user in ${AUTH_USER//:/ }; do
@@ -508,10 +503,8 @@ auth_basic_user_file    $htpasswd;"
 				| grep ":$auth_user$" | cut -f 1 -d:)
 			auth_hash=$(echo $AUTH_HASH | tr ':' '\n' | grep -n '' \
 				| grep "^$position:" | cut -f 2 -d :)
-			# AUTH_USER and AUTH_HASH are two lists joined by position, and a foreign archive is
-			# exactly where they can arrive out of step. A line with no hash never matches, so
-			# writing it would shut the domain - and since this file is now the only source rather
-			# than one of two, that line would be its whole content.
+			# The two lists are joined by position and can arrive out of step. A line with no hash
+			# never matches, and this file is the only source - writing it shuts the domain.
 			if [ -z "$auth_hash" ]; then
 				auth_nohash="$auth_nohash $auth_user"
 				continue
@@ -521,9 +514,8 @@ auth_basic_user_file    $htpasswd;"
 		[ -n "$auth_nohash" ] \
 			&& echo "Warning!: $domain: the record names http auth account(s)$auth_nohash with no password hash - left out of the password file, which is otherwise kept as it is"
 
-		# Written before the password file and independently of it: it holds paths only, and
-		# correcting the path is the whole point. The archive delivers the password file itself at
-		# the right place with the right hashes; only the path inside this one was wrong.
+		# Paths only, so it is safe to correct even when no account can be written - the archive
+		# delivers a usable password file at the right place.
 		if [ "$htaccess_want" != "$(cat "$htaccess" 2> /dev/null)" ]; then
 			printf '%s\n' "$htaccess_want" > "$htaccess"
 			restart_required='yes'
@@ -532,8 +524,7 @@ auth_basic_user_file    $htpasswd;"
 			ln -sfn "$htaccess" "$shtaccess"
 			restart_required='yes'
 		fi
-		# Only where the record can fill it. Compared first, so a rebuild that changes nothing does
-		# not restart the web server.
+		# Only where the record can fill it. Compared first, so an idle rebuild causes no restart.
 		if [ -n "$htpasswd_want" ] && [ "$htpasswd_want" != "$(cat "$htpasswd" 2> /dev/null)" ]; then
 			printf '%s\n' "$htpasswd_want" > "$htpasswd"
 			restart_required='yes'
@@ -542,9 +533,7 @@ auth_basic_user_file    $htpasswd;"
 		chgrp "$user" "$htaccess"
 		[ -e "$htpasswd" ] && chmod 644 "$htpasswd" && chgrp "$user" "$htpasswd"
 	elif [ -e "$htaccess" ] || [ -e "$shtaccess" ] || [ -e "$htpasswd" ]; then
-		# The record names no account, so the protection is not this domain's. Left in place it
-		# would either gate the site with a password the panel cannot show or, after a rename,
-		# break it outright - and h-delete-web-domain-httpauth removes exactly these three.
+		# The record names no account, so neither file belongs to this domain.
 		rm -f "$htaccess" "$shtaccess" "$htpasswd"
 		restart_required='yes'
 	fi
