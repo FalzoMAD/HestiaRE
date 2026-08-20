@@ -502,18 +502,28 @@ auth_basic_user_file    $htpasswd;"
 		# The record's accounts and only those. Appending to a restored file would keep an account
 		# the record no longer knows - a credential nobody can see in the panel.
 		htpasswd_want=''
+		auth_nohash=''
 		for auth_user in ${AUTH_USER//:/ }; do
 			position=$(echo $AUTH_USER | tr ':' '\n' | grep -n '' \
 				| grep ":$auth_user$" | cut -f 1 -d:)
 			auth_hash=$(echo $AUTH_HASH | tr ':' '\n' | grep -n '' \
 				| grep "^$position:" | cut -f 2 -d :)
+			# AUTH_USER and AUTH_HASH are two lists joined by position, and a foreign archive is
+			# exactly where they can arrive out of step. A line with no hash never matches, so
+			# writing it would shut the domain - and since this file is now the only source rather
+			# than one of two, that line would be its whole content.
+			if [ -z "$auth_hash" ]; then
+				auth_nohash="$auth_nohash $auth_user"
+				continue
+			fi
 			htpasswd_want="${htpasswd_want:+$htpasswd_want$'\n'}$auth_user:$auth_hash"
 		done
-		# Compared before writing, so a rebuild that changes nothing does not restart the web server.
-		if [ "$htpasswd_want" != "$(cat "$htpasswd" 2> /dev/null)" ]; then
-			printf '%s\n' "$htpasswd_want" > "$htpasswd"
-			restart_required='yes'
-		fi
+		[ -n "$auth_nohash" ] \
+			&& echo "Warning!: $domain: the record names http auth account(s)$auth_nohash with no password hash - left out of the password file, which is otherwise kept as it is"
+
+		# Written before the password file and independently of it: it holds paths only, and
+		# correcting the path is the whole point. The archive delivers the password file itself at
+		# the right place with the right hashes; only the path inside this one was wrong.
 		if [ "$htaccess_want" != "$(cat "$htaccess" 2> /dev/null)" ]; then
 			printf '%s\n' "$htaccess_want" > "$htaccess"
 			restart_required='yes'
@@ -522,8 +532,15 @@ auth_basic_user_file    $htpasswd;"
 			ln -sfn "$htaccess" "$shtaccess"
 			restart_required='yes'
 		fi
-		chmod 644 "$htpasswd" "$htaccess"
-		chgrp "$user" "$htpasswd" "$htaccess"
+		# Only where the record can fill it. Compared first, so a rebuild that changes nothing does
+		# not restart the web server.
+		if [ -n "$htpasswd_want" ] && [ "$htpasswd_want" != "$(cat "$htpasswd" 2> /dev/null)" ]; then
+			printf '%s\n' "$htpasswd_want" > "$htpasswd"
+			restart_required='yes'
+		fi
+		chmod 644 "$htaccess"
+		chgrp "$user" "$htaccess"
+		[ -e "$htpasswd" ] && chmod 644 "$htpasswd" && chgrp "$user" "$htpasswd"
 	elif [ -e "$htaccess" ] || [ -e "$shtaccess" ] || [ -e "$htpasswd" ]; then
 		# The record names no account, so the protection is not this domain's. Left in place it
 		# would either gate the site with a password the panel cannot show or, after a rename,

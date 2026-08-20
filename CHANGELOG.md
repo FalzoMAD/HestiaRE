@@ -21,7 +21,9 @@ opens above it.
   password; where it did, the site was gated by **another customer's** password file. Both files
   are now derived from the record on every rebuild, so they name the customer who actually owns the
   domain, and an account the record no longer knows is dropped from the file instead of living on
-  in it. Where the record names no account at all, the fragments go rather than staying behind, and
+  in it. An account the record names but carries no hash for is named and left out rather than
+  written as a line that can never match - the password file is now the only source, so a bad line
+  in it would be the whole truth and would shut the domain. Where the record names no account at all, the fragments go rather than staying behind, and
   the pair belonging to the web server this host does not run is dropped too - it is inert until
   the web model is switched, and then it is not.
 
