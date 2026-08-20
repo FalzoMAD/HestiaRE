@@ -804,8 +804,8 @@ rebuild_mail_domain_conf() {
 # Rebuild MySQL
 rebuild_mysql_database() {
 	mysql_connect $HOST
-	# Before the CREATE USERs below, for the same reason as on the pgsql side: only the answer to
-	# "was this user already here" tells a kept credential apart from one that never arrived.
+	# Before the CREATE USERs: only "was this user already here" tells a kept credential from one
+	# that never arrived.
 	dbuser_existed=$(mysql_query "SELECT COUNT(*) FROM mysql.user WHERE User='$DBUSER'" 2> /dev/null | tail -n1)
 	[ "$dbuser_existed" = '0' ] && dbuser_existed=''
 	mysql_query "CREATE DATABASE \`$DB\` CHARACTER SET $CHARSET" > /dev/null
@@ -853,11 +853,8 @@ rebuild_mysql_database() {
 	fi
 	mysql_query "GRANT ALL ON \`$DB\`.* TO \`$DBUSER\`@\`%\`" > /dev/null
 	mysql_query "GRANT ALL ON \`$DB\`.* TO \`$DBUSER\`@localhost" > /dev/null
-	# Same reasoning as the pgsql side: an empty hash would blank a working password. mysql only
-	# survives this today because its own read path works - not by design. What this guards is an
-	# EXISTING credential; the CREATE USER above is IF NOT EXISTS and cannot overwrite one. A
-	# genuinely new user still ends up without a password here, unchanged by this guard - that case
-	# is what the restore's "carries no password" notice is for.
+	# An empty hash would blank a working password; mysql survives today only because its own read
+	# path happens to work. Guards an EXISTING credential - CREATE USER above is IF NOT EXISTS.
 	if [ -n "$MD5" ]; then
 		mysql_query "$query" > /dev/null
 		if [ ! -z "$query2" ]; then
@@ -902,31 +899,24 @@ rebuild_pgsql_database() {
 		exit "$E_CONNECT"
 	fi
 
-	# Asked BEFORE anything is created, because the answer decides what a missing password means.
-	# On this host there is a credential to protect; on a fresh host - the migration case - there
-	# is none, and the database arrives unusable. Afterwards the two look identical, and saying the
-	# wrong one is how a migration reports a success it did not have.
+	# Asked before anything is created: afterwards the two cases look identical, and "kept
+	# unchanged" on a host where the role was just made claims a credential that never existed.
 	role_existed=$(psql_value "SELECT 1 FROM pg_authid WHERE rolname='$DBUSER'")
 
 	if [ -n "$MD5" ]; then
-		# LOGIN, as add_pgsql_database has always written it: a bare CREATE ROLE is NOLOGIN, so a
-		# restored database was unreachable whatever its password said - which is why the empty
-		# password went unnoticed for so long. Granted only together with a password: turning a
-		# passwordless role into a LOGIN one would open it wherever pg_hba.conf carries a trust
-		# line, and nothing here can see that file. The ALTER repairs roles the old bare form left
-		# behind, at the moment they get a password to go with it.
+		# Bare CREATE ROLE is NOLOGIN, so a restored database was unreachable whatever its password
+		# said. Granted only together with a password: a passwordless login role would be open
+		# wherever pg_hba.conf carries a trust line, which nothing here can read. The ALTER repairs
+		# roles the old bare form left behind.
 		query="CREATE ROLE $DBUSER WITH LOGIN"
 		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
 		query="ALTER ROLE $DBUSER WITH LOGIN"
 		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
-		# Through psql_query's temp file and never through -c: a SCRAM verifier is
-		# credential-equivalent - StoredKey and ServerKey are enough to authenticate - and argv is
-		# readable by every local user through /proc. This is the one statement here that carries
-		# a secret, so it is the one that takes the file path (#693/#695).
+		# Through psql_query's temp file, never -c: a SCRAM verifier is credential-equivalent and
+		# argv is readable through /proc. The only statement here that carries a secret.
 		psql_query "UPDATE pg_authid SET rolpassword='$MD5' WHERE rolname='$DBUSER'" > /dev/null
 	else
-		# An empty hash is the absence of a password, never a password. It must not replace one
-		# that works, and it must not be dressed up as one either.
+		# An empty hash is the absence of a password: it may neither replace a working one nor pose as one.
 		query="CREATE ROLE $DBUSER"
 		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
 		if [ -n "$role_existed" ]; then

@@ -175,14 +175,11 @@ psql_query() {
 	rm -f $sql_tmp
 }
 
-# psql_value QUERY - the value of a one-column, one-row SELECT, and nothing else.
+# psql_value QUERY - the value of a one-column, one-row SELECT, nothing else.
 #
-# Deliberately not psql_query: that prints the aligned table with a column heading, padding and a
-# row count, and get_pgsql_disk_usage parses exactly that shape. Reading a value out of it is what
-# lost every pgsql password - `head -n1` takes the HEADING, and a `grep md5` filter matches no
-# SCRAM hash at all, so the record was written empty and the rebuild wrote that emptiness into
-# pg_authid. -t drops the heading and the count, -A the padding, -X any .psqlrc that would add
-# either back.
+# Not psql_query: that prints the aligned table, and get_pgsql_disk_usage parses exactly that shape.
+# Reading a value out of it lost every pgsql password - `head -n1` is the column HEADING, and a
+# `grep md5` filter matches no SCRAM hash. -tAX: no heading, no padding, no .psqlrc.
 psql_value() {
 	local _tmp
 	_tmp=$(mktemp)
