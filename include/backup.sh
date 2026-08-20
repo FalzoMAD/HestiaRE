@@ -284,7 +284,7 @@ backup_local_keys() {
 # read nothing" have to look different.
 backup_report() {
 	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys _installed
-	local _o_mode _o_fmt _o_who
+	local _o_mode _o_fmt _o_who _prot _dom _file _bl _e _bl_list
 
 	echo "-- ARCHIVE --"
 	printf '   %s compressed\n' "$PROBE_MODE"
@@ -339,6 +339,36 @@ backup_report() {
 		_found=1
 		printf '   custom web template(s) for %s domain(s) - this host renders from its own set\n' \
 			"$(backup_report_count "$PROBE_TPL")"
+	fi
+
+	# Protections a domain asks for that this host cannot render. The setting survives the restore
+	# on purpose, so only the report can say that it does nothing here. Asked of the renderers' own
+	# predicates, and only where the module is present - this must not be what dies without one.
+	[ -f "$HESTIA/include/crowdsec.sh" ] && { type crowdsec_domain_capable > /dev/null 2>&1 || source "$HESTIA/include/crowdsec.sh"; }
+	[ -f "$HESTIA/include/botpolicy.sh" ] && { type botpolicy_family_enabled > /dev/null 2>&1 || source "$HESTIA/include/botpolicy.sh"; }
+	_prot=''
+	while IFS= read -r _dom; do
+		[ -n "$_dom" ] || continue
+		_file=$(backup_record_file web "$_dom")
+		[ -s "$_file" ] || continue
+		_rec=$(head -n1 "$_file")
+		if [ "$(sed -n "s/.*CROWDSEC='\([^']*\)'.*/\1/p" <<< "$_rec")" = 'yes' ] \
+			&& type crowdsec_domain_capable > /dev/null 2>&1 && ! crowdsec_domain_capable; then
+			_prot="$_prot$_dom: CrowdSec"$'\n'
+		fi
+		_bl=$(sed -n "s/.*BOTLIMIT='\([^']*\)'.*/\1/p" <<< "$_rec")
+		type botpolicy_family_enabled > /dev/null 2>&1 || continue
+		# Split on the comma and only there: unquoted, a '*' would glob against the cwd.
+		IFS=',' read -r -a _bl_list <<< "$_bl"
+		for _e in "${_bl_list[@]}"; do
+			[ -n "$_e" ] || continue
+			botpolicy_family_enabled "${_e%%:*}" || _prot="$_prot$_dom: bot family ${_e%%:*}"$'\n'
+		done
+	done <<< "$PROBE_WEB"
+	if [ -n "$_prot" ]; then
+		_found=1
+		printf '   protection(s) restored as a setting but inactive here, because this host cannot render them:\n'
+		sed '/^$/d;s/^/      /' <<< "$_prot"
 	fi
 
 	# A section this host has no subsystem for is dropped in full. With the count: "mail is skipped"
