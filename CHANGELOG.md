@@ -14,6 +14,14 @@ opens above it.
 
 ### Fixed
 
+- **Rebuilding a single database set the customer's database count to 1** (#757). The singular
+  command had inherited the accumulator of its plural sibling without that command's flush in front
+  of the loop, so it wrote "whatever the variable held, plus one" as the customer's total - and the
+  next deletion took it to 0, which is what the panel and the counter check then showed. Disk usage
+  carried the same shape, claiming one database's usage as all of it. A command that touches one
+  object no longer claims a total; the plural form owns the counting and the disk queue owns the
+  usage.
+
 - **A PostgreSQL database came back from a restore with its password destroyed** (#752). The rows
   all returned and the customer's application could no longer connect, which reads as a broken app
   rather than as a restore - and on a same-box restore nothing said a word. The hash was being
