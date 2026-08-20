@@ -35,42 +35,8 @@ rebuild_user_conf() {
 		sed -i "s/FNAME='$FNAME'/NAME='$NAME'/g" $USER_DATA/user.conf
 		sed -i "/LNAME='$LNAME'/d" $USER_DATA/user.conf
 	fi
-	if [ -z "${TWOFA+x}" ]; then
-		sed -i "/RKEY/a TWOFA=''" $USER_DATA/user.conf
-	fi
-	if [ -z "${QRCODE+x}" ]; then
-		sed -i "/TWOFA/a QRCODE=''" $USER_DATA/user.conf
-	fi
-	if [ -z "${PHPCLI+x}" ]; then
-		sed -i "/QRCODE/a PHPCLI=''" $USER_DATA/user.conf
-	fi
-	if [ -z "${ROLE+x}" ]; then
-		sed -i "/PHPCLI/a ROLE='user'" $USER_DATA/user.conf
-	fi
-	if [ -z "${THEME+x}" ]; then
-		sed -i "/LANGUAGE/a THEME=''" $USER_DATA/user.conf
-	fi
-	if [ -z "${PREF_UI_SORT+x}" ]; then
-		sed -i "/NOTIFICATIONS/a PREF_UI_SORT='name'" $USER_DATA/user.conf
-	fi
-	if [ -z "${LOGIN_DISABLED+x}" ]; then
-		sed -i "/PREF_UI_SORT/a LOGIN_DISABLED=''" $USER_DATA/user.conf
-	fi
-	if [ -z "${LOGIN_USE_IPLIST+x}" ]; then
-		sed -i "/LOGIN_DISABLED/a LOGIN_USE_IPLIST=''" $USER_DATA/user.conf
-	fi
-	if [ -z "${LOGIN_ALLOW_IPS+x}" ]; then
-		sed -i "/LOGIN_USE_IPLIST/a LOGIN_ALLOW_IPS=''" $USER_DATA/user.conf
-	fi
-	if [ -z "${RATE_LIMIT+x}" ]; then
-		sed -i "/MAIL_ACCOUNTS/a RATE_LIMIT='200'" $USER_DATA/user.conf
-	fi
-	if [ -z "${FILE_MANAGER+x}" ]; then
-		sed -i "/RATE_LIMIT/a FILE_MANAGER=''" $USER_DATA/user.conf
-	fi
-	# Generic sweep after the seeds above, which set real defaults rather than empty ones. Until
-	# #559 user.conf had no repair at all, so a key added to the known set reached existing
-	# customers only by chance.
+	# One repair, not a hand list in front of a generic sweep: the defaults live with the sweep,
+	# which also covers the package block.
 	syshealth_repair_user_config
 	# Run template trigger
 	if [ -x "$CONF_DIR/packages/$PACKAGE.sh" ]; then
@@ -83,7 +49,19 @@ rebuild_user_conf() {
 	# band (#388). The archived uid is deliberately ignored: tar resolves ownership by
 	# name on extract, and this runs BEFORE the unpack, so the files land here by
 	# themselves. An existing account keeps its uid.
-	shell=$(grep -w "$SHELL" /etc/shells | head -n1)
+	# From the record, never the caller's environment: SHELL is a registry key, so
+	# sanitize_config_file unsets it, and grep -w "" then matches every line of /etc/shells -
+	# head -n1 hands its comment banner to useradd. Off the allowlist becomes nologin, and the
+	# answer must start with / so a comment line can never be it.
+	shell_name=$(sed -n "s/^SHELL='\(.*\)'$/\1/p" "$USER_DATA/user.conf" | head -n1)
+	list_allowed_shells | grep -qxF "$shell_name" 2> /dev/null || shell_name='nologin'
+	shell=$(grep -w "$shell_name" /etc/shells | grep -m1 '^/')
+	# Picked by existence, not spelling: usrmerge decides which of the two paths is real.
+	if [ -z "$shell" ]; then
+		for _c in /usr/sbin/nologin /sbin/nologin; do
+			[ -x "$_c" ] && shell="$_c" && break
+		done
+	fi
 	if ! id "$user" > /dev/null 2>&1; then
 		local user_uid
 		read -r user_uid _ < <(identity_allocate "$user")

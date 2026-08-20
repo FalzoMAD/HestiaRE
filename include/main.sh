@@ -247,6 +247,18 @@ is_system_enabled() {
 }
 
 # User package check
+# package_key_value KEY - what this customer's package file says for KEY, or nothing. The same file
+# h-add-user seeds a new user.conf from, so it is not a second opinion. KEY reaches a sed pattern,
+# so it comes from the registry, never from input.
+package_key_value() {
+	local _pkg
+	[ -f "$USER_DATA/user.conf" ] || return 1
+	_pkg=$(sed -n "s/^PACKAGE='\(.*\)'$/\1/p" "$USER_DATA/user.conf" | head -n1)
+	[ -n "$_pkg" ] || return 1
+	[ -f "$CONF_DIR/packages/$_pkg.pkg" ] || return 1
+	sed -n "s/^$1='\(.*\)'$/\1/p" "$CONF_DIR/packages/$_pkg.pkg" | head -n1
+}
+
 is_package_full() {
 	case "$1" in
 		WEB_DOMAINS) used=$(wc -l $USER_DATA/web.conf) ;;
@@ -258,6 +270,25 @@ is_package_full() {
 	esac
 	used=$(echo "$used" | cut -f 1 -d \ )
 	limit=$(grep "^$1=" $USER_DATA/user.conf | cut -f 2 -d \')
+	# An absent limit is a broken record, not a limit of zero - but [[ n -ge "" ]] reads it as one
+	# and refuses every request with a message blaming the customer's package. Ask the package file
+	# instead, which is where the value came from.
+	case "$limit" in
+		'unlimited') ;;
+		'' | *[!0-9]*)
+			limit=$(package_key_value "$1")
+			case "$limit" in
+				'unlimited') return 0 ;;
+				'' | *[!0-9]*)
+					# Not enforcing is the safe direction for the customer and an invisible one
+					# for the operator: one typo in a package would silently unlimit everyone on
+					# it. So it is said.
+					echo "Warning!: neither user.conf nor the package gives a usable $1 limit - not enforcing one"
+					return 0
+					;;
+			esac
+			;;
+	esac
 	if [ "$1" = WEB_ALIASES ]; then
 		# Used is always calculated with the new alias added
 		if [ "$limit" != 'unlimited' ] && [[ "$used" -gt "$limit" ]]; then
@@ -2124,7 +2155,6 @@ web_lock_release() {
 	exec {WEB_LOCK_FD}>&- 2> /dev/null
 	unset WEB_LOCK_FD HESTIA_WEB_LOCK_HELD HESTIA_WEB_LOCK_PID
 }
-
 
 # SFTP jail membership (#413): the sftp-jailed group is the sshd chroot selector and
 # the pam_namespace scope; the jail is built per session (h-add-sys-sftp-jail).
