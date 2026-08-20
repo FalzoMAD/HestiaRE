@@ -994,6 +994,9 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 
 		# Importing database dump
 		database_dump="$tmpdir/db/$database/$database.$TYPE.sql"
+		# Per database, so the report below names the ones that actually arrived without a password
+		# rather than everything after the first.
+		REBUILD_DB_UNUSABLE=''
 		case $TYPE in
 			mysql)
 				delete_mysql_database
@@ -1006,6 +1009,13 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 				import_pgsql_database $database_dump
 				;;
 		esac
+		# A database whose rows are all back but which nothing can connect to is a degraded result,
+		# not a warning to find in the log afterwards: on a fresh host - the migration case - the
+		# archive carried no password and the account was created without one. On this host the
+		# existing password was kept, and that stays a warning.
+		if [ -n "$REBUILD_DB_UNUSABLE" ]; then
+			restore_failures="$restore_failures$(printf '\n  database %s (restored without a password - set one before the application can connect)' "$target_db")"
+		fi
 	done 3< <(printf '%s\n' "$databases")
 fi
 

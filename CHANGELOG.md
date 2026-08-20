@@ -26,9 +26,17 @@ opens above it.
 
 - **A restored PostgreSQL role could not log in at all** (#752). The rebuild created it with a bare
   `CREATE ROLE`, which is `NOLOGIN` in PostgreSQL - so a restored database was unreachable whatever
-  its password said, and that is why the empty password went unnoticed for so long. Roles are
-  created with `LOGIN` as they always were on the add path, and existing ones left behind by the
-  old form are repaired in place.
+  its password said, and that is why the empty password went unnoticed for so long. Roles get
+  `LOGIN` as they always did on the add path, but only together with a password: a role that has
+  none stays shut, because turning it into a login role would open it wherever `pg_hba.conf`
+  carries a `trust` line.
+
+- **A database restored onto another host without a password now says so, and the run ends
+  accordingly** (#752). The two cases had been reported with one sentence: on the same host an
+  existing password is kept, on a fresh host - the migration case - the account is created without
+  one and nothing can connect to the database at all. Saying "kept unchanged" there claimed a
+  credential that never existed. The second case is now named as such and counts as a part that
+  did not come back, so a queue or a script sees it rather than finding it in the log.
 
 - **A customer whose `user.conf` lost a package limit was locked out of their own package** (#711).
   An absent or empty limit is not a limit of zero, but that is how the comparison read it, so every
