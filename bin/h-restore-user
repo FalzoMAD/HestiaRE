@@ -1009,25 +1009,28 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 		# Refused means the target was not emptied, so importing on top would merge the archive into
 		# whatever is there. Named as a part that did not come back, or the run reports a success it
 		# did not have.
+		# Branched rather than `continue`d: the loop body keeps one way out, so anything appended
+		# at its end still runs for every database.
 		if [ "$db_cleared" != 'yes' ]; then
 			echo "Warning!: $target_db was not restored - it is not a database of $user" | tee -a $tmpdir/restore.log
 			restore_failures="$restore_failures$(printf '\n  database %s (refused: not a database of %s)' "$target_db" "$user")"
-			continue
-		fi
-		case $TYPE in
-			mysql)
-				rebuild_mysql_database
-				import_mysql_database $database_dump
-				;;
-			pgsql)
-				rebuild_pgsql_database
-				import_pgsql_database $database_dump
-				;;
-		esac
-		# Rows back, nothing able to connect: a degraded result, not a line to find in the log later.
-		# Only the fresh-host case reaches here - where a password was kept, it stays a warning.
-		if [ -n "$REBUILD_DB_UNUSABLE" ]; then
-			restore_failures="$restore_failures$(printf '\n  database %s (restored without a password - set one before the application can connect)' "$target_db")"
+		else
+			case $TYPE in
+				mysql)
+					rebuild_mysql_database
+					import_mysql_database $database_dump
+					;;
+				pgsql)
+					rebuild_pgsql_database
+					import_pgsql_database $database_dump
+					;;
+			esac
+			# Rows back, nothing able to connect: a degraded result, not a line to find in the log
+			# later. Only the fresh-host case reaches here - where a password was kept it stays a
+			# warning.
+			if [ -n "$REBUILD_DB_UNUSABLE" ]; then
+				restore_failures="$restore_failures$(printf '\n  database %s (restored without a password - set one before the application can connect)' "$target_db")"
+			fi
 		fi
 	done 3< <(printf '%s\n' "$databases")
 fi

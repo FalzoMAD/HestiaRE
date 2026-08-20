@@ -522,7 +522,11 @@ change_pgsql_password() {
 # SOURCE customer's live database on the same box - and reported success. A guard placed in the
 # callers is missing again at the next caller.
 db_is_owned_by_user() {
-	[ -n "$1" ] && grep -qF "DB='$1'" "$USER_DATA/db.conf" 2> /dev/null
+	[ -n "$1" ] || return 1
+	# Field-anchored and literal. A record's first field is DB='<name>', so matching it whole holds
+	# on its own rather than on the quoting around it happening to bound the match; -F because the
+	# name can come out of an archive, where a regex metacharacter would widen it.
+	cut -d' ' -f1 "$USER_DATA/db.conf" 2> /dev/null | grep -qxF "DB='$1'"
 }
 
 # Delete MySQL database
