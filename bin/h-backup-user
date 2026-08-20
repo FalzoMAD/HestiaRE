@@ -298,25 +298,26 @@ if [ -n "$pkg_name" ] && [ -e "$CONF_DIR/packages/$pkg_name.pkg" ]; then
 fi
 
 # The rest of the customer's data directory, taken from what is in it rather than from a list of
-# names. A list only ever covers the files that existed when it was written: notifications.conf and
-# auth.log were never in it, so a restore silently dropped the customer's panel notifications and
-# login history. What is left out is named here, each with its reason:
+# names. A list only ever covers the files that existed when it was written: notifications.conf was
+# never in it, so a restore silently dropped the customer's panel notifications. What never travels
+# is BACKUP_USER_DATA_CORE, defined once in include/backup.sh and read by the restore as well;
+# user.conf and ssl are already copied above.
 #
-#   web|mail|db|cron.conf, mail/  the sections rebuild these per object, and the restore selectors
-#                                 depend on them being rebuilt rather than copied whole
-#   backup.conf                   this box's list of archives; on another box it would claim
-#                                 archives that are not there
-#   dns.conf, dns                 the subsystem is gone (#58); only boxes made before that still
-#                                 carry the empty leftovers
-#   restic.conf                   the customer's repository password
-#   user.conf, ssl                already copied above
-BACKUP_USER_DATA_SKIP=' web.conf mail.conf db.conf cron.conf mail backup.conf dns.conf dns restic.conf user.conf ssl '
-for _entry in "$USER_DATA"/* "$USER_DATA"/.[!.]*; do
+# Dotfiles are deliberately not enumerated: nothing in the panel writes one here, and on the way
+# back a leading dot is exactly what the member-name rule rejects - carrying one would only mean
+# losing it later. Said out loud if one ever turns up, rather than skipped in silence.
+_hidden=$(find "$USER_DATA" -maxdepth 1 -name '.*' ! -name '.' 2> /dev/null | wc -l)
+[ "$_hidden" -gt 0 ] \
+	&& echo "Warning!: $_hidden hidden file(s) in the data directory are not backed up" | tee -a $BACKUP/$user.log
+for _entry in "$USER_DATA"/*; do
 	[ -e "$_entry" ] || continue
 	_name=$(basename "$_entry")
-	[[ "$BACKUP_USER_DATA_SKIP" == *" $_name "* ]] && continue
+	[[ " $BACKUP_USER_DATA_CORE user.conf ssl " == *" $_name "* ]] && continue
 	echo -e "$(date "+%F %T") $_name" | tee -a $BACKUP/$user.log
-	cp -r "$_entry" "$tmpdir/hestia/"
+	if ! cp -r "$_entry" "$tmpdir/hestia/"; then
+		rm -rf $tmpdir
+		check_result "$E_NOTEXIST" "can't copy $_name out of the data directory"
+	fi
 done
 
 # Backup PAM

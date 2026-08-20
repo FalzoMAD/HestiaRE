@@ -114,6 +114,21 @@ record_del_field() {
 # outright rather than threaded through every path join, so this is a constant.
 BACKUP_CONTAINER='hestia'
 
+# BACKUP_USER_DATA_CORE - entries of a customer's data directory that travel in NEITHER direction.
+# One list, read by the backup and by the restore, because two would drift and the entry that fell
+# out of one of them would be the one nobody thought of. The restore adds its own on top, so it can
+# never reject less than the backup withholds - it is the side that takes in foreign archives.
+#
+#   web|mail|db|cron.conf, mail  the sections rebuild these per object; the restore selectors
+#                                depend on that rather than on a copy
+#   backup.conf                  a box's own list of archives - elsewhere it claims archives that
+#                                are not there
+#   dns.conf, dns                the subsystem is gone; an archive must not bring it back
+#   restic.conf                  a repository password
+#   auth.log                     login IPs, browser fingerprints and session ids: a per-box view of
+#                                who was signed in, not something a customer takes along
+BACKUP_USER_DATA_CORE='web.conf mail.conf db.conf cron.conf mail backup.conf dns.conf dns restic.conf auth.log'
+
 # The text identifying a queued job - command plus the arguments that tell it apart. One per
 # queueable command.
 QUEUE_JOB=''
