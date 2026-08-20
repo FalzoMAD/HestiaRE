@@ -3,7 +3,7 @@
 # options: USER BACKUP [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR] [NOTIFY] [CONSENT]
 #
 # example: h-restore-user admin 2019-04-22_01-00-00.tar
-# example: h-restore-user admin 2019-04-22_01-00-00.tar '' '' '' '' '' '' no all
+# example: h-restore-user admin 2019-04-22_01-00-00.tar '' '' '' '' '' '' no all,php-fallback
 #
 # This function for restoring user from backup. To be able to restore the backup,
 # the archive needs to be placed in /backup.
@@ -271,7 +271,11 @@ fi
 if [ -n "$restore_refused" ]; then
 	rm -rf "$tmpdir"
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
-	check_result "$E_INVALID" "no consent for:$restore_refused - nothing was written. Name them in the CONSENT argument (or 'all'), select the objects to restore, or answer the prompt on a terminal"
+	# The tokens that were actually refused, not a generic hint at 'all': 'all' covers the sections
+	# and deliberately not php-fallback, so pointing at it while complaining about php-fallback sent
+	# the operator in a circle.
+	restore_suggest=$(tr ' ' ',' <<< "${restore_refused# }")
+	check_result "$E_INVALID" "no consent for:$restore_refused - nothing was written. Pass CONSENT='$restore_suggest', select the objects to restore, or answer the prompt on a terminal. 'all' stands for the sections and deliberately not for php-fallback, which moves a customer's domains onto another PHP version."
 fi
 
 # Restoring user account
@@ -364,17 +368,11 @@ new_uid=$(grep "^$user:" /etc/passwd | cut -f 3 -d :)
 if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 	echo -e "\n-- WEB --" | tee -a $tmpdir/restore.log
 
-	# Cross-model restore banner: the web configs are regenerated for THIS host's
-	# model; if the archive was made under a different model, custom includes may not apply.
-	if [ -f "$tmpdir/$BACKUP_CONTAINER/web-system" ]; then
-		bk_web=$(sed -n "s/.*WEB_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$BACKUP_CONTAINER/web-system")
-		bk_proxy=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$BACKUP_CONTAINER/web-system")
-		if [ "$bk_web" != "$WEB_SYSTEM" ] || [ "$bk_proxy" != "$PROXY_SYSTEM" ]; then
-			echo "Warning!: backup web model (WEB_SYSTEM='$bk_web' PROXY_SYSTEM='$bk_proxy') differs from this host (WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'); web configs are regenerated for this host - review any custom nginx/apache includes." | tee -a "$tmpdir/restore.log"
-		fi
-	else
-		echo "Warning!: backup web model unknown (pre-#120 archive); review the restored web configs manually." | tee -a "$tmpdir/restore.log"
-	fi
+	# The cross-model banner that used to stand here is gone, not moved: backup_report already says
+	# it, from the probe, before anything is written. This copy read ./hestia/web-system off the
+	# disk - a member only unpacked when the account is created - so a restore over an existing
+	# customer called a native archive "pre-#120" and stayed silent about a model that really did
+	# differ. Two reports of one fact are two chances to disagree.
 
 	# Restoring web domain. The list comes from the archive's member paths, not from a validator,
 	# so a member with a space in its name would split into two - and one of the halves could match
@@ -987,7 +985,9 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 
 		# Unzipping database dump
 		if [ $backup_mode = 'zstd' ]; then
-			pzstd -d $tmpdir/db/$database/$database.*.sql.zst
+			# -q like everywhere else: pzstd prints every file's size on stderr, and in the middle
+			# of a restore log that reads like an error.
+			pzstd -q -d $tmpdir/db/$database/$database.*.sql.zst
 		else
 			gzip -d $tmpdir/db/$database/$database.*.sql.gz
 		fi

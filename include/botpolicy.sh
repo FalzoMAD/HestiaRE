@@ -135,6 +135,14 @@ botpolicy_apply() {
 # A family that is gone or disabled is SKIPPED: the server config only defines zones for enabled
 # families, so emitting `limit_req zone=hbot_x_strict` for a disabled one leaves a dangling zone
 # reference and `nginx -t` fails - which would block the next reload for every domain on the box.
+# botpolicy_family_enabled FAMILY - does this host know the family and have it switched on?
+#
+# A family that is gone or disabled has no zone in the server config, so a fragment naming it makes
+# `nginx -t` fail for the whole box. Asked by the renderer and by the restore's loss report.
+botpolicy_family_enabled() {
+	[ "$(get_object_value "$CONF_DIR/botfamilies" 'FAMILY' "$1" '$ENABLED' 2> /dev/null)" = 'yes' ]
+}
+
 botpolicy_render_domain_fragment() {
 	local user="$1" domain="$2" sys
 	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
@@ -155,7 +163,7 @@ botpolicy_render_domain_fragment() {
 			fam=${entry%%:*}
 			lvl=${entry#*:}
 			case "$lvl" in lenient | strict) ;; *) continue ;; esac
-			[ "$(get_object_value "$obj" 'FAMILY' "$fam" '$ENABLED' 2> /dev/null)" = 'yes' ] || continue
+			botpolicy_family_enabled "$fam" || continue
 			burst=$(get_object_value "$obj" 'FAMILY' "$fam" '$BURST' 2> /dev/null)
 			nodelay=$(get_object_value "$obj" 'FAMILY' "$fam" '$NODELAY' 2> /dev/null)
 			[ -n "$burst" ] || burst=10
@@ -170,7 +178,7 @@ botpolicy_render_domain_fragment() {
 			fam=${entry%%:*}
 			lvl=${entry#*:}
 			case "$lvl" in lenient | strict) ;; *) continue ;; esac
-			[ "$(get_object_value "$obj" 'FAMILY' "$fam" '$ENABLED' 2> /dev/null)" = 'yes' ] || continue
+			botpolicy_family_enabled "$fam" || continue
 			match=$(get_object_value "$obj" 'FAMILY' "$fam" '$MATCH' 2> /dev/null)
 			[ -n "$match" ] || continue
 			echo "BrowserMatchNoCase \"$match\" hbot_$fam" >> "$tmp"

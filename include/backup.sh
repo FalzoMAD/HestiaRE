@@ -284,7 +284,7 @@ backup_local_keys() {
 # read nothing" have to look different.
 backup_report() {
 	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys _installed
-	local _o_mode _o_fmt _o_who
+	local _o_mode _o_fmt _o_who _prot _dom _file _bl _e
 
 	echo "-- ARCHIVE --"
 	printf '   %s compressed\n' "$PROBE_MODE"
@@ -339,6 +339,33 @@ backup_report() {
 		_found=1
 		printf '   custom web template(s) for %s domain(s) - this host renders from its own set\n' \
 			"$(backup_report_count "$PROBE_TPL")"
+	fi
+
+	# Protections a domain asks for that this host cannot render. The field itself survives the
+	# restore - it is the customer's setting and takes effect if the module arrives later - but a
+	# protection that is silently inactive belongs in the report. Both questions are asked of the
+	# renderers' own predicates, so the report cannot claim a capability the renderer disagrees with.
+	type crowdsec_domain_capable > /dev/null 2>&1 || source "$HESTIA/include/crowdsec.sh"
+	type botpolicy_family_enabled > /dev/null 2>&1 || source "$HESTIA/include/botpolicy.sh"
+	_prot=''
+	while IFS= read -r _dom; do
+		[ -n "$_dom" ] || continue
+		_file=$(backup_record_file web "$_dom")
+		[ -s "$_file" ] || continue
+		_rec=$(head -n1 "$_file")
+		if [ "$(sed -n "s/.*CROWDSEC='\([^']*\)'.*/\1/p" <<< "$_rec")" = 'yes' ] \
+			&& ! crowdsec_domain_capable; then
+			_prot="$_prot$_dom: CrowdSec"$'\n'
+		fi
+		_bl=$(sed -n "s/.*BOTLIMIT='\([^']*\)'.*/\1/p" <<< "$_rec")
+		for _e in ${_bl//,/ }; do
+			botpolicy_family_enabled "${_e%%:*}" || _prot="$_prot$_dom: bot family ${_e%%:*}"$'\n'
+		done
+	done <<< "$PROBE_WEB"
+	if [ -n "$_prot" ]; then
+		_found=1
+		printf '   protection(s) restored as a setting but inactive here, because this host cannot render them:\n'
+		sed '/^$/d;s/^/      /' <<< "$_prot"
 	fi
 
 	# A section this host has no subsystem for is dropped in full. With the count: "mail is skipped"
