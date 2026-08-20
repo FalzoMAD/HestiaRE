@@ -10,3 +10,4 @@ STRUCTURE.md export-ignore
 VENDORED.json export-ignore
 .editorconfig export-ignore
 .shellcheckrc export-ignore
+.php-cs-fixer.dist.php export-ignore
