@@ -19,7 +19,7 @@ check_return_code($return_var, $output);
 $data = json_decode(implode("", $output), true) ?: [];
 unset($output);
 
-$v_web = $v_mail = $v_db = $v_userdir = "";
+$v_web = $v_mail = $v_db = $v_cron = $v_userdir = "";
 // Parse web
 $v_username = $user;
 foreach ($data["WEB"] as $key => $value) {
@@ -45,6 +45,15 @@ foreach ($data["DB"] as $key => $value) {
 		$v_db .= $key . ":" . $value . "\n";
 	} else {
 		$v_db .= $key . "\n";
+	}
+}
+
+// Parse cron jobs
+foreach ($data["CRON"] as $key => $value) {
+	if (!empty($value)) {
+		$v_cron .= $key . ":" . $value . "\n";
+	} else {
+		$v_cron .= $key . "\n";
 	}
 }
 
@@ -98,6 +107,8 @@ if (!empty($_POST["save"])) {
 				$v_mail_tmp .
 				"\n" .
 				$v_db_tmp .
+				"\n" .
+				$v_cron_tmp .
 				"\n" .
 				$v_userdir_tmp .
 				"\n",

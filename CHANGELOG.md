@@ -23,6 +23,12 @@ opens above it.
 
 ### Fixed
 
+- **Saving the backup exclusions cleared the cron exclusion** (#768). A customer set to skip their
+  cron jobs kept that setting only until someone opened the exclusions page and pressed save: the
+  form had no cron field, so the handler wrote an empty one over it, and the next backup silently
+  carried the jobs again. The page now offers the field and the lister reports it, so what the
+  backup honours is what the panel shows.
+
 - **A restore that could not take a whole section reported success** (#754). Three databases handed
   to the customer because the box has no database engine ended in a zero exit status, while a single
   database that could not be loaded - the same loss reached by another branch - ended in red. Which
