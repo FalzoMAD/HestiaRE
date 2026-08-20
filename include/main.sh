@@ -282,8 +282,16 @@ is_package_full() {
 		'' | *[!0-9]*)
 			limit=$(package_key_value "$1")
 			case "$limit" in
-				'unlimited' | *[!0-9]*) return 0 ;;
-				'') return 0 ;;
+				'unlimited') return 0 ;;
+				'' | *[!0-9]*)
+					# Said, not swallowed. This is the safe direction for the customer and the
+					# wrong one for the operator: a package with a typo would otherwise switch the
+					# limit off for everyone on it and look completely normal doing so. The rule
+					# this whole change follows is that a defect must not present itself as a
+					# normal state - which cuts both ways.
+					echo "Warning!: neither user.conf nor the package gives a usable $1 limit - not enforcing one"
+					return 0
+					;;
 			esac
 			;;
 	esac
@@ -327,7 +335,10 @@ fetch_wp_cli_phar() {
 		rm -f "$tmp"
 		return 1
 	fi
-	mv -f "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+	mv -f "$tmp" "$dest" || {
+		rm -f "$tmp"
+		return 1
+	}
 	chmod 755 "$dest"
 }
 
@@ -2153,7 +2164,6 @@ web_lock_release() {
 	exec {WEB_LOCK_FD}>&- 2> /dev/null
 	unset WEB_LOCK_FD HESTIA_WEB_LOCK_HELD HESTIA_WEB_LOCK_PID
 }
-
 
 # SFTP jail membership (#413): the sftp-jailed group is the sshd chroot selector and
 # the pam_namespace scope; the jail is built per session (h-add-sys-sftp-jail).

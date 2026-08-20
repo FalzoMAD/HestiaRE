@@ -61,7 +61,13 @@ rebuild_user_conf() {
 	shell_name=$(sed -n "s/^SHELL='\(.*\)'$/\1/p" "$USER_DATA/user.conf" | head -n1)
 	list_allowed_shells | grep -qxF "$shell_name" 2> /dev/null || shell_name='nologin'
 	shell=$(grep -w "$shell_name" /etc/shells | grep -m1 '^/')
-	[ -n "$shell" ] || shell='/usr/sbin/nologin'
+	# Last resort picked by existence, not by spelling: /usr/sbin/nologin and /sbin/nologin are
+	# both right depending on whether the box has usrmerge.
+	if [ -z "$shell" ]; then
+		for _c in /usr/sbin/nologin /sbin/nologin; do
+			[ -x "$_c" ] && shell="$_c" && break
+		done
+	fi
 	if ! id "$user" > /dev/null 2>&1; then
 		local user_uid
 		read -r user_uid _ < <(identity_allocate "$user")

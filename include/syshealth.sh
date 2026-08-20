@@ -244,20 +244,77 @@ syshealth_user_key_default() {
 }
 
 syshealth_repair_user_config() {
-	local key
+	local key line pending i seen_dup='' missing='' add=() lines=()
 	[ -f "$USER_DATA/user.conf" ] || return 0
 	syshealth_refresh_registry 'user'
 	sanitize_config_file 'user'
+
 	for key in $(read_kv_config_file 'user'); do
 		grep -q "^${key}='" "$USER_DATA/user.conf" && continue
 		# A real default, not ''. The package block carries the customer's limits, and an empty
 		# limit is not "no limit" to any reader - it is zero.
 		if ! syshealth_user_key_default "$key"; then
-			echo "Warning!: $key is missing from user.conf and package '$(sed -n "s/^PACKAGE='\(.*\)'$/\1/p" "$USER_DATA/user.conf" | head -n1)' cannot supply it - left out rather than guessed"
+			missing="$missing $key"
 			continue
 		fi
-		sed -i "/^TIME=/i ${key}='${REPLY//\//\\/}'" "$USER_DATA/user.conf"
+		# The value ends up inside KEY='...' on a line of its own. A quote would close that early
+		# and turn the rest into a second field, a newline would make it a second line - either way
+		# a record two readers disagree about, which is the defect this function exists to remove.
+		case "$REPLY" in
+			*"'"* | *$'\n'*)
+				echo "Warning!: the package value for $key cannot be written as a record field - left out"
+				continue
+				;;
+		esac
+		add+=("${key}='${REPLY}'")
 	done
+	[ -z "$missing" ] || echo "Warning!: package '$(sed -n "s/^PACKAGE='\(.*\)'$/\1/p" "$USER_DATA/user.conf" | head -n1)' cannot supply${missing} - left out rather than guessed"
+
+	# Read once, written once. Also the pass that removes a key appearing twice: earlier repairs
+	# addressed their inserts with bare sed patterns, so /MAIL_ACCOUNTS/ also matched
+	# U_MAIL_ACCOUNTS and boxes carry two RATE_LIMIT lines to this day. Those do not go away on
+	# their own - the loop above skips a key that is present, however often it is present.
+	mapfile -t lines < "$USER_DATA/user.conf"
+	declare -A _cnt=() _last=()
+	for i in "${!lines[@]}"; do
+		key="${lines[$i]%%=*}"
+		case "${lines[$i]}" in "$key='"*) ;; *) continue ;; esac
+		_cnt[$key]=$((${_cnt[$key]:-0} + 1))
+		_last[$key]=$i
+	done
+	for key in "${!_cnt[@]}"; do
+		[ "${_cnt[$key]}" -gt 1 ] || continue
+		seen_dup="$seen_dup $key"
+		# The last one wins because source_conf does, and source_conf is what nearly every reader
+		# uses; the grep | head -1 readers were seeing the other one, which is the ambiguity itself.
+		echo "Warning!: user.conf had ${_cnt[$key]} lines for $key - keeping line $((_last[$key] + 1)), the value source_conf was already using"
+	done
+
+	# One rewrite: drop the earlier copies of a duplicated key, then insert what is missing before
+	# TIME=. printf, never sed's i command - the value is data here, and sed would eat a backslash
+	# in it and need the text escaped for the command's own syntax on top.
+	if [ -n "$seen_dup" ] || [ ${#add[@]} -gt 0 ]; then
+		{
+			for i in "${!lines[@]}"; do
+				line="${lines[$i]}"
+				key="${line%%=*}"
+				case "$line" in "$key='"*)
+					if [ -n "${_last[$key]:-}" ] && [ "${_last[$key]}" != "$i" ]; then continue; fi
+					;;
+				esac
+				case "$line" in
+					TIME=*)
+						for pending in "${add[@]}"; do printf '%s\n' "$pending"; done
+						add=()
+						;;
+				esac
+				printf '%s\n' "$line"
+			done
+			# No TIME= line: append rather than lose them (#433 names that shape).
+			for pending in "${add[@]}"; do printf '%s\n' "$pending"; done
+		} > "$USER_DATA/user.conf.repair" && mv -f "$USER_DATA/user.conf.repair" "$USER_DATA/user.conf"
+		chmod 660 "$USER_DATA/user.conf"
+	fi
 	# Sourced last, not before the loop: sanitize_config_file clears the keys from the environment,
 	# so re-reading first would load the pre-repair state and leave every key inserted below unset as
 	# a shell variable. Callers testing ${KEY+x} would then get the opposite of what the file says.

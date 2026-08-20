@@ -26,7 +26,9 @@ opens above it.
   generic one addressed its insert with a bare `/MAIL_ACCOUNTS/`, which also matches
   `U_MAIL_ACCOUNTS`, so `RATE_LIMIT` was written after both - and `FILE_MANAGER` after both of
   those. Which value then won depended on the reader: `source_conf` keeps the last, `grep | head -1`
-  the first. The two repairs are now one.
+  the first. The two repairs are now one, and it also removes the extra lines a box is already
+  carrying - keeping the one `source_conf` was using, and saying which - because a duplicate that is
+  only prevented from now on stays on every box that already has it.
 
 - **A user's login shell could be set from the caller's environment** (#711). Where the record had
   no `SHELL`, the rebuild fell back to the ambient `$SHELL`, and where that was unset `grep -w ""`
