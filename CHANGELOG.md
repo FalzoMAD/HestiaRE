@@ -14,6 +14,21 @@ opens above it.
 
 ### Fixed
 
+- **A restore under a different customer name deleted the source customer's database and reported
+  success** (#764). Restoring an archive under a new name on the same box - what a careful operator
+  does as a rehearsal before migrating - dropped the live database the archive came from, left its
+  record claiming it was still there, and ended with a zero exit status. The deletion took the name
+  out of the **archive** while everything else worked on the target's name; where the two coincide,
+  which is every same-name restore, nothing showed. The name to clear now comes from the customer
+  being restored into, and the check that it belongs to them sits in the delete itself rather than
+  in its callers, so the next caller cannot arrive without it. A refusal is named and counts as a
+  part that did not come back.
+
+- **A second FTP account came back under the old customer's name** (#764). The conversion replaced
+  the first occurrence of the source prefix in the whole colon-separated field, so the second
+  account kept it - and a name carrying the prefix in the middle lost it from there instead. Each
+  entry is converted on its own now, anchored at the front, the way the database name already was.
+
 - **A restore under a different customer name pointed the site's password protection into the old
   customer's home** (#756). The `.htaccess` fragments travel inside the archive with an absolute
   path written into them, and the rebuild only wrote its own when none was there - which after a

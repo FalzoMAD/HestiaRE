@@ -477,10 +477,17 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				CUSTOM_PHPROOT=$(echo "$CUSTOM_PHPROOT" | sed -e "s|/home/${old_user}/web/|/home/${user}/web/|g")
 			fi
 
-			# Converting FTP users
+			# Converting FTP users. Per entry and anchored at the front, like the database name
+			# below: the field is a colon list, and one `sed s/<old>_//` over the whole string
+			# replaced the FIRST occurrence only - a second account kept the SOURCE customer's
+			# prefix, and a name carrying the prefix in the middle lost it from there instead.
 			if [ -n "$FTP_USER" ]; then
-				FTP_USER=$(echo "$FTP_USER" | sed -e "s/${old_user}_//")
-				FTP_USER="${user}_${FTP_USER}"
+				IFS=':' read -r -a _ftp_list <<< "$FTP_USER"
+				FTP_USER=''
+				for _f in "${_ftp_list[@]}"; do
+					[ -n "$_f" ] || continue
+					FTP_USER="${FTP_USER:+$FTP_USER:}${user}_${_f#"${old_user}_"}"
+				done
 			fi
 
 			# Copying SSL certificates
@@ -987,22 +994,43 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 		database_dump="$tmpdir/db/$database/$database.$TYPE.sql"
 		# Reset per database, or the report names every database after the first one that lacked one.
 		REBUILD_DB_UNUSABLE=''
+		# The name to clear is the one this customer will own, never the one the archive carries.
+		# Where the two differ - a restore under a different customer name - the archived name is
+		# somebody else's live database on this box.
+		db_cleared='yes'
 		case $TYPE in
 			mysql)
-				delete_mysql_database
-				rebuild_mysql_database
-				import_mysql_database $database_dump
+				delete_mysql_database "$target_db" || db_cleared='no'
 				;;
 			pgsql)
-				delete_pgsql_database
-				rebuild_pgsql_database
-				import_pgsql_database $database_dump
+				delete_pgsql_database "$target_db" || db_cleared='no'
 				;;
 		esac
-		# Rows back, nothing able to connect: a degraded result, not a line to find in the log later.
-		# Only the fresh-host case reaches here - where a password was kept, it stays a warning.
-		if [ -n "$REBUILD_DB_UNUSABLE" ]; then
-			restore_failures="$restore_failures$(printf '\n  database %s (restored without a password - set one before the application can connect)' "$target_db")"
+		# Refused means the target was not emptied, so importing on top would merge the archive into
+		# whatever is there. Named as a part that did not come back, or the run reports a success it
+		# did not have.
+		# Branched rather than `continue`d: the loop body keeps one way out, so anything appended
+		# at its end still runs for every database.
+		if [ "$db_cleared" != 'yes' ]; then
+			echo "Warning!: $target_db was not restored - it is not a database of $user" | tee -a $tmpdir/restore.log
+			restore_failures="$restore_failures$(printf '\n  database %s (refused: not a database of %s)' "$target_db" "$user")"
+		else
+			case $TYPE in
+				mysql)
+					rebuild_mysql_database
+					import_mysql_database $database_dump
+					;;
+				pgsql)
+					rebuild_pgsql_database
+					import_pgsql_database $database_dump
+					;;
+			esac
+			# Rows back, nothing able to connect: a degraded result, not a line to find in the log
+			# later. Only the fresh-host case reaches here - where a password was kept it stays a
+			# warning.
+			if [ -n "$REBUILD_DB_UNUSABLE" ]; then
+				restore_failures="$restore_failures$(printf '\n  database %s (restored without a password - set one before the application can connect)' "$target_db")"
+			fi
 		fi
 	done 3< <(printf '%s\n' "$databases")
 fi
