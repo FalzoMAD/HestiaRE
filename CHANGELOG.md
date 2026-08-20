@@ -14,6 +14,15 @@ opens above it.
 
 ### Fixed
 
+- **A restore that could not take a whole section reported success** (#754). Three databases handed
+  to the customer because the box has no database engine ended in a zero exit status, while a single
+  database that could not be loaded - the same loss reached by another branch - ended in red. Which
+  one you got depended on whether the section was entered at all, not on what the customer was left
+  with. A section this host has no subsystem for now counts as a part that did not come back, and so
+  does a docker setup that could not be re-enabled. What is handed over because this product does
+  not do it at all - DNS zones - still does not colour the status: a HestiaCP migration is not a
+  failed restore for carrying zones we never claimed to keep.
+
 - **A restore under a different customer name deleted the source customer's database and reported
   success** (#764). Restoring an archive under a new name on the same box - what a careful operator
   does as a rehearsal before migrating - dropped the live database the archive came from, left its

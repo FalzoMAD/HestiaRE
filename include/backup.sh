@@ -628,28 +628,37 @@ backup_php_missing() {
 # so the two cannot drift: whatever the report names is either carried out here or has a reason
 # printed next to it (a rewritten template is a remap, not a loss - nothing to hand over).
 #
-# Sets LEFTOVERS_PATTERNS (tar wildcards) and LEFTOVERS_SUMMARY (one line each).
+# Sets LEFTOVERS_PATTERNS (tar wildcards), LEFTOVERS_SUMMARY (one line each) and
+# LEFTOVERS_DEGRADED - the subset the customer is actually missing afterwards.
 backup_leftovers_plan() {
 	local _obj _eff
 	LEFTOVERS_PATTERNS=''
 	LEFTOVERS_SUMMARY=''
+	LEFTOVERS_DEGRADED=''
 	# Each line is <mode>TAB<pattern>. 'w' means tar may read it as a wildcard, 'x' means literally.
 	# Only OUR patterns are wildcards; anything carrying a name out of the archive is literal, or a
 	# database called x* extracts xyz along with it - measured, and xyz was one this host can restore.
+	#
+	# A fourth argument marks a whole section this box cannot take although the product can - the
+	# customer is missing it afterwards. DNS and rewritten templates carry no such mark: the first
+	# is a subsystem this product does not have, the second is a remap. Per-object engine mismatches
+	# are marked by the restore itself, which would otherwise count them twice.
 	_lo() {
 		LEFTOVERS_PATTERNS="$LEFTOVERS_PATTERNS$1"$'\t'"$2"$'\n'
 		LEFTOVERS_SUMMARY="$LEFTOVERS_SUMMARY$3"$'\n'
+		[ -n "$4" ] && LEFTOVERS_DEGRADED="$LEFTOVERS_DEGRADED$3"$'\n'
+		return 0
 	}
 
 	[ -n "$PROBE_DNS" ] && _lo w './dns/*' "$(backup_report_count "$PROBE_DNS") DNS zone(s), records and zone files"
 	[ -n "$PROBE_TPL" ] && _lo w './web/*/template/*' "custom web template(s) for $(backup_report_count "$PROBE_TPL") domain(s)"
 
-	[ -z "$WEB_SYSTEM" ] && [ -n "$PROBE_WEB" ] && _lo w './web/*' "$(backup_report_count "$PROBE_WEB") web object(s), no WEB_SYSTEM here"
-	[ -z "$MAIL_SYSTEM" ] && [ -n "$PROBE_MAIL" ] && _lo w './mail/*' "$(backup_report_count "$PROBE_MAIL") mail object(s), no MAIL_SYSTEM here"
-	[ "$PROBE_CRON" = 'yes' ] && [ -z "$CRON_SYSTEM" ] && _lo w './cron/*' "the cron section, no CRON_SYSTEM here"
+	[ -z "$WEB_SYSTEM" ] && [ -n "$PROBE_WEB" ] && _lo w './web/*' "$(backup_report_count "$PROBE_WEB") web object(s), no WEB_SYSTEM here" d
+	[ -z "$MAIL_SYSTEM" ] && [ -n "$PROBE_MAIL" ] && _lo w './mail/*' "$(backup_report_count "$PROBE_MAIL") mail object(s), no MAIL_SYSTEM here" d
+	[ "$PROBE_CRON" = 'yes' ] && [ -z "$CRON_SYSTEM" ] && _lo w './cron/*' "the cron section, no CRON_SYSTEM here" d
 
 	if [ -z "$DB_SYSTEM" ]; then
-		[ -n "$PROBE_DB" ] && _lo w './db/*' "$(backup_report_count "$PROBE_DB") database(s), no DB_SYSTEM here"
+		[ -n "$PROBE_DB" ] && _lo w './db/*' "$(backup_report_count "$PROBE_DB") database(s), no DB_SYSTEM here" d
 	else
 		# Per object: a host can have a DB_SYSTEM and still not the engine one dump was taken from.
 		while IFS= read -r _obj; do
