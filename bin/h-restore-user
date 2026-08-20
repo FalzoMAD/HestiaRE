@@ -301,7 +301,26 @@ if [ "$create_user" = 'yes' ]; then
 	mkdir $USER_DATA
 	cp $tmpdir/$BACKUP_CONTAINER/user.conf $USER_DATA/
 	cp -r $tmpdir/$BACKUP_CONTAINER/ssl $USER_DATA/ > /dev/null 2>&1
-	cp $tmpdir/$BACKUP_CONTAINER/backup-excludes.conf $USER_DATA/ > /dev/null 2>&1
+
+	# Everything else the container holds, mirroring what the backup derives rather than naming the
+	# same files a second time - the two lists would drift apart, and the file that fell out would
+	# be the one nobody thought of. Skipped here:
+	#
+	#   user.conf, ssl              copied above
+	#   packages                    added below, and only where the name is free
+	#   web-system, origin          about the archive, not the customer
+	#   web|mail|db|cron.conf, mail the sections rebuild these; a copy would fight the selectors
+	#   backup.conf                 the source box's archive list, which is not ours
+	RESTORE_USER_DATA_SKIP=' user.conf ssl packages web-system origin web.conf mail.conf db.conf cron.conf mail backup.conf '
+	for _entry in "$tmpdir/$BACKUP_CONTAINER"/* "$tmpdir/$BACKUP_CONTAINER"/.[!.]*; do
+		[ -e "$_entry" ] || continue
+		_name=$(basename "$_entry")
+		[[ "$RESTORE_USER_DATA_SKIP" == *" $_name "* ]] && continue
+		# The name comes out of the archive and is then joined onto a path we write to. A plain
+		# basename, or it is not copied - stricter than the archive needs, on purpose.
+		case "$_name" in '' | .* | */* | *[!A-Za-z0-9._-]*) continue ;; esac
+		cp -r "$_entry" "$USER_DATA/" 2> /dev/null
+	done
 
 	# The user's hosting package, if the archive carried one. ADD ONLY: a package of that name
 	# already on this box is left exactly as it is, even if its values differ - the admin owns the
