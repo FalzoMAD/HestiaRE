@@ -98,12 +98,15 @@ function sanitize_config_file() {
 # answer as valid: the writer would persist an empty registry, and the guard would compare it
 # against the same empty reference and pass. A ninth subsystem added without a branch here has to
 # fail loudly, not vacuously agree with itself.
+# The key set per object type. Derived, not remembered: everything a command writes with
+# add_object_key or update_object_value belongs here, or the repair functions quietly work against a
+# smaller set than the code does - and a record they call healthy is missing fields nobody notices.
 syshealth_known_keys() {
 	case "$1" in
-		web) echo "DOMAIN IP IP6 CUSTOM_DOCROOT CUSTOM_PHPROOT FASTCGI_CACHE FASTCGI_DURATION PROXY_CACHE PROXY_CACHE_DURATION ALIAS TPL SSL SSL_FORCE SSL_HSTS SSL_HOME HTTP3 DOCKER DOCKER_PORT DOCKER_OCTET LETSENCRYPT WP FTP_USER FTP_MD5 FTP_PATH BACKEND PHP_VERSION PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT U_DISK U_BANDWIDTH REDIRECT REDIRECT_CODE AUTH_USER AUTH_HASH DIR_LIST OFFLINE SUSPENDED TIME DATE" ;;
-		mail) echo "DOMAIN ANTIVIRUS ANTISPAM DKIM WEBMAIL SSL LETSENCRYPT CATCHALL ACCOUNTS RATE_LIMIT REJECT U_DISK SUSPENDED TIME DATE" ;;
+		web) echo "DOMAIN IP IP6 CUSTOM_DOCROOT CUSTOM_PHPROOT FASTCGI_CACHE FASTCGI_DURATION PROXY_CACHE PROXY_CACHE_DURATION ALIAS TPL SSL SSL_FORCE SSL_HSTS SSL_HOME HTTP3 DOCKER DOCKER_PORT DOCKER_OCTET LETSENCRYPT LETSENCRYPT_FAIL_COUNT WP FTP_USER FTP_MD5 FTP_PATH BACKEND PHP_VERSION PROXY PROXY_EXT STATS STATS_USER STATS_CRYPT U_DISK U_BANDWIDTH REDIRECT REDIRECT_CODE AUTH_USER AUTH_HASH ALLOW_USERS DIR_LIST CROWDSEC BOTLIMIT OFFLINE SUSPENDED TIME DATE" ;;
+		mail) echo "DOMAIN ANTIVIRUS ANTISPAM DKIM WEBMAIL SSL LETSENCRYPT LETSENCRYPT_FAIL_COUNT CATCHALL ACCOUNTS RATE_LIMIT REJECT U_SMTP_RELAY U_SMTP_RELAY_HOST U_SMTP_RELAY_PORT U_SMTP_RELAY_USERNAME U_SMTP_RELAY_PASSWORD U_SMTP_RELAY_EXCLUDE U_SPAM_SCORE U_SPAM_REJECT_SCORE U_SPAM_SUBJECT_TAG U_SPAM_WHITELIST U_SPAM_BLACKLIST U_DISK SUSPENDED TIME DATE" ;;
 		mail_accounts) echo "ACCOUNT ALIAS AUTOREPLY FWD FWD_ONLY MD5 QUOTA RATE_LIMIT U_DISK SUSPENDED TIME DATE" ;;
-		user) echo "NAME PACKAGE CONTACT CRON_REPORTS MD5 RKEY TWOFA QRCODE PHPCLI ROLE SUSPENDED SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON IP_AVAIL IP_OWNED U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DKIM U_MAIL_ACCOUNTS U_MAIL_DOMAINS U_MAIL_SSL U_DATABASES U_CRON_JOBS U_BACKUPS LANGUAGE THEME NOTIFICATIONS PREF_UI_SORT FILE_MANAGER DOCKER_BACKUP DOCKER_IP DOCKER_LIMIT TIME DATE" ;;
+		user) echo "NAME PACKAGE CONTACT CRON_REPORTS MD5 RKEY TWOFA QRCODE PHPCLI ROLE SUSPENDED SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON IP_AVAIL IP_OWNED WEB_TEMPLATE PROXY_TEMPLATE BACKEND_TEMPLATE WEB_DOMAINS WEB_ALIASES MAIL_DOMAINS MAIL_ACCOUNTS RATE_LIMIT DATABASES CRON_JOBS DISK_QUOTA CPU_QUOTA CPU_QUOTA_PERIOD MEMORY_LIMIT SWAP_LIMIT BANDWIDTH SHELL BACKUPS BACKUPS_INCREMENTAL U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DKIM U_MAIL_ACCOUNTS U_MAIL_DOMAINS U_MAIL_SSL U_DATABASES U_CRON_JOBS U_BACKUPS LANGUAGE THEME NOTIFICATIONS PREF_UI_SORT FILE_MANAGER LOGIN_DISABLED LOGIN_USE_IPLIST LOGIN_ALLOW_IPS DOCKER_BACKUP DOCKER_IP DOCKER_LIMIT TIME DATE" ;;
 		cron) echo "JOB MIN HOUR DAY MONTH WDAY CMD SUSPENDED TIME DATE" ;;
 		db) echo "DB DBUSER MD5 HOST TYPE CHARSET U_DISK SUSPENDED TIME DATE" ;;
 		system) echo "ANTISPAM_SYSTEM ANTIVIRUS_SYSTEM APP_NAME BACKEND_PORT BACKUP_GZIP BACKUP_INCREMENTAL BACKUP_MODE BACKUP_SYSTEM BLOCKLIST_INTERVAL CRON_SYSTEM DB_ADMINER_ALIAS DB_PMA_ALIAS DB_SYSTEM DEBUG_MODE DEMO_MODE DISABLE_IP_CHECK DISK_QUOTA DOCKER_SYSTEM DOMAINDIR_WRITABLE ENFORCE_SUBDOMAIN_OWNERSHIP FILE_MANAGER FILE_MANAGER_PORT FIREWALL_EXTENSION FIREWALL_SYSTEM FROM_EMAIL FROM_NAME FTP_SYSTEM HIDE_DOCS IMAP_SYSTEM INACTIVE_SESSION_TIMEOUT LANGUAGE LOGIN_STYLE MAIL_SYSTEM PHPMYADMIN_KEY PLUGIN_APP_INSTALLER POLICY_BACKUP_SUSPENDED_USERS POLICY_CSRF_STRICTNESS POLICY_SPAM_CUSTOMER_TUNING POLICY_SPAM_REJECT_SCORE_MAX POLICY_SPAM_REJECT_SCORE_MIN POLICY_SPAM_SCORE_MAX POLICY_SPAM_SCORE_MIN POLICY_SYNC_ERROR_DOCUMENTS POLICY_SYNC_SKELETON POLICY_SYSTEM_ENABLE_BACON POLICY_SYSTEM_HIDE_SERVICES POLICY_SYSTEM_PASSWORD_RESET POLICY_SYSTEM_PROTECTED_ADMIN POLICY_USER_CHANGE_THEME POLICY_USER_DELETE_LOGS POLICY_USER_EDIT_DETAILS POLICY_USER_EDIT_WEB_TEMPLATES POLICY_USER_VIEW_LOGS POLICY_USER_VIEW_SUSPENDED PROXY_PORT PROXY_SSL_PORT PROXY_SYSTEM RELEASE_BRANCH RESOURCES_LIMIT ROOT_USER SERVER_SMTP_ADDR SERVER_SMTP_HOST SERVER_SMTP_PASSWD SERVER_SMTP_PORT SERVER_SMTP_SECURITY SERVER_SMTP_USER SIEVE_SYSTEM STATS_SYSTEM SUBJECT_EMAIL THEME TITLE UPDATE_HOSTNAME_SSL UPGRADE_SEND_EMAIL UPGRADE_SEND_EMAIL_LOG USE_SERVER_SMTP VERSION WEB_BACKEND WEBMAIL_ALIAS WEBMAIL_SYSTEM WEB_PORT WEB_RGROUPS WEB_SSL WEB_SSL_PORT WEB_SYSTEM" ;;
@@ -215,18 +218,100 @@ function syshealth_repair_web_config() {
 # Not add_object_key: that one edits a single-line record in place, while user.conf is one key per
 # line. Inserted before TIME= rather than appended, so the key never sits on the last line - a record
 # without a TIME= line gains nothing, the known limit of this shape (#433).
+# syshealth_user_key_default KEY - the value a missing key should get, in REPLY.
+#
+# Returns 1 when the key must NOT be inserted: it belongs to the package block and this customer's
+# package cannot answer. Empty is worse than absent there - an empty limit reads as zero and locks
+# the customer out of their own package (is_package_full).
+#
+# Block membership is read off default.pkg rather than listed, so a package gaining a field needs no
+# edit here. The named defaults are the ones no package file carries; they mirror h-add-user.
+syshealth_user_key_default() {
+	local _key="$1"
+	REPLY=$(package_key_value "$_key")
+	[ -n "$REPLY" ] && return 0
+	if grep -q "^${_key}='" "$CONF_DIR/packages/default.pkg" 2> /dev/null; then
+		return 1
+	fi
+	case "$_key" in
+		ROLE) REPLY='user' ;;
+		PREF_UI_SORT) REPLY='name' ;;
+		LOGIN_DISABLED | LOGIN_USE_IPLIST | NOTIFICATIONS) REPLY='no' ;;
+		*) REPLY='' ;;
+	esac
+	return 0
+}
+
 syshealth_repair_user_config() {
-	local key
+	local key line pending i seen_dup='' missing='' add=() lines=()
 	[ -f "$USER_DATA/user.conf" ] || return 0
 	syshealth_refresh_registry 'user'
 	sanitize_config_file 'user'
+
 	for key in $(read_kv_config_file 'user'); do
 		grep -q "^${key}='" "$USER_DATA/user.conf" && continue
-		sed -i "/^TIME=/i ${key}=''" "$USER_DATA/user.conf"
+		# A real default, not '': an empty limit is zero to every reader, not "no limit".
+		if ! syshealth_user_key_default "$key"; then
+			missing="$missing $key"
+			continue
+		fi
+		# The value lands inside KEY='...' on its own line: a quote closes it early, a newline
+		# splits it, and either way two readers disagree about the record.
+		case "$REPLY" in
+			*"'"* | *$'\n'*)
+				echo "Warning!: the package value for $key cannot be written as a record field - left out"
+				continue
+				;;
+		esac
+		add+=("${key}='${REPLY}'")
 	done
-	# Sourced last, not before the loop: sanitize_config_file clears the keys from the environment,
-	# so re-reading first would load the pre-repair state and leave every key inserted below unset as
-	# a shell variable. Callers testing ${KEY+x} would then get the opposite of what the file says.
+	[ -z "$missing" ] || echo "Warning!: package '$(sed -n "s/^PACKAGE='\(.*\)'$/\1/p" "$USER_DATA/user.conf" | head -n1)' cannot supply${missing} - left out rather than guessed"
+
+	# Also the pass that drops a key appearing twice: bare sed addresses put it there
+	# (/MAIL_ACCOUNTS/ matches U_MAIL_ACCOUNTS too), and the loop above skips a key that is
+	# present however often it is present, so those lines never leave on their own.
+	mapfile -t lines < "$USER_DATA/user.conf"
+	declare -A _cnt=() _last=()
+	for i in "${!lines[@]}"; do
+		key="${lines[$i]%%=*}"
+		case "${lines[$i]}" in "$key='"*) ;; *) continue ;; esac
+		_cnt[$key]=$((${_cnt[$key]:-0} + 1))
+		_last[$key]=$i
+	done
+	for key in "${!_cnt[@]}"; do
+		[ "${_cnt[$key]}" -gt 1 ] || continue
+		seen_dup="$seen_dup $key"
+		# The last wins because source_conf does, and that is what nearly every reader uses.
+		echo "Warning!: user.conf had ${_cnt[$key]} lines for $key - keeping line $((_last[$key] + 1)), the value source_conf was already using"
+	done
+
+	# printf, never sed's i command: the value is data here, and i eats a backslash in it and wants
+	# the text escaped for its own syntax on top.
+	if [ -n "$seen_dup" ] || [ ${#add[@]} -gt 0 ]; then
+		{
+			for i in "${!lines[@]}"; do
+				line="${lines[$i]}"
+				key="${line%%=*}"
+				case "$line" in "$key='"*)
+					if [ -n "${_last[$key]:-}" ] && [ "${_last[$key]}" != "$i" ]; then continue; fi
+					;;
+				esac
+				case "$line" in
+					TIME=*)
+						for pending in "${add[@]}"; do printf '%s\n' "$pending"; done
+						add=()
+						;;
+				esac
+				printf '%s\n' "$line"
+			done
+			# No TIME= line: append rather than lose them.
+			for pending in "${add[@]}"; do printf '%s\n' "$pending"; done
+		} > "$USER_DATA/user.conf.repair" && mv -f "$USER_DATA/user.conf.repair" "$USER_DATA/user.conf"
+		chmod 660 "$USER_DATA/user.conf"
+	fi
+	# Sourced last: sanitize_config_file cleared these from the environment, so reading before the
+	# repair would leave every key it just inserted unset as a shell variable, and a caller testing
+	# ${KEY+x} would get the opposite of what the file says.
 	source_conf "$USER_DATA/user.conf"
 }
 

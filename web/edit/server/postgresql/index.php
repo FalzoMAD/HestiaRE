@@ -24,40 +24,42 @@ if (!empty($_POST["save"])) {
 
 	// Update option
 	if (!empty($_POST["v_options"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_options"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD .
-				"h-change-sys-service-config " .
-				$new_conf .
-				" postgresql-hba " .
-				$v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_options"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD .
+					"h-change-sys-service-config " .
+					$new_conf .
+					" postgresql-hba " .
+					$v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Update config
 	if (empty($_SESSION["error_msg"]) && !empty($_POST["v_config"])) {
-		exec("mktemp", $mktemp_output, $return_var);
-		$new_conf = $mktemp_output[0];
-		$fp = fopen($new_conf, "w");
-		fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config"]));
-		fclose($fp);
-		exec(
-			HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " postgresql " . $v_restart,
-			$output,
-			$return_var,
-		);
-		check_return_code($return_var, $output);
-		unset($output);
-		unlink($new_conf);
+		$new_conf = private_tmpfile();
+		if ($new_conf !== false) {
+			$fp = fopen($new_conf, "w");
+			fwrite($fp, str_replace("\r\n", "\n", $_POST["v_config"]));
+			fclose($fp);
+			exec(
+				HESTIA_CMD . "h-change-sys-service-config " . $new_conf . " postgresql " . $v_restart,
+				$output,
+				$return_var,
+			);
+			check_return_code($return_var, $output);
+			unset($output);
+			unlink($new_conf);
+		}
 	}
 
 	// Set success message

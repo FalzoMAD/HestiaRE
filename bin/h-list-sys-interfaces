@@ -27,7 +27,8 @@ json_list() {
 	i=1
 	echo '['
 	for interface in $physical_nics; do
-		echo -n '    "'$interface'"'
+		json_escape interface
+		printf '    "%s"' "$interface"
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

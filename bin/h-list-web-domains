@@ -28,7 +28,7 @@ json_list() {
 	i=1
 	objects=$(grep DOMAIN $USER_DATA/web.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		parse_object_kv_list "$str"
 		# Set correct document root path
 		if [ -n "$CUSTOM_DOCROOT" ]; then
@@ -36,35 +36,36 @@ json_list() {
 		else
 			DOCROOT="$HOMEDIR/$user/web/$DOMAIN/public_html/"
 		fi
-		echo -n '    "'$DOMAIN'": {
-        "IP": "'$IP'",
-        "IP6": "'$IP6'",
-        "DOCUMENT_ROOT": "'$DOCROOT'",
-        "U_DISK": "'$U_DISK'",
-        "U_BANDWIDTH": "'$U_BANDWIDTH'",
-        "TPL": "'$TPL'",
-        "ALIAS": "'$ALIAS'",
-        "STATS": "'$STATS'",
-        "STATS_USER": "'$STATS_USER'",
-        "SSL": "'$SSL'",
-        "SSL_HOME": "'$SSL_HOME'",
-        "HTTP3": "'$HTTP3'",
-        "DOCKER": "'$DOCKER'",
-        "DOCKER_PORT": "'$DOCKER_PORT'",
-        "DOCKER_OCTET": "'$DOCKER_OCTET'",
-        "LETSENCRYPT": "'$LETSENCRYPT'",
-        "WP": "'$WP'",
-        "FTP_USER": "'$FTP_USER'",
-        "FTP_PATH": "'$FTP_PATH'",
-        "AUTH_USER": "'$AUTH_USER'",
-        "BACKEND": "'$BACKEND'",
-        "PHP_VERSION": "'$PHP_VERSION'",
-        "PROXY": "'$PROXY'",
-        "PROXY_EXT": "'$PROXY_EXT'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+		json_escape DOMAIN IP IP6 DOCROOT U_DISK U_BANDWIDTH TPL ALIAS STATS STATS_USER SSL SSL_HOME HTTP3 DOCKER DOCKER_PORT DOCKER_OCTET LETSENCRYPT WP FTP_USER FTP_PATH AUTH_USER BACKEND PHP_VERSION PROXY PROXY_EXT SUSPENDED TIME DATE
+		printf '    "%s": {\n' "$DOMAIN"
+		printf '        "IP": "%s",\n' "$IP"
+		printf '        "IP6": "%s",\n' "$IP6"
+		printf '        "DOCUMENT_ROOT": "%s",\n' "$DOCROOT"
+		printf '        "U_DISK": "%s",\n' "$U_DISK"
+		printf '        "U_BANDWIDTH": "%s",\n' "$U_BANDWIDTH"
+		printf '        "TPL": "%s",\n' "$TPL"
+		printf '        "ALIAS": "%s",\n' "$ALIAS"
+		printf '        "STATS": "%s",\n' "$STATS"
+		printf '        "STATS_USER": "%s",\n' "$STATS_USER"
+		printf '        "SSL": "%s",\n' "$SSL"
+		printf '        "SSL_HOME": "%s",\n' "$SSL_HOME"
+		printf '        "HTTP3": "%s",\n' "$HTTP3"
+		printf '        "DOCKER": "%s",\n' "$DOCKER"
+		printf '        "DOCKER_PORT": "%s",\n' "$DOCKER_PORT"
+		printf '        "DOCKER_OCTET": "%s",\n' "$DOCKER_OCTET"
+		printf '        "LETSENCRYPT": "%s",\n' "$LETSENCRYPT"
+		printf '        "WP": "%s",\n' "$WP"
+		printf '        "FTP_USER": "%s",\n' "$FTP_USER"
+		printf '        "FTP_PATH": "%s",\n' "$FTP_PATH"
+		printf '        "AUTH_USER": "%s",\n' "$AUTH_USER"
+		printf '        "BACKEND": "%s",\n' "$BACKEND"
+		printf '        "PHP_VERSION": "%s",\n' "$PHP_VERSION"
+		printf '        "PROXY": "%s",\n' "$PROXY"
+		printf '        "PROXY_EXT": "%s",\n' "$PROXY_EXT"
+		printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s"\n' "$DATE"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

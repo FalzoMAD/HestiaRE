@@ -30,10 +30,11 @@ json_list() {
 	for str in $keys; do
 		KEY=$(echo $str | awk '{print $(NF-2)}')
 		ID=$(echo $str | awk '{print $(NF-1)}')
-		echo -n '    "'$ID'": {
-        "ID": "'$ID'",
-        "KEY": "'$KEY'"
-        }'
+		json_escape ID KEY
+		printf '    "%s": {\n' "$ID"
+		printf '        "ID": "%s",\n' "$ID"
+		printf '        "KEY": "%s"\n' "$KEY"
+		printf '        }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		fi

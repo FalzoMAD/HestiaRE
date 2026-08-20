@@ -27,19 +27,20 @@ json_list() {
 	i=1
 	objects=$(grep RULE $CONF_DIR/firewall/rules.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		[[ -z "$str" ]] && continue
 		parse_object_kv_list "$str"
-		echo -n '    "'$RULE'": {
-        "ACTION": "'$ACTION'",
-        "PROTOCOL": "'$PROTOCOL'",
-        "PORT": "'$PORT'",
-        "IP": "'$IP'",
-        "COMMENT": "'$COMMENT'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+		json_escape RULE ACTION PROTOCOL PORT IP COMMENT SUSPENDED TIME DATE
+		printf '    "%s": {\n' "$RULE"
+		printf '        "ACTION": "%s",\n' "$ACTION"
+		printf '        "PROTOCOL": "%s",\n' "$PROTOCOL"
+		printf '        "PORT": "%s",\n' "$PORT"
+		printf '        "IP": "%s",\n' "$IP"
+		printf '        "COMMENT": "%s",\n' "$COMMENT"
+		printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s"\n' "$DATE"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

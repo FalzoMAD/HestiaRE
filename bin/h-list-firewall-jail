@@ -61,14 +61,15 @@ json_list() {
 	while read -r jail; do
 		jail_row "$jail"
 		[ "$i" -gt 0 ] && echo -e '\t},'
-		echo -e "\t\"$JAIL\": {"
-		echo -e "\t\t\"JAIL\": \"$JAIL\","
-		echo -e "\t\t\"STATE\": \"$STATE\","
-		echo -e "\t\t\"FAILED\": \"$FAILED\","
-		echo -e "\t\t\"FAILED_TOTAL\": \"$FAILED_TOTAL\","
-		echo -e "\t\t\"BANNED\": \"$BANNED\","
-		echo -e "\t\t\"BANNED_TOTAL\": \"$BANNED_TOTAL\","
-		echo -e "\t\t\"LOGPATH\": \"$LOGPATH\""
+		json_escape JAIL STATE FAILED FAILED_TOTAL BANNED BANNED_TOTAL LOGPATH
+		printf '\t"%s": {\n' "$JAIL"
+		printf '\t\t"JAIL": "%s",\n' "$JAIL"
+		printf '\t\t"STATE": "%s",\n' "$STATE"
+		printf '\t\t"FAILED": "%s",\n' "$FAILED"
+		printf '\t\t"FAILED_TOTAL": "%s",\n' "$FAILED_TOTAL"
+		printf '\t\t"BANNED": "%s",\n' "$BANNED"
+		printf '\t\t"BANNED_TOTAL": "%s",\n' "$BANNED_TOTAL"
+		printf '\t\t"LOGPATH": "%s"\n' "$LOGPATH"
 		i=$((i + 1))
 	done < <(jail_names)
 	[ "$i" -gt 0 ] && echo -e '\t}'

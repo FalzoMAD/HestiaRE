@@ -244,8 +244,10 @@ crowdsec_render_domain_fragment() {
 	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
 
 	local frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf"
-	# apache-only never runs CrowdSec; make sure no stale Layer-A fragment lingers.
-	if [ "$sys" != "nginx" ]; then
+	# The field is intent, the fragment is intent AND capability: an nginx without the bouncer either
+	# cannot parse the directive at all - invalidating the WHOLE config - or answers 500 per request.
+	# Keyed on the artefact the apply step installs; leftovers of a removal go at the next rebuild (#743).
+	if [ "$sys" != "nginx" ] || [ ! -f /etc/nginx/conf.d/crowdsec_init.conf ]; then
 		rm -f "$frag"
 		return 0
 	fi
@@ -268,5 +270,11 @@ crowdsec_render_domain_fragment() {
 # Remove the nginx-side wiring (leaves the engine + /etc/crowdsec saved state).
 crowdsec_remove_nginx() {
 	rm -f /etc/nginx/conf.d/crowdsec_init.conf /etc/crowdsec/bouncers/hestia_bouncer.lua
+	# The per-domain fragments call require("hestia_bouncer"), the file just removed. Left behind they
+	# answer 500 on every request, and the reload below would put that live immediately - nginx -t
+	# still passes, because the directive parses as long as the lua module is installed. Found from
+	# the tree rather than from the records: a fragment can outlive the record that asked for it.
+	find "${HOMEDIR:-/home}" -mindepth 5 -maxdepth 5 -path '*/conf/web/*' -name 'nginx.crowdsec.conf' \
+		-delete 2> /dev/null
 	nginx -t > /dev/null 2>&1 && { systemctl reload nginx > /dev/null 2>&1 || true; }
 }

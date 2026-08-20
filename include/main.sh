@@ -247,6 +247,18 @@ is_system_enabled() {
 }
 
 # User package check
+# package_key_value KEY - what this customer's package file says for KEY, or nothing. The same file
+# h-add-user seeds a new user.conf from, so it is not a second opinion. KEY reaches a sed pattern,
+# so it comes from the registry, never from input.
+package_key_value() {
+	local _pkg
+	[ -f "$USER_DATA/user.conf" ] || return 1
+	_pkg=$(sed -n "s/^PACKAGE='\(.*\)'$/\1/p" "$USER_DATA/user.conf" | head -n1)
+	[ -n "$_pkg" ] || return 1
+	[ -f "$CONF_DIR/packages/$_pkg.pkg" ] || return 1
+	sed -n "s/^$1='\(.*\)'$/\1/p" "$CONF_DIR/packages/$_pkg.pkg" | head -n1
+}
+
 is_package_full() {
 	case "$1" in
 		WEB_DOMAINS) used=$(wc -l $USER_DATA/web.conf) ;;
@@ -258,6 +270,25 @@ is_package_full() {
 	esac
 	used=$(echo "$used" | cut -f 1 -d \ )
 	limit=$(grep "^$1=" $USER_DATA/user.conf | cut -f 2 -d \')
+	# An absent limit is a broken record, not a limit of zero - but [[ n -ge "" ]] reads it as one
+	# and refuses every request with a message blaming the customer's package. Ask the package file
+	# instead, which is where the value came from.
+	case "$limit" in
+		'unlimited') ;;
+		'' | *[!0-9]*)
+			limit=$(package_key_value "$1")
+			case "$limit" in
+				'unlimited') return 0 ;;
+				'' | *[!0-9]*)
+					# Not enforcing is the safe direction for the customer and an invisible one
+					# for the operator: one typo in a package would silently unlimit everyone on
+					# it. So it is said.
+					echo "Warning!: neither user.conf nor the package gives a usable $1 limit - not enforcing one"
+					return 0
+					;;
+			esac
+			;;
+	esac
 	if [ "$1" = WEB_ALIASES ]; then
 		# Used is always calculated with the new alias added
 		if [ "$limit" != 'unlimited' ] && [[ "$used" -gt "$limit" ]]; then
@@ -429,17 +460,38 @@ is_object_valid() {
 
 # Check if a object string with key values pairs has the correct format and load it afterwards
 parse_object_kv_list_non_eval() {
-	local str
-	local objkv obj_key obj_val
-	local OLD_IFS="$IFS"
+	local str objkv obj_key obj_val out rc
+	local -a pairs=()
 
-	str=${@//$'\n'/ }
-	str=${str//\"/\\\"}
-	str=${str//$/\\$}
-	IFS=$'\n'
+	str=${*//$'\n'/ }
 
 	# Extract and loop trough each key-value pair. (Regex test: https://regex101.com/r/eiMufk/5)
-	for objkv in $(echo "$str" | perl -n -e "while(/\b([a-zA-Z]+[\w]*)='(.*?)'(\s|\$)/g) {print \$1.'='.\$2 . \"\n\" }"); do
+	#
+	# mapfile, not `for objkv in $(...)`: that word splitting also GLOBS, so a record value holding
+	# a * was matched against the working directory and the parsed value came back as a FILENAME.
+	# Reachable where the caller's directory is one a customer writes to.
+	#
+	# The " and $ escaping that used to sit here is gone. It protected nothing - the data reaches
+	# perl through a quoted echo and is assigned through a quoted expansion, so neither character
+	# is ever re-expanded - and it was never undone, so every consumer got a value with backslashes
+	# baked in: the search listers emitted \" where the record holds " (#719).
+	#
+	# Captured first and the status checked, rather than read straight through a process
+	# substitution, whose exit status is not observable. Measured: with perl off the PATH the
+	# substitution form returned 0 and set NOTHING - the caller then read whatever was in those
+	# variables before. The sibling parser is loud in the same situation (its check_result on the
+	# php exit status fires), and two parsers that disagree about failure is the asymmetry worth
+	# removing. Not reachable on a supported target - perl-base is priority required on all four -
+	# but "unreachable" is the reason it would never have been noticed.
+	out=$(printf '%s\n' "$str" | perl -n -e "while(/\b([a-zA-Z]+[\w]*)='(.*?)'(\s|\$)/g) {print \$1.'='.\$2 . \"\n\" }")
+	rc=$?
+	if [ "$rc" -ne 0 ]; then
+		check_result "$E_PARSING" "record could not be tokenised [$str]"
+	fi
+	mapfile -t pairs <<< "$out"
+
+	for objkv in "${pairs[@]}"; do
+		[ -n "$objkv" ] || continue
 
 		if ! [[ "$objkv" =~ ^([[:alnum:]][_[:alnum:]]{0,64}[[:alnum:]])=(\'?[^\']+?\'?)?$ ]]; then
 			check_result "$E_INVALID" "Invalid key value format [$objkv]"
@@ -450,7 +502,6 @@ parse_object_kv_list_non_eval() {
 		declare -g $obj_key="$obj_val"
 
 	done
-	IFS="$OLD_IFS"
 }
 
 # Check if a object string with key values pairs has the correct format and load it afterwards
@@ -602,6 +653,11 @@ EOPHP
 	eval "$validated_output"
 }
 
+# QUOTE THE ARGUMENT. Both parsers are safe on what they receive, but an unquoted `$(grep ...)` is
+# split and GLOBBED by the shell before either of them sees a character: a record holding MIN='*'
+# picks up any file named MIN='...' in the working directory and the parsed value becomes that
+# filename. Reachable wherever a customer chooses the directory a h-* runs in. Unquoted also
+# collapses runs of whitespace inside a value, so TPL='two  spaces' comes back with one.
 parse_object_kv_list() {
 	_parse_object_kv_list_php "$@"
 }
@@ -686,6 +742,47 @@ is_dir_symlink() {
 	fi
 }
 
+# Escape the named variables IN PLACE for splicing into a JSON string literal. The h-list-*
+# emitters build their JSON by concatenation, so a record value carrying a " or a backslash
+# produces a document the panel cannot json_decode - the same class as upstream #5585 at the
+# certificate listers. Escaping belongs here, at the one definition, not in each emitter.
+#
+# In place and by name because the alternative is a subshell per field: a 300-domain listing
+# would fork twelve thousand times. Pure parameter expansion, no external process.
+#
+# Only the emitters may call this - it destroys the raw value, so never call it before a
+# shell_list or before a value is used for anything but the JSON output.
+#
+# EMIT WITH printf AND %s, never by splicing into an echo argument (#728). `echo '"K": "'$V'"'`
+# leaves the escaped value unquoted, so the shell splits and globs it AFTER this function ran:
+# whitespace runs collapse, and a value holding a * is replaced by filenames from the working
+# directory - text that never passed through here at all, so a filename with a " in it opens a
+# second JSON key. printf takes the value as an argument and none of that applies.
+json_escape() {
+	local _n _v _c _out
+	for _n in "$@"; do
+		_v="${!_n}"
+		_v="${_v//\\/\\\\}"
+		_v="${_v//\"/\\\"}"
+		_v="${_v//$'\t'/\\t}"
+		_v="${_v//$'\r'/\\r}"
+		_v="${_v//$'\n'/\\n}"
+		# JSON forbids every raw control character, not just the three with a short form. Rare
+		# enough to pay for a per-character loop only when one is actually present.
+		if [[ "$_v" == *[$'\x01'-$'\x1f']* ]]; then
+			_out=''
+			while IFS= read -r -n1 -d '' _c; do
+				if [[ "$_c" == [$'\x01'-$'\x1f'] ]]; then
+					printf -v _c '\\u%04x' "'$_c"
+				fi
+				_out+="$_c"
+			done < <(printf '%s' "$_v")
+			_v="$_out"
+		fi
+		printf -v "$_n" '%s' "$_v"
+	done
+}
+
 # Get object value
 get_object_value() {
 	object=$(grep -F "$2='$3'" "$(_object_conf "$1")")
@@ -696,7 +793,7 @@ get_object_value() {
 }
 
 get_object_values() {
-	parse_object_kv_list $(grep -F "$2='$3'" "$(_object_conf "$1")")
+	parse_object_kv_list "$(grep -F "$2='$3'" "$(_object_conf "$1")")"
 }
 
 # Update object value
@@ -729,7 +826,12 @@ add_object_key() {
 	if [[ -z "$lnr" || -z "$5" ]]; then
 		return 1
 	fi
-	if [ -z "$(echo "$object" | grep "$4=")" ]; then
+	# Anchored on a separator, and on the opening quote: unanchored, a key that is a SUFFIX of one
+	# already in the record counted as present and was silently not added - adding LIST to a record
+	# that has DIR_LIST would do nothing at all. Measured today: no key any caller adds is a suffix
+	# of another key in the same record, so this is latent rather than live, and it goes sharp the
+	# moment the registry grows one more name.
+	if [[ "$object" != "$4='"* && "$object" != *" $4='"* ]]; then
 		local varname="${4#\$}"
 		old="${!varname}"
 		sed -i "$lnr s/$5='/$4='' $5='/" "$(_object_conf "$1")"
@@ -1335,6 +1437,23 @@ is_no_new_line_format() {
 is_no_quote_format() {
 	if [[ "$1" == *\'* ]] || [[ "$1" == *$'\n'* ]] || [[ "$1" == *$'\r'* ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: quotes and line breaks are not allowed"
+	fi
+}
+
+# A restore selector: empty, '*', 'no'/'yes', or a comma list of object names.
+#
+# CLOSED character set, not a deny list. The value is spliced into the queue line that
+# h-update-sys-queue runs through bash as root, and a deny list holds only as long as the quoting
+# around it does - it was a too-wide allowed set that let a pipe reach that line once.
+#
+# A literal space is in, because a home entry can be called "my documents". A TAB is not, although
+# it is just as legal in a filename: tar prints it escaped in the member listing the restore matches
+# against, so such a selector is accepted and then silently selects nothing. Refusing it says so.
+is_selector_format_valid() {
+	# In a variable: an unquoted space inside [[ =~ ]] would split the pattern into two words.
+	local _re='^[-._,* [:alnum:]]+$'
+	if [ -n "$1" ] && ! [[ "$1" =~ $_re ]]; then
+		check_result "$E_INVALID" "invalid $2 format :: only letters, digits, spaces and - . _ , * are allowed"
 	fi
 }
 
@@ -2036,7 +2155,6 @@ web_lock_release() {
 	exec {WEB_LOCK_FD}>&- 2> /dev/null
 	unset WEB_LOCK_FD HESTIA_WEB_LOCK_HELD HESTIA_WEB_LOCK_PID
 }
-
 
 # SFTP jail membership (#413): the sftp-jailed group is the sshd chroot selector and
 # the pam_namespace scope; the jail is built per session (h-add-sys-sftp-jail).

@@ -46,7 +46,7 @@ check_hestia_demo_mode
 
 # Load domain data
 # shellcheck disable=SC2046  # word splitting carries the record into KEY='v' tokens
-parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)"
 
 # add_object_key is idempotent on key presence, so no value guard needed
 add_object_key "web" 'DOMAIN' "$domain" 'OFFLINE' 'SUSPENDED'

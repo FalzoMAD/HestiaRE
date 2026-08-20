@@ -27,18 +27,19 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	echo '{'
-	echo '    "'$ip'": {
-        "OWNER": "'$OWNER'",
-        "STATUS": "'$STATUS'",
-        "NAME": "'$NAME'",
-        "U_SYS_USERS": "'$U_SYS_USERS'",
-        "U_WEB_DOMAINS": "'$U_WEB_DOMAINS'",
-        "INTERFACE": "'$INTERFACE'",
-        "NETMASK": "'$NETMASK'",
-        "NAT": "'$NAT'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-        }'
+	json_escape ip OWNER STATUS NAME U_SYS_USERS U_WEB_DOMAINS INTERFACE NETMASK NAT TIME DATE
+	printf '    "%s": {\n' "$ip"
+	printf '        "OWNER": "%s",\n' "$OWNER"
+	printf '        "STATUS": "%s",\n' "$STATUS"
+	printf '        "NAME": "%s",\n' "$NAME"
+	printf '        "U_SYS_USERS": "%s",\n' "$U_SYS_USERS"
+	printf '        "U_WEB_DOMAINS": "%s",\n' "$U_WEB_DOMAINS"
+	printf '        "INTERFACE": "%s",\n' "$INTERFACE"
+	printf '        "NETMASK": "%s",\n' "$NETMASK"
+	printf '        "NAT": "%s",\n' "$NAT"
+	printf '        "TIME": "%s",\n' "$TIME"
+	printf '        "DATE": "%s"\n' "$DATE"
+	echo '        }'
 	echo '}'
 }
 

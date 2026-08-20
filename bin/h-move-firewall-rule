@@ -87,7 +87,7 @@ check_hestia_demo_mode
 target_rule=$(get_rule_id "$source_rule" "$direction")
 
 # Get the rule that will be moved
-parse_object_kv_list $(grep "RULE='$source_rule'" $CONF_DIR/firewall/rules.conf)
+parse_object_kv_list "$(grep "RULE='$source_rule'" $CONF_DIR/firewall/rules.conf)"
 
 # Generating timestamp
 time_n_date=$(date +'%T %F')
@@ -102,7 +102,7 @@ source_str="$source_str TIME='$time' DATE='$date'"
 # Deleting old source rule
 sed -i "/RULE='$source_rule' /d" $CONF_DIR/firewall/rules.conf
 
-parse_object_kv_list $(grep "RULE='$target_rule'" $CONF_DIR/firewall/rules.conf)
+parse_object_kv_list "$(grep "RULE='$target_rule'" $CONF_DIR/firewall/rules.conf)"
 
 # Generating timestamp
 time_n_date=$(date +'%T %F')

@@ -70,12 +70,16 @@ fi
 if [[ "$ttl" -gt 0 ]]; then
 	echo "$BIN/h-delete-database-temp-user $user $database $dbuser mysql $host" | at "now +${ttl} minute" > /dev/null 2>&1
 fi
-echo '{
-    "login": {
-        "user": "'$dbuser'",
-        "password": "'$dbpass'"
-    }
-}'
+# Escaped copies: $dbuser is still needed raw by the log line below.
+json_dbuser="$dbuser"
+json_dbpass="$dbpass"
+json_escape json_dbuser json_dbpass
+echo '{'
+echo '    "login": {'
+printf '        "user": "%s",\n' "$json_dbuser"
+printf '        "password": "%s"\n' "$json_dbpass"
+echo '    }'
+echo '}'
 
 #----------------------------------------------------------#
 #                       Hestia                             #

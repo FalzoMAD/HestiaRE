@@ -30,19 +30,20 @@ fields="$fields \$RUNTIME \$TIME \$DATE"
 # JSON list function
 json_list() {
 	echo '{'
-	echo '    "'$BACKUP'": {
-        "TYPE": "'$TYPE'",
-        "SIZE": "'$SIZE'",
-        "WEB": "'$WEB'",
-        "DNS": "'$DNS'",
-        "MAIL": "'$MAIL'",
-        "DB": "'$DB'",
-        "CRON": "'$CRON'",
-        "UDIR": "'$UDIR'",
-        "RUNTIME": "'$RUNTIME'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+	json_escape BACKUP TYPE SIZE WEB DNS MAIL DB CRON UDIR RUNTIME TIME DATE
+	printf '    "%s": {\n' "$BACKUP"
+	printf '        "TYPE": "%s",\n' "$TYPE"
+	printf '        "SIZE": "%s",\n' "$SIZE"
+	printf '        "WEB": "%s",\n' "$WEB"
+	printf '        "DNS": "%s",\n' "$DNS"
+	printf '        "MAIL": "%s",\n' "$MAIL"
+	printf '        "DB": "%s",\n' "$DB"
+	printf '        "CRON": "%s",\n' "$CRON"
+	printf '        "UDIR": "%s",\n' "$UDIR"
+	printf '        "RUNTIME": "%s",\n' "$RUNTIME"
+	printf '        "TIME": "%s",\n' "$TIME"
+	printf '        "DATE": "%s"\n' "$DATE"
+	echo '    }'
 	echo '}'
 }
 
@@ -89,7 +90,7 @@ is_object_valid 'backup' 'BACKUP' "$backup"
 #----------------------------------------------------------#
 
 # Parsing backup config
-parse_object_kv_list $(grep "BACKUP='$backup'" $USER_DATA/backup.conf)
+parse_object_kv_list "$(grep "BACKUP='$backup'" $USER_DATA/backup.conf)"
 
 # Listing data
 case $format in

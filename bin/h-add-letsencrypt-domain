@@ -147,7 +147,7 @@ if [ -n "$mail" ]; then
 		aliases="$WEBMAIL_ALIAS.$root_domain"
 	fi
 else
-	parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+	parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)"
 
 	domain_redirect="$REDIRECT"
 	if [[ -n "$domain_redirect" ]]; then
@@ -276,7 +276,7 @@ for auth in $authz; do
 				echo 'location ~ "^/\.well-known/acme-challenge/(.*)$" {' \
 					> $conf
 				echo '    default_type text/plain;' >> $conf
-				echo '    return 200 "$1.'$THUMB'";' >> $conf
+				printf '    return 200 "$1.%s";\n' "$THUMB" >> $conf
 				echo '}' >> $conf
 				if [ ! -e "$sconf" ]; then
 					ln -s "$conf" "$sconf"
@@ -309,7 +309,7 @@ for auth in $authz; do
 				echo 'location ~ "^/\.well-known/acme-challenge/(.*)$" {' \
 					> $conf
 				echo '    default_type text/plain;' >> $conf
-				echo '    return 200 "$1.'$THUMB'";' >> $conf
+				printf '    return 200 "$1.%s";\n' "$THUMB" >> $conf
 				echo '}' >> $conf
 				if [ ! -e "$sconf" ]; then
 					ln -s "$conf" "$sconf"

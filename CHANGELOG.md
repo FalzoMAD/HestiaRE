@@ -12,7 +12,311 @@ opens above it.
 
 ## Unreleased
 
-_Nothing yet._
+### Fixed
+
+- **A customer whose `user.conf` lost a package limit was locked out of their own package** (#711).
+  An absent or empty limit is not a limit of zero, but that is how the comparison read it, so every
+  attempt to add a web domain, mail domain, database or cron job was refused with a message blaming
+  the customer's package - measured, with no domains at all. The limit is now taken from the
+  customer's package file when the record cannot answer, and a defect in the record never presents
+  itself as a limit somebody has hit. `user.conf` repair seeds real values from that same package
+  file instead of inserting empty ones, and says so rather than guessing when the package is gone.
+
+- **`user.conf` could end up with the same key twice** (#711). The repair that ran before the
+  generic one addressed its insert with a bare `/MAIL_ACCOUNTS/`, which also matches
+  `U_MAIL_ACCOUNTS`, so `RATE_LIMIT` was written after both - and `FILE_MANAGER` after both of
+  those. Which value then won depended on the reader: `source_conf` keeps the last, `grep | head -1`
+  the first. The two repairs are now one, and it also removes the extra lines a box is already
+  carrying - keeping the one `source_conf` was using, and saying which - because a duplicate that is
+  only prevented from now on stays on every box that already has it.
+
+- **A user's login shell could be set from the caller's environment** (#711). Where the record had
+  no `SHELL`, the rebuild fell back to the ambient `$SHELL`, and where that was unset `grep -w ""`
+  matched every line of `/etc/shells` - handing `# /etc/shells: valid login shells` to `useradd`.
+  The shell now comes from the record, falls back to a named default off the curated allowlist, and
+  can never be a comment line.
+
+- **The config repair worked against a smaller key set than the code writes** (#711). Every field a
+  command stores with `add_object_key` or `update_object_value` has to be in `syshealth_known_keys`,
+  or the repair functions call a record healthy while fields they never heard of are missing from
+  it. Web records gain `CROWDSEC`, `BOTLIMIT`, `ALLOW_USERS` and `LETSENCRYPT_FAIL_COUNT`; mail
+  records gain `LETSENCRYPT_FAIL_COUNT`, the six `U_SMTP_RELAY*` and the five `U_SPAM_*` fields. A
+  value that is already set is never touched, and an empty one is inert for every one of these
+  fields - checked per field rather than by analogy. `sanitize_config_file` clears exactly the
+  registered keys between two objects, so the unregistered ones stayed set for the next one; no
+  current path acts on that, because the readers take the record and the one function that reads
+  such a value as a plain variable only ever handles one domain per process, but it stopped being
+  something the caller's process model has to keep true.
+
+- **The webmail store on a box without a database engine was not backed up** (#710). Where there is
+  no engine, Roundcube keeps every mailbox's identities, address books and settings in a SQLite file
+  under `/var/lib/roundcube/db/` - which is exactly the state the server backup exists for, and the
+  only one it was missing. It is snapshotted with SQLite's own `.backup` rather than copied, because
+  these run in WAL mode and a plain copy taken mid-transaction can lose commits that are already
+  durable. On the way back the archived file is verified whole before the live one is touched at
+  all, so a damaged archive leaves the running webmail alone, and the replacement is a single
+  rename that carries the existing owner and mode. Where the `sqlite3` client is absent the restore
+  declines rather than installing something it cannot check - unlike a database too broken to dump,
+  a missing client is a prerequisite one `apt` away.
+
+### Added
+
+- **The state that belongs to the box has its own backup** (#710). The webmail databases hold every
+  mailbox's identities, address books and settings in one table set, so no per-customer archive can
+  carry them without carrying other customers' rows; the same is true of `hestia.conf`, the hosting
+  packages and the firewall sources. `h-backup-server` takes them, `h-list-server-backups` shows what
+  each archive holds, and `h-restore-server` puts back the components that are named. There is
+  deliberately no whole-archive verb: restoring all of it would overwrite the configuration of a
+  running host in one step, so a run without a component refuses before it writes anything. Naming a
+  component says which live state to replace, not that replacing it is intended, so each one is
+  consented to before the first write - the question names the paths and databases this host would
+  actually lose, and without a terminal the consent has to arrive in the argument or nothing is
+  written. A database is dropped and recreated rather than loaded on top, because a table the
+  archive predates would otherwise survive into a schema that never existed; a dump that did not
+  finish is refused before the target is touched, on the way in as well as on the way out, and a
+  copy of the live database is taken first so that a load which fails for some other reason is
+  rolled back instead of leaving a half-built schema. A run that did not restore everything says so
+  in a closing summary and ends in a failing exit status, rather than reporting success with the
+  detail buried in warnings. What a
+  box can back up is derived from what it actually has, never from a fixed list - a target without a
+  database engine produces a webmail component of directories and no dumps. The archive is root's
+  alone at 0600, because `/etc/roundcube` carries the `des_key` and the database password.
+
+- **An archive put into the backup folder by hand becomes visible to the panel** (#709).
+  `h-add-user-backup` writes the `backup.conf` record a foreign archive never had, and writes it
+  from the archive's own members rather than from its name - the name is a claim, the members are
+  the finding. Until now a HestiaCP archive could only be restored from the command line, and
+  nothing said so. It takes a basename and no path, resolves only inside the backup folder, and the
+  record is marked `ADOPTED`: the nightly rotation prunes by age and would otherwise take the
+  migration source first, and deleting the entry now forgets the record while leaving the operator's
+  file where they put it.
+
+- **What a restore cannot put back is handed to the customer instead of left in the archive** (#708).
+  DNS zones with their records and rendered zone files, custom web templates, and the raw members of
+  any section this host has no subsystem for - a database dump this box cannot load among them - land
+  in `~/leftovers/<timestamp>/`, owned by the customer at 0700, with the loss report beside them. A
+  dump in hand is somewhere else in minutes; inside an archive it has to be found first. `leftovers`
+  joins `conf`, `web`, `mail`, `tmp` and `dns` as a reserved name in the home: a directory a customer
+  had under that name before would stop being archived.
+
+  Same derivation as the loss report, so the two cannot drift, and the same consent rules as every
+  other section. "Nothing to hand over" is printed rather than left as silence, and a run that named
+  objects says so instead - it was asked for those, not for the rest of the archive. The directory is
+  on the backup's fixed exclusion list, so it does not grow into the next archive.
+
+- **An archive says who wrote it** (#707). `hestia/origin` carries producer, version, format,
+  compression mode and timestamp, and the report prints them. It is forensics, never detection:
+  no archive written before today has one and a HestiaCP archive never will, so anything keying on
+  it would be deciding by its absence. Where it disagrees with the members - it claims gzip and the
+  archive is zstd - the members are what the restore acts on and the report says both. Verified
+  inert in the other direction on a real HestiaCP 1.10.3 box: a HestiaRE archive restores there
+  cleanly and the extra member is ignored.
+
+- **A backup archive can be inspected before a restore touches anything** (#707).
+  `h-list-backup-contents` reads the archive FILE rather than the `backup.conf` record, so an
+  archive put into `/backup` by hand - a HestiaCP one - can be looked at at all; until now nothing
+  could see it. The same report runs as the restore's preflight, before the first write.
+
+  It answers what the restore used to answer only by doing it, or not at all: DNS zones **by name**,
+  because that is the question somebody moving off HestiaCP is actually asking; sections that would
+  be dropped in full because this host has no such subsystem, **with the object count**; templates
+  and PHP versions that will be rewritten; record keys and package limits this host has no use for.
+  An empty report is printed in words - "nothing falls away" and "the probe read nothing" had no
+  way of looking different before.
+
+- **A database whose engine this host does not run is named, and skipped instead of fatal** (#707).
+  `DB_SYSTEM` is a comma list - a HestiaCP box routinely carries `pgsql,mysql` - and the import was
+  a `case` over the type with no default branch, so a postgres dump on a MariaDB-only host took the
+  whole run down at that object. Measured against a real HestiaCP archive: three web domains and two
+  mail domains were already written, and the second database, every cron job and the entire home
+  directory never arrived. The preflight names it before the first write, and the restore finishes
+  everything else and then exits non-zero saying what did not come back.
+
+- **A restore asks before it writes, section by section** (#707). The only question it used to ask
+  sat inside the web section, so refusing it left the account, its data directory and its home
+  behind - a customer that exists and holds nothing. Consent is collected before the first write
+  now, and the run either has it for everything it plans to do or it has not started at all. Naming
+  objects in a selector is itself the consent for that section, so the panel's per-object restore
+  and the four `h-restore-*` wrappers work exactly as before; with a terminal the run prompts per
+  section; and where nobody can be asked - the queue, the panel - the consent travels as a `CONSENT`
+  argument from a closed set (`all`, the five sections, `php-fallback`). An argument rather than an
+  environment prefix, because the queue line is executed by bash and an env prefix in front of it
+  would put operator input into a command line (#661). Sections this host cannot serve are never
+  asked about; the report already says they will be dropped.
+
+  `all` deliberately does **not** cover `php-fallback`: moving a customer's domains onto a different
+  PHP version is not "restore everything", and #591 exists because that used to happen quietly.
+
+### Security
+
+- **A restore selector reaches the queue through a closed character set** (#707). The five selectors
+  are spliced into the line `h-update-sys-queue` runs through `bash` as root, and they only had a
+  deny list of three characters in front of them - a pipe, a semicolon, a backtick and a `$(` all
+  went in. Not exploitable: they land inside single quotes and the one character that ends those was
+  already refused. But a deny list holds only as long as the quoting around it does, and it was a
+  too-wide allowed set that put a pipe on that line once before. A home entry with a space still
+  passes, because `my documents` is a name a customer can really have; one with a tab is refused,
+  because `tar` prints that escaped in the listing the restore matches against, so such a selector
+  used to be accepted and then quietly select nothing.
+
+
+- **The backup exclusion list is read through the hardened reader** (#706). Three places still used
+  a raw `source` on a file the customer's panel writes, while the fourth already used `source_conf`
+  - the same shape as the upstream advisory that reader exists for. `add_object_key`'s existence
+  check is anchored too: unanchored, a key that is a suffix of one already in the record counted as
+  present and was silently never added.
+
+- **The listers print their values with `printf`, not by splicing them into an `echo`** (#728). The
+  JSON emitters built their output as one big quoted string with `'$VAR'` holes, which leaves the
+  value unquoted - so the shell split and globbed it *after* `json_escape` had run. Whitespace runs
+  inside a value collapsed, and a value holding a `*` was replaced by the filenames in the working
+  directory: text that never went through the escaper, so a filename containing a `"` opens a
+  second key in the document. 53 emitters, 693 values. Where a lister happened to have set
+  `IFS=$'\n'` for an unrelated loop it was inert - by luck, not by design.
+
+- **A record is quoted on its way into the parser, at every call site** (#723). Forty-six `h-*` and
+  helper calls handed the record over unquoted, so the shell split and globbed it before either
+  parser saw a character: a cron record holding `MIN='*'` picked up any file named `MIN='...'` in
+  the working directory and the parsed value became that filename. A customer only has to create
+  one such file in a directory an admin later runs a command from. Two of the forty-six are shared
+  helpers - `get_object_values` and `get_domain_values`, the latter with 42 calling files. Unquoted
+  also collapsed runs of whitespace inside a value.
+
+- **A failing `mktemp` no longer lets the panel write into an unset path** (#703). Thirty save
+  routes took `exec("mktemp")` and used `$output[0]` without checking it, so a failure produced an
+  empty path: `fopen()` on it aborts the request with a fatal, and the certificate or service
+  config the route was about to hand to the CLI is gone with it. They now go through
+  `private_tmpfile()` / `private_tmpdir()`, which return `false` and make the caller branch. The
+  login route is covered too - it wrote the password hash the same way. The backup exclusion list
+  also stopped leaving its tempfile behind.
+
+- **An archived record is checked before it is trusted** (#705). Appending the archived line
+  verbatim is what preserves the fields, but it also puts a line this box did not write into a live
+  config, and not every reader goes through the tokenizer - some parse with `sed` on quote
+  boundaries, and the listers splice into JSON. A record must now be exactly `KEY='VALUE'`, with the
+  quote, backslash, backtick, doublequote and newline refused; `$` stays allowed because the crypt
+  hashes carry it. Mail records were appended with no check at all before. The three archive parses
+  are quoted now - unquoted, the archive content word-split and globbed before the parser saw it.
+
+### Removed
+
+- **Vesta archives are refused instead of half-supported** (#707). The restore carried a container
+  variable through twenty-six path joins and a `sed` over `cron.conf` so that a `./vesta` archive
+  could be read - a permanent constraint on every path in the restore, for a panel that has not
+  produced an archive in years. The container is a constant now, and a Vesta archive is detected,
+  named in the report and refused before the first write.
+
+### Fixed
+
+- **A home entry whose name carries a backslash or a tab comes back** (#736). The restore built its
+  list of home entries from `tar -t`, which prints such names *escaped*, and then asked for a file
+  under the escaped name - so the unpack failed and took the whole section with it, including the
+  entries that were fine. A customer creates that state themselves, with one folder copied out of a
+  Windows share, and it only shows when the restore is needed. The names come from the directory the
+  container unpacked into now, which cannot disagree with itself, and a single entry that cannot be
+  read is named as a failure instead of abandoning the rest. Inherited: HestiaCP 1.10.3 does the
+  same.
+
+- **Removing CrowdSec no longer leaves its domains answering 500** (#743). The uninstall took away
+  the bouncer and the init config and left every per-domain fragment behind, still calling
+  `require("hestia_bouncer")` - and since the directive keeps parsing while the lua module is
+  installed, `nginx -t` stayed green and the reload put the breakage live on the spot. The fragments
+  go with it now, found in the tree rather than from the records, because one can outlive the other.
+  The records keep their `yes`, so reinstalling brings the protection back.
+
+- **A domain carrying `CROWDSEC='yes'` no longer breaks the whole nginx config on a box without
+  CrowdSec** (#741). The per-domain fragment was written from the record and gated only on the web
+  model, so an nginx that has no bouncer got a `rewrite_by_lua_block` it cannot parse - and that
+  invalidates the entire configuration, not the one domain. Nothing looks wrong until something
+  reloads, at which point every site on the box is affected. The fragment is now intent *and*
+  capability, decided by the artefact the CrowdSec apply step installs; the record keeps its `yes`,
+  so moving back to a CrowdSec box restores the protection. Reachable on any rebuild, and the normal
+  way in is a restore between two HestiaRE hosts with different addons.
+
+- **The directory-listing switch stopped printing a `sed` error on every rebuild** (#731). It patched
+  the SSL vhost as a second file, which the merged template has not produced since both blocks moved
+  into one - so every unsuspend and every restore of an SSL domain wrote a "cannot read
+  apache2.ssl.conf" line to stderr while doing the right thing. The one `sed` already covers both
+  blocks; the second only runs where a legacy pair actually exists.
+
+- **A queued job removes its own line, not every line naming the customer** (#733). The cleanup on
+  every abort path matched ` <customer> `, and since the scheduler quotes a restore's arguments the
+  pattern never matched the restore's own line - it matched the customer's queued *backup* instead.
+  So a refused restore deleted the backup that was waiting and left itself in the queue to fail
+  again on every tick, both without a word. The line is now located as fixed text by command,
+  customer and archive, and only the first hit is removed.
+
+
+- **Suspending a web domain no longer switches its forced HTTPS and HSTS off for good** (#720). The
+  rebuild re-renders those switches by calling delete and then add. The add half refuses on a
+  suspended domain, the delete half has already written `no` into the record - so a suspend printed
+  four `is suspended` errors and left the domain with `SSL_FORCE='no'`, `SSL_HSTS='no'`, no proxy or
+  FastCGI cache and, in a restore, no FTP account. Unsuspending did not bring any of it back: the
+  domain came out of a suspension no longer redirecting to HTTPS. A suspended domain renders the
+  suspend template, which includes the existing fragments unchanged, so the rebuild leaves them
+  alone until the domain is unsuspended.
+
+- **A domain that was suspended when it was archived comes back suspended** (#720). The restore
+  forced `SUSPENDED='no'`, so a locked domain was served again the moment it was restored. It keeps
+  the archived value now; `SUSPENDED_WEB` is recounted from the records as before.
+
+- **A customer directory with a space in its name no longer aborts the restore** (#706). The restore
+  walked the list of home directories with an unquoted `for`, so `my documents` became two names and
+  the run died on `Can't unpack my user dir container` - after the web, mail and database sections
+  had already been written. The four lists that come out of the archive rather than out of a
+  validator are read line by line now, and the certificate copy globs instead of parsing `ls`, where
+  the domain was also spliced unquoted into a regex and its dots matched any character.
+
+- **Restoring an archive under a different customer name no longer duplicates every database
+  record** (#721). The existence check looked for the archived name while the record carries the
+  renamed one, so it never matched: the fresh branch ran every time, and a second restore of the
+  same archive appended everything again - two records became four. It also meant the branch that
+  protects a database already on the target was unreachable in exactly that case.
+
+- **The two search commands report the record, not an escaped copy of it** (#719).
+  `parse_object_kv_list_non_eval` escaped `"` and `$` on the way in and never undid it, so every
+  value it parsed carried the backslashes: `h-search-object` and `h-search-user-object` emitted
+  `\"` where the record holds `"`. The escaping protected nothing - the data reaches the parser
+  through a quoted expansion and is assigned through another, so neither character is ever
+  re-expanded. The same function also read its pairs through word splitting, which globs, so a
+  record value containing a `*` came back as a filename from the working directory.
+  **The search output changes shape**: it was wrong before, and anyone parsing it gets correct
+  values now. The only consumer in the tree is the panel's search page, where this is plainly a
+  correction; upstream carries the identical escaping, so `v-search-object` and
+  `v-search-user-object` now differ from HestiaCP's output - deliberately, because HestiaCP's is
+  the broken one.
+
+- **A record value containing a quote no longer breaks the JSON the panel reads** (#704). The
+  `h-*` commands build JSON by string concatenation, so a `"` or a backslash anywhere in a
+  record - a domain alias, a notification, a certificate subject, a log line - produced a document
+  `json_decode` rejects, and the panel showed an empty page instead of the object. Escaping now
+  happens once, in `json_escape` (`include/main.sh`), applied by all 85 emitters. Three listers
+  carried a local half-fix that covered the fields upstream #5585 named and missed the rest. A hand
+  check on the `docs` branch (`tests/lint/`) derives both the spliced and the escaped names
+  from the source, so a field added later cannot slip past unescaped - and reports the opposite
+  defect too, a value escaped by hand as well as by the helper, which is how a doubled `\"` reached
+  the panel from five emitters. Alongside it, 17 listers read the record with `read` and no `-r`,
+  so a backslash in any value was eaten before anything was escaped at all.
+
+- **A restored web domain keeps every field it had** (#705). The restore rebuilt the record from a
+  hand-written list of keys, so anything the list did not know simply did not come back: the
+  domain's `AUTH_USER`/`AUTH_HASH` - its password protection - along with `WP`, `DIR_LIST`,
+  `CROWDSEC` and `BOTLIMIT`. The repair pass then re-inserted those keys empty, so the record looked
+  healthy afterwards and the page was open. It only fires when the domain is new on the target,
+  which is exactly migration and disaster recovery. The archived line is the record now, edited in
+  place, with only named fields rewritten - a field added later survives without anyone remembering
+  it. The same applies to the database record.
+
+- **A DKIM record without its private key is now a named failure** (#705). An archive whose record
+  says `DKIM='yes'` but carries no `.pem` left a `cp` error on stderr while the restore reported
+  success: the panel showed DKIM on, exim signed nothing, and the published TXT record kept
+  announcing a key - so every message failed DKIM rather than merely being unsigned. The restore
+  finishes the rest and then exits non-zero naming what did not come back.
+
+- Smaller inherited ones, all in the backup path: a dead `google_download` call left over from the
+  B2 removal, `egrep` in five places, and `sftp_delete` printing the backup name and the remote path
+  on stdout - which the panel showed the customer as part of the error message when a remote delete
+  failed.
 
 ## v0.16.0 (2026-08-18)
 

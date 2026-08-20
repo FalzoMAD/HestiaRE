@@ -1452,6 +1452,15 @@
       "note": ""
     },
     {
+      "path": "h-backup-server",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-19",
+      "divergence": null,
+      "note": "Backs up the state that belongs to the box rather than to a customer - the shared webmail databases and config, hestia.conf, the hosting packages and the firewall sources. The component list is derived from what the host actually has (#710)."
+    },
+    {
       "path": "h-backup-user",
       "source_type": "derived",
       "upstream_path": "bin/v-backup-user",
@@ -4832,6 +4841,15 @@
       "note": ""
     },
     {
+      "path": "h-list-server-backups",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-19",
+      "divergence": null,
+      "note": "Lists the server archives in the backup folder with their components and origin line, read from the files - a server backup belongs to the box, so there is no per-customer record to register it in (#710)."
+    },
+    {
       "path": "h-list-sys-botfamily",
       "source_type": "eigenbau",
       "upstream_path": null,
@@ -5369,6 +5387,24 @@
         "measured_at": "2026-08-18"
       },
       "note": ""
+    },
+    {
+      "path": "h-add-user-backup",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-19",
+      "divergence": null,
+      "note": "Registers an archive already in the backup folder from its own members, so a HestiaCP one placed by hand becomes visible to the panel; the record is marked ADOPTED and is exempt from rotation (#709)."
+    },
+    {
+      "path": "h-list-backup-contents",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-18",
+      "divergence": null,
+      "note": "Reads the archive file rather than the backup.conf record, so an archive placed by hand - a HestiaCP one - can be inspected before a restore touches anything (#707)."
     },
     {
       "path": "h-list-user-backup",
@@ -6322,6 +6358,15 @@
         "measured_at": "2026-08-18"
       },
       "note": ""
+    },
+    {
+      "path": "h-restore-server",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-19",
+      "divergence": null,
+      "note": "Restores named components of a server backup. Deliberately has no whole-archive verb: putting all of it back would overwrite a running host's configuration in one step (#710)."
     },
     {
       "path": "h-restore-user",

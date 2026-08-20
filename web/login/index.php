@@ -189,10 +189,21 @@ function authenticate_user($user, $password, $twofa = "")
 			}
 
 			// Send hash via tmp file
-			$v_hash = exec("mktemp -p /tmp");
-			$fp = fopen($v_hash, "w");
-			fwrite($fp, $hash . "\n");
-			fclose($fp);
+			$v_hash = secret_tmpfile($hash);
+			if ($v_hash === false) {
+				// No file, no login attempt: the old fopen() on an unset path wrote the password
+				// hash into the filesystem root and handed the command an empty argument.
+				//
+				// Says "internal error", not "invalid password": the credentials may well be
+				// right, and blaming them sends the legitimate user into a password reset for a
+				// fault on our side. It is no oracle either - this fires after the salt lookup and
+				// before the hash check, identically for every account, and only when the server
+				// cannot write a tempfile. Not logged as a failed login: that log feeds fail2ban,
+				// and our own failure must not ban the user.
+				unset($_SESSION["error_msg"]);
+				sleep(2);
+				return _("An internal error occurred");
+			}
 
 			// Check user hash
 			exec(

@@ -72,7 +72,12 @@ if [ "$mode" = "on" ]; then
 		fi
 	else
 		sed -i "s/-Index/+Index/g" "$conf_dir/$WEB_SYSTEM.conf"
-		[ "$SSL" == "yes" ] && sed -i "s/-Index/+Index/g" "$conf_dir/$WEB_SYSTEM.ssl.conf"
+		# A merged template renders both vhost blocks into that one file, so the sed above has
+		# already flipped the SSL block; a separate .ssl.conf exists only for a legacy pair. Without
+		# the test this is a sed error per domain on every rebuild and every restore.
+		if [ -f "$conf_dir/$WEB_SYSTEM.ssl.conf" ]; then
+			sed -i "s/-Index/+Index/g" "$conf_dir/$WEB_SYSTEM.ssl.conf"
+		fi
 	fi
 	[ "$quiet" != "yes" ] && echo "Enabled directory browsing for $domain."
 else
@@ -80,7 +85,9 @@ else
 		rm -f "$conf_dir/nginx.conf_dirlist" "$conf_dir/nginx.ssl.conf_dirlist"
 	else
 		sed -i "s/+Index/-Index/g" "$conf_dir/$WEB_SYSTEM.conf"
-		[ "$SSL" == "yes" ] && sed -i "s/+Index/-Index/g" "$conf_dir/$WEB_SYSTEM.ssl.conf"
+		if [ -f "$conf_dir/$WEB_SYSTEM.ssl.conf" ]; then
+			sed -i "s/+Index/-Index/g" "$conf_dir/$WEB_SYSTEM.ssl.conf"
+		fi
 	fi
 	[ "$quiet" != "yes" ] && echo "Disabled directory browsing for $domain."
 fi

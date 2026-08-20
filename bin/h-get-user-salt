@@ -32,12 +32,13 @@ date=$(echo "$time_n_date" | cut -f 2 -d \ )
 # JSON list function
 json_list() {
 	echo '{'
-	echo '    "'$user'": {
-        "METHOD": "'$method'",
-        "SALT": "'$salt'",
-        "TIME": "'$time'",
-        "DATE": "'$date'"
-        }'
+	json_escape user method salt time date
+	printf '    "%s": {\n' "$user"
+	printf '        "METHOD": "%s",\n' "$method"
+	printf '        "SALT": "%s",\n' "$salt"
+	printf '        "TIME": "%s",\n' "$time"
+	printf '        "DATE": "%s"\n' "$date"
+	echo '        }'
 	echo '}'
 }
 

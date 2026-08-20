@@ -27,7 +27,8 @@ json_list() {
 	i=1
 	echo '['
 	for type in ${DB_SYSTEM//,/ }; do
-		echo -n '    "'$type'"'
+		json_escape type
+		printf '    "%s"' "$type"
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

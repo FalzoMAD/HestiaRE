@@ -28,19 +28,20 @@ json_list() {
 	i=1
 	objects=$(grep "DB=" $USER_DATA/db.conf | wc -l)
 	echo "{"
-	while read str; do
+	while read -r str; do
 		parse_object_kv_list "$str"
-		echo -n '    "'$DB'": {
-        "DATABASE": "'$DB'",
-        "DBUSER": "'$DBUSER'",
-        "HOST": "'$HOST'",
-        "TYPE": "'$TYPE'",
-        "CHARSET": "'$CHARSET'",
-        "U_DISK": "'$U_DISK'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+		json_escape DB DBUSER HOST TYPE CHARSET U_DISK SUSPENDED TIME DATE
+		printf '    "%s": {\n' "$DB"
+		printf '        "DATABASE": "%s",\n' "$DB"
+		printf '        "DBUSER": "%s",\n' "$DBUSER"
+		printf '        "HOST": "%s",\n' "$HOST"
+		printf '        "TYPE": "%s",\n' "$TYPE"
+		printf '        "CHARSET": "%s",\n' "$CHARSET"
+		printf '        "U_DISK": "%s",\n' "$U_DISK"
+		printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "DATE": "%s"\n' "$DATE"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

@@ -36,6 +36,7 @@ json_list() {
 		[ -z "$host" ] && continue
 		[ "$first" -eq 1 ] || echo ','
 		first=0
+		json_escape host
 		echo -n "    \"$host\": {
         \"HOST\": \"$host\"
     }"

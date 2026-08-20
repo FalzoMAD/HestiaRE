@@ -26,46 +26,47 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	echo '{'
-	echo '    "'$DOMAIN'": {
-        "IP": "'$IP'",
-        "IP6": "'$IP6'",
-        "DOCUMENT_ROOT": "'$DOCROOT'",
-        "U_DISK": "'$U_DISK'",
-        "U_BANDWIDTH": "'$U_BANDWIDTH'",
-        "TPL": "'$TPL'",
-        "ALIAS": "'$ALIAS'",
-        "STATS": "'$STATS'",
-        "STATS_USER": "'$STATS_USER'",
-        "SSL": "'$SSL'",
-        "SSL_FORCE": "'$SSL_FORCE'",
-        "SSL_HSTS": "'$SSL_HSTS'",
-        "SSL_HOME": "'$SSL_HOME'",
-        "HTTP3": "'$HTTP3'",
-        "DOCKER": "'$DOCKER'",
-        "DOCKER_PORT": "'$DOCKER_PORT'",
-        "DOCKER_OCTET": "'$DOCKER_OCTET'",
-        "LETSENCRYPT": "'$LETSENCRYPT'",
-        "WP": "'$WP'",
-        "FTP_USER": "'$FTP_USER'",
-        "FTP_PATH": "'$FTP_PATH'",
-        "AUTH_USER": "'$AUTH_USER'",
-        "BACKEND": "'$BACKEND'",
-        "PHP_VERSION": "'$PHP_VERSION'",
-        "PROXY": "'$PROXY'",
-        "PROXY_EXT": "'$PROXY_EXT'",
-        "FASTCGI_CACHE": "'$FASTCGI_CACHE'",
-        "FASTCGI_DURATION": "'$FASTCGI_DURATION'",
-        "PROXY_CACHE": "'$PROXY_CACHE'",
-        "PROXY_CACHE_DURATION": "'$PROXY_CACHE_DURATION'",
-        "REDIRECT": "'$REDIRECT'",
-        "REDIRECT_CODE": "'$REDIRECT_CODE'",
-        "CUSTOM_DOCROOT": "'$CUSTOM_DOCROOT'",
-        "BOTLIMIT": "'$BOTLIMIT'",
-        "OFFLINE": "'$OFFLINE'",
-        "SUSPENDED": "'$SUSPENDED'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+	json_escape DOMAIN IP IP6 DOCROOT U_DISK U_BANDWIDTH TPL ALIAS STATS STATS_USER SSL SSL_FORCE SSL_HSTS SSL_HOME HTTP3 DOCKER DOCKER_PORT DOCKER_OCTET LETSENCRYPT WP FTP_USER FTP_PATH AUTH_USER BACKEND PHP_VERSION PROXY PROXY_EXT FASTCGI_CACHE FASTCGI_DURATION PROXY_CACHE PROXY_CACHE_DURATION REDIRECT REDIRECT_CODE CUSTOM_DOCROOT BOTLIMIT OFFLINE SUSPENDED TIME DATE
+	printf '    "%s": {\n' "$DOMAIN"
+	printf '        "IP": "%s",\n' "$IP"
+	printf '        "IP6": "%s",\n' "$IP6"
+	printf '        "DOCUMENT_ROOT": "%s",\n' "$DOCROOT"
+	printf '        "U_DISK": "%s",\n' "$U_DISK"
+	printf '        "U_BANDWIDTH": "%s",\n' "$U_BANDWIDTH"
+	printf '        "TPL": "%s",\n' "$TPL"
+	printf '        "ALIAS": "%s",\n' "$ALIAS"
+	printf '        "STATS": "%s",\n' "$STATS"
+	printf '        "STATS_USER": "%s",\n' "$STATS_USER"
+	printf '        "SSL": "%s",\n' "$SSL"
+	printf '        "SSL_FORCE": "%s",\n' "$SSL_FORCE"
+	printf '        "SSL_HSTS": "%s",\n' "$SSL_HSTS"
+	printf '        "SSL_HOME": "%s",\n' "$SSL_HOME"
+	printf '        "HTTP3": "%s",\n' "$HTTP3"
+	printf '        "DOCKER": "%s",\n' "$DOCKER"
+	printf '        "DOCKER_PORT": "%s",\n' "$DOCKER_PORT"
+	printf '        "DOCKER_OCTET": "%s",\n' "$DOCKER_OCTET"
+	printf '        "LETSENCRYPT": "%s",\n' "$LETSENCRYPT"
+	printf '        "WP": "%s",\n' "$WP"
+	printf '        "FTP_USER": "%s",\n' "$FTP_USER"
+	printf '        "FTP_PATH": "%s",\n' "$FTP_PATH"
+	printf '        "AUTH_USER": "%s",\n' "$AUTH_USER"
+	printf '        "BACKEND": "%s",\n' "$BACKEND"
+	printf '        "PHP_VERSION": "%s",\n' "$PHP_VERSION"
+	printf '        "PROXY": "%s",\n' "$PROXY"
+	printf '        "PROXY_EXT": "%s",\n' "$PROXY_EXT"
+	printf '        "FASTCGI_CACHE": "%s",\n' "$FASTCGI_CACHE"
+	printf '        "FASTCGI_DURATION": "%s",\n' "$FASTCGI_DURATION"
+	printf '        "PROXY_CACHE": "%s",\n' "$PROXY_CACHE"
+	printf '        "PROXY_CACHE_DURATION": "%s",\n' "$PROXY_CACHE_DURATION"
+	printf '        "REDIRECT": "%s",\n' "$REDIRECT"
+	printf '        "REDIRECT_CODE": "%s",\n' "$REDIRECT_CODE"
+	printf '        "CUSTOM_DOCROOT": "%s",\n' "$CUSTOM_DOCROOT"
+	printf '        "BOTLIMIT": "%s",\n' "$BOTLIMIT"
+	printf '        "OFFLINE": "%s",\n' "$OFFLINE"
+	printf '        "SUSPENDED": "%s",\n' "$SUSPENDED"
+	printf '        "TIME": "%s",\n' "$TIME"
+	printf '        "DATE": "%s"\n' "$DATE"
+	echo '    }'
 	echo '}'
 }
 
@@ -184,7 +185,7 @@ is_object_valid 'web' 'DOMAIN' "$domain"
 #----------------------------------------------------------#
 
 # Parsing domain
-parse_object_kv_list $(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)
+parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/web.conf)"
 
 if [ -n "$CUSTOM_DOCROOT" ]; then
 	DOCROOT="$CUSTOM_DOCROOT"

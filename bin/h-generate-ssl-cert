@@ -37,7 +37,11 @@ source_conf "$HESTIA/conf/hestia.conf"
 json_list_ssl() {
 	i='1' # iterator
 	echo '{'
-	echo -e "\t\"$domain\": {"
+	# From the RAW files: json_escape encodes the newlines itself, and running it over the
+	# already-encoded $crt would turn each of its \n into two visible characters.
+	local crt="${crt_raw}" key="${key_raw}" csr="${csr_raw}"
+	json_escape domain crt key csr workdir
+	printf '\t"%s": {\n' "$domain"
 	echo "        \"CRT\": \"$crt\","
 	echo "        \"KEY\": \"$key\","
 	echo "        \"CSR\": \"$csr\","
@@ -167,15 +171,18 @@ fi
 
 # Listing certificates
 if [ -e "$domain.crt" ]; then
-	crt=$(cat $domain.crt | sed ':a;N;$!ba;s/\n/\\n/g')
+	crt_raw=$(cat $domain.crt)
+	crt=$(echo "$crt_raw" | sed ':a;N;$!ba;s/\n/\\n/g')
 fi
 
 if [ -e "$domain.key" ]; then
-	key=$(cat $domain.key | sed ':a;N;$!ba;s/\n/\\n/g')
+	key_raw=$(cat $domain.key)
+	key=$(echo "$key_raw" | sed ':a;N;$!ba;s/\n/\\n/g')
 fi
 
 if [ -e "$domain.csr" ]; then
-	csr=$(cat $domain.csr | sed ':a;N;$!ba;s/\n/\\n/g')
+	csr_raw=$(cat $domain.csr)
+	csr=$(echo "$csr_raw" | sed ':a;N;$!ba;s/\n/\\n/g')
 fi
 
 case $format in

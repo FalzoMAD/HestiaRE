@@ -37,6 +37,9 @@ source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
+# This run's own queue line, for the abort path (see queue_drop_job).
+QUEUE_JOB="h-download-backup $user $backup"
+
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -55,16 +58,12 @@ check_hestia_demo_mode
 disk_usage=$(df $BACKUP | tail -n1 | tr ' ' '\n' | grep % | cut -f 1 -d %)
 if [ "$disk_usage" -ge "$BACKUP_DISK_LIMIT" ]; then
 	echo "Error: Not enough disk space" | $SENDMAIL -s "$subj" $email $notify
-	sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result $E_DISK "Not enough disk space"
 fi
 
 # Checking local backup
 if [ ! -e "$BACKUP/$backup" ]; then
-	if [[ "$BACKUP_SYSTEM" =~ "google" ]]; then
-		google_download "$backup"
-		downloaded='yes'
-	fi
 	if [[ "$BACKUP_SYSTEM" =~ "sftp" ]] && [ -z "$downloaded" ]; then
 		sftp_download "$backup"
 		downloaded='yes'

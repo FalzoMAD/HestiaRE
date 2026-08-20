@@ -23,20 +23,21 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 # JSON list function
 json_list() {
-	parse_object_kv_list $(echo "$config" | egrep "$keys" \
-		| sed -e "s/[ ]*=/=/" -e "s/=[ ]*/=\'/" -e "s/$/'/")
-	echo '{
-    "CONFIG": {
-        "memory_limit": "'$memory_limit'",
-        "max_execution_time": "'$max_execution_time'",
-        "max_input_time": "'$max_input_time'",
-        "upload_max_filesize": "'$upload_max_filesize'",
-        "post_max_size": "'$post_max_size'",
-        "display_errors": "'$display_errors'",
-        "error_reporting": "'$error_reporting'",
-        "config_path": "'$config_path'"
-        }
-}'
+	parse_object_kv_list "$(echo "$config" | egrep "$keys" \
+		| sed -e "s/[ ]*=/=/" -e "s/=[ ]*/=\'/" -e "s/$/'/")"
+	json_escape memory_limit max_execution_time max_input_time upload_max_filesize post_max_size display_errors error_reporting config_path
+	echo '{'
+	echo '    "CONFIG": {'
+	printf '        "memory_limit": "%s",\n' "$memory_limit"
+	printf '        "max_execution_time": "%s",\n' "$max_execution_time"
+	printf '        "max_input_time": "%s",\n' "$max_input_time"
+	printf '        "upload_max_filesize": "%s",\n' "$upload_max_filesize"
+	printf '        "post_max_size": "%s",\n' "$post_max_size"
+	printf '        "display_errors": "%s",\n' "$display_errors"
+	printf '        "error_reporting": "%s",\n' "$error_reporting"
+	printf '        "config_path": "%s"\n' "$config_path"
+	echo '        }'
+	echo '}'
 }
 
 # SHELL list function

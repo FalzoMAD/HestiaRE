@@ -35,16 +35,17 @@ json_list() {
 		USER_AGENT=$(echo "$str" | cut -f 12 -d \')
 		SESSION=$(echo "$str" | cut -f 14 -d \')
 		ACTIVE=$(echo "$str" | cut -f 16 -d \')
-		echo -n '    "'$i'": {
-            "DATE": "'$DATE'",
-            "TIME": "'$TIME'",
-            "IP": "'$IP'",
-            "ACTION": "'$ACTION'",
-            "STATUS": "'$STATUS'",
-            "USER_AGENT": "'$USER_AGENT'",
-            "SESSION": "'$SESSION'",
-            "ACTIVE": "'$ACTIVE'"
-        }'
+		json_escape i DATE TIME IP ACTION STATUS USER_AGENT SESSION ACTIVE
+		printf '    "%s": {\n' "$i"
+		printf '            "DATE": "%s",\n' "$DATE"
+		printf '            "TIME": "%s",\n' "$TIME"
+		printf '            "IP": "%s",\n' "$IP"
+		printf '            "ACTION": "%s",\n' "$ACTION"
+		printf '            "STATUS": "%s",\n' "$STATUS"
+		printf '            "USER_AGENT": "%s",\n' "$USER_AGENT"
+		printf '            "SESSION": "%s",\n' "$SESSION"
+		printf '            "ACTIVE": "%s"\n' "$ACTIVE"
+		printf '        }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

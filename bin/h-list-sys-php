@@ -27,10 +27,11 @@ json_list() {
 	objects=$(echo "${versions[@]}" | wc -w)
 	echo '['
 	for version in "${versions[@]}"; do
+		json_escape version
 		if [ "$i" -lt "$objects" ]; then
-			echo -e "\t\"$version\","
+			printf '\t"%s",\n' "$version"
 		else
-			echo -e "\t\"$version\""
+			printf '\t"%s"\n' "$version"
 		fi
 		((++i))
 	done

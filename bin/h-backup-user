@@ -28,6 +28,9 @@ source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
+# This run's own queue line, for the abort paths (see queue_drop_job).
+QUEUE_JOB="h-backup-user $user "
+
 DOCKER_ROOT_REL='.companion/.local/share/docker'
 # Children a Docker data root is known to have. Only used to tell "expected" from "new" in the
 # report below; an unlisted one is still excluded.
@@ -251,7 +254,7 @@ if [ "$u_disk" -gt "$v_disk" ]; then
 	# Always notify on failure
 	echo "Not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb). https://hestiacp.com/docs/server-administration/backup-restore.html" | $SENDMAIL -s "$subj" "$email" "yes"
 	# Deleting task from queue
-	sed -i "/h-backup-user $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_LIMIT" "not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb)."
 fi
 
@@ -265,7 +268,7 @@ tmpdir=$(mktemp -p $BACKUP_TEMP -d)
 if [ "$?" -ne 0 ]; then
 	echo "Can't create tmp dir $tmpdir" | $SENDMAIL -s "$subj" "$email" "yes"
 	# Deleting task from queue
-	sed -i "/h-backup-user $user /d" $CONF_DIR/queue/backup.pipe
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create tmp dir"
 fi
 
@@ -277,6 +280,10 @@ echo -e "$(date "+%F %T") $user.conf" | tee -a $BACKUP/$user.log
 cp -r $USER_DATA/user.conf $tmpdir/hestia/
 # Record the web model in the archive so a cross-model restore can warn (#120)
 echo "WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'" > $tmpdir/hestia/web-system
+# Who wrote this file. Forensics only - nothing detects by it, because no archive written before
+# today carries one and a HestiaCP archive never will. Where it disagrees with what the members
+# actually show, the members win and the report says so.
+backup_write_origin "$tmpdir/hestia/origin"
 cp -r $USER_DATA/ssl $tmpdir/hestia/
 
 # The user's hosting package, so a restore onto a box that never had it can recreate it (#663). The
@@ -315,7 +322,7 @@ echo
 
 # Parsing excludes
 if [ -e "$USER_DATA/backup-excludes.conf" ]; then
-	source $USER_DATA/backup-excludes.conf
+	source_conf "$USER_DATA/backup-excludes.conf"
 fi
 
 # WEB domains
@@ -437,8 +444,11 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			fi
 		fi
 
-		domain_conf=$(grep -F "DOMAIN='$domain'" $conf)
-		parse_object_kv_list_non_eval domain_conf
+		# No re-parse of the record here. There used to be one, but it passed the VARIABLE NAME
+		# instead of its value, so it parsed the word "domain_conf" - which holds no KEY='VALUE'
+		# pair - and assigned nothing at all (#719). Everything below reads what
+		# get_domain_values already set at the top of this iteration, which is where $SSL comes
+		# from - and $SSL decides whether this domain's certificate goes into the archive.
 
 		# No template/ copy in the archive: neither HestiaRE nor HestiaCP reads it back on
 		# restore, and it was the only place the template tree layout was baked into the
@@ -692,7 +702,7 @@ if [ "$USER" != '*' ]; then
 	# Parsing directory exclusions
 	USER=''
 	if [ -e "$USER_DATA/backup-excludes.conf" ]; then
-		source $USER_DATA/backup-excludes.conf
+		source_conf "$USER_DATA/backup-excludes.conf"
 	fi
 	# Built in, not via backup-excludes.conf: that file is the customer's, and dropping this entry
 	# would silently put the whole image store back into every archive. What is dropped depends on
@@ -721,7 +731,10 @@ if [ "$USER" != '*' ]; then
 	set -f
 	i=0
 
-	for udir in $(ls -a | egrep -v "^conf$|^web$|^dns$|^tmp$|^mail$|^\.\.$|^\.$"); do
+	# leftovers is what a previous restore handed over; archiving it would grow the archive over every
+	# roundtrip. A reserved name in the home from here on, like conf/web/mail/tmp - and in this fixed
+	# list rather than in backup-excludes.conf, which the customer can edit.
+	for udir in $(ls -a | grep -E -v "^conf$|^web$|^dns$|^tmp$|^mail$|^leftovers$|^\.\.$|^\.$"); do
 		exclusion=$(echo "$USER" | tr ',' '\n' | grep "^$udir$")
 		if [ -z "$exclusion" ]; then
 			((i++))
@@ -829,14 +842,28 @@ backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 
-# Removing old backups
-tail -n $BACKUPS $USER_DATA/backup.conf > $USER_DATA/backup.conf_
+# Removing old backups. Adopted records are kept whatever their age: they point at a file this
+# rotation does not own, and dropping the record would hide the archive from the panel again.
+#
+# In place, in FILE ORDER - the listers print the file as it stands, so pulling the adopted lines to
+# the front would reorder what the panel shows. ADOPTED is matched as a whole field, not as a
+# substring anywhere in the line.
+awk -v keep="$BACKUPS" '
+	/(^| )ADOPTED='"'"'yes'"'"'( |$)/ { next }
+	{ n++ }
+	END { print n }
+' $USER_DATA/backup.conf > $USER_DATA/backup.count_
+awk -v keep="$BACKUPS" -v total="$(cat $USER_DATA/backup.count_)" '
+	/(^| )ADOPTED='"'"'yes'"'"'( |$)/ { print; next }
+	{ i++; if (i > total - keep) print }
+' $USER_DATA/backup.conf > $USER_DATA/backup.conf_
+rm -f $USER_DATA/backup.count_
 mv -f $USER_DATA/backup.conf_ $USER_DATA/backup.conf
 chmod 660 $USER_DATA/backup.conf
 chmod 660 $BACKUP/$user.log
 
 # Deleting task from queue
-sed -i "/h-backup-user $user /d" $CONF_DIR/queue/backup.pipe
+queue_drop_job "$CONF_DIR/queue/backup.pipe"
 
 U_BACKUPS=$(grep BACKUP $USER_DATA/backup.conf | wc -l)
 update_user_value "$user" '$U_BACKUPS' "$U_BACKUPS"

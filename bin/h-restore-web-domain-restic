@@ -24,6 +24,8 @@ new_user=${5-no}
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
 # shellcheck source=/usr/local/hestia/include/domain.sh
 source $HESTIA/include/domain.sh
 # shellcheck source=/usr/local/hestia/include/ip.sh
@@ -34,6 +36,9 @@ source $HESTIA/include/rebuild.sh
 source $HESTIA/include/syshealth.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
+
+# This run's own queue line, for the abort path (see queue_drop_job).
+QUEUE_JOB="h-restore-web-domain-restic '$user' '$snapshot' '$web'"
 
 source_conf $HESTIA/conf/restic.conf
 
@@ -63,7 +68,7 @@ restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" dump "$snaps
 old_uid=$(cut -f 3 -d : $tmpdir/passwd)
 
 domains=""
-parse_object_kv_list $(cat $tmpdir/backup.conf)
+parse_object_kv_list "$(cat $tmpdir/backup.conf)"
 # Split on commas without leaking IFS: it stayed ',' for the rest of the script, so every later
 # word split collapsed - that is how the generated nginx conf came out wrong. And iterate the
 # array itself: "$domains" is element 0, so a user with several domains had all but the first
@@ -90,7 +95,7 @@ for domain in "${domains[@]}"; do
 				rm -rf $tmpdir
 				error="$domain belongs to another user"
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				sed -i "/ $user /d" $CONF_DIR/queue/backup.pipe
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
 			fi
 		fi
@@ -101,7 +106,7 @@ for domain in "${domains[@]}"; do
 
 		# Restoring web.conf
 		if [ -z "$check_config" ]; then
-			parse_object_kv_list $(cat $tmpdir/home/$user/backup/web/$domain/hestia/web.conf)
+			parse_object_kv_list "$(cat $tmpdir/home/$user/backup/web/$domain/hestia/web.conf)"
 
 			# Deleting conflicting aliases
 			for dom_alias in ${ALIAS//,/ }; do

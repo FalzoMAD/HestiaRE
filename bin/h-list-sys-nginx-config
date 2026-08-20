@@ -23,22 +23,23 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 # JSON list function
 json_list() {
-	parse_object_kv_list $(echo "$config" | egrep "$keys" | tr -d ';' | awk '{print $1"="$2}')
-	echo '{
-    "CONFIG": {
-        "worker_processes": "'$worker_processes'",
-        "worker_connections": "'$worker_connections'",
-        "send_timeout": "'$send_timeout'",
-        "proxy_connect_timeout": "'$proxy_connect_timeout'",
-        "proxy_send_timeout": "'$proxy_send_timeout'",
-        "proxy_read_timeout": "'$proxy_read_timeout'",
-        "client_max_body_size": "'$client_max_body_size'",
-        "gzip": "'$gzip'",
-        "gzip_comp_level": "'$gzip_comp_level'",
-        "charset": "'$charset'",
-        "config_path": "'$config_path'"
-        }
-}'
+	parse_object_kv_list "$(echo "$config" | egrep "$keys" | tr -d ';' | awk '{print $1"="$2}')"
+	json_escape worker_processes worker_connections send_timeout proxy_connect_timeout proxy_send_timeout proxy_read_timeout client_max_body_size gzip gzip_comp_level charset config_path
+	echo '{'
+	echo '    "CONFIG": {'
+	printf '        "worker_processes": "%s",\n' "$worker_processes"
+	printf '        "worker_connections": "%s",\n' "$worker_connections"
+	printf '        "send_timeout": "%s",\n' "$send_timeout"
+	printf '        "proxy_connect_timeout": "%s",\n' "$proxy_connect_timeout"
+	printf '        "proxy_send_timeout": "%s",\n' "$proxy_send_timeout"
+	printf '        "proxy_read_timeout": "%s",\n' "$proxy_read_timeout"
+	printf '        "client_max_body_size": "%s",\n' "$client_max_body_size"
+	printf '        "gzip": "%s",\n' "$gzip"
+	printf '        "gzip_comp_level": "%s",\n' "$gzip_comp_level"
+	printf '        "charset": "%s",\n' "$charset"
+	printf '        "config_path": "%s"\n' "$config_path"
+	echo '        }'
+	echo '}'
 }
 
 # SHELL list function

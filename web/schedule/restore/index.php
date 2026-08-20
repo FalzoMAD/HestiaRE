@@ -63,7 +63,10 @@ if (!empty($_GET["type"])) {
 		" " .
 		$udir;
 } else {
-	$restore_cmd = HESTIA_CMD . "h-schedule-user-restore " . $user . " " . $backup;
+	// A whole-archive restore names no object, so nothing in it carries consent by selection. The
+	// queue has no terminal to ask at, so the click has to say it (#707). "all" covers the sections
+	// and not the PHP fallback - moving domains onto another PHP version stays an explicit choice.
+	$restore_cmd = HESTIA_CMD . "h-schedule-user-restore " . $user . " " . $backup . " '' '' '' '' '' '' all";
 }
 
 exec($restore_cmd, $output, $return_var);

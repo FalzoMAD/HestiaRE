@@ -23,11 +23,12 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 # JSON list function
 json_list() {
-	echo '{
-    "CONFIG": {
-        "config_path": "'$config_path'"
-        }
-}'
+	json_escape config_path
+	echo '{'
+	echo '    "CONFIG": {'
+	printf '        "config_path": "%s"\n' "$config_path"
+	echo '        }'
+	echo '}'
 }
 
 # SHELL list function

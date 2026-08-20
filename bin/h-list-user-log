@@ -35,14 +35,14 @@ json_list() {
 		LEVEL=$(echo "$str" | cut -f 8 -d \')
 		CATEGORY=$(echo "$str" | cut -f 10 -d \')
 		MESSAGE=$(echo "$str" | cut -f 12 -d \')
-		MESSAGE=${MESSAGE//\"/\\\"}
-		echo -n '    "'$ID'": {
-        "DATE": "'$DATE'",
-        "TIME": "'$TIME'",
-        "LEVEL": "'$LEVEL'",
-        "CATEGORY": "'$CATEGORY'",
-        "MESSAGE": "'$MESSAGE'"
-    }'
+		json_escape ID DATE TIME LEVEL CATEGORY MESSAGE
+		printf '    "%s": {\n' "$ID"
+		printf '        "DATE": "%s",\n' "$DATE"
+		printf '        "TIME": "%s",\n' "$TIME"
+		printf '        "LEVEL": "%s",\n' "$LEVEL"
+		printf '        "CATEGORY": "%s",\n' "$CATEGORY"
+		printf '        "MESSAGE": "%s"\n' "$MESSAGE"
+		printf '    }'
 		if [ "$i" -lt "$objects" ]; then
 			echo ','
 		else

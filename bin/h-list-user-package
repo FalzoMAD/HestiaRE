@@ -23,30 +23,31 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	echo '{'
-	echo '    "'$PACKAGE'": {
-        "WEB_TEMPLATE": "'$WEB_TEMPLATE'",
-        "BACKEND_TEMPLATE": "'$BACKEND_TEMPLATE'",
-        "PROXY_TEMPLATE": "'$PROXY_TEMPLATE'",
-        "WEB_DOMAINS": "'$WEB_DOMAINS'",
-        "WEB_ALIASES": "'$WEB_ALIASES'",
-        "MAIL_DOMAINS": "'$MAIL_DOMAINS'",
-        "MAIL_ACCOUNTS": "'$MAIL_ACCOUNTS'",
-        "RATE_LIMIT": "'$RATE_LIMIT'",
-        "DATABASES": "'$DATABASES'",
-        "CRON_JOBS": "'$CRON_JOBS'",
-        "DISK_QUOTA": "'$DISK_QUOTA'",
-        "CPU_QUOTA":"'$CPU_QUOTA'",
-        "CPU_QUOTA_PERIOD":"'$CPU_QUOTA_PERIOD'",
-        "MEMORY_LIMIT":"'$MEMORY_LIMIT'",
-        "SWAP_LIMIT":"'$SWAP_LIMIT'",
-        "DOCKER_LIMIT":"'$DOCKER_LIMIT'",
-        "BANDWIDTH": "'$BANDWIDTH'",
-        "SHELL": "'$SHELL'",
-        "BACKUPS": "'$BACKUPS'",
-				"BACKUPS_INCREMENTAL": "'$BACKUPS_INCREMENTAL'",
-        "TIME": "'$TIME'",
-        "DATE": "'$DATE'"
-    }'
+	json_escape PACKAGE WEB_TEMPLATE BACKEND_TEMPLATE PROXY_TEMPLATE WEB_DOMAINS WEB_ALIASES MAIL_DOMAINS MAIL_ACCOUNTS RATE_LIMIT DATABASES CRON_JOBS DISK_QUOTA CPU_QUOTA CPU_QUOTA_PERIOD MEMORY_LIMIT SWAP_LIMIT DOCKER_LIMIT BANDWIDTH SHELL BACKUPS BACKUPS_INCREMENTAL TIME DATE
+	printf '    "%s": {\n' "$PACKAGE"
+	printf '        "WEB_TEMPLATE": "%s",\n' "$WEB_TEMPLATE"
+	printf '        "BACKEND_TEMPLATE": "%s",\n' "$BACKEND_TEMPLATE"
+	printf '        "PROXY_TEMPLATE": "%s",\n' "$PROXY_TEMPLATE"
+	printf '        "WEB_DOMAINS": "%s",\n' "$WEB_DOMAINS"
+	printf '        "WEB_ALIASES": "%s",\n' "$WEB_ALIASES"
+	printf '        "MAIL_DOMAINS": "%s",\n' "$MAIL_DOMAINS"
+	printf '        "MAIL_ACCOUNTS": "%s",\n' "$MAIL_ACCOUNTS"
+	printf '        "RATE_LIMIT": "%s",\n' "$RATE_LIMIT"
+	printf '        "DATABASES": "%s",\n' "$DATABASES"
+	printf '        "CRON_JOBS": "%s",\n' "$CRON_JOBS"
+	printf '        "DISK_QUOTA": "%s",\n' "$DISK_QUOTA"
+	printf '        "CPU_QUOTA":"%s",\n' "$CPU_QUOTA"
+	printf '        "CPU_QUOTA_PERIOD":"%s",\n' "$CPU_QUOTA_PERIOD"
+	printf '        "MEMORY_LIMIT":"%s",\n' "$MEMORY_LIMIT"
+	printf '        "SWAP_LIMIT":"%s",\n' "$SWAP_LIMIT"
+	printf '        "DOCKER_LIMIT":"%s",\n' "$DOCKER_LIMIT"
+	printf '        "BANDWIDTH": "%s",\n' "$BANDWIDTH"
+	printf '        "SHELL": "%s",\n' "$SHELL"
+	printf '        "BACKUPS": "%s",\n' "$BACKUPS"
+	printf '				"BACKUPS_INCREMENTAL": "%s",\n' "$BACKUPS_INCREMENTAL"
+	printf '        "TIME": "%s",\n' "$TIME"
+	printf '        "DATE": "%s"\n' "$DATE"
+	echo '    }'
 	echo '}'
 }
 
