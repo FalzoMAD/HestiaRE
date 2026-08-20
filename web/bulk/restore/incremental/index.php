@@ -13,7 +13,6 @@ $action = $_POST["action"];
 $snapshot = quoteshellarg($_POST["snapshot"]);
 
 $web = [];
-$dns = [];
 $mail = [];
 $db = [];
 $cron = [];
@@ -21,9 +20,6 @@ $udir = [];
 
 if (!empty($_POST["web"])) {
 	$web = quoteshellarg(implode(",", $_POST["web"]));
-}
-if (!empty($_POST["dns"])) {
-	$dns = quoteshellarg(implode(",", $_POST["dns"]));
 }
 if (!empty($_POST["mail"])) {
 	$mail = quoteshellarg(implode(",", $_POST["mail"]));
@@ -54,21 +50,6 @@ if ($action == "restore") {
 			$return_var,
 		);
 	}
-	if (!empty($dns)) {
-		exec(
-			HESTIA_CMD .
-				"h-schedule-user-restore-restic " .
-				$user .
-				" " .
-				$snapshot .
-				" " .
-				"dns" .
-				" " .
-				$dns,
-			$output,
-			$return_var,
-		);
-	}
 	if (!empty($mail)) {
 		exec(
 			HESTIA_CMD .
@@ -83,21 +64,6 @@ if ($action == "restore") {
 			$output,
 			$return_var,
 		);
-		if (!empty($dns)) {
-			exec(
-				HESTIA_CMD .
-					"h-schedule-user-restore-restic " .
-					$user .
-					" " .
-					$snapshot .
-					" " .
-					"dns" .
-					" " .
-					$dns,
-				$output,
-				$return_var,
-			);
-		}
 	}
 	if (!empty($cron)) {
 		exec(

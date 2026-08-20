@@ -30,12 +30,11 @@ json_list() {
 	echo "{"
 	while read -r str; do
 		parse_object_kv_list "$str"
-		json_escape BACKUP TYPE SIZE WEB DNS MAIL DB CRON UDIR RUNTIME TIME DATE
+		json_escape BACKUP TYPE SIZE WEB MAIL DB CRON UDIR RUNTIME TIME DATE
 		printf '    "%s": {\n' "$BACKUP"
 		printf '        "TYPE": "%s",\n' "$TYPE"
 		printf '        "SIZE": "%s",\n' "$SIZE"
 		printf '        "WEB": "%s",\n' "$WEB"
-		printf '        "DNS": "%s",\n' "$DNS"
 		printf '        "MAIL": "%s",\n' "$MAIL"
 		printf '        "DB": "%s",\n' "$DB"
 		printf '        "CRON": "%s",\n' "$CRON"
@@ -70,7 +69,7 @@ plain_list() {
 	IFS=$'\n'
 	while read -r str; do
 		parse_object_kv_list "$str"
-		echo -ne "$BACKUP\t$TYPE\t$SIZE\t$WEB\t$DNS\t$MAIL\t$CRON\t$UDIR\t"
+		echo -ne "$BACKUP\t$TYPE\t$SIZE\t$WEB\t$MAIL\t$CRON\t$UDIR\t"
 		echo -e "$RUNTIME\t$TIME\t$DATE"
 	done < <(cat $USER_DATA/backup.conf)
 }
@@ -78,10 +77,10 @@ plain_list() {
 # CSV list function
 csv_list() {
 	IFS=$'\n'
-	echo "BACKUP,TYPE,SIZE,WEB,DNS,MAIL,CRON,UDIR,RUNTIME,TIME,DATE"
+	echo "BACKUP,TYPE,SIZE,WEB,MAIL,CRON,UDIR,RUNTIME,TIME,DATE"
 	while read -r str; do
 		parse_object_kv_list "$str"
-		echo -n "$BACKUP,$TYPE,$SIZE,\"$WEB\",\"$DNS\",\"$MAIL\",\"$CRON\","
+		echo -n "$BACKUP,$TYPE,$SIZE,\"$WEB\",\"$MAIL\",\"$CRON\","
 		echo "\"$UDIR\",$RUNTIME,$TIME,$DATE"
 	done < <(cat $USER_DATA/backup.conf)
 }

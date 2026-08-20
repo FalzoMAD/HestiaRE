@@ -12,6 +12,15 @@ opens above it.
 
 ## Unreleased
 
+### Removed
+
+- **The backup pages no longer offer DNS** (#713). Zones stopped being backed up when the
+  subsystem went, but the panel kept a DNS column, a list of zones with checkboxes and per-zone
+  restore links, and the restore handlers still accepted what those checkboxes posted - all of it
+  fed by a field the backup fills with nothing. The `[DNS]` argument of `h-restore-user` stays, as
+  does the empty `DNS=` in the backup record: both are HestiaCP compatibility, and the panel now
+  passes the argument unset rather than offering a way to fill it.
+
 ### Fixed
 
 - **A restore that could not take a whole section reported success** (#754). Three databases handed

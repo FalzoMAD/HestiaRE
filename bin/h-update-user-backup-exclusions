@@ -54,7 +54,6 @@ check_hestia_demo_mode
 
 # Flush variables
 WEB=''
-DNS=''
 MAIL=''
 DB=''
 CRON=''
@@ -65,7 +64,6 @@ source_conf "$vfile"
 
 # Updating exlusion list
 echo "WEB='$WEB'" > $USER_DATA/backup-excludes.conf
-echo "DNS='$DNS'" >> $USER_DATA/backup-excludes.conf
 echo "MAIL='$MAIL'" >> $USER_DATA/backup-excludes.conf
 echo "DB='$DB'" >> $USER_DATA/backup-excludes.conf
 echo "CRON='$CRON'" >> $USER_DATA/backup-excludes.conf
