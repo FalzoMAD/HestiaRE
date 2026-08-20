@@ -848,10 +848,8 @@ check_object_counters() {
 		_ctr U_DATABASES "$(_cnt . "$ud/db.conf")"
 		_ctr U_CRON_JOBS "$(_cnt . "$ud/cron.conf")"
 		_ctr U_BACKUPS "$(_cnt . "$ud/backup.conf")"
-		# The suspended mirrors. They sat in the exclusion list next to U_DISK*/U_BANDWIDTH, which
-		# are measured and genuinely not derivable - these are, by the same rule the recount uses.
-		# Nothing else watches them: no recount runs on a schedule, only h-rebuild-user,
-		# h-rebuild-databases and h-update-user-counters, each on demand.
+		# The suspended mirrors, by the same rule the recount uses. Nothing else watches them: no
+		# recount runs on a schedule, only h-rebuild-user and h-update-user-counters, on demand.
 		_ctr SUSPENDED_WEB "$(_cnt "SUSPENDED='yes'" "$ud/web.conf")"
 		_ctr SUSPENDED_MAIL "$(_cnt "SUSPENDED='yes'" "$ud/mail.conf")"
 		_ctr SUSPENDED_DB "$(_cnt "SUSPENDED='yes'" "$ud/db.conf")"

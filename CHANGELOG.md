@@ -14,6 +14,40 @@ opens above it.
 
 ### Fixed
 
+- **A restore under a different customer name pointed the site's password protection into the old
+  customer's home** (#756). The `.htaccess` fragments travel inside the archive with an absolute
+  path written into them, and the rebuild only wrote its own when none was there - which after a
+  restore is never. Where that path did not exist the domain answered 403 even with the right
+  password; where it did, the site was gated by **another customer's** password file. Both files
+  are now derived from the record on every rebuild, so they name the customer who actually owns the
+  domain, and an account the record no longer knows is dropped from the file instead of living on
+  in it. An account the record names but carries no hash for is named and left out rather than
+  written as a line that can never match. Where the record names no account at all the fragments go
+  rather than staying behind, and the pair belonging to the web server this host does not run is
+  dropped too - it is inert until the web model is switched, and then it is not.
+
+- **A restore over an existing customer called a fresh archive "pre-#120" and said nothing about a
+  web model that really did differ** (#753). The banner inside the run read a member that is only
+  unpacked when the account is created, so on the most common path it never saw it. It is gone
+  rather than repaired: the preflight report already carries the same sentence, from the probe, and
+  before anything is written - two reports of one fact are two chances to disagree.
+
+- **The consent error pointed at a token that could not satisfy it** (#755). Refusing on
+  `php-fallback` while suggesting `all` sent the operator in a circle, because `all` deliberately
+  does not cover it. The message now names the tokens that were actually refused, says what `all`
+  stands for, and the command's own example no longer teaches the form that does not work.
+
+- **A restored domain kept its CrowdSec or bot-limit setting on a host that cannot render it, and
+  the report called the archive fully restorable** (#755). Those protections survive as settings on
+  purpose - they take effect if the module arrives later - but silence made an inactive protection
+  look like a live one. The report names them, asking the renderers' own capability checks rather
+  than a second copy of the condition. It reads them only where the module is installed, so the one
+  function whose job is to be honest before anything is written cannot be what fails without it.
+
+- Smaller: a zstd database dump no longer prints its size into the middle of the restore log, where
+  it read like an error, and a `*` in an archived bot-limit value no longer expands against the
+  working directory (#755).
+
 - **Rebuilding a single database set the customer's database count to 1** (#757). The singular
   command had inherited the accumulator of its plural sibling without that command's flush in front
   of the loop, so it wrote "whatever the variable held, plus one" as the customer's total - and the
