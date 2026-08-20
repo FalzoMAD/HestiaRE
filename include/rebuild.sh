@@ -849,9 +849,18 @@ rebuild_mysql_database() {
 	fi
 	mysql_query "GRANT ALL ON \`$DB\`.* TO \`$DBUSER\`@\`%\`" > /dev/null
 	mysql_query "GRANT ALL ON \`$DB\`.* TO \`$DBUSER\`@localhost" > /dev/null
-	mysql_query "$query" > /dev/null
-	if [ ! -z "$query2" ]; then
-		mysql_query "$query2" > /dev/null
+	# Same reasoning as the pgsql side: an empty hash would blank a working password. mysql only
+	# survives this today because its own read path works - not by design. What this guards is an
+	# EXISTING credential; the CREATE USER above is IF NOT EXISTS and cannot overwrite one. A
+	# genuinely new user still ends up without a password here, unchanged by this guard - that case
+	# is what the restore's "carries no password" notice is for.
+	if [ -n "$MD5" ]; then
+		mysql_query "$query" > /dev/null
+		if [ ! -z "$query2" ]; then
+			mysql_query "$query2" > /dev/null
+		fi
+	else
+		echo "Warning!: $DB carries no password for $DBUSER - the one on this host is kept unchanged"
 	fi
 	mysql_query "FLUSH PRIVILEGES" > /dev/null
 }
@@ -889,8 +898,16 @@ rebuild_pgsql_database() {
 	query="CREATE ROLE $DBUSER"
 	psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
 
-	query="UPDATE pg_authid SET rolpassword='$MD5' WHERE rolname='$DBUSER'"
-	psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+	# An empty hash is the absence of a password, not a password. Writing it replaced a working
+	# credential with nothing: the rows all came back and the customer's application could no
+	# longer connect, which reads as a broken app rather than as a restore. Records written before
+	# the hash was read correctly carry an empty MD5 to this day, so this has to hold for them.
+	if [ -n "$MD5" ]; then
+		query="UPDATE pg_authid SET rolpassword='$MD5' WHERE rolname='$DBUSER'"
+		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+	else
+		echo "Warning!: $DB carries no password for $DBUSER - the one on this host is kept unchanged"
+	fi
 
 	query="CREATE DATABASE $DB OWNER $DBUSER"
 	if [ "$TPL" = 'template0' ]; then
