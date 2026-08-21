@@ -23,11 +23,20 @@ opens above it.
 
 ### Fixed
 
+- **The shell format check passed on files it had never measured** (#713). It compared a file
+  against its state on the base branch by piping that revision into `shfmt`, but `shfmt` picks up
+  `.editorconfig` from the file's path and content on standard input has none - so the base was
+  judged by the tool's own defaults, came back unformatted whatever it contained, and every
+  freshly introduced misformat was waved through as inherited debt. The settings are now passed
+  explicitly, and the set of files the check exempts is counted on both sides: it may shrink,
+  never grow.
+
 - **Saving the backup exclusions cleared the cron exclusion** (#768). A customer set to skip their
   cron jobs kept that setting only until someone opened the exclusions page and pressed save: the
   form had no cron field, so the handler wrote an empty one over it, and the next backup silently
-  carried the jobs again. The page now offers the field and the lister reports it, so what the
-  backup honours is what the panel shows.
+  carried the jobs again. The page now offers the field and the lister reports it. A single job name
+  is refused rather than stored: the backup tests the value only against `*`, so anything else would
+  have been accepted, shown back and then ignored.
 
 - **A restore that could not take a whole section reported success** (#754). Three databases handed
   to the customer because the box has no database engine ended in a zero exit status, while a single

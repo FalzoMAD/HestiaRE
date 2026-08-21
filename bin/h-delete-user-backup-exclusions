@@ -53,8 +53,7 @@ else
 		DB) DB='' ;;
 		CRON) CRON='' ;;
 		USER) USER='' ;;
-		# Named, not ignored: without this an unknown name rewrote the file unchanged and reported
-		# success, so a typo and a deletion looked the same from the outside.
+		# Silence on an unknown name is indistinguishable from success.
 		*) check_result "$E_INVALID" "no such exclusion type '$system' - one of: WEB MAIL DB CRON USER" ;;
 	esac
 fi

@@ -62,13 +62,13 @@ USER=''
 # Source exclusion list
 source_conf "$vfile"
 
-# Updating exlusion list.
-#
-# No DNS line: this is a key-value file read with source_conf, so a missing key is simply an unset
-# variable. The empty DNS= in the backup.conf RECORD stays, because a record's field set is an
-# interface - HestiaCP parses it positionally-by-name and a reader may expect the key. This file
-# travels in the archive, so it reaches a HestiaCP box without the line; harmless, because their
-# writers put it back on the next save.
+# The backup tests CRON only against '*', so a job name would be stored and then ignored.
+if [ -n "$CRON" ] && [ "$CRON" != '*' ]; then
+	check_result "$E_INVALID" "cron accepts only '*' (all jobs) or empty - single jobs cannot be excluded"
+fi
+
+# No DNS key: source_conf turns an absent key into an unset variable. The empty DNS= in the
+# backup.conf record stays, because a record's field set is a HestiaCP-facing interface.
 echo "WEB='$WEB'" > $USER_DATA/backup-excludes.conf
 echo "MAIL='$MAIL'" >> $USER_DATA/backup-excludes.conf
 echo "DB='$DB'" >> $USER_DATA/backup-excludes.conf

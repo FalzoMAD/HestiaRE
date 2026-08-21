@@ -46,6 +46,25 @@ for t in shellcheck shfmt; do
 	}
 done
 
+# shfmt reads .editorconfig by file PATH, and the shell block is a path glob - a blob on stdin gets
+# shfmt's own defaults instead. Pass the settings explicitly, asserted so the two cannot drift.
+mapfile -t ec_shell < <(sed -n '/^\[{bin\/h-\*/,/^\[.*\]$/p' .editorconfig)
+[ "${#ec_shell[@]}" -gt 1 ] || {
+	echo "ERROR: no shell block found in .editorconfig" >&2
+	exit 2
+}
+for k in switch_case_indent space_redirects binary_next_line; do
+	printf '%s\n' "${ec_shell[@]}" | grep -q "^$k *= *true" || {
+		echo "ERROR: .editorconfig shell block no longer sets $k - update the shfmt flags below" >&2
+		exit 2
+	}
+done
+grep -q '^indent_style *= *tab' .editorconfig || {
+	echo "ERROR: .editorconfig no longer indents with tabs - update the shfmt flags below" >&2
+	exit 2
+}
+FMT=(-i 0 -ci -sr -bn)
+
 # The shell surface: the CLI, the sourced libraries, the bootstrap. v-* are symlinks (skipped by -f).
 is_shell() { [[ "$1" =~ ^(bin/h-|include/.*\.sh$|install\.sh$|\.gitea/tools/.*\.sh$) ]]; }
 
@@ -130,11 +149,11 @@ else
 	fmt_fail=0
 	fmt_debt=0
 	for f in "${changed[@]}"; do
-		shfmt -d "$f" > /dev/null 2>&1 && continue
-		if git show "$BASE:$(base_of "$f")" 2> /dev/null | shfmt -d - > /dev/null 2>&1; then
+		shfmt "${FMT[@]}" -d "$f" > /dev/null 2>&1 && continue
+		if git show "$BASE:$(base_of "$f")" 2> /dev/null | shfmt "${FMT[@]}" -d - > /dev/null 2>&1; then
 			# clean before, dirty now (or newly added) -> a regression this change introduced
 			echo "--- $f"
-			shfmt -d "$f" 2>&1 | sed 's/^/   /'
+			shfmt "${FMT[@]}" -d "$f" 2>&1 | sed 's/^/   /'
 			fmt_fail=$((fmt_fail + 1))
 		else
 			fmt_debt=$((fmt_debt + 1))
@@ -146,6 +165,31 @@ else
 		rc=1
 	else
 		echo "   OK${fmt_debt:+ ($fmt_debt pre-existing, not blocking)}"
+	fi
+
+	# The exemption above hides the set it skips, so judge it by size: shrink yes, grow no. Says
+	# nothing about formatting inside an exempt file. An unreadable base counts 0, so it fails closed.
+	debt_now=0
+	for f in "${ALL_FILES[@]}"; do
+		shfmt "${FMT[@]}" -d "$f" > /dev/null 2>&1 || debt_now=$((debt_now + 1))
+	done
+	debt_base=0
+	while read -r f; do
+		is_shell "$f" || continue
+		git show "$BASE:$f" 2> /dev/null | shfmt "${FMT[@]}" -d - > /dev/null 2>&1 || debt_base=$((debt_base + 1))
+	done < <(git ls-tree -r --name-only "$BASE" 2> /dev/null)
+
+	echo "== shfmt debt (whole tree): $debt_now, base $debt_base =="
+	if [ "$debt_now" -gt "$debt_base" ]; then
+		echo "   FAILED - the exempt set grew by $((debt_now - debt_base)). Apply with: shfmt -w <file>"
+		rc=1
+	elif [ "$debt_now" -eq 0 ]; then
+		echo "   OK - nothing exempt, every file is checked"
+	else
+		echo "   OK - not growing. These files are exempt from the check above:"
+		for f in "${ALL_FILES[@]}"; do
+			shfmt "${FMT[@]}" -d "$f" > /dev/null 2>&1 || echo "      $f"
+		done
 	fi
 fi
 

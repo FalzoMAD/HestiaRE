@@ -38,7 +38,7 @@
 			</div>
 			<div class="u-mb10">
 				<label for="v_cron" class="form-label"><?= tohtml(_("Cron Jobs")) ?></label>
-				<textarea class="form-control" name="v_cron" id="v_cron" placeholder="<?= tohtml(_("To exclude all cron jobs use *")) ?>"><?= tohtml(trim($v_cron, "'")) ?></textarea>
+				<textarea class="form-control" name="v_cron" id="v_cron" placeholder="<?= tohtml(_("Only * is honoured here: all cron jobs, or none. Single jobs cannot be excluded.")) ?>"><?= tohtml(trim($v_cron, "'")) ?></textarea>
 			</div>
 			<div class="u-mb10">
 				<label for="v_userdir" class="form-label"><?= tohtml(_("User Directory")) ?></label>
