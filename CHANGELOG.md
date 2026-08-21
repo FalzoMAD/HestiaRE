@@ -12,6 +12,18 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **`b3sum` joins the base packages** (#712). The differential backup map hashes every byte of a
+  customer's web and mail trees on every run, so the hash has to stay well ahead of the compressor.
+  Measured on two machines that both lack `sha_ni` - the normal case on virtualised servers, where
+  the CPU model masks the flag - BLAKE3 runs 2.8x faster than SHA-256 on a real file tree and 9x on
+  large files, single-threaded in both cases - and it is a cryptographic hash as well, so the faster
+  option is not the weaker one and nothing is traded away. That the map could later double as an
+  integrity statement is a bonus, not the reason. It is an OS package on all four targets, and 1.2.0
+  through 1.8.2 produce identical digests, so a stored map survives a distro upgrade. The consumer
+  itself is not built yet.
+
 ### Removed
 
 - **Demo mode is gone** (#759). Inherited from upstream, where it exists to keep a public demo box
@@ -23,6 +35,26 @@ opens above it.
   a fresh install writes it correctly from the start.
 
 ### Fixed
+
+- **The shell lint gate did not look at `sbin/`** (#777). Its file predicate listed `bin/h-*`,
+  `include/*.sh`, `install.sh` and `.gitea/tools/*.sh`; `sbin/` was carved out of `bin/` after the
+  gate was written and never added, so the installer, the umbrella command and the PHP wrappers sat
+  outside both tiers - a change to `h-install-hestia` was answered with "no changed shell files",
+  green because nothing had been read. Eight more shipped scripts under `share/` and `web/locale`
+  were missing for the same reason. The predicate now covers all of them, and because a path list
+  goes stale on every move, a new check measures it against a set derived from content (shebang or
+  `.sh` name) and fails on anything shell it does not cover - including the case where the sweep
+  itself reads nothing. A second check holds `.editorconfig` to the same surface, because it is a
+  second hand-kept list of it and nothing measured it: `shfmt` resolves its settings by path from
+  that file, so on a house-formatted tree a run with no flags has to agree - where it does not, the
+  path is outside the block. It carries its own probe, and a probe that cannot tell the two settings
+  apart fails the run instead of passing it. All failure directions were provoked and observed. The
+  interpreter set follows what shellcheck has a dialect for; zsh and csh stay out on purpose, since
+  pulling one in would redden a tier nothing here can judge, and that assumption is written at the
+  line rather than left implicit. The six files this
+  exposed are formatted (proven semantics-preserving, not merely re-indented), a `profile.d`
+  fragment states its dialect so shellcheck can judge it, and two findings in the installer and the
+  jail shell are fixed. Whole-tree coverage goes from 553 to 568 files, formatting debt from 6 to 0.
 
 - **Two addon installers announced work they had not done** (#772). Run against a host that already
   had ProFTPD or Docker, they printed "Installing ProFTPD" and "Adding the Docker repository" and

@@ -26,7 +26,9 @@ indent_size = 2
 # Shell: the house style deviates from shfmt's defaults on all three counts, so a bare `shfmt -d`
 # would want to rewrite the whole tree. Spaced redirections (`2> /dev/null`), a leading `&&` on
 # continuation lines, and indented case arms.
-[{bin/h-*,include/*.sh,install.sh,.gitea/tools/*.sh}]
+# The three extensionless scripts are named one by one because their directories also hold
+# non-shell files; the gate's own coverage check is what keeps that list from going stale.
+[{bin/h-*,sbin/*,include/*.sh,install.sh,.gitea/tools/*.sh,share/**.sh,web/locale/*.sh,share/apache2/httpd-prerotate/awstats,share/bubblewrap/jailbash,share/security/hestia-jail.init}]
 switch_case_indent = true
 space_redirects = true
 binary_next_line = true

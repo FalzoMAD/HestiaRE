@@ -26,7 +26,7 @@ if ! mountpoint -q "$polydir"; then
 fi
 
 # only build for jailed accounts (the PAM stack already gates on the group)
-id -nG "$user" 2>/dev/null | tr ' ' '\n' | grep -qx "sftp-jailed" || exit 0
+id -nG "$user" 2> /dev/null | tr ' ' '\n' | grep -qx "sftp-jailed" || exit 0
 
 home="$(getent passwd "$user" | cut -d: -f6)"
 if [ -z "$home" ] || [ ! -d "$home" ]; then
@@ -36,11 +36,20 @@ fi
 
 root="$polydir/$user"
 target="$root$home"
-mkdir -p "$target" || { logger -t "$tag" "FAIL $user: mkdir $target"; exit 1; }
-mount --bind "$home" "$target" || { logger -t "$tag" "FAIL $user: bind $home"; exit 1; }
+mkdir -p "$target" || {
+	logger -t "$tag" "FAIL $user: mkdir $target"
+	exit 1
+}
+mount --bind "$home" "$target" || {
+	logger -t "$tag" "FAIL $user: bind $home"
+	exit 1
+}
 
 # commit point (see header): the polydir chmod is the last action
-chown root:root "$root" "$polydir" || { logger -t "$tag" "FAIL $user: chown"; exit 1; }
+chown root:root "$root" "$polydir" || {
+	logger -t "$tag" "FAIL $user: chown"
+	exit 1
+}
 chmod 755 "$root"
 chmod 755 "$polydir"
 exit 0

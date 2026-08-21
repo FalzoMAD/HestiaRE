@@ -44,16 +44,16 @@ git checkout dev
 echo ""
 echo "==> Changes in hestiacp since last sync:"
 if [ -z "$BEFORE" ]; then
-  # First sync of this branch - a "$BEFORE..$AFTER" range would be its entire history.
-  echo "    Branch $UPSTREAM_BRANCH had no local ref before this run; skipping the change list."
+	# First sync of this branch - a "$BEFORE..$AFTER" range would be its entire history.
+	echo "    Branch $UPSTREAM_BRANCH had no local ref before this run; skipping the change list."
 elif [ "$BEFORE" = "$AFTER" ]; then
-  echo "    No new commits in hestiacp mirror."
+	echo "    No new commits in hestiacp mirror."
 else
-  echo ""
-  git -C "$HESTIACP_DIR" log --oneline "${BEFORE}..${AFTER}"
-  echo ""
-  echo "==> Changed files:"
-  git -C "$HESTIACP_DIR" diff --name-only "$BEFORE" "$AFTER"
+	echo ""
+	git -C "$HESTIACP_DIR" log --oneline "${BEFORE}..${AFTER}"
+	echo ""
+	echo "==> Changed files:"
+	git -C "$HESTIACP_DIR" diff --name-only "$BEFORE" "$AFTER"
 fi
 
 # ── 1.4 near-verbatim drift check (CODEMAP drift_watch) ──────────────────────
@@ -68,24 +68,24 @@ CODEMAP="$HESTIARE_DIR/CODEMAP.json"
 UPSTREAM_REF="upstream/hestiacp"
 drift=0
 if ! command -v jq > /dev/null 2>&1 || [ ! -f "$CODEMAP" ]; then
-  echo "    SKIP: jq or CODEMAP.json missing."
+	echo "    SKIP: jq or CODEMAP.json missing."
 else
-  while IFS=$'\t' read -r file upath ref; do
-    [ -n "$file" ] || continue
-    if ! git -C "$HESTIARE_DIR" cat-file -e "$ref^{commit}" 2> /dev/null; then
-      echo "    WARN: $file - checked_ref ${ref:0:12} not found (stale marker?)"
-      drift=1
-      continue
-    fi
-    if ! git -C "$HESTIARE_DIR" diff --quiet "$ref".."$UPSTREAM_REF" -- "$upath"; then
-      echo "    DRIFT: upstream moved $upath since ${ref:0:12}"
-      echo "           → re-verify $file, then bump its checked_ref in CODEMAP.json"
-      drift=1
-    fi
-  done < <(jq -r '.upstream_provenance.drift_watch.files
+	while IFS=$'\t' read -r file upath ref; do
+		[ -n "$file" ] || continue
+		if ! git -C "$HESTIARE_DIR" cat-file -e "$ref^{commit}" 2> /dev/null; then
+			echo "    WARN: $file - checked_ref ${ref:0:12} not found (stale marker?)"
+			drift=1
+			continue
+		fi
+		if ! git -C "$HESTIARE_DIR" diff --quiet "$ref".."$UPSTREAM_REF" -- "$upath"; then
+			echo "    DRIFT: upstream moved $upath since ${ref:0:12}"
+			echo "           → re-verify $file, then bump its checked_ref in CODEMAP.json"
+			drift=1
+		fi
+	done < <(jq -r '.upstream_provenance.drift_watch.files
                   | to_entries[]
                   | [.key, .value.upstream_path, .value.checked_ref] | @tsv' "$CODEMAP")
-  [ "$drift" = 0 ] && echo "    No drift - all watched files current with upstream."
+	[ "$drift" = 0 ] && echo "    No drift - all watched files current with upstream."
 fi
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -112,16 +112,16 @@ git fetch --tags --quiet
 VENDORED_FILE="$HESTIARE_DIR/web/inc/lib/quoteshellarg.php"
 
 if [ ! -f "$VENDORED_FILE" ]; then
-  echo "    ERROR: $VENDORED_FILE not found - check HESTIARE_DIR or file path."
-  exit 1
+	echo "    ERROR: $VENDORED_FILE not found - check HESTIARE_DIR or file path."
+	exit 1
 fi
 
 CURRENT_VENDORED_TAG=$(grep -oP 'Upstream version:\s*\K\S+' "$VENDORED_FILE" || true)
 
 if [ -z "$CURRENT_VENDORED_TAG" ]; then
-  echo "    ERROR: could not find 'Upstream version:' line in $VENDORED_FILE"
-  echo "    Add a header comment like: // Upstream version: v1.1.0"
-  exit 1
+	echo "    ERROR: could not find 'Upstream version:' line in $VENDORED_FILE"
+	echo "    Add a header comment like: // Upstream version: v1.1.0"
+	exit 1
 fi
 
 echo "    Currently vendored version (read from file header): $CURRENT_VENDORED_TAG"
@@ -130,21 +130,21 @@ echo "    Currently vendored version (read from file header): $CURRENT_VENDORED_
 LATEST_UPSTREAM_TAG=$(git tag --sort=-v:refname | head -n1)
 
 if [ "$LATEST_UPSTREAM_TAG" = "$CURRENT_VENDORED_TAG" ]; then
-  echo "    No new release. Vendored version ($CURRENT_VENDORED_TAG) is current."
+	echo "    No new release. Vendored version ($CURRENT_VENDORED_TAG) is current."
 else
-  echo "    NEW RELEASE AVAILABLE: $LATEST_UPSTREAM_TAG (vendored: $CURRENT_VENDORED_TAG)"
-  echo ""
-  echo "==> Changes between $CURRENT_VENDORED_TAG and $LATEST_UPSTREAM_TAG:"
-  git log --oneline "${CURRENT_VENDORED_TAG}..${LATEST_UPSTREAM_TAG}"
-  echo ""
-  echo "==> Changed files:"
-  git diff --name-only "$CURRENT_VENDORED_TAG" "$LATEST_UPSTREAM_TAG"
-  echo ""
-  echo "    ACTION NEEDED: review the diff above, then if it's safe to take:"
-  echo "    1. Update web/inc/lib/quoteshellarg.php with the new version"
-  echo "    2. Update the 'Upstream version:' line in that file's header to $LATEST_UPSTREAM_TAG"
-  echo "       (this script reads the version from there - no separate value to maintain)"
-  echo "    3. Update upstream/phpquoteshellarg snapshot branch (see below)"
+	echo "    NEW RELEASE AVAILABLE: $LATEST_UPSTREAM_TAG (vendored: $CURRENT_VENDORED_TAG)"
+	echo ""
+	echo "==> Changes between $CURRENT_VENDORED_TAG and $LATEST_UPSTREAM_TAG:"
+	git log --oneline "${CURRENT_VENDORED_TAG}..${LATEST_UPSTREAM_TAG}"
+	echo ""
+	echo "==> Changed files:"
+	git diff --name-only "$CURRENT_VENDORED_TAG" "$LATEST_UPSTREAM_TAG"
+	echo ""
+	echo "    ACTION NEEDED: review the diff above, then if it's safe to take:"
+	echo "    1. Update web/inc/lib/quoteshellarg.php with the new version"
+	echo "    2. Update the 'Upstream version:' line in that file's header to $LATEST_UPSTREAM_TAG"
+	echo "       (this script reads the version from there - no separate value to maintain)"
+	echo "    3. Update upstream/phpquoteshellarg snapshot branch (see below)"
 fi
 
 # ── 2.1 Update upstream/phpquoteshellarg snapshot branch ────────────────────
@@ -154,18 +154,18 @@ fi
 # changes.
 
 if [ "$LATEST_UPSTREAM_TAG" != "$CURRENT_VENDORED_TAG" ]; then
-  echo ""
-  echo "==> Updating upstream/phpquoteshellarg snapshot to $LATEST_UPSTREAM_TAG..."
-  cd "$HESTIARE_DIR"
-  git checkout upstream/phpquoteshellarg
-  git rm -rf .
-  git archive --remote="$PHPQUOTESHELLARG_DIR" "$LATEST_UPSTREAM_TAG" | tar -x
-  git add -A
-  git commit -m "upstream: phpquoteshellarg snapshot $LATEST_UPSTREAM_TAG ($(date +%Y-%m-%d))"
-  git push origin upstream/phpquoteshellarg
-  git checkout dev
-  echo "    Snapshot updated. Manual review and integration into"
-  echo "    web/inc/lib/quoteshellarg.php is still required (not automatic)."
+	echo ""
+	echo "==> Updating upstream/phpquoteshellarg snapshot to $LATEST_UPSTREAM_TAG..."
+	cd "$HESTIARE_DIR"
+	git checkout upstream/phpquoteshellarg
+	git rm -rf .
+	git archive --remote="$PHPQUOTESHELLARG_DIR" "$LATEST_UPSTREAM_TAG" | tar -x
+	git add -A
+	git commit -m "upstream: phpquoteshellarg snapshot $LATEST_UPSTREAM_TAG ($(date +%Y-%m-%d))"
+	git push origin upstream/phpquoteshellarg
+	git checkout dev
+	echo "    Snapshot updated. Manual review and integration into"
+	echo "    web/inc/lib/quoteshellarg.php is still required (not automatic)."
 fi
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -193,6 +193,6 @@ git pull origin dev
 echo ""
 echo "==> Checking vendored web assets (VENDORED.json vs upstream)..."
 if ! "$HESTIARE_DIR/share/upstream/update-web-vendor.sh" --check; then
-  echo "    WARNING: web-vendor check failed (network/API?) - re-run manually:"
-  echo "    $HESTIARE_DIR/share/upstream/update-web-vendor.sh --check"
+	echo "    WARNING: web-vendor check failed (network/API?) - re-run manually:"
+	echo "    $HESTIARE_DIR/share/upstream/update-web-vendor.sh --check"
 fi
