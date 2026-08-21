@@ -32,7 +32,10 @@ CODE_DIR="/usr/share/filemanager/fm"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-[ "$(id -u)" = '0' ] || { echo "ERROR: h-add-user-filemanager must be run as root"; exit 10; }
+[ "$(id -u)" = '0' ] || {
+	echo "ERROR: h-add-user-filemanager must be run as root"
+	exit 10
+}
 check_hestia_demo_mode
 is_format_valid 'user'
 
@@ -53,9 +56,13 @@ pool="/etc/php/$ver/fpm/pool.d/fm-$user.conf"
 
 # FM front: nginx if it fronts the stack (nginx-only or nginx+apache), else apache
 if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
-	fm_web='nginx'; vhost="/etc/nginx/conf.d/fm-$user.conf"; tpl='nginx'
+	fm_web='nginx'
+	vhost="/etc/nginx/conf.d/fm-$user.conf"
+	tpl='nginx'
 else
-	fm_web='apache2'; vhost="/etc/apache2/conf.d/fm-$user.conf"; tpl='apache'
+	fm_web='apache2'
+	vhost="/etc/apache2/conf.d/fm-$user.conf"
+	tpl='apache'
 fi
 
 # Customer-owned session/upload dir (the one the web pool uses; persists over reboot)
@@ -72,7 +79,10 @@ systemctl reload "php$ver-fpm" 2> /dev/null || systemctl restart "php$ver-fpm" 2
 # after the reload, and fm-auth's enabled-gate IS that socket — so a click that
 # immediately follows enabling would otherwise race a 403 ("not enabled yet").
 sock="/run/hestia/fm/$user.sock"
-for _ in $(seq 1 50); do [ -S "$sock" ] && break; sleep 0.1; done
+for _ in $(seq 1 50); do
+	[ -S "$sock" ] && break
+	sleep 0.1
+done
 # Fail loudly if it never showed (php$ver-fpm reload failed / bad pool): returning
 # OK here would leave FILE_MANAGER='yes' with a dead listener that always 403s. Bail
 # BEFORE the vhost + flag are written, so a failed enable is a clean no-op.

@@ -63,9 +63,18 @@ accept_web_template() {
 	# A role this model does not have carries no template - pass the stored value through
 	# untouched, the same gating the validators use
 	case "$role" in
-		web) [ -n "$WEB_SYSTEM" ] || { echo "$value -"; return 0; } ;;
-		proxy) [ -n "$PROXY_SYSTEM" ] || { echo "$value -"; return 0; } ;;
-		backend) [ -n "$WEB_BACKEND" ] || { echo "$value -"; return 0; } ;;
+		web) [ -n "$WEB_SYSTEM" ] || {
+			echo "$value -"
+			return 0
+		} ;;
+		proxy) [ -n "$PROXY_SYSTEM" ] || {
+			echo "$value -"
+			return 0
+		} ;;
+		backend) [ -n "$WEB_BACKEND" ] || {
+			echo "$value -"
+			return 0
+		} ;;
 	esac
 	case "$role" in
 		web) file=$(web_template_file "$WEB_SYSTEM" "$value" 'tpl') ;;
@@ -1065,7 +1074,10 @@ is_base_domain_owner() {
 				if [ -n "$web" ]; then
 					# Subshell: this is the PARENT's record - parsed in place, its keys (SSL, ...)
 					# leaked into the caller's vhost rendering. Only ALLOW_USERS leaves this line.
-					allow_users=$(parse_object_kv_list "$web" 2> /dev/null; echo "${ALLOW_USERS:-}")
+					allow_users=$(
+						parse_object_kv_list "$web" 2> /dev/null
+						echo "${ALLOW_USERS:-}"
+					)
 					if [ "$allow_users" != "yes" ]; then
 						# an existing $basedomain is fine as long as the current user owns it
 						check=$(is_domain_new "" $basedomain)

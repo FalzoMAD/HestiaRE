@@ -46,7 +46,10 @@ check_hestia_demo_mode
 
 case "$level" in
 	off | lenient | strict) ;;
-	*) echo "Error: LEVEL must be off, lenient or strict"; exit "$E_INVALID" ;;
+	*)
+		echo "Error: LEVEL must be off, lenient or strict"
+		exit "$E_INVALID"
+		;;
 esac
 
 # family must exist in the system conf (get_object_value takes the object base, appends .conf)

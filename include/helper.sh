@@ -31,8 +31,8 @@ _hestia_spin_start() {
 
 _hestia_spin_stop() {
 	[ -n "$_hestia_spin_pid" ] || return 0
-	kill "$_hestia_spin_pid" 2>/dev/null || true
-	wait "$_hestia_spin_pid" 2>/dev/null || true
+	kill "$_hestia_spin_pid" 2> /dev/null || true
+	wait "$_hestia_spin_pid" 2> /dev/null || true
 	printf '\r\033[K' >&2
 	_hestia_spin_pid=""
 }
@@ -114,21 +114,34 @@ apt_auto_units_restore() {
 # Usage: add_sury_repo <codename>
 add_sury_repo() {
 	local codename="$1"
-	[ -n "$codename" ] || { echo "ERROR: add_sury_repo: codename missing" >&2; return 1; }
+	[ -n "$codename" ] || {
+		echo "ERROR: add_sury_repo: codename missing" >&2
+		return 1
+	}
 	local arch keyring list
-	arch="$(dpkg --print-architecture 2>/dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+	arch="$(dpkg --print-architecture 2> /dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 	keyring="/usr/share/keyrings/sury-keyring.gpg"
 	list="/etc/apt/sources.list.d/php.list"
 	# drop any legacy/foreign Sury definition that would conflict on Signed-By
 	rm -f /etc/apt/sources.list.d/sury-php.list /etc/apt/trusted.gpg.d/sury-php.gpg
 	if [ ! -s "$keyring" ]; then
 		curl -fsSL https://packages.sury.org/php/apt.gpg -o /tmp/sury_apt.gpg \
-			|| { echo "ERROR: failed to download Sury PHP signing key" >&2; return 1; }
+			|| {
+				echo "ERROR: failed to download Sury PHP signing key" >&2
+				return 1
+			}
 		gpg --dearmor < /tmp/sury_apt.gpg > "$keyring" \
-			|| { echo "ERROR: failed to dearmor Sury PHP signing key" >&2; rm -f /tmp/sury_apt.gpg; return 1; }
+			|| {
+				echo "ERROR: failed to dearmor Sury PHP signing key" >&2
+				rm -f /tmp/sury_apt.gpg
+				return 1
+			}
 		rm -f /tmp/sury_apt.gpg
 	fi
-	[ -s "$keyring" ] || { echo "ERROR: Sury keyring empty" >&2; return 1; }
+	[ -s "$keyring" ] || {
+		echo "ERROR: Sury keyring empty" >&2
+		return 1
+	}
 	printf 'deb [arch=%s signed-by=%s] https://packages.sury.org/php/ %s main\n' \
 		"$arch" "$keyring" "$codename" > "$list"
 }
@@ -138,25 +151,35 @@ add_sury_repo() {
 load_os_profile() {
 	case "$1" in
 		debian-bookworm)
-			OS_ID="debian"; CODENAME="bookworm"; RELEASE="12"
+			OS_ID="debian"
+			CODENAME="bookworm"
+			RELEASE="12"
 			EXIM_USR="Debian-exim"
 			BASE_PKGS_EXTRA="libmail-dkim-perl unrar-free"
 			;;
 		debian-trixie)
-			OS_ID="debian"; CODENAME="trixie"; RELEASE="13"
+			OS_ID="debian"
+			CODENAME="trixie"
+			RELEASE="13"
 			EXIM_USR="Debian-exim"
 			BASE_PKGS_EXTRA="libmail-dkim-perl unrar-free"
 			;;
 		ubuntu-noble)
-			OS_ID="ubuntu"; CODENAME="noble"; RELEASE="24"
+			OS_ID="ubuntu"
+			CODENAME="noble"
+			RELEASE="24"
 			EXIM_USR="Debian-exim"
 			# libzip4t64: t64 transition renamed libzip4 on 24.04
 			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip4t64 apparmor-utils"
 			;;
 		ubuntu-26lts)
 			# TODO: pin the official 26.04 codename; until then read it at runtime
-			OS_ID="ubuntu"; RELEASE="26"
-			CODENAME="$(. /etc/os-release 2>/dev/null; echo "${VERSION_CODENAME:-}")"
+			OS_ID="ubuntu"
+			RELEASE="26"
+			CODENAME="$(
+				. /etc/os-release 2> /dev/null
+				echo "${VERSION_CODENAME:-}"
+			)"
 			EXIM_USR="Debian-exim"
 			# 26.04 ships libzip5; libzip4/libzip4t64 do not exist here at all
 			BASE_PKGS_EXTRA="libmail-dkim-perl libonig5 libzip5 apparmor-utils"
@@ -166,7 +189,10 @@ load_os_profile() {
 			return 1
 			;;
 	esac
-	[ -n "$CODENAME" ] || { echo "ERROR: could not determine codename for '$1'" >&2; return 1; }
+	[ -n "$CODENAME" ] || {
+		echo "ERROR: could not determine codename for '$1'" >&2
+		return 1
+	}
 }
 
 # ── seed /etc/hestia ────────────────────────────────────────────────────────
@@ -182,7 +208,7 @@ seed_hestia_etc() {
 		admin="${HESTIA_ADMIN:-admin}"
 		port="${HESTIA_PANEL_PORT:-8083}"
 	fi
-	version=$(cat "$hestia_root/VERSION" 2>/dev/null || echo "dev")
+	version=$(cat "$hestia_root/VERSION" 2> /dev/null || echo "dev")
 
 	mkdir -p /etc/hestia
 	# if-form for the local.conf include so the file's last statement returns 0
@@ -205,7 +231,7 @@ seed_hestia_etc() {
 	mkdir -p "$conf_dir"
 	if [ ! -L "$hestia_root/conf" ]; then
 		if [ -d "$hestia_root/conf" ]; then
-			cp -an "$hestia_root/conf/." "$conf_dir/" 2>/dev/null || true
+			cp -an "$hestia_root/conf/." "$conf_dir/" 2> /dev/null || true
 			rm -rf "$hestia_root/conf"
 		fi
 		ln -sfn "$conf_dir" "$hestia_root/conf"
@@ -214,24 +240,24 @@ seed_hestia_etc() {
 	touch "$conf_dir/hestia.conf"
 	chmod 660 "$conf_dir/hestia.conf"
 	_wcv() { echo "$1='$2'" >> "$conf_dir/hestia.conf"; }
-	_wcv "BACKEND_PORT"             "$port"
-	_wcv "CRON_SYSTEM"              "cron"
-	_wcv "DISK_QUOTA"               "no"
-	_wcv "RESOURCES_LIMIT"          "no"
-	_wcv "BACKUP_SYSTEM"            "local"
-	_wcv "BACKUP_GZIP"              "4"
-	_wcv "BACKUP_MODE"              "zstd"
-	_wcv "LANGUAGE"                 "en"
-	_wcv "LOGIN_STYLE"              "default"
-	_wcv "THEME"                    "dark"
+	_wcv "BACKEND_PORT" "$port"
+	_wcv "CRON_SYSTEM" "cron"
+	_wcv "DISK_QUOTA" "no"
+	_wcv "RESOURCES_LIMIT" "no"
+	_wcv "BACKUP_SYSTEM" "local"
+	_wcv "BACKUP_GZIP" "4"
+	_wcv "BACKUP_MODE" "zstd"
+	_wcv "LANGUAGE" "en"
+	_wcv "LOGIN_STYLE" "default"
+	_wcv "THEME" "dark"
 	_wcv "INACTIVE_SESSION_TIMEOUT" "60"
-	_wcv "VERSION"                  "$version"
-	_wcv "RELEASE_BRANCH"           "release"
-	_wcv "UPGRADE_SEND_EMAIL"       "true"
-	_wcv "UPGRADE_SEND_EMAIL_LOG"   "false"
-	_wcv "ROOT_USER"                "$admin"
+	_wcv "VERSION" "$version"
+	_wcv "RELEASE_BRANCH" "release"
+	_wcv "UPGRADE_SEND_EMAIL" "true"
+	_wcv "UPGRADE_SEND_EMAIL_LOG" "false"
+	_wcv "ROOT_USER" "$admin"
 	# seed DB_SYSTEM empty - it is composed from registered hosts by h-add-database-host
-	_wcv "DB_SYSTEM"                ""
+	_wcv "DB_SYSTEM" ""
 	unset -f _wcv
 }
 
@@ -246,7 +272,10 @@ deploy_hestia_sudoers() {
 	[ -f "$root/share/hestia/sudoers" ] && [ -d /etc/sudoers.d ] || return 0
 	local suppressed="no" dropped="no"
 	tmp=$(mktemp)
-	{ printf 'Defaults:hestia !log_allowed\n'; cat "$root/share/hestia/sudoers"; } > "$tmp"
+	{
+		printf 'Defaults:hestia !log_allowed\n'
+		cat "$root/share/hestia/sudoers"
+	} > "$tmp"
 	if visudo -c -f "$tmp" > /dev/null 2>&1; then
 		suppressed="yes"
 	else
@@ -349,7 +378,10 @@ proc_hardening_apply() {
 
 	getent group "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 \
 		|| groupadd --system "$PROC_VISIBLE_GROUP" > /dev/null 2>&1 \
-		|| { echo "Warning: cannot create group $PROC_VISIBLE_GROUP - skipping /proc hardening" >&2; return 1; }
+		|| {
+			echo "Warning: cannot create group $PROC_VISIBLE_GROUP - skipping /proc hardening" >&2
+			return 1
+		}
 
 	# Mirrors what the unit does at every boot. gid=0 when the group is gone: a remount
 	# that merely omits gid keeps the previous value, so this is what actually withdraws
@@ -372,7 +404,10 @@ proc_hardening_apply() {
 
 	# Installed verbatim: the unit resolves the gid itself on every start, so there is
 	# nothing host-specific to substitute and nothing to go stale.
-	[ -f "$src" ] || { echo "Warning: $src missing - hidepid applied live, not persisted" >&2; return 1; }
+	[ -f "$src" ] || {
+		echo "Warning: $src missing - hidepid applied live, not persisted" >&2
+		return 1
+	}
 	install -m 644 "$src" "$dst" || return 1
 	systemctl daemon-reload
 	systemctl enable "$PROC_HARDENING_UNIT" > /dev/null 2>&1

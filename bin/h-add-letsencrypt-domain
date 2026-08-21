@@ -104,7 +104,6 @@ if [ -n "$mail" ]; then
 	is_boolean_format_valid "$mail" 'mail'
 fi
 
-
 if [ -z "$mail" ] || [ "$mail" = 'no' ]; then
 	mail=''
 	is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
@@ -270,69 +269,69 @@ for auth in $authz; do
 
 	# Accepting challenge / STEP 4
 	if [ -z "$mail" ]; then
-			if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
-				conf="$HOMEDIR/$user/conf/web/$domain/nginx.conf_letsencrypt"
-				sconf="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_letsencrypt"
-				echo 'location ~ "^/\.well-known/acme-challenge/(.*)$" {' \
-					> $conf
-				echo '    default_type text/plain;' >> $conf
-				printf '    return 200 "$1.%s";\n' "$THUMB" >> $conf
-				echo '}' >> $conf
-				if [ ! -e "$sconf" ]; then
-					ln -s "$conf" "$sconf"
-				fi
-				if [ -n "$PROXY_SYSTEM" ]; then
-					$BIN/h-restart-proxy
-					check_result $? "Proxy restart failed" > /dev/null
-				fi
-			else
-				# Get root directory from configuration
-				domain_config="$HOMEDIR/$user/conf/web/$domain"
-				if [ -f "$domain_config/apache2.conf" ]; then
-					well_known="$(cat $domain_config/apache2.conf | egrep \
-						'^\s+DocumentRoot' | awk '{split($0, a, " "); \
+		if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
+			conf="$HOMEDIR/$user/conf/web/$domain/nginx.conf_letsencrypt"
+			sconf="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_letsencrypt"
+			echo 'location ~ "^/\.well-known/acme-challenge/(.*)$" {' \
+				> $conf
+			echo '    default_type text/plain;' >> $conf
+			printf '    return 200 "$1.%s";\n' "$THUMB" >> $conf
+			echo '}' >> $conf
+			if [ ! -e "$sconf" ]; then
+				ln -s "$conf" "$sconf"
+			fi
+			if [ -n "$PROXY_SYSTEM" ]; then
+				$BIN/h-restart-proxy
+				check_result $? "Proxy restart failed" > /dev/null
+			fi
+		else
+			# Get root directory from configuration
+			domain_config="$HOMEDIR/$user/conf/web/$domain"
+			if [ -f "$domain_config/apache2.conf" ]; then
+				well_known="$(cat $domain_config/apache2.conf | egrep \
+					'^\s+DocumentRoot' | awk '{split($0, a, " "); \
                                 print a[2]}')/.well-known"
-				else
-					well_known="$(cat $domain_config/nginx.conf | egrep '^\s+root' \
-						| awk '{split($0, a, " "); print a[2]}' \
-						| sed 's/;$//')/.well-known"
-				fi
+			else
+				well_known="$(cat $domain_config/nginx.conf | egrep '^\s+root' \
+					| awk '{split($0, a, " "); print a[2]}' \
+					| sed 's/;$//')/.well-known"
+			fi
+			acme_challenge="$well_known/acme-challenge"
+			mkdir -p $acme_challenge
+			echo "$token.$THUMB" > $acme_challenge/$token
+			chown -R $user:$user $well_known
+		fi
+	else
+		if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
+			conf="$HOMEDIR/$user/conf/mail/$root_domain/nginx.conf_letsencrypt"
+			sconf="$HOMEDIR/$user/conf/mail/$root_domain/nginx.ssl.conf_letsencrypt"
+			echo 'location ~ "^/\.well-known/acme-challenge/(.*)$" {' \
+				> $conf
+			echo '    default_type text/plain;' >> $conf
+			printf '    return 200 "$1.%s";\n' "$THUMB" >> $conf
+			echo '}' >> $conf
+			if [ ! -e "$sconf" ]; then
+				ln -s "$conf" "$sconf"
+			fi
+			if [ -n "$PROXY_SYSTEM" ]; then
+				$BIN/h-restart-proxy
+				check_result $? "Proxy restart failed" > /dev/null
+			fi
+		else
+			get_object_value 'mail' 'DOMAIN' "$root_domain" "WEBMAIL"
+			if [ -n "$WEBMAIL" ]; then
+				well_known="/var/lib/$WEBMAIL/.well-known"
 				acme_challenge="$well_known/acme-challenge"
 				mkdir -p $acme_challenge
 				echo "$token.$THUMB" > $acme_challenge/$token
 				chown -R $user:$user $well_known
 			fi
-		else
-			if [ "$WEB_SYSTEM" = 'nginx' ] || [ "$PROXY_SYSTEM" = 'nginx' ]; then
-				conf="$HOMEDIR/$user/conf/mail/$root_domain/nginx.conf_letsencrypt"
-				sconf="$HOMEDIR/$user/conf/mail/$root_domain/nginx.ssl.conf_letsencrypt"
-				echo 'location ~ "^/\.well-known/acme-challenge/(.*)$" {' \
-					> $conf
-				echo '    default_type text/plain;' >> $conf
-				printf '    return 200 "$1.%s";\n' "$THUMB" >> $conf
-				echo '}' >> $conf
-				if [ ! -e "$sconf" ]; then
-					ln -s "$conf" "$sconf"
-				fi
-				if [ -n "$PROXY_SYSTEM" ]; then
-					$BIN/h-restart-proxy
-					check_result $? "Proxy restart failed" > /dev/null
-				fi
-			else
-				get_object_value 'mail' 'DOMAIN' "$root_domain" "WEBMAIL"
-				if [ -n "$WEBMAIL" ]; then
-					well_known="/var/lib/$WEBMAIL/.well-known"
-					acme_challenge="$well_known/acme-challenge"
-					mkdir -p $acme_challenge
-					echo "$token.$THUMB" > $acme_challenge/$token
-					chown -R $user:$user $well_known
-				fi
-			fi
 		fi
-		if [ "$WEB_SYSTEM" = 'nginx' ]; then
-			$BIN/h-restart-web
-			check_result $? "Web restart failed" > /dev/null
-		fi
+	fi
+	if [ "$WEB_SYSTEM" = 'nginx' ]; then
+		$BIN/h-restart-web
+		check_result $? "Web restart failed" > /dev/null
+	fi
 
 	# Requesting ACME validation / STEP 5
 	validation_check=$(echo "$answer" | grep '"valid"')

@@ -168,19 +168,26 @@ else
 	fi
 
 	# The exemption above hides the set it skips, so judge it by size: shrink yes, grow no. Says
-	# nothing about formatting inside an exempt file. An unreadable base counts 0, so it fails closed.
+	# nothing about formatting inside an exempt file. Both sides also report how many files they
+	# looked at, because a side that read nothing counts 0 debt - and zero debt is the expected
+	# result here, so the degenerate run would be indistinguishable from the good one.
 	debt_now=0
 	for f in "${ALL_FILES[@]}"; do
 		shfmt "${FMT[@]}" -d "$f" > /dev/null 2>&1 || debt_now=$((debt_now + 1))
 	done
 	debt_base=0
+	seen_base=0
 	while read -r f; do
 		is_shell "$f" || continue
+		seen_base=$((seen_base + 1))
 		git show "$BASE:$f" 2> /dev/null | shfmt "${FMT[@]}" -d - > /dev/null 2>&1 || debt_base=$((debt_base + 1))
 	done < <(git ls-tree -r --name-only "$BASE" 2> /dev/null)
 
-	echo "== shfmt debt (whole tree): $debt_now, base $debt_base =="
-	if [ "$debt_now" -gt "$debt_base" ]; then
+	echo "== shfmt debt (whole tree): $debt_now of ${#ALL_FILES[@]}, base $debt_base of $seen_base =="
+	if [ "${#ALL_FILES[@]}" -eq 0 ] || [ "$seen_base" -eq 0 ]; then
+		echo "   FAILED - a side measured no files at all, so its count carries no verdict."
+		rc=1
+	elif [ "$debt_now" -gt "$debt_base" ]; then
 		echo "   FAILED - the exempt set grew by $((debt_now - debt_base)). Apply with: shfmt -w <file>"
 		rc=1
 	elif [ "$debt_now" -eq 0 ]; then

@@ -67,7 +67,10 @@ systemctl start "postgresql@${PG_MAJOR}-main" > /dev/null 2>&1 \
 	|| systemctl start postgresql > /dev/null 2>&1 || true
 _ready=0
 for _ in $(seq 1 15); do
-	pg_isready -q 2> /dev/null && { _ready=1; break; }
+	pg_isready -q 2> /dev/null && {
+		_ready=1
+		break
+	}
 	sleep 1
 done
 if [ "$_ready" != 1 ]; then

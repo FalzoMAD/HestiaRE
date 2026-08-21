@@ -121,7 +121,10 @@ set_install_component ADDON_PROFTPD true
 # fail2ban), so re-arm it now the daemon and its log exist. Ensure the file first, or the jail's reload
 # would prune it straight back if proftpd has not written yet.
 if [ -n "$FIREWALL_EXTENSION" ] && [ -f "$HESTIA/include/fail2ban.sh" ]; then
-	[ -e /var/log/proftpd/proftpd.log ] || { mkdir -p /var/log/proftpd; touch /var/log/proftpd/proftpd.log; }
+	[ -e /var/log/proftpd/proftpd.log ] || {
+		mkdir -p /var/log/proftpd
+		touch /var/log/proftpd/proftpd.log
+	}
 	# shellcheck source=/usr/local/hestia/include/fail2ban.sh
 	source "$HESTIA/include/fail2ban.sh"
 	fail2ban_rearm_jail proftpd-iptables

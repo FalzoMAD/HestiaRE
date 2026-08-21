@@ -96,7 +96,7 @@ apt-get -y -qq purge clamav clamav-daemon clamav-freshclam > /dev/null 2>&1
 restore_clamav_db
 trap - EXIT
 if [ "${PURGE_DATA:-}" = "yes" ]; then
-	rm -rf /var/lib/clamav   # drop the empty dir the purge leaves behind
+	rm -rf /var/lib/clamav # drop the empty dir the purge leaves behind
 	echo "[ * ] PURGE_DATA=yes — virus DB removed with the purge."
 fi
 
