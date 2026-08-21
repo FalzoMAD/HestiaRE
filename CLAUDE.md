@@ -243,6 +243,14 @@ prefer deciding by content over deciding by path, since a rename silently change
 an empty or zero reference set fail rather than pass. State in the guard's comment what it does
 **not** cover, so a three-quarter guard is not mistaken for a whole one.
 
+**A checker that reports "nothing to check" is a suspicion, not a pass.** Three times now the symptom
+was identical - a green line that meant nothing had been looked at: the shfmt gate comparing against
+a base it never read, the shell gate answering a change to the installer with "no changed shell
+files" because `sbin/` was outside its predicate, and a smoke probe counting 31 untouched files from
+a trace that never ran. Where a checker can legitimately have nothing to do, it must say how much it
+looked at, and a run that looked at nothing must fail. Where a second hand-kept list describes the
+same surface, something has to hold the two together - a list nobody measures is the next gap.
+
 ### Every negative proof needs a positive control in the same run
 
 **Showing that something does NOT happen is worthless without showing that something CAN happen.**
