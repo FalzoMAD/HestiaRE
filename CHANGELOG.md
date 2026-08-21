@@ -14,6 +14,21 @@ opens above it.
 
 ### Added
 
+- **Differential backups** (#712, stage 2). A customer set to `BACKUPS_MODE='diff'` gets an archive
+  whose web and mail members carry only what changed against the newest full archive; everything
+  else - records, databases, home entries, the map - stays whole, so listing, probe, report and
+  preflight need the base for nothing. Members are built whole first and rebuilt from that, never
+  from the live tree: the map was derived from the member, so nothing the tree does in between can
+  make it lie. A member the base never had, or one whose diff would not save at least half, stays
+  whole and says so. Restoring reads the archive directly - two passes, the base filtered to what
+  both maps still agree on, then the diff over it. A path deleted since the base is in neither list
+  and is simply never written. Measured on a real tree: a 189 KB member became 233 bytes, and the
+  restored tree matched the state at diff time exactly, including the deletion, a mode-only change
+  and a retargeted symlink; restoring the base instead reproduces the base state, so the check can
+  tell the two apart.
+- **`h-restore-user` refuses a differential archive whose base is missing** (#712), before the first
+  write rather than at the third member.
+
 - **Every backup now carries a content map** (#712, stage 1). One record per entry - path, BLAKE3
   hash, mode, owner, symlink target - over the two member types a later run can diff against, web
   and mail. Paths, types, modes and owners are read OUT of the finished members - web excludes by

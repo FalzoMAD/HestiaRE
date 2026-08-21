@@ -1488,11 +1488,12 @@ backup_map_member() {
 				}
 				h = ""
 				if (typ == "-" || typ == "h") h = hash[rest]
-				# tar writes "./x" for a tree given as "." and "x" for one given by name - the two
-				# member types differ there, so the leading "./" goes and both read alike.
-				sub(/^\.\//, "", rest)
-				sub(/\/$/, "", rest)
-				printf "%s/%s%c%s%c%s%c%s:%s%c%s%c", pre, rest, 0, h, 0, octal($1), 0, o[1], o[2], 0, target, 0
+				# The name is kept EXACTLY as the archive stores it, "./" and trailing slash and
+				# all: -T matches stored names literally, so a normalised path would select nothing
+				# when the diff is built - and the hash table keys carry the same form, find and
+				# tar walk the same roots. Cosmetics happen in the lister, not here.
+				# (No apostrophe anywhere in this block - it would close the awk program.)
+				printf "%s|%s%c%s%c%s%c%s:%s%c%s%c", pre, rest, 0, h, 0, octal($1), 0, o[1], o[2], 0, target, 0
 			}
 			$0 !~ /^[-dlbcpshD]/ { bad++ }
 			END {
@@ -1550,4 +1551,215 @@ backup_map_prune() {
 		# Literal and anchored - the name holds dots, and grep would read them as a pattern.
 		sed -n "s/^BACKUP='\([^']*\)'.*/\1/p" "$_conf" 2> /dev/null | grep -qxF -- "$_name" || rm -f "$_f"
 	done
+}
+
+# ── Differential members (#712 stage 2) ──────────────────────────────────────────────────────────
+#
+# The map is always the FULL one, whatever the member turned out to be: a diff without a complete
+# map cannot express a deletion, and deletions are the half of the roundtrip that a restore which
+# only adds would still pass. So the member is built whole first, its map derived from it, and only
+# then rebuilt as a diff against the base - build, measure, decide, exactly as the threshold does.
+#
+# RS="\0" is used to walk the records; verified on mawk (deb12) as well as gawk (the other three).
+BACKUP_MAP_FIELDS=5
+
+# backup_map_changed BASEMAP CURMAP PREFIX - the in-member paths that are new or differ, NUL-list.
+# Compared over the WHOLE record, not the hash alone: a chmod or chown leaves the content untouched,
+# and comparing hashes only would leave the old mode to be restored over the new one.
+backup_map_changed() {
+	awk -v base="$1" -v pre="$3|" '
+		BEGIN { RS = "\0"; ORS = "" }
+		{
+			i = (FNR - 1) % 5
+			if (i == 0) p = $0
+			else if (i == 1) h = $0
+			else if (i == 2) m = $0
+			else if (i == 3) o = $0
+			else {
+				v = h "\x01" m "\x01" o "\x01" $0
+				if (FILENAME == base) { B[p] = v; next }
+				if (index(p, pre) != 1) next
+				inpath = substr(p, length(pre) + 1)
+				if (!(p in B) || B[p] != v) print inpath "\0"
+			}
+		}' "$1" "$2"
+}
+
+# backup_map_keep BASEMAP CURMAP PREFIX SKIPLIST - what the FIRST extraction pass writes: the paths
+# present in both maps, minus the ones the diff member carries anyway. A path deleted since the base
+# is in neither list and is therefore never written - which is how a deletion survives the restore.
+#
+# The subtraction is an economy, not a correctness condition: a path that slips through is written
+# from the base and overwritten by the diff. Double work, right result.
+backup_map_keep() {
+	awk -v base="$1" -v pre="$3|" -v skip="$4" '
+		BEGIN {
+			# The skip list is read BEFORE RS changes: getline from a file uses RS too, and with RS
+			# already at NUL the whole newline-separated listing arrives as one single key.
+			if (skip != "") { while ((getline line < skip) > 0) S[line] = 1 }
+			RS = "\0"; ORS = ""
+		}
+		{
+			i = (FNR - 1) % 5
+			if (i == 0) p = $0
+			else if (i > 0 && i < 4) next
+			else {
+				if (FILENAME == base) { B[p] = 1; next }
+				if (!(p in B)) next
+				if (index(p, pre) != 1) next
+				inpath = substr(p, length(pre) + 1)
+				if (inpath in S) next
+				print inpath "\0"
+			}
+		}' "$1" "$2"
+}
+
+# backup_diff_base BACKUPCONF MAPDIR - the newest archive that can serve as a base: it must still be
+# listed, must not be adopted (an adopted archive is the operator's own file and carries no map),
+# and its local map must be readable. Anything else is not a base, and a run that finds none writes
+# a full archive rather than a diff against nothing.
+backup_diff_base() {
+	local _conf="$1" _dir="$2" _name
+	[ -f "$_conf" ] || return 1
+	while read -r _name; do
+		[ -n "$_name" ] || continue
+		grep -q "BACKUP='$_name'.*ADOPTED='yes'" "$_conf" && continue
+		# Only a FULL archive is a base. Chaining a diff onto a diff would make a restore depend on
+		# a whole chain, and the plan buys none of that: one full, and the diffs hanging off it.
+		grep -q "BACKUP='$_name'.*MODE='diff'" "$_conf" && continue
+		[ -f "$BACKUP/$_name" ] || continue
+		[ -s "$_dir/$_name.map.zst" ] || continue
+		echo "$_name"
+		return 0
+	done < <(sed -n "s/^BACKUP='\([^']*\)'.*/\1/p" "$_conf" | sort -r)
+	return 1
+}
+
+# Per-member threshold: a diff that saves less than this is not worth the dependency on a base.
+BACKUP_DIFF_MEMBER_PCT=50
+
+# backup_diff_build TMPDIR BASEMAP CURMAP BASE - rebuild what is worth rebuilding, and record what
+# each member ended up as. Members are rebuilt FROM the full member, not from the live tree: the map
+# was derived from that member, so anything the tree does in the meantime cannot make the map lie.
+backup_diff_build() {
+	local _tmp="$1" _bm="$2" _cur="$3" _base="$4"
+	local _d _pre _arc _out _opt _list _work _sz_full _sz_diff _kind _basehits
+	local -a _codec
+	: > "$_tmp/$BACKUP_CONTAINER/backup.members"
+	for _d in "$_tmp"/web/*/ "$_tmp"/mail/*/; do
+		[ -d "$_d" ] || continue
+		case "$_d" in
+			*/web/*) _pre="web/$(basename "$_d")" ;;
+			*/mail/*) _pre="mail/$(basename "$_d")" ;;
+			*) continue ;;
+		esac
+		_arc=$(ls "$_d"domain_data.tar.* "$_d"accounts.tar.* 2> /dev/null | head -1)
+		[ -n "$_arc" ] || continue
+		_kind='full'
+
+		# A member the base never had is new: everything would be "changed", so a diff of it is the
+		# full member with a dependency bolted on.
+		_basehits=$(backup_map_prefix_count "$_bm" "$_pre")
+		if [ "$_basehits" -gt 0 ]; then
+			_list=$(mktemp)
+			backup_map_changed "$_bm" "$_cur" "$_pre" > "$_list"
+			_work=$(mktemp -d)
+			_opt=$(backup_map_taropt "$_arc")
+			# An ARRAY, not a string: a library function must not depend on word splitting, and
+			# h-backup-user sets IFS=$'\n' further up - an unquoted "pzstd -q -4 -" then arrives as
+			# one command name and the pipeline dies with "command not found".
+			case "$_arc" in
+				*.zst) _codec=(pzstd -q "-$BACKUP_GZIP" -) ;;
+				*) _codec=(gzip -n "-$BACKUP_GZIP" -) ;;
+			esac
+			# shellcheck disable=SC2086
+			tar $_opt -xpf "$_arc" -C "$_work" --null -T "$_list" > /dev/null 2>&1
+			# --no-recursion goes BEFORE -T: it is positional in GNU tar, and after -T it does
+			# nothing - a changed directory would then drag its whole unchanged content along.
+			tar --sort=name -cpf- -C "$_work" --no-recursion --null -T "$_list" 2> /dev/null \
+				| "${_codec[@]}" > "$_arc.diff" 2> /dev/null
+			_sz_full=$(stat -c %s "$_arc" 2> /dev/null || echo 0)
+			_sz_diff=$(stat -c %s "$_arc.diff" 2> /dev/null || echo 0)
+			# A member where nothing changed produces a valid EMPTY archive, and that is the whole
+			# point of the mode - so "small" is the test, never "non-empty". A zero-byte file means
+			# the build failed and the member stays whole.
+			if [ "$_sz_diff" -gt 0 ] && [ $((_sz_diff * 100)) -lt $((_sz_full * BACKUP_DIFF_MEMBER_PCT)) ]; then
+				mv -f "$_arc.diff" "$_arc"
+				_kind='diff'
+			else
+				rm -f "$_arc.diff"
+			fi
+			rm -rf "$_work" "$_list"
+		fi
+		echo "$_pre=$_kind" >> "$_tmp/$BACKUP_CONTAINER/backup.members"
+	done
+	# The base is named in the archive, so the restore does not have to be told. MAPHASH is what
+	# says "this is the base I was built against" - a same-named archive from elsewhere would not
+	# match it.
+	printf "BASE='%s' MAPHASH='%s'\n" "$_base" "$(sha256sum "$_bm" | cut -d' ' -f1)" \
+		> "$_tmp/$BACKUP_CONTAINER/backup.base"
+}
+
+# backup_map_prefix_count MAPFILE PREFIX - how many entries a member has in a map.
+backup_map_prefix_count() {
+	awk -v pre="$2|" 'BEGIN { RS = "\0" } (FNR - 1) % 5 == 0 && index($0, pre) == 1 { n++ } END { print n + 0 }' "$1"
+}
+
+# ── Reading a differential archive back ──────────────────────────────────────────────────────────
+#
+# A diff archive carries its full outer structure: every record, every non-diffable member, and the
+# complete map. Only the CONTENT of a diffable member is short, so listing, probe, report and
+# preflight need the base for nothing at all - it is fetched for the extraction and nowhere else.
+
+# backup_diff_probe ARCHIVE WORKDIR - sets DIFF_BASE when the archive is one. Everything else is
+# decided from the files it drops in WORKDIR, so a caller never has to be told what it is holding.
+backup_diff_probe() {
+	local _arc="$1" _wd="$2"
+	DIFF_BASE=''
+	mkdir -p "$_wd" || return 1
+	tar -xOf "$_arc" "./$BACKUP_CONTAINER/backup.base" > "$_wd/backup.base" 2> /dev/null || true
+	[ -s "$_wd/backup.base" ] || return 0
+	DIFF_BASE=$(sed -n "s/.*BASE='\([^']*\)'.*/\1/p" "$_wd/backup.base")
+	tar -xOf "$_arc" "./$BACKUP_CONTAINER/backup.members" > "$_wd/backup.members" 2> /dev/null || true
+	tar -xOf "$_arc" "./$BACKUP_CONTAINER/backup.map" > "$_wd/backup.map" 2> /dev/null || true
+}
+
+# backup_member_needs_base MEMBERSFILE PREFIX - fail-safe by design. The two wrong answers are not
+# equal: a diff member treated as whole gives the customer a tree of only the changed files that
+# looks complete, while a whole member treated as a diff costs one pointless base read. So anything
+# not explicitly marked full needs the base.
+backup_member_needs_base() {
+	grep -qxF "$2=full" "$1" 2> /dev/null && return 1
+	return 0
+}
+
+# backup_diff_stage_base BASEARCHIVE PREFIX MEMBERNAME WORKDIR - put the base's copy of one member
+# next to the diff and print its path.
+backup_diff_stage_base() {
+	local _base="$1" _pre="$2" _member="$3" _wd="$4"
+	mkdir -p "$_wd/base" || return 1
+	tar -xf "$_base" -C "$_wd/base" "./$_pre" > /dev/null 2>&1 || return 1
+	[ -f "$_wd/base/$_pre/$_member" ] || return 1
+	echo "$_wd/base/$_pre/$_member"
+}
+
+# backup_diff_keep_list BASEARCHIVE CURMAP PREFIX DIFFMEMBER OUT - the paths the FIRST pass writes.
+# The diff's own paths are subtracted so they are not written twice; a path deleted since the base
+# is in neither map and is therefore never written at all, which is how a deletion survives.
+backup_diff_keep_list() {
+	local _base="$1" _cur="$2" _pre="$3" _member="$4" _out="$5" _bm _skip _opt
+	_bm=$(mktemp) || return 1
+	_skip=$(mktemp) || return 1
+	tar -xOf "$_base" "./$BACKUP_CONTAINER/backup.map" > "$_bm" 2> /dev/null
+	if [ ! -s "$_bm" ]; then
+		rm -f "$_bm" "$_skip"
+		return 1
+	fi
+	_opt=$(backup_map_taropt "$_member")
+	# --quoting-style=literal: the maps are NUL-clean and this listing is not, so without it a name
+	# holding a backslash never matches and is written twice. Costs work, never correctness.
+	# shellcheck disable=SC2086
+	tar $_opt -tf "$_member" --quoting-style=literal > "$_skip" 2> /dev/null
+	backup_map_keep "$_bm" "$_cur" "$_pre" "$_skip" > "$_out"
+	rm -f "$_bm" "$_skip"
 }
