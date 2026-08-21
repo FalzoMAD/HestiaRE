@@ -93,7 +93,10 @@ else
 	echo "NOTE: no MySQL/MariaDB on this box - Tachyon contacts use the SQLite backend"
 	# fail here, not at the customer's first contacts write: the serving pool needs the driver
 	ensure_panel_sqlite_driver \
-		|| { echo "ERROR: panel PHP lacks the sqlite driver (php-sqlite3 for the pinned version)"; exit 2; }
+		|| {
+			echo "ERROR: panel PHP lacks the sqlite driver (php-sqlite3 for the pinned version)"
+			exit 2
+		}
 fi
 
 # Without it the release URL would resolve to .../download/v/tachyon-.tar.gz and 404.

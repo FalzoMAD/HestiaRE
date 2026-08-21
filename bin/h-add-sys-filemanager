@@ -33,9 +33,15 @@ TMPFILES="/etc/tmpfiles.d/hestia-fm.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-[ "$(id -u)" = '0' ] || { echo "ERROR: h-add-sys-filemanager must be run as root"; exit 10; }
+[ "$(id -u)" = '0' ] || {
+	echo "ERROR: h-add-sys-filemanager must be run as root"
+	exit 10
+}
 check_hestia_demo_mode
-[ -s "$CODE_SRC/index.php" ] || { echo "ERROR: FM app code missing ($CODE_SRC)"; exit "$E_NOTEXIST"; }
+[ -s "$CODE_SRC/index.php" ] || {
+	echo "ERROR: FM app code missing ($CODE_SRC)"
+	exit "$E_NOTEXIST"
+}
 
 if [ -f "$CODE_DIR/index.php" ] && [ -s "$SECRET_FILE" ] && [ -f "$ROUTE" ]; then
 	echo "INFO: file manager is already installed."

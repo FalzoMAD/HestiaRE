@@ -81,7 +81,10 @@ fi
 
 # detection + L7 nginx wiring + L3 feeder (the one shared path)
 source "$HESTIA/include/crowdsec.sh"
-crowdsec_apply || { echo "ERROR: CrowdSec wiring failed."; exit "$E_INVALID"; }
+crowdsec_apply || {
+	echo "ERROR: CrowdSec wiring failed."
+	exit "$E_INVALID"
+}
 
 set_install_component ADDON_CROWDSEC true
 

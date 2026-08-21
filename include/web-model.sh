@@ -224,8 +224,8 @@ web_current_model() {
 	fi
 }
 
-web_model_uses_apache() { case "$1" in both | apache) return 0 ;; *) return 1 ;; esac; }
-web_model_uses_nginx() { case "$1" in both | nginx) return 0 ;; *) return 1 ;; esac; }
+web_model_uses_apache() { case "$1" in both | apache) return 0 ;; *) return 1 ;; esac }
+web_model_uses_nginx() { case "$1" in both | nginx) return 0 ;; *) return 1 ;; esac }
 
 web_model_label() {
 	case "$1" in
@@ -256,7 +256,8 @@ web_model_flip_keyset() {
 web_model_sentinel() { echo "$WEB_MODEL_SNAP_DIR/IN_PROGRESS"; }
 
 web_model_sentinel_check() {
-	local s op; s="$(web_model_sentinel)"
+	local s op
+	s="$(web_model_sentinel)"
 	[ -f "$s" ] || return 0
 	op=$(sed -n 's/^op=//p' "$s")
 	echo "Error: a previous web-model switch did not finish:" >&2
@@ -313,7 +314,8 @@ web_model_rollback() {
 	# restoring the old tree on top keeps apache trusting X-Real-IP with no nginx in front
 	# - the Decision #4 client-IP spoofing regression, now via the failure path. Idempotent.
 	if [ "$restored" = "both" ]; then
-		local rips; rips=$(web_sys_proxy_ips | tr '\n' ' ')
+		local rips
+		rips=$(web_sys_proxy_ips | tr '\n' ' ')
 		# shellcheck disable=SC2086
 		apache_remoteip_enable $rips
 	elif [ -d /etc/apache2/mods-available ]; then
@@ -458,7 +460,10 @@ web_model_run() {
 	}
 
 	echo "[ * ] Snapshotting current state..."
-	web_model_snapshot "$snap" || { web_lock_release; return 1; }
+	web_model_snapshot "$snap" || {
+		web_lock_release
+		return 1
+	}
 	mkdir -p "$(dirname "$(web_model_sentinel)")"
 	printf 'op=%s\nfrom=%s\nto=%s\nsnapshot=%s\nstarted=%s\n' \
 		"$oplabel" "$current" "$target" "$snap" "$(date '+%F %T')" > "$(web_model_sentinel)"
@@ -466,7 +471,10 @@ web_model_run() {
 	if web_model_uses_apache "$target"; then
 		echo "[ * ] Setting up apache2..."
 		configure_apache2
-		command -v apache2ctl > /dev/null 2>&1 || { _wm_fail "apache2 install failed"; return 1; }
+		command -v apache2ctl > /dev/null 2>&1 || {
+			_wm_fail "apache2 install failed"
+			return 1
+		}
 	fi
 
 	# rotate-before-switch (plan step 4): seal the current domain logs so the target
@@ -481,7 +489,8 @@ web_model_run() {
 	source_conf "$HESTIA/conf/hestia.conf" # reload globals to the target model
 
 	if [ "$target" = "both" ]; then
-		local ips; ips=$(web_sys_proxy_ips | tr '\n' ' ')
+		local ips
+		ips=$(web_sys_proxy_ips | tr '\n' ' ')
 		# shellcheck disable=SC2086
 		apache_remoteip_enable $ips
 	elif [ -d /etc/apache2/mods-available ]; then
@@ -502,10 +511,16 @@ web_model_run() {
 	while IFS= read -r u; do
 		[ -n "$u" ] || continue
 		"$BIN/h-rebuild-web-domains" "$u" no > /dev/null 2>&1 \
-			|| { _wm_fail "web rebuild failed for $u"; return 1; }
+			|| {
+				_wm_fail "web rebuild failed for $u"
+				return 1
+			}
 		if [ -n "$MAIL_SYSTEM" ]; then
 			"$BIN/h-rebuild-mail-domains" "$u" > /dev/null 2>&1 \
-				|| { _wm_fail "mail/webmail rebuild failed for $u"; return 1; }
+				|| {
+					_wm_fail "mail/webmail rebuild failed for $u"
+					return 1
+				}
 		fi
 	done < <(web_users)
 	if [ -s /etc/hestia/conf/.filemanager.key ]; then
@@ -519,15 +534,24 @@ web_model_run() {
 
 	echo "[ * ] Validating..."
 	if web_model_uses_nginx "$target"; then
-		nginx -t > /dev/null 2>&1 || { _wm_fail "nginx configtest failed"; return 1; }
+		nginx -t > /dev/null 2>&1 || {
+			_wm_fail "nginx configtest failed"
+			return 1
+		}
 	fi
 	if web_model_uses_apache "$target"; then
-		apache2ctl configtest > /dev/null 2>&1 || { _wm_fail "apache2 configtest failed"; return 1; }
+		apache2ctl configtest > /dev/null 2>&1 || {
+			_wm_fail "apache2 configtest failed"
+			return 1
+		}
 	fi
 	# Old-model files are still present here (cleanup runs only after a proven restart,
 	# below) so the assert tolerates the departing OLD_WEB/OLD_PROXY prefixes and flags
 	# only a genuinely foreign one - the strict half (target vhost must exist) still bites.
-	web_model_inventory_assert "$target" "$OLD_WEB" "$OLD_PROXY" || { _wm_fail "inventory assertion failed (mixed tree)"; return 1; }
+	web_model_inventory_assert "$target" "$OLD_WEB" "$OLD_PROXY" || {
+		_wm_fail "inventory assertion failed (mixed tree)"
+		return 1
+	}
 
 	echo "[ * ] Restarting web services..."
 	# Stop the DEPARTING server FIRST so it frees any port the target server reclaims
@@ -557,7 +581,10 @@ web_model_run() {
 	# configtest green != started (port still held by a hung process, a vhost cert read
 	# only at start, a masked unit). Prove the target servers are actually up and holding
 	# the front ports BEFORE removing the rollback path - else a dark box "succeeds".
-	web_model_verify_up "$target" || { _wm_fail "target server(s) did not come up after restart"; return 1; }
+	web_model_verify_up "$target" || {
+		_wm_fail "target server(s) did not come up after restart"
+		return 1
+	}
 
 	# Re-gate the fail2ban web jails to the new web system's log dir (#537). The per-domain rebuild above
 	# already addlogpath'd the live logs, so the running jails follow the switch, but their PERSISTED
@@ -649,8 +676,8 @@ web_model_verify_up() {
 # mixed tree that syntax tests pass).
 web_model_inventory_assert() {
 	local target="$1" old_web="$2" old_proxy="$3" u d dir pfx bad=""
-	local keep=" $WEB_SYSTEM $PROXY_SYSTEM "     # prefixes the target legitimately uses
-	local tolerate=" $old_web $old_proxy "       # departing prefixes, cleaned right after
+	local keep=" $WEB_SYSTEM $PROXY_SYSTEM " # prefixes the target legitimately uses
+	local tolerate=" $old_web $old_proxy "   # departing prefixes, cleaned right after
 	while IFS=$'\t' read -r u dir; do
 		d=$(basename "$dir")
 		# strict: the target web system's main vhost MUST exist (catches a broken rebuild)
@@ -696,14 +723,20 @@ web_model_cleanup() {
 
 # ── recovery (from a crash sentinel) ────────────────────────────────────────
 web_model_recover() {
-	local s; s="$(web_model_sentinel)"
+	local s
+	s="$(web_model_sentinel)"
 	if [ ! -f "$s" ]; then
 		echo "No interrupted web-model switch to recover."
 		return 0
 	fi
-	local snap; snap=$(sed -n 's/^snapshot=//p' "$s")
-	echo "Recovering from interrupted switch:"; sed 's/^/  /' "$s"
-	[ -d "$snap" ] || { echo "Error: snapshot dir $snap missing; recover by hand." >&2; return 1; }
+	local snap
+	snap=$(sed -n 's/^snapshot=//p' "$s")
+	echo "Recovering from interrupted switch:"
+	sed 's/^/  /' "$s"
+	[ -d "$snap" ] || {
+		echo "Error: snapshot dir $snap missing; recover by hand." >&2
+		return 1
+	}
 	web_lock_acquire 300 || return 1
 	web_model_rollback "$snap"
 	rm -f "$s"
@@ -716,8 +749,12 @@ web_model_recover() {
 #   ACTION=add|delete  COMPONENT=nginx|apache2
 web_component_op() {
 	local action="$1" comp="$2" mode="$3" purge="$4" force="$5"
-	local current; current=$(web_current_model)
-	[ "$current" = "unknown" ] && { echo "Refused: no web stack is configured (empty WEB_SYSTEM); this is not the axis a web-model command changes." >&2; return 1; }
+	local current
+	current=$(web_current_model)
+	[ "$current" = "unknown" ] && {
+		echo "Refused: no web stack is configured (empty WEB_SYSTEM); this is not the axis a web-model command changes." >&2
+		return 1
+	}
 
 	local has_nginx=no has_apache=no
 	web_model_uses_nginx "$current" && has_nginx=yes
@@ -777,7 +814,10 @@ _web_htaccess_files() {
 web_precheck_add_apache2() {
 	# a non-overridable port check that silently no-ops without its tool is worse than none
 	command -v ss > /dev/null 2>&1 \
-		|| { echo "Refused: 'ss' (iproute2) unavailable - cannot verify the apache backend ports are free (not --force-able)." >&2; return 1; }
+		|| {
+			echo "Refused: 'ss' (iproute2) unavailable - cannot verify the apache backend ports are free (not --force-able)." >&2
+			return 1
+		}
 	local p occupied=""
 	for p in 8080 8443; do
 		ss -H -tln 2> /dev/null | awk '{print $4}' | grep -qE "[:.]$p\$" && occupied="$occupied $p"
@@ -792,14 +832,16 @@ web_precheck_add_apache2() {
 # add-nginx (apache-only -> both): nginx serves static assets directly, so .htaccess
 # directives on assets go inert. Warn (routing change, not a loss); never blocks.
 web_precheck_add_nginx() {
-	local f; local -a hits=()
+	local f
+	local -a hits=()
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
 		grep -qiE 'Header|ExpiresBy|deny from|Rewrite' "$f" 2> /dev/null && hits+=("${f#"$HOMEDIR/"}")
 	done < <(_web_htaccess_files)
 	if [ ${#hits[@]} -gt 0 ]; then
 		echo "Note: in 'both', nginx serves static assets directly - .htaccess asset rules go inert in:" >&2
-		local h; for h in "${hits[@]}"; do echo "        $h" >&2; done
+		local h
+		for h in "${hits[@]}"; do echo "        $h" >&2; done
 		echo "      (routing change, not a capability loss)" >&2
 	fi
 	return 0
@@ -808,7 +850,8 @@ web_precheck_add_nginx() {
 # delete-apache2 (both -> nginx-only): highest risk. Refuse on any apache-only feature
 # unless --force (which still prints + logs the overridden findings).
 web_precheck_delete_apache2() {
-	local force="$3" f u d dir; local -a findings=()
+	local force="$3" f u d dir
+	local -a findings=()
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
 		grep -qiE 'RewriteRule|php_value|php_flag|AuthType|Require |Options |ErrorDocument|Header ' "$f" 2> /dev/null \
@@ -820,7 +863,8 @@ web_precheck_delete_apache2() {
 	done < <(web_domain_dirs)
 	if [ ${#findings[@]} -gt 0 ]; then
 		echo "Removing apache2 would drop apache-only config for:" >&2
-		local x; for x in "${findings[@]}"; do echo "        $x" >&2; done
+		local x
+		for x in "${findings[@]}"; do echo "        $x" >&2; done
 		if [ "$force" = "yes" ]; then
 			echo "  --force: proceeding anyway (recorded in the action log)." >&2
 			"$BIN/h-log-action" "${ROOT_USER:-admin}" "Warning" "Web" "h-delete-sys-apache2 --force overrode: ${findings[*]}" > /dev/null 2>&1 || true
@@ -834,7 +878,8 @@ web_precheck_delete_apache2() {
 
 # delete-nginx (both -> apache-only): custom nginx includes + fastcgi-cache go away.
 web_precheck_delete_nginx() {
-	local force="$3" u d dir; local -a findings=()
+	local force="$3" u d dir
+	local -a findings=()
 	while IFS=$'\t' read -r u dir; do
 		d=$(basename "$dir")
 		ls "$dir"/nginx.conf_* > /dev/null 2>&1 && findings+=("nginx-include:$u/$d")
@@ -848,7 +893,8 @@ web_precheck_delete_nginx() {
 	echo "Note: removing nginx also disables mod_remoteip (apache serves :80 directly)." >&2
 	if [ ${#findings[@]} -gt 0 ]; then
 		echo "Removing nginx would drop nginx-only config for:" >&2
-		local x; for x in "${findings[@]}"; do echo "        $x" >&2; done
+		local x
+		for x in "${findings[@]}"; do echo "        $x" >&2; done
 		if [ "$force" = "yes" ]; then
 			echo "  --force: proceeding anyway (recorded in the action log)." >&2
 			"$BIN/h-log-action" "${ROOT_USER:-admin}" "Warning" "Web" "h-delete-sys-nginx --force overrode: ${findings[*]}" > /dev/null 2>&1 || true
@@ -862,7 +908,8 @@ web_precheck_delete_nginx() {
 
 # web_component_main ACTION COMPONENT "$@"  - the body every thin command runs.
 web_component_main() {
-	local action="$1" comp="$2"; shift 2
+	local action="$1" comp="$2"
+	shift 2
 	local mode="" purge="no" force="no" recover="no" a
 	for a in "$@"; do
 		case "$a" in
@@ -872,7 +919,10 @@ web_component_main() {
 			yes) mode="yes" ;;
 			# reject unknown args: a typo'd --forse / --yes must not silently become a
 			# preview someone reads as an apply (this is a destructive command)
-			*) echo "Error: unknown argument '$a'. Use: [yes] [--force] [--purge] [--recover]." >&2; return 1 ;;
+			*)
+				echo "Error: unknown argument '$a'. Use: [yes] [--force] [--purge] [--recover]." >&2
+				return 1
+				;;
 		esac
 	done
 	check_hestia_demo_mode

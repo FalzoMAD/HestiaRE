@@ -49,7 +49,10 @@ fw_batch_discard() {
 
 # Refuses without an open batch: $FW_WORK is empty then and the append would land on /$1 at the root.
 fw_sec() {
-	[ -n "${FW_WORK:-}" ] || { echo "firewall: fw_sec '$1' without an open batch" >&2; return 1; }
+	[ -n "${FW_WORK:-}" ] || {
+		echo "firewall: fw_sec '$1' without an open batch" >&2
+		return 1
+	}
 	echo "$2" >> "$FW_WORK/$1"
 }
 
@@ -126,7 +129,6 @@ fw_policy_get() {
 		| jq -r 'first(.nftables[] | select(.chain) | .chain.policy) // empty' 2> /dev/null \
 		| tr '[:lower:]' '[:upper:]'
 }
-
 
 #----------------------------------------------------------#
 #                    Base INPUT rules                      #
@@ -316,7 +318,6 @@ fw_set_destroy() {
 	"$FW_NFT" delete set "$FW_FAMILY" "$FW_TABLE" "$(fw_set_id "$1")" 2> /dev/null
 }
 
-
 # A port list becomes an anonymous nft set. iptables writes ranges with a colon, nft with a dash.
 fw_port_expr() {
 	local spec="${1//:/-}"
@@ -458,7 +459,6 @@ fw_jail_rebuild() {
 	# presupposed. Needed because the service accepts carry no family qualifier - v6 reaches the jailed ports.
 	fw_sec jail "		ip6 saddr @$(fw_jail_set6 "$chain") ${proto} dport $(fw_port_expr "$port_val") $verdict"
 }
-
 
 # Live attach: the rule has to go to the head of the chain for a ban to outrank the service accepts.
 # Same verdict table as fw_jail_rebuild. fail2ban's actionstart reaches this path, so a hardcoded

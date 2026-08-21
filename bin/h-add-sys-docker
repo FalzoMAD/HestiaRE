@@ -59,7 +59,10 @@ if [ "$os_id" != 'debian' ] && [ "$os_id" != 'ubuntu' ]; then
 	echo "ERROR: unsupported distribution '$os_id' for the Docker repo."
 	exit "$E_INVALID"
 fi
-[ -n "$os_codename" ] || { echo "ERROR: cannot determine the OS codename."; exit "$E_INVALID"; }
+[ -n "$os_codename" ] || {
+	echo "ERROR: cannot determine the OS codename."
+	exit "$E_INVALID"
+}
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -77,12 +80,22 @@ echo "Adding the Docker repository..."
 install -m 0755 -d /usr/share/keyrings
 if [ ! -s "$DOCKER_KEYRING" ]; then
 	curl -fsSL "https://download.docker.com/linux/$os_id/gpg" -o /tmp/docker_apt.gpg \
-		|| { echo "ERROR: failed to download the Docker signing key"; exit "$E_CONNECT"; }
+		|| {
+			echo "ERROR: failed to download the Docker signing key"
+			exit "$E_CONNECT"
+		}
 	gpg --dearmor < /tmp/docker_apt.gpg > "$DOCKER_KEYRING" \
-		|| { echo "ERROR: failed to dearmor the Docker signing key"; rm -f /tmp/docker_apt.gpg; exit "$E_INVALID"; }
+		|| {
+			echo "ERROR: failed to dearmor the Docker signing key"
+			rm -f /tmp/docker_apt.gpg
+			exit "$E_INVALID"
+		}
 	rm -f /tmp/docker_apt.gpg
 fi
-[ -s "$DOCKER_KEYRING" ] || { echo "ERROR: Docker keyring empty"; exit "$E_INVALID"; }
+[ -s "$DOCKER_KEYRING" ] || {
+	echo "ERROR: Docker keyring empty"
+	exit "$E_INVALID"
+}
 chmod a+r "$DOCKER_KEYRING"
 
 arch="$(dpkg --print-architecture 2> /dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"

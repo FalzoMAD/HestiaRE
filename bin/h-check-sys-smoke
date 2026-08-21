@@ -54,8 +54,14 @@ skip() { echo "[ skip ] $1"; }
 # Covers log FILES only; the journald copy is out of scope here.
 check_sudo_secret_leak() {
 	local probe control f sinks='' leaked=''
-	id hestia > /dev/null 2>&1 || { skip "sudo argv leak (panel user absent)"; return; }
-	command -v logger > /dev/null 2>&1 || { skip "sudo argv leak (no logger to probe with)"; return; }
+	id hestia > /dev/null 2>&1 || {
+		skip "sudo argv leak (panel user absent)"
+		return
+	}
+	command -v logger > /dev/null 2>&1 || {
+		skip "sudo argv leak (no logger to probe with)"
+		return
+	}
 	probe="HstProbeArgv$(openssl rand -hex 6)"
 	control="HstProbeSink$(openssl rand -hex 6)"
 
@@ -196,7 +202,10 @@ check_firewall_closed() {
 # entirely (neigh INCOMPLETE, ping6 100% loss). Invisible on the v4-only fleet, hence the guard.
 check_firewall_icmpv6() {
 	local rules
-	rules=$(nft list chain inet hestia input 2> /dev/null) || { skip "firewall ICMPv6 accept (inet hestia not readable)"; return; }
+	rules=$(nft list chain inet hestia input 2> /dev/null) || {
+		skip "firewall ICMPv6 accept (inet hestia not readable)"
+		return
+	}
 	if echo "$rules" | grep -q 'ipv6-icmp'; then
 		ok "firewall accepts ICMPv6 (NDP/PMTUD - IPv6 stays functional)"
 	else
@@ -238,7 +247,10 @@ check_firewall_chains_tracked() {
 # nor a valid address, so a corrupted entry drops out of the firewall with nothing going red.
 check_firewall_rules_rendered() {
 	local rules="$CONF_DIR/firewall/rules.conf" bad='' line
-	[ -f "$rules" ] || { ok "firewall rules all renderable (none)"; return; }
+	[ -f "$rules" ] || {
+		ok "firewall rules all renderable (none)"
+		return
+	}
 	while IFS= read -r line; do
 		[ -n "$line" ] || continue
 		parse_object_kv_list "$line"
@@ -259,7 +271,10 @@ check_firewall_rules_rendered() {
 # behind it. No cache file renders an EMPTY set: rule present, panel shows the list, nothing matches.
 check_firewall_ipsets_populated() {
 	local rules="$CONF_DIR/firewall/rules.conf" bad='' line name src
-	[ -f "$rules" ] || { ok "firewall IP lists all populated (no rules)"; return; }
+	[ -f "$rules" ] || {
+		ok "firewall IP lists all populated (no rules)"
+		return
+	}
 	while IFS= read -r line; do
 		[ -n "$line" ] || continue
 		parse_object_kv_list "$line"
@@ -360,7 +375,10 @@ check_fail2ban_backends() {
 # - this names the cause.
 check_webmail_payload() {
 	local wm="$1" f="$2"
-	[ -s "$f" ] && { ok "$wm payload installed"; return; }
+	[ -s "$f" ] && {
+		ok "$wm payload installed"
+		return
+	}
 	no "$wm claimed by WEBMAIL_SYSTEM but not installed" "missing $f"
 }
 
@@ -396,7 +414,10 @@ check_webmail_value_domain() {
 		no "webmail value-domain guard found no client templates" "share/*/webmail/ empty or moved"
 		return
 	fi
-	[ -z "$missing" ] && { ok "webmail value domain covers the shipped client templates"; return; }
+	[ -z "$missing" ] && {
+		ok "webmail value domain covers the shipped client templates"
+		return
+	}
 	no "webmail templates outside the value domain:$missing" "extend WEBMAIL_KNOWN_CLIENTS in include/main.sh"
 }
 
@@ -405,7 +426,10 @@ check_webmail_value_domain() {
 # restart from any cause leaves it watching a stack with no traffic. Compared against the WEB_SYSTEM dir.
 check_fail2ban_web_logpath() {
 	local want jail lp bad=''
-	want="$(fail2ban_web_logdir 2> /dev/null)" || { skip "web jail logpath (no web system)"; return; }
+	want="$(fail2ban_web_logdir 2> /dev/null)" || {
+		skip "web jail logpath (no web system)"
+		return
+	}
 	for jail in $F2B_WEB_JAILS; do
 		fail2ban_jail_enabled "$jail" || continue
 		lp="$(fail2ban_jail_logpath "$jail")"
@@ -632,13 +656,15 @@ check_sudoers() {
 	fi
 }
 
-
 # check_web_cache_zones - a cache flag whose zone is gone breaks nginx -t box-wide: the
 # vhost references a zone nginx never loaded.
 check_web_hsts_effective() {
 	local u d line hsts front conf miss=0 first='' checked=0
 	front="${PROXY_SYSTEM:-$WEB_SYSTEM}"
-	[ -n "$front" ] || { skip "no web front - hsts guard not checkable"; return; }
+	[ -n "$front" ] || {
+		skip "no web front - hsts guard not checkable"
+		return
+	}
 	for u in $("$BIN/h-list-users" list 2> /dev/null); do
 		[ -f "$CONF_DIR/users/$u/web.conf" ] || continue
 		while IFS= read -r line; do
@@ -833,7 +859,10 @@ check_object_counters() {
 	# grep -c prints its count even at rc 1 (zero matches) - a fallback echo would
 	# double the output
 	_cnt() {
-		[ -f "$2" ] || { echo 0; return; }
+		[ -f "$2" ] || {
+			echo 0
+			return
+		}
 		grep -c "$1" "$2" || true
 	}
 	for u in $("$BIN/h-list-users" list 2> /dev/null); do
@@ -1028,7 +1057,9 @@ check_slice_dropins_owned() {
 	local d uid orphan='' first=''
 	for d in /etc/systemd/system.control/user-*.slice.d; do
 		[ -d "$d" ] || continue
-		uid=$(basename "$d"); uid=${uid#user-}; uid=${uid%.slice.d}
+		uid=$(basename "$d")
+		uid=${uid#user-}
+		uid=${uid%.slice.d}
 		getent passwd "$uid" > /dev/null 2>&1 && continue
 		orphan=$((${orphan:-0} + 1))
 		[ -z "$first" ] && first="uid $uid"

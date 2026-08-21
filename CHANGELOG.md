@@ -12,6 +12,14 @@ opens above it.
 
 ## Unreleased
 
+### Changed
+
+- **The 32 shell files the format check had exempted are formatted** (#770). They were unformatted
+  before the gate existed, so it skipped them - which left the check blind on exactly the files most
+  likely to need it, `include/main.sh` and `install.sh` among them. The list is now empty and every
+  shell file is measured. Whitespace and a few redundant semicolons only: each file was compared
+  against its previous revision in minified form, and the fleet smoke run passes on all four targets.
+
 ### Removed
 
 - **The backup pages no longer offer DNS** (#713). Zones stopped being backed up when the

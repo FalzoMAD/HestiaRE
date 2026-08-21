@@ -329,7 +329,10 @@ fetch_wp_cli_phar() {
 		rm -f "$tmp"
 		return 1
 	fi
-	mv -f "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+	mv -f "$tmp" "$dest" || {
+		rm -f "$tmp"
+		return 1
+	}
 	chmod 755 "$dest"
 }
 

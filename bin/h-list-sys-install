@@ -6,16 +6,16 @@
 # install phases ($CONF_DIR/.done.*) and the recorded COMPONENT_* selections.
 
 HESTIA="${HESTIA:-/usr/local/hestia}"
-[ -f $CONF_DIR/hestia.env ] && . $CONF_DIR/hestia.env 2>/dev/null || true
+[ -f $CONF_DIR/hestia.env ] && . $CONF_DIR/hestia.env 2> /dev/null || true
 CONF_DIR="/etc/hestia"
 INSTALL_CONF="$CONF_DIR/install.conf"
 SOURCE_CONF="$CONF_DIR/source.conf"
-VERSION="$(cat "$HESTIA/VERSION" 2>/dev/null || echo dev)"
+VERSION="$(cat "$HESTIA/VERSION" 2> /dev/null || echo dev)"
 
 # shellcheck disable=SC1090
-[ -f "$INSTALL_CONF" ] && . "$INSTALL_CONF" 2>/dev/null || true
+[ -f "$INSTALL_CONF" ] && . "$INSTALL_CONF" 2> /dev/null || true
 # shellcheck disable=SC1090
-[ -f "$SOURCE_CONF" ] && . "$SOURCE_CONF" 2>/dev/null || true
+[ -f "$SOURCE_CONF" ] && . "$SOURCE_CONF" 2> /dev/null || true
 
 echo "HestiaRE $VERSION"
 echo "Source:   ${HESTIARE_SOURCE:-github}"
@@ -29,4 +29,4 @@ for s in "$CONF_DIR"/.done.*; do
 done
 echo ""
 echo "Installed components:"
-grep '^COMPONENT_' "$INSTALL_CONF" 2>/dev/null | sed 's/^/  /' || echo "  (install.conf not found)"
+grep '^COMPONENT_' "$INSTALL_CONF" 2> /dev/null | sed 's/^/  /' || echo "  (install.conf not found)"
