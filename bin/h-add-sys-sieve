@@ -24,6 +24,8 @@
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/sieve.sh
+source $HESTIA/include/sieve.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state
@@ -69,11 +71,21 @@ cp -f "$DCDIR/sieve/"* /etc/dovecot/conf.d/
 # global script dir referenced by the sieve config (pipe/global extensions)
 mkdir -p /etc/dovecot/sieve
 
+# IMAP-triggered learning. Collected rather than aborted: filters and vacation work without any of
+# it, so a half-wired learner is a degradation and not a failure.
+learn_failures=''
+sieve_imap_plugin_add || learn_failures="$learn_failures$(printf '\n  the imap_sieve trigger')"
+sieve_mail_group_add || learn_failures="$learn_failures$(printf '\n  the rspamd controller group')"
+sieve_learn_install
+
 systemctl restart dovecot
 if ! systemctl is-active --quiet dovecot; then
 	echo "ERROR: dovecot failed to restart with sieve enabled."
 	exit "$E_RESTART"
 fi
+
+# Only now: the compiler asks the running dovecot (see sieve_learn_compile).
+sieve_learn_compile || learn_failures="$learn_failures$(printf '\n  the learn scripts')"
 
 # switch clean local delivery to dovecot-lda so sieve scripts run at delivery
 sed -i 's/^#SIEVE = yes/SIEVE = yes/' /etc/exim4/exim4.conf.template
@@ -86,7 +98,14 @@ fi
 $BIN/h-change-sys-config-value 'SIEVE_SYSTEM' 'yes'
 set_install_component ADDON_SIEVE true
 
-echo "sieve is now active (ManageSieve on 4190, scripts run at delivery)."
+# Without this the only way in is a client that speaks ManageSieve itself - the panel has no screen.
+webmail_sieve_apply
+
+echo "sieve is now active (ManageSieve on 4190, filters and vacation in the webmail)."
+# Into the exit code, not only the log: a caller reading the status must see the missing half (#746).
+if [ -n "$learn_failures" ]; then
+	check_result "$E_PARSING" "IMAP-triggered spam learning is NOT wired:$learn_failures"
+fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #

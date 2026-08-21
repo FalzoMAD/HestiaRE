@@ -14,6 +14,29 @@ opens above it.
 
 ### Added
 
+- **Sieve is reachable for customers, and moving mail to Spam now trains the filter** (#780). The
+  engine was installed, ManageSieve was listening, and nothing could reach it: the panel offers no
+  filter screen and roundcube was not loading the `managesieve` plugin, so a customer could only
+  write rules with a mail client that speaks the protocol itself. Two settings fixed that - the
+  plugin (its package was already installed) and Tachyon's per-domain `Sieve.enabled`, whose block
+  already pointed at localhost:4190 and only had the flag off. Both are gated on `SIEVE_SYSTEM` and
+  derived in one place, `include/sieve.sh`, because the engine and the two webmails are separate
+  addons installable in any order; `default.json` is included because Tachyon clones it for every
+  mail domain added later. Filters and vacation now exist in both webmails without a panel login.
+- **Moving a message into or out of the Spam folder teaches rspamd** (#780). The pieces were half
+  present: `sieve_imapsieve` was loaded and advertised in the managesieve capability list, while the
+  hook that would fire it - `imap_sieve` in the IMAP protocol's plugin list - was missing along with
+  the rules and the scripts. The chain is complete now, on the `Spam` folder rather than the `Junk`
+  that every recipe assumes, because exim files spam into `.Spam` with a final verdict. The learner
+  reaches rspamd's controller socket through dovecot's own `mail_access_groups`, which keeps the
+  grant on dovecot's mail processes: no login holds it, and a customer's own script cannot use it
+  because `pipe` is offered to global scripts only. The classifier stays global, so one customer's
+  correction still trains the box; every learn is logged to syslog with the account that caused it,
+  so a box whose hit rate drifts can be traced to whoever moved the mail. Switching to per-user
+  statistics stays a config key - the learner already passes the account. Wiring the learner is a
+  degradation and not a failure: filters and vacation work without it, so a missing trigger, group
+  or compiled script is named and carried into the exit code rather than announced as success.
+
 - **`b3sum` joins the base packages** (#712). The differential backup map hashes every byte of a
   customer's web and mail trees on every run, so the hash has to stay well ahead of the compressor.
   Measured on two machines that both lack `sha_ni` - the normal case on virtualised servers, where
@@ -35,6 +58,14 @@ opens above it.
   a fresh install writes it correctly from the start.
 
 ### Fixed
+
+- **Removing sieve destroyed the mail server on two of four targets** (#780). Debian 13 and Ubuntu
+  26.04 ship a `dovecot-core` that *depends on* `dovecot-sieve`, so `h-delete-sys-sieve`'s purge took
+  core, imapd and pop3d with it - measured, five packages against the two intended, dovecot dead and
+  `/etc/dovecot/conf.d` emptied for the removal of an optional addon. The existing comment read the
+  symptom as flakiness ("the purge may stop dovecot"). The package now stays where core requires it
+  and only its configuration goes, decided from the dependency rather than from a version number,
+  because the packaging is the thing that changes here.
 
 - **The backup compression level was one number on two scales, unchecked, with four defaults**
   (#776). `BACKUP_GZIP` feeds both `gzip -N` (valid 1-9) and `pzstd -N` (valid 1-19), and nothing

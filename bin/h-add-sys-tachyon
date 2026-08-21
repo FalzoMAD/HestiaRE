@@ -20,6 +20,8 @@
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/sieve.sh
+source $HESTIA/include/sieve.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -214,6 +216,10 @@ if [ "$UPDATE" == "no" ]; then
 	# back to caddy (the FPM pool user); explicit 0750 keeps the data dir caddy-private
 	chown -R caddy:caddy $TX_CONFIG_DIR/
 	chmod -R 750 $TX_CONFIG_DIR/data
+
+	# After the chown, because the rewrite copies owner and mode from the file it replaces. A webmail
+	# installed after sieve must not come up without the filter screen.
+	webmail_sieve_apply
 
 	# Auth-log target for the fail2ban webmail jail. Tachyon runs as caddy and writes
 	# /var/log/tachyon/fail2ban/auth.txt (see share/tachyon/install.php); create the root here so

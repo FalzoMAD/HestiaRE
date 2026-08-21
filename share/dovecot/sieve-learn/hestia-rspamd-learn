@@ -1,0 +1,5 @@
+#!/bin/sh
+# HestiaRE - what dovecot's sieve `pipe` calls, as the customer whose mail was moved. It only hands
+# the message on; the group that opens the rspamd controller socket comes from dovecot's own
+# mail_access_groups (see include/sieve.sh). Everything that decides lives in h-learn-mail-message.
+exec /usr/local/hestia/bin/h-learn-mail-message "$1" "$2"
