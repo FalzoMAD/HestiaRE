@@ -35,6 +35,19 @@ opens above it.
 
 ### Fixed
 
+- **The shell lint gate did not look at `sbin/`** (#777). Its file predicate listed `bin/h-*`,
+  `include/*.sh`, `install.sh` and `.gitea/tools/*.sh`; `sbin/` was carved out of `bin/` after the
+  gate was written and never added, so the installer, the umbrella command and the PHP wrappers sat
+  outside both tiers - a change to `h-install-hestia` was answered with "no changed shell files",
+  green because nothing had been read. Eight more shipped scripts under `share/` and `web/locale`
+  were missing for the same reason. The predicate now covers all of them, and because a path list
+  goes stale on every move, a new check measures it against a set derived from content (shebang or
+  `.sh` name) and fails on anything shell it does not cover - including the case where the sweep
+  itself reads nothing. Both failure directions were provoked and observed. The six files this
+  exposed are formatted (proven semantics-preserving, not merely re-indented), a `profile.d`
+  fragment states its dialect so shellcheck can judge it, and two findings in the installer and the
+  jail shell are fixed. Whole-tree coverage goes from 553 to 568 files, formatting debt from 6 to 0.
+
 - **Two addon installers announced work they had not done** (#772). Run against a host that already
   had ProFTPD or Docker, they printed "Installing ProFTPD" and "Adding the Docker repository" and
   went through the motions again, while their guarded siblings say "already installed" and stop.

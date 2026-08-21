@@ -14,7 +14,10 @@ CONF_DIR="/etc/hestia"
 PURGE=false
 [ "${1:-}" = "--purge" ] && PURGE=true
 
-[ "$(id -u)" = "0" ] || { echo "ERROR: must run as root." >&2; exit 1; }
+[ "$(id -u)" = "0" ] || {
+	echo "ERROR: must run as root." >&2
+	exit 1
+}
 
 echo "========================================================================"
 echo " HestiaRE Uninstall"
@@ -29,25 +32,28 @@ echo ""
 read -rp "Proceed? [y/N] " confirm < /dev/tty
 case "$confirm" in
 	[yY] | [yY][eE][sS]) ;;
-	*) echo "Aborted."; exit 1 ;;
+	*)
+		echo "Aborted."
+		exit 1
+		;;
 esac
 
 echo "[ * ] Stopping services..."
 for s in hestia hestia-php caddy; do
-	systemctl stop "$s" 2>/dev/null || true
-	systemctl disable "$s" 2>/dev/null || true
+	systemctl stop "$s" 2> /dev/null || true
+	systemctl disable "$s" 2> /dev/null || true
 done
 
 echo "[ * ] Removing cron, profile and sudoers entries..."
-rm -f /var/spool/cron/crontabs/hestia 2>/dev/null || true
-rm -f /etc/cron.d/hestia-* 2>/dev/null || true
-rm -f /etc/profile.d/hestia.sh 2>/dev/null || true
-rm -f /etc/sudoers.d/hestia 2>/dev/null || true
-rm -f "$CONF_DIR"/.done.* 2>/dev/null || true
+rm -f /var/spool/cron/crontabs/hestia 2> /dev/null || true
+rm -f /etc/cron.d/hestia-* 2> /dev/null || true
+rm -f /etc/profile.d/hestia.sh 2> /dev/null || true
+rm -f /etc/sudoers.d/hestia 2> /dev/null || true
+rm -f "$CONF_DIR"/.done.* 2> /dev/null || true
 
 if [ "$PURGE" = true ]; then
 	echo "[ * ] Purging panel packages and directories..."
-	DEBIAN_FRONTEND=noninteractive apt-get -y purge caddy 2>/dev/null || true
+	DEBIAN_FRONTEND=noninteractive apt-get -y purge caddy 2> /dev/null || true
 	rm -rf "$HESTIA" "$CONF_DIR"
 	# Both live outside the install root, so the line above does not reach them (#564). The SNI dir
 	# holds only symlinks into the customers' own mail conf, which stays.
