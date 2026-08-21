@@ -76,9 +76,6 @@ fi
 admin_email=$(get_user_value '$CONTACT')
 [ -n "$admin_email" ] || check_result "$E_INVALID" "user $user has no CONTACT email - set one first"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

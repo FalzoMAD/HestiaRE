@@ -33,9 +33,6 @@ web_lock_acquire || exit 1
 htpasswd="$HOMEDIR/$user/conf/web/$domain/htpasswd"
 docroot="$HOMEDIR/$user/web/$domain/public_html"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#

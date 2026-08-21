@@ -44,8 +44,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 # On cgroup v1 container resource limits are silent no-ops - refuse rather than
 # half-install.
 if [ "$(stat -fc %T /sys/fs/cgroup 2> /dev/null)" != 'cgroup2fs' ]; then

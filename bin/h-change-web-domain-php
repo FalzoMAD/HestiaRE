@@ -52,9 +52,6 @@ if [ "$version" != 'none' ]; then
 	esac
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

@@ -27,9 +27,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 is_refresh_ipset_format_valid "$refresh" 'Refresh IP lists (load/yes/no)'
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 ipset_hstobject="$CONF_DIR/firewall/ipset"
 
 for ipset_name in $(search_objects "$ipset_hstobject" 'SUSPENDED' 'no' 'LISTNAME' 2> /dev/null); do

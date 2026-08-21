@@ -39,8 +39,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 companion="${user}-docker"
 companion_home="$HOMEDIR/$user/.companion"
 

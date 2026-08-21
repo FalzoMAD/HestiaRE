@@ -45,9 +45,6 @@ if ! [[ "$duration" =~ ^[1-9][0-9]*[smd]$ ]]; then
 	exit 2
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

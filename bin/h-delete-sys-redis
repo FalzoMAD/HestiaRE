@@ -34,9 +34,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 if [ "${COMPONENT_DB_REDIS:-}" != "true" ]; then
 	echo "ERROR: Redis is not installed as a general service."
 	exit "$E_NOTEXIST"

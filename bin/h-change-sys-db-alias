@@ -33,9 +33,6 @@ check_args '2' "$#" 'type alias'
 
 is_common_format_valid "$alias" "Alias"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

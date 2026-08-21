@@ -12,6 +12,16 @@ opens above it.
 
 ## Unreleased
 
+### Removed
+
+- **Demo mode is gone** (#759). Inherited from upstream, where it exists to keep a public demo box
+  from being changed: a config key that made 365 commands refuse to do anything, plus the command
+  that set it, its entry in the config listers and the key registry, and a panel branch that hid the
+  login history. There will be no demo box here, and a switch that turns every write off is a large
+  surface with no purpose - one that nothing tested and nothing would have noticed going wrong. An
+  existing host keeps a stale `conf/defaults/system.conf` until `h-update-sys-defaults` runs once;
+  a fresh install writes it correctly from the start.
+
 ### Fixed
 
 - **Two addon installers announced work they had not done** (#772). Run against a host that already

@@ -33,9 +33,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 # Not installed?
 if ! dpkg -l postgresql 2> /dev/null | grep -q '^ii'; then
 	echo "ERROR: PostgreSQL is not installed."

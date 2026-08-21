@@ -41,9 +41,6 @@ if [ "$source_arg" != 'os' ] && [ "$source_arg" != 'upstream' ]; then
 	check_result "$E_INVALID" "SOURCE must be 'os' or 'upstream'"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

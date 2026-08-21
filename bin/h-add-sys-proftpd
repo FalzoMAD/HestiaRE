@@ -38,8 +38,6 @@ fi
 
 if [ -z "$HESTIA" ]; then HESTIA="/usr/local/hestia"; fi
 
-check_hestia_demo_mode
-
 # installed = package present AND registered. Both halves: a package the OS dragged in without our
 # config is not an installation, and the installer must still get through on a half-built box.
 if dpkg -l proftpd-core 2> /dev/null | grep -q '^ii' && [ "$FTP_SYSTEM" = 'proftpd' ]; then

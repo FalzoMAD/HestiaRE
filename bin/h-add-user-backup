@@ -50,9 +50,6 @@ is_object_format_valid "$archive" 'backup'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 if [ ! -f "$BACKUP/$archive" ]; then
 	check_result "$E_NOTEXIST" "$archive doesn't exist in '$BACKUP'"
 fi

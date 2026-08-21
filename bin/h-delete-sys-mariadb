@@ -31,9 +31,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 # Not installed?
 if ! dpkg -l mariadb-server 2> /dev/null | grep -q '^ii'; then
 	echo "ERROR: MariaDB is not installed."

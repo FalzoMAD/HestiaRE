@@ -36,9 +36,6 @@ if [ -n "$lname" ]; then
 	is_common_format_spaces_valid "$lname" "last name"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

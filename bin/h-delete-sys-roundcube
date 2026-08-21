@@ -32,8 +32,6 @@ fi
 
 if [ -z "$HESTIA" ]; then HESTIA="/usr/local/hestia"; fi
 
-check_hestia_demo_mode
-
 if ! echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	echo "ERROR: Roundcube is not installed."
 	exit 1

@@ -50,9 +50,6 @@ if [[ " ${php_supported[*]} " != *" $version "* ]]; then
 	exit "$E_INVALID"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

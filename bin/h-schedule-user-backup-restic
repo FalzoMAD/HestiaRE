@@ -33,9 +33,6 @@ is_incremental_backup_enabled
 
 is_backup_scheduled 'backup'
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

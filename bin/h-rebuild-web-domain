@@ -46,9 +46,6 @@ if [ -n "$check_user" ]; then
 fi
 is_object_valid 'web' 'DOMAIN' "$domain"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

@@ -29,9 +29,6 @@ if ! type -P quota &> /dev/null; then
 	check_result $? "quota package installation failed" "$E_UPDATE"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

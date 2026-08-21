@@ -37,9 +37,6 @@ is_username_format_valid "$username" 'username'
 format_no_quotes "$password" 'passowrd'
 is_common_format_valid "$smtp_security" "SMTP_SECURITY"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

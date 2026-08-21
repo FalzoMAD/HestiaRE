@@ -61,9 +61,6 @@ is_user_free "$user"
 is_password_valid
 is_package_valid
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

@@ -43,8 +43,6 @@ fi
 
 is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
 
-check_hestia_demo_mode
-
 # already fully active? idempotent early-exit
 if grep -q '^CLAMD = yes' "$EXIM_TPL" 2> /dev/null \
 	&& [ "$ANTIVIRUS_SYSTEM" = 'clamav' ] && clamd_alive; then

@@ -21,7 +21,7 @@
 					</a>
 				<?php } ?>
 			<?php } ?>
-			<?php if ($_SESSION['DEMO_MODE'] != "yes") {
+			<?php
 				if (($_SESSION['userContext'] === 'admin') && (htmlentities($_GET['user']) !== 'admin')) { ?>
 				<?php if (($_SESSION['userContext'] === 'admin') && ($_GET['user'] != '') && (htmlentities($_GET['user']) !== 'admin')) { ?>
 					<?php if (htmlentities($_GET['user']) !== 'system') { ?>
@@ -39,8 +39,7 @@
 				<a href="/list/log/auth/" class="button button-secondary button-back js-button-back" title="<?= tohtml(_("Login History")) ?>">
 					<i class="fas fa-binoculars icon-green"></i><?= tohtml(_("Login History")) ?>
 				</a>
-			<?php }
-			} ?>
+			<?php } ?>
 		</div>
 		<div class="toolbar-buttons">
 			<a href="javascript:location.reload();" class="button button-secondary"><i class="fas fa-arrow-rotate-right icon-green"></i><?= tohtml(_("Refresh")) ?></a>

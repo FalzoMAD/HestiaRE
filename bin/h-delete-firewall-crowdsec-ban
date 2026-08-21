@@ -40,8 +40,6 @@ if ! fw_is_addr "$ip" && ! fw_is_addr6 "$ip"; then
 	check_result "$E_INVALID" "invalid IP: $ip"
 fi
 
-check_hestia_demo_mode
-
 command -v cscli > /dev/null 2>&1 || check_result "$E_NOTEXIST" "CrowdSec is not installed"
 
 #----------------------------------------------------------#

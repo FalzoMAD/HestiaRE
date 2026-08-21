@@ -46,9 +46,6 @@ if [ -e "$pkg_dir/$new_name.pkg" ]; then
 	check_result "$E_NOTEXIST" "package $new_name exist"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

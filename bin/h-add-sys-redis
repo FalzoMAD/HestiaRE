@@ -34,9 +34,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 # installed = redis-server present AND not the rspamd-capped companion; capped
 # falls through to promote. Guard on the artefact, not COMPONENT_* (wizard selection).
 if dpkg -l redis-server 2> /dev/null | grep -q '^ii' \

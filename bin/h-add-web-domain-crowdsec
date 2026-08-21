@@ -38,7 +38,6 @@ is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'web' 'DOMAIN' "$domain"
 is_object_unsuspended 'web' 'DOMAIN' "$domain"
-check_hestia_demo_mode
 
 # CrowdSec only enforces where nginx is the public front (nginx-only / both).
 if [ -n "$PROXY_SYSTEM" ]; then pub="$PROXY_SYSTEM"; else pub="$WEB_SYSTEM"; fi

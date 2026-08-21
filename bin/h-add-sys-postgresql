@@ -35,9 +35,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 # installed = package present AND host registered
 if dpkg -l postgresql 2> /dev/null | grep -q '^ii' \
 	&& grep -qs "HOST='localhost'" "$HESTIA/conf/pgsql.conf"; then

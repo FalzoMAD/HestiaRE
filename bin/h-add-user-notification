@@ -34,9 +34,6 @@ is_format_valid 'user' 'topic' 'notice' 'priority'
 is_object_valid 'user' 'USER' "$user"
 is_common_format_valid "$type"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

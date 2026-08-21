@@ -925,7 +925,7 @@ web_component_main() {
 				;;
 		esac
 	done
-	check_hestia_demo_mode
+
 	if [ "$recover" = "yes" ]; then
 		web_model_recover
 		return $?

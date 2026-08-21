@@ -45,8 +45,6 @@ else
 	echo "NOTE: no MySQL/MariaDB on this box - Roundcube uses the SQLite backend"
 fi
 
-check_hestia_demo_mode
-
 # Already installed? Keyed on the pool conf: it is written LAST, only by this command, and
 # removed by the delete. config.inc.php marks nothing - the OS package ships one of its own,
 # which made a retry after a mid-flow failure skip everything (#684).
