@@ -36,6 +36,28 @@ opens above it.
 
 ### Fixed
 
+- **"Back" led to the administrator's own profile, not to the customer being managed** (#779).
+  Opening another user's SSH keys or logs through the pencil icon - without impersonating them -
+  produced a Back button pointing at the admin's own page, while the Login History button next to it
+  correctly carried the customer. The condition chain had no branch for "an admin manages someone
+  else without impersonation": the first branch requires a non-empty `look`, which only impersonation
+  sets, so it fell through to a fallback that uses the viewer's own identity. The new branch reads
+  `userContext`, because a back link is scoping and not a protective policy (#438). Verified by
+  clicking through a real browser: with the fix an admin lands on the managed customer, on their own
+  pages nothing changes, and an impersonating session is byte-identical to before - the same run
+  against the unfixed templates fails, so the result is not a dead test. Adopted from an upstream
+  report and reimplemented, and the affected set is derived here rather than inherited: of the 64
+  back buttons under `web/templates/pages/`, exactly two resolve the target from the session, and
+  the other pages that accept a `?user` either already carry the right shape or have no back button
+  at all. It coincides with upstream's list minus the two files that belong to the REST API, but the
+  coincidence is the result, not the method.
+- **A long SSH key overflowed its cell instead of wrapping** (#779). `overflow-wrap: break-word`
+  breaks a word only when it would not fit on a line of its own, not when it bursts its container,
+  and the only caller of `.u-text-break` in the tree is the SSH key list - where the content is a
+  base64 blob with no break opportunity at all. The class has a general name and one specific
+  purpose, so its definition now says what it is for and that prose is not it: `anywhere` breaks
+  mid-word, which is right for base64 and wrong for a sentence.
+
 - **The shell lint gate did not look at `sbin/`** (#777). Its file predicate listed `bin/h-*`,
   `include/*.sh`, `install.sh` and `.gitea/tools/*.sh`; `sbin/` was carved out of `bin/` after the
   gate was written and never added, so the installer, the umbrella command and the PHP wrappers sat

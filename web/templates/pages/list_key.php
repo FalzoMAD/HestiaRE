@@ -6,6 +6,12 @@
 				<a href="/edit/user/?<?= tohtml(http_build_query(["user" => $_SESSION["look"], "token" => $_SESSION["token"]])) ?>" class="button button-secondary button-back js-button-back">
 					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 				</a>
+			<?php }
+			// A back link is scoping, not a protective policy, so it reads userContext (#438).
+			elseif ($_SESSION["userContext"] === "admin" && !empty($_GET["user"])) { ?>
+				<a href="/edit/user/?<?= tohtml(http_build_query(["user" => $_GET["user"], "token" => $_SESSION["token"]])) ?>" class="button button-secondary button-back js-button-back">
+					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
+				</a>
 			<?php } else { ?>
 				<a href="/edit/user/?<?= tohtml(http_build_query(["user" => $_SESSION["user"], "token" => $_SESSION["token"]])) ?>" class="button button-secondary button-back js-button-back">
 					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
