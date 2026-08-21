@@ -14,6 +14,14 @@ opens above it.
 
 ### Fixed
 
+- **The PHP fallback could not be agreed to from the panel** (#608). A restore whose archive carries
+  a PHP version this host does not have needs an explicit yes, and the queue has no terminal to ask
+  at - so a panel restore of such an archive refused, and the message named a token only the CLI
+  could pass. The backup page now carries that choice, named after the version the domains would
+  land on, and both the whole-archive button and the bulk action send it.
+
+### Fixed
+
 - **The restic bulk restore restored the wrong thing, or nothing** (#767). Selecting mail domains
   scheduled a database restore, databases could not be selected at all because the branch for them
   was missing, and the branch for user directories tested a variable that was never set - against a
