@@ -14,6 +14,17 @@ opens above it.
 
 ### Added
 
+- **The backup mode is a package choice** (#712, stage 4). `BACKUPS_MODE='full'|'diff'|'restic'`
+  lives next to `BACKUPS` in the package, defaults to `full` so nothing changes on its own, and
+  refuses `restic` where the addon is not installed. The nightly `h-backup-users` dispatches per
+  customer instead of running the archive path for everybody: a restic customer gets the restic run,
+  everyone else the archive run, and a restic mode without the addon falls back to the archive with
+  a named warning rather than silently backing up nothing. `h-backup-users-restic` now skips
+  customers whose mode is not restic, so a manual invocation no longer duplicates the nightly run.
+  The package pages offer the mode (restic only where the addon is, but a package already saying
+  restic keeps its option so an unrelated save cannot flip it), and the backup list marks a
+  differential archive with its base.
+
 - **OPERATIONAL NOTE - the repaired remote rotation deletes on its first run.** The ftp/sftp
   listings arrived CRLF-tainted from expect's pty, `tar$` never matched, and remote rotation on
   those targets was structurally dead: archives accumulated regardless of `BACKUPS`. Fixed - which

@@ -42,6 +42,13 @@ for user in $($BIN/h-list-sys-users plain); do
 		echo -e "================================" >> $log
 		echo -e "$user" >> $log
 		echo -e "--------------------------------\n" >> $log
+		# Only the customers whose mode names restic. This command has no cron entry of its own -
+		# h-backup-users dispatches - so it is the manual path, and running it must not duplicate
+		# what the nightly run already did for everybody else.
+		mode=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$user/user.conf" | head -1)
+		if [ "${mode:-full}" != 'restic' ]; then
+			continue
+		fi
 		nice -n 19 ionice -c2 -n7 $BIN/h-backup-user-restic $user >> $log 2>&1
 		echo -e "\n--------------------------------\n\n" >> $log
 	fi

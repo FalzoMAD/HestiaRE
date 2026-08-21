@@ -134,6 +134,11 @@
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Type")) ?>:</span>
 					<?= tohtml($data[$key]["TYPE"]) ?>
+					<?php if (($data[$key]["MODE"] ?? "") === "diff") { ?>
+						<span class="u-text-small" title="<?= tohtml(sprintf(_("Base: %s"), $data[$key]["BASE"] ?? "")) ?>">
+							(<?= tohtml(_("differential")) ?>)
+						</span>
+					<?php } ?>
 				</div>
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Runtime")) ?>:</span>
