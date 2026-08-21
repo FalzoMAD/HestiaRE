@@ -443,7 +443,7 @@ function syshealth_repair_system_config() {
 	fi
 
 	# Backup compression level
-	repair_key 'BACKUP_GZIP' '4'
+	repair_key 'BACKUP_GZIP' '3'
 
 	# Theme
 	repair_key 'THEME' 'dark'

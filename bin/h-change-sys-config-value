@@ -30,6 +30,30 @@ source_conf "$HESTIA/conf/hestia.conf"
 check_args '2' "$#" 'KEY VALUE'
 is_common_format_valid "$key" 'key'
 format_no_quotes "$value" 'value'
+
+# One key, two scales: gzip takes 1-9, zstd 1-19. Checked where the value is set, not in the
+# nightly run that would die at 3 a.m. An unset mode passes - during an install it may not exist
+# yet, and the mode's own check catches the pair once it does.
+case "$key" in
+	BACKUP_GZIP)
+		is_int_format_valid "$value" 'BACKUP_GZIP'
+		if [ "$value" -lt 1 ] || [ "$value" -gt 19 ]; then
+			check_result "$E_INVALID" "BACKUP_GZIP must be 1-19 (gzip only reaches 9)"
+		fi
+		if [ "${BACKUP_MODE:-}" = 'gzip' ] && [ "$value" -gt 9 ]; then
+			check_result "$E_INVALID" "BACKUP_GZIP $value is zstd-only - gzip accepts 1-9"
+		fi
+		;;
+	BACKUP_MODE)
+		if [ "$value" != 'gzip' ] && [ "$value" != 'zstd' ]; then
+			check_result "$E_INVALID" "BACKUP_MODE must be gzip or zstd"
+		fi
+		# The other direction: a level legal under zstd stops being legal when the mode changes.
+		if [ "$value" = 'gzip' ] && [ "${BACKUP_GZIP:-0}" -gt 9 ]; then
+			check_result "$E_INVALID" "BACKUP_GZIP is $BACKUP_GZIP - lower it to 9 or less before switching to gzip"
+		fi
+		;;
+esac
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
