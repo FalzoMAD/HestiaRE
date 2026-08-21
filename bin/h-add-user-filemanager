@@ -36,7 +36,7 @@ CODE_DIR="/usr/share/filemanager/fm"
 	echo "ERROR: h-add-user-filemanager must be run as root"
 	exit 10
 }
-check_hestia_demo_mode
+
 is_format_valid 'user'
 
 # System module must be installed first (secret + code + port)

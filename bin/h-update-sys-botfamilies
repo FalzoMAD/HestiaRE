@@ -36,8 +36,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 if [ ! -f "$CONF_DIR/botfamilies.conf" ]; then
 	echo "Error: no bot-family conf (/etc/hestia/botfamilies.conf)."
 	exit "$E_NOTEXIST"

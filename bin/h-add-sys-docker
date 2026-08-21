@@ -44,8 +44,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 # On cgroup v1 container resource limits are silent no-ops - refuse rather than
 # half-install.
 if [ "$(stat -fc %T /sys/fs/cgroup 2> /dev/null)" != 'cgroup2fs' ]; then
@@ -67,6 +65,13 @@ fi
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
+
+# installed = package present AND registered. Both halves: a package the OS dragged in without our
+# config is not an installation, and the installer must still get through on a half-built box.
+if dpkg -l docker-ce 2> /dev/null | grep -q '^ii' && [ "$DOCKER_SYSTEM" = 'docker' ]; then
+	echo "INFO: Docker is already installed."
+	exit
+fi
 
 # The old inline addon installed the OS docker.io, which is the rootful daemon this
 # feature replaces. It conflicts with docker-ce, so it goes first rather than letting

@@ -12,6 +12,32 @@ opens above it.
 
 ## Unreleased
 
+### Removed
+
+- **Demo mode is gone** (#759). Inherited from upstream, where it exists to keep a public demo box
+  from being changed: a config key that made 365 commands refuse to do anything, plus the command
+  that set it, its entry in the config listers and the key registry, and a panel branch that hid the
+  login history. There will be no demo box here, and a switch that turns every write off is a large
+  surface with no purpose - one that nothing tested and nothing would have noticed going wrong. An
+  existing host keeps a stale `conf/defaults/system.conf` until `h-update-sys-defaults` runs once;
+  a fresh install writes it correctly from the start.
+
+### Fixed
+
+- **Two addon installers announced work they had not done** (#772). Run against a host that already
+  had ProFTPD or Docker, they printed "Installing ProFTPD" and "Adding the Docker repository" and
+  went through the motions again, while their guarded siblings say "already installed" and stop.
+  A message that claims an action nobody performed is read as evidence of the state before it - and
+  it was, during a cleanup, which is how a working ProFTPD came to be removed. Both now check the
+  package and the registration together, so a package the OS dragged in without our configuration
+  still counts as not installed and a fresh install is not turned away.
+
+- **The PHP fallback could not be agreed to from the panel** (#608). A restore whose archive carries
+  a PHP version this host does not have needs an explicit yes, and the queue has no terminal to ask
+  at - so a panel restore of such an archive refused, and the message named a token only the CLI
+  could pass. The backup page now carries that choice, named after the version the domains would
+  land on, and both the whole-archive button and the bulk action send it.
+
 ### Fixed
 
 - **The restic bulk restore restored the wrong thing, or nothing** (#767). Selecting mail domains

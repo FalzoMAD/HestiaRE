@@ -40,8 +40,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 # Guard on the package, not COMPONENT_*: a timed-out install leaves the flag true with a half-wired engine.
 if ! dpkg -l crowdsec 2> /dev/null | grep -q '^ii' && [ "$FORCE" != 'yes' ]; then
 	echo "ERROR: CrowdSec is not installed. Use FORCE=yes to clean up anyway."

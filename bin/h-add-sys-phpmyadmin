@@ -35,8 +35,6 @@ if ! echo "$DB_SYSTEM" | grep -qw 'mysql'; then
 	exit 2
 fi
 
-check_hestia_demo_mode
-
 # Already installed?
 if [ -f "$PMA_CONFIG/config-db.php" ] && [ -f "/var/lib/phpmyadmin/blowfish_secret.inc.php" ]; then
 	echo "INFO: phpMyAdmin is already installed and configured."

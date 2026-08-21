@@ -38,8 +38,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 # guard on the package, not COMPONENT_* — an install that timed out on the DB may
 # have ADDON_CLAMAV=true but never armed; the package is the honest signal.
 if ! dpkg -l clamav-daemon 2> /dev/null | grep -q '^ii' && [ "$FORCE" != 'yes' ]; then

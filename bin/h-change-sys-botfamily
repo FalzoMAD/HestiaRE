@@ -50,7 +50,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 fi
 
 check_args '5' "$#" 'FAMILY MATCH LENIENT STRICT ENABLED [APPLY]'
-check_hestia_demo_mode
 
 botpolicy_seed_families
 [ -f "$OBJ.conf" ] || {

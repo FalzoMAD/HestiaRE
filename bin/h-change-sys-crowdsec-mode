@@ -38,7 +38,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 fi
 
 check_args '1' "$#" 'MODE'
-check_hestia_demo_mode
 
 case "$mode" in
 	capi | local | mesh) ;;

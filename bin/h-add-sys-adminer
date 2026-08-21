@@ -36,9 +36,6 @@ if [ "$(id -u)" != '0' ]; then
 	exit 10
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 if [ ! -s "$HESTIA/share/adminer/adminer.php" ]; then
 	echo "ERROR: vendored Adminer file missing ($HESTIA/share/adminer/adminer.php)"
 	exit "$E_NOTEXIST"

@@ -42,8 +42,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 # <user>-docker identifies an enabled customer without reading every user.conf.
 enabled=$(getent passwd | cut -d: -f1 | grep -c -- '-docker$' || true)
 if [ "$enabled" -gt 0 ] && [ "$force" != 'yes' ]; then

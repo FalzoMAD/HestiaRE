@@ -44,9 +44,6 @@ if [ "$ip_owner" != "$ROOT_USER" ] && [ "$ip_status" = "shared" ]; then
 	$BIN/h-change-sys-ip-owner "$ip" "$ROOT_USER"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

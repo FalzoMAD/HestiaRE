@@ -116,9 +116,6 @@ case "$target" in
 		;;
 esac
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 if ! dpkg -l mariadb-server 2> /dev/null | grep -q '^ii'; then
 	echo "ERROR: MariaDB is not installed (use h-add-sys-mariadb)."
 	exit "$E_NOTEXIST"

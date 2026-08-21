@@ -96,9 +96,6 @@ if [ "$force" != 'yes' ]; then
 	is_package_available
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

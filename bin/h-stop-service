@@ -28,9 +28,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 check_args '1' "$#" 'SERVICE'
 is_format_valid 'service'
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

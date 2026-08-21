@@ -33,9 +33,6 @@ if [ "$user" = "$ROOT_USER" ]; then
 	exit
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

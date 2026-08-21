@@ -48,9 +48,6 @@ is_negative_one_or_int $weekly 'Weekly snapshots'
 is_negative_one_or_int $monthly 'Monthly snapshots'
 is_negative_one_or_int $yearly 'Yearly snapshots'
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

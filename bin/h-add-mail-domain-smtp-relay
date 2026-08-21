@@ -41,9 +41,6 @@ is_password_valid "$password" "Password"
 is_username_format_valid "$username" "Username"
 format_no_quotes "$password" "Password"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

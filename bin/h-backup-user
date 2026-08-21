@@ -216,9 +216,6 @@ if [ "$POLICY_BACKUP_SUSPENDED_USERS" != "yes" ]; then
 fi
 is_backup_enabled
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

@@ -63,7 +63,9 @@ if ($action == "restore") {
 			" " .
 			$cron .
 			" " .
-			$udir,
+			$udir .
+			" " .
+			(empty($_POST["php_fallback"]) ? "''" : "php-fallback"),
 		$output,
 		$return_var,
 	);

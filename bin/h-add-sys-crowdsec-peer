@@ -47,7 +47,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 fi
 
 check_args '2' "$#" 'HOST CODE [PORT]'
-check_hestia_demo_mode
 
 if ! mesh_load; then
 	echo "ERROR: CrowdSec fleet-mesh is not enabled. Run h-add-sys-crowdsec-mesh first."

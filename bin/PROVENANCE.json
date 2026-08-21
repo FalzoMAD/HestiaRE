@@ -1851,22 +1851,6 @@
       "note": ""
     },
     {
-      "path": "h-change-sys-demo-mode",
-      "source_type": "derived",
-      "upstream_path": "bin/v-change-sys-demo-mode",
-      "upstream_ref": "5eb9396",
-      "last_reconciled": "2026-08-18",
-      "divergence": {
-        "upstream_lines": 68,
-        "our_lines": 66,
-        "added": 12,
-        "removed": 14,
-        "pct": 19,
-        "measured_at": "2026-08-18"
-      },
-      "note": ""
-    },
-    {
       "path": "h-change-sys-firewall-model",
       "source_type": "eigenbau",
       "upstream_path": null,

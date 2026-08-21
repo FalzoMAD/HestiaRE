@@ -6,16 +6,22 @@
 					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 				</a>
 				<?php if ($read_only !== "true") { ?>
-					<a href="/schedule/restore/?<?= tohtml(http_build_query(array("token" => $_SESSION["token"], "backup" => $_GET["backup"]))) ?>" class="button button-secondary">
+					<button type="submit" form="restore-form" formaction="/schedule/restore/" class="button button-secondary">
 						<i class="fas fa-arrow-rotate-left icon-green"></i><?= tohtml(_("Restore All")) ?>
-					</a>
+					</button>
 				<?php } ?>
 			</div>
 			<div class="toolbar-right">
 				<?php if ($read_only !== "true") { ?>
-					<form x-data x-bind="BulkEdit" action="/bulk/restore/" method="post">
+					<form id="restore-form" x-data x-bind="BulkEdit" action="/bulk/restore/" method="post">
 						<input type="hidden" name="token" value="<?= tohtml($_SESSION["token"]) ?>">
 						<input type="hidden" name="backup" value="<?= tohtml($_GET["backup"]) ?>">
+						<?php if ($default_php !== "") { ?>
+							<label class="u-mr10">
+								<input type="checkbox" name="php_fallback" value="yes" checked>
+								<?= tohtml(sprintf(_("Fall back to PHP %s"), $default_php)) ?>
+							</label>
+						<?php } ?>
 						<select class="form-select" name="action">
 							<option value=""><?= tohtml(_("Apply to selected")) ?></option>
 							<option value="restore"><?= tohtml(_("Restore")) ?></option>

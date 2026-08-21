@@ -33,9 +33,6 @@ if [[ ! $version =~ ^[0-9]+\.[0-9]+ ]]; then
 	exit "$E_INVALID"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 version_file="/etc/php/hestia/php-version"
 current=$(cat "$version_file" 2> /dev/null)
 

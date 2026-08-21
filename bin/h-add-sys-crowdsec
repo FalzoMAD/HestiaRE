@@ -38,8 +38,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 # Held across the front check AND the wiring, or a concurrent web switch could flip the front between them.
 # Reentrant, so callers already holding it pass through. The front is re-read under the lock.
 web_lock_acquire || exit "$E_INUSE"

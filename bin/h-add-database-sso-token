@@ -39,9 +39,6 @@ check_args '3' "$#" 'USER DATABASE CLIENT_IP'
 is_format_valid 'user' 'database'
 is_ip46_format_valid "$client_ip"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

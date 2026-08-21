@@ -30,8 +30,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 # The ban action writes into the hestia ruleset; with no firewall there is nothing to write to.
 if [ -z "$FIREWALL_SYSTEM" ]; then
 	echo "ERROR: fail2ban needs the system firewall; enable it first (h-add-sys-firewall)."

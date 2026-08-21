@@ -27,9 +27,6 @@ PMA_CONFIG="/etc/phpmyadmin"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 if [ "$(id -u)" != '0' ]; then
 	echo "Error: Script can be run executed only by root"
 	exit 10

@@ -46,9 +46,6 @@ fi
 wp_state=$(get_object_value 'web' 'DOMAIN' "$domain" '$WP')
 [ "$wp_state" = "yes" ] || check_result "$E_NOTEXIST" "WordPress is not managed for $domain"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

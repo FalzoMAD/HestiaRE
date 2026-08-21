@@ -65,9 +65,6 @@ else
 	is_ip_cidr_format_valid "$ipv4_cidr"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
