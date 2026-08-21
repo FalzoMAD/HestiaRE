@@ -462,49 +462,81 @@ rebuild_web_domain_conf() {
 		fi
 	done
 
-	# Adding http auth protection
-	htaccess="$HOMEDIR/$user/conf/web/$domain/htaccess"
+	# Http auth, derived from the record on every rebuild. The archive carries both files with an
+	# absolute path inside them, so keeping one points the protection at whatever home made it.
 	htpasswd="$HOMEDIR/$user/conf/web/$domain/htpasswd"
 	docroot="$HOMEDIR/$user/web/$domain/public_html"
-	for auth_user in ${AUTH_USER//:/ }; do
-		# Parsing auth user variables
-		position=$(echo $AUTH_USER | tr ':' '\n' | grep -n '' \
-			| grep ":$auth_user$" | cut -f 1 -d:)
-		auth_hash=$(echo $AUTH_HASH | tr ':' '\n' | grep -n '' \
-			| grep "^$position:" | cut -f 2 -d :)
+	nginx_htaccess="$HOMEDIR/$user/conf/web/$domain/nginx.conf_htaccess"
+	nginx_shtaccess="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_htaccess"
+	apache_htaccess="$HOMEDIR/$user/conf/web/$domain/apache2.conf_htaccess"
+	apache_shtaccess="$HOMEDIR/$user/conf/web/$domain/apache2.ssl.conf_htaccess"
+	if [ "$WEB_SYSTEM" = "nginx" ] || [ "$PROXY_SYSTEM" = "nginx" ]; then
+		htaccess="$nginx_htaccess"
+		shtaccess="$nginx_shtaccess"
+		stale_htaccess="$apache_htaccess"
+		stale_shtaccess="$apache_shtaccess"
+		htaccess_want="auth_basic  \"$domain password access\";
+auth_basic_user_file    $htpasswd;"
+	else
+		htaccess="$apache_htaccess"
+		shtaccess="$apache_shtaccess"
+		stale_htaccess="$nginx_htaccess"
+		stale_shtaccess="$nginx_shtaccess"
+		htaccess_want="<Directory $docroot>
+    AuthUserFile $htpasswd
+    AuthName \"$domain access\"
+    AuthType Basic
+    Require valid-user
+</Directory>"
+	fi
 
-		# Adding http auth user
-		touch $htpasswd
-		sed -i "/^$auth_user:/d" $htpasswd
-		echo "$auth_user:$auth_hash" >> $htpasswd
+	# The other web server's pair is inert here, so a wrong path in it stays unnoticed until the
+	# model is switched.
+	rm -f "$stale_htaccess" "$stale_shtaccess"
 
-		# Adding htaccess password protection
-		if [ "$WEB_SYSTEM" = "nginx" ] || [ "$PROXY_SYSTEM" = "nginx" ]; then
-			htaccess="$HOMEDIR/$user/conf/web/$domain/nginx.conf_htaccess"
-			shtaccess="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_htaccess"
-			if [ ! -f "$htaccess" ]; then
-				echo "auth_basic  \"$domain password access\";" > $htaccess
-				echo "auth_basic_user_file    $htpasswd;" >> $htaccess
-				ln -s $htaccess $shtaccess
-				restart_required='yes'
+	if [ -n "$AUTH_USER" ]; then
+		# The record's accounts and only those: appending keeps one the panel cannot show.
+		htpasswd_want=''
+		auth_nohash=''
+		for auth_user in ${AUTH_USER//:/ }; do
+			position=$(echo $AUTH_USER | tr ':' '\n' | grep -n '' \
+				| grep ":$auth_user$" | cut -f 1 -d:)
+			auth_hash=$(echo $AUTH_HASH | tr ':' '\n' | grep -n '' \
+				| grep "^$position:" | cut -f 2 -d :)
+			# The two lists are joined by position and can arrive out of step. A line with no hash
+			# never matches, and this file is the only source - writing it shuts the domain.
+			if [ -z "$auth_hash" ]; then
+				auth_nohash="$auth_nohash $auth_user"
+				continue
 			fi
-		else
-			htaccess="$HOMEDIR/$user/conf/web/$domain/apache2.conf_htaccess"
-			shtaccess="$HOMEDIR/$user/conf/web/$domain/apache2.ssl.conf_htaccess"
-			if [ ! -f "$htaccess" ]; then
-				echo "<Directory $docroot>" > $htaccess
-				echo "    AuthUserFile $htpasswd" >> $htaccess
-				echo "    AuthName \"$domain access\"" >> $htaccess
-				echo "    AuthType Basic" >> $htaccess
-				echo "    Require valid-user" >> $htaccess
-				echo "</Directory>" >> $htaccess
-				ln -s $htaccess $shtaccess
-				restart_required='yes'
-			fi
+			htpasswd_want="${htpasswd_want:+$htpasswd_want$'\n'}$auth_user:$auth_hash"
+		done
+		[ -n "$auth_nohash" ] \
+			&& echo "Warning!: $domain: the record names http auth account(s)$auth_nohash with no password hash - left out of the password file, which is otherwise kept as it is"
+
+		# Paths only, so it is safe to correct even when no account can be written - the archive
+		# delivers a usable password file at the right place.
+		if [ "$htaccess_want" != "$(cat "$htaccess" 2> /dev/null)" ]; then
+			printf '%s\n' "$htaccess_want" > "$htaccess"
+			restart_required='yes'
 		fi
-		chmod 644 $htpasswd $htaccess
-		chgrp $user $htpasswd $htaccess
-	done
+		if [ "$(readlink "$shtaccess" 2> /dev/null)" != "$htaccess" ]; then
+			ln -sfn "$htaccess" "$shtaccess"
+			restart_required='yes'
+		fi
+		# Only where the record can fill it. Compared first, so an idle rebuild causes no restart.
+		if [ -n "$htpasswd_want" ] && [ "$htpasswd_want" != "$(cat "$htpasswd" 2> /dev/null)" ]; then
+			printf '%s\n' "$htpasswd_want" > "$htpasswd"
+			restart_required='yes'
+		fi
+		chmod 644 "$htaccess"
+		chgrp "$user" "$htaccess"
+		[ -e "$htpasswd" ] && chmod 644 "$htpasswd" && chgrp "$user" "$htpasswd"
+	elif [ -e "$htaccess" ] || [ -e "$shtaccess" ] || [ -e "$htpasswd" ]; then
+		# The record names no account, so neither file belongs to this domain.
+		rm -f "$htaccess" "$shtaccess" "$htpasswd"
+		restart_required='yes'
+	fi
 
 	# domain folder permissions: DOMAINDIR_WRITABLE: default-val:no source:hestia.conf
 	DOMAINDIR_MODE=551
@@ -804,6 +836,12 @@ rebuild_mail_domain_conf() {
 # Rebuild MySQL
 rebuild_mysql_database() {
 	mysql_connect $HOST
+	# Cleared per call: only one branch sets it, so it would carry into the next database.
+	query2=''
+	# Before the CREATE USERs: only "was this user already here" tells a kept credential from one
+	# that never arrived.
+	dbuser_existed=$(mysql_query "SELECT COUNT(*) FROM mysql.user WHERE User='$DBUSER'" 2> /dev/null | tail -n1)
+	[ "$dbuser_existed" = '0' ] && dbuser_existed=''
 	mysql_query "CREATE DATABASE \`$DB\` CHARACTER SET $CHARSET" > /dev/null
 	if [ "$mysql_fork" = "mysql" ]; then
 		# mysql
@@ -849,9 +887,18 @@ rebuild_mysql_database() {
 	fi
 	mysql_query "GRANT ALL ON \`$DB\`.* TO \`$DBUSER\`@\`%\`" > /dev/null
 	mysql_query "GRANT ALL ON \`$DB\`.* TO \`$DBUSER\`@localhost" > /dev/null
-	mysql_query "$query" > /dev/null
-	if [ ! -z "$query2" ]; then
-		mysql_query "$query2" > /dev/null
+	# An empty hash would blank a working password; mysql survives today only because its own read
+	# path happens to work. Guards an EXISTING credential - CREATE USER above is IF NOT EXISTS.
+	if [ -n "$MD5" ]; then
+		mysql_query "$query" > /dev/null
+		if [ ! -z "$query2" ]; then
+			mysql_query "$query2" > /dev/null
+		fi
+	elif [ -n "$dbuser_existed" ]; then
+		echo "Warning!: $DB carries no password for $DBUSER - the one on this host is kept unchanged"
+	else
+		echo "Warning!: $DB has no password for $DBUSER on this host - the data is back, but nothing can connect to it until a password is set"
+		REBUILD_DB_UNUSABLE="$REBUILD_DB_UNUSABLE $DB"
 	fi
 	mysql_query "FLUSH PRIVILEGES" > /dev/null
 }
@@ -886,11 +933,33 @@ rebuild_pgsql_database() {
 		exit "$E_CONNECT"
 	fi
 
-	query="CREATE ROLE $DBUSER"
-	psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+	# Asked before anything is created: afterwards the two cases look identical, and "kept
+	# unchanged" on a host where the role was just made claims a credential that never existed.
+	role_existed=$(psql_value "SELECT 1 FROM pg_authid WHERE rolname='$DBUSER'")
 
-	query="UPDATE pg_authid SET rolpassword='$MD5' WHERE rolname='$DBUSER'"
-	psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+	if [ -n "$MD5" ]; then
+		# Bare CREATE ROLE is NOLOGIN, so a restored database was unreachable whatever its password
+		# said. Granted only together with a password: a passwordless login role would be open
+		# wherever pg_hba.conf carries a trust line, which nothing here can read. The ALTER repairs
+		# roles the old bare form left behind.
+		query="CREATE ROLE $DBUSER WITH LOGIN"
+		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+		query="ALTER ROLE $DBUSER WITH LOGIN"
+		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+		# Through psql_query's temp file, never -c: a SCRAM verifier is credential-equivalent and
+		# argv is readable through /proc. The only statement here that carries a secret.
+		psql_query "UPDATE pg_authid SET rolpassword='$MD5' WHERE rolname='$DBUSER'" > /dev/null
+	else
+		# An empty hash is the absence of a password: it may neither replace a working one nor pose as one.
+		query="CREATE ROLE $DBUSER"
+		psql -h $HOST -U $USER -p $PORT -c "$query" > /dev/null 2>&1
+		if [ -n "$role_existed" ]; then
+			echo "Warning!: $DB carries no password for $DBUSER - the one on this host is kept unchanged"
+		else
+			echo "Warning!: $DB has no password for $DBUSER on this host - the data is back, but nothing can connect to it until a password is set"
+			REBUILD_DB_UNUSABLE="$REBUILD_DB_UNUSABLE $DB"
+		fi
+	fi
 
 	query="CREATE DATABASE $DB OWNER $DBUSER"
 	if [ "$TPL" = 'template0' ]; then

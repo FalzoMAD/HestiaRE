@@ -37,9 +37,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 # installed = package present AND host registered (see header); else resume
 if dpkg -l mariadb-server 2> /dev/null | grep -q '^ii' \
 	&& grep -qs "HOST='localhost'" "$HESTIA/conf/mysql.conf"; then
@@ -56,7 +53,10 @@ MARIADB_VER="${1:-${COMPONENT_DB_MARIADB_VERSION:-}}"
 [ -z "$MARIADB_VER" ] && MARIADB_VER="__os__"
 case "$MARIADB_VER" in
 	12.3 | 11.8 | 11.4 | __os__) ;;
-	*) echo "ERROR: unsupported MariaDB version '$MARIADB_VER' (expected 12.3|11.8|11.4|__os__)"; exit "$E_INVALID" ;;
+	*)
+		echo "ERROR: unsupported MariaDB version '$MARIADB_VER' (expected 12.3|11.8|11.4|__os__)"
+		exit "$E_INVALID"
+		;;
 esac
 ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 
@@ -64,8 +64,14 @@ ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 if command -v load_os_profile > /dev/null 2>&1 && [ -n "${INSTALL_OS:-}" ]; then
 	load_os_profile "$INSTALL_OS" > /dev/null 2>&1 || true
 fi
-[ -n "${OS_ID:-}" ] || OS_ID="$(. /etc/os-release; echo "$ID")"
-[ -n "${CODENAME:-}" ] || CODENAME="$(. /etc/os-release; echo "${VERSION_CODENAME:-}")"
+[ -n "${OS_ID:-}" ] || OS_ID="$(
+	. /etc/os-release
+	echo "$ID"
+)"
+[ -n "${CODENAME:-}" ] || CODENAME="$(
+	. /etc/os-release
+	echo "${VERSION_CODENAME:-}"
+)"
 
 # Repo/keyring only for an external-repo version; __os__/empty uses OS packages.
 case "$MARIADB_VER" in
@@ -74,10 +80,19 @@ case "$MARIADB_VER" in
 		printf 'deb [arch=%s signed-by=/usr/share/keyrings/mariadb-keyring.gpg] https://dlm.mariadb.com/repo/mariadb-server/%s/repo/%s %s main\n' \
 			"$ARCH" "$MARIADB_VER" "$OS_ID" "$CODENAME" > /etc/apt/sources.list.d/mariadb.list
 		curl -fsSL https://mariadb.org/mariadb_release_signing_key.asc -o /tmp/mariadb_signing.asc \
-			|| { echo "ERROR: failed to download MariaDB signing key"; exit 1; }
+			|| {
+				echo "ERROR: failed to download MariaDB signing key"
+				exit 1
+			}
 		gpg --dearmor < /tmp/mariadb_signing.asc > /usr/share/keyrings/mariadb-keyring.gpg \
-			|| { echo "ERROR: failed to dearmor MariaDB signing key"; exit 1; }
-		[ -s /usr/share/keyrings/mariadb-keyring.gpg ] || { echo "ERROR: MariaDB keyring empty"; exit 1; }
+			|| {
+				echo "ERROR: failed to dearmor MariaDB signing key"
+				exit 1
+			}
+		[ -s /usr/share/keyrings/mariadb-keyring.gpg ] || {
+			echo "ERROR: MariaDB keyring empty"
+			exit 1
+		}
 		rm -f /tmp/mariadb_signing.asc
 		;;
 	*)
@@ -96,9 +111,12 @@ fi
 
 echo "[ * ] Configuring MariaDB..."
 MEM=$(awk '/MemTotal/{print $2}' /proc/meminfo)
-if   [ "$MEM" -gt 3900000 ]; then MYCNF="my-large.cnf"
-elif [ "$MEM" -gt 1200000 ]; then MYCNF="my-medium.cnf"
-else                              MYCNF="my-small.cnf"
+if [ "$MEM" -gt 3900000 ]; then
+	MYCNF="my-large.cnf"
+elif [ "$MEM" -gt 1200000 ]; then
+	MYCNF="my-medium.cnf"
+else
+	MYCNF="my-small.cnf"
 fi
 rm -f /etc/mysql/my.cnf
 cp -f "$HESTIA/share/mysql/$MYCNF" /etc/mysql/my.cnf

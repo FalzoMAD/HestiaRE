@@ -35,8 +35,6 @@ if ! echo "$DB_SYSTEM" | grep -qw 'mysql'; then
 	exit 2
 fi
 
-check_hestia_demo_mode
-
 # Already installed?
 if [ -f "$PMA_CONFIG/config-db.php" ] && [ -f "/var/lib/phpmyadmin/blowfish_secret.inc.php" ]; then
 	echo "INFO: phpMyAdmin is already installed and configured."
@@ -63,7 +61,7 @@ DEBIAN_FRONTEND=noninteractive apt-get -y install phpmyadmin $pma_no_apache
 # Generate blowfish secret and write to expected location
 blowfish="$(openssl rand -base64 32 | tr -d '/+=' | cut -c1-32)"
 mkdir -p /var/lib/phpmyadmin
-cat > /var/lib/phpmyadmin/blowfish_secret.inc.php <<'PHP'
+cat > /var/lib/phpmyadmin/blowfish_secret.inc.php << 'PHP'
 <?php
 $cfg['blowfish_secret'] = '_BLOWFISH_';
 PHP
@@ -83,25 +81,37 @@ db_client="mysql"
 
 # Guard against name collision: bail if a 'phpmyadmin' database already exists
 # from a source not managed by this HestiaRE instance.
-if $db_client -e "SHOW DATABASES LIKE 'phpmyadmin'" 2>/dev/null | grep -q 'phpmyadmin'; then
+if $db_client -e "SHOW DATABASES LIKE 'phpmyadmin'" 2> /dev/null | grep -q 'phpmyadmin'; then
 	echo "ERROR: Database 'phpmyadmin' already exists but is not managed by this HestiaRE instance."
 	echo "       Remove it manually first, or run h-delete-sys-phpmyadmin if it was a previous install."
 	exit 1
 fi
 
 $db_client -e "CREATE DATABASE IF NOT EXISTS \`phpmyadmin\` DEFAULT CHARACTER SET utf8 COLLATE utf8_bin" \
-	|| { echo "ERROR: Failed to create phpmyadmin database"; exit 1; }
+	|| {
+		echo "ERROR: Failed to create phpmyadmin database"
+		exit 1
+	}
 $db_client -e "CREATE USER IF NOT EXISTS 'pma'@'localhost' IDENTIFIED BY '$dbpass'" \
-	|| { echo "ERROR: Failed to create pma database user"; exit 1; }
+	|| {
+		echo "ERROR: Failed to create pma database user"
+		exit 1
+	}
 $db_client -e "GRANT ALL ON \`phpmyadmin\`.* TO 'pma'@'localhost'" \
-	|| { echo "ERROR: Failed to grant pma privileges"; exit 1; }
+	|| {
+		echo "ERROR: Failed to grant pma privileges"
+		exit 1
+	}
 $db_client -e "FLUSH PRIVILEGES"
 $db_client phpmyadmin < /usr/share/phpmyadmin/sql/create_tables.sql \
-	|| { echo "ERROR: Failed to initialize phpMyAdmin config storage schema"; exit 1; }
+	|| {
+		echo "ERROR: Failed to initialize phpMyAdmin config storage schema"
+		exit 1
+	}
 
 # config-db.php (read by the OS config.inc.php for config storage)
 mkdir -p "$PMA_CONFIG"
-cat > "$PMA_CONFIG/config-db.php" <<'PHP'
+cat > "$PMA_CONFIG/config-db.php" << 'PHP'
 <?php
 $dbserver='localhost';
 $dbport='';

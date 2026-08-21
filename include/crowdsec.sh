@@ -73,7 +73,10 @@ crowdsec_enable_capi() {
 crowdsec_current_mode() {
 	local mesh=0 capi=0
 	# No engine at all is not "local", or a caller would report a model for a box that has none.
-	[ -f /etc/crowdsec/config.yaml ] || { echo "none"; return 0; }
+	[ -f /etc/crowdsec/config.yaml ] || {
+		echo "none"
+		return 0
+	}
 	[ -f "$CONF_DIR/crowdsec/mesh.conf" ] && mesh=1
 	grep -qE '^[[:space:]]*credentials_path:.*online_api_credentials' /etc/crowdsec/config.yaml 2> /dev/null && capi=1
 	if [ "$mesh" = 1 ] && [ "$capi" = 1 ]; then
@@ -98,9 +101,15 @@ crowdsec_gate_bruteforce() {
 	for s in $CS_BF_SCENARIOS; do
 		f="/etc/crowdsec/scenarios/${s##*/}.yaml"
 		if [ "$f2b" = 'fail2ban' ]; then
-			[ -e "$f" ] && { cscli scenarios remove "$s" > /dev/null 2>&1; changed='yes'; }
+			[ -e "$f" ] && {
+				cscli scenarios remove "$s" > /dev/null 2>&1
+				changed='yes'
+			}
 		else
-			[ -e "$f" ] || { cscli scenarios install "$s" > /dev/null 2>&1; changed='yes'; }
+			[ -e "$f" ] || {
+				cscli scenarios install "$s" > /dev/null 2>&1
+				changed='yes'
+			}
 		fi
 	done
 	[ "$changed" = 'yes' ] && systemctl reload crowdsec > /dev/null 2>&1
@@ -118,7 +127,10 @@ crowdsec_apply() {
 
 	# Engine + nginx lua module (OS-repo; the module auto-loads + pulls lua-resty-core itself).
 	DEBIAN_FRONTEND=noninteractive apt-get -y -qq install crowdsec libnginx-mod-http-lua > /dev/null 2>&1 \
-		|| { echo "CrowdSec: package install failed" >&2; return 1; }
+		|| {
+			echo "CrowdSec: package install failed" >&2
+			return 1
+		}
 
 	# Curated web collections (LAPI already on :8054); failures non-fatal (hub/network hiccup).
 	cscli hub update > /dev/null 2>&1 || true
@@ -142,8 +154,11 @@ crowdsec_apply() {
 		cscli bouncers delete hestia-nginx > /dev/null 2>&1 || true
 		local key
 		key=$(cscli bouncers add hestia-nginx -o raw 2> /dev/null)
-		[ -n "$key" ] || { echo "CrowdSec: bouncer registration failed" >&2; return 1; }
-		cat > "$keyfile" <<-EOF
+		[ -n "$key" ] || {
+			echo "CrowdSec: bouncer registration failed" >&2
+			return 1
+		}
+		cat > "$keyfile" <<- EOF
 			-- CrowdSec nginx bouncer config. Generated - do not edit.
 			return {
 				host = "127.0.0.1", port = 8054,
@@ -199,21 +214,23 @@ crowdsec_l3_setup() {
 	local share="$HESTIA/share/crowdsec"
 	local marker="$CONF_DIR/firewall/crowdsec.conf"
 
-	command -v cscli > /dev/null 2>&1 || { echo "CrowdSec: cscli missing, L3 skipped" >&2; return 1; }
+	command -v cscli > /dev/null 2>&1 || {
+		echo "CrowdSec: cscli missing, L3 skipped" >&2
+		return 1
+	}
 	# jq drives the feeder's decision filter.
 	command -v jq > /dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get -y -qq install jq > /dev/null 2>&1
 
 	# Marker: presence gates the set + DROP chain and the feed.
 	mkdir -p "$CONF_DIR/firewall"
 	if [ ! -f "$marker" ]; then
-		cat > "$marker" <<-EOF
+		cat > "$marker" <<- EOF
 			# HestiaRE CrowdSec L3 marker: presence enables the set, the DROP chain and the feeder timer.
 			# Managed by include/crowdsec.sh; do not edit.
 			SET='crowdsec-blacklists'
 		EOF
 		chmod 640 "$marker"
 	fi
-
 
 	# h-update-firewall self-guards mid-install: no rules.conf yet, the configure stage rebuilds later.
 	cp -f "$share/systemd/hestia-crowdsec-l3.service" /etc/systemd/system/hestia-crowdsec-l3.service
@@ -239,15 +256,23 @@ crowdsec_l3_teardown() {
 
 # The per-domain Layer-A ban check, into the public nginx vhost dir - nginx-only, apache has no CrowdSec.
 # Removed when off, so the vhost's `include ...nginx.crowdsec.conf*;` glob is a no-op for that domain.
-crowdsec_render_domain_fragment() {
-	local user="$1" domain="$2" sys
+# crowdsec_domain_capable - can a per-domain fragment do anything here?
+#
+# The field is intent, this is capability: an nginx without the bouncer either fails to parse the
+# directive, invalidating the whole config, or answers 500 per request. Keyed on the artefact the
+# apply step installs, and asked from here by both the renderer and the restore's report.
+crowdsec_domain_capable() {
+	local sys
 	if [ -n "$PROXY_SYSTEM" ]; then sys="$PROXY_SYSTEM"; else sys="$WEB_SYSTEM"; fi
+	[ "$sys" = "nginx" ] && [ -f /etc/nginx/conf.d/crowdsec_init.conf ]
+}
+
+crowdsec_render_domain_fragment() {
+	local user="$1" domain="$2"
 
 	local frag="$HOMEDIR/$user/conf/web/$domain/nginx.crowdsec.conf"
-	# The field is intent, the fragment is intent AND capability: an nginx without the bouncer either
-	# cannot parse the directive at all - invalidating the WHOLE config - or answers 500 per request.
-	# Keyed on the artefact the apply step installs; leftovers of a removal go at the next rebuild (#743).
-	if [ "$sys" != "nginx" ] || [ ! -f /etc/nginx/conf.d/crowdsec_init.conf ]; then
+	# Leftovers of a removal go at the next rebuild.
+	if ! crowdsec_domain_capable; then
 		rm -f "$frag"
 		return 0
 	fi

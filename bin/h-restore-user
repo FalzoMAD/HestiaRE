@@ -3,7 +3,7 @@
 # options: USER BACKUP [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR] [NOTIFY] [CONSENT]
 #
 # example: h-restore-user admin 2019-04-22_01-00-00.tar
-# example: h-restore-user admin 2019-04-22_01-00-00.tar '' '' '' '' '' '' no all
+# example: h-restore-user admin 2019-04-22_01-00-00.tar '' '' '' '' '' '' no all,php-fallback
 #
 # This function for restoring user from backup. To be able to restore the backup,
 # the archive needs to be placed in /backup.
@@ -271,7 +271,9 @@ fi
 if [ -n "$restore_refused" ]; then
 	rm -rf "$tmpdir"
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
-	check_result "$E_INVALID" "no consent for:$restore_refused - nothing was written. Name them in the CONSENT argument (or 'all'), select the objects to restore, or answer the prompt on a terminal"
+	# The tokens actually refused: 'all' covers the sections and deliberately not php-fallback.
+	restore_suggest=$(tr ' ' ',' <<< "${restore_refused# }")
+	check_result "$E_INVALID" "no consent for:$restore_refused - nothing was written. Pass CONSENT='$restore_suggest', select the objects to restore, or answer the prompt on a terminal. 'all' stands for the sections and deliberately not for php-fallback, which moves a customer's domains onto another PHP version."
 fi
 
 # Restoring user account
@@ -299,7 +301,19 @@ if [ "$create_user" = 'yes' ]; then
 	mkdir $USER_DATA
 	cp $tmpdir/$BACKUP_CONTAINER/user.conf $USER_DATA/
 	cp -r $tmpdir/$BACKUP_CONTAINER/ssl $USER_DATA/ > /dev/null 2>&1
-	cp $tmpdir/$BACKUP_CONTAINER/backup-excludes.conf $USER_DATA/ > /dev/null 2>&1
+
+	# Everything else the container holds. Skipped: BACKUP_USER_DATA_CORE, plus what this side does
+	# itself - user.conf and ssl above, packages below, web-system and origin, which describe the
+	# archive. A superset on purpose: this is the side that takes in foreign archives.
+	for _entry in "$tmpdir/$BACKUP_CONTAINER"/*; do
+		[ -e "$_entry" ] || continue
+		_name=$(basename "$_entry")
+		[[ " $BACKUP_USER_DATA_CORE user.conf ssl packages web-system origin " == *" $_name "* ]] && continue
+		# Out of the archive and joined onto a path we write to: a plain basename or nothing.
+		case "$_name" in '' | .* | */* | *[!A-Za-z0-9._-]*) continue ;; esac
+		cp -r "$_entry" "$USER_DATA/" \
+			|| echo "Warning!: $_name from the archive could not be written to the data directory" | tee -a $tmpdir/restore.log
+	done
 
 	# The user's hosting package, if the archive carried one. ADD ONLY: a package of that name
 	# already on this box is left exactly as it is, even if its values differ - the admin owns the
@@ -310,7 +324,7 @@ if [ "$create_user" = 'yes' ]; then
 			[ -e "$_pkg" ] || continue
 			_dest="$CONF_DIR/packages/$(basename "$_pkg")"
 			if [ -e "$_dest" ]; then
-				echo "$(date "+%F %T") package $(basename "$_pkg") exists on target, kept unchanged" >> $tmpdir/restore.log 2>/dev/null || true
+				echo "$(date "+%F %T") package $(basename "$_pkg") exists on target, kept unchanged" >> $tmpdir/restore.log 2> /dev/null || true
 			else
 				cp -f "$_pkg" "$_dest"
 			fi
@@ -345,6 +359,13 @@ else
 		restore_failures="$restore_failures$(printf '\n  not handed over:%s' "$(tr '\n' ';' <<< "$LEFTOVERS_FAILED" | sed 's/;$//;s/;/, /g')")"
 	fi
 	[ -n "$LEFTOVERS_DONE" ] && echo "$(date '+%F %T') -> $leftovers_dir" | tee -a $tmpdir/restore.log
+	# Handing the objects to the customer is the friendly half; the status has to carry the rest.
+	# Otherwise a queue reads three missing databases as a restore that worked, while one missing
+	# database - the same loss, reached by another branch - already ends the run in red.
+	while IFS= read -r _degraded; do
+		[ -n "$_degraded" ] || continue
+		restore_failures="$restore_failures$(printf '\n  %s - handed over instead of restored' "$_degraded")"
+	done <<< "$LEFTOVERS_DEGRADED"
 fi
 
 # Unpacking pam container
@@ -363,18 +384,6 @@ new_uid=$(grep "^$user:" /etc/passwd | cut -f 3 -d :)
 # Restoring web domains
 if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 	echo -e "\n-- WEB --" | tee -a $tmpdir/restore.log
-
-	# Cross-model restore banner: the web configs are regenerated for THIS host's
-	# model; if the archive was made under a different model, custom includes may not apply.
-	if [ -f "$tmpdir/$BACKUP_CONTAINER/web-system" ]; then
-		bk_web=$(sed -n "s/.*WEB_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$BACKUP_CONTAINER/web-system")
-		bk_proxy=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$tmpdir/$BACKUP_CONTAINER/web-system")
-		if [ "$bk_web" != "$WEB_SYSTEM" ] || [ "$bk_proxy" != "$PROXY_SYSTEM" ]; then
-			echo "Warning!: backup web model (WEB_SYSTEM='$bk_web' PROXY_SYSTEM='$bk_proxy') differs from this host (WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'); web configs are regenerated for this host - review any custom nginx/apache includes." | tee -a "$tmpdir/restore.log"
-		fi
-	else
-		echo "Warning!: backup web model unknown (pre-#120 archive); review the restored web configs manually." | tee -a "$tmpdir/restore.log"
-	fi
 
 	# Restoring web domain. The list comes from the archive's member paths, not from a validator,
 	# so a member with a space in its name would split into two - and one of the halves could match
@@ -487,10 +496,17 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				CUSTOM_PHPROOT=$(echo "$CUSTOM_PHPROOT" | sed -e "s|/home/${old_user}/web/|/home/${user}/web/|g")
 			fi
 
-			# Converting FTP users
+			# Converting FTP users. Per entry and anchored at the front, like the database name
+			# below: the field is a colon list, and one `sed s/<old>_//` over the whole string
+			# replaced the FIRST occurrence only - a second account kept the SOURCE customer's
+			# prefix, and a name carrying the prefix in the middle lost it from there instead.
 			if [ -n "$FTP_USER" ]; then
-				FTP_USER=$(echo "$FTP_USER" | sed -e "s/${old_user}_//")
-				FTP_USER="${user}_${FTP_USER}"
+				IFS=':' read -r -a _ftp_list <<< "$FTP_USER"
+				FTP_USER=''
+				for _f in "${_ftp_list[@]}"; do
+					[ -n "$_f" ] || continue
+					FTP_USER="${FTP_USER:+$FTP_USER:}${user}_${_f#"${old_user}_"}"
+				done
 			fi
 
 			# Copying SSL certificates
@@ -987,25 +1003,54 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 
 		# Unzipping database dump
 		if [ $backup_mode = 'zstd' ]; then
-			pzstd -d $tmpdir/db/$database/$database.*.sql.zst
+			# -q: pzstd reports every file's size on stderr, which reads like an error here.
+			pzstd -q -d $tmpdir/db/$database/$database.*.sql.zst
 		else
 			gzip -d $tmpdir/db/$database/$database.*.sql.gz
 		fi
 
 		# Importing database dump
 		database_dump="$tmpdir/db/$database/$database.$TYPE.sql"
+		# Reset per database, or the report names every database after the first one that lacked one.
+		REBUILD_DB_UNUSABLE=''
+		# The name to clear is the one this customer will own, never the one the archive carries.
+		# Where the two differ - a restore under a different customer name - the archived name is
+		# somebody else's live database on this box.
+		db_cleared='yes'
 		case $TYPE in
 			mysql)
-				delete_mysql_database
-				rebuild_mysql_database
-				import_mysql_database $database_dump
+				delete_mysql_database "$target_db" || db_cleared='no'
 				;;
 			pgsql)
-				delete_pgsql_database
-				rebuild_pgsql_database
-				import_pgsql_database $database_dump
+				delete_pgsql_database "$target_db" || db_cleared='no'
 				;;
 		esac
+		# Refused means the target was not emptied, so importing on top would merge the archive into
+		# whatever is there. Named as a part that did not come back, or the run reports a success it
+		# did not have.
+		# Branched rather than `continue`d: the loop body keeps one way out, so anything appended
+		# at its end still runs for every database.
+		if [ "$db_cleared" != 'yes' ]; then
+			echo "Warning!: $target_db was not restored - it is not a database of $user" | tee -a $tmpdir/restore.log
+			restore_failures="$restore_failures$(printf '\n  database %s (refused: not a database of %s)' "$target_db" "$user")"
+		else
+			case $TYPE in
+				mysql)
+					rebuild_mysql_database
+					import_mysql_database $database_dump
+					;;
+				pgsql)
+					rebuild_pgsql_database
+					import_pgsql_database $database_dump
+					;;
+			esac
+			# Rows back, nothing able to connect: a degraded result, not a line to find in the log
+			# later. Only the fresh-host case reaches here - where a password was kept it stays a
+			# warning.
+			if [ -n "$REBUILD_DB_UNUSABLE" ]; then
+				restore_failures="$restore_failures$(printf '\n  database %s (restored without a password - set one before the application can connect)' "$target_db")"
+			fi
+		fi
 	done 3< <(printf '%s\n' "$databases")
 fi
 
@@ -1159,8 +1204,12 @@ if [ -d "$HOMEDIR/$user/.companion" ] && [ -x "$BIN/h-add-user-docker" ]; then
 			-exec chown -h "$new_companion" {} \;
 	fi
 
-	"$BIN/h-add-user-docker" "$user" >> $tmpdir/restore.log 2>&1 \
-		|| echo "Warning!: could not re-enable Docker for $user - see the log above." | tee -a $tmpdir/restore.log
+	if ! "$BIN/h-add-user-docker" "$user" >> $tmpdir/restore.log 2>&1; then
+		echo "Warning!: could not re-enable Docker for $user - see the log above." | tee -a $tmpdir/restore.log
+		# The customer had docker and does not have it here, which is the same kind of loss as a
+		# section this box cannot take.
+		restore_failures="$restore_failures$(printf '\n  docker for %s (could not be re-enabled on this host)' "$user")"
+	fi
 fi
 
 # Sending mail notification

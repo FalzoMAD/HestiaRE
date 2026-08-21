@@ -12,7 +12,193 @@ opens above it.
 
 ## Unreleased
 
+### Removed
+
+- **Demo mode is gone** (#759). Inherited from upstream, where it exists to keep a public demo box
+  from being changed: a config key that made 365 commands refuse to do anything, plus the command
+  that set it, its entry in the config listers and the key registry, and a panel branch that hid the
+  login history. There will be no demo box here, and a switch that turns every write off is a large
+  surface with no purpose - one that nothing tested and nothing would have noticed going wrong. An
+  existing host keeps a stale `conf/defaults/system.conf` until `h-update-sys-defaults` runs once;
+  a fresh install writes it correctly from the start.
+
 ### Fixed
+
+- **Two addon installers announced work they had not done** (#772). Run against a host that already
+  had ProFTPD or Docker, they printed "Installing ProFTPD" and "Adding the Docker repository" and
+  went through the motions again, while their guarded siblings say "already installed" and stop.
+  A message that claims an action nobody performed is read as evidence of the state before it - and
+  it was, during a cleanup, which is how a working ProFTPD came to be removed. Both now check the
+  package and the registration together, so a package the OS dragged in without our configuration
+  still counts as not installed and a fresh install is not turned away.
+
+- **The PHP fallback could not be agreed to from the panel** (#608). A restore whose archive carries
+  a PHP version this host does not have needs an explicit yes, and the queue has no terminal to ask
+  at - so a panel restore of such an archive refused, and the message named a token only the CLI
+  could pass. The backup page now carries that choice, named after the version the domains would
+  land on, and both the whole-archive button and the bulk action send it.
+
+### Fixed
+
+- **The restic bulk restore restored the wrong thing, or nothing** (#767). Selecting mail domains
+  scheduled a database restore, databases could not be selected at all because the branch for them
+  was missing, and the branch for user directories tested a variable that was never set - against a
+  control the page does not render and an object type the scheduler does not accept. What did run
+  passed a comma-separated list to a command that takes one value and rejects a comma, so even the
+  web branch only ever worked for a single selection. Each selected object is now scheduled on its
+  own. Two debug dumps of the POST body went with it.
+
+### Fixed
+
+- **A lint run that measured nothing reported the cleanest possible result** (#770). The format
+  ratchet compared how many files are exempt now against how many were exempt on the base branch,
+  and an unreadable base counting zero failed closed - but a current side counting zero did not,
+  because zero is not greater than zero. With the exempt list now empty, zero is also the expected
+  result, so a run that read no files at all was indistinguishable from a clean one. Both sides now
+  report how many files they looked at, and a side that looked at none fails.
+
+### Changed
+
+- **The 32 shell files the format check had exempted are formatted** (#770). They were unformatted
+  before the gate existed, so it skipped them - which left the check blind on exactly the files most
+  likely to need it, `include/main.sh` and `install.sh` among them. The list is now empty and every
+  shell file is measured. Whitespace and a few redundant semicolons only: each file was compared
+  against its previous revision in minified form, and the fleet smoke run passes on all four targets.
+
+### Removed
+
+- **The backup pages no longer offer DNS** (#713). Zones stopped being backed up when the
+  subsystem went, but the panel kept a DNS column, a list of zones with checkboxes and per-zone
+  restore links, and the restore handlers still accepted what those checkboxes posted - all of it
+  fed by a field the backup fills with nothing. The `[DNS]` argument of `h-restore-user` stays, as
+  does the empty `DNS=` in the backup record: both are HestiaCP compatibility, and the panel now
+  passes the argument unset rather than offering a way to fill it.
+
+### Fixed
+
+- **The shell format check passed on files it had never measured** (#713). It compared a file
+  against its state on the base branch by piping that revision into `shfmt`, but `shfmt` picks up
+  `.editorconfig` from the file's path and content on standard input has none - so the base was
+  judged by the tool's own defaults, came back unformatted whatever it contained, and every
+  freshly introduced misformat was waved through as inherited debt. The settings are now passed
+  explicitly, and the set of files the check exempts is counted on both sides: it may shrink,
+  never grow.
+
+- **Saving the backup exclusions cleared the cron exclusion** (#768). A customer set to skip their
+  cron jobs kept that setting only until someone opened the exclusions page and pressed save: the
+  form had no cron field, so the handler wrote an empty one over it, and the next backup silently
+  carried the jobs again. The page now offers the field and the lister reports it. A single job name
+  is refused rather than stored: the backup tests the value only against `*`, so anything else would
+  have been accepted, shown back and then ignored.
+
+- **A restore that could not take a whole section reported success** (#754). Three databases handed
+  to the customer because the box has no database engine ended in a zero exit status, while a single
+  database that could not be loaded - the same loss reached by another branch - ended in red. Which
+  one you got depended on whether the section was entered at all, not on what the customer was left
+  with. A section this host has no subsystem for now counts as a part that did not come back, and so
+  does a docker setup that could not be re-enabled. What is handed over because this product does
+  not do it at all - DNS zones - still does not colour the status: a HestiaCP migration is not a
+  failed restore for carrying zones we never claimed to keep.
+
+- **A restore under a different customer name deleted the source customer's database and reported
+  success** (#764). Restoring an archive under a new name on the same box - what a careful operator
+  does as a rehearsal before migrating - dropped the live database the archive came from, left its
+  record claiming it was still there, and ended with a zero exit status. The deletion took the name
+  out of the **archive** while everything else worked on the target's name; where the two coincide,
+  which is every same-name restore, nothing showed. The name to clear now comes from the customer
+  being restored into, and the check that it belongs to them sits in the delete itself rather than
+  in its callers, so the next caller cannot arrive without it. A refusal is named and counts as a
+  part that did not come back.
+
+- **A second FTP account came back under the old customer's name** (#764). The conversion replaced
+  the first occurrence of the source prefix in the whole colon-separated field, so the second
+  account kept it - and a name carrying the prefix in the middle lost it from there instead. Each
+  entry is converted on its own now, anchored at the front, the way the database name already was.
+
+- **A restore dropped the customer's panel notifications without a word** (#713). The backup copied
+  a fixed list of names out of the customer's data directory, and a list only ever covers the files
+  that existed when it was written - `notifications.conf` never made it in. Both sides now walk the
+  directory and skip a named set instead, each entry with its reason next to it, so the next file
+  added there travels by default rather than by amendment. What stays out: the customer's restic
+  repository password, the records the sections rebuild themselves, and the panel login history,
+  which is a per-box view of who was signed in - down to IP addresses, browser fingerprints and
+  session ids - rather than something a customer takes along.
+
+- **The restore report says that webmail settings and address books are not in the archive** (#713).
+  They live in one table set per box, shared by every mailbox, so the server backup carries them -
+  but silence on the point made "my contacts are gone" a discovery for after the restore.
+
+- Smaller: a new account no longer gets an empty `dns` directory and `dns.conf` for a subsystem that
+  was removed, and a MySQL password statement can no longer survive from one database into the next
+  in a rebuild loop (#713).
+
+- **A restore under a different customer name pointed the site's password protection into the old
+  customer's home** (#756). The `.htaccess` fragments travel inside the archive with an absolute
+  path written into them, and the rebuild only wrote its own when none was there - which after a
+  restore is never. Where that path did not exist the domain answered 403 even with the right
+  password; where it did, the site was gated by **another customer's** password file. Both files
+  are now derived from the record on every rebuild, so they name the customer who actually owns the
+  domain, and an account the record no longer knows is dropped from the file instead of living on
+  in it. An account the record names but carries no hash for is named and left out rather than
+  written as a line that can never match. Where the record names no account at all the fragments go
+  rather than staying behind, and the pair belonging to the web server this host does not run is
+  dropped too - it is inert until the web model is switched, and then it is not.
+
+- **A restore over an existing customer called a fresh archive "pre-#120" and said nothing about a
+  web model that really did differ** (#753). The banner inside the run read a member that is only
+  unpacked when the account is created, so on the most common path it never saw it. It is gone
+  rather than repaired: the preflight report already carries the same sentence, from the probe, and
+  before anything is written - two reports of one fact are two chances to disagree.
+
+- **The consent error pointed at a token that could not satisfy it** (#755). Refusing on
+  `php-fallback` while suggesting `all` sent the operator in a circle, because `all` deliberately
+  does not cover it. The message now names the tokens that were actually refused, says what `all`
+  stands for, and the command's own example no longer teaches the form that does not work.
+
+- **A restored domain kept its CrowdSec or bot-limit setting on a host that cannot render it, and
+  the report called the archive fully restorable** (#755). Those protections survive as settings on
+  purpose - they take effect if the module arrives later - but silence made an inactive protection
+  look like a live one. The report names them, asking the renderers' own capability checks rather
+  than a second copy of the condition. It reads them only where the module is installed, so the one
+  function whose job is to be honest before anything is written cannot be what fails without it.
+
+- Smaller: a zstd database dump no longer prints its size into the middle of the restore log, where
+  it read like an error, and a `*` in an archived bot-limit value no longer expands against the
+  working directory (#755).
+
+- **Rebuilding a single database set the customer's database count to 1** (#757). The singular
+  command had inherited the accumulator of its plural sibling without that command's flush in front
+  of the loop, so it wrote "whatever the variable held, plus one" as the customer's total - and the
+  next deletion took it to 0, which is what the panel and the counter check then showed. Disk usage
+  carried the same shape, claiming one database's usage as all of it. A command that touches one
+  object no longer claims a total; the plural form owns the counting and the disk queue owns the
+  usage. The counter check now also watches the suspended mirrors, which are derivable from the
+  records like the rest and were the one group in its exclusion list without a reason - so a value
+  knocked out of step becomes visible instead of waiting for somebody to rebuild the customer.
+
+- **A PostgreSQL database came back from a restore with its password destroyed** (#752). The rows
+  all returned and the customer's application could no longer connect, which reads as a broken app
+  rather than as a restore - and on a same-box restore nothing said a word. The hash was being
+  parsed out of `psql`'s aligned table: the backup took the first line, which is the column
+  heading, and the create and password-change paths filtered for `md5`, which matches no SCRAM
+  hash at all. Every pgsql record was therefore written with an empty password, and the rebuild
+  wrote that emptiness into `pg_authid`. The hash is now read as a value, an empty one never
+  replaces a credential that works, and the run says when it kept one. The same guard covers MySQL,
+  which was only safe because its own read path happened to work.
+
+- **A restored PostgreSQL role could not log in at all** (#752). The rebuild created it with a bare
+  `CREATE ROLE`, which is `NOLOGIN` in PostgreSQL - so a restored database was unreachable whatever
+  its password said, and that is why the empty password went unnoticed for so long. Roles get
+  `LOGIN` as they always did on the add path, but only together with a password: a role that has
+  none stays shut, because turning it into a login role would open it wherever `pg_hba.conf`
+  carries a `trust` line.
+
+- **A database restored onto another host without a password now says so, and the run ends
+  accordingly** (#752). The two cases had been reported with one sentence: on the same host an
+  existing password is kept, on a fresh host - the migration case - the account is created without
+  one and nothing can connect to the database at all. Saying "kept unchanged" there claimed a
+  credential that never existed. The second case is now named as such and counts as a part that
+  did not come back, so a queue or a script sees it rather than finding it in the log.
 
 - **A customer whose `user.conf` lost a package limit was locked out of their own package** (#711).
   An absent or empty limit is not a limit of zero, but that is how the comparison read it, so every

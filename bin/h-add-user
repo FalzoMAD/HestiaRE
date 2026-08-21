@@ -61,9 +61,6 @@ is_user_free "$user"
 is_password_valid
 is_package_valid
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -162,28 +159,25 @@ chmod a+x $HOMEDIR/$user
 chattr +i $HOMEDIR/$user/conf > /dev/null 2>&1
 
 # Adding user dir
-mkdir -p $USER_DATA/ssl $USER_DATA/dns $USER_DATA/mail
+mkdir -p $USER_DATA/ssl $USER_DATA/mail
 
 # Creating configuration files and pipes
 touch $USER_DATA/backup.conf \
 	$USER_DATA/history.log \
 	$USER_DATA/stats.log \
 	$USER_DATA/web.conf \
-	$USER_DATA/dns.conf \
 	$USER_DATA/mail.conf \
 	$USER_DATA/db.conf \
 	$USER_DATA/cron.conf
 
 chmod 770 $USER_DATA \
 	$USER_DATA/ssl \
-	$USER_DATA/dns \
 	$USER_DATA/mail
 
 chmod 660 $USER_DATA/backup.conf \
 	$USER_DATA/history.log \
 	$USER_DATA/stats.log \
 	$USER_DATA/web.conf \
-	$USER_DATA/dns.conf \
 	$USER_DATA/mail.conf \
 	$USER_DATA/db.conf \
 	$USER_DATA/cron.conf

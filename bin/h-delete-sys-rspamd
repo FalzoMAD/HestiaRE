@@ -33,9 +33,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 if [ "$ANTISPAM_SYSTEM" != 'rspamd' ]; then
 	echo "ERROR: rspamd is not the active antispam system."
 	exit "$E_NOTEXIST"

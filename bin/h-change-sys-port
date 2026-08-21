@@ -47,9 +47,6 @@ is_port_valid() {
 check_args '1' "$#" 'PORT'
 is_port_valid
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

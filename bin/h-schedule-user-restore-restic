@@ -1,8 +1,8 @@
 #!/bin/bash
 # info: schedule user backup restoration
-# options: USER BACKUP [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR]
+# options: USER SNAPSHOT [OBJECT] [VALUE]
 #
-# example: h-schedule-user-restore 2019-04-22_01-00-00.tar
+# example: h-schedule-user-restore-restic admin latest web example.tld
 #
 # This function for scheduling user backup restoration.
 
@@ -36,9 +36,6 @@ is_object_format_valid "$snapshot" 'snapshot'
 is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 is_backup_scheduled 'restore'
-
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #

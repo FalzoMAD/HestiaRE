@@ -58,31 +58,6 @@
 		<?php
 			foreach ($data as $key => $value) {
 				++$i;
-				$web = _('No');
-				$dns = _('No');
-				$mail = _('No');
-				$db = _('No');
-				$cron = _('No');
-				$udir = _('No');
-
-				if (!empty($data[$key]['WEB'])) {
-					$web = _('Yes');
-				}
-				if (!empty($data[$key]['DNS'])) {
-					$dns = _('Yes');
-				}
-				if (!empty($data[$key]['MAIL'])) {
-					$mail = _('Yes');
-				}
-				if (!empty($data[$key]['DB'])) {
-					$db = _('Yes');
-				}
-				if (!empty($data[$key]['CRON'])) {
-					$cron = _('Yes');
-				}
-				if (!empty($data[$key]['UDIR'])) {
-					$udir = _('Yes');
-				}
 				?>
 			<div class="units-table-row js-unit">
 				<div class="units-table-cell">

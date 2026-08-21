@@ -38,9 +38,6 @@ is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -48,11 +45,10 @@ check_hestia_demo_mode
 # JSON list function
 json_list() {
 	echo '{'
-	json_escape BACKUP TYPE WEB DNS MAIL DB CRON UDIR RUNTIME TIME DATE
+	json_escape BACKUP TYPE WEB MAIL DB CRON UDIR RUNTIME TIME DATE
 	printf '    "%s": {\n' "$BACKUP"
 	printf '		"TYPE": "%s",\n' "$TYPE"
 	printf '		"WEB": "%s",\n' "$WEB"
-	printf '		"DNS": "%s",\n' "$DNS"
 	printf '		"MAIL": "%s",\n' "$MAIL"
 	printf '		"DB": "%s",\n' "$DB"
 	printf '		"CRON": "%s",\n' "$CRON"
@@ -70,7 +66,6 @@ shell_list() {
 	echo "TYPE:           $TYPE"
 	echo "RUNTIME:        $RUNTIME min"
 	echo "WEB:            ${WEB//,/ }"
-	echo "DNS:            ${DNS//,/ }"
 	echo "MAIL:           ${MAIL//,/ }"
 	echo "DB:             ${DB//,/ }"
 	echo "CRON:           $CRON"
@@ -81,7 +76,7 @@ shell_list() {
 
 # PLAIN list function
 plain_list() {
-	echo -ne "$BACKUP\t$TYPE\t$WEB\t$DNS\t$MAIL\t$DB\t$CRON\t"
+	echo -ne "$BACKUP\t$TYPE\t$WEB\t$MAIL\t$DB\t$CRON\t"
 	echo -e "$UDIR\t$RUNTIME\t$TIME\t$DATE"
 }
 

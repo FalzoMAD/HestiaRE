@@ -37,6 +37,10 @@
 				<textarea class="form-control" name="v_db" id="v_db" placeholder="<?= tohtml(_("Type full database name, one per line. To exclude all databases use *")) ?>"><?= tohtml(trim($v_db, "'")) ?></textarea>
 			</div>
 			<div class="u-mb10">
+				<label for="v_cron" class="form-label"><?= tohtml(_("Cron Jobs")) ?></label>
+				<textarea class="form-control" name="v_cron" id="v_cron" placeholder="<?= tohtml(_("Only * is honoured here: all cron jobs, or none. Single jobs cannot be excluded.")) ?>"><?= tohtml(trim($v_cron, "'")) ?></textarea>
+			</div>
+			<div class="u-mb10">
 				<label for="v_userdir" class="form-label"><?= tohtml(_("User Directory")) ?></label>
 				<textarea class="form-control" name="v_userdir" id="v_userdir" placeholder="<?= tohtml(_("Type directory name, one per line. To exlude all dirs use *")) ?>"><?= tohtml(trim($v_userdir, "'")) ?></textarea>
 			</div>

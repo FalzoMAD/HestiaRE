@@ -44,8 +44,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 # On cgroup v1 container resource limits are silent no-ops - refuse rather than
 # half-install.
 if [ "$(stat -fc %T /sys/fs/cgroup 2> /dev/null)" != 'cgroup2fs' ]; then
@@ -59,11 +57,21 @@ if [ "$os_id" != 'debian' ] && [ "$os_id" != 'ubuntu' ]; then
 	echo "ERROR: unsupported distribution '$os_id' for the Docker repo."
 	exit "$E_INVALID"
 fi
-[ -n "$os_codename" ] || { echo "ERROR: cannot determine the OS codename."; exit "$E_INVALID"; }
+[ -n "$os_codename" ] || {
+	echo "ERROR: cannot determine the OS codename."
+	exit "$E_INVALID"
+}
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
+
+# installed = package present AND registered. Both halves: a package the OS dragged in without our
+# config is not an installation, and the installer must still get through on a half-built box.
+if dpkg -l docker-ce 2> /dev/null | grep -q '^ii' && [ "$DOCKER_SYSTEM" = 'docker' ]; then
+	echo "INFO: Docker is already installed."
+	exit
+fi
 
 # The old inline addon installed the OS docker.io, which is the rootful daemon this
 # feature replaces. It conflicts with docker-ce, so it goes first rather than letting
@@ -77,12 +85,22 @@ echo "Adding the Docker repository..."
 install -m 0755 -d /usr/share/keyrings
 if [ ! -s "$DOCKER_KEYRING" ]; then
 	curl -fsSL "https://download.docker.com/linux/$os_id/gpg" -o /tmp/docker_apt.gpg \
-		|| { echo "ERROR: failed to download the Docker signing key"; exit "$E_CONNECT"; }
+		|| {
+			echo "ERROR: failed to download the Docker signing key"
+			exit "$E_CONNECT"
+		}
 	gpg --dearmor < /tmp/docker_apt.gpg > "$DOCKER_KEYRING" \
-		|| { echo "ERROR: failed to dearmor the Docker signing key"; rm -f /tmp/docker_apt.gpg; exit "$E_INVALID"; }
+		|| {
+			echo "ERROR: failed to dearmor the Docker signing key"
+			rm -f /tmp/docker_apt.gpg
+			exit "$E_INVALID"
+		}
 	rm -f /tmp/docker_apt.gpg
 fi
-[ -s "$DOCKER_KEYRING" ] || { echo "ERROR: Docker keyring empty"; exit "$E_INVALID"; }
+[ -s "$DOCKER_KEYRING" ] || {
+	echo "ERROR: Docker keyring empty"
+	exit "$E_INVALID"
+}
 chmod a+r "$DOCKER_KEYRING"
 
 arch="$(dpkg --print-architecture 2> /dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"

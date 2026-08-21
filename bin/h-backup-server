@@ -36,8 +36,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_hestia_demo_mode
-
 available=$(server_components | cut -f1)
 if [ -z "$available" ]; then
 	check_result "$E_NOTEXIST" "this host has none of the components a server backup carries"

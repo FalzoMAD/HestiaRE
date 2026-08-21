@@ -52,9 +52,6 @@ fi
 read -r template tpl_effect <<< "$tpl_accepted"
 get_domain_values 'web'
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

@@ -43,9 +43,6 @@ is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'mail' 'DOMAIN' "$domain"
 is_object_unsuspended 'mail' 'DOMAIN' "$domain"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 exclude_file="$HOMEDIR/$user/conf/mail/$domain/smtp_relay_exclude"
 current=$(get_object_value 'mail' 'DOMAIN' "$domain" '$U_SMTP_RELAY_EXCLUDE')
 

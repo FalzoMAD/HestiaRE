@@ -33,8 +33,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 if ! mesh_load; then
 	echo "ERROR: CrowdSec fleet-mesh is not enabled. Run h-add-sys-crowdsec-mesh first."
 	exit "$E_DISABLED"

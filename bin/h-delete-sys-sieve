@@ -32,9 +32,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 if [ "$SIEVE_SYSTEM" != 'yes' ]; then
 	echo "ERROR: sieve is not installed."
 	exit "$E_NOTEXIST"

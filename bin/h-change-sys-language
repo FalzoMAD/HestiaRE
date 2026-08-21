@@ -46,9 +46,6 @@ check_args '1' "$#" 'LANGUAGE [UPDATE_USERS]'
 is_format_valid 'language'
 is_language_valid "$language"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

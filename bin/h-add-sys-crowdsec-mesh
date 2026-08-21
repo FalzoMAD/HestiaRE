@@ -32,8 +32,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 	exit 10
 fi
 
-check_hestia_demo_mode
-
 # mesh rides on CrowdSec (L7); the engine must be installed.
 if ! dpkg -l crowdsec 2> /dev/null | grep -q '^ii'; then
 	echo "ERROR: CrowdSec is not installed. Run h-add-sys-crowdsec first."

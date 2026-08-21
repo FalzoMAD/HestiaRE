@@ -43,9 +43,6 @@ if ! tpl_accepted=$(accept_web_template 'backend' "$template" strict); then
 fi
 read -r template tpl_effect <<< "$tpl_accepted"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

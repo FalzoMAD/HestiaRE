@@ -42,11 +42,13 @@ is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'web' 'DOMAIN' "$domain"
 is_object_unsuspended 'web' 'DOMAIN' "$domain"
-check_hestia_demo_mode
 
 case "$level" in
 	off | lenient | strict) ;;
-	*) echo "Error: LEVEL must be off, lenient or strict"; exit "$E_INVALID" ;;
+	*)
+		echo "Error: LEVEL must be off, lenient or strict"
+		exit "$E_INVALID"
+		;;
 esac
 
 # family must exist in the system conf (get_object_value takes the object base, appends .conf)

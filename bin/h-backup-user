@@ -216,9 +216,6 @@ if [ "$POLICY_BACKUP_SUSPENDED_USERS" != "yes" ]; then
 fi
 is_backup_enabled
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -297,20 +294,23 @@ if [ -n "$pkg_name" ] && [ -e "$CONF_DIR/packages/$pkg_name.pkg" ]; then
 	echo -e "$(date "+%F %T") package $pkg_name" | tee -a $BACKUP/$user.log
 fi
 
-if [ -e "$USER_DATA/stats.log" ]; then
-	echo -e "$(date "+%F %T") stats.log" | tee -a $BACKUP/$user.log
-	cp -r $USER_DATA/stats.log $tmpdir/hestia/
-fi
-
-if [ -e "$USER_DATA/history.log" ]; then
-	echo -e "$(date "+%F %T") history.log" | tee -a $BACKUP/$user.log
-	cp -r $USER_DATA/history.log $tmpdir/hestia/
-fi
-
-if [ -e "$USER_DATA/backup-excludes.conf" ]; then
-	echo -e "$(date "+%F %T") backup-excludes.conf" | tee -a $BACKUP/$user.log
-	cp -r $USER_DATA/backup-excludes.conf $tmpdir/hestia/
-fi
+# The rest of the customer's data directory, from what is in it rather than from a list of names.
+# BACKUP_USER_DATA_CORE says what never travels; user.conf and ssl are copied above. Dotfiles are
+# not enumerated - the restore's member-name rule rejects a leading dot, so carrying one would only
+# lose it later - and one that turns up is named rather than skipped in silence.
+_hidden=$(find "$USER_DATA" -maxdepth 1 -name '.*' ! -name '.' 2> /dev/null | wc -l)
+[ "$_hidden" -gt 0 ] \
+	&& echo "Warning!: $_hidden hidden file(s) in the data directory are not backed up" | tee -a $BACKUP/$user.log
+for _entry in "$USER_DATA"/*; do
+	[ -e "$_entry" ] || continue
+	_name=$(basename "$_entry")
+	[[ " $BACKUP_USER_DATA_CORE user.conf ssl " == *" $_name "* ]] && continue
+	echo -e "$(date "+%F %T") $_name" | tee -a $BACKUP/$user.log
+	if ! cp -r "$_entry" "$tmpdir/hestia/"; then
+		rm -rf $tmpdir
+		check_result "$E_NOTEXIST" "can't copy $_name out of the data directory"
+	fi
+done
 
 # Backup PAM
 mkdir $tmpdir/pam

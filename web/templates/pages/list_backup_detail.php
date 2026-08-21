@@ -6,16 +6,22 @@
 					<i class="fas fa-arrow-left icon-blue"></i><?= tohtml(_("Back")) ?>
 				</a>
 				<?php if ($read_only !== "true") { ?>
-					<a href="/schedule/restore/?<?= tohtml(http_build_query(array("token" => $_SESSION["token"], "backup" => $_GET["backup"]))) ?>" class="button button-secondary">
+					<button type="submit" form="restore-form" formaction="/schedule/restore/" class="button button-secondary">
 						<i class="fas fa-arrow-rotate-left icon-green"></i><?= tohtml(_("Restore All")) ?>
-					</a>
+					</button>
 				<?php } ?>
 			</div>
 			<div class="toolbar-right">
 				<?php if ($read_only !== "true") { ?>
-					<form x-data x-bind="BulkEdit" action="/bulk/restore/" method="post">
+					<form id="restore-form" x-data x-bind="BulkEdit" action="/bulk/restore/" method="post">
 						<input type="hidden" name="token" value="<?= tohtml($_SESSION["token"]) ?>">
 						<input type="hidden" name="backup" value="<?= tohtml($_GET["backup"]) ?>">
+						<?php if ($default_php !== "") { ?>
+							<label class="u-mr10">
+								<input type="checkbox" name="php_fallback" value="yes" checked>
+								<?= tohtml(sprintf(_("Fall back to PHP %s"), $default_php)) ?>
+							</label>
+						<?php } ?>
 						<select class="form-select" name="action">
 							<option value=""><?= tohtml(_("Apply to selected")) ?></option>
 							<option value="restore"><?= tohtml(_("Restore")) ?></option>
@@ -129,50 +135,6 @@
 							<a
 								class="units-table-row-action-link data-controls js-confirm-action"
 								href="/schedule/restore/?<?= tohtml(http_build_query(array("backup" => $backup, "type" => "mail", "object" => $key, "token" => $_SESSION["token"]))) ?>"
-								title="<?= tohtml(_("Restore")) ?>"
-								data-confirm-title="<?= tohtml(_("Restore")) ?>"
-								data-confirm-message="<?= tohtml(sprintf(_("Are you sure you want to restore %s?"), $key)) ?>"
-							>
-								<i class="fas fa-arrow-rotate-left icon-green"></i>
-								<span class="u-hide-desktop"><?= tohtml(_("Restore")) ?></span>
-							</a>
-						</li>
-					</ul>
-				</div>
-			</div>
-		<?php }
-						} ?>
-
-		<!-- List DNS zones -->
-			<?php
-						$dns_index = 0;
-					$dns = explode(',', $data[$backup]['DNS']);
-					foreach ($dns as $key) {
-						if (!empty($key)) {
-							++$dns_index;
-							++$item_count;
-							?>
-				<div class="units-table-row js-unit">
-					<div class="units-table-cell">
-						<div>
-							<input id="check-dns<?= tohtml($dns_index) ?>" class="js-unit-checkbox" type="checkbox" name="dns[]" value="<?= tohtml($key) ?>">
-							<label for="check-dns<?= tohtml($dns_index) ?>" class="u-hide-desktop"><?= tohtml(_("Select")) ?></label>
-						</div>
-					</div>
-				<div class="units-table-cell units-table-heading-cell">
-					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Type")) ?>:</span>
-					<?= tohtml(_("DNS Zone")) ?>
-				</div>
-				<div class="units-table-cell u-text-bold">
-					<span class="u-hide-desktop"><?= tohtml(_("Details")) ?>:</span>
-					<?= tohtml($key) ?>
-				</div>
-				<div class="units-table-cell">
-					<ul class="units-table-row-actions">
-						<li class="units-table-row-action shortcut-enter" data-key-action="href">
-							<a
-								class="units-table-row-action-link data-controls js-confirm-action"
-								href="/schedule/restore/?<?= tohtml(http_build_query(array("backup" => $backup, "type" => "dns", "object" => $key, "token" => $_SESSION["token"]))) ?>"
 								title="<?= tohtml(_("Restore")) ?>"
 								data-confirm-title="<?= tohtml(_("Restore")) ?>"
 								data-confirm-message="<?= tohtml(sprintf(_("Are you sure you want to restore %s?"), $key)) ?>"

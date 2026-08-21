@@ -35,9 +35,6 @@ ipset_hstobject="$CONF_DIR/firewall/ipset"
 is_object_valid "$ipset_hstobject" 'LISTNAME' "$ip_name"
 ip_version="$(get_object_value "$ipset_hstobject" 'LISTNAME' "$ip_name" '$IP_VERSION')"
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 IPSET_PATH="$CONF_DIR/firewall/ipset"
 IPSET_FILE="${ip_name}.${ip_version}"
 

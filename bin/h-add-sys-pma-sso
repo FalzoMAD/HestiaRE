@@ -32,9 +32,6 @@ PMA_CONFIG="/etc/phpmyadmin"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 if [ "$(id -u)" != '0' ]; then
 	echo "Error: Script can be run executed only by root"
 	exit 10
@@ -76,7 +73,7 @@ chown root:caddy $PMA_INSTALL/hestia-sso.php
 # /etc/phpmyadmin/config.inc.php above the "foreach glob(...conf.d...)" line —
 # if the count changes from 2, update [1] here accordingly.
 mkdir -p "$PMA_CONFIG/conf.d"
-cat > "$PMA_CONFIG/conf.d/hestia-sso.inc.php" <<'PHP'
+cat > "$PMA_CONFIG/conf.d/hestia-sso.inc.php" << 'PHP'
 <?php
 if (isset($_COOKIE['SignonSession'])) {
     $cfg['Servers'][1]['auth_type'] = 'signon';

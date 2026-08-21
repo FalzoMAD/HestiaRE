@@ -31,9 +31,6 @@ is_format_valid 'restart'
 # No -n guard: is_format_valid skips an empty value itself.
 is_format_valid 'delay'
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

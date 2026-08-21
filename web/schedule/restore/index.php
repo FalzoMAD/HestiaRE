@@ -6,44 +6,46 @@ ob_start();
 
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
+// The whole-archive restore posts, so it can carry the PHP-fallback consent; the per-object
+// links stay GET.
+$req = $_SERVER["REQUEST_METHOD"] === "POST" ? $_POST : $_GET;
+
 // Check token
-verify_csrf($_GET);
+verify_csrf($req);
 
 // Without a backup id there is nothing to schedule; quoteshellarg(null) is a TypeError, so this
 // has to refuse before it, not after.
-if (empty($_GET["backup"])) {
+if (empty($req["backup"])) {
 	header("Location: /list/backup/");
 	exit();
 }
-$backup = quoteshellarg($_GET["backup"]);
+$backup = quoteshellarg($req["backup"]);
 
 $web = "no";
+// The subsystem is gone; the positional stays for CLI compatibility and is always "no".
 $dns = "no";
 $mail = "no";
 $db = "no";
 $cron = "no";
 $udir = "no";
 
-if ($_GET["type"] == "web") {
-	$web = quoteshellarg($_GET["object"]);
+if ($req["type"] == "web") {
+	$web = quoteshellarg($req["object"]);
 }
-if ($_GET["type"] == "dns") {
-	$dns = quoteshellarg($_GET["object"]);
+if ($req["type"] == "mail") {
+	$mail = quoteshellarg($req["object"]);
 }
-if ($_GET["type"] == "mail") {
-	$mail = quoteshellarg($_GET["object"]);
+if ($req["type"] == "db") {
+	$db = quoteshellarg($req["object"]);
 }
-if ($_GET["type"] == "db") {
-	$db = quoteshellarg($_GET["object"]);
-}
-if ($_GET["type"] == "cron") {
+if ($req["type"] == "cron") {
 	$cron = "yes";
 }
-if ($_GET["type"] == "udir") {
-	$udir = quoteshellarg($_GET["object"]);
+if ($req["type"] == "udir") {
+	$udir = quoteshellarg($req["object"]);
 }
 
-if (!empty($_GET["type"])) {
+if (!empty($req["type"])) {
 	$restore_cmd =
 		HESTIA_CMD .
 		"h-schedule-user-restore " .
@@ -66,7 +68,9 @@ if (!empty($_GET["type"])) {
 	// A whole-archive restore names no object, so nothing in it carries consent by selection. The
 	// queue has no terminal to ask at, so the click has to say it (#707). "all" covers the sections
 	// and not the PHP fallback - moving domains onto another PHP version stays an explicit choice.
-	$restore_cmd = HESTIA_CMD . "h-schedule-user-restore " . $user . " " . $backup . " '' '' '' '' '' '' all";
+	$consent = empty($req["php_fallback"]) ? "all" : "all,php-fallback";
+	$restore_cmd =
+		HESTIA_CMD . "h-schedule-user-restore " . $user . " " . $backup . " '' '' '' '' '' '' " . $consent;
 }
 
 exec($restore_cmd, $output, $return_var);
@@ -86,4 +90,4 @@ if ($return_var == 0) {
 	}
 }
 
-header("Location: /list/backup/?backup=" . $_GET["backup"]);
+header("Location: /list/backup/?backup=" . $req["backup"]);

@@ -35,7 +35,6 @@ check_args '2' "$#" 'USER DOMAIN [RESTART]'
 is_format_valid 'user' 'domain' 'restart'
 is_object_valid 'user' 'USER' "$user"
 is_object_valid 'web' 'DOMAIN' "$domain"
-check_hestia_demo_mode
 
 #----------------------------------------------------------#
 #                       Action                             #

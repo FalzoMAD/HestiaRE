@@ -54,7 +54,6 @@ if [ "x$(id -u)" != 'x0' ]; then
 fi
 
 check_args '2' "$#" 'IP HANDOFF_FILE'
-check_hestia_demo_mode
 
 mesh_load || fail "fleet-mesh is not enabled" "$E_DISABLED"
 [ -f "$MESH_PAIRING_CONF" ] || fail "no pairing window is open" "$E_NOTEXIST"

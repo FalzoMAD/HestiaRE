@@ -68,8 +68,14 @@ if [ -z "$target" ]; then
 	echo "Running:  MariaDB ${current:-unknown}  (source: ${COMPONENT_DB_MARIADB_VERSION:-?})"
 	echo ""
 	echo "Available upgrade targets:"
-	_os_id="$(. /etc/os-release; echo "$ID")"
-	_codename="$(. /etc/os-release; echo "${VERSION_CODENAME:-}")"
+	_os_id="$(
+		. /etc/os-release
+		echo "$ID"
+	)"
+	_codename="$(
+		. /etc/os-release
+		echo "${VERSION_CODENAME:-}"
+	)"
 	_arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 	while IFS=$'\t' read -r _val _src _descr; do
 		_cand=""
@@ -104,11 +110,11 @@ fi
 
 case "$target" in
 	12.3 | 11.8 | 11.4 | __os__) ;;
-	*) echo "ERROR: unsupported target '$target' (expected 12.3|11.8|11.4|__os__)"; exit "$E_INVALID" ;;
+	*)
+		echo "ERROR: unsupported target '$target' (expected 12.3|11.8|11.4|__os__)"
+		exit "$E_INVALID"
+		;;
 esac
-
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
 
 if ! dpkg -l mariadb-server 2> /dev/null | grep -q '^ii'; then
 	echo "ERROR: MariaDB is not installed (use h-add-sys-mariadb)."
@@ -120,7 +126,10 @@ if ! systemctl is-active --quiet mariadb; then
 fi
 
 current=$(mariadb -N -e "SELECT VERSION();" 2> /dev/null | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
-[ -n "$current" ] || { echo "ERROR: cannot determine running MariaDB version."; exit "$E_INVALID"; }
+[ -n "$current" ] || {
+	echo "ERROR: cannot determine running MariaDB version."
+	exit "$E_INVALID"
+}
 
 if [ "$target" = "${COMPONENT_DB_MARIADB_VERSION:-}" ]; then
 	echo "INFO: MariaDB is already on '$target' — nothing to do."
@@ -141,13 +150,23 @@ if ! mariadb-dump --all-databases --events --routines --triggers 2> /tmp/mdb-dum
 	exit "$E_INVALID"
 fi
 chmod 600 "$backup"
-[ -s "$backup" ] || { echo "ERROR: backup file is empty — upgrade aborted."; rm -f "$backup"; exit "$E_INVALID"; }
+[ -s "$backup" ] || {
+	echo "ERROR: backup file is empty — upgrade aborted."
+	rm -f "$backup"
+	exit "$E_INVALID"
+}
 
 # 2. repo switch, keeping the old state for restore-on-refusal
 [ -f "$REPO_LIST" ] && cp -f "$REPO_LIST" "${REPO_LIST}.bak"
 ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
-OS_ID="$(. /etc/os-release; echo "$ID")"
-CODENAME="$(. /etc/os-release; echo "${VERSION_CODENAME:-}")"
+OS_ID="$(
+	. /etc/os-release
+	echo "$ID"
+)"
+CODENAME="$(
+	. /etc/os-release
+	echo "${VERSION_CODENAME:-}"
+)"
 case "$target" in
 	12.3 | 11.8 | 11.4)
 		echo "[ * ] Switching to MariaDB.org $target repo..."
@@ -155,7 +174,11 @@ case "$target" in
 			"$ARCH" "$target" "$OS_ID" "$CODENAME" > "$REPO_LIST"
 		if [ ! -s /usr/share/keyrings/mariadb-keyring.gpg ]; then
 			curl -fsSL https://mariadb.org/mariadb_release_signing_key.asc -o /tmp/mariadb_signing.asc \
-				|| { echo "ERROR: failed to download MariaDB signing key"; _restore_repo; exit 1; }
+				|| {
+					echo "ERROR: failed to download MariaDB signing key"
+					_restore_repo
+					exit 1
+				}
 			gpg --dearmor < /tmp/mariadb_signing.asc > /usr/share/keyrings/mariadb-keyring.gpg
 			rm -f /tmp/mariadb_signing.asc
 		fi
@@ -174,7 +197,7 @@ candidate=$(LC_ALL=C apt-cache policy mariadb-server 2> /dev/null | awk '/Candid
 if [ -z "$candidate" ]; then
 	echo "ERROR: no installation candidate for mariadb-server after repo switch."
 	_restore_repo
-	rm -f "$backup"   # nothing was changed — drop the unused pre-upgrade dump
+	rm -f "$backup" # nothing was changed — drop the unused pre-upgrade dump
 	exit "$E_INVALID"
 fi
 # an older-only target makes apt's candidate fall back to the installed version, so
@@ -186,7 +209,7 @@ if [ "$(printf '%s\n%s\n' "$current" "$candidate" | sort -V | tail -1)" != "$can
 	echo "       open a datadir written by a newer version."
 	echo "       To go back anyway: restore from a dump (see the command header)."
 	_restore_repo
-	rm -f "$backup"   # nothing was changed — drop the unused pre-upgrade dump
+	rm -f "$backup" # nothing was changed — drop the unused pre-upgrade dump
 	exit "$E_INVALID"
 fi
 echo "[ * ] Upgrading MariaDB $current -> $candidate..."

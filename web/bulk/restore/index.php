@@ -22,6 +22,7 @@ $action = $_POST["action"];
 $backup = quoteshellarg($_POST["backup"]);
 
 $web = "no";
+// The subsystem is gone; the positional stays for CLI compatibility and is always "no".
 $dns = "no";
 $mail = "no";
 $db = "no";
@@ -30,9 +31,6 @@ $udir = "no";
 
 if (!empty($_POST["web"])) {
 	$web = quoteshellarg(implode(",", $_POST["web"]));
-}
-if (!empty($_POST["dns"])) {
-	$dns = quoteshellarg(implode(",", $_POST["dns"]));
 }
 if (!empty($_POST["mail"])) {
 	$mail = quoteshellarg(implode(",", $_POST["mail"]));
@@ -65,7 +63,9 @@ if ($action == "restore") {
 			" " .
 			$cron .
 			" " .
-			$udir,
+			$udir .
+			" " .
+			(empty($_POST["php_fallback"]) ? "''" : "php-fallback"),
 		$output,
 		$return_var,
 	);

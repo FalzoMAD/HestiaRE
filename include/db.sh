@@ -175,6 +175,19 @@ psql_query() {
 	rm -f $sql_tmp
 }
 
+# psql_value QUERY - the value of a one-column, one-row SELECT, nothing else.
+#
+# Not psql_query: that prints the aligned table, and get_pgsql_disk_usage parses exactly that shape.
+# Reading a value out of it lost every pgsql password - `head -n1` is the column HEADING, and a
+# `grep md5` filter matches no SCRAM hash. -tAX: no heading, no padding, no .psqlrc.
+psql_value() {
+	local _tmp
+	_tmp=$(mktemp)
+	echo "$1" > "$_tmp"
+	psql -h "$HOST" -U "$USER" -p "$PORT" -tAX -f "$_tmp" 2> /dev/null | head -n1
+	rm -f "$_tmp"
+}
+
 psql_dump() {
 	pg_dump -h $HOST -U $USER -p $PORT -c --inserts -O -x -f $1 $2 2> /tmp/e.psql
 	if [ '0' -ne "$?" ]; then
@@ -370,7 +383,7 @@ add_pgsql_database() {
 	psql_query "$query" > /dev/null
 
 	query="SELECT rolpassword FROM pg_authid WHERE rolname='$dbuser'"
-	md5=$(psql_query "$query" | grep md5 | cut -f 2 -d \ )
+	md5=$(psql_value "$query")
 }
 
 add_mysql_database_temp_user() {
@@ -499,11 +512,30 @@ change_pgsql_password() {
 	psql_query "$query" > /dev/null
 
 	query="SELECT rolpassword FROM pg_authid WHERE rolname='$DBUSER'"
-	md5=$(psql_query "$query" | grep md5 | cut -f 2 -d \ )
+	md5=$(psql_value "$query")
+}
+
+# db_is_owned_by_user DB - is this database one of the customer whose data directory is in play?
+#
+# Asked by the delete functions themselves, not by their callers. On the restore path the name in
+# $database is the one out of the ARCHIVE, so a restore under a different customer name dropped the
+# SOURCE customer's live database on the same box - and reported success. A guard placed in the
+# callers is missing again at the next caller.
+db_is_owned_by_user() {
+	[ -n "$1" ] || return 1
+	# Field-anchored and literal. A record's first field is DB='<name>', so matching it whole holds
+	# on its own rather than on the quoting around it happening to bound the match; -F because the
+	# name can come out of an archive, where a regex metacharacter would widen it.
+	cut -d' ' -f1 "$USER_DATA/db.conf" 2> /dev/null | grep -qxF "DB='$1'"
 }
 
 # Delete MySQL database
 delete_mysql_database() {
+	local database="${1:-$database}"
+	if ! db_is_owned_by_user "$database"; then
+		echo "Error: $database is not a database of $user - refusing to drop it"
+		return 1
+	fi
 	mysql_connect $HOST
 
 	query="DROP DATABASE \`$database\`"
@@ -522,10 +554,18 @@ delete_mysql_database() {
 		query="DROP USER '$DBUSER'@'localhost'"
 		mysql_query "$query" > /dev/null
 	fi
+	# Explicit, so a non-zero return means the guard refused and nothing else. Without it the status
+	# is whatever the last REVOKE happened to give, which no caller could have read as an answer.
+	return 0
 }
 
 # Delete PostgreSQL database
 delete_pgsql_database() {
+	local database="${1:-$database}"
+	if ! db_is_owned_by_user "$database"; then
+		echo "Error: $database is not a database of $user - refusing to drop it"
+		return 1
+	fi
 	psql_connect $HOST
 
 	query="REVOKE ALL PRIVILEGES ON DATABASE $database FROM $DBUSER"
@@ -540,6 +580,8 @@ delete_pgsql_database() {
 		query="DROP ROLE $DBUSER"
 		psql_query "$query" > /dev/null
 	fi
+	# Explicit, for the same reason as on the mysql side.
+	return 0
 }
 
 # Dump MySQL database
@@ -562,7 +604,7 @@ dump_pgsql_database() {
 	psql_dump $dump $database
 
 	query="SELECT rolpassword FROM pg_authid WHERE rolname='$DBUSER'"
-	md5=$(psql_query "$query" | head -n1 | cut -f 2 -d \ )
+	md5=$(psql_value "$query")
 	pw_str="UPDATE pg_authid SET rolpassword='$md5' WHERE rolname='$DBUSER'"
 	gr_str="GRANT ALL PRIVILEGES ON DATABASE $database to '$DBUSER'"
 	echo -e "$pw_str\n$gr_str" >> $grants

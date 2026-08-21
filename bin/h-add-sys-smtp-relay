@@ -36,9 +36,6 @@ is_username_format_valid "$username" 'username'
 format_no_quotes "$password" 'passowrd'
 is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

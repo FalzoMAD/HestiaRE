@@ -28,7 +28,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 check_args '1' "$#" 'IP_CIDR'
 is_format_valid 'ip_cidr'
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
-check_hestia_demo_mode
 
 excludes="$CONF_DIR/firewall/excludes.conf"
 if ! grep -qxF "$ip_cidr" "$excludes" 2> /dev/null; then

@@ -15,6 +15,12 @@ export default function alpineInit() {
 				}
 			});
 
+			// form.submit() ignores the submitter, so a button's formaction would be dropped and the
+			// post would silently go to the form's own action.
+			if (evt.submitter && evt.submitter.hasAttribute('formaction')) {
+				evt.target.action = evt.submitter.formAction;
+			}
+
 			evt.target.submit();
 		},
 	}));

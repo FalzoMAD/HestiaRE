@@ -54,9 +54,6 @@ if [ -n "$(echo $fwd | grep -w "$email_forward")" ]; then
 	exit $E_EXISTS
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

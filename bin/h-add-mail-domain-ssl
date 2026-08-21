@@ -66,9 +66,6 @@ fi
 
 is_web_domain_cert_valid
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

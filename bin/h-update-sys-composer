@@ -41,9 +41,6 @@ if [ "$source_arg" != 'os' ] && [ "$source_arg" != 'upstream' ]; then
 	check_result "$E_INVALID" "SOURCE must be 'os' or 'upstream'"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -75,7 +72,10 @@ else
 		check_result "$E_INVALID" "composer installer download/signature verification failed"
 	fi
 	php "$setup_tmp" --quiet --install-dir=/usr/local/bin --filename=composer \
-		|| { rm -f "$setup_tmp"; check_result "$E_UPDATE" "composer upstream install failed"; }
+		|| {
+			rm -f "$setup_tmp"
+			check_result "$E_UPDATE" "composer upstream install failed"
+		}
 	rm -f "$setup_tmp"
 	# Mandatory purge: package + phar together is a shadowed state the next admin cannot see;
 	# on failure the phar already serves. No autoremove - it is not scoped to composer.

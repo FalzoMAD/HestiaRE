@@ -35,9 +35,6 @@ fi
 
 is_system_enabled "$MAIL_SYSTEM" 'MAIL_SYSTEM'
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 if [ "$ANTISPAM_SYSTEM" = 'rspamd' ] && dpkg -l rspamd 2> /dev/null | grep -q '^ii'; then
 	echo "ERROR: rspamd is already installed."
 	exit "$E_EXISTS"

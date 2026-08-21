@@ -38,9 +38,6 @@ if [ ! -f "$DNSBL_CONF" ] || ! grep -qxF "$host" "$DNSBL_CONF"; then
 	check_result "$E_NOTEXIST" "dnsbl host $host doesn't exist"
 fi
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#

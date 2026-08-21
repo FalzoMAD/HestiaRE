@@ -329,7 +329,10 @@ fetch_wp_cli_phar() {
 		rm -f "$tmp"
 		return 1
 	fi
-	mv -f "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+	mv -f "$tmp" "$dest" || {
+		rm -f "$tmp"
+		return 1
+	}
 	chmod 755 "$dest"
 }
 
@@ -1992,14 +1995,6 @@ download_file() {
 		elif [ -d "$(dirname $destination)" ]; then
 			cp "$ARCHIVE_DIR/$filename" "$destination"
 		fi
-	fi
-}
-
-check_hestia_demo_mode() {
-	demo_mode=$(grep DEMO_MODE /usr/local/hestia/conf/hestia.conf | cut -d '=' -f2 | sed "s|'||g")
-	if [ -n "$demo_mode" ] && [ "$demo_mode" = "yes" ]; then
-		echo "ERROR: Unable to perform operation due to security restrictions that are in place."
-		exit 1
 	fi
 }
 

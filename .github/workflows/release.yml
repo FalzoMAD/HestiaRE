@@ -28,6 +28,7 @@ jobs:
           rsync -a \
             --exclude='.git*' \
             --exclude='dist' \
+            --exclude='*/PROVENANCE.json' \
             $(for e in $EXCLUDES; do echo "--exclude=$e"; done) \
             . dist/hestiare-${VERSION}/
           tar -czf dist/hestiare-${VERSION}.tar.gz -C dist hestiare-${VERSION}

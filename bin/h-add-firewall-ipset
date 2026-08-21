@@ -36,9 +36,6 @@ is_boolean_format_valid "$autoupdate" 'Automatically update IP list (yes/no)'
 is_boolean_format_valid "$refresh" 'Refresh IP list (yes/no)'
 is_system_enabled "$FIREWALL_SYSTEM" 'FIREWALL_SYSTEM'
 
-# Perform verification if read-only mode is enabled
-check_hestia_demo_mode
-
 # No ipset binary probe or install: the renderer builds native nft sets, so the package is not on this path.
 ipset_hstobject="$CONF_DIR/firewall/ipset"
 IPSET_PATH="$CONF_DIR/firewall/ipset"

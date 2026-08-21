@@ -19,6 +19,10 @@ if (empty($_GET["backup"])) {
 } else {
 	$data = array_reverse(cli_json("h-list-user-backup $user " . quoteshellarg($_GET["backup"]) . " json"), true);
 
+	// Named on the consent control, so the choice says where a domain would land. A property of the
+	// host, not of the archive - no probe needed.
+	$default_php = cli_json("h-list-default-php json")[0] ?? "";
+
 	render_page($user, $TAB, "list_backup_detail");
 }
 

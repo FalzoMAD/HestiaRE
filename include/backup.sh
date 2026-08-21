@@ -114,6 +114,17 @@ record_del_field() {
 # outright rather than threaded through every path join, so this is a constant.
 BACKUP_CONTAINER='hestia'
 
+# BACKUP_USER_DATA_CORE - entries of a customer's data directory that travel in NEITHER direction.
+# One list for both sides; the restore adds its own on top, so it can never reject less than the
+# backup withholds.
+#
+#   web|mail|db|cron.conf, mail  the sections rebuild these per object
+#   backup.conf                  a box's own list of archives
+#   dns.conf, dns                the subsystem is gone
+#   restic.conf                  a repository password
+#   auth.log                     login IPs, browser fingerprints and session ids
+BACKUP_USER_DATA_CORE='web.conf mail.conf db.conf cron.conf mail backup.conf dns.conf dns restic.conf auth.log'
+
 # The text identifying a queued job - command plus the arguments that tell it apart. One per
 # queueable command.
 QUEUE_JOB=''
@@ -284,7 +295,7 @@ backup_local_keys() {
 # read nothing" have to look different.
 backup_report() {
 	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys _installed
-	local _o_mode _o_fmt _o_who
+	local _o_mode _o_fmt _o_who _prot _dom _file _bl _e _bl_list
 
 	echo "-- ARCHIVE --"
 	printf '   %s compressed\n' "$PROBE_MODE"
@@ -339,6 +350,44 @@ backup_report() {
 		_found=1
 		printf '   custom web template(s) for %s domain(s) - this host renders from its own set\n' \
 			"$(backup_report_count "$PROBE_TPL")"
+	fi
+
+	# Webmail settings and address books sit in one table set per box, shared by every mailbox, so
+	# the server backup carries them. Said whenever the archive has mail domains.
+	if [ -n "$PROBE_MAIL" ]; then
+		_found=1
+		printf '   webmail settings and address books for %s mail domain(s) - shared per box, so the server backup carries them\n' \
+			"$(backup_report_count "$PROBE_MAIL")"
+	fi
+
+	# Protections a domain asks for that this host cannot render. The setting survives the restore
+	# on purpose, so only the report can say that it does nothing here. Asked of the renderers' own
+	# predicates, and only where the module is present - this must not be what dies without one.
+	[ -f "$HESTIA/include/crowdsec.sh" ] && { type crowdsec_domain_capable > /dev/null 2>&1 || source "$HESTIA/include/crowdsec.sh"; }
+	[ -f "$HESTIA/include/botpolicy.sh" ] && { type botpolicy_family_enabled > /dev/null 2>&1 || source "$HESTIA/include/botpolicy.sh"; }
+	_prot=''
+	while IFS= read -r _dom; do
+		[ -n "$_dom" ] || continue
+		_file=$(backup_record_file web "$_dom")
+		[ -s "$_file" ] || continue
+		_rec=$(head -n1 "$_file")
+		if [ "$(sed -n "s/.*CROWDSEC='\([^']*\)'.*/\1/p" <<< "$_rec")" = 'yes' ] \
+			&& type crowdsec_domain_capable > /dev/null 2>&1 && ! crowdsec_domain_capable; then
+			_prot="$_prot$_dom: CrowdSec"$'\n'
+		fi
+		_bl=$(sed -n "s/.*BOTLIMIT='\([^']*\)'.*/\1/p" <<< "$_rec")
+		type botpolicy_family_enabled > /dev/null 2>&1 || continue
+		# Split on the comma and only there: unquoted, a '*' would glob against the cwd.
+		IFS=',' read -r -a _bl_list <<< "$_bl"
+		for _e in "${_bl_list[@]}"; do
+			[ -n "$_e" ] || continue
+			botpolicy_family_enabled "${_e%%:*}" || _prot="$_prot$_dom: bot family ${_e%%:*}"$'\n'
+		done
+	done <<< "$PROBE_WEB"
+	if [ -n "$_prot" ]; then
+		_found=1
+		printf '   protection(s) restored as a setting but inactive here, because this host cannot render them:\n'
+		sed '/^$/d;s/^/      /' <<< "$_prot"
 	fi
 
 	# A section this host has no subsystem for is dropped in full. With the count: "mail is skipped"
@@ -579,28 +628,37 @@ backup_php_missing() {
 # so the two cannot drift: whatever the report names is either carried out here or has a reason
 # printed next to it (a rewritten template is a remap, not a loss - nothing to hand over).
 #
-# Sets LEFTOVERS_PATTERNS (tar wildcards) and LEFTOVERS_SUMMARY (one line each).
+# Sets LEFTOVERS_PATTERNS (tar wildcards), LEFTOVERS_SUMMARY (one line each) and
+# LEFTOVERS_DEGRADED - the subset the customer is actually missing afterwards.
 backup_leftovers_plan() {
 	local _obj _eff
 	LEFTOVERS_PATTERNS=''
 	LEFTOVERS_SUMMARY=''
+	LEFTOVERS_DEGRADED=''
 	# Each line is <mode>TAB<pattern>. 'w' means tar may read it as a wildcard, 'x' means literally.
 	# Only OUR patterns are wildcards; anything carrying a name out of the archive is literal, or a
 	# database called x* extracts xyz along with it - measured, and xyz was one this host can restore.
+	#
+	# A fourth argument marks a whole section this box cannot take although the product can - the
+	# customer is missing it afterwards. DNS and rewritten templates carry no such mark: the first
+	# is a subsystem this product does not have, the second is a remap. Per-object engine mismatches
+	# are marked by the restore itself, which would otherwise count them twice.
 	_lo() {
 		LEFTOVERS_PATTERNS="$LEFTOVERS_PATTERNS$1"$'\t'"$2"$'\n'
 		LEFTOVERS_SUMMARY="$LEFTOVERS_SUMMARY$3"$'\n'
+		[ -n "$4" ] && LEFTOVERS_DEGRADED="$LEFTOVERS_DEGRADED$3"$'\n'
+		return 0
 	}
 
 	[ -n "$PROBE_DNS" ] && _lo w './dns/*' "$(backup_report_count "$PROBE_DNS") DNS zone(s), records and zone files"
 	[ -n "$PROBE_TPL" ] && _lo w './web/*/template/*' "custom web template(s) for $(backup_report_count "$PROBE_TPL") domain(s)"
 
-	[ -z "$WEB_SYSTEM" ] && [ -n "$PROBE_WEB" ] && _lo w './web/*' "$(backup_report_count "$PROBE_WEB") web object(s), no WEB_SYSTEM here"
-	[ -z "$MAIL_SYSTEM" ] && [ -n "$PROBE_MAIL" ] && _lo w './mail/*' "$(backup_report_count "$PROBE_MAIL") mail object(s), no MAIL_SYSTEM here"
-	[ "$PROBE_CRON" = 'yes' ] && [ -z "$CRON_SYSTEM" ] && _lo w './cron/*' "the cron section, no CRON_SYSTEM here"
+	[ -z "$WEB_SYSTEM" ] && [ -n "$PROBE_WEB" ] && _lo w './web/*' "$(backup_report_count "$PROBE_WEB") web object(s), no WEB_SYSTEM here" d
+	[ -z "$MAIL_SYSTEM" ] && [ -n "$PROBE_MAIL" ] && _lo w './mail/*' "$(backup_report_count "$PROBE_MAIL") mail object(s), no MAIL_SYSTEM here" d
+	[ "$PROBE_CRON" = 'yes' ] && [ -z "$CRON_SYSTEM" ] && _lo w './cron/*' "the cron section, no CRON_SYSTEM here" d
 
 	if [ -z "$DB_SYSTEM" ]; then
-		[ -n "$PROBE_DB" ] && _lo w './db/*' "$(backup_report_count "$PROBE_DB") database(s), no DB_SYSTEM here"
+		[ -n "$PROBE_DB" ] && _lo w './db/*' "$(backup_report_count "$PROBE_DB") database(s), no DB_SYSTEM here" d
 	else
 		# Per object: a host can have a DB_SYSTEM and still not the engine one dump was taken from.
 		while IFS= read -r _obj; do

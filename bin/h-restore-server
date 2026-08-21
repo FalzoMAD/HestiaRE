@@ -85,7 +85,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 check_args '2' "$#" 'ARCHIVE COMPONENT[,COMPONENT...] [CONSENT]'
 is_object_format_valid "$archive" 'backup'
-check_hestia_demo_mode
 
 if [ ! -f "$BACKUP/$archive" ]; then
 	check_result "$E_NOTEXIST" "$archive doesn't exist in '$BACKUP'"
