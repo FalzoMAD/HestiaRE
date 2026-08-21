@@ -14,6 +14,16 @@ opens above it.
 
 ### Fixed
 
+- **The restic bulk restore restored the wrong thing, or nothing** (#767). Selecting mail domains
+  scheduled a database restore, databases could not be selected at all because the branch for them
+  was missing, and the branch for user directories tested a variable that was never set - against a
+  control the page does not render and an object type the scheduler does not accept. What did run
+  passed a comma-separated list to a command that takes one value and rejects a comma, so even the
+  web branch only ever worked for a single selection. Each selected object is now scheduled on its
+  own. Two debug dumps of the POST body went with it.
+
+### Fixed
+
 - **A lint run that measured nothing reported the cleanest possible result** (#770). The format
   ratchet compared how many files are exempt now against how many were exempt on the base branch,
   and an unreadable base counting zero failed closed - but a current side counting zero did not,
