@@ -1326,3 +1326,123 @@ rclone_download() {
 		rclone copy -v $HOST:$BPATH/$1 ./
 	fi
 }
+
+# ── Content map (#712 stage 1) ───────────────────────────────────────────────────────────────────
+#
+# One record per entry, five NUL-terminated fields, no record separator - a reader takes them five
+# at a time, and an empty field is simply an empty one:
+#
+#   <path>\0<hash>\0<mode>\0<uid>:<gid>\0<symlink target>\0
+#
+# Deliberately unordered: comparisons are by path key, and sorting NUL records whose paths may hold
+# any byte would need a separator that does not exist.
+#
+# It is read OUT of the finished member, not walked a second time on disk. That is the whole point:
+# web excludes by pattern, mail passes an explicit account list, and no find would stay in step with
+# both. What the map describes is what the archive contains, by construction.
+BACKUP_MAP_ALGO='b3sum'
+
+# tar auto-detects compression by content, but prints "This does not look like a tar archive" and
+# exits non-zero while doing it - measured. So the decompressor is named.
+backup_map_taropt() {
+	case "$1" in
+		*.zst) echo '--zstd' ;;
+		*.gz) echo '--gzip' ;;
+		*) echo '' ;;
+	esac
+}
+
+# backup_map_member ARCHIVE PREFIX - the records for one member, paths prefixed with PREFIX.
+backup_map_member() {
+	local _arc="$1" _pre="$2" _opt
+	[ -f "$_arc" ] || return 0
+	_opt=$(backup_map_taropt "$_arc")
+
+	# Regular files: metadata straight from tar's own variables, content on stdin. No parsing, so a
+	# name holding a space or a backslash survives untouched. Runs under /bin/sh, not bash.
+	# shellcheck disable=SC2086
+	tar $_opt -xf "$_arc" --to-command='
+		h=$(b3sum -)
+		n=${TAR_FILENAME#./}
+		printf "%s\0%s\0%s\0%s:%s\0\0" "'"$_pre"'/$n" "${h%% *}" "$TAR_MODE" "$TAR_UID" "$TAR_GID"
+	' 2> /dev/null
+
+	# Directories and symlinks: --to-command never sees them, so they come from the listing. Empty
+	# directories and link targets are not reconstructable without this.
+	# shellcheck disable=SC2086
+	tar $_opt -tvf "$_arc" --quoting-style=literal --numeric-owner 2> /dev/null \
+		| awk -v pre="$_pre" '
+			function octal(p,   i, c, v, r) {
+				r = ""
+				for (i = 1; i <= 3; i++) {
+					v = 0
+					c = substr(p, 2 + (i - 1) * 3, 3)
+					if (substr(c, 1, 1) == "r") v += 4
+					if (substr(c, 2, 1) == "w") v += 2
+					if (substr(c, 3, 1) ~ /[xst]/) v += 1
+					r = r v
+				}
+				return "0" r
+			}
+			/^[dl]/ {
+				typ = substr($0, 1, 1)
+				split($2, o, "/")
+				# The name is everything after the fifth field; taking the tail keeps spaces intact.
+				n = index($0, $5) + length($5) + 1
+				rest = substr($0, n)
+				target = ""
+				if (typ == "l") {
+					i = index(rest, " -> ")
+					if (i > 0) { target = substr(rest, i + 4); rest = substr(rest, 1, i - 1) }
+				}
+				# tar writes "./x" for a tree given as "." and "x" for one given by name - the two
+				# member types differ there, so the leading "./" goes and both read alike.
+				sub(/^\.\//, "", rest)
+				sub(/\/$/, "", rest)
+				printf "%s/%s%c%c%s%c%s:%s%c%s%c", pre, rest, 0, 0, octal($1), 0, o[1], o[2], 0, target, 0
+			}'
+}
+
+# backup_map_write TMPDIR MAPFILE - the map for everything this archive diffs against: web and mail.
+# The other members are always written whole, so they have nothing to compare.
+backup_map_write() {
+	local _tmp="$1" _out="$2" _d _arc _n
+	: > "$_out"
+	for _d in "$_tmp"/web/*/ "$_tmp"/mail/*/; do
+		[ -d "$_d" ] || continue
+		_n=$(basename "$_d")
+		for _arc in "$_d"domain_data.tar.zst "$_d"domain_data.tar.gz "$_d"accounts.tar.zst "$_d"accounts.tar.gz; do
+			[ -f "$_arc" ] || continue
+			case "$_d" in
+				*/web/*) backup_map_member "$_arc" "web/$_n" ;;
+				*/mail/*) backup_map_member "$_arc" "mail/$_n" ;;
+			esac
+		done
+	done >> "$_out"
+	# A member that produced no records is a suspicion, not a success: a tree that could not be read
+	# looks exactly like one that is empty. Counted, so the caller can say which.
+	backup_map_count "$_out"
+}
+
+# backup_map_count MAPFILE - how many records, derived from the field count (five per record).
+backup_map_count() {
+	local _f=$((0))
+	[ -s "$1" ] || {
+		echo 0
+		return
+	}
+	_f=$(tr -cd '\0' < "$1" | wc -c)
+	echo $((_f / 5))
+}
+
+# backup_map_prune MAPDIR BACKUPCONF - a local map whose archive is gone is dead weight. Derived
+# from the records, so a map survives exactly as long as the backup it describes.
+backup_map_prune() {
+	local _dir="$1" _conf="$2" _f _name
+	[ -d "$_dir" ] || return 0
+	for _f in "$_dir"/*.map.zst; do
+		[ -f "$_f" ] || continue
+		_name=$(basename "$_f" .map.zst)
+		grep -q "BACKUP='$_name'" "$_conf" 2> /dev/null || rm -f "$_f"
+	done
+}

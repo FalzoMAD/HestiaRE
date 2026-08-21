@@ -14,6 +14,22 @@ opens above it.
 
 ### Added
 
+- **Every backup now carries a content map** (#712, stage 1). One record per entry - path, BLAKE3
+  hash, mode, owner, symlink target - over the two member types a later run can diff against, web
+  and mail. It is read OUT of the finished members instead of walking the tree a second time, which
+  is the whole point: web excludes by pattern and mail passes an explicit account list, so no second
+  enumeration would stay in step with both, and what the map describes is what the archive holds by
+  construction. It travels inside the archive so a foreign box can read it, and is mirrored under
+  `$USER_DATA/backup-maps` so a later run can compare without fetching a remote archive back; a
+  mirror is dropped when its archive leaves the record. `h-list-user-backup-map` reads it back, and
+  the entry count lands in the backup record as `MAP`. Nothing changes about restoring - the map is
+  the missing piece for differential backups and for comparing a roundtrip by content rather than by
+  record (#342).
+- **Archives are byte-identical for an unchanged tree** (#712). `tar --sort=name` on the member tars
+  and `gzip -n` wherever gzip writes one: member order no longer follows readdir, and the gzip header
+  carries no name or timestamp. Measured: two runs over an unchanged tree produce identical members
+  and identical maps, and changing one file makes both differ.
+
 - **Sieve is reachable for customers, and moving mail to Spam now trains the filter** (#780). The
   engine was installed, ManageSieve was listening, and nothing could reach it: the panel offers no
   filter screen and roundcube was not loading the `managesieve` plugin, so a customer could only
