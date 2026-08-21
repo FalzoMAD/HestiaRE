@@ -19,7 +19,7 @@ check_return_code($return_var, $output);
 $data = json_decode(implode("", $output), true) ?: [];
 unset($output);
 
-$v_web = $v_mail = $v_db = $v_userdir = "";
+$v_web = $v_mail = $v_db = $v_cron = $v_userdir = "";
 // Parse web
 $v_username = $user;
 foreach ($data["WEB"] as $key => $value) {
@@ -48,6 +48,15 @@ foreach ($data["DB"] as $key => $value) {
 	}
 }
 
+// Parse cron jobs
+foreach ($data["CRON"] as $key => $value) {
+	if (!empty($value)) {
+		$v_cron .= $key . ":" . $value . "\n";
+	} else {
+		$v_cron .= $key . "\n";
+	}
+}
+
 // Parse user directories
 foreach ($data["USER"] as $key => $value) {
 	if (!empty($value)) {
@@ -63,32 +72,27 @@ if (!empty($_POST["save"])) {
 	verify_csrf($_POST);
 
 	$v_web = $_POST["v_web"] ?? "";
-	$v_web_tmp = str_replace("\r\n", ",", $_POST["v_web"]);
+	$v_web_tmp = str_replace("\r\n", ",", $v_web);
 	$v_web_tmp = rtrim($v_web_tmp, ",");
 	$v_web_tmp = "WEB=" . quoteshellarg($v_web_tmp);
 
-	$v_dns = $_POST["v_dns"] ?? "";
-	$v_dns_tmp = str_replace("\r\n", ",", $_POST["v_dns"]);
-	$v_dns_tmp = rtrim($v_dns_tmp, ",");
-	$v_dns_tmp = "DNS=" . quoteshellarg($v_dns_tmp);
-
 	$v_mail = $_POST["v_mail"] ?? "";
-	$v_mail_tmp = str_replace("\r\n", ",", $_POST["v_mail"]);
+	$v_mail_tmp = str_replace("\r\n", ",", $v_mail);
 	$v_mail_tmp = rtrim($v_mail_tmp, ",");
 	$v_mail_tmp = "MAIL=" . quoteshellarg($v_mail_tmp);
 
 	$v_db = $_POST["v_db"] ?? "";
-	$v_db_tmp = str_replace("\r\n", ",", $_POST["v_db"]);
+	$v_db_tmp = str_replace("\r\n", ",", $v_db);
 	$v_db_tmp = rtrim($v_db_tmp, ",");
 	$v_db_tmp = "DB=" . quoteshellarg($v_db_tmp);
 
 	$v_cron = $_POST["v_cron"] ?? "";
-	$v_cron_tmp = str_replace("\r\n", ",", $_POST["v_cron"]);
+	$v_cron_tmp = str_replace("\r\n", ",", $v_cron);
 	$v_cron_tmp = rtrim($v_cron_tmp, ",");
 	$v_cron_tmp = "CRON=" . quoteshellarg($v_cron_tmp);
 
 	$v_userdir = $_POST["v_userdir"] ?? "";
-	$v_userdir_tmp = str_replace("\r\n", ",", $_POST["v_userdir"]);
+	$v_userdir_tmp = str_replace("\r\n", ",", $v_userdir);
 	$v_userdir_tmp = rtrim($v_userdir_tmp, ",");
 	$v_userdir_tmp = "USER=" . quoteshellarg($v_userdir_tmp);
 
@@ -100,11 +104,11 @@ if (!empty($_POST["save"])) {
 			$fp,
 			$v_web_tmp .
 				"\n" .
-				$v_dns_tmp .
-				"\n" .
 				$v_mail_tmp .
 				"\n" .
 				$v_db_tmp .
+				"\n" .
+				$v_cron_tmp .
 				"\n" .
 				$v_userdir_tmp .
 				"\n",

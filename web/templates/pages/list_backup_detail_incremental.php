@@ -119,41 +119,6 @@
 				} ?>
 
 		<?php
-				$dns = explode(',', $data['snapshot']['DNS']);
-			foreach ($dns as $key) {
-				if (!empty($key)) {
-					++$i;
-					?>
-		<div class="units-table-row js-unit">
-			<div class="units-table-cell">
-				<div class="clearfix l-unit__stat-col--left super-compact">
-						<input id="check<?= tohtml($i) ?>" class="js-unit-checkbox" type="checkbox" name="dns[]" value="<?= tohtml($key) ?>">
-					<label for="check<?= tohtml($i) ?>" class="u-hide-desktop"><?= tohtml(_("Select")) ?></label>
-				</div>
-			</div>
-			<div class="units-table-cell units-table-heading-cell">
-				<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Type")) ?>:</span>
-				<?= tohtml(_("DNS Domain")) ?>
-			</div>
-			<div class="units-table-cell u-text-bold">
-				<span class="u-hide-desktop"><?= tohtml(_("Details")) ?>:</span>
-					<?= tohtml($key) ?>
-			</div>
-			<div class="units-table-cell">
-				<ul class="units-table-row-actions">
-					<li class="units-table-row-action shortcut-enter" data-key-action="href">
-							<a href="/schedule/restore/incremental/?<?= tohtml(http_build_query(array("snapshot" => $_GET["snapshot"], "type" => "dns", "object" => $key, "token" => $_SESSION["token"]))) ?>" title="<?= tohtml(_("Restore")) ?>">
-						<i class="fas fa-arrow-rotate-left icon-green"></i>
-						<span class="u-hide-desktop"><?= tohtml(_("Restore")) ?></span>
-						</a>
-					</li>
-				</ul>
-			</div>
-		</div>
-		<?php }
-				} ?>
-
-		<?php
 				$db = explode(',', $data['snapshot']['DB']);
 			foreach ($db as $key) {
 				if (!empty($key)) {

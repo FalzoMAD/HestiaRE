@@ -143,50 +143,6 @@
 		<?php }
 						} ?>
 
-		<!-- List DNS zones -->
-			<?php
-						$dns_index = 0;
-					$dns = explode(',', $data[$backup]['DNS']);
-					foreach ($dns as $key) {
-						if (!empty($key)) {
-							++$dns_index;
-							++$item_count;
-							?>
-				<div class="units-table-row js-unit">
-					<div class="units-table-cell">
-						<div>
-							<input id="check-dns<?= tohtml($dns_index) ?>" class="js-unit-checkbox" type="checkbox" name="dns[]" value="<?= tohtml($key) ?>">
-							<label for="check-dns<?= tohtml($dns_index) ?>" class="u-hide-desktop"><?= tohtml(_("Select")) ?></label>
-						</div>
-					</div>
-				<div class="units-table-cell units-table-heading-cell">
-					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Type")) ?>:</span>
-					<?= tohtml(_("DNS Zone")) ?>
-				</div>
-				<div class="units-table-cell u-text-bold">
-					<span class="u-hide-desktop"><?= tohtml(_("Details")) ?>:</span>
-					<?= tohtml($key) ?>
-				</div>
-				<div class="units-table-cell">
-					<ul class="units-table-row-actions">
-						<li class="units-table-row-action shortcut-enter" data-key-action="href">
-							<a
-								class="units-table-row-action-link data-controls js-confirm-action"
-								href="/schedule/restore/?<?= tohtml(http_build_query(array("backup" => $backup, "type" => "dns", "object" => $key, "token" => $_SESSION["token"]))) ?>"
-								title="<?= tohtml(_("Restore")) ?>"
-								data-confirm-title="<?= tohtml(_("Restore")) ?>"
-								data-confirm-message="<?= tohtml(sprintf(_("Are you sure you want to restore %s?"), $key)) ?>"
-							>
-								<i class="fas fa-arrow-rotate-left icon-green"></i>
-								<span class="u-hide-desktop"><?= tohtml(_("Restore")) ?></span>
-							</a>
-						</li>
-					</ul>
-				</div>
-			</div>
-		<?php }
-						} ?>
-
 		<!-- List Databases -->
 			<?php
 						$db_index = 0;

@@ -18,6 +18,7 @@ if (empty($_GET["backup"])) {
 $backup = quoteshellarg($_GET["backup"]);
 
 $web = "no";
+// The subsystem is gone; the positional stays for CLI compatibility and is always "no".
 $dns = "no";
 $mail = "no";
 $db = "no";
@@ -26,9 +27,6 @@ $udir = "no";
 
 if ($_GET["type"] == "web") {
 	$web = quoteshellarg($_GET["object"]);
-}
-if ($_GET["type"] == "dns") {
-	$dns = quoteshellarg($_GET["object"]);
 }
 if ($_GET["type"] == "mail") {
 	$mail = quoteshellarg($_GET["object"]);

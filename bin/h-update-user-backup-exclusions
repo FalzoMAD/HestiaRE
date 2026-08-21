@@ -54,7 +54,6 @@ check_hestia_demo_mode
 
 # Flush variables
 WEB=''
-DNS=''
 MAIL=''
 DB=''
 CRON=''
@@ -63,9 +62,14 @@ USER=''
 # Source exclusion list
 source_conf "$vfile"
 
-# Updating exlusion list
+# The backup tests CRON only against '*', so a job name would be stored and then ignored.
+if [ -n "$CRON" ] && [ "$CRON" != '*' ]; then
+	check_result "$E_INVALID" "cron accepts only '*' (all jobs) or empty - single jobs cannot be excluded"
+fi
+
+# No DNS key: source_conf turns an absent key into an unset variable. The empty DNS= in the
+# backup.conf record stays, because a record's field set is a HestiaCP-facing interface.
 echo "WEB='$WEB'" > $USER_DATA/backup-excludes.conf
-echo "DNS='$DNS'" >> $USER_DATA/backup-excludes.conf
 echo "MAIL='$MAIL'" >> $USER_DATA/backup-excludes.conf
 echo "DB='$DB'" >> $USER_DATA/backup-excludes.conf
 echo "CRON='$CRON'" >> $USER_DATA/backup-excludes.conf
