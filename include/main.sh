@@ -44,7 +44,9 @@ fi
 # Internal variables
 HOMEDIR='/home'
 BACKUP='/backup'
-BACKUP_GZIP=9
+# Same value the installer writes and syshealth repairs to. Measured: the knee is between 3 and 6,
+# 9 buys 3 percentage points for triple the time (#776).
+BACKUP_GZIP=3
 BACKUP_DISK_LIMIT=95
 BACKUP_LA_LIMIT=$(grep -c '^processor' /proc/cpuinfo)
 RRD_STEP=300

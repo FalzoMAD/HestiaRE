@@ -36,6 +36,21 @@ opens above it.
 
 ### Fixed
 
+- **The backup compression level was one number on two scales, unchecked, with four defaults**
+  (#776). `BACKUP_GZIP` feeds both `gzip -N` (valid 1-9) and `pzstd -N` (valid 1-19), and nothing
+  validated it: `h-change-sys-config-value BACKUP_GZIP 12` on a gzip host was accepted and then
+  killed every backup at compression time. Both directions are now refused by name, at the point the
+  value is set rather than at 3 a.m. in a nightly run - a level out of range, a level the current
+  mode cannot reach, and a switch to gzip that would strand a zstd-only level. The panel used to
+  answer the same problem by forcing the level to 9 for every gzip host, silently overwriting a
+  deliberate choice with the slowest point of the whole range; it now caps at 9 only when the chosen
+  level exceeds it, and does so before writing the mode, because the CLI refuses a switch that would
+  strand it. The four defaults - 9 in `include/main.sh`, 4 from the installer and from
+  `syshealth`, 5 as the panel's display fallback - are one value now. It is 3, measured: over four
+  WordPress installations the knee sits between 3 and 6, level 19 costs 68x the time of level 1 for
+  24% less output, and `gzip -9` is 21x slower than `pzstd -3` while producing a larger archive. An
+  existing host keeps whatever it has; `repair_key` only fills a missing or empty value.
+
 - **"Back" led to the administrator's own profile, not to the customer being managed** (#779).
   Opening another user's SSH keys or logs through the pencil icon - without impersonating them -
   produced a Back button pointing at the admin's own page, while the Login History button next to it

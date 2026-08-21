@@ -148,7 +148,7 @@ $v_backup_dir = "/backup";
 if (!empty($_SESSION["BACKUP"])) {
 	$v_backup_dir = $_SESSION["BACKUP"];
 }
-$v_backup_gzip = "5";
+$v_backup_gzip = "3";
 if (!empty($_SESSION["BACKUP_GZIP"])) {
 	$v_backup_gzip = $_SESSION["BACKUP_GZIP"];
 }
@@ -768,12 +768,16 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Change backup gzip level
+	// gzip stops at 9, zstd reaches 19 (#776). Only a level ABOVE 9 is lowered - the old code forced
+	// 9 on every gzip host, the slowest point of the range. Before the mode is written, because the
+	// CLI refuses a switch that would strand the level.
 	if (empty($_SESSION["error_msg"])) {
+		$v_gzip_target = (int) $_POST["v_backup_gzip"];
+		if ($_POST["v_backup_mode"] == "gzip" && $v_gzip_target > 9) {
+			$v_gzip_target = 9;
+		}
+		$_POST["v_backup_gzip"] = $v_gzip_target;
 		if ($_POST["v_backup_gzip"] != $v_backup_gzip) {
-			if ($_POST["v_backup_mode"] == "gzip") {
-				$_POST["v_backup_gzip"] = 9;
-			}
 			exec(
 				HESTIA_CMD .
 					"h-change-sys-config-value BACKUP_GZIP " .
@@ -806,19 +810,6 @@ if (!empty($_POST["save"])) {
 				$v_backup_mode = $_POST["v_backup_mode"];
 			}
 			$v_backup_adv = "yes";
-			if ($_POST["v_backup_mode"] == "gzip") {
-				$_POST["v_backup_gzip"] = 9;
-				if (empty($_SESSION["error_msg"])) {
-					$v_backup_gzip = $_POST["v_backup_gzip"];
-				}
-				exec(
-					HESTIA_CMD .
-						"h-change-sys-config-value BACKUP_GZIP " .
-						quoteshellarg($_POST["v_backup_gzip"]),
-					$output,
-					$return_var,
-				);
-			}
 		}
 	}
 

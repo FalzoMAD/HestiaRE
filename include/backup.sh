@@ -165,7 +165,7 @@ backup_codec_suffix() {
 }
 # -q on both: pzstd reports every file's size on stderr, which in a restore log reads like an error.
 backup_compress() {
-	if [ "$BACKUP_MODE" = 'zstd' ]; then pzstd -q -"${BACKUP_GZIP:-4}" -; else gzip -"${BACKUP_GZIP:-4}" -; fi
+	if [ "$BACKUP_MODE" = 'zstd' ]; then pzstd -q -"${BACKUP_GZIP:-3}" -; else gzip -"${BACKUP_GZIP:-3}" -; fi
 }
 backup_decompress() {
 	case "$1" in
