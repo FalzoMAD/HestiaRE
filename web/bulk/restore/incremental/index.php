@@ -12,82 +12,40 @@ verify_csrf($_POST);
 $action = $_POST["action"];
 $snapshot = quoteshellarg($_POST["snapshot"]);
 
-$web = [];
-$mail = [];
-$db = [];
-$cron = [];
-$udir = [];
-
-if (!empty($_POST["web"])) {
-	$web = quoteshellarg(implode(",", $_POST["web"]));
-}
-if (!empty($_POST["mail"])) {
-	$mail = quoteshellarg(implode(",", $_POST["mail"]));
-}
-if (!empty($_POST["db"])) {
-	$db = quoteshellarg(implode(",", $_POST["db"]));
-}
-if (!empty($_POST["cron"])) {
-	$cron = "yes";
-}
-if (!empty($_POST["file"])) {
-	$udir = quoteshellarg(implode(",", $_POST["file"]));
+// One scheduler call per object: h-schedule-user-restore-restic takes a single value and
+// validates it as one domain or database, and its validator rejects a comma.
+function schedule_restic($user, $snapshot, $object, $values)
+{
+	foreach ((array) $values as $value) {
+		exec(
+			HESTIA_CMD .
+				"h-schedule-user-restore-restic " .
+				$user .
+				" " .
+				$snapshot .
+				" " .
+				$object .
+				" " .
+				quoteshellarg($value),
+			$output,
+			$return_var,
+		);
+	}
 }
 
 if ($action == "restore") {
-	if (!empty($web)) {
-		exec(
-			HESTIA_CMD .
-				"h-schedule-user-restore-restic " .
-				$user .
-				" " .
-				$snapshot .
-				" " .
-				"web" .
-				" " .
-				$web,
-			$output,
-			$return_var,
-		);
-	}
-	if (!empty($mail)) {
-		exec(
-			HESTIA_CMD .
-				"h-schedule-user-restore-restic " .
-				$user .
-				" " .
-				$snapshot .
-				" " .
-				"db" .
-				" " .
-				$db,
-			$output,
-			$return_var,
-		);
-	}
-	if (!empty($cron)) {
+	schedule_restic($user, $snapshot, "web", $_POST["web"] ?? []);
+	schedule_restic($user, $snapshot, "mail", $_POST["mail"] ?? []);
+	schedule_restic($user, $snapshot, "db", $_POST["db"] ?? []);
+	if (!empty($_POST["cron"])) {
 		exec(
 			HESTIA_CMD . "h-schedule-user-restore-restic " . $user . " " . $snapshot . " " . "cron",
 			$output,
 			$return_var,
 		);
 	}
-
-	if (!empty($file)) {
-		exec(
-			HESTIA_CMD .
-				"h-schedule-user-restore-restic " .
-				$user .
-				" " .
-				$snapshot .
-				" " .
-				"file" .
-				$file,
-			$output,
-			$return_var,
-		);
-	}
 }
+
 if ($return_var == 0) {
 	$_SESSION["error_msg"] = _(
 		"Task has been added to the queue. You will receive an email notification when your restore has been completed.",
@@ -95,6 +53,4 @@ if ($return_var == 0) {
 } else {
 	$_SESSION["error_msg"] = implode("<br>", $output);
 }
-var_dump($_POST);
-var_dump($output);
 header("Location: /list/backup/incremental/?snapshot=" . $_POST["snapshot"]);
