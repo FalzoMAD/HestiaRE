@@ -4,9 +4,10 @@
 #
 # example: h-delete-sys-sieve
 #
-# Unwires and uninstalls sieve: exim's SIEVE macro back to inert, sieve packages
-# purged, and 15-lda.conf restored to the base variant (it belongs to dovecot-core,
-# so the purge does not bring it back). Per-account scripts stay in the maildirs.
+# Unwires and uninstalls sieve: exim's SIEVE macro back to inert, sieve packages purged, and
+# 15-lda.conf restored to the base variant (it belongs to dovecot-core, so the purge does not bring
+# it back). On dovecot 2.4 the sieve package itself STAYS - core depends on it there - and only its
+# configuration goes. Per-account scripts stay in the maildirs.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -17,6 +18,8 @@
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/sieve.sh
+source $HESTIA/include/sieve.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state
@@ -53,7 +56,13 @@ fi
 # the purge's dovecot restart would fail while sieve settings are still referenced
 rm -f /etc/dovecot/conf.d/20-managesieve.conf \
 	/etc/dovecot/conf.d/90-sieve.conf \
-	/etc/dovecot/conf.d/90-sieve-extprograms.conf
+	/etc/dovecot/conf.d/90-sieve-extprograms.conf \
+	/etc/dovecot/conf.d/91-imapsieve.conf
+
+# Before the restart: the rules are gone, so the plugin and the group go with them.
+sieve_mail_group_del
+sieve_learn_remove
+sieve_imap_plugin_del
 # 15-lda.conf belongs to dovecot-core — restore the base (non-sieve) variant
 DOVECOT_VER=$(dovecot --version 2> /dev/null | cut -d. -f1,2 || echo "2.3")
 if [ "$(printf '%s\n2.4' "$DOVECOT_VER" | sort -V | head -1)" = "2.4" ]; then
@@ -69,9 +78,18 @@ if ! systemctl is-active --quiet dovecot; then
 	exit "$E_RESTART"
 fi
 
-apt-get -y -qq purge dovecot-managesieved dovecot-sieve > /dev/null 2>&1
+# On dovecot 2.4 core DEPENDS on dovecot-sieve, so purging sieve takes core, imapd and pop3d with
+# it - the whole mail server, for removing an optional addon. Read from the dependency and not from
+# a version number: the packaging is what changes here.
+purge_pkgs='dovecot-managesieved dovecot-sieve'
+if apt-cache show dovecot-core 2> /dev/null | grep -qE '^Depends:.*[ ,]dovecot-sieve[ ,(]'; then
+	purge_pkgs='dovecot-managesieved'
+	echo "NOTE: dovecot-core requires dovecot-sieve on this release - the package stays, its configuration does not."
+fi
+# shellcheck disable=SC2086  # deliberate word splitting: one or two package names
+apt-get -y -qq purge $purge_pkgs > /dev/null 2>&1
+
 # no autoremove: it would rip out shared-stack siblings (deb13 autoremoved dovecot-core).
-# the purge may stop dovecot (deb13) — bring it back up.
 systemctl start dovecot 2> /dev/null || true
 if ! systemctl is-active --quiet dovecot; then
 	echo "ERROR: dovecot did not come back up after the sieve purge."
@@ -80,6 +98,10 @@ fi
 
 $BIN/h-change-sys-config-value 'SIEVE_SYSTEM' ''
 set_install_component ADDON_SIEVE false
+
+# Take the filter screens away with the service. A UI whose backend stopped answering is worse
+# than no UI: it fails at the first save, with an error nobody can act on.
+webmail_sieve_apply
 
 echo "sieve has been removed (stored scripts remain in the maildirs)."
 
