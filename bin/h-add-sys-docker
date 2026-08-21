@@ -68,6 +68,13 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
+# installed = package present AND registered. Both halves: a package the OS dragged in without our
+# config is not an installation, and the installer must still get through on a half-built box.
+if dpkg -l docker-ce 2> /dev/null | grep -q '^ii' && [ "$DOCKER_SYSTEM" = 'docker' ]; then
+	echo "INFO: Docker is already installed."
+	exit
+fi
+
 # The old inline addon installed the OS docker.io, which is the rootful daemon this
 # feature replaces. It conflicts with docker-ce, so it goes first rather than letting
 # apt resolve it mid-transaction.

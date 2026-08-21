@@ -14,6 +14,14 @@ opens above it.
 
 ### Fixed
 
+- **Two addon installers announced work they had not done** (#772). Run against a host that already
+  had ProFTPD or Docker, they printed "Installing ProFTPD" and "Adding the Docker repository" and
+  went through the motions again, while their guarded siblings say "already installed" and stop.
+  A message that claims an action nobody performed is read as evidence of the state before it - and
+  it was, during a cleanup, which is how a working ProFTPD came to be removed. Both now check the
+  package and the registration together, so a package the OS dragged in without our configuration
+  still counts as not installed and a fresh install is not turned away.
+
 - **The PHP fallback could not be agreed to from the panel** (#608). A restore whose archive carries
   a PHP version this host does not have needs an explicit yes, and the queue has no terminal to ask
   at - so a panel restore of such an archive refused, and the message named a token only the CLI
