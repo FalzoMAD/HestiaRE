@@ -12,6 +12,15 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **A lint run that measured nothing reported the cleanest possible result** (#770). The format
+  ratchet compared how many files are exempt now against how many were exempt on the base branch,
+  and an unreadable base counting zero failed closed - but a current side counting zero did not,
+  because zero is not greater than zero. With the exempt list now empty, zero is also the expected
+  result, so a run that read no files at all was indistinguishable from a clean one. Both sides now
+  report how many files they looked at, and a side that looked at none fails.
+
 ### Changed
 
 - **The 32 shell files the format check had exempted are formatted** (#770). They were unformatted
