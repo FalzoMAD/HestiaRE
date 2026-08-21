@@ -204,6 +204,7 @@ backup_probe() {
 	PROBE_WEB='' PROBE_MAIL='' PROBE_DB='' PROBE_UDIR='' PROBE_DNS='' PROBE_TPL=''
 	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM=''
 	PROBE_ORIGIN='' PROBE_RECORDS="$_wd"
+	PROBE_DIFF_BASE='' PROBE_DIFF_MEMBERS=''
 
 	[ -f "$_arc" ] || return 1
 	_members=$(tar -tf "$_arc" 2> /dev/null) || return 1
@@ -251,6 +252,15 @@ backup_probe() {
 		PROBE_PROXY_SYSTEM=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$_dir/web-system")
 	fi
 	[ -f "$_dir/origin" ] && PROBE_ORIGIN=$(head -n1 "$_dir/origin")
+
+	# A differential archive has to say so before anyone restores it: everything else it carries is
+	# complete, but these members are not, and the base is the only thing that completes them.
+	if grep -qx "\./$BACKUP_CONTAINER/backup.base" <<< "$_members"; then
+		PROBE_DIFF_BASE=$(tar -xOf "$_arc" "./$BACKUP_CONTAINER/backup.base" 2> /dev/null \
+			| sed -n "s/.*BASE='\([^']*\)'.*/\1/p")
+		PROBE_DIFF_MEMBERS=$(tar -xOf "$_arc" "./$BACKUP_CONTAINER/backup.members" 2> /dev/null \
+			| sed -n 's/=diff$//p')
+	fi
 	return 0
 }
 
@@ -310,6 +320,12 @@ backup_report() {
 		"$(backup_report_count "$PROBE_WEB")" "$(backup_report_count "$PROBE_MAIL")" \
 		"$(backup_report_count "$PROBE_DB")" "$(backup_report_count "$PROBE_UDIR")" \
 		"$([ "$(backup_report_count "$PROBE_UDIR")" = 1 ] && echo y || echo ies)" "$PROBE_CRON"
+	if [ -n "$PROBE_DIFF_BASE" ]; then
+		printf '   DIFFERENTIAL against %s\n' "$PROBE_DIFF_BASE"
+		if [ -n "$PROBE_DIFF_MEMBERS" ]; then
+			printf '   incomplete without it: %s\n' "$(tr '\n' ' ' <<< "$PROBE_DIFF_MEMBERS")"
+		fi
+	fi
 	# The origin line describes, never decides: on a disagreement the members are what the restore
 	# acts on, and the disagreement is worth printing.
 	if [ -n "$PROBE_ORIGIN" ]; then
@@ -835,7 +851,8 @@ local_backup() {
 		backups_rm_number=$((backups_count - BACKUPS + 1))
 
 		# Removing old backup
-		for backup in $(echo "$backup_list" | head -n $backups_rm_number); do
+		for backup in $(echo "$backup_list" \
+			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar$//")
 			echo -e "$(date "+%F %T") Rotated: $backup_date" \
 				| tee -a $BACKUP/$user.log
@@ -949,7 +966,8 @@ ftp_backup() {
 	backups_count=$(echo "$backup_list" | wc -l)
 	if [ "$backups_count" -ge "$BACKUPS" ]; then
 		backups_rm_number=$((backups_count - BACKUPS + 1))
-		for backup in $(echo "$backup_list" | head -n $backups_rm_number); do
+		for backup in $(echo "$backup_list" \
+			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar$//")
 			echo -e "$(date "+%F %T") Rotated ftp backup: $backup_date" \
 				| tee -a $BACKUP/$user.log
@@ -1222,7 +1240,8 @@ sftp_backup() {
 	backups_count=$(echo "$backup_list" | wc -l)
 	if [ "$backups_count" -ge "$BACKUPS" ]; then
 		backups_rm_number=$((backups_count - BACKUPS + 1))
-		for backup in $(echo "$backup_list" | head -n $backups_rm_number); do
+		for backup in $(echo "$backup_list" \
+			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar.*$//")
 			echo -e "$(date "+%F %T") Rotated sftp backup: $backup_date" \
 				| tee -a $BACKUP/$user.log
@@ -1277,7 +1296,8 @@ rclone_backup() {
 		backups_count=$(echo "$backup_list" | wc -l)
 		backups_rm_number=$((backups_count - BACKUPS))
 		if [ "$backups_count" -ge "$BACKUPS" ]; then
-			for backup in $(echo "$backup_list" | head -n $backups_rm_number); do
+			for backup in $(echo "$backup_list" \
+				| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
 				echo "Delete file: $backup"
 				rclone deletefile $HOST:/$backup
 			done
@@ -1293,7 +1313,8 @@ rclone_backup() {
 		backups_count=$(echo "$backup_list" | wc -l)
 		backups_rm_number=$(($backups_count - $BACKUPS))
 		if [ "$backups_count" -ge "$BACKUPS" ]; then
-			for backup in $(echo "$backup_list" | head -n $backups_rm_number); do
+			for backup in $(echo "$backup_list" \
+				| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
 				echo "Delete file: $backup"
 				rclone deletefile $HOST:$BPATH/$backup
 			done
@@ -1768,4 +1789,27 @@ backup_diff_keep_list() {
 	tar $_opt -tf "$_member" --quoting-style=literal > "$_skip" 2> /dev/null
 	backup_map_keep "$_bm" "$_cur" "$_pre" "$_skip" > "$_out"
 	rm -f "$_bm" "$_skip"
+}
+
+# ── Set rotation (#712 stage 3) ──────────────────────────────────────────────────────────────────
+#
+# A diff restores only together with its base, so the base stays as long as any kept diff needs it.
+# The obvious rule - "taking a full takes its diffs" - is the wrong way round and was measured to be
+# destructive: with one full and three diffs hanging off it, rotating the full wiped the entire
+# history in a single run.
+#
+# So: keep the newest N, then keep the base of everything kept, then remove the rest. The retained
+# count can exceed N by the number of distinct bases, which is the price of never orphaning a diff.
+backup_set_removals() {
+	local _conf="$1" _keep="$2" _list _total _name _keepset
+	_list=$(sed '/^$/d')
+	_total=$(grep -c . <<< "$_list")
+	[ "$_total" -gt "$_keep" ] || return 0
+	_keepset=$(tail -n "$_keep" <<< "$_list")
+	while read -r _name; do
+		[ -n "$_name" ] || continue
+		_keepset="$_keepset
+$(grep -F "BACKUP='$_name'" "$_conf" 2> /dev/null | sed -n "s/.*BASE='\([^']*\)'.*/\1/p")"
+	done <<< "$_keepset"
+	comm -23 <(sort <<< "$_list") <(sed '/^$/d' <<< "$_keepset" | sort -u)
 }

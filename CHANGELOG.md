@@ -14,6 +14,15 @@ opens above it.
 
 ### Added
 
+- **Retention understands differential sets** (#712, stage 3). A diff restores only together with
+  its base, so the base is kept as long as any kept archive names it - in all four transports, which
+  each rotate for themselves, and in the record, which the count-based pass would otherwise shorten
+  past it. The obvious rule, "removing a full removes its diffs", is the wrong way round and was
+  measured to be destructive: with one full and three diffs hanging off it, rotating the full wiped
+  the entire history in one run. Verified: four archives are all retained, and the fifth run rotates
+  the oldest diff while the base stays. The probe now announces a differential archive and names the
+  members that are incomplete without their base, so a report says it before anyone restores.
+
 - **Differential backups** (#712, stage 2). A customer set to `BACKUPS_MODE='diff'` gets an archive
   whose web and mail members carry only what changed against the newest full archive; everything
   else - records, databases, home entries, the map - stays whole, so listing, probe, report and
