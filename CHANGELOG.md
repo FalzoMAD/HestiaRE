@@ -12,6 +12,17 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **`b3sum` joins the base packages** (#712). The differential backup map hashes every byte of a
+  customer's web and mail trees on every run, so the hash has to stay well ahead of the compressor.
+  Measured on two machines that both lack `sha_ni` - the normal case on virtualised servers, where
+  the CPU model masks the flag - BLAKE3 runs 2.8x faster than SHA-256 on a real file tree and 9x on
+  large files, single-threaded in both cases, while remaining a cryptographic hash: the map can
+  serve as an integrity statement later without a second derivation. It is an OS package on all four
+  targets, and 1.2.0 through 1.8.2 produce identical digests, so a stored map survives a distro
+  upgrade. The consumer itself is not built yet.
+
 ### Removed
 
 - **Demo mode is gone** (#759). Inherited from upstream, where it exists to keep a public demo box

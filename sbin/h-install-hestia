@@ -145,9 +145,11 @@ install_base() {
 
 	echo "[ * ] Installing base packages..."
 	apt-get -qq update
+	# b3sum ships ahead of its consumer: the differential backup map (#712) hashes every byte, and
+	# BLAKE3 is the only cryptographic candidate that stays ahead of the compressor without sha_ni.
 	# shellcheck disable=SC2086
 	hestia_apt -y install \
-		acl at bc bsdmainutils bsdutils ca-certificates \
+		acl at b3sum bc bsdmainutils bsdutils ca-certificates \
 		cron curl dnsutils e2fslibs e2fsprogs expect flex ftp \
 		git gnupg idn2 imagemagick jq nftables \
 		lsb-release lsof mc net-tools openssh-server quota \
