@@ -852,7 +852,7 @@ local_backup() {
 
 		# Removing old backup
 		for backup in $(echo "$backup_list" \
-			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
+			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar$//")
 			echo -e "$(date "+%F %T") Rotated: $backup_date" \
 				| tee -a $BACKUP/$user.log
@@ -967,7 +967,7 @@ ftp_backup() {
 	if [ "$backups_count" -ge "$BACKUPS" ]; then
 		backups_rm_number=$((backups_count - BACKUPS + 1))
 		for backup in $(echo "$backup_list" \
-			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
+			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar$//")
 			echo -e "$(date "+%F %T") Rotated ftp backup: $backup_date" \
 				| tee -a $BACKUP/$user.log
@@ -1241,7 +1241,7 @@ sftp_backup() {
 	if [ "$backups_count" -ge "$BACKUPS" ]; then
 		backups_rm_number=$((backups_count - BACKUPS + 1))
 		for backup in $(echo "$backup_list" \
-			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
+			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar.*$//")
 			echo -e "$(date "+%F %T") Rotated sftp backup: $backup_date" \
 				| tee -a $BACKUP/$user.log
@@ -1297,7 +1297,7 @@ rclone_backup() {
 		backups_rm_number=$((backups_count - BACKUPS))
 		if [ "$backups_count" -ge "$BACKUPS" ]; then
 			for backup in $(echo "$backup_list" \
-				| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
+				| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
 				echo "Delete file: $backup"
 				rclone deletefile $HOST:/$backup
 			done
@@ -1314,7 +1314,7 @@ rclone_backup() {
 		backups_rm_number=$(($backups_count - $BACKUPS))
 		if [ "$backups_count" -ge "$BACKUPS" ]; then
 			for backup in $(echo "$backup_list" \
-				| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number))); do
+				| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
 				echo "Delete file: $backup"
 				rclone deletefile $HOST:$BPATH/$backup
 			done
@@ -1801,11 +1801,16 @@ backup_diff_keep_list() {
 # So: keep the newest N, then keep the base of everything kept, then remove the rest. The retained
 # count can exceed N by the number of distinct bases, which is the price of never orphaning a diff.
 backup_set_removals() {
-	local _conf="$1" _keep="$2" _list _total _name _keepset
+	local _conf="$1" _keep="$2" _base="${3:-}" _list _total _name _keepset
 	_list=$(sed '/^$/d')
 	_total=$(grep -c . <<< "$_list")
 	[ "$_total" -gt "$_keep" ] || return 0
+	# The archive this run is about to write is not in the records yet, so the base it diffs
+	# against is invisible to the record lookup below - with BACKUPS='1' the kept tail is even
+	# empty. Measured: the run deleted its own base seconds before writing the diff against it.
 	_keepset=$(tail -n "$_keep" <<< "$_list")
+	[ -n "$_base" ] && _keepset="$_keepset
+$_base"
 	while read -r _name; do
 		[ -n "$_name" ] || continue
 		_keepset="$_keepset

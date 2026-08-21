@@ -22,6 +22,10 @@ opens above it.
   the entire history in one run. Verified: four archives are all retained, and the fifth run rotates
   the oldest diff while the base stays. The probe now announces a differential archive and names the
   members that are incomplete without their base, so a report says it before anyone restores.
+  Found on `BACKUPS='1'` and fixed: the rotation runs before the new archive exists in the records,
+  so the base the current run diffs against was invisible to the keep set - the run deleted its own
+  base seconds before writing the diff against it. The base is now passed into the removal
+  calculation explicitly, in all four transports.
 
 - **Differential backups** (#712, stage 2). A customer set to `BACKUPS_MODE='diff'` gets an archive
   whose web and mail members carry only what changed against the newest full archive; everything
