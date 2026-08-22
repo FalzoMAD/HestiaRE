@@ -911,41 +911,48 @@ backup_str="$backup_str MODE='$([ -n "$diff_base" ] && echo diff || echo full)' 
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 
-# After the record is written, so a map is dropped only once its archive is gone from it.
+# One pass, in FILE ORDER - the listers print the file as it stands. Adopted records are kept
+# whatever their age: they point at a file this rotation does not own, and dropping the record
+# would hide the archive from the panel again. Everything else is kept per SET, the same unit the
+# file rotation uses: the newest $BACKUPS sets stay, records and files cannot disagree about what
+# a set is. The new record is already in the file here, so no incoming adjustment is needed.
+# The quote arrives via -v q, not as an escape some awk implementation might read differently.
+LC_ALL=C awk -v keep="$BACKUPS" -v q="'" '
+	function field(l, k,   i, r) {
+		i = index(l, k q)
+		if (i == 0) return ""
+		r = substr(l, i + length(k) + 1)
+		i = index(r, q)
+		if (i == 0) return ""
+		return substr(r, 1, i - 1)
+	}
+	function adopted(l) { return index(l, "ADOPTED=" q "yes" q) > 0 }
+	NR == FNR {
+		if (adopted($0)) next
+		n = field($0, "BACKUP=")
+		if (n == "") next
+		b = field($0, "BASE=")
+		id = (b == "" ? n : b)
+		ids[NR] = id
+		if (!(id in seen)) { seen[id] = 1; sets[++s] = id }
+		next
+	}
+	FNR == 1 {
+		for (i = 1; i <= s; i++)
+			for (j = i + 1; j <= s; j++)
+				if (sets[j] > sets[i]) { t = sets[i]; sets[i] = sets[j]; sets[j] = t }
+		for (i = 1; i <= keep && i <= s; i++) kept[sets[i]] = 1
+	}
+	{
+		if (adopted($0)) { print; next }
+		if (FNR in ids && ids[FNR] in kept) print
+	}
+' $USER_DATA/backup.conf $USER_DATA/backup.conf > $USER_DATA/backup.conf_
+mv -f $USER_DATA/backup.conf_ $USER_DATA/backup.conf
+
+# After the set-aware cleanup, so a mirror map is dropped in the same run that rotates its
+# archive's record - before it, the rotated set's mirrors survived one run as orphans.
 backup_map_prune "$USER_DATA/backup-maps" "$USER_DATA/backup.conf"
-
-# Removing old backups. Adopted records are kept whatever their age: they point at a file this
-# rotation does not own, and dropping the record would hide the archive from the panel again.
-#
-# In place, in FILE ORDER - the listers print the file as it stands, so pulling the adopted lines to
-# the front would reorder what the panel shows. ADOPTED is matched as a whole field, not as a
-# substring anywhere in the line.
-cp -f $USER_DATA/backup.conf $USER_DATA/backup.conf.all
-awk -v keep="$BACKUPS" '
-	/(^| )ADOPTED='"'"'yes'"'"'( |$)/ { next }
-	{ n++ }
-	END { print n }
-' $USER_DATA/backup.conf > $USER_DATA/backup.count_
-awk -v keep="$BACKUPS" -v total="$(cat $USER_DATA/backup.count_)" '
-	/(^| )ADOPTED='"'"'yes'"'"'( |$)/ { print; next }
-	{ i++; if (i > total - keep) print }
-' $USER_DATA/backup.conf > $USER_DATA/backup.conf_
-rm -f $USER_DATA/backup.count_
-mv -f $USER_DATA/backup.conf_ $USER_DATA/backup.conf
-
-# The files rotate as sets, so the records have to. The rule is the same one and in the same
-# direction: a base is kept as long as a kept diff names it. The count-based pass above does not
-# know that, so this pass puts the bases back - a record dropped here would leave a diff whose base
-# the next run can no longer find. (\x27 for the quote - a literal one would close this string.)
-awk '
-	function nameof(l,   r) { if (match(l, /BACKUP=.[^\x27]*./)) return substr(l, RSTART + 8, RLENGTH - 9); return "" }
-	function baseof(l,   r) { if (match(l, /BASE=.[^\x27]*./)) return substr(l, RSTART + 6, RLENGTH - 7); return "" }
-	# pass 1: what the count-based pass kept, plus the base each of those names
-	NR == FNR { keep[nameof($0)] = 1; b = baseof($0); if (b != "") need[b] = 1; next }
-	{ n = nameof($0); if (n in keep || n in need) print }
-' $USER_DATA/backup.conf $USER_DATA/backup.conf.all > $USER_DATA/backup.conf_
-mv -f $USER_DATA/backup.conf_ $USER_DATA/backup.conf
-rm -f $USER_DATA/backup.conf.all
 chmod 660 $USER_DATA/backup.conf
 chmod 660 $BACKUP/$user.log
 

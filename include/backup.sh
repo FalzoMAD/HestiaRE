@@ -848,11 +848,10 @@ local_backup() {
 	fi
 	backups_count=$(grep -c . <<< "$backup_list")
 	if [ "$BACKUPS" -le "$backups_count" ]; then
-		backups_rm_number=$((backups_count - BACKUPS + 1))
 
 		# Removing old backup
 		for backup in $(echo "$backup_list" \
-			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
+			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar$//")
 			echo -e "$(date "+%F %T") Rotated: $backup_date" \
 				| tee -a $BACKUP/$user.log
@@ -965,9 +964,8 @@ ftp_backup() {
 	fi
 	backups_count=$(echo "$backup_list" | wc -l)
 	if [ "$backups_count" -ge "$BACKUPS" ]; then
-		backups_rm_number=$((backups_count - BACKUPS + 1))
 		for backup in $(echo "$backup_list" \
-			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
+			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar$//")
 			echo -e "$(date "+%F %T") Rotated ftp backup: $backup_date" \
 				| tee -a $BACKUP/$user.log
@@ -1239,9 +1237,8 @@ sftp_backup() {
 	fi
 	backups_count=$(echo "$backup_list" | wc -l)
 	if [ "$backups_count" -ge "$BACKUPS" ]; then
-		backups_rm_number=$((backups_count - BACKUPS + 1))
 		for backup in $(echo "$backup_list" \
-			| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
+			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar.*$//")
 			echo -e "$(date "+%F %T") Rotated sftp backup: $backup_date" \
 				| tee -a $BACKUP/$user.log
@@ -1294,10 +1291,9 @@ rclone_backup() {
 		# Only include *.tar files
 		backup_list=$(rclone lsf $HOST: | cut -d' ' -f1 | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
 		backups_count=$(echo "$backup_list" | wc -l)
-		backups_rm_number=$((backups_count - BACKUPS))
 		if [ "$backups_count" -ge "$BACKUPS" ]; then
 			for backup in $(echo "$backup_list" \
-				| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
+				| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
 				echo "Delete file: $backup"
 				rclone deletefile $HOST:/$backup
 			done
@@ -1311,10 +1307,9 @@ rclone_backup() {
 		# Only include *.tar files
 		backup_list=$(rclone lsf $HOST:$BPATH | cut -d' ' -f1 | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
 		backups_count=$(echo "$backup_list" | wc -l)
-		backups_rm_number=$(($backups_count - $BACKUPS))
 		if [ "$backups_count" -ge "$BACKUPS" ]; then
 			for backup in $(echo "$backup_list" \
-				| backup_set_removals "$USER_DATA/backup.conf" $((backups_count - backups_rm_number)) "$diff_base"); do
+				| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
 				echo "Delete file: $backup"
 				rclone deletefile $HOST:$BPATH/$backup
 			done
@@ -1354,6 +1349,10 @@ rclone_download() {
 # at a time, and an empty field is simply an empty one:
 #
 #   <path>\0<hash>\0<mode>\0<uid>:<gid>\0<symlink target>\0
+#
+# The hash field has two idle values: "" for a type that never carries one (directory, symlink,
+# device), "-" for a regular file whose hash was withdrawn (stat tripwire) or never taken (appeared
+# mid-run). "-" compares as changed even against itself; "" only ever meets "" on same-type paths.
 #
 # Deliberately unordered: comparisons are by path key, and sorting NUL records whose paths may hold
 # any byte would need a separator that does not exist.
@@ -1438,7 +1437,7 @@ backup_map_hash_verify() {
 		close(ARGV[2])
 		while ((getline p < ARGV[3]) > 0) {
 			if ((getline h < ARGV[3]) <= 0) break
-			if (then_stat[p] != now_stat[p]) h = ""
+			if (then_stat[p] != now_stat[p]) h = "-"
 			printf "%s%c%s%c", p, 0, h, 0
 		}
 	}' "$_out.stat" "$_now" "$_out" > "$_out.checked"
@@ -1507,8 +1506,13 @@ backup_map_member() {
 					i = index(rest, " link to ")
 					if (i > 0) rest = substr(rest, 1, i - 1)
 				}
+				# Two idle values with two meanings: "" is a type that never carries a hash
+				# (directory, symlink, device), "-" is a regular file whose hash is withdrawn or
+				# was never taken - the tripwire fired, or the file appeared between the hash
+				# pass and the tar. "-" compares as changed even against itself; "" stays equal
+				# to "" so directories do not land in every diff.
 				h = ""
-				if (typ == "-" || typ == "h") h = hash[rest]
+				if (typ == "-" || typ == "h") { h = hash[rest]; if (h == "") h = "-" }
 				# The name is kept EXACTLY as the archive stores it, "./" and trailing slash and
 				# all: -T matches stored names literally, so a normalised path would select nothing
 				# when the diff is built - and the hash table keys carry the same form, find and
@@ -1598,10 +1602,13 @@ backup_map_changed() {
 			else if (i == 3) o = $0
 			else {
 				v = h "\x01" m "\x01" o "\x01" $0
-				if (FILENAME == base) { B[p] = v; next }
+				if (FILENAME == base) { B[p] = v; BH[p] = h; next }
 				if (index(p, pre) != 1) next
 				inpath = substr(p, length(pre) + 1)
-				if (!(p in B) || B[p] != v) print inpath "\0"
+				# A withdrawn hash ("-") is changed even against itself: the same file racing two
+				# runs in a row must not read as unchanged and then restore from a base that
+				# holds who-knows-which version.
+				if (!(p in B) || B[p] != v || h == "-" || BH[p] == "-") print inpath "\0"
 			}
 		}' "$1" "$2"
 }
@@ -1801,20 +1808,52 @@ backup_diff_keep_list() {
 # So: keep the newest N, then keep the base of everything kept, then remove the rest. The retained
 # count can exceed N by the number of distinct bases, which is the price of never orphaning a diff.
 backup_set_removals() {
-	local _conf="$1" _keep="$2" _base="${3:-}" _list _total _name _keepset
-	_list=$(sed '/^$/d')
-	_total=$(grep -c . <<< "$_list")
-	[ "$_total" -gt "$_keep" ] || return 0
-	# The archive this run is about to write is not in the records yet, so the base it diffs
-	# against is invisible to the record lookup below - with BACKUPS='1' the kept tail is even
-	# empty. Measured: the run deleted its own base seconds before writing the diff against it.
-	_keepset=$(tail -n "$_keep" <<< "$_list")
-	[ -n "$_base" ] && _keepset="$_keepset
-$_base"
-	while read -r _name; do
-		[ -n "$_name" ] || continue
-		_keepset="$_keepset
-$(grep -F "BACKUP='$_name'" "$_conf" 2> /dev/null | sed -n "s/.*BASE='\([^']*\)'.*/\1/p")"
-	done <<< "$_keepset"
-	comm -23 <(sort <<< "$_list") <(sed '/^$/d' <<< "$_keepset" | sort -u)
+	local _conf="$1" _target="$2" _base="${3:-}"
+	# TARGET counts SETS - one full plus the diffs naming it - so BACKUPS='3' in diff mode means
+	# three fulls with their history, not three days. For a full-only customer every archive is
+	# its own set and the behaviour is exactly the count it always was. The archive this run is
+	# about to write is not in the records yet: a diff extends the set of _base (kept explicitly),
+	# a new full founds a set of its own, so the existing list may keep one set less. Measured
+	# without this: with BACKUPS='1' the kept tail was empty and the run deleted its own base
+	# seconds before writing the diff against it.
+	# Resolution is ONE level deep, and that carries only because backup_diff_base restricts a
+	# base to a FULL archive - diff-on-diff would silently orphan a link here.
+	# LC_ALL=C so string order is byte order on every awk; the quote arrives via -v q, not as an
+	# escape some implementation might read differently.
+	LC_ALL=C awk -v conf="$_conf" -v target="$_target" -v inbase="$_base" -v q="'" '
+		function field(l, k,   i, r) {
+			i = index(l, k q)
+			if (i == 0) return ""
+			r = substr(l, i + length(k) + 1)
+			i = index(r, q)
+			if (i == 0) return ""
+			return substr(r, 1, i - 1)
+		}
+		BEGIN {
+			while ((getline l < conf) > 0) {
+				n = field(l, "BACKUP=")
+				if (n == "") continue
+				b = field(l, "BASE=")
+				setid[n] = (b == "" ? n : b)
+			}
+			close(conf)
+			if (inbase == "") target = target - 1
+			if (target < 0) target = 0
+		}
+		NF {
+			names[++c] = $0
+			id = ($0 in setid) ? setid[$0] : $0
+			ids[$0] = id
+			if (!(id in seen)) { seen[id] = 1; sets[++s] = id }
+		}
+		END {
+			# newest sets first - the timestamp in the archive name sorts chronologically
+			for (i = 1; i <= s; i++)
+				for (j = i + 1; j <= s; j++)
+					if (sets[j] > sets[i]) { t = sets[i]; sets[i] = sets[j]; sets[j] = t }
+			for (i = 1; i <= target && i <= s; i++) keep[sets[i]] = 1
+			if (inbase != "") keep[inbase] = 1
+			for (i = 1; i <= c; i++)
+				if (!(ids[names[i]] in keep)) print names[i]
+		}'
 }

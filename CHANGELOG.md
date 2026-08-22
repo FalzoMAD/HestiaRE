@@ -14,10 +14,12 @@ opens above it.
 
 ### Added
 
-- **Retention understands differential sets** (#712, stage 3). A diff restores only together with
-  its base, so the base is kept as long as any kept archive names it - in all four transports, which
-  each rotate for themselves, and in the record, which the count-based pass would otherwise shorten
-  past it. The obvious rule, "removing a full removes its diffs", is the wrong way round and was
+- **Retention understands differential sets** (#712, stage 3). `BACKUPS` counts SETS - one full
+  plus the diffs naming it - in all four transports and in the record file, which use the same
+  derivation and cannot disagree about what a set is. `BACKUPS='3'` with weekly fulls therefore
+  means three weeks of history, the same figure it means for a full-only customer, where every
+  archive is its own set and nothing changes. A diff restores only together with its base, so a
+  base is kept as long as its set is. The obvious rule, "removing a full removes its diffs", is the wrong way round and was
   measured to be destructive: with one full and three diffs hanging off it, rotating the full wiped
   the entire history in one run. Verified: four archives are all retained, and the fifth run rotates
   the oldest diff while the base stays. The probe now announces a differential archive and names the
@@ -58,8 +60,10 @@ opens above it.
   the next diff instead of silently treated as already covered. The one exception is the return
   case - changed in the window, later reverted to exactly the hashed bytes, which would read as
   "unchanged" against a base that physically holds the other version - and a stat tripwire closes
-  it: files whose size or mtime moved between the hash pass and after the tar lose their hash,
-  which reads as changed, the over-inclusion side. Accepted price, stated so nobody mistakes it
+  it: files whose size or mtime moved between the hash pass and after the tar get the withdrawn
+  marker `-` as their hash - distinct from the empty hash a directory or symlink carries by type,
+  and compared as changed even against itself, so the same file racing two runs in a row cannot
+  read as unchanged. The over-inclusion side, always. Accepted price, stated so nobody mistakes it
   for an accident: the map roughly quadruples the run for a mail-heavy customer (7.8s to 29.9s on
   153k files) - the savings target storage, never runtime. Hardlink members get real records
   this way - --to-command never even handed them over. It travels inside the archive so a foreign box can read it, and is mirrored under
