@@ -14,6 +14,14 @@ opens above it.
 
 ### Added
 
+- **OPERATIONAL NOTE - the repaired remote rotation deletes on its first run.** The ftp/sftp
+  listings arrived CRLF-tainted from expect's pty, `tar$` never matched, and remote rotation on
+  those targets was structurally dead: archives accumulated regardless of `BACKUPS`. Fixed - which
+  means the FIRST nightly run against a grown target counts them for the first time and removes
+  everything beyond retention, under the new set-counting rule. Harmless on this project today (no
+  live boxes), destructive on any grown target this ever gets deployed to: the fix is correct and
+  its first run is the mass deletion.
+
 - **Retention understands differential sets** (#712, stage 3). `BACKUPS` counts SETS - one full
   plus the diffs naming it - in all four transports and in the record file, which use the same
   derivation and cannot disagree about what a set is. `BACKUPS='3'` with weekly fulls therefore
