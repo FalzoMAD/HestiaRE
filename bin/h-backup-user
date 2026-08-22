@@ -782,7 +782,7 @@ map_records=$(backup_map_write "$tmpdir" "$tmpdir/hestia/backup.map" "$maptbl")
 
 # Differential members (#712): BACKUPS_MODE comes from the package; anything but 'diff' stays
 # whole, and no base means full, never a diff against nothing.
-backup_mode_sel=$(sed -n "s/.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)
+backup_mode_sel=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)
 diff_base=''
 if [ "${backup_mode_sel:-full}" = 'diff' ] && [ "$map_records" -gt 0 ]; then
 	diff_base=$(backup_diff_base "$USER_DATA/backup.conf" "$USER_DATA/backup-maps") || diff_base=''

@@ -39,15 +39,15 @@ for user in $($BIN/h-list-sys-users plain); do
 	check_suspend=$(grep "SUSPENDED='no'" $CONF_DIR/users/$user/user.conf)
 	log=$HESTIA/log/backup.log
 	if [ -n "$check_suspend" ]; then
-		echo -e "================================" >> $log
-		echo -e "$user" >> $log
-		echo -e "--------------------------------\n" >> $log
-		# Only restic-mode customers: this is the manual path, and it must not duplicate what the
-		# nightly dispatcher already did for everybody else.
+		# Only restic-mode customers, checked BEFORE the log header: a skipped customer must
+		# leave nothing, not a header without a body.
 		mode=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$user/user.conf" | head -1)
 		if [ "${mode:-full}" != 'restic' ]; then
 			continue
 		fi
+		echo -e "================================" >> $log
+		echo -e "$user" >> $log
+		echo -e "--------------------------------\n" >> $log
 		nice -n 19 ionice -c2 -n7 $BIN/h-backup-user-restic $user >> $log 2>&1
 		echo -e "\n--------------------------------\n\n" >> $log
 	fi

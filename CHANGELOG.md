@@ -23,7 +23,9 @@ opens above it.
   customers whose mode is not restic, so a manual invocation no longer duplicates the nightly run.
   The package pages offer the mode (restic only where the addon is, but a package already saying
   restic keeps its option so an unrelated save cannot flip it), and the backup list marks a
-  differential archive with its base.
+  differential archive with its base. Like every package key, the mode reaches a customer on
+  assignment (`h-change-user-package`) or creation - editing a package does NOT re-propagate to
+  the customers already sitting on it.
 
 - **OPERATIONAL NOTE - the repaired remote rotation deletes on its first run.** The ftp/sftp
   listings arrived CRLF-tainted from expect's pty, `tar$` never matched, and remote rotation on
