@@ -261,6 +261,9 @@ fi
 
 # Creating temporary directory
 tmpdir=$(mktemp -p $BACKUP_TEMP -d)
+# Hash tables live OUTSIDE tmpdir - everything in tmpdir ends up inside the final tarball.
+maptbl=$(mktemp -d)
+map_hash_failed=''
 
 if [ "$?" -ne 0 ]; then
 	echo "Can't create tmp dir $tmpdir" | $SENDMAIL -s "$subj" "$email" "yes"
@@ -489,12 +492,20 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		fi
 		set +f
 
-		# Backup files
+		# Hashes BEFORE the member is tarred (#712): the map may be older than the archive, never
+		# newer - a racing file is re-shipped by the next diff instead of silently left behind.
+		# Excluded paths are hashed too and simply find no listing entry to join later.
+		backup_map_hash_tree "$maptbl/web.$domain.tbl" || map_hash_failed="web/$domain"
+
+		# --sort=name and gzip -n (#712): member order and the gzip header carry no timestamp or
+		# readdir order any more, so an unchanged tree produces the same bytes twice. Free, and it is
+		# what makes a diff between two runs mean what it says.
 		if [ "$BACKUP_MODE" = 'zstd' ]; then
-			tar "${fargs[@]}" -cpf- . | pzstd -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.zst
+			tar --sort=name "${fargs[@]}" -cpf- . | pzstd -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.zst
 		else
-			tar "${fargs[@]}" -cpf- . | gzip -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.gz
+			tar --sort=name "${fargs[@]}" -cpf- . | gzip -n -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.gz
 		fi
+		backup_map_hash_verify "$maptbl/web.$domain.tbl"
 	done
 
 	# Print total
@@ -573,11 +584,13 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 		done
 		# Compress archive
 		if [ ${#accounts[@]} -gt 0 ]; then
+			backup_map_hash_tree "$maptbl/mail.$domain.tbl" "${accounts[@]}" || map_hash_failed="mail/$domain"
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar -cpf- "${accounts[@]}" | pzstd -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.zst
+				tar --sort=name -cpf- "${accounts[@]}" | pzstd -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.zst
 			else
-				tar -cpf- "${accounts[@]}" | gzip -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.gz
+				tar --sort=name -cpf- "${accounts[@]}" | gzip -n -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.gz
 			fi
+			backup_map_hash_verify "$maptbl/mail.$domain.tbl" "${accounts[@]}"
 		fi
 	done
 
@@ -654,7 +667,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 				pzstd -$BACKUP_GZIP $dump
 				rm $dump
 			else
-				gzip -$BACKUP_GZIP $dump
+				gzip -n -$BACKUP_GZIP $dump
 			fi
 		fi
 	done
@@ -745,9 +758,9 @@ if [ "$USER" != '*' ]; then
 
 			# Backup files and dirs
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar --anchored -cpf- "${fargs[@]}" $udir | pzstd -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.zst
+				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | pzstd -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.zst
 			else
-				tar --anchored -cpf- "${fargs[@]}" $udir | gzip -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.gz
+				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | gzip -n -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.gz
 			fi
 
 		fi
@@ -769,6 +782,24 @@ if [ "$BACKUP_MODE" = 'zstd' ]; then
 	touch $tmpdir/.zstd
 fi
 
+# The content map over the two member types a later run can diff against: web and mail (#712).
+# Read out of the finished members, so it cannot describe anything the archive does not hold.
+if [ -n "$map_hash_failed" ]; then
+	echo "$(date "+%F %T") Warning: hash pass failed for $map_hash_failed - archive carries no map" \
+		| tee -a $BACKUP/$user.log
+	map_records=0
+	rm -f "$tmpdir/hestia/backup.map"
+else
+	map_records=$(backup_map_write "$tmpdir" "$tmpdir/hestia/backup.map" "$maptbl")
+fi
+rm -rf "$maptbl"
+if [ -n "$web_list$mail_list" ] && [ "$map_records" -eq 0 ]; then
+	# Zero entries for a customer who HAS web or mail means a member could not be read - which looks
+	# exactly like an empty one until somebody tries to restore it.
+	echo "$(date "+%F %T") Warning: content map is empty although web/mail members exist" \
+		| tee -a $BACKUP/$user.log
+fi
+
 # Get backup size
 size="$(du -shm $tmpdir | cut -f 1)"
 
@@ -778,6 +809,15 @@ time_n_date=$(date +'%T %F')
 time=$(echo "$time_n_date" | cut -f 1 -d \ )
 date=$(echo "$time_n_date" | cut -f 2 -d \ )
 backup_new_date=$(date +"%Y-%m-%d_%H-%M-%S")
+
+# The local mirror: a later run reads the base map from here instead of fetching the archive back
+# from a remote target. The archive carries its own copy regardless, so it stays readable elsewhere.
+if [ -s "$tmpdir/hestia/backup.map" ]; then
+	mkdir -p "$USER_DATA/backup-maps"
+	zstd -q -3 -f -o "$USER_DATA/backup-maps/$user.$backup_new_date.tar.map.zst" \
+		"$tmpdir/hestia/backup.map" 2> /dev/null \
+		|| echo "$(date "+%F %T") Warning: could not store the local content map" | tee -a $BACKUP/$user.log
+fi
 
 echo -e "\n-- SUMMARY --" | tee -a $BACKUP/$user.log
 
@@ -839,8 +879,12 @@ backup_str="$backup_str DB='${db_list// /,}'"
 backup_str="$backup_str CRON='$cron_list'"
 backup_str="$backup_str UDIR='${udir_list// /,}'"
 backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
+backup_str="$backup_str MAP='$map_records'"
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
+
+# After the record is written, so a map is dropped only once its archive is gone from it.
+backup_map_prune "$USER_DATA/backup-maps" "$USER_DATA/backup.conf"
 
 # Removing old backups. Adopted records are kept whatever their age: they point at a file this
 # rotation does not own, and dropping the record would hide the archive from the panel again.

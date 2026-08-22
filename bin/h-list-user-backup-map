@@ -1,0 +1,103 @@
+#!/bin/bash
+# info: list the content map of a backup
+# options: USER BACKUP [FORMAT]
+#
+# example: h-list-user-backup-map admin admin.2026-08-21_03-00-00.tar
+#
+# Reads hestia/backup.map out of the archive - the archive is the authority, the local mirror under
+# $USER_DATA/backup-maps is only there so a diff can be built without fetching a remote target back.
+# The map covers the two member types a later run can diff against, web and mail; everything else is
+# always written whole and has nothing to compare.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user=$1
+backup=$2
+format=${3-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# A path may hold anything but NUL and '/', including newlines and tabs - which would turn one
+# record into several lines of output. Rendered with those two escaped, so a line is a record.
+esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/\t/\\t/g' -e ':a;N;$!ba;s/\n/\\n/g'; }
+
+emit() {
+	local _n=0 _p _h _m _o _t
+	while IFS= read -r -d '' _p && IFS= read -r -d '' _h && IFS= read -r -d '' _m \
+		&& IFS= read -r -d '' _o && IFS= read -r -d '' _t; do
+		_n=$((_n + 1))
+		case $format in
+			json)
+				[ "$_n" -gt 1 ] && echo ','
+				printf '        "%s": {\n' "$(esc "$_p")"
+				printf '            "HASH": "%s",\n' "$_h"
+				printf '            "MODE": "%s",\n' "$_m"
+				printf '            "OWNER": "%s",\n' "$_o"
+				printf '            "LINK": "%s"\n' "$(esc "$_t")"
+				printf '        }'
+				;;
+			plain) printf '%s\t%s\t%s\t%s\t%s\n' "$(esc "$_p")" "$_h" "$_m" "$_o" "$(esc "$_t")" ;;
+			csv) printf '"%s","%s","%s","%s","%s"\n' "$(esc "$_p")" "$_h" "$_m" "$_o" "$(esc "$_t")" ;;
+			*) printf 'PATH=%s HASH=%s MODE=%s OWNER=%s LINK=%s\n' "$(esc "$_p")" "$_h" "$_m" "$_o" "$(esc "$_t")" ;;
+		esac
+	done
+	[ "$format" = 'json' ] && [ "$_n" -gt 0 ] && echo ''
+	return 0
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'USER BACKUP [FORMAT]'
+is_format_valid 'user' 'backup'
+is_object_valid 'user' 'USER' "$user"
+# No is_backup_scheduled here: reading an archive is safe while something else is queued for it.
+[ -f "$BACKUP/$backup" ] || check_result "$E_NOTEXIST" "backup file $backup doesn't exist"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# Never through a variable: the map is NUL-separated and command substitution drops NUL bytes -
+# it would arrive as one unreadable run of fields. Streamed straight into the reader instead.
+#
+# An archive written before the map existed simply has no member - a fact to report, not a failure.
+if ! tar -tf "$BACKUP/$backup" 2> /dev/null | grep -qxF "./$BACKUP_CONTAINER/backup.map"; then
+	case $format in
+		json) echo '{}' ;;
+		csv) echo "PATH,HASH,MODE,OWNER,LINK" ;;
+		plain) : ;;
+		*) echo "This archive carries no content map." ;;
+	esac
+	exit
+fi
+
+case $format in
+	json)
+		echo '{'
+		tar -xOf "$BACKUP/$backup" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit
+		echo '}'
+		;;
+	csv)
+		echo "PATH,HASH,MODE,OWNER,LINK"
+		tar -xOf "$BACKUP/$backup" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit
+		;;
+	*) tar -xOf "$BACKUP/$backup" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit ;;
+esac
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+exit

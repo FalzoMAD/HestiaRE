@@ -1326,3 +1326,228 @@ rclone_download() {
 		rclone copy -v $HOST:$BPATH/$1 ./
 	fi
 }
+
+# ── Content map (#712 stage 1) ───────────────────────────────────────────────────────────────────
+#
+# One record per entry, five NUL-terminated fields, no record separator - a reader takes them five
+# at a time, and an empty field is simply an empty one:
+#
+#   <path>\0<hash>\0<mode>\0<uid>:<gid>\0<symlink target>\0
+#
+# Deliberately unordered: comparisons are by path key, and sorting NUL records whose paths may hold
+# any byte would need a separator that does not exist.
+#
+# Two sources, one rule about time. Paths, types, modes and owners come from the finished member's
+# listing - web excludes by pattern, mail passes an explicit account list, and no second enumeration
+# would stay in step with both, so what the map lists is what the archive holds. Content hashes come
+# from the live tree, taken BEFORE the member is tarred and joined in by path; whatever tar left out
+# simply finds no listing entry to join. The order is the correctness argument: the map is always as
+# old as or older than the archive, so a file racing the run reads as changed next time and is
+# re-shipped once - hashing the member afterwards has the opposite, unhealing failure, and hashing
+# it per file through --to-command cost 836s of a 838s run on a 153k-file maildir (measured; the
+# same bytes hash in ~2s when b3sum reads the tree batched).
+BACKUP_MAP_ALGO='b3sum'
+
+# tar auto-detects compression by content, but prints "This does not look like a tar archive" and
+# exits non-zero while doing it - measured. So the decompressor is named.
+backup_map_taropt() {
+	case "$1" in
+		*.zst) echo '--zstd' ;;
+		*.gz) echo '--gzip' ;;
+		*) echo '' ;;
+	esac
+}
+
+# backup_map_hash_tree OUTTABLE [PATH...] - content hashes of every regular file under the given
+# paths (default .), read from the live tree, batched through xargs (one hasher per ~thousands of
+# names instead of processes per file). Output: <path>\0<hash>\0 pairs; find prints the same form
+# tar later stores for the same roots. Pairing is positional (--no-names), so a file vanishing
+# mid-pass would shift the columns: the count check catches that, one retry absorbs a delivery
+# moving mail around, a second miss leaves the member unmapped and the run stays full.
+backup_map_hash_tree() {
+	local _out="$1" _try _paths _hashes
+	shift
+	[ $# -gt 0 ] || set -- .
+	_paths=$(mktemp)
+	_hashes=$(mktemp)
+	for _try in 1 2; do
+		# One walk yields the path list AND the stat snapshot backup_map_hash_verify compares
+		# against after the tar. The count below runs against THIS frozen list - the very bytes
+		# xargs consumed - never against a re-walk: a tree where one file arrives and another
+		# vanishes mid-run would count the same twice with a shifted middle.
+		find "$@" -type f -printf '%p\0%s.%T@\0' 2> /dev/null > "$_out.stat"
+		awk 'BEGIN { RS = "\0"; while ((getline p < ARGV[1]) > 0) { if ((getline s < ARGV[1]) <= 0) break; printf "%s%c", p, 0 } }' \
+			"$_out.stat" > "$_paths"
+		xargs -0 -r "$BACKUP_MAP_ALGO" --no-names < "$_paths" 2> /dev/null > "$_hashes"
+		if [ "$(tr -cd '\0' < "$_paths" | wc -c)" -eq "$(grep -c . "$_hashes")" ]; then
+			awk 'BEGIN {
+				while ((getline h < ARGV[2]) > 0) { n++; hash[n] = h }
+				close(ARGV[2])
+				RS = "\0"
+				while ((getline p < ARGV[1]) > 0) { i++; printf "%s%c%s%c", p, 0, hash[i], 0 }
+			}' "$_paths" "$_hashes" > "$_out"
+			rm -f "$_paths" "$_hashes"
+			return 0
+		fi
+	done
+	rm -f "$_paths" "$_hashes" "$_out" "$_out.stat"
+	return 1
+}
+
+# backup_map_hash_verify OUTTABLE [PATH...] - the return-case tripwire, run AFTER the member is
+# tarred. A file touched between the hash pass and tar's read carries a stale hash for content the
+# archive holds in a newer form. Mostly that only over-includes - but if the file later returns to
+# exactly the hashed bytes, base map and current map agree on "unchanged", the keep list serves it
+# from the base, and the base holds the OTHER version. Silent wrong content, and it never heals.
+# So: stat again, and any file whose size or mtime moved since the snapshot loses its hash - an
+# empty hash reads as changed on every later comparison, which is the over-inclusion side.
+backup_map_hash_verify() {
+	local _out="$1" _now
+	shift
+	[ -s "$_out" ] || return 0
+	[ -s "$_out.stat" ] || return 0
+	[ $# -gt 0 ] || set -- .
+	_now=$(mktemp)
+	find "$@" -type f -printf '%p\0%s.%T@\0' 2> /dev/null > "$_now"
+	awk 'BEGIN {
+		RS = "\0"
+		while ((getline p < ARGV[1]) > 0) { if ((getline s < ARGV[1]) <= 0) break; then_stat[p] = s }
+		close(ARGV[1])
+		while ((getline p < ARGV[2]) > 0) { if ((getline s < ARGV[2]) <= 0) break; now_stat[p] = s }
+		close(ARGV[2])
+		while ((getline p < ARGV[3]) > 0) {
+			if ((getline h < ARGV[3]) <= 0) break
+			if (then_stat[p] != now_stat[p]) h = ""
+			printf "%s%c%s%c", p, 0, h, 0
+		}
+	}' "$_out.stat" "$_now" "$_out" > "$_out.checked"
+	mv "$_out.checked" "$_out"
+	rm -f "$_now" "$_out.stat"
+}
+
+# backup_map_member ARCHIVE PREFIX HASHTABLE - the records for one member, paths prefixed with
+# PREFIX: one LC_ALL=C listing for paths, types, modes and owners, hashes joined in from the table
+# the run took before building the member. Hardlink members ("h") join like regular files - the
+# tree shows them as such - where --to-command never even handed them over. A file in the archive
+# but not in the table appeared between hash pass and tar: its hash stays empty and reads as
+# changed next time, the benign direction.
+backup_map_member() {
+	local _arc="$1" _pre="$2" _tbl="$3" _opt
+	[ -f "$_arc" ] || return 0
+	_opt=$(backup_map_taropt "$_arc")
+	[ -s "$_tbl" ] || _tbl=/dev/null
+
+	# One listing for every entry type. KNOWN LIMIT: the listing is line-based and tar has no NUL
+	# variant, so a name holding a newline splits its line: the first half still looks like a valid
+	# entry and becomes a TRUNCATED record, only the spill line is detectable - it matches no entry
+	# shape and raises the warning below. So the warning means "a record may be truncated", not
+	# just "one is missing". LC_ALL=C pins the hardlink phrase ("link to") the parser relies on.
+	# shellcheck disable=SC2086
+	LC_ALL=C tar $_opt -tvf "$_arc" --quoting-style=literal --numeric-owner 2> /dev/null \
+		| awk -v pre="$_pre" -v tbl="$_tbl" '
+			function octal(p,   i, c, v, r) {
+				r = ""
+				for (i = 1; i <= 3; i++) {
+					v = 0
+					c = substr(p, 2 + (i - 1) * 3, 3)
+					if (substr(c, 1, 1) == "r") v += 4
+					if (substr(c, 2, 1) == "w") v += 2
+					if (substr(c, 3, 1) ~ /[xst]/) v += 1
+					r = r v
+				}
+				return "0" r
+			}
+			BEGIN {
+				# The table is NUL-formatted, the listing is not: read it here, then switch RS
+				# back before the main loop sees a line.
+				RS = "\0"
+				while ((getline p < tbl) > 0) {
+					if ((getline h < tbl) > 0) hash[p] = h
+					else break
+				}
+				close(tbl)
+				RS = "\n"
+			}
+			/^[-hdlpbc]/ {
+				if (length($1) != 10 || $1 !~ /^[-hdlpbc][rwxsStT-]+$/ || index($2, "/") == 0) { bad++; next }
+				typ = substr($0, 1, 1)
+				split($2, o, "/")
+				# The name is everything after the fifth field; taking the tail keeps spaces
+				# intact. Devices print major,minor as ONE field where size stands, so the field
+				# positions hold for every type here.
+				n = index($0, $5) + length($5) + 1
+				rest = substr($0, n)
+				target = ""
+				if (typ == "l") {
+					i = index(rest, " -> ")
+					if (i > 0) { target = substr(rest, i + 4); rest = substr(rest, 1, i - 1) }
+				}
+				if (typ == "h") {
+					i = index(rest, " link to ")
+					if (i > 0) rest = substr(rest, 1, i - 1)
+				}
+				h = ""
+				if (typ == "-" || typ == "h") h = hash[rest]
+				# tar writes "./x" for a tree given as "." and "x" for one given by name - the two
+				# member types differ there, so the leading "./" goes and both read alike.
+				sub(/^\.\//, "", rest)
+				sub(/\/$/, "", rest)
+				printf "%s/%s%c%s%c%s%c%s:%s%c%s%c", pre, rest, 0, h, 0, octal($1), 0, o[1], o[2], 0, target, 0
+			}
+			$0 !~ /^[-dlbcpshD]/ { bad++ }
+			END {
+				if (bad) printf "Warning: %d unparseable listing line(s) in %s - a record may be truncated or missing\n", bad, pre > "/dev/stderr"
+			}'
+}
+
+# backup_map_write TMPDIR MAPFILE TBLDIR - the map for everything this archive diffs against: web and mail.
+# The other members are always written whole, so they have nothing to compare.
+backup_map_write() {
+	local _tmp="$1" _out="$2" _tbldir="$3" _d _arc _n
+	: > "$_out"
+	for _d in "$_tmp"/web/*/ "$_tmp"/mail/*/; do
+		[ -d "$_d" ] || continue
+		_n=$(basename "$_d")
+		for _arc in "$_d"domain_data.tar.zst "$_d"domain_data.tar.gz "$_d"accounts.tar.zst "$_d"accounts.tar.gz; do
+			[ -f "$_arc" ] || continue
+			case "$_d" in
+				*/web/*) backup_map_member "$_arc" "web/$_n" "$_tbldir/web.$_n.tbl" ;;
+				*/mail/*) backup_map_member "$_arc" "mail/$_n" "$_tbldir/mail.$_n.tbl" ;;
+			esac
+		done
+	done >> "$_out"
+	# A member that produced no records is a suspicion, not a success: a tree that could not be read
+	# looks exactly like one that is empty. Counted, so the caller can say which.
+	backup_map_count "$_out"
+}
+
+# backup_map_count MAPFILE - how many records, derived from the field count (five per record).
+# A remainder means one record has the wrong field count and every field after it is shifted by one
+# in any reader - such a map counts as unusable (0), not as a plausible smaller number.
+backup_map_count() {
+	local _f=$((0))
+	[ -s "$1" ] || {
+		echo 0
+		return
+	}
+	_f=$(tr -cd '\0' < "$1" | wc -c)
+	if [ $((_f % 5)) -ne 0 ]; then
+		echo "Warning: map $1 holds $_f fields, not a multiple of five - treating it as unreadable" >&2
+		echo 0
+		return
+	fi
+	echo $((_f / 5))
+}
+
+# backup_map_prune MAPDIR BACKUPCONF - a local map whose archive is gone is dead weight. Derived
+# from the records, so a map survives exactly as long as the backup it describes.
+backup_map_prune() {
+	local _dir="$1" _conf="$2" _f _name
+	[ -d "$_dir" ] || return 0
+	for _f in "$_dir"/*.map.zst; do
+		[ -f "$_f" ] || continue
+		_name=$(basename "$_f" .map.zst)
+		# Literal and anchored - the name holds dots, and grep would read them as a pattern.
+		sed -n "s/^BACKUP='\([^']*\)'.*/\1/p" "$_conf" 2> /dev/null | grep -qxF -- "$_name" || rm -f "$_f"
+	done
+}
