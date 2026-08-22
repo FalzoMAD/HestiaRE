@@ -1337,9 +1337,15 @@ rclone_download() {
 # Deliberately unordered: comparisons are by path key, and sorting NUL records whose paths may hold
 # any byte would need a separator that does not exist.
 #
-# It is read OUT of the finished member, not walked a second time on disk. That is the whole point:
-# web excludes by pattern, mail passes an explicit account list, and no find would stay in step with
-# both. What the map describes is what the archive contains, by construction.
+# Two sources, one rule about time. Paths, types, modes and owners come from the finished member's
+# listing - web excludes by pattern, mail passes an explicit account list, and no second enumeration
+# would stay in step with both, so what the map lists is what the archive holds. Content hashes come
+# from the live tree, taken BEFORE the member is tarred and joined in by path; whatever tar left out
+# simply finds no listing entry to join. The order is the correctness argument: the map is always as
+# old as or older than the archive, so a file racing the run reads as changed next time and is
+# re-shipped once - hashing the member afterwards has the opposite, unhealing failure, and hashing
+# it per file through --to-command cost 836s of a 838s run on a 153k-file maildir (measured; the
+# same bytes hash in ~2s when b3sum reads the tree batched).
 BACKUP_MAP_ALGO='b3sum'
 
 # tar auto-detects compression by content, but prints "This does not look like a tar archive" and
@@ -1352,31 +1358,56 @@ backup_map_taropt() {
 	esac
 }
 
-# backup_map_member ARCHIVE PREFIX - the records for one member, paths prefixed with PREFIX.
+# backup_map_hash_tree OUTTABLE [PATH...] - content hashes of every regular file under the given
+# paths (default .), read from the live tree, batched through xargs (one hasher per ~thousands of
+# names instead of processes per file). Output: <path>\0<hash>\0 pairs; find prints the same form
+# tar later stores for the same roots. Pairing is positional (--no-names), so a file vanishing
+# mid-pass would shift the columns: the count check catches that, one retry absorbs a delivery
+# moving mail around, a second miss leaves the member unmapped and the run stays full.
+backup_map_hash_tree() {
+	local _out="$1" _try _paths _hashes
+	shift
+	[ $# -gt 0 ] || set -- .
+	_paths=$(mktemp)
+	_hashes=$(mktemp)
+	for _try in 1 2; do
+		find "$@" -type f -print0 2> /dev/null > "$_paths"
+		xargs -0 -r "$BACKUP_MAP_ALGO" --no-names < "$_paths" 2> /dev/null > "$_hashes"
+		if [ "$(tr -cd '\0' < "$_paths" | wc -c)" -eq "$(grep -c . "$_hashes")" ]; then
+			awk 'BEGIN {
+				while ((getline h < ARGV[2]) > 0) { n++; hash[n] = h }
+				close(ARGV[2])
+				RS = "\0"
+				while ((getline p < ARGV[1]) > 0) { i++; printf "%s%c%s%c", p, 0, hash[i], 0 }
+			}' "$_paths" "$_hashes" > "$_out"
+			rm -f "$_paths" "$_hashes"
+			return 0
+		fi
+	done
+	rm -f "$_paths" "$_hashes" "$_out"
+	return 1
+}
+
+# backup_map_member ARCHIVE PREFIX HASHTABLE - the records for one member, paths prefixed with
+# PREFIX: one LC_ALL=C listing for paths, types, modes and owners, hashes joined in from the table
+# the run took before building the member. Hardlink members ("h") join like regular files - the
+# tree shows them as such - where --to-command never even handed them over. A file in the archive
+# but not in the table appeared between hash pass and tar: its hash stays empty and reads as
+# changed next time, the benign direction.
 backup_map_member() {
-	local _arc="$1" _pre="$2" _opt
+	local _arc="$1" _pre="$2" _tbl="$3" _opt
 	[ -f "$_arc" ] || return 0
 	_opt=$(backup_map_taropt "$_arc")
+	[ -s "$_tbl" ] || _tbl=/dev/null
 
-	# Regular files: metadata straight from tar's own variables, content on stdin. No parsing, so a
-	# name holding a space or a backslash survives untouched. Runs under /bin/sh, not bash.
+	# One listing for every entry type. KNOWN LIMIT: the listing is line-based and tar has no NUL
+	# variant, so a name holding a newline splits its line: the first half still looks like a valid
+	# entry and becomes a TRUNCATED record, only the spill line is detectable - it matches no entry
+	# shape and raises the warning below. So the warning means "a record may be truncated", not
+	# just "one is missing". LC_ALL=C pins the hardlink phrase ("link to") the parser relies on.
 	# shellcheck disable=SC2086
-	tar $_opt -xf "$_arc" --to-command='
-		h=$(b3sum -)
-		n=${TAR_FILENAME#./}
-		printf "%s\0%s\0%s\0%s:%s\0\0" "'"$_pre"'/$n" "${h%% *}" "$TAR_MODE" "$TAR_UID" "$TAR_GID"
-	' 2> /dev/null
-
-	# Directories and symlinks: --to-command never sees them, so they come from the listing. Empty
-	# directories and link targets are not reconstructable without this. KNOWN LIMIT: the listing is
-	# line-based and tar has no NUL variant, so a directory or symlink name holding a newline splits
-	# its line: the first half still looks like a valid entry and becomes a TRUNCATED record, only
-	# the spill line is detectable - it matches no entry shape and raises the warning below. So the
-	# warning means "a record may be truncated", not just "one is missing". Regular files are immune
-	# (their pass reads TAR_FILENAME raw).
-	# shellcheck disable=SC2086
-	tar $_opt -tvf "$_arc" --quoting-style=literal --numeric-owner 2> /dev/null \
-		| awk -v pre="$_pre" '
+	LC_ALL=C tar $_opt -tvf "$_arc" --quoting-style=literal --numeric-owner 2> /dev/null \
+		| awk -v pre="$_pre" -v tbl="$_tbl" '
 			function octal(p,   i, c, v, r) {
 				r = ""
 				for (i = 1; i <= 3; i++) {
@@ -1389,11 +1420,24 @@ backup_map_member() {
 				}
 				return "0" r
 			}
-			/^[dl]/ {
-				if (length($1) != 10 || $1 !~ /^[dl][rwxsStT-]+$/ || index($2, "/") == 0) { bad++; next }
+			BEGIN {
+				# The table is NUL-formatted, the listing is not: read it here, then switch RS
+				# back before the main loop sees a line.
+				RS = "\0"
+				while ((getline p < tbl) > 0) {
+					if ((getline h < tbl) > 0) hash[p] = h
+					else break
+				}
+				close(tbl)
+				RS = "\n"
+			}
+			/^[-hdlpbc]/ {
+				if (length($1) != 10 || $1 !~ /^[-hdlpbc][rwxsStT-]+$/ || index($2, "/") == 0) { bad++; next }
 				typ = substr($0, 1, 1)
 				split($2, o, "/")
-				# The name is everything after the fifth field; taking the tail keeps spaces intact.
+				# The name is everything after the fifth field; taking the tail keeps spaces
+				# intact. Devices print major,minor as ONE field where size stands, so the field
+				# positions hold for every type here.
 				n = index($0, $5) + length($5) + 1
 				rest = substr($0, n)
 				target = ""
@@ -1401,22 +1445,28 @@ backup_map_member() {
 					i = index(rest, " -> ")
 					if (i > 0) { target = substr(rest, i + 4); rest = substr(rest, 1, i - 1) }
 				}
+				if (typ == "h") {
+					i = index(rest, " link to ")
+					if (i > 0) rest = substr(rest, 1, i - 1)
+				}
+				h = ""
+				if (typ == "-" || typ == "h") h = hash[rest]
 				# tar writes "./x" for a tree given as "." and "x" for one given by name - the two
 				# member types differ there, so the leading "./" goes and both read alike.
 				sub(/^\.\//, "", rest)
 				sub(/\/$/, "", rest)
-				printf "%s/%s%c%c%s%c%s:%s%c%s%c", pre, rest, 0, 0, octal($1), 0, o[1], o[2], 0, target, 0
+				printf "%s/%s%c%s%c%s%c%s:%s%c%s%c", pre, rest, 0, h, 0, octal($1), 0, o[1], o[2], 0, target, 0
 			}
 			$0 !~ /^[-dlbcpshD]/ { bad++ }
 			END {
-				if (bad) printf "Warning: %d unparseable listing line(s) in %s - a directory or symlink record may be truncated or missing\n", bad, pre > "/dev/stderr"
+				if (bad) printf "Warning: %d unparseable listing line(s) in %s - a record may be truncated or missing\n", bad, pre > "/dev/stderr"
 			}'
 }
 
-# backup_map_write TMPDIR MAPFILE - the map for everything this archive diffs against: web and mail.
+# backup_map_write TMPDIR MAPFILE TBLDIR - the map for everything this archive diffs against: web and mail.
 # The other members are always written whole, so they have nothing to compare.
 backup_map_write() {
-	local _tmp="$1" _out="$2" _d _arc _n
+	local _tmp="$1" _out="$2" _tbldir="$3" _d _arc _n
 	: > "$_out"
 	for _d in "$_tmp"/web/*/ "$_tmp"/mail/*/; do
 		[ -d "$_d" ] || continue
@@ -1424,8 +1474,8 @@ backup_map_write() {
 		for _arc in "$_d"domain_data.tar.zst "$_d"domain_data.tar.gz "$_d"accounts.tar.zst "$_d"accounts.tar.gz; do
 			[ -f "$_arc" ] || continue
 			case "$_d" in
-				*/web/*) backup_map_member "$_arc" "web/$_n" ;;
-				*/mail/*) backup_map_member "$_arc" "mail/$_n" ;;
+				*/web/*) backup_map_member "$_arc" "web/$_n" "$_tbldir/web.$_n.tbl" ;;
+				*/mail/*) backup_map_member "$_arc" "mail/$_n" "$_tbldir/mail.$_n.tbl" ;;
 			esac
 		done
 	done >> "$_out"
