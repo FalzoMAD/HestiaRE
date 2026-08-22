@@ -804,8 +804,10 @@ if [ "${backup_mode_sel:-full}" = 'diff' ] && [ "$map_records" -gt 0 ]; then
 	diff_base=$(backup_diff_base "$USER_DATA/backup.conf" "$USER_DATA/backup-maps") || diff_base=''
 	if [ -n "$diff_base" ]; then
 		base_map=$(mktemp)
+		# The count doubles as a form check: a desynced map counts 0 and forces a full run, the
+		# same as an unreadable one - "wrong shape" must never read as "nothing changed".
 		if zstd -q -d -c "$USER_DATA/backup-maps/$diff_base.map.zst" > "$base_map" 2> /dev/null \
-			&& [ -s "$base_map" ]; then
+			&& [ "$(backup_map_count "$base_map")" -gt 0 ]; then
 			backup_diff_build "$tmpdir" "$base_map" "$tmpdir/hestia/backup.map" "$diff_base"
 			echo "$(date "+%F %T") Differential against $diff_base" | tee -a $BACKUP/$user.log
 		else

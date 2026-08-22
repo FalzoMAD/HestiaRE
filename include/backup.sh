@@ -1621,12 +1621,15 @@ backup_map_keep() {
 backup_diff_base() {
 	local _conf="$1" _dir="$2" _name
 	[ -f "$_conf" ] || return 1
+	local _line
 	while read -r _name; do
 		[ -n "$_name" ] || continue
-		grep -q "BACKUP='$_name'.*ADOPTED='yes'" "$_conf" && continue
+		# -F: the name holds dots, grep must not read it as a pattern (same lesson as #765).
+		_line=$(grep -F "BACKUP='$_name'" "$_conf" 2> /dev/null | head -1)
+		case "$_line" in *"ADOPTED='yes'"*) continue ;; esac
 		# Only a FULL archive is a base. Chaining a diff onto a diff would make a restore depend on
 		# a whole chain, and the plan buys none of that: one full, and the diffs hanging off it.
-		grep -q "BACKUP='$_name'.*MODE='diff'" "$_conf" && continue
+		case "$_line" in *"MODE='diff'"*) continue ;; esac
 		[ -f "$BACKUP/$_name" ] || continue
 		[ -s "$_dir/$_name.map.zst" ] || continue
 		echo "$_name"
