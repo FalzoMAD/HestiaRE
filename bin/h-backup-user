@@ -779,11 +779,10 @@ fi
 # The content map over web and mail (#712): paths/metadata from the finished members, hashes from
 # before the tars - the map lists what the archive holds and is never newer than it.
 map_records=$(backup_map_write "$tmpdir" "$tmpdir/hestia/backup.map" "$maptbl")
-# Differential members (#712 stage 2). The mode is a per-customer setting; until the package key
-# exists it is read straight from user.conf, and anything but 'diff' means the archive stays whole.
-# No base, no diff: a run that finds nothing to compare against writes a full archive rather than a
-# difference to nothing.
-backup_mode_sel=$(sed -n "s/.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)
+
+# Differential members (#712): BACKUPS_MODE comes from the package; anything but 'diff' stays
+# whole, and no base means full, never a diff against nothing.
+backup_mode_sel=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)
 diff_base=''
 if [ "${backup_mode_sel:-full}" = 'diff' ] && [ "$map_records" -gt 0 ]; then
 	diff_base=$(backup_diff_base "$USER_DATA/backup.conf" "$USER_DATA/backup-maps") || diff_base=''

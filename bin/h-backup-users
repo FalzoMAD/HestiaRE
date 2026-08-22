@@ -41,7 +41,17 @@ for user in $("$BIN/h-list-users" list); do
 		echo -e "================================" >> $log
 		echo -e "$user" >> $log
 		echo -e "--------------------------------\n" >> $log
-		nice -n 19 ionice -c2 -n7 $BIN/h-backup-user $user >> $log 2>&1
+		# One nightly run, the customer's mode picks the runner (#712); restic without the addon
+		# falls back to the archive path rather than failing silently at 5 in the morning.
+		mode=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$user/user.conf" | head -1)
+		if [ "${mode:-full}" = 'restic' ] && [ "$BACKUP_INCREMENTAL" = 'yes' ]; then
+			nice -n 19 ionice -c2 -n7 $BIN/h-backup-user-restic $user >> $log 2>&1
+		else
+			if [ "${mode:-full}" = 'restic' ]; then
+				echo "Warning: $user is set to restic but the addon is not installed - archive backup instead" >> $log
+			fi
+			nice -n 19 ionice -c2 -n7 $BIN/h-backup-user $user >> $log 2>&1
+		fi
 		echo -e "\n--------------------------------\n\n" >> $log
 	fi
 done
