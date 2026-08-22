@@ -164,6 +164,45 @@ fi
 backup_mode="$PROBE_MODE"
 backup_report | tee -a "$tmpdir/restore.log"
 
+# A differential archive needs its base for the CONTENT of web and mail members - and for nothing
+# else: records, non-diffable members and the map are all complete in here. Checked now, because a
+# restore that discovers the missing base at its third member has already written the first two.
+backup_diff_probe "$BACKUP/$backup" "$tmpdir/.diff"
+if [ -n "$DIFF_BASE" ]; then
+	echo "   differential archive, base $DIFF_BASE" | tee -a "$tmpdir/restore.log"
+	if [ ! -f "$BACKUP/$DIFF_BASE" ]; then
+		rm -rf "$tmpdir"
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
+		check_result "$E_NOTEXIST" "$backup is differential and its base $DIFF_BASE is not in $BACKUP"
+	fi
+	if ! tar -tf "$BACKUP/$DIFF_BASE" 2> /dev/null | grep -qxF "./$BACKUP_CONTAINER/backup.map"; then
+		rm -rf "$tmpdir"
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
+		check_result "$E_PARSING" "base $DIFF_BASE carries no content map - it cannot serve as one"
+	fi
+	# MAPHASH closes the two-source gap: the diff was BUILT against the local mirror map, but is
+	# READ against the map inside the base archive. A same-named archive from elsewhere - or a
+	# mirror that had diverged from its archive - passes every name check and fails exactly here,
+	# before the first write.
+	base_maphash=$(sed -n "s/.*MAPHASH='\([^']*\)'.*/\1/p" "$tmpdir/.diff/backup.base")
+	base_maphash_live=$(tar -xOf "$BACKUP/$DIFF_BASE" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null \
+		| sha256sum | cut -d' ' -f1)
+	if [ -z "$base_maphash" ] || [ "$base_maphash" != "$base_maphash_live" ]; then
+		rm -rf "$tmpdir"
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
+		check_result "$E_PARSING" "base $DIFF_BASE is not the archive this diff was built against (map hash mismatch)"
+	fi
+fi
+# The outer guard, fail-safe like the inner one: DIFF_BASE comes from backup.base alone, so a
+# missing or garbled backup.base would silently skip the whole diff branch and unpack diff members
+# as if they were whole - a tree of only the changed files that looks complete. backup.members says
+# whether that may happen: any member not marked full needs a base this archive failed to name.
+if [ -z "$DIFF_BASE" ] && grep -qv '=full$' "$tmpdir/.diff/backup.members" 2> /dev/null; then
+	rm -rf "$tmpdir"
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
+	check_result "$E_PARSING" "$backup marks differential members but names no readable base - refusing a restore that would only look complete"
+fi
+
 # Refused before the first write: supporting a second container shape would constrain every path
 # join in this file, for a panel that has not produced an archive in years.
 if [ "$PROBE_VESTA" = 'yes' ]; then
@@ -617,6 +656,41 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		chmod u+w "$HOMEDIR/$user/web/$domain"
 		[[ -d $HOMEDIR/$user/web/$domain/stats ]] && chmod u+w "$HOMEDIR/$user/web/$domain/stats"
 
+		# Two passes when the member is a difference: the base first, filtered to what both maps
+		# still agree on, then the diff over it. A path deleted since the base is in neither list
+		# and is simply never written.
+		#
+		# No --unlink-first: measured, tar already unlinks and recreates, so a hardlink pair the
+		# customer broke keeps its untouched half. Only --overwrite writes THROUGH the shared inode,
+		# and nothing here passes it. Adding the flag anyway costs correctness - it fails on any
+		# non-empty directory with "Cannot unlink: Directory not empty".
+		web_member="$tmpdir/web/$domain/domain_data.tar.zst"
+		[ "$backup_mode" = "zstd" ] || web_member="$tmpdir/web/$domain/domain_data.tar.gz"
+		if [ -n "$DIFF_BASE" ] && backup_member_needs_base "$tmpdir/.diff/backup.members" "web/$domain"; then
+			web_base=$(backup_diff_stage_base "$BACKUP/$DIFF_BASE" "web/$domain" "$(basename "$web_member")" "$tmpdir/.diff")
+			if [ -z "$web_base" ]; then
+				rm -rf $tmpdir
+				error="$domain is differential and its base member is missing from $DIFF_BASE"
+				echo "$error" | $SENDMAIL -s "$subj" $email $notify
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
+				check_result "$E_NOTEXIST" "$error"
+			fi
+			backup_diff_keep_list "$BACKUP/$DIFF_BASE" "$tmpdir/.diff/backup.map" "web/$domain" \
+				"$web_member" "$tmpdir/.diff/keep.web.nul"
+			chmod 644 "$tmpdir/.diff/keep.web.nul" 2> /dev/null
+			if [ -s "$tmpdir/.diff/keep.web.nul" ]; then
+				# --no-recursion BEFORE -T, and it is not optional: the list names directories the
+				# way the archive stores them, with a trailing slash, and without the flag tar
+				# unpacks each of them RECURSIVELY - which walks the deleted files right back in.
+				tar_codec=()
+				[ "$backup_mode" = "zstd" ] && tar_codec=(-I pzstd)
+				user_exec tar "${tar_codec[@]}" -xpf "$web_base" \
+					-C "$HOMEDIR/$user/web/$domain/" \
+					--anchored --exclude='logs/*' --no-recursion \
+					--null -T "$tmpdir/.diff/keep.web.nul"
+			fi
+		fi
+
 		if [ "$backup_mode" = "zstd" ]; then
 			user_exec tar -I pzstd -xpf $tmpdir/web/$domain/domain_data.tar.zst \
 				-C "$HOMEDIR/$user/web/$domain/" \
@@ -838,6 +912,30 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		# Current Hestia store email in the $HOMEDIR/$user/mail/$domain_idn
 		chmod u+w "$HOMEDIR/$user/mail/$domain_idn"
 		chown $user:$user "$HOMEDIR/$user/mail/$domain_idn"
+
+		# Same two passes as web, through the extractor that drops privileges. Mail has no
+		# equivalent of the public_html wipe above, so a deletion does NOT take effect here - the
+		# restore adds to the mailbox, exactly as it does from a full archive (#744).
+		mail_member="$tmpdir/mail/$domain/accounts.tar.zst"
+		[ "$backup_mode" = 'zstd' ] || mail_member="$tmpdir/mail/$domain/accounts.tar.gz"
+		if [ -n "$DIFF_BASE" ] && [ -e "$mail_member" ] \
+			&& backup_member_needs_base "$tmpdir/.diff/backup.members" "mail/$domain"; then
+			mail_base=$(backup_diff_stage_base "$BACKUP/$DIFF_BASE" "mail/$domain" "$(basename "$mail_member")" "$tmpdir/.diff")
+			if [ -z "$mail_base" ]; then
+				rm -rf $tmpdir
+				error="$domain is differential and its base member is missing from $DIFF_BASE"
+				echo "$error" | $SENDMAIL -s "$subj" $email $notify
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
+				check_result "$E_NOTEXIST" "$error"
+			fi
+			backup_diff_keep_list "$BACKUP/$DIFF_BASE" "$tmpdir/.diff/backup.map" "mail/$domain" \
+				"$mail_member" "$tmpdir/.diff/keep.mail.nul"
+			chmod 644 "$tmpdir/.diff/keep.mail.nul" 2> /dev/null
+			if [ -s "$tmpdir/.diff/keep.mail.nul" ]; then
+				$BIN/h-extract-fs-archive "$user" "$mail_base" "$HOMEDIR/$user/mail/$domain_idn/" \
+					'' '' '' "$tmpdir/.diff/keep.mail.nul"
+			fi
+		fi
 
 		# Restoring emails
 		if [ $backup_mode = 'zstd' ]; then

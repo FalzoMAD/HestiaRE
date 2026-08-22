@@ -783,7 +783,8 @@ if [ "$BACKUP_MODE" = 'zstd' ]; then
 fi
 
 # The content map over the two member types a later run can diff against: web and mail (#712).
-# Read out of the finished members, so it cannot describe anything the archive does not hold.
+# Paths and metadata from the finished members, hashes from the tree BEFORE the members were tarred
+# - so the map lists exactly what the archive holds and is never newer than it.
 if [ -n "$map_hash_failed" ]; then
 	echo "$(date "+%F %T") Warning: hash pass failed for $map_hash_failed - archive carries no map" \
 		| tee -a $BACKUP/$user.log
@@ -793,6 +794,32 @@ else
 	map_records=$(backup_map_write "$tmpdir" "$tmpdir/hestia/backup.map" "$maptbl")
 fi
 rm -rf "$maptbl"
+# Differential members (#712 stage 2). The mode is a per-customer setting; until the package key
+# exists it is read straight from user.conf, and anything but 'diff' means the archive stays whole.
+# No base, no diff: a run that finds nothing to compare against writes a full archive rather than a
+# difference to nothing.
+backup_mode_sel=$(sed -n "s/.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)
+diff_base=''
+if [ "${backup_mode_sel:-full}" = 'diff' ] && [ "$map_records" -gt 0 ]; then
+	diff_base=$(backup_diff_base "$USER_DATA/backup.conf" "$USER_DATA/backup-maps") || diff_base=''
+	if [ -n "$diff_base" ]; then
+		base_map=$(mktemp)
+		# The count doubles as a form check: a desynced map counts 0 and forces a full run, the
+		# same as an unreadable one - "wrong shape" must never read as "nothing changed".
+		if zstd -q -d -c "$USER_DATA/backup-maps/$diff_base.map.zst" > "$base_map" 2> /dev/null \
+			&& [ "$(backup_map_count "$base_map")" -gt 0 ]; then
+			backup_diff_build "$tmpdir" "$base_map" "$tmpdir/hestia/backup.map" "$diff_base"
+			echo "$(date "+%F %T") Differential against $diff_base" | tee -a $BACKUP/$user.log
+		else
+			# An unreadable base map must force a full run, never an empty diff: "nothing changed"
+			# and "nothing could be read" produce the same empty file.
+			echo "$(date "+%F %T") Warning: base map for $diff_base is unreadable - writing a full backup" \
+				| tee -a $BACKUP/$user.log
+			diff_base=''
+		fi
+		rm -f "$base_map"
+	fi
+fi
 if [ -n "$web_list$mail_list" ] && [ "$map_records" -eq 0 ]; then
 	# Zero entries for a customer who HAS web or mail means a member could not be read - which looks
 	# exactly like an empty one until somebody tries to restore it.
@@ -880,6 +907,7 @@ backup_str="$backup_str CRON='$cron_list'"
 backup_str="$backup_str UDIR='${udir_list// /,}'"
 backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
 backup_str="$backup_str MAP='$map_records'"
+backup_str="$backup_str MODE='$([ -n "$diff_base" ] && echo diff || echo full)' BASE='$diff_base'"
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 
