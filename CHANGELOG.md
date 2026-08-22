@@ -18,8 +18,9 @@ opens above it.
   whose web and mail members carry only what changed against the newest full archive; everything
   else - records, databases, home entries, the map - stays whole, so listing, probe, report and
   preflight need the base for nothing. Members are built whole first and rebuilt from that, never
-  from the live tree: the map was derived from the member, so nothing the tree does in between can
-  make it lie. A member the base never had, or one whose diff would not save at least half, stays
+  from the live tree; the map's paths come from the member and its hashes from the tree before the
+  member was tarred, and the stat tripwire (stage 1) drops the hash of anything the tree touched in
+  between - so a stale entry reads as changed, never as covered. A member the base never had, or one whose diff would not save at least half, stays
   whole and says so. Restoring reads the archive directly - two passes, the base filtered to what
   both maps still agree on, then the diff over it. A path deleted since the base is in neither list
   and is simply never written. Measured on a real tree: a 189 KB member became 233 bytes, and the
