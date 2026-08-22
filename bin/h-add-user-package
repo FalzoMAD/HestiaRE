@@ -72,8 +72,7 @@ is_package_consistent() {
 	fi
 	is_int_format_valid "$BACKUPS" 'BACKUPS'
 	is_boolean_format_valid "$BACKUPS_INCREMENTAL" 'BACKUPS_INCREMENTAL'
-	# full is the only value that needs nothing: diff needs a base to compare against, restic needs
-	# the addon. An unknown one would be read as "not diff" by the backup and silently mean full.
+	# An unknown value would read as "not diff" in the backup and silently mean full.
 	case "${BACKUPS_MODE:-full}" in
 		full | diff) ;;
 		restic)

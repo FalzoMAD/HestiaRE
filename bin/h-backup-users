@@ -41,10 +41,8 @@ for user in $("$BIN/h-list-users" list); do
 		echo -e "================================" >> $log
 		echo -e "$user" >> $log
 		echo -e "--------------------------------\n" >> $log
-		# The dispatcher (#712): one nightly run, and the customer's mode decides which backup it
-		# is. restic is an alternative to the archive path, not something running beside it - and
-		# it only exists where the addon does, so a mode naming it on a host without it falls back
-		# rather than failing silently at 5 in the morning.
+		# One nightly run, the customer's mode picks the runner (#712); restic without the addon
+		# falls back to the archive path rather than failing silently at 5 in the morning.
 		mode=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$user/user.conf" | head -1)
 		if [ "${mode:-full}" = 'restic' ] && [ "$BACKUP_INCREMENTAL" = 'yes' ]; then
 			nice -n 19 ionice -c2 -n7 $BIN/h-backup-user-restic $user >> $log 2>&1
