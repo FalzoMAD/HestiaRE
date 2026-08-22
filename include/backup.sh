@@ -1368,7 +1368,12 @@ backup_map_member() {
 	' 2> /dev/null
 
 	# Directories and symlinks: --to-command never sees them, so they come from the listing. Empty
-	# directories and link targets are not reconstructable without this.
+	# directories and link targets are not reconstructable without this. KNOWN LIMIT: the listing is
+	# line-based and tar has no NUL variant, so a directory or symlink name holding a newline splits
+	# its line: the first half still looks like a valid entry and becomes a TRUNCATED record, only
+	# the spill line is detectable - it matches no entry shape and raises the warning below. So the
+	# warning means "a record may be truncated", not just "one is missing". Regular files are immune
+	# (their pass reads TAR_FILENAME raw).
 	# shellcheck disable=SC2086
 	tar $_opt -tvf "$_arc" --quoting-style=literal --numeric-owner 2> /dev/null \
 		| awk -v pre="$_pre" '
@@ -1385,6 +1390,7 @@ backup_map_member() {
 				return "0" r
 			}
 			/^[dl]/ {
+				if (length($1) != 10 || $1 !~ /^[dl][rwxsStT-]+$/ || index($2, "/") == 0) { bad++; next }
 				typ = substr($0, 1, 1)
 				split($2, o, "/")
 				# The name is everything after the fifth field; taking the tail keeps spaces intact.
@@ -1400,6 +1406,10 @@ backup_map_member() {
 				sub(/^\.\//, "", rest)
 				sub(/\/$/, "", rest)
 				printf "%s/%s%c%c%s%c%s:%s%c%s%c", pre, rest, 0, 0, octal($1), 0, o[1], o[2], 0, target, 0
+			}
+			$0 !~ /^[-dlbcpshD]/ { bad++ }
+			END {
+				if (bad) printf "Warning: %d unparseable listing line(s) in %s - a directory or symlink record may be truncated or missing\n", bad, pre > "/dev/stderr"
 			}'
 }
 
@@ -1425,6 +1435,8 @@ backup_map_write() {
 }
 
 # backup_map_count MAPFILE - how many records, derived from the field count (five per record).
+# A remainder means one record has the wrong field count and every field after it is shifted by one
+# in any reader - such a map counts as unusable (0), not as a plausible smaller number.
 backup_map_count() {
 	local _f=$((0))
 	[ -s "$1" ] || {
@@ -1432,6 +1444,11 @@ backup_map_count() {
 		return
 	}
 	_f=$(tr -cd '\0' < "$1" | wc -c)
+	if [ $((_f % 5)) -ne 0 ]; then
+		echo "Warning: map $1 holds $_f fields, not a multiple of five - treating it as unreadable" >&2
+		echo 0
+		return
+	fi
 	echo $((_f / 5))
 }
 
@@ -1443,6 +1460,7 @@ backup_map_prune() {
 	for _f in "$_dir"/*.map.zst; do
 		[ -f "$_f" ] || continue
 		_name=$(basename "$_f" .map.zst)
-		grep -q "BACKUP='$_name'" "$_conf" 2> /dev/null || rm -f "$_f"
+		# Literal and anchored - the name holds dots, and grep would read them as a pattern.
+		sed -n "s/^BACKUP='\([^']*\)'.*/\1/p" "$_conf" 2> /dev/null | grep -qxF -- "$_name" || rm -f "$_f"
 	done
 }
