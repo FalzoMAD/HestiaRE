@@ -20,9 +20,15 @@ opens above it.
   pattern and mail passes an explicit account list, so no second enumeration would stay in step with
   both, and what the map lists is what the archive holds. Content hashes are taken from the live
   tree BEFORE the member is tarred, batched (per-file hashing through tar's --to-command cost 836 of
-  838 seconds on a 153k-file maildir - measured, the hashing itself is ~2s). The order makes every
+  838 seconds on a 153k-file maildir - measured, the hashing itself is ~2s). The order makes almost every
   race benign: the map is never newer than the archive, so a file changing mid-run is re-shipped by
-  the next diff instead of silently treated as already covered. Hardlink members get real records
+  the next diff instead of silently treated as already covered. The one exception is the return
+  case - changed in the window, later reverted to exactly the hashed bytes, which would read as
+  "unchanged" against a base that physically holds the other version - and a stat tripwire closes
+  it: files whose size or mtime moved between the hash pass and after the tar lose their hash,
+  which reads as changed, the over-inclusion side. Accepted price, stated so nobody mistakes it
+  for an accident: the map roughly quadruples the run for a mail-heavy customer (7.8s to 29.9s on
+  153k files) - the savings target storage, never runtime. Hardlink members get real records
   this way - --to-command never even handed them over. It travels inside the archive so a foreign box can read it, and is mirrored under
   `$USER_DATA/backup-maps` so a later run can compare without fetching a remote archive back; a
   mirror is dropped when its archive leaves the record. `h-list-user-backup-map` reads it back, and

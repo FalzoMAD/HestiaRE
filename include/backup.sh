@@ -1371,7 +1371,13 @@ backup_map_hash_tree() {
 	_paths=$(mktemp)
 	_hashes=$(mktemp)
 	for _try in 1 2; do
-		find "$@" -type f -print0 2> /dev/null > "$_paths"
+		# One walk yields the path list AND the stat snapshot backup_map_hash_verify compares
+		# against after the tar. The count below runs against THIS frozen list - the very bytes
+		# xargs consumed - never against a re-walk: a tree where one file arrives and another
+		# vanishes mid-run would count the same twice with a shifted middle.
+		find "$@" -type f -printf '%p\0%s.%T@\0' 2> /dev/null > "$_out.stat"
+		awk 'BEGIN { RS = "\0"; while ((getline p < ARGV[1]) > 0) { if ((getline s < ARGV[1]) <= 0) break; printf "%s%c", p, 0 } }' \
+			"$_out.stat" > "$_paths"
 		xargs -0 -r "$BACKUP_MAP_ALGO" --no-names < "$_paths" 2> /dev/null > "$_hashes"
 		if [ "$(tr -cd '\0' < "$_paths" | wc -c)" -eq "$(grep -c . "$_hashes")" ]; then
 			awk 'BEGIN {
@@ -1384,8 +1390,39 @@ backup_map_hash_tree() {
 			return 0
 		fi
 	done
-	rm -f "$_paths" "$_hashes" "$_out"
+	rm -f "$_paths" "$_hashes" "$_out" "$_out.stat"
 	return 1
+}
+
+# backup_map_hash_verify OUTTABLE [PATH...] - the return-case tripwire, run AFTER the member is
+# tarred. A file touched between the hash pass and tar's read carries a stale hash for content the
+# archive holds in a newer form. Mostly that only over-includes - but if the file later returns to
+# exactly the hashed bytes, base map and current map agree on "unchanged", the keep list serves it
+# from the base, and the base holds the OTHER version. Silent wrong content, and it never heals.
+# So: stat again, and any file whose size or mtime moved since the snapshot loses its hash - an
+# empty hash reads as changed on every later comparison, which is the over-inclusion side.
+backup_map_hash_verify() {
+	local _out="$1" _now
+	shift
+	[ -s "$_out" ] || return 0
+	[ -s "$_out.stat" ] || return 0
+	[ $# -gt 0 ] || set -- .
+	_now=$(mktemp)
+	find "$@" -type f -printf '%p\0%s.%T@\0' 2> /dev/null > "$_now"
+	awk 'BEGIN {
+		RS = "\0"
+		while ((getline p < ARGV[1]) > 0) { if ((getline s < ARGV[1]) <= 0) break; then_stat[p] = s }
+		close(ARGV[1])
+		while ((getline p < ARGV[2]) > 0) { if ((getline s < ARGV[2]) <= 0) break; now_stat[p] = s }
+		close(ARGV[2])
+		while ((getline p < ARGV[3]) > 0) {
+			if ((getline h < ARGV[3]) <= 0) break
+			if (then_stat[p] != now_stat[p]) h = ""
+			printf "%s%c%s%c", p, 0, h, 0
+		}
+	}' "$_out.stat" "$_now" "$_out" > "$_out.checked"
+	mv "$_out.checked" "$_out"
+	rm -f "$_now" "$_out.stat"
 }
 
 # backup_map_member ARCHIVE PREFIX HASHTABLE - the records for one member, paths prefixed with
