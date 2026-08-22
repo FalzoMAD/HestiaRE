@@ -180,6 +180,27 @@ if [ -n "$DIFF_BASE" ]; then
 		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		check_result "$E_PARSING" "base $DIFF_BASE carries no content map - it cannot serve as one"
 	fi
+	# MAPHASH closes the two-source gap: the diff was BUILT against the local mirror map, but is
+	# READ against the map inside the base archive. A same-named archive from elsewhere - or a
+	# mirror that had diverged from its archive - passes every name check and fails exactly here,
+	# before the first write.
+	base_maphash=$(sed -n "s/.*MAPHASH='\([^']*\)'.*/\1/p" "$tmpdir/.diff/backup.base")
+	base_maphash_live=$(tar -xOf "$BACKUP/$DIFF_BASE" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null \
+		| sha256sum | cut -d' ' -f1)
+	if [ -z "$base_maphash" ] || [ "$base_maphash" != "$base_maphash_live" ]; then
+		rm -rf "$tmpdir"
+		queue_drop_job "$CONF_DIR/queue/backup.pipe"
+		check_result "$E_PARSING" "base $DIFF_BASE is not the archive this diff was built against (map hash mismatch)"
+	fi
+fi
+# The outer guard, fail-safe like the inner one: DIFF_BASE comes from backup.base alone, so a
+# missing or garbled backup.base would silently skip the whole diff branch and unpack diff members
+# as if they were whole - a tree of only the changed files that looks complete. backup.members says
+# whether that may happen: any member not marked full needs a base this archive failed to name.
+if [ -z "$DIFF_BASE" ] && grep -qv '=full$' "$tmpdir/.diff/backup.members" 2> /dev/null; then
+	rm -rf "$tmpdir"
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
+	check_result "$E_PARSING" "$backup marks differential members but names no readable base - refusing a restore that would only look complete"
 fi
 
 # Refused before the first write: supporting a second container shape would constrain every path
@@ -661,7 +682,9 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				# --no-recursion BEFORE -T, and it is not optional: the list names directories the
 				# way the archive stores them, with a trailing slash, and without the flag tar
 				# unpacks each of them RECURSIVELY - which walks the deleted files right back in.
-				user_exec tar $([ "$backup_mode" = "zstd" ] && echo "-I pzstd") -xpf "$web_base" \
+				tar_codec=()
+				[ "$backup_mode" = "zstd" ] && tar_codec=(-I pzstd)
+				user_exec tar "${tar_codec[@]}" -xpf "$web_base" \
 					-C "$HOMEDIR/$user/web/$domain/" \
 					--anchored --exclude='logs/*' --no-recursion \
 					--null -T "$tmpdir/.diff/keep.web.nul"

@@ -1720,11 +1720,14 @@ backup_diff_probe() {
 	local _arc="$1" _wd="$2"
 	DIFF_BASE=''
 	mkdir -p "$_wd" || return 1
+	# All three files come out unconditionally: a diff archive whose backup.base is missing or
+	# unreadable still drops its backup.members, and that is what lets the caller refuse instead
+	# of unpacking diff members as if they were whole.
 	tar -xOf "$_arc" "./$BACKUP_CONTAINER/backup.base" > "$_wd/backup.base" 2> /dev/null || true
-	[ -s "$_wd/backup.base" ] || return 0
-	DIFF_BASE=$(sed -n "s/.*BASE='\([^']*\)'.*/\1/p" "$_wd/backup.base")
 	tar -xOf "$_arc" "./$BACKUP_CONTAINER/backup.members" > "$_wd/backup.members" 2> /dev/null || true
 	tar -xOf "$_arc" "./$BACKUP_CONTAINER/backup.map" > "$_wd/backup.map" 2> /dev/null || true
+	[ -s "$_wd/backup.base" ] || return 0
+	DIFF_BASE=$(sed -n "s/.*BASE='\([^']*\)'.*/\1/p" "$_wd/backup.base")
 }
 
 # backup_member_needs_base MEMBERSFILE PREFIX - fail-safe by design. The two wrong answers are not

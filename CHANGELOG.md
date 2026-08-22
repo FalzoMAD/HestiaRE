@@ -27,7 +27,11 @@ opens above it.
   and a retargeted symlink; restoring the base instead reproduces the base state, so the check can
   tell the two apart.
 - **`h-restore-user` refuses a differential archive whose base is missing** (#712), before the first
-  write rather than at the third member.
+  write rather than at the third member. Two more refusals guard the same edge: the base's content
+  map must hash to the MAPHASH the diff recorded at build time (a same-named archive from elsewhere,
+  or a mirror that had diverged, fails exactly there), and an archive whose backup.members marks
+  differential members while backup.base is missing or unreadable refuses instead of unpacking the
+  diff members as if they were whole - a tree of only the changed files that looks complete.
 
 - **Every backup now carries a content map** (#712, stage 1). One record per entry - path, BLAKE3
   hash, mode, owner, symlink target - over the two member types a later run can diff against, web
