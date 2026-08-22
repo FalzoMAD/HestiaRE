@@ -149,9 +149,8 @@ fi
 # object does not abandon the rest and does not pass as a success either.
 restore_failures=''
 
-# This run's own queue line, for the abort paths: command, customer and archive, matched as fixed
-# text. Two queued restores of the same archive for the same customer are the same job, so removing
-# either is right; a queued BACKUP for that customer is not, and used to go with it.
+# This run's queue line as fixed text: a queued BACKUP for the same customer must not go with it
+# (it used to).
 QUEUE_JOB="h-restore-user '$user' '$backup'"
 
 # Read the archive once, before anything is written, and say what this host will not be able to
@@ -164,9 +163,7 @@ fi
 backup_mode="$PROBE_MODE"
 backup_report | tee -a "$tmpdir/restore.log"
 
-# A differential archive needs its base for the CONTENT of web and mail members - and for nothing
-# else: records, non-diffable members and the map are all complete in here. Checked now, because a
-# restore that discovers the missing base at its third member has already written the first two.
+# Diff base checked NOW: a restore that discovers it at the third member has already written two.
 backup_diff_probe "$BACKUP/$backup" "$tmpdir/.diff"
 if [ -n "$DIFF_BASE" ]; then
 	echo "   differential archive, base $DIFF_BASE" | tee -a "$tmpdir/restore.log"
@@ -180,10 +177,8 @@ if [ -n "$DIFF_BASE" ]; then
 		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		check_result "$E_PARSING" "base $DIFF_BASE carries no content map - it cannot serve as one"
 	fi
-	# MAPHASH closes the two-source gap: the diff was BUILT against the local mirror map, but is
-	# READ against the map inside the base archive. A same-named archive from elsewhere - or a
-	# mirror that had diverged from its archive - passes every name check and fails exactly here,
-	# before the first write.
+	# MAPHASH: built against the local mirror, read against the base archive's map - a same-named
+	# archive from elsewhere passes every name check and fails exactly here.
 	base_maphash=$(sed -n "s/.*MAPHASH='\([^']*\)'.*/\1/p" "$tmpdir/.diff/backup.base")
 	base_maphash_live=$(tar -xOf "$BACKUP/$DIFF_BASE" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null \
 		| sha256sum | cut -d' ' -f1)
@@ -193,10 +188,9 @@ if [ -n "$DIFF_BASE" ]; then
 		check_result "$E_PARSING" "base $DIFF_BASE is not the archive this diff was built against (map hash mismatch)"
 	fi
 fi
-# The outer guard, fail-safe like the inner one: DIFF_BASE comes from backup.base alone, so a
-# missing or garbled backup.base would silently skip the whole diff branch and unpack diff members
-# as if they were whole - a tree of only the changed files that looks complete. backup.members says
-# whether that may happen: any member not marked full needs a base this archive failed to name.
+# Outer guard: a garbled backup.base would silently skip the diff branch and unpack diff members
+# as whole - a tree of only the changed files that looks complete. backup.members says whether
+# that may happen.
 if [ -z "$DIFF_BASE" ] && grep -qv '=full$' "$tmpdir/.diff/backup.members" 2> /dev/null; then
 	rm -rf "$tmpdir"
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
@@ -211,11 +205,8 @@ if [ "$PROBE_VESTA" = 'yes' ]; then
 	check_result "$E_PARSING" "$backup is a Vesta archive - HestiaRE restores HestiaCP and HestiaRE archives only"
 fi
 
-# Plan, then consent, then write. Everything below reads; everything after the gate writes. A gate
-# inside a section leaves the account, its data directory and its home behind when it refuses.
-#
-# The web restore list is derived here, once, so the PHP question is about exactly the domains this
-# run would touch - deriving it twice is how a gate and its section come to disagree.
+# Plan, then consent, then write - a gate inside a section leaves half an account behind when it
+# refuses. The web list is derived ONCE, so the PHP question matches what this run touches.
 
 # Creating web domain restore list
 backup_domains=$(tar -tf $BACKUP/$backup | grep "^./web")
@@ -239,17 +230,14 @@ if ! restore_consent_parse "$consent"; then
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_INVALID" "unknown consent token in '$consent' - allowed: ${RESTORE_CONSENT_TOKENS// /, }"
 fi
-# CLI convenience only - nothing puts these on a queue line. RESTORE_ASSUME_YES maps to 'all' and
-# therefore does NOT cover php-fallback: the name promises more than it gives, and an operator who
-# wants a PHP version changed has RESTORE_PHP_FALLBACK, which says so.
+# CLI convenience only. RESTORE_ASSUME_YES maps to 'all' and deliberately NOT to php-fallback -
+# that one moves domains onto another PHP version and has its own switch.
 [ "$RESTORE_ASSUME_YES" = 'yes' ] && RESTORE_CONSENT="$RESTORE_CONSENT""all "
 [ "$RESTORE_PHP_FALLBACK" = 'yes' ] && RESTORE_CONSENT="$RESTORE_CONSENT""php-fallback "
 
 restore_refused=''
-# Per section: switched off, selected (which IS the consent), or asked. A section this host has no
-# subsystem for is never asked about - the report already said it will be dropped.
-# One list, read twice - here and by the whole-archive test further down. A sixth section added to
-# only one of them would make a run that names just that section look like a full one.
+# Per section: off, selected (which IS the consent), or asked. ONE list, read twice - a sixth
+# section added to only one reader would make a named run look like a full one.
 restore_sections='web:WEB_SYSTEM:PROBE_WEB mail:MAIL_SYSTEM:PROBE_MAIL db:DB_SYSTEM:PROBE_DB
 cron:CRON_SYSTEM:PROBE_CRON udir::PROBE_UDIR'
 for _sec in $restore_sections; do
@@ -288,12 +276,9 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ] && [ -n "$domains" ]; then
 fi
 restore_consent_has 'php-fallback' && RESTORE_PHP_FALLBACK='yes'
 
-# Handing the unrestorable parts to the customer writes their data - dumps, mail spools - into their
-# home, so it is a section like any other and asks like one.
-#
-# Only on a whole-archive restore. A run that names objects was asked for those; carrying out the
-# rest of the archive is not what it was asked for, and it would make the h-restore-* wrappers stop
-# on any archive that happens to hold a DNS zone.
+# Handover writes customer data into the home, so it is a section and asks like one. Whole-archive
+# runs only - a run that names objects was not asked for the rest, and the h-restore-* wrappers
+# must not stop on a stray DNS zone.
 LEFTOVERS_PATTERNS=''
 leftovers_partial=''
 for _sec in $restore_sections; do
@@ -660,10 +645,8 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		# still agree on, then the diff over it. A path deleted since the base is in neither list
 		# and is simply never written.
 		#
-		# No --unlink-first: measured, tar already unlinks and recreates, so a hardlink pair the
-		# customer broke keeps its untouched half. Only --overwrite writes THROUGH the shared inode,
-		# and nothing here passes it. Adding the flag anyway costs correctness - it fails on any
-		# non-empty directory with "Cannot unlink: Directory not empty".
+		# No --unlink-first (fails on non-empty dirs); tar already unlinks and recreates, only
+		# --overwrite would write THROUGH a shared inode. Measured on all four targets.
 		web_member="$tmpdir/web/$domain/domain_data.tar.zst"
 		[ "$backup_mode" = "zstd" ] || web_member="$tmpdir/web/$domain/domain_data.tar.gz"
 		if [ -n "$DIFF_BASE" ] && backup_member_needs_base "$tmpdir/.diff/backup.members" "web/$domain"; then
@@ -679,9 +662,8 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				"$web_member" "$tmpdir/.diff/keep.web.nul"
 			chmod 644 "$tmpdir/.diff/keep.web.nul" 2> /dev/null
 			if [ -s "$tmpdir/.diff/keep.web.nul" ]; then
-				# --no-recursion BEFORE -T, and it is not optional: the list names directories the
-				# way the archive stores them, with a trailing slash, and without the flag tar
-				# unpacks each of them RECURSIVELY - which walks the deleted files right back in.
+				# --no-recursion BEFORE -T (positional): without it every listed directory
+				# unpacks RECURSIVELY and walks the deleted files right back in.
 				tar_codec=()
 				[ "$backup_mode" = "zstd" ] && tar_codec=(-I pzstd)
 				user_exec tar "${tar_codec[@]}" -xpf "$web_base" \

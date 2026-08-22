@@ -36,17 +36,10 @@ DOCKER_ROOT_REL='.companion/.local/share/docker'
 # report below; an unlisted one is still excluded.
 DOCKER_ROOT_KNOWN=' buildkit containerd containers engine-id image network overlay2 plugins rootfs runtimes swarm tmp trust volumes '
 
-# Docker data-root exclusions for the customer's chosen scope, emitted relative to the user home so
-# the pre-flight du and the tar below cannot drift apart (#389).
-#
-# Only two boundaries are sound. The layer store and the metadata that indexes it are separate
-# directories, and which ones they are depends on the storage driver and Docker version - on 29.x
-# with overlayfs the layers sit under containerd/, on older overlay2 setups under overlay2/. Keep one
-# without the other and the restore yields a store referencing layers that are not there. So:
-# volumes/ alone, which Docker refills on the next compose up, or the whole root. Nothing between.
-#
-# Absent or empty resolves to 'volumes'. That is the normal state, not an edge case: user.conf gains
-# the key only on a rebuild or restore, so most existing customers will not have it for a while.
+# Docker data-root exclusions, relative to the user home so the du pre-flight and the tar cannot
+# drift apart (#389). Only two sound boundaries: volumes/ alone (Docker refills the rest) or the
+# whole root - layer store and its index are separate, driver-dependent dirs, and keeping one
+# without the other references absent layers. Absent or empty key = 'volumes' (the normal state).
 docker_backup_excludes() {
 	local e name
 	[ "$(get_user_value '$DOCKER_BACKUP')" = 'full' ] && return 0
@@ -260,17 +253,20 @@ if [ -z "$BACKUP_TEMP" ]; then
 fi
 
 # Creating temporary directory
-tmpdir=$(mktemp -p $BACKUP_TEMP -d)
-# Hash tables live OUTSIDE tmpdir - everything in tmpdir ends up inside the final tarball.
-maptbl=$(mktemp -d)
-map_hash_failed=''
-
-if [ "$?" -ne 0 ]; then
-	echo "Can't create tmp dir $tmpdir" | $SENDMAIL -s "$subj" "$email" "yes"
-	# Deleting task from queue
+# Checked at the source - a check via $? behind any later line is dead (measured: two inserted
+# assignments silenced it).
+if ! tmpdir=$(mktemp -p $BACKUP_TEMP -d); then
+	echo "Can't create tmp dir" | $SENDMAIL -s "$subj" "$email" "yes"
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create tmp dir"
 fi
+# Hash tables live OUTSIDE tmpdir (everything in tmpdir lands in the tarball); the trap covers
+# every abort path, which the per-path rm -rf $tmpdir calls never did for this directory.
+if ! maptbl=$(mktemp -d); then
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
+	check_result "$E_NOTEXIST" "can't create map table dir"
+fi
+trap 'rm -rf "$maptbl"' EXIT
 
 # Backup sys configs
 echo "-- SYSTEM --" | tee $BACKUP/$user.log
@@ -280,15 +276,13 @@ echo -e "$(date "+%F %T") $user.conf" | tee -a $BACKUP/$user.log
 cp -r $USER_DATA/user.conf $tmpdir/hestia/
 # Record the web model in the archive so a cross-model restore can warn (#120)
 echo "WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'" > $tmpdir/hestia/web-system
-# Who wrote this file. Forensics only - nothing detects by it, because no archive written before
-# today carries one and a HestiaCP archive never will. Where it disagrees with what the members
-# actually show, the members win and the report says so.
+# Who wrote this file - forensics only, nothing detects by it; where it disagrees with the
+# members, the members win.
 backup_write_origin "$tmpdir/hestia/origin"
 cp -r $USER_DATA/ssl $tmpdir/hestia/
 
-# The user's hosting package, so a restore onto a box that never had it can recreate it (#663). The
-# .pkg name is the PACKAGE field of the user.conf just copied. Restore only ADDS it, never
-# overwrites an existing one - see h-restore-user.
+# The package travels so a foreign box can recreate it (#663); the restore only ADDS it, never
+# overwrites an existing one.
 pkg_name=$(grep -m1 "^PACKAGE=" $USER_DATA/user.conf | cut -f2 -d "'")
 if [ -n "$pkg_name" ] && [ -e "$CONF_DIR/packages/$pkg_name.pkg" ]; then
 	mkdir -p $tmpdir/hestia/packages
@@ -297,10 +291,9 @@ if [ -n "$pkg_name" ] && [ -e "$CONF_DIR/packages/$pkg_name.pkg" ]; then
 	echo -e "$(date "+%F %T") package $pkg_name" | tee -a $BACKUP/$user.log
 fi
 
-# The rest of the customer's data directory, from what is in it rather than from a list of names.
-# BACKUP_USER_DATA_CORE says what never travels; user.conf and ssl are copied above. Dotfiles are
-# not enumerated - the restore's member-name rule rejects a leading dot, so carrying one would only
-# lose it later - and one that turns up is named rather than skipped in silence.
+# Data directory from what is IN it, never a name list; BACKUP_USER_DATA_CORE says what never
+# travels. Dotfiles are not enumerated (the restore rejects a leading dot) - one that turns up is
+# named rather than skipped in silence.
 _hidden=$(find "$USER_DATA" -maxdepth 1 -name '.*' ! -name '.' 2> /dev/null | wc -l)
 [ "$_hidden" -gt 0 ] \
 	&& echo "Warning!: $_hidden hidden file(s) in the data directory are not backed up" | tee -a $BACKUP/$user.log
@@ -492,14 +485,13 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		fi
 		set +f
 
-		# Hashes BEFORE the member is tarred (#712): the map may be older than the archive, never
-		# newer - a racing file is re-shipped by the next diff instead of silently left behind.
-		# Excluded paths are hashed too and simply find no listing entry to join later.
-		backup_map_hash_tree "$maptbl/web.$domain.tbl" || map_hash_failed="web/$domain"
+		# Hashes BEFORE the tar (#712): the map is never newer than the archive, a racing file is
+		# re-shipped instead of silently left behind. Excluded paths hash too, the join drops them.
+		backup_map_hash_tree "$maptbl/web.$domain.tbl" \
+			|| echo "$(date "+%F %T") Warning: hash pass failed for web/$domain - its hashes are withdrawn, the member stays effectively whole" \
+			| tee -a $BACKUP/$user.log
 
-		# --sort=name and gzip -n (#712): member order and the gzip header carry no timestamp or
-		# readdir order any more, so an unchanged tree produces the same bytes twice. Free, and it is
-		# what makes a diff between two runs mean what it says.
+		# --sort=name and gzip -n (#712): an unchanged tree produces identical bytes twice.
 		if [ "$BACKUP_MODE" = 'zstd' ]; then
 			tar --sort=name "${fargs[@]}" -cpf- . | pzstd -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.zst
 		else
@@ -584,7 +576,9 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 		done
 		# Compress archive
 		if [ ${#accounts[@]} -gt 0 ]; then
-			backup_map_hash_tree "$maptbl/mail.$domain.tbl" "${accounts[@]}" || map_hash_failed="mail/$domain"
+			backup_map_hash_tree "$maptbl/mail.$domain.tbl" "${accounts[@]}" \
+				|| echo "$(date "+%F %T") Warning: hash pass failed for mail/$domain - its hashes are withdrawn, the member stays effectively whole" \
+				| tee -a $BACKUP/$user.log
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
 				tar --sort=name -cpf- "${accounts[@]}" | pzstd -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.zst
 			else
@@ -782,18 +776,9 @@ if [ "$BACKUP_MODE" = 'zstd' ]; then
 	touch $tmpdir/.zstd
 fi
 
-# The content map over the two member types a later run can diff against: web and mail (#712).
-# Paths and metadata from the finished members, hashes from the tree BEFORE the members were tarred
-# - so the map lists exactly what the archive holds and is never newer than it.
-if [ -n "$map_hash_failed" ]; then
-	echo "$(date "+%F %T") Warning: hash pass failed for $map_hash_failed - archive carries no map" \
-		| tee -a $BACKUP/$user.log
-	map_records=0
-	rm -f "$tmpdir/hestia/backup.map"
-else
-	map_records=$(backup_map_write "$tmpdir" "$tmpdir/hestia/backup.map" "$maptbl")
-fi
-rm -rf "$maptbl"
+# The content map over web and mail (#712): paths/metadata from the finished members, hashes from
+# before the tars - the map lists what the archive holds and is never newer than it.
+map_records=$(backup_map_write "$tmpdir" "$tmpdir/hestia/backup.map" "$maptbl")
 # Differential members (#712 stage 2). The mode is a per-customer setting; until the package key
 # exists it is read straight from user.conf, and anything but 'diff' means the archive stays whole.
 # No base, no diff: a run that finds nothing to compare against writes a full archive rather than a
@@ -911,12 +896,9 @@ backup_str="$backup_str MODE='$([ -n "$diff_base" ] && echo diff || echo full)' 
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 
-# One pass, in FILE ORDER - the listers print the file as it stands. Adopted records are kept
-# whatever their age: they point at a file this rotation does not own, and dropping the record
-# would hide the archive from the panel again. Everything else is kept per SET, the same unit the
-# file rotation uses: the newest $BACKUPS sets stay, records and files cannot disagree about what
-# a set is. The new record is already in the file here, so no incoming adjustment is needed.
-# The quote arrives via -v q, not as an escape some awk implementation might read differently.
+# Record cleanup in FILE ORDER (the listers print the file as it stands). Adopted records always
+# stay - the file is not ours to rotate. The rest is kept per SET, derived exactly as the file
+# rotation derives it; the new record is already in the file, so no incoming adjustment.
 LC_ALL=C awk -v keep="$BACKUPS" -v q="'" '
 	function field(l, k,   i, r) {
 		i = index(l, k q)
