@@ -13,9 +13,10 @@
 # $BACKUP and extracts record members as root - and it deliberately does not require the user to
 # exist, because on a migration it does not. What holds the line instead:
 #
-#   - the archive name is a basename: is_object_format_valid allows no '/', so $BACKUP/$backup
-#     cannot leave the directory, and the containment check below says so a second time in code
-#   - $BACKUP is root-owned 0755, so nobody else can plant a symlink in it
+#   - the archive name is a basename: is_object_format_valid allows no '/', and backup_archive_path
+#     cannot leave the two allowed places, and its containment says so a second time in code
+#   - $BACKUP is root-owned 0711 and the customer folder is hestia-owned, so nobody else can
+#     plant a symlink in either
 #   - the only non-root caller is the panel process, and it reaches h-* only through a route it
 #     builds itself; no route calls this command yet
 #
