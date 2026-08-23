@@ -967,6 +967,12 @@ fi
 # Logging
 $BIN/h-log-action "$user" "Info" "Backup" "Backup created (Archive: $backup_new_date.tar)."
 $BIN/h-log-action "system" "Info" "Backup" "Backup created (User: $user, Archive: $backup_new_date.tar)."
+
+# Degradation goes into the exit code, not only into log and mail (the #746/#766 rule), and only
+# AFTER every piece of bookkeeping: the local archive is real, so its record and counters must be too.
+if [ -n "$failed_targets" ]; then
+	check_result "$errorcode" "backup of $user is local only - remote target(s) failed:${failed_targets}"
+fi
 log_event "$OK" "$ARGUMENTS"
 
 exit

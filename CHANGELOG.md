@@ -25,7 +25,10 @@ opens above it.
   TYPE carries the targets actually reached. Fetched copies carry the same owner and mode as
   locally written archives; an empty remote listing counts as 0, not 1; and
   `h-add-backup-host rclone` no longer pipes an installer from the internet into bash - rclone
-  is an OS package.
+  is an OS package. A degraded run - local archive written, a remote leg failed - now exits
+  non-zero AFTER all bookkeeping (record, counters, mail), so scripts see the degradation
+  without losing the archive's record; and the transport chains match comma-bounded, because
+  ftp is a substring of sftp and first-match-only had masked exactly that.
 
 - **Every customer's archives live in their own folder now** (#789). `/backup/$user/$user.<date>.tar`
   replaces the flat `/backup/$user.<date>.tar`; the file name keeps its prefix, records keep bare
