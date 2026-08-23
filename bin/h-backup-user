@@ -836,28 +836,37 @@ fi
 echo -e "\n-- SUMMARY --" | tee -a $BACKUP/$user/$user.log
 
 errorcode="0"
-# Switching on backup system types
+# Switching on backup system types. Which targets failed is kept by NAME: the record and the
+# operator both get the reached set, not a rewritten wish (stage-0 protocol, E).
+failed_targets=''
 for backup_type in $(echo -e "${BACKUP_SYSTEM//,/\\n}"); do
 	case $backup_type in
 		local) local_backup ;;
-		ftp) ftp_backup ;;
-		sftp) sftp_backup ;;
-		rclone) rclone_backup ;;
+		ftp) ftp_backup || failed_targets="$failed_targets ftp" ;;
+		sftp) sftp_backup || failed_targets="$failed_targets sftp" ;;
+		rclone) rclone_backup || failed_targets="$failed_targets rclone" ;;
 	esac
 done
+reached=''
+for backup_type in $(echo -e "${BACKUP_SYSTEM//,/\\n}"); do
+	case " $failed_targets " in *" $backup_type "*) continue ;; esac
+	reached="$reached,$backup_type"
+done
+reached="${reached#,}"
 
 # Removing tmpdir
 rm -rf $tmpdir
 if [[ "$errorcode" != "0" ]]; then
-	if [[ "$BACKUP_SYSTEM" =~ "local" ]]; then
-		echo -e "$(date "+%F %T") *** Local backup was successfully executed. Remote backup failed ***" \
+	if [[ "$reached" =~ "local" ]]; then
+		echo -e "$(date "+%F %T") *** Local backup was successfully executed. Remote backup failed:${failed_targets} ***" \
 			| tee -a $BACKUP/$user/$user.log
-		BACKUP_SYSTEM="local"
+		echo "Backup of $user is LOCAL ONLY - remote target(s) failed:${failed_targets}" \
+			| $SENDMAIL -s "$user → remote backup failed" "$email" 'yes'
 	else
-		echo -e "$(date "+%F %T") *** Remote backup failed ***" \
+		echo -e "$(date "+%F %T") *** Remote backup failed:${failed_targets} ***" \
 			| tee -a $BACKUP/$user/$user.log
-
-		exit $error_code
+		# errorcode, not the never-set error_code: that typo made a failed remote-only run exit 0.
+		exit "$errorcode"
 	fi
 fi
 # Calculation run time
@@ -885,7 +894,7 @@ sed -i "/$user.$backup_new_date.tar/d" $USER_DATA/backup.conf
 
 # Registering new backup
 backup_str="BACKUP='$user.$backup_new_date.tar'"
-backup_str="$backup_str TYPE='$BACKUP_SYSTEM' SIZE='$size'"
+backup_str="$backup_str TYPE='$reached' SIZE='$size'"
 backup_str="$backup_str WEB='${web_list// /,}'"
 backup_str="$backup_str DNS='${dns_list// /,}'"
 backup_str="$backup_str MAIL='${mail_list// /,}'"

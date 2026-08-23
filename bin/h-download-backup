@@ -68,18 +68,17 @@ fi
 
 # Checking local backup (customer folder first, then the flat hand-off spot)
 if ! backup_archive_path "$user" "$backup"; then
-	if [[ "$BACKUP_SYSTEM" =~ "sftp" ]] && [ -z "$downloaded" ]; then
-		sftp_download "$backup"
-		downloaded='yes'
-	fi
-	if [[ "$BACKUP_SYSTEM" =~ "ftp" ]] && [ -z "$downloaded" ]; then
-		ftp_download "$backup"
-		downloaded='yes'
-	fi
-	if [[ "$BACKUP_SYSTEM" =~ "rclone" ]] && [ -z "$downloaded" ]; then
-		rclone_download "$backup"
-		downloaded='yes'
-	fi
+	# Chain over every configured transport; only an ARRIVED file counts as downloaded - the
+	# old flag said yes after the first try regardless, and a failed fetch exited green with
+	# nothing to show (stage-0 protocol, D1).
+	for remote_type in sftp ftp rclone; do
+		[[ "$BACKUP_SYSTEM" =~ $remote_type ]] || continue
+		${remote_type}_download "$backup"
+		if backup_archive_path "$user" "$backup"; then
+			downloaded='yes'
+			break
+		fi
+	done
 	if [ -z "$downloaded" ]; then
 		subj="Download of $backup failed for $user"
 		$BIN/h-add-user-notification $user "$subj" "<p class'u-text-bold'>Unable to retrieve backup file from remote server.</p><p><span class='u-text-bold'>Error:</span> $backup file doesn't exist in <code>'${BACKUP}'</code> directory.</p>"

@@ -906,6 +906,48 @@ local_backup() {
 		| tee -a $BACKUP/$user/$user.log
 }
 
+# remote_file_present TYPE NAME - is NAME on the target, asked from a FRESH listing? Content
+# over exit codes: the put pipelines discard theirs, and a chmod-000 target gave a green run,
+# a record, and an archive that existed nowhere (stage-0 protocol, C5). Same pipelines as the
+# rotation listings, CR stripped for the same pty reason.
+remote_file_present() {
+	local _t="$1" _n="$2" _l=''
+	case "$_t" in
+		ftp)
+			if [ -z "$BPATH" ]; then
+				_l=$(ftpc "ls" | tr -d "\r" | awk '{print $9}')
+			else
+				_l=$(ftpc "cd $BPATH" "ls" | tr -d "\r" | awk '{print $9}')
+			fi
+			;;
+		sftp)
+			if [ -z "$BPATH" ]; then
+				_l=$(sftpc "ls -l" | tr -d "\r" | awk '{print $9}')
+			else
+				_l=$(sftpc "cd $BPATH" "ls -l" | tr -d "\r" | awk '{print $9}')
+			fi
+			;;
+		rclone)
+			if [ -z "$BPATH" ]; then
+				_l=$(rclone lsf "$HOST:" 2> /dev/null | cut -d' ' -f1)
+			else
+				_l=$(rclone lsf "$HOST:$BPATH" 2> /dev/null | cut -d' ' -f1)
+			fi
+			;;
+	esac
+	grep -qxF -- "$_n" <<< "$_l"
+}
+
+# backup_download_norm NAME - a fetched copy carries the same rights picture as a locally
+# written archive. The group may not exist yet (DR box, account created later in the restore).
+backup_download_norm() {
+	[ -f "$BACKUP/$user/$1" ] || return 0
+	chmod 640 "$BACKUP/$user/$1"
+	chown hestia "$BACKUP/$user/$1"
+	getent group "$user" > /dev/null 2>&1 && chgrp "$user" "$BACKUP/$user/$1"
+	return 0
+}
+
 # FTP Functions
 # Defining ftp command function
 ftpc() {
@@ -989,7 +1031,7 @@ ftp_backup() {
 	else
 		backup_list=$(ftpc "cd $BPATH" "ls" | tr -d "\r" | awk '{print $9}' | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
 	fi
-	backups_count=$(echo "$backup_list" | wc -l)
+	backups_count=$(grep -c . <<< "$backup_list")
 	if [ "$backups_count" -ge "$BACKUPS" ]; then
 		for backup in $(echo "$backup_list" \
 			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
@@ -1014,6 +1056,13 @@ ftp_backup() {
 		else
 			ftpc "cd $BPATH" "put $diff_base"
 		fi
+		if ! remote_file_present ftp "$diff_base"; then
+			error="base $diff_base did not arrive on the ftp target - every diff there would be unrestorable"
+			echo "$error" | $SENDMAIL -s "$subj" $email $notify
+			echo "$error"
+			errorcode="$E_FTP"
+			return "$E_FTP"
+		fi
 	fi
 
 	# Uploading backup archive
@@ -1035,6 +1084,13 @@ ftp_backup() {
 		fi
 		rm -f $user.$backup_new_date.tar
 	fi
+	if ! remote_file_present ftp "$user.$backup_new_date.tar"; then
+		error="$user.$backup_new_date.tar did not arrive on the ftp target"
+		echo "$error" | $SENDMAIL -s "$subj" $email $notify
+		echo "$error"
+		errorcode="$E_FTP"
+		return "$E_FTP"
+	fi
 }
 
 # FTP backup download function
@@ -1050,6 +1106,7 @@ ftp_download() {
 	else
 		ftpc "cd $BPATH" "get $1"
 	fi
+	backup_download_norm "$1"
 }
 
 #FTP Delete function
@@ -1201,6 +1258,7 @@ sftp_download() {
 	else
 		sftpc "cd $BPATH" "get $1" > /dev/null 2>&1
 	fi
+	backup_download_norm "$1"
 }
 
 sftp_delete() {
@@ -1276,7 +1334,7 @@ sftp_backup() {
 	else
 		backup_list=$(sftpc "cd $BPATH" "ls -l" | tr -d "\r" | awk '{print $9}' | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
 	fi
-	backups_count=$(echo "$backup_list" | wc -l)
+	backups_count=$(grep -c . <<< "$backup_list")
 	if [ "$backups_count" -ge "$BACKUPS" ]; then
 		for backup in $(echo "$backup_list" \
 			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
@@ -1300,6 +1358,13 @@ sftp_backup() {
 		else
 			sftpc "cd $BPATH" "put $diff_base" "chmod 0600 $diff_base" > /dev/null 2>&1
 		fi
+		if ! remote_file_present sftp "$diff_base"; then
+			error="base $diff_base did not arrive on the sftp target - every diff there would be unrestorable"
+			echo "$error" | $SENDMAIL -s "$subj" $email $notify
+			echo "$error"
+			errorcode="$E_FTP"
+			return "$E_FTP"
+		fi
 	fi
 
 	# Uploading backup archive
@@ -1322,6 +1387,13 @@ sftp_backup() {
 		fi
 		rm -f $user.$backup_new_date.tar
 	fi
+	if ! remote_file_present sftp "$user.$backup_new_date.tar"; then
+		error="$user.$backup_new_date.tar did not arrive on the sftp target"
+		echo "$error" | $SENDMAIL -s "$subj" $email $notify
+		echo "$error"
+		errorcode="$E_FTP"
+		return "$E_FTP"
+	fi
 }
 
 rclone_backup() {
@@ -1339,17 +1411,28 @@ rclone_backup() {
 		if [ -n "$diff_base" ] && backup_archive_path "$user" "$diff_base" \
 			&& ! rclone lsf $HOST: 2> /dev/null | cut -d' ' -f1 | grep -qxF -- "$diff_base"; then
 			echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user/$user.log
-			rclone copy -v "$BACKUP_ARCHIVE" $HOST:
+			if ! rclone copy -v "$BACKUP_ARCHIVE" $HOST:; then
+				error="base $diff_base did not arrive on the rclone target - every diff there would be unrestorable"
+				echo "$error" | $SENDMAIL -s "$subj" $email $notify
+				echo "$error"
+				errorcode="$E_CONNECT"
+				return "$E_CONNECT"
+			fi
 		fi
 		# $HOST: plain - $backup here would be the LOOP VARIABLE of an earlier transport's rotation
-		rclone copy -v $user.$backup_new_date.tar $HOST:
-		if [ "$?" -ne 0 ]; then
-			check_result "$E_CONNECT" "Unable to upload backup"
+		# return, not check_result: check_result exits the whole run BEFORE the record is written,
+		# so with local,rclone a finished local archive lost its record (stage-0 class E).
+		if ! rclone copy -v $user.$backup_new_date.tar $HOST:; then
+			error="$user.$backup_new_date.tar did not arrive on the rclone target"
+			echo "$error" | $SENDMAIL -s "$subj" $email $notify
+			echo "$error"
+			errorcode="$E_CONNECT"
+			return "$E_CONNECT"
 		fi
 
 		# Only include *.tar files
 		backup_list=$(rclone lsf $HOST: | cut -d' ' -f1 | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
-		backups_count=$(echo "$backup_list" | wc -l)
+		backups_count=$(grep -c . <<< "$backup_list")
 		if [ "$backups_count" -ge "$BACKUPS" ]; then
 			for backup in $(echo "$backup_list" \
 				| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
@@ -1361,16 +1444,25 @@ rclone_backup() {
 		if [ -n "$diff_base" ] && backup_archive_path "$user" "$diff_base" \
 			&& ! rclone lsf $HOST:$BPATH 2> /dev/null | cut -d' ' -f1 | grep -qxF -- "$diff_base"; then
 			echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user/$user.log
-			rclone copy -v "$BACKUP_ARCHIVE" $HOST:$BPATH
+			if ! rclone copy -v "$BACKUP_ARCHIVE" $HOST:$BPATH; then
+				error="base $diff_base did not arrive on the rclone target - every diff there would be unrestorable"
+				echo "$error" | $SENDMAIL -s "$subj" $email $notify
+				echo "$error"
+				errorcode="$E_CONNECT"
+				return "$E_CONNECT"
+			fi
 		fi
-		rclone copy -v $user.$backup_new_date.tar $HOST:$BPATH
-		if [ "$?" -ne 0 ]; then
-			check_result "$E_CONNECT" "Unable to upload backup"
+		if ! rclone copy -v $user.$backup_new_date.tar $HOST:$BPATH; then
+			error="$user.$backup_new_date.tar did not arrive on the rclone target"
+			echo "$error" | $SENDMAIL -s "$subj" $email $notify
+			echo "$error"
+			errorcode="$E_CONNECT"
+			return "$E_CONNECT"
 		fi
 
 		# Only include *.tar files
 		backup_list=$(rclone lsf $HOST:$BPATH | cut -d' ' -f1 | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
-		backups_count=$(echo "$backup_list" | wc -l)
+		backups_count=$(grep -c . <<< "$backup_list")
 		if [ "$backups_count" -ge "$BACKUPS" ]; then
 			for backup in $(echo "$backup_list" \
 				| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
@@ -1406,6 +1498,7 @@ rclone_download() {
 	else
 		rclone copy -v $HOST:$BPATH/$1 ./
 	fi
+	backup_download_norm "$1"
 }
 
 # ── Content map (#712) ───────────────────────────────────────────────────────────────────────────
