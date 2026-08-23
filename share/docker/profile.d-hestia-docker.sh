@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # HestiaRE: point a Docker-enabled customer at their companion's socket (#389).
 # POSIX sh so bash, zsh, dash and sh all pick it up; per-user .bashrc would be
 # bash-only and is overwritable in panel-managed homes. Guarded on the socket, so it

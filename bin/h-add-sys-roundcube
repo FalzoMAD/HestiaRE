@@ -15,6 +15,8 @@
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/sieve.sh
+source $HESTIA/include/sieve.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -173,7 +175,6 @@ $config['imap_host'] = 'localhost:143';
 $config['smtp_host'] = 'localhost:587';
 $config['des_key'] = '_DES_KEY_';
 $config['max_recipients'] = 100;
-$config['plugins'] = ['password', 'newmail_notifier', 'zipdownload', 'archive'];
 $config['log_dir'] = '/var/log/roundcube/';
 $config['smtp_log'] = false;
 $config['log_session'] = true;
@@ -193,6 +194,8 @@ $config['smtp_conn_options'] = ['ssl' => [
 	'cafile' => '/etc/ssl/certs/ca-certificates.crt',
 ]];
 PHP
+# From the shared derivation, not the heredoc: the sieve commands rewrite this very line later.
+printf "\$config['plugins'] = [%s];\n" "$(webmail_roundcube_plugins)" >> "$RC_CONFIG_DIR/config.inc.php"
 sed -i "s/_DES_KEY_/$des_key/" "$RC_CONFIG_DIR/config.inc.php"
 # 640 like debian-db.php: the des_key encrypts the IMAP credentials in the session cookie -
 # a secret of the same class as the DB password, and shell customers must not read it.

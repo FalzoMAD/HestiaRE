@@ -12,6 +12,192 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **remote only is diff-capable now** (#790, stage 3). Base selection asks for REACHABILITY
+  instead of a local file: the local map mirror is what a diff is built from, and the base
+  archive itself may live on a remote only - eligible when a configured target's fresh listing
+  shows it (the record's word alone would collect diffs against a base that exists nowhere).
+  On restore the base follows the same transport chain as the archive, so a differential
+  restores onto a box that holds nothing locally. A run whose base is reachable nowhere says
+  "No reachable base archive - writing a full backup"; a transport that receives a diff while
+  holding neither the base nor a local copy warns that a restore from it alone needs another
+  source. Refusals name what was
+  actually searched. Worth knowing: a remote restore leaves the fetched archive and base in the
+  customer folder on purpose - the next run counts them as local (rotation takes them, oldest
+  first, and the base check finds them without a remote round trip); they are a cache, not a
+  leak.
+
+- **A remote target may retain more than the package limit** (#790, stage 2). Every remote
+  backup host takes an optional KEEP number (`h-add-backup-host ... [KEEP]`, editable in the
+  server panel): its rotation keeps that many SETS while the local rotation keeps the package's
+  `BACKUPS` - "off-site laenger vorhalten" as a per-target number instead of an accident. The
+  record now outlives the local file: record retention follows the longest keep of any
+  configured place, so ownership (#791) still covers an archive that only a remote holds, the
+  backup list marks it "(no local copy)" - exactly what was checked, whether a remote still
+  holds it was not asked - and download/restore fetch it transparently over the stage-1 chain.
+  The listers carry that as a LOCAL field in every output format, derived through the same
+  resolver the CLI uses; a per-target keep of 0 is refused by name and a hand-edited 0 reads
+  as "mirror the package", never as "delete everything on this target". With no per-target number nothing moves - every place mirrors the package.
+  The nightly runner finally reads the per-run exit codes and mails one summary of degraded or
+  failed runs; a diff-mode run without a usable local base says so in the log instead of
+  silently writing fulls; and the panel offers rclone only where the binary exists, naming
+  that the remote itself is created as root via `rclone config`.
+
+- **Remote backup targets fail loudly now** (#790, stage 1 of the remote-target round; stage-0
+  protocol on the docs branch). After every upload the target's fresh listing is asked whether
+  the archive - and a shipped diff base - actually arrived: the put pipelines discard their exit
+  codes, and an unreachable target used to produce a green run, a record, and an archive that
+  existed nowhere (a never-set variable also turned the failed-remote-only exit into a 0).
+  Restore and panel download now CHAIN every configured transport and let the arrived file
+  decide, instead of stopping after the first transport's silent no. A failed remote leg keeps
+  the local archive and its record, names the failed target in log and mail, and the record's
+  TYPE carries the targets actually reached. Fetched copies carry the same owner and mode as
+  locally written archives; an empty remote listing counts as 0, not 1; and
+  `h-add-backup-host rclone` no longer pipes an installer from the internet into bash - rclone
+  is an OS package. A degraded run - local archive written, a remote leg failed - now exits
+  non-zero AFTER all bookkeeping (record, counters, mail), so scripts see the degradation
+  without losing the archive's record; and the transport chains match comma-bounded, because
+  ftp is a substring of sftp and first-match-only had masked exactly that.
+
+- **Every customer's archives live in their own folder now** (#789). `/backup/$user/$user.<date>.tar`
+  replaces the flat `/backup/$user.<date>.tar`; the file name keeps its prefix, records keep bare
+  basenames, and the run log moves along (`/backup/$user/$user.log`). Reading commands accept two
+  places - the customer folder first, then `/backup` itself as the hand-off spot for a migration
+  archive an operator drops in by hand (adoption does not move it) - and every message names which
+  of the two it found. One resolver in `include/backup.sh` carries the two-place rule and the
+  symlink containment for all readers, CLI and panel. In the same move `/backup` went from 0755 to
+  0711 (measured first: only root lists it, the panel pool opens by name): local system users can
+  no longer enumerate customer names and backup dates, while each customer still reads their own
+  folder (0750, `hestia:$user`). `server` joined the reserved login names - `h-backup-server`
+  writes `server.*.tar` into the same namespace a customer of that name would claim. Two side
+  effects worth knowing: rotation now lists only the customer folder, so a hand-placed archive at
+  the hand-off spot can no longer be rotated away even without adoption (before, only the ADOPTED
+  record exclusion protected it); and an archive fetched back from a remote target carries the
+  same owner and mode as a locally written one (`hestia:$user` 0640), so one folder holds one
+  rights picture. Because that makes a fetched file customer-readable, the remote fetch is now
+  bound to ownership by data: `h-download-backup` and its scheduler refuse a name that has no
+  record for that customer, so nobody can pull another customer's archive off the shared remote
+  target into their own folder (restore keeps its own transport path - a DR box with empty
+  records is that flow, never this command).
+
+- **The backup mode is a package choice** (#712, stage 4). `BACKUPS_MODE='full'|'diff'|'restic'`
+  lives next to `BACKUPS` in the package, defaults to `full` so nothing changes on its own, and
+  refuses `restic` where the addon is not installed. The nightly `h-backup-users` dispatches per
+  customer instead of running the archive path for everybody: a restic customer gets the restic run,
+  everyone else the archive run, and a restic mode without the addon falls back to the archive with
+  a named warning rather than silently backing up nothing. `h-backup-users-restic` now skips
+  customers whose mode is not restic, so a manual invocation no longer duplicates the nightly run.
+  The package pages offer the mode (restic only where the addon is, but a package already saying
+  restic keeps its option so an unrelated save cannot flip it), and the backup list marks a
+  differential archive with its base. Like every package key, the mode reaches a customer on
+  assignment (`h-change-user-package`) or creation - editing a package does NOT re-propagate to
+  the customers already sitting on it.
+
+- **OPERATIONAL NOTE - the repaired remote rotation deletes on its first run.** The ftp/sftp
+  listings arrived CRLF-tainted from expect's pty, `tar$` never matched, and remote rotation on
+  those targets was structurally dead: archives accumulated regardless of `BACKUPS`. Fixed - which
+  means the FIRST nightly run against a grown target counts them for the first time and removes
+  everything beyond retention, under the new set-counting rule. Harmless on this project today (no
+  live boxes), destructive on any grown target this ever gets deployed to: the fix is correct and
+  its first run is the mass deletion.
+
+- **Retention understands differential sets** (#712, stage 3). `BACKUPS` counts SETS - one full
+  plus the diffs naming it - in all four transports and in the record file, which use the same
+  derivation and cannot disagree about what a set is. `BACKUPS='3'` with weekly fulls therefore
+  means three weeks of history, the same figure it means for a full-only customer, where every
+  archive is its own set and nothing changes. A diff restores only together with its base, so a
+  base is kept as long as its set is. The obvious rule, "removing a full removes its diffs", is the wrong way round and was
+  measured to be destructive: with one full and three diffs hanging off it, rotating the full wiped
+  the entire history in one run. Verified: four archives are all retained, and the fifth run rotates
+  the oldest diff while the base stays. The probe now announces a differential archive and names the
+  members that are incomplete without their base, so a report says it before anyone restores.
+  Found on `BACKUPS='1'` and fixed: the rotation runs before the new archive exists in the records,
+  so the base the current run diffs against was invisible to the keep set - the run deleted its own
+  base seconds before writing the diff against it. The base is now passed into the removal
+  calculation explicitly, in all four transports.
+
+- **Differential backups** (#712, stage 2). A customer set to `BACKUPS_MODE='diff'` gets an archive
+  whose web and mail members carry only what changed against the newest full archive; everything
+  else - records, databases, home entries, the map - stays whole, so listing, probe, report and
+  preflight need the base for nothing. Members are built whole first and rebuilt from that, never
+  from the live tree; the map's paths come from the member and its hashes from the tree before the
+  member was tarred, and the stat tripwire (stage 1) drops the hash of anything the tree touched in
+  between - so a stale entry reads as changed, never as covered. A member the base never had, or one whose diff would not save at least half, stays
+  whole and says so. Restoring reads the archive directly - two passes, the base filtered to what
+  both maps still agree on, then the diff over it. A path deleted since the base is in neither list
+  and is simply never written. Measured on a real tree: a 189 KB member became 233 bytes, and the
+  restored tree matched the state at diff time exactly, including the deletion, a mode-only change
+  and a retargeted symlink; restoring the base instead reproduces the base state, so the check can
+  tell the two apart.
+- **`h-restore-user` refuses a differential archive whose base is missing** (#712), before the first
+  write rather than at the third member. Two more refusals guard the same edge: the base's content
+  map must hash to the MAPHASH the diff recorded at build time (a same-named archive from elsewhere,
+  or a mirror that had diverged, fails exactly there), and an archive whose backup.members marks
+  differential members while backup.base is missing or unreadable refuses instead of unpacking the
+  diff members as if they were whole - a tree of only the changed files that looks complete.
+
+- **Every backup now carries a content map** (#712, stage 1). One record per entry - path, BLAKE3
+  hash, mode, owner, symlink target - over the two member types a later run can diff against, web
+  and mail. Paths, types, modes and owners are read OUT of the finished members - web excludes by
+  pattern and mail passes an explicit account list, so no second enumeration would stay in step with
+  both, and what the map lists is what the archive holds. Content hashes are taken from the live
+  tree BEFORE the member is tarred, batched (per-file hashing through tar's --to-command cost 836 of
+  838 seconds on a 153k-file maildir - measured, the hashing itself is ~2s). The order makes almost every
+  race benign: the map is never newer than the archive, so a file changing mid-run is re-shipped by
+  the next diff instead of silently treated as already covered. The one exception is the return
+  case - changed in the window, later reverted to exactly the hashed bytes, which would read as
+  "unchanged" against a base that physically holds the other version - and a stat tripwire closes
+  it: files whose size or mtime moved between the hash pass and after the tar get the withdrawn
+  marker `-` as their hash - distinct from the empty hash a directory or symlink carries by type,
+  and compared as changed even against itself, so the same file racing two runs in a row cannot
+  read as unchanged. The over-inclusion side, always. Accepted price, stated so nobody mistakes it
+  for an accident: the map roughly quadruples the run for a mail-heavy customer (7.8s to 29.9s on
+  153k files) - the savings target storage, never runtime. Hardlink members get real records
+  this way - --to-command never even handed them over. It travels inside the archive so a foreign box can read it, and is mirrored under
+  `$USER_DATA/backup-maps` so a later run can compare without fetching a remote archive back; a
+  mirror is dropped when its archive leaves the record. `h-list-user-backup-map` reads it back, and
+  the entry count lands in the backup record as `MAP`. Nothing changes about restoring - the map is
+  the missing piece for differential backups and for comparing a roundtrip by content rather than by
+  record (#342).
+- **Archives are byte-identical for an unchanged tree** (#712). `tar --sort=name` on the member tars
+  and `gzip -n` wherever gzip writes one: member order no longer follows readdir, and the gzip header
+  carries no name or timestamp. Measured: two runs over an unchanged tree produce identical members
+  and identical maps, and changing one file makes both differ.
+
+- **Sieve is reachable for customers, and moving mail to Spam now trains the filter** (#780). The
+  engine was installed, ManageSieve was listening, and nothing could reach it: the panel offers no
+  filter screen and roundcube was not loading the `managesieve` plugin, so a customer could only
+  write rules with a mail client that speaks the protocol itself. Two settings fixed that - the
+  plugin (its package was already installed) and Tachyon's per-domain `Sieve.enabled`, whose block
+  already pointed at localhost:4190 and only had the flag off. Both are gated on `SIEVE_SYSTEM` and
+  derived in one place, `include/sieve.sh`, because the engine and the two webmails are separate
+  addons installable in any order; `default.json` is included because Tachyon clones it for every
+  mail domain added later. Filters and vacation now exist in both webmails without a panel login.
+- **Moving a message into or out of the Spam folder teaches rspamd** (#780). The pieces were half
+  present: `sieve_imapsieve` was loaded and advertised in the managesieve capability list, while the
+  hook that would fire it - `imap_sieve` in the IMAP protocol's plugin list - was missing along with
+  the rules and the scripts. The chain is complete now, on the `Spam` folder rather than the `Junk`
+  that every recipe assumes, because exim files spam into `.Spam` with a final verdict. The learner
+  reaches rspamd's controller socket through dovecot's own `mail_access_groups`, which keeps the
+  grant on dovecot's mail processes: no login holds it, and a customer's own script cannot use it
+  because `pipe` is offered to global scripts only. The classifier stays global, so one customer's
+  correction still trains the box; every learn is logged to syslog with the account that caused it,
+  so a box whose hit rate drifts can be traced to whoever moved the mail. Switching to per-user
+  statistics stays a config key - the learner already passes the account. Wiring the learner is a
+  degradation and not a failure: filters and vacation work without it, so a missing trigger, group
+  or compiled script is named and carried into the exit code rather than announced as success.
+
+- **`b3sum` joins the base packages** (#712). The differential backup map hashes every byte of a
+  customer's web and mail trees on every run, so the hash has to stay well ahead of the compressor.
+  Measured on two machines that both lack `sha_ni` - the normal case on virtualised servers, where
+  the CPU model masks the flag - BLAKE3 runs 2.8x faster than SHA-256 on a real file tree and 9x on
+  large files, single-threaded in both cases - and it is a cryptographic hash as well, so the faster
+  option is not the weaker one and nothing is traded away. That the map could later double as an
+  integrity statement is a bonus, not the reason. It is an OS package on all four targets, and 1.2.0
+  through 1.8.2 produce identical digests, so a stored map survives a distro upgrade. The consumer
+  itself is not built yet.
+
 ### Removed
 
 - **Demo mode is gone** (#759). Inherited from upstream, where it exists to keep a public demo box
@@ -23,6 +209,71 @@ opens above it.
   a fresh install writes it correctly from the start.
 
 ### Fixed
+
+- **Removing sieve destroyed the mail server on two of four targets** (#780). Debian 13 and Ubuntu
+  26.04 ship a `dovecot-core` that *depends on* `dovecot-sieve`, so `h-delete-sys-sieve`'s purge took
+  core, imapd and pop3d with it - measured, five packages against the two intended, dovecot dead and
+  `/etc/dovecot/conf.d` emptied for the removal of an optional addon. The existing comment read the
+  symptom as flakiness ("the purge may stop dovecot"). The package now stays where core requires it
+  and only its configuration goes, decided from the dependency rather than from a version number,
+  because the packaging is the thing that changes here.
+
+- **The backup compression level was one number on two scales, unchecked, with four defaults**
+  (#776). `BACKUP_GZIP` feeds both `gzip -N` (valid 1-9) and `pzstd -N` (valid 1-19), and nothing
+  validated it: `h-change-sys-config-value BACKUP_GZIP 12` on a gzip host was accepted and then
+  killed every backup at compression time. Both directions are now refused by name, at the point the
+  value is set rather than at 3 a.m. in a nightly run - a level out of range, a level the current
+  mode cannot reach, and a switch to gzip that would strand a zstd-only level. The panel used to
+  answer the same problem by forcing the level to 9 for every gzip host, silently overwriting a
+  deliberate choice with the slowest point of the whole range; it now caps at 9 only when the chosen
+  level exceeds it, and does so before writing the mode, because the CLI refuses a switch that would
+  strand it. The four defaults - 9 in `include/main.sh`, 4 from the installer and from
+  `syshealth`, 5 as the panel's display fallback - are one value now. It is 3, measured: over four
+  WordPress installations the knee sits between 3 and 6, level 19 costs 68x the time of level 1 for
+  24% less output, and `gzip -9` is 21x slower than `pzstd -3` while producing a larger archive. An
+  existing host keeps whatever it has; `repair_key` only fills a missing or empty value.
+
+- **"Back" led to the administrator's own profile, not to the customer being managed** (#779).
+  Opening another user's SSH keys or logs through the pencil icon - without impersonating them -
+  produced a Back button pointing at the admin's own page, while the Login History button next to it
+  correctly carried the customer. The condition chain had no branch for "an admin manages someone
+  else without impersonation": the first branch requires a non-empty `look`, which only impersonation
+  sets, so it fell through to a fallback that uses the viewer's own identity. The new branch reads
+  `userContext`, because a back link is scoping and not a protective policy (#438). Verified by
+  clicking through a real browser: with the fix an admin lands on the managed customer, on their own
+  pages nothing changes, and an impersonating session is byte-identical to before - the same run
+  against the unfixed templates fails, so the result is not a dead test. Adopted from an upstream
+  report and reimplemented, and the affected set is derived here rather than inherited: of the 64
+  back buttons under `web/templates/pages/`, exactly two resolve the target from the session, and
+  the other pages that accept a `?user` either already carry the right shape or have no back button
+  at all. It coincides with upstream's list minus the two files that belong to the REST API, but the
+  coincidence is the result, not the method.
+- **A long SSH key overflowed its cell instead of wrapping** (#779). `overflow-wrap: break-word`
+  breaks a word only when it would not fit on a line of its own, not when it bursts its container,
+  and the only caller of `.u-text-break` in the tree is the SSH key list - where the content is a
+  base64 blob with no break opportunity at all. The class has a general name and one specific
+  purpose, so its definition now says what it is for and that prose is not it: `anywhere` breaks
+  mid-word, which is right for base64 and wrong for a sentence.
+
+- **The shell lint gate did not look at `sbin/`** (#777). Its file predicate listed `bin/h-*`,
+  `include/*.sh`, `install.sh` and `.gitea/tools/*.sh`; `sbin/` was carved out of `bin/` after the
+  gate was written and never added, so the installer, the umbrella command and the PHP wrappers sat
+  outside both tiers - a change to `h-install-hestia` was answered with "no changed shell files",
+  green because nothing had been read. Eight more shipped scripts under `share/` and `web/locale`
+  were missing for the same reason. The predicate now covers all of them, and because a path list
+  goes stale on every move, a new check measures it against a set derived from content (shebang or
+  `.sh` name) and fails on anything shell it does not cover - including the case where the sweep
+  itself reads nothing. A second check holds `.editorconfig` to the same surface, because it is a
+  second hand-kept list of it and nothing measured it: `shfmt` resolves its settings by path from
+  that file, so on a house-formatted tree a run with no flags has to agree - where it does not, the
+  path is outside the block. It carries its own probe, and a probe that cannot tell the two settings
+  apart fails the run instead of passing it. All failure directions were provoked and observed. The
+  interpreter set follows what shellcheck has a dialect for; zsh and csh stay out on purpose, since
+  pulling one in would redden a tier nothing here can judge, and that assumption is written at the
+  line rather than left implicit. The six files this
+  exposed are formatted (proven semantics-preserving, not merely re-indented), a `profile.d`
+  fragment states its dialect so shellcheck can judge it, and two findings in the installer and the
+  jail shell are fixed. Whole-tree coverage goes from 553 to 568 files, formatting debt from 6 to 0.
 
 - **Two addon installers announced work they had not done** (#772). Run against a host that already
   had ProFTPD or Docker, they printed "Installing ProFTPD" and "Adding the Docker repository" and

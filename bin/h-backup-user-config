@@ -49,32 +49,34 @@ tmpdir="/home/$user/backup/"
 rm -fr "/home/$user/backup/"
 mkdir -p "$tmpdir"
 
+backup_user_dir "$user"
+
 # Backup sys configs
-echo "-- SYSTEM --" | tee $BACKUP/$user.log
+echo "-- SYSTEM --" | tee $BACKUP/$user/$user.log
 mkdir -p $tmpdir/hestia
 
-echo -e "$(date "+%F %T") $user.conf" | tee -a $BACKUP/$user.log
+echo -e "$(date "+%F %T") $user.conf" | tee -a $BACKUP/$user/$user.log
 cp -r $USER_DATA/user.conf $tmpdir/hestia/
 cp -r $USER_DATA/ssl $tmpdir/hestia/
 
 if [ -e "$USER_DATA/stats.log" ]; then
-	echo -e "$(date "+%F %T") stats.log" | tee -a $BACKUP/$user.log
+	echo -e "$(date "+%F %T") stats.log" | tee -a $BACKUP/$user/$user.log
 	cp -r $USER_DATA/stats.log $tmpdir/hestia/
 fi
 
 if [ -e "$USER_DATA/history.log" ]; then
-	echo -e "$(date "+%F %T") history.log" | tee -a $BACKUP/$user.log
+	echo -e "$(date "+%F %T") history.log" | tee -a $BACKUP/$user/$user.log
 	cp -r $USER_DATA/history.log $tmpdir/hestia/
 fi
 
 if [ -e "$USER_DATA/backup-excludes.conf" ]; then
-	echo -e "$(date "+%F %T") backup-excludes.conf" | tee -a $BACKUP/$user.log
+	echo -e "$(date "+%F %T") backup-excludes.conf" | tee -a $BACKUP/$user/$user.log
 	cp -r $USER_DATA/backup-excludes.conf $tmpdir/hestia/
 fi
 
 # Backup PAM
 mkdir -p $tmpdir/pam
-echo -e "$(date "+%F %T") pam" | tee -a $BACKUP/$user.log
+echo -e "$(date "+%F %T") pam" | tee -a $BACKUP/$user/$user.log
 grep "^$user:" /etc/passwd > $tmpdir/pam/passwd
 grep "^$user:" /etc/shadow > $tmpdir/pam/shadow
 grep "^$user:" /etc/group > $tmpdir/pam/group
@@ -87,7 +89,7 @@ fi
 
 # WEB domains
 if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
-	echo -e "\n-- WEB --" | tee -a $BACKUP/$user.log
+	echo -e "\n-- WEB --" | tee -a $BACKUP/$user/$user.log
 	mkdir -p $tmpdir/web/
 
 	# Parsing domain exclusions
@@ -97,7 +99,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		if [ -z "$exclusion" ]; then
 			web_list="$web_list $domain"
 		else
-			echo "$(date "+%F %T") excluding $domain" | tee -a $BACKUP/$user.log
+			echo "$(date "+%F %T") excluding $domain" | tee -a $BACKUP/$user/$user.log
 		fi
 	done
 	web_list=$(echo "$web_list" | sed -e "s/  */\ /g" -e "s/^ //")
@@ -107,7 +109,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 	for domain in $web_list; do
 		check_backup_conditions
 		((i++))
-		echo -e "$(date "+%F %T") $domain" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") $domain" | tee -a $BACKUP/$user/$user.log
 		mkdir -p -p $tmpdir/web/$domain/conf
 		mkdir -p -p $tmpdir/web/$domain/hestia
 
@@ -194,15 +196,15 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 
 	# Print total
 	if [ "$i" -eq 1 ]; then
-		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user/$user.log
 	else
-		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user/$user.log
 	fi
 fi
 
 # Mail domains
 if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
-	echo -e "\n-- MAIL --" | tee -a $BACKUP/$user.log
+	echo -e "\n-- MAIL --" | tee -a $BACKUP/$user/$user.log
 	mkdir -p $tmpdir/mail/
 
 	# Parsing domain exclusions
@@ -212,7 +214,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 		if [ -z "$check_exl" ]; then
 			mail_list="$mail_list $domain"
 		else
-			echo "$(date "+%F %T") excluding $domain" | tee -a $BACKUP/$user.log
+			echo "$(date "+%F %T") excluding $domain" | tee -a $BACKUP/$user/$user.log
 		fi
 	done
 	mail_list=$(echo "$mail_list" | sed -e "s/  */\ /g" -e "s/^ //")
@@ -221,7 +223,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 	for domain in $mail_list; do
 		check_backup_conditions
 		((i++))
-		echo -e "$(date "+%F %T") $domain" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") $domain" | tee -a $BACKUP/$user/$user.log
 		mkdir -p $tmpdir/mail/$domain/conf
 		mkdir -p $tmpdir/mail/$domain/hestia
 		domain_idn=$domain
@@ -244,15 +246,15 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 
 	# Print total
 	if [ "$i" -eq 1 ]; then
-		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user/$user.log
 	else
-		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user/$user.log
 	fi
 fi
 
 # Databases
 if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
-	echo -e "\n-- DB --" | tee -a $BACKUP/$user.log
+	echo -e "\n-- DB --" | tee -a $BACKUP/$user/$user.log
 	mkdir -p $tmpdir/db/
 
 	# Parsing database exclusions
@@ -262,7 +264,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 			db_list="$db_list $database"
 		else
 			echo "$(date "+%F %T") excluding $database" \
-				| tee -a $BACKUP/$user.log
+				| tee -a $BACKUP/$user/$user.log
 		fi
 	done
 
@@ -274,7 +276,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 		((i++))
 		get_database_values
 
-		echo -e "$(date "+%F %T") $database ($TYPE)" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") $database ($TYPE)" | tee -a $BACKUP/$user/$user.log
 		mkdir -p $tmpdir/db/$database/conf
 		mkdir -p $tmpdir/db/$database/hestia
 
@@ -323,16 +325,16 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 	# Print total
 	if [ "$i" -eq 1 ]; then
 		echo -e "$(date "+%F %T") *** $i database ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	else
 		echo -e "$(date "+%F %T") *** $i databases ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	fi
 fi
 
 # Cron jobs
 if [ -n "$CRON_SYSTEM" ] && [ "$CRON" != '*' ]; then
-	echo -e "\n-- CRON --" | tee -a $BACKUP/$user.log
+	echo -e "\n-- CRON --" | tee -a $BACKUP/$user/$user.log
 	mkdir -p $tmpdir/cron/
 
 	# Backup cron.conf
@@ -347,10 +349,10 @@ if [ -n "$CRON_SYSTEM" ] && [ "$CRON" != '*' ]; then
 	# Print total
 	if [ "$cron_record" -eq 1 ]; then
 		echo -e "$(date "+%F %T") *** $cron_record job ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	else
 		echo -e "$(date "+%F %T") *** $cron_record jobs ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	fi
 fi
 # There is no need to create
@@ -370,7 +372,7 @@ fi
 time_n_date=$(date +'%T %F')
 time=$(echo "$time_n_date" | cut -f 1 -d \ )
 date=$(echo "$time_n_date" | cut -f 2 -d \ )
-echo "$(date "+%F %T") Runtime: $run_time $min" | tee -a $BACKUP/$user.log
+echo "$(date "+%F %T") Runtime: $run_time $min" | tee -a $BACKUP/$user/$user.log
 
 #----------------------------------------------------------#
 #                       Hestia                             #

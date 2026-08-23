@@ -1,0 +1,87 @@
+#!/bin/bash
+# info: learn a message as spam or ham
+# options: CLASS [ACCOUNT]
+#
+# example: h-learn-mail-message spam john@example.com
+#
+# Reads the message on stdin. Called by the dovecot imapsieve pipe when a customer moves mail into
+# or out of the Spam folder, so it runs with the mailbox's uid and dovecot's groups - the group that
+# opens the controller socket comes from mail_access_groups (see include/sieve.sh).
+#
+# Loads NOTHING from include/, because as the customer it cannot: hestia.env is 0600 and hestia.conf
+# 0660, root-only on purpose. Exit codes mirror include/main.sh.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+class=$1
+account=$2
+
+E_INVALID=2
+E_NOTEXIST=3
+E_LIMIT=8
+E_DISK=13
+
+RSPAMD_SOCKET='/run/rspamd/controller.sock'
+# A huge attachment teaches the classifier nothing. Refused rather than truncated - a cut-off
+# message is a malformed one.
+MAX_BYTES=$((10 * 1024 * 1024))
+
+fail() {
+	echo "Error: $2" >&2
+	exit "$1"
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+case "$class" in
+	spam) verb='learn_spam' ;;
+	ham) verb='learn_ham' ;;
+	*) fail "$E_INVALID" "class must be spam or ham" ;;
+esac
+[ -S "$RSPAMD_SOCKET" ] || fail "$E_NOTEXIST" "rspamd controller socket is not there"
+if [ -n "$account" ] && ! [[ "$account" =~ ^[[:alnum:]._%+-]+@[[:alnum:].-]+$ ]]; then
+	fail "$E_INVALID" "account is not an address"
+fi
+command -v rspamc > /dev/null 2>&1 || fail "$E_NOTEXIST" "rspamc is not installed"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+msg=$(mktemp) || fail "$E_DISK" "could not create a temporary file"
+trap 'rm -f "$msg"' EXIT
+# One byte over is enough to know it is over.
+head -c $((MAX_BYTES + 1)) > "$msg"
+[ -s "$msg" ] || fail "$E_INVALID" "no message on stdin"
+[ "$(stat -c %s "$msg")" -le "$MAX_BYTES" ] || fail "$E_LIMIT" "message is larger than $MAX_BYTES bytes"
+
+# -d keys the statistics, -u only claims a sender. Ignored under today's global classifier - passing
+# it keeps a switch to per-user a config key, not a code change.
+learn_args=(-h "$RSPAMD_SOCKET")
+[ -n "$account" ] && learn_args+=(-d "$account")
+out=$(rspamc "${learn_args[@]}" "$verb" < "$msg" 2>&1)
+
+# Judged by what rspamc SAYS: it exits 0 while reporting a refusal in its body (a message below the
+# token minimum does exactly that). "Already learned" is not a failure - a customer moving mail back
+# and forth would otherwise log every move as a failed script.
+# Attributable, because the classifier is shared: one customer filing legitimate mail as spam moves
+# the statistics for every mailbox on the box. To syslog, since as the customer this process cannot
+# write $HESTIA/log. Never the message, only who and what.
+note() { command -v logger > /dev/null 2>&1 && logger -t hestia-learn -- "$1"; }
+
+if grep -q 'success = true' <<< "$out"; then
+	note "class=$class account=${account:-unknown} result=learned"
+	exit 0
+fi
+if grep -qi 'already learned' <<< "$out"; then
+	note "class=$class account=${account:-unknown} result=already-learned"
+	exit 0
+fi
+reason=$(grep -m1 -E 'error =' <<< "$out" || head -n1 <<< "$out")
+note "class=$class account=${account:-unknown} result=failed"
+echo "Error: rspamc $verb did not learn: $reason" >&2
+exit 1

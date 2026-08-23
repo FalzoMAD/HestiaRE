@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: archive to directory
-# options: USER ARCHIVE DIRECTORY [SELECTED_DIR] [STRIP] [TEST]
+# options: USER ARCHIVE DIRECTORY [SELECTED_DIR] [STRIP] [TEST] [FILELIST]
 #
 # example: h-extract-fs-archive admin latest.tar.gz /home/admin
 #
@@ -12,6 +12,9 @@ dst_dir=$3
 selected_dir=$4
 strip=$5
 test=$6
+# NUL-separated list of members to extract (#712): the first pass of a differential restore lays
+# down only what the base still shares with the current map. Absent means "everything", as before.
+filelist=$7
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -25,7 +28,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '3' "$#" 'USER ARCHIVE DIRECTORY [SELECTED_DIR] [STRIP] [TEST]'
+check_args '3' "$#" 'USER ARCHIVE DIRECTORY [SELECTED_DIR] [STRIP] [TEST] [FILELIST]'
 is_format_valid 'user'
 is_object_valid 'user' 'USER' "$user"
 
@@ -44,7 +47,7 @@ fi
 
 # Checking source path
 rpath=$(readlink -f "$src_file")
-if [ -z "$(echo $rpath | egrep "^/tmp|^$homedir|^$BACKUP/$user\.|^$BACKUP/tmp\.")" ]; then
+if [ -z "$(echo $rpath | egrep "^/tmp|^$homedir|^$BACKUP/$user\.|^$BACKUP/$user/$user\.|^$BACKUP/tmp\.")" ]; then
 	echo "Error: invalid source path $src_file"
 	exit 2
 fi
@@ -60,12 +63,22 @@ if [ -n "$strip" ]; then
 	is_int_format_valid "$strip" 'strip-components'
 	tar_strip_level="--strip-components $strip"
 fi
+tar_select=()
+if [ -n "$filelist" ]; then
+	[ -f "$filelist" ] || {
+		echo "Error: file list $filelist doesn't exist"
+		exit 3
+	}
+	# --no-recursion first: the list names directories as the archive stores them, and without it
+	# each one is unpacked recursively - which brings deleted files back on a differential restore.
+	tar_select=(--no-recursion --null -T "$filelist")
+fi
 # Extracting gziped archive
 if [ -n "$(echo $src_file | egrep -i '.tgz|.tar.gz')" ]; then
 	x='yes'
 	if [ -z "$test" ] || [ "$test" = "no" ]; then
 		user_exec mkdir -p "$dst_dir" > /dev/null 2>&1
-		user_exec tar -xzf "$src_file" -C "$dst_dir" --no-wildcards "$selected_dir" $tar_strip_level > /dev/null 2>&1
+		user_exec tar -xzf "$src_file" -C "$dst_dir" --no-wildcards "$selected_dir" $tar_strip_level "${tar_select[@]}" > /dev/null 2>&1
 		rc=$?
 	else
 		user_exec tar -tf "$src_file" --no-wildcards "$selected_dir" > /dev/null 2>&1
@@ -78,7 +91,7 @@ if [ -n "$(echo $src_file | egrep -i '.tbz|.tar.bz')" ]; then
 	x='yes'
 	if [ -z "$test" ] || [ "$test" = "no" ]; then
 		user_exec mkdir -p "$dst_dir" > /dev/null 2>&1
-		user_exec tar -xjf "$src_file" -C "$dst_dir" --no-wildcards "$selected_dir" $tar_strip_level > /dev/null 2>&1
+		user_exec tar -xjf "$src_file" -C "$dst_dir" --no-wildcards "$selected_dir" $tar_strip_level "${tar_select[@]}" > /dev/null 2>&1
 		rc=$?
 	else
 		user_exec tar -tf "$src_file" --no-wildcards "$selected_dir" > /dev/null 2>&1
@@ -91,7 +104,7 @@ if [ -n "$(echo $src_file | egrep -i '.tar.zst')" ]; then
 	x='yes'
 	if [ -z "$test" ] || [ "$test" = "no" ]; then
 		user_exec mkdir -p "$dst_dir" > /dev/null 2>&1
-		user_exec tar -I pzstd -xf "$src_file" -C "$dst_dir" --no-wildcards "$selected_dir" $tar_strip_level > /dev/null 2>&1
+		user_exec tar -I pzstd -xf "$src_file" -C "$dst_dir" --no-wildcards "$selected_dir" $tar_strip_level "${tar_select[@]}" > /dev/null 2>&1
 		rc=$?
 	else
 		user_exec tar -I pzstd -tf "$src_file" --no-wildcards "$selected_dir" > /dev/null 2>&1
@@ -143,7 +156,7 @@ if [ -n "$(echo $src_file | grep -i '.tar')" ] && [ -z "$x" ]; then
 	x='yes'
 	if [ -z "$test" ] || [ "$test" = "no" ]; then
 		user_exec mkdir -p "$dst_dir" > /dev/null 2>&1
-		user_exec tar -xf "$src_file" -C "$dst_dir" --no-wildcards "$selected_dir" $tar_strip_level > /dev/null 2>&1
+		user_exec tar -xf "$src_file" -C "$dst_dir" --no-wildcards "$selected_dir" $tar_strip_level "${tar_select[@]}" > /dev/null 2>&1
 		rc=$?
 	else
 		user_exec tar -tf "$src_file" --no-wildcards "$selected_dir" > /dev/null 2>&1

@@ -20,6 +20,7 @@ $backend_templates = [];
 $proxy_templates = [];
 // Read by the template on the first render, where no POST has set it yet.
 $v_backups_incremental = "no";
+$v_backups_mode = "full";
 if (!empty($_SESSION["WEB_BACKEND"])) {
 	exec(HESTIA_CMD . "h-list-web-templates-backend json", $output, $return_var);
 	$backend_templates = json_decode(implode("", $output), true) ?? [];
@@ -86,6 +87,9 @@ if (!empty($_POST["ok"])) {
 	if (!isset($_POST["v_backups_incremental"])) {
 		$errors[] = _("Incremental Backups");
 	}
+	if (!isset($_POST["v_backups_mode"])) {
+		$errors[] = _("Backup Mode");
+	}
 	if (!isset($_POST["v_disk_quota"])) {
 		$errors[] = _("Quota");
 	}
@@ -138,6 +142,7 @@ if (!empty($_POST["ok"])) {
 		$v_cron_jobs = quoteshellarg($_POST["v_cron_jobs"]);
 		$v_backups = quoteshellarg($_POST["v_backups"]);
 		$v_backups_incremental = quoteshellarg($_POST["v_backups_incremental"]);
+		$v_backups_mode = quoteshellarg($_POST["v_backups_mode"]);
 		$v_disk_quota = quoteshellarg($_POST["v_disk_quota"]);
 		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 		$v_ratelimit = quoteshellarg($_POST["v_ratelimit"]);
@@ -180,6 +185,7 @@ if (!empty($_POST["ok"])) {
 			$pkg .= "SHELL=" . $v_shell . "\n";
 			$pkg .= "BACKUPS=" . $v_backups . "\n";
 			$pkg .= "BACKUPS_INCREMENTAL=" . $v_backups_incremental . "\n";
+			$pkg .= "BACKUPS_MODE=" . $v_backups_mode . "\n";
 			$pkg .= "TIME=" . $v_time . "\n";
 			$pkg .= "DATE=" . $v_date . "\n";
 

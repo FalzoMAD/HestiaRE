@@ -67,6 +67,20 @@
 						<?php endif; ?>><?= tohtml(_("Enabled")) ?></option>
 				</select>
 			</div>
+			<div class="u-mb10">
+				<label for="v_backups_mode" class="form-label"><?= tohtml(_("Backup Mode")) ?></label>
+				<select class="form-select" name="v_backups_mode" id="v_backups_mode">
+					<option value="full"><?= tohtml(_("Full")) ?></option>
+					<option value="diff" <?php if ('diff' == trim($v_backups_mode, "'")): ?>
+						selected
+					<?php endif; ?>><?= tohtml(_("Differential")) ?></option>
+					<?php if (($_SESSION["BACKUP_INCREMENTAL"] ?? "") === "yes" || 'restic' == trim($v_backups_mode, "'")): ?>
+						<option value="restic" <?php if ('restic' == trim($v_backups_mode, "'")): ?>
+							selected
+						<?php endif; ?>><?= tohtml(_("restic (addon)")) ?></option>
+					<?php endif; ?>
+				</select>
+			</div>
 			<details class="collapse" id="web-options">
 				<summary class="collapse-header">
 					<?= tohtml(_("WEB")) ?>

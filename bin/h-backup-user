@@ -36,17 +36,10 @@ DOCKER_ROOT_REL='.companion/.local/share/docker'
 # report below; an unlisted one is still excluded.
 DOCKER_ROOT_KNOWN=' buildkit containerd containers engine-id image network overlay2 plugins rootfs runtimes swarm tmp trust volumes '
 
-# Docker data-root exclusions for the customer's chosen scope, emitted relative to the user home so
-# the pre-flight du and the tar below cannot drift apart (#389).
-#
-# Only two boundaries are sound. The layer store and the metadata that indexes it are separate
-# directories, and which ones they are depends on the storage driver and Docker version - on 29.x
-# with overlayfs the layers sit under containerd/, on older overlay2 setups under overlay2/. Keep one
-# without the other and the restore yields a store referencing layers that are not there. So:
-# volumes/ alone, which Docker refills on the next compose up, or the whole root. Nothing between.
-#
-# Absent or empty resolves to 'volumes'. That is the normal state, not an edge case: user.conf gains
-# the key only on a rebuild or restore, so most existing customers will not have it for a while.
+# Docker data-root exclusions, relative to the user home so the du pre-flight and the tar cannot
+# drift apart (#389). Only two sound boundaries: volumes/ alone (Docker refills the rest) or the
+# whole root - layer store and its index are separate, driver-dependent dirs, and keeping one
+# without the other references absent layers. Absent or empty key = 'volumes' (the normal state).
 docker_backup_excludes() {
 	local e name
 	[ "$(get_user_value '$DOCKER_BACKUP')" = 'full' ] && return 0
@@ -231,9 +224,12 @@ fi
 if [[ ! -d "$BACKUP" ]]; then
 	mkdir -p $BACKUP
 fi
-if [ "$(stat -c %a "$BACKUP")" != 755 ]; then
-	chmod 755 $BACKUP
+# 711: the names in $BACKUP are customer names and run dates - nobody but root enumerates them.
+# The customer's read access moves into their own folder (#789).
+if [ "$(stat -c %a "$BACKUP")" != 711 ]; then
+	chmod 711 $BACKUP
 fi
+backup_user_dir "$user"
 
 # Get current time
 start_time=$(date '+%s')
@@ -260,52 +256,55 @@ if [ -z "$BACKUP_TEMP" ]; then
 fi
 
 # Creating temporary directory
-tmpdir=$(mktemp -p $BACKUP_TEMP -d)
-
-if [ "$?" -ne 0 ]; then
-	echo "Can't create tmp dir $tmpdir" | $SENDMAIL -s "$subj" "$email" "yes"
-	# Deleting task from queue
+# Checked at the source - a check via $? behind any later line is dead (measured: two inserted
+# assignments silenced it).
+if ! tmpdir=$(mktemp -p $BACKUP_TEMP -d); then
+	echo "Can't create tmp dir" | $SENDMAIL -s "$subj" "$email" "yes"
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create tmp dir"
 fi
+# Hash tables live OUTSIDE tmpdir (everything in tmpdir lands in the tarball); the trap covers
+# every abort path, which the per-path rm -rf $tmpdir calls never did for this directory.
+if ! maptbl=$(mktemp -d); then
+	queue_drop_job "$CONF_DIR/queue/backup.pipe"
+	check_result "$E_NOTEXIST" "can't create map table dir"
+fi
+trap 'rm -rf "$maptbl"' EXIT
 
 # Backup sys configs
-echo "-- SYSTEM --" | tee $BACKUP/$user.log
+echo "-- SYSTEM --" | tee $BACKUP/$user/$user.log
 mkdir $tmpdir/hestia
 
-echo -e "$(date "+%F %T") $user.conf" | tee -a $BACKUP/$user.log
+echo -e "$(date "+%F %T") $user.conf" | tee -a $BACKUP/$user/$user.log
 cp -r $USER_DATA/user.conf $tmpdir/hestia/
 # Record the web model in the archive so a cross-model restore can warn (#120)
 echo "WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'" > $tmpdir/hestia/web-system
-# Who wrote this file. Forensics only - nothing detects by it, because no archive written before
-# today carries one and a HestiaCP archive never will. Where it disagrees with what the members
-# actually show, the members win and the report says so.
+# Who wrote this file - forensics only, nothing detects by it; where it disagrees with the
+# members, the members win.
 backup_write_origin "$tmpdir/hestia/origin"
 cp -r $USER_DATA/ssl $tmpdir/hestia/
 
-# The user's hosting package, so a restore onto a box that never had it can recreate it (#663). The
-# .pkg name is the PACKAGE field of the user.conf just copied. Restore only ADDS it, never
-# overwrites an existing one - see h-restore-user.
+# The package travels so a foreign box can recreate it (#663); the restore only ADDS it, never
+# overwrites an existing one.
 pkg_name=$(grep -m1 "^PACKAGE=" $USER_DATA/user.conf | cut -f2 -d "'")
 if [ -n "$pkg_name" ] && [ -e "$CONF_DIR/packages/$pkg_name.pkg" ]; then
 	mkdir -p $tmpdir/hestia/packages
 	cp -f "$CONF_DIR/packages/$pkg_name.pkg" $tmpdir/hestia/packages/
 	[ -e "$CONF_DIR/packages/$pkg_name.sh" ] && cp -f "$CONF_DIR/packages/$pkg_name.sh" $tmpdir/hestia/packages/
-	echo -e "$(date "+%F %T") package $pkg_name" | tee -a $BACKUP/$user.log
+	echo -e "$(date "+%F %T") package $pkg_name" | tee -a $BACKUP/$user/$user.log
 fi
 
-# The rest of the customer's data directory, from what is in it rather than from a list of names.
-# BACKUP_USER_DATA_CORE says what never travels; user.conf and ssl are copied above. Dotfiles are
-# not enumerated - the restore's member-name rule rejects a leading dot, so carrying one would only
-# lose it later - and one that turns up is named rather than skipped in silence.
+# Data directory from what is IN it, never a name list; BACKUP_USER_DATA_CORE says what never
+# travels. Dotfiles are not enumerated (the restore rejects a leading dot) - one that turns up is
+# named rather than skipped in silence.
 _hidden=$(find "$USER_DATA" -maxdepth 1 -name '.*' ! -name '.' 2> /dev/null | wc -l)
 [ "$_hidden" -gt 0 ] \
-	&& echo "Warning!: $_hidden hidden file(s) in the data directory are not backed up" | tee -a $BACKUP/$user.log
+	&& echo "Warning!: $_hidden hidden file(s) in the data directory are not backed up" | tee -a $BACKUP/$user/$user.log
 for _entry in "$USER_DATA"/*; do
 	[ -e "$_entry" ] || continue
 	_name=$(basename "$_entry")
 	[[ " $BACKUP_USER_DATA_CORE user.conf ssl " == *" $_name "* ]] && continue
-	echo -e "$(date "+%F %T") $_name" | tee -a $BACKUP/$user.log
+	echo -e "$(date "+%F %T") $_name" | tee -a $BACKUP/$user/$user.log
 	if ! cp -r "$_entry" "$tmpdir/hestia/"; then
 		rm -rf $tmpdir
 		check_result "$E_NOTEXIST" "can't copy $_name out of the data directory"
@@ -314,7 +313,7 @@ done
 
 # Backup PAM
 mkdir $tmpdir/pam
-echo -e "$(date "+%F %T") pam" | tee -a $BACKUP/$user.log
+echo -e "$(date "+%F %T") pam" | tee -a $BACKUP/$user/$user.log
 grep "^$user:" /etc/passwd > $tmpdir/pam/passwd
 grep "^$user:" /etc/shadow > $tmpdir/pam/shadow
 grep "^$user:" /etc/group > $tmpdir/pam/group
@@ -327,7 +326,7 @@ fi
 
 # WEB domains
 if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
-	echo -e "\n-- WEB --" | tee -a $BACKUP/$user.log
+	echo -e "\n-- WEB --" | tee -a $BACKUP/$user/$user.log
 	mkdir $tmpdir/web/
 
 	# Parsing domain exclusions
@@ -339,7 +338,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			web_list="$web_list $domain"
 		else
 			web_excluded=$((web_excluded + 1))
-			echo "$(date "+%F %T") excluding $domain" | tee -a $BACKUP/$user.log
+			echo "$(date "+%F %T") excluding $domain" | tee -a $BACKUP/$user/$user.log
 		fi
 	done
 	web_list=$(echo "$web_list" | sed -e "s/  */\ /g" -e "s/^ //")
@@ -355,7 +354,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 	for domain in $web_list; do
 		check_backup_conditions
 		((i++))
-		echo -e "$(date "+%F %T") $domain" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") $domain" | tee -a $BACKUP/$user/$user.log
 		mkdir -p $tmpdir/web/$domain/conf
 		mkdir -p $tmpdir/web/$domain/hestia
 
@@ -489,19 +488,26 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 		fi
 		set +f
 
-		# Backup files
+		# Hashes BEFORE the tar (#712): the map is never newer than the archive, a racing file is
+		# re-shipped instead of silently left behind. Excluded paths hash too, the join drops them.
+		backup_map_hash_tree "$maptbl/web.$domain.tbl" \
+			|| echo "$(date "+%F %T") Warning: hash pass failed for web/$domain - its hashes are withdrawn, the member stays effectively whole" \
+			| tee -a $BACKUP/$user/$user.log
+
+		# --sort=name and gzip -n (#712): an unchanged tree produces identical bytes twice.
 		if [ "$BACKUP_MODE" = 'zstd' ]; then
-			tar "${fargs[@]}" -cpf- . | pzstd -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.zst
+			tar --sort=name "${fargs[@]}" -cpf- . | pzstd -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.zst
 		else
-			tar "${fargs[@]}" -cpf- . | gzip -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.gz
+			tar --sort=name "${fargs[@]}" -cpf- . | gzip -n -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.gz
 		fi
+		backup_map_hash_verify "$maptbl/web.$domain.tbl"
 	done
 
 	# Print total
 	if [ "$i" -eq 1 ]; then
-		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user/$user.log
 	else
-		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user/$user.log
 	fi
 
 	# The counter-check: what the archive carries against what the records say, minus what the
@@ -510,14 +516,14 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 	web_packed=$(find "$tmpdir/web" -mindepth 1 -maxdepth 1 -type d 2> /dev/null | wc -l)
 	if [ "$web_packed" -ne "$web_expected" ]; then
 		echo -e "$(date "+%F %T") *** WARNING: archive carries $web_packed web domain(s), records say $web_expected ($web_records total, $web_excluded excluded) ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 		send_notice 'BACKUP' "$user backup carries $web_packed of $web_expected web domains - check the exclusions"
 	fi
 fi
 
 # Mail domains
 if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
-	echo -e "\n-- MAIL --" | tee -a $BACKUP/$user.log
+	echo -e "\n-- MAIL --" | tee -a $BACKUP/$user/$user.log
 	mkdir $tmpdir/mail/
 
 	# Parsing domain exclusions
@@ -527,7 +533,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 		if [ -z "$check_exl" ]; then
 			mail_list="$mail_list $domain"
 		else
-			echo "$(date "+%F %T") excluding $domain" | tee -a $BACKUP/$user.log
+			echo "$(date "+%F %T") excluding $domain" | tee -a $BACKUP/$user/$user.log
 		fi
 	done
 	mail_list=$(echo "$mail_list" | sed -e "s/  */\ /g" -e "s/^ //")
@@ -536,7 +542,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 	for domain in $mail_list; do
 		check_backup_conditions
 		((i++))
-		echo -e "$(date "+%F %T") $domain" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") $domain" | tee -a $BACKUP/$user/$user.log
 		mkdir -p $tmpdir/mail/$domain/conf
 		mkdir -p $tmpdir/mail/$domain/hestia
 		domain_idn=$domain
@@ -568,30 +574,34 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 				accounts+=($account)
 			else
 				echo "$(date "+%F %T") excluding mail account $account" \
-					| tee -a $BACKUP/$user.log
+					| tee -a $BACKUP/$user/$user.log
 			fi
 		done
 		# Compress archive
 		if [ ${#accounts[@]} -gt 0 ]; then
+			backup_map_hash_tree "$maptbl/mail.$domain.tbl" "${accounts[@]}" \
+				|| echo "$(date "+%F %T") Warning: hash pass failed for mail/$domain - its hashes are withdrawn, the member stays effectively whole" \
+				| tee -a $BACKUP/$user/$user.log
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar -cpf- "${accounts[@]}" | pzstd -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.zst
+				tar --sort=name -cpf- "${accounts[@]}" | pzstd -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.zst
 			else
-				tar -cpf- "${accounts[@]}" | gzip -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.gz
+				tar --sort=name -cpf- "${accounts[@]}" | gzip -n -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.gz
 			fi
+			backup_map_hash_verify "$maptbl/mail.$domain.tbl" "${accounts[@]}"
 		fi
 	done
 
 	# Print total
 	if [ "$i" -eq 1 ]; then
-		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") *** $i domain ***" | tee -a $BACKUP/$user/$user.log
 	else
-		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") *** $i domains ***" | tee -a $BACKUP/$user/$user.log
 	fi
 fi
 
 # Databases
 if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
-	echo -e "\n-- DB --" | tee -a $BACKUP/$user.log
+	echo -e "\n-- DB --" | tee -a $BACKUP/$user/$user.log
 	mkdir $tmpdir/db/
 
 	# Parsing database exclusions
@@ -601,7 +611,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 			db_list="$db_list $database"
 		else
 			echo "$(date "+%F %T") excluding $database" \
-				| tee -a $BACKUP/$user.log
+				| tee -a $BACKUP/$user/$user.log
 		fi
 	done
 
@@ -613,7 +623,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 		((i++))
 		get_database_values
 
-		echo -e "$(date "+%F %T") $database ($TYPE)" | tee -a $BACKUP/$user.log
+		echo -e "$(date "+%F %T") $database ($TYPE)" | tee -a $BACKUP/$user/$user.log
 		mkdir -p $tmpdir/db/$database/conf
 		mkdir -p $tmpdir/db/$database/hestia
 
@@ -654,7 +664,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 				pzstd -$BACKUP_GZIP $dump
 				rm $dump
 			else
-				gzip -$BACKUP_GZIP $dump
+				gzip -n -$BACKUP_GZIP $dump
 			fi
 		fi
 	done
@@ -662,16 +672,16 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 	# Print total
 	if [ "$i" -eq 1 ]; then
 		echo -e "$(date "+%F %T") *** $i database ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	else
 		echo -e "$(date "+%F %T") *** $i databases ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	fi
 fi
 
 # Cron jobs
 if [ -n "$CRON_SYSTEM" ] && [ "$CRON" != '*' ]; then
-	echo -e "\n-- CRON --" | tee -a $BACKUP/$user.log
+	echo -e "\n-- CRON --" | tee -a $BACKUP/$user/$user.log
 	mkdir $tmpdir/cron/
 
 	# Backup cron.conf
@@ -686,16 +696,16 @@ if [ -n "$CRON_SYSTEM" ] && [ "$CRON" != '*' ]; then
 	# Print total
 	if [ "$cron_record" -eq 1 ]; then
 		echo -e "$(date "+%F %T") *** $cron_record job ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	else
 		echo -e "$(date "+%F %T") *** $cron_record jobs ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	fi
 fi
 
 # User Directories
 if [ "$USER" != '*' ]; then
-	echo -e "\n-- USER DIRECTORIES --" | tee -a $BACKUP/$user.log
+	echo -e "\n-- USER DIRECTORIES --" | tee -a $BACKUP/$user/$user.log
 	mkdir $tmpdir/user_dir
 	cd $HOMEDIR/$user
 
@@ -713,16 +723,16 @@ if [ "$USER" != '*' ]; then
 	done < <(docker_backup_excludes)
 	while IFS= read -r xnew; do
 		[ -n "$xnew" ] && echo "$(date "+%F %T") NOTE: unrecognised Docker data-root entry '$xnew' excluded" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	done < <(docker_backup_unknown)
 	for xpath in $(echo "$USER" | tr ',' '\n'); do
 		if [ -d "$xpath" ]; then
 			fargs+=(--exclude="$xpath"/*)
 			echo "$(date "+%F %T") excluding directory $xpath" \
-				| tee -a $BACKUP/$user.log
+				| tee -a $BACKUP/$user/$user.log
 		else
 			echo "$(date "+%F %T") excluding file $xpath" \
-				| tee -a $BACKUP/$user.log
+				| tee -a $BACKUP/$user/$user.log
 			fargs+=(--exclude="$xpath")
 		fi
 	done
@@ -739,15 +749,15 @@ if [ "$USER" != '*' ]; then
 		if [ -z "$exclusion" ]; then
 			((i++))
 			udir_list="$udir_list $udir"
-			echo -e "$(date "+%F %T") adding $udir" | tee -a $BACKUP/$user.log
+			echo -e "$(date "+%F %T") adding $udir" | tee -a $BACKUP/$user/$user.log
 
 			check_backup_conditions
 
 			# Backup files and dirs
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar --anchored -cpf- "${fargs[@]}" $udir | pzstd -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.zst
+				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | pzstd -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.zst
 			else
-				tar --anchored -cpf- "${fargs[@]}" $udir | gzip -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.gz
+				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | gzip -n -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.gz
 			fi
 
 		fi
@@ -758,15 +768,57 @@ if [ "$USER" != '*' ]; then
 	# Print total
 	if [ "$i" -eq 1 ]; then
 		echo -e "$(date "+%F %T") *** $i user directory ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	else
 		echo -e "$(date "+%F %T") *** $i directories ***" \
-			| tee -a $BACKUP/$user.log
+			| tee -a $BACKUP/$user/$user.log
 	fi
 fi
 
 if [ "$BACKUP_MODE" = 'zstd' ]; then
 	touch $tmpdir/.zstd
+fi
+
+# The content map over web and mail (#712): paths/metadata from the finished members, hashes from
+# before the tars - the map lists what the archive holds and is never newer than it.
+map_records=$(backup_map_write "$tmpdir" "$tmpdir/hestia/backup.map" "$maptbl")
+
+# Differential members (#712): BACKUPS_MODE comes from the package; anything but 'diff' stays
+# whole, and no base means full, never a diff against nothing.
+backup_mode_sel=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)
+diff_base=''
+if [ "${backup_mode_sel:-full}" = 'diff' ] && [ "$map_records" -gt 0 ]; then
+	diff_base=$(backup_diff_base "$USER_DATA/backup.conf" "$USER_DATA/backup-maps") || diff_base=''
+	# Named, not silent: after rotation (or against an emptied target) every run lands here and
+	# would look like "diff mode never engages" - stage-0 measured exactly that blindness. Since
+	# stage 3 a base may live on a remote only, so the word "local" would be wrong here.
+	if [ -z "$diff_base" ]; then
+		echo "$(date "+%F %T") No reachable base archive - writing a full backup" \
+			| tee -a $BACKUP/$user/$user.log
+	fi
+	if [ -n "$diff_base" ]; then
+		base_map=$(mktemp)
+		# The count doubles as a form check: a desynced map counts 0 and forces a full run, the
+		# same as an unreadable one - "wrong shape" must never read as "nothing changed".
+		if zstd -q -d -c "$USER_DATA/backup-maps/$diff_base.map.zst" > "$base_map" 2> /dev/null \
+			&& [ "$(backup_map_count "$base_map")" -gt 0 ]; then
+			backup_diff_build "$tmpdir" "$base_map" "$tmpdir/hestia/backup.map" "$diff_base"
+			echo "$(date "+%F %T") Differential against $diff_base" | tee -a $BACKUP/$user/$user.log
+		else
+			# An unreadable base map must force a full run, never an empty diff: "nothing changed"
+			# and "nothing could be read" produce the same empty file.
+			echo "$(date "+%F %T") Warning: base map for $diff_base is unreadable - writing a full backup" \
+				| tee -a $BACKUP/$user/$user.log
+			diff_base=''
+		fi
+		rm -f "$base_map"
+	fi
+fi
+if [ -n "$web_list$mail_list" ] && [ "$map_records" -eq 0 ]; then
+	# Zero entries for a customer who HAS web or mail means a member could not be read - which looks
+	# exactly like an empty one until somebody tries to restore it.
+	echo "$(date "+%F %T") Warning: content map is empty although web/mail members exist" \
+		| tee -a $BACKUP/$user/$user.log
 fi
 
 # Get backup size
@@ -779,31 +831,49 @@ time=$(echo "$time_n_date" | cut -f 1 -d \ )
 date=$(echo "$time_n_date" | cut -f 2 -d \ )
 backup_new_date=$(date +"%Y-%m-%d_%H-%M-%S")
 
-echo -e "\n-- SUMMARY --" | tee -a $BACKUP/$user.log
+# The local mirror: a later run reads the base map from here instead of fetching the archive back
+# from a remote target. The archive carries its own copy regardless, so it stays readable elsewhere.
+if [ -s "$tmpdir/hestia/backup.map" ]; then
+	mkdir -p "$USER_DATA/backup-maps"
+	zstd -q -3 -f -o "$USER_DATA/backup-maps/$user.$backup_new_date.tar.map.zst" \
+		"$tmpdir/hestia/backup.map" 2> /dev/null \
+		|| echo "$(date "+%F %T") Warning: could not store the local content map" | tee -a $BACKUP/$user/$user.log
+fi
+
+echo -e "\n-- SUMMARY --" | tee -a $BACKUP/$user/$user.log
 
 errorcode="0"
-# Switching on backup system types
+# Switching on backup system types. Which targets failed is kept by NAME: the record and the
+# operator both get the reached set, not a rewritten wish (stage-0 protocol, E).
+failed_targets=''
 for backup_type in $(echo -e "${BACKUP_SYSTEM//,/\\n}"); do
 	case $backup_type in
 		local) local_backup ;;
-		ftp) ftp_backup ;;
-		sftp) sftp_backup ;;
-		rclone) rclone_backup ;;
+		ftp) ftp_backup || failed_targets="$failed_targets ftp" ;;
+		sftp) sftp_backup || failed_targets="$failed_targets sftp" ;;
+		rclone) rclone_backup || failed_targets="$failed_targets rclone" ;;
 	esac
 done
+reached=''
+for backup_type in $(echo -e "${BACKUP_SYSTEM//,/\\n}"); do
+	case " $failed_targets " in *" $backup_type "*) continue ;; esac
+	reached="$reached,$backup_type"
+done
+reached="${reached#,}"
 
 # Removing tmpdir
 rm -rf $tmpdir
 if [[ "$errorcode" != "0" ]]; then
-	if [[ "$BACKUP_SYSTEM" =~ "local" ]]; then
-		echo -e "$(date "+%F %T") *** Local backup was successfully executed. Remote backup failed ***" \
-			| tee -a $BACKUP/$user.log
-		BACKUP_SYSTEM="local"
+	if [[ "$reached" =~ "local" ]]; then
+		echo -e "$(date "+%F %T") *** Local backup was successfully executed. Remote backup failed:${failed_targets} ***" \
+			| tee -a $BACKUP/$user/$user.log
+		echo "Backup of $user is LOCAL ONLY - remote target(s) failed:${failed_targets}" \
+			| $SENDMAIL -s "$user → remote backup failed" "$email" 'yes'
 	else
-		echo -e "$(date "+%F %T") *** Remote backup failed ***" \
-			| tee -a $BACKUP/$user.log
-
-		exit $error_code
+		echo -e "$(date "+%F %T") *** Remote backup failed:${failed_targets} ***" \
+			| tee -a $BACKUP/$user/$user.log
+		# errorcode, not the never-set error_code: that typo made a failed remote-only run exit 0.
+		exit "$errorcode"
 	fi
 fi
 # Calculation run time
@@ -818,8 +888,8 @@ if [ "$run_time" -eq 1 ]; then
 	min=minute
 fi
 
-echo "$(date "+%F %T") Size: $size MB" | tee -a $BACKUP/$user.log
-echo "$(date "+%F %T") Runtime: $run_time $min" | tee -a $BACKUP/$user.log
+echo "$(date "+%F %T") Size: $size MB" | tee -a $BACKUP/$user/$user.log
+echo "$(date "+%F %T") Runtime: $run_time $min" | tee -a $BACKUP/$user/$user.log
 
 #----------------------------------------------------------#
 #                       Hestia                             #
@@ -831,7 +901,7 @@ sed -i "/$user.$backup_new_date.tar/d" $USER_DATA/backup.conf
 
 # Registering new backup
 backup_str="BACKUP='$user.$backup_new_date.tar'"
-backup_str="$backup_str TYPE='$BACKUP_SYSTEM' SIZE='$size'"
+backup_str="$backup_str TYPE='$reached' SIZE='$size'"
 backup_str="$backup_str WEB='${web_list// /,}'"
 backup_str="$backup_str DNS='${dns_list// /,}'"
 backup_str="$backup_str MAIL='${mail_list// /,}'"
@@ -839,28 +909,64 @@ backup_str="$backup_str DB='${db_list// /,}'"
 backup_str="$backup_str CRON='$cron_list'"
 backup_str="$backup_str UDIR='${udir_list// /,}'"
 backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
+backup_str="$backup_str MAP='$map_records'"
+backup_str="$backup_str MODE='$([ -n "$diff_base" ] && echo diff || echo full)' BASE='$diff_base'"
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 
-# Removing old backups. Adopted records are kept whatever their age: they point at a file this
-# rotation does not own, and dropping the record would hide the archive from the panel again.
-#
-# In place, in FILE ORDER - the listers print the file as it stands, so pulling the adopted lines to
-# the front would reorder what the panel shows. ADOPTED is matched as a whole field, not as a
-# substring anywhere in the line.
-awk -v keep="$BACKUPS" '
-	/(^| )ADOPTED='"'"'yes'"'"'( |$)/ { next }
-	{ n++ }
-	END { print n }
-' $USER_DATA/backup.conf > $USER_DATA/backup.count_
-awk -v keep="$BACKUPS" -v total="$(cat $USER_DATA/backup.count_)" '
-	/(^| )ADOPTED='"'"'yes'"'"'( |$)/ { print; next }
-	{ i++; if (i > total - keep) print }
-' $USER_DATA/backup.conf > $USER_DATA/backup.conf_
-rm -f $USER_DATA/backup.count_
+# Record cleanup in FILE ORDER (the listers print the file as it stands). Adopted records always
+# stay - the file is not ours to rotate. The rest is kept per SET, derived exactly as the file
+# rotation derives it; the new record is already in the file, so no incoming adjustment.
+# The record outlives the file (#790 stage 2): record retention follows the LONGEST keep of
+# any configured place - the local file rotation keeps $BACKUPS, every remote place keeps its
+# own number, and the record stays as long as ANY of them still holds the archive. Ownership
+# stays bound to the record (#791), so a customer can schedule what only a remote still has.
+keep_records="$BACKUPS"
+for backup_type in $(echo -e "${BACKUP_SYSTEM//,/\\n}"); do
+	case $backup_type in
+		ftp | sftp | rclone) _k=$(backup_target_keep "$backup_type") ;;
+		*) continue ;;
+	esac
+	[ "$_k" -gt "$keep_records" ] && keep_records="$_k"
+done
+LC_ALL=C awk -v keep="$keep_records" -v q="'" '
+	function field(l, k,   i, r) {
+		i = index(l, k q)
+		if (i == 0) return ""
+		r = substr(l, i + length(k) + 1)
+		i = index(r, q)
+		if (i == 0) return ""
+		return substr(r, 1, i - 1)
+	}
+	function adopted(l) { return index(l, "ADOPTED=" q "yes" q) > 0 }
+	NR == FNR {
+		if (adopted($0)) next
+		n = field($0, "BACKUP=")
+		if (n == "") next
+		b = field($0, "BASE=")
+		id = (b == "" ? n : b)
+		ids[NR] = id
+		if (!(id in seen)) { seen[id] = 1; sets[++s] = id }
+		next
+	}
+	FNR == 1 {
+		for (i = 1; i <= s; i++)
+			for (j = i + 1; j <= s; j++)
+				if (sets[j] > sets[i]) { t = sets[i]; sets[i] = sets[j]; sets[j] = t }
+		for (i = 1; i <= keep && i <= s; i++) kept[sets[i]] = 1
+	}
+	{
+		if (adopted($0)) { print; next }
+		if (FNR in ids && ids[FNR] in kept) print
+	}
+' $USER_DATA/backup.conf $USER_DATA/backup.conf > $USER_DATA/backup.conf_
 mv -f $USER_DATA/backup.conf_ $USER_DATA/backup.conf
+
+# After the set-aware cleanup, so a mirror map is dropped in the same run that rotates its
+# archive's record - before it, the rotated set's mirrors survived one run as orphans.
+backup_map_prune "$USER_DATA/backup-maps" "$USER_DATA/backup.conf"
 chmod 660 $USER_DATA/backup.conf
-chmod 660 $BACKUP/$user.log
+chmod 660 $BACKUP/$user/$user.log
 
 # Deleting task from queue
 queue_drop_job "$CONF_DIR/queue/backup.pipe"
@@ -870,16 +976,22 @@ update_user_value "$user" '$U_BACKUPS' "$U_BACKUPS"
 cd $BACKUP
 
 # Send notification
-if [ -e "$BACKUP/$user.log" ] && [ "$notify" = "yes" ]; then
+if [ -e "$BACKUP/$user/$user.log" ] && [ "$notify" = "yes" ]; then
 	subj="$user → backup has been completed"
 	email=$(get_user_value '$CONTACT')
-	cat $BACKUP/$user.log | $SENDMAIL -s "$subj" "$email" "$notify"
+	cat $BACKUP/$user/$user.log | $SENDMAIL -s "$subj" "$email" "$notify"
 	$BIN/h-add-user-notification "$user" "Backup created successfully" "<p><span class='u-text-bold'>Archive:</span> <code>$user.$backup_new_date.tar</code></p>"
 fi
 
 # Logging
 $BIN/h-log-action "$user" "Info" "Backup" "Backup created (Archive: $backup_new_date.tar)."
 $BIN/h-log-action "system" "Info" "Backup" "Backup created (User: $user, Archive: $backup_new_date.tar)."
+
+# Degradation goes into the exit code, not only into log and mail (the #746/#766 rule), and only
+# AFTER every piece of bookkeeping: the local archive is real, so its record and counters must be too.
+if [ -n "$failed_targets" ]; then
+	check_result "$errorcode" "backup of $user is local only - remote target(s) failed:${failed_targets}"
+fi
 log_event "$OK" "$ARGUMENTS"
 
 exit

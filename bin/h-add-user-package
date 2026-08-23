@@ -72,6 +72,15 @@ is_package_consistent() {
 	fi
 	is_int_format_valid "$BACKUPS" 'BACKUPS'
 	is_boolean_format_valid "$BACKUPS_INCREMENTAL" 'BACKUPS_INCREMENTAL'
+	# An unknown value would read as "not diff" in the backup and silently mean full.
+	case "${BACKUPS_MODE:-full}" in
+		full | diff) ;;
+		restic)
+			[ "$BACKUP_INCREMENTAL" = 'yes' ] \
+				|| check_result "$E_NOTEXIST" "BACKUPS_MODE 'restic' needs the restic addon on this host"
+			;;
+		*) check_result "$E_INVALID" "BACKUPS_MODE must be full, diff or restic" ;;
+	esac
 	if [ -n "$WEB_TEMPLATE" ]; then
 		is_web_template_valid "$WEB_TEMPLATE"
 	fi
@@ -142,6 +151,7 @@ BANDWIDTH='$BANDWIDTH'
 SHELL='$SHELL'
 BACKUPS='$BACKUPS'
 BACKUPS_INCREMENTAL='$BACKUPS_INCREMENTAL'
+BACKUPS_MODE='${BACKUPS_MODE:-full}'
 TIME='$time'
 DATE='$date'
 " > "$CONF_DIR/packages/$package.pkg"

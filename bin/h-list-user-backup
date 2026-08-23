@@ -25,12 +25,12 @@ source $HESTIA/include/main.sh
 source_conf "$HESTIA/conf/hestia.conf"
 
 fields="\$BACKUP \$TYPE \$SIZE \$WEB \$DB \$MAIL \$CRON \$UDIR"
-fields="$fields \$RUNTIME \$TIME \$DATE"
+fields="$fields \$MAP \$MODE \$BASE \$RUNTIME \$TIME \$DATE"
 
 # JSON list function
 json_list() {
 	echo '{'
-	json_escape BACKUP TYPE SIZE WEB MAIL DB CRON UDIR RUNTIME TIME DATE
+	json_escape BACKUP TYPE SIZE WEB MAIL DB CRON UDIR MAP MODE BASE RUNTIME TIME DATE
 	printf '    "%s": {\n' "$BACKUP"
 	printf '        "TYPE": "%s",\n' "$TYPE"
 	printf '        "SIZE": "%s",\n' "$SIZE"
@@ -39,6 +39,9 @@ json_list() {
 	printf '        "DB": "%s",\n' "$DB"
 	printf '        "CRON": "%s",\n' "$CRON"
 	printf '        "UDIR": "%s",\n' "$UDIR"
+	printf '        "MAP": "%s",\n' "$MAP"
+	printf '        "MODE": "%s",\n' "${MODE:-full}"
+	printf '        "BASE": "%s",\n' "$BASE"
 	printf '        "RUNTIME": "%s",\n' "$RUNTIME"
 	printf '        "TIME": "%s",\n' "$TIME"
 	printf '        "DATE": "%s"\n' "$DATE"
@@ -51,6 +54,8 @@ shell_list() {
 	echo "BACKUP:         $BACKUP"
 	echo "TYPE:           $TYPE"
 	echo "SIZE:           $SIZE mb"
+	echo "MAP:            ${MAP:-0} entries"
+	echo "MODE:           ${MODE:-full}${BASE:+ against $BASE}"
 	echo "RUNTIME:        $RUNTIME min"
 	echo "WEB:            ${WEB//,/ }"
 	echo "MAIL:           ${MAIL//,/ }"
@@ -64,14 +69,14 @@ shell_list() {
 # PLAIN list function
 plain_list() {
 	echo -ne "$BACKUP\t$TYPE\t$SIZE\t$WEB\t$MAIL\t$DB\t$CRON\t"
-	echo -e "$UDIR\t$RUNTIME\t$TIME\t$DATE"
+	echo -e "$UDIR\t$MAP\t${MODE:-full}\t$BASE\t$RUNTIME\t$TIME\t$DATE"
 }
 
 # CSV list function
 csv_list() {
-	echo "BACKUP,TYPE,SIZE,WEB,MAIL,DB,CRON,UDIR,RUNTIME,TIME,DATE"
+	echo "BACKUP,TYPE,SIZE,WEB,MAIL,DB,CRON,UDIR,MAP,MODE,BASE,RUNTIME,TIME,DATE"
 	echo -n "$BACKUP,$TYPE,$SIZE,\"$WEB\",\"$MAIL\",\"$DB\","
-	echo "\"$CRON\",\"$UDIR\",$RUNTIME,$TIME,$DATE"
+	echo "\"$CRON\",\"$UDIR\",$MAP,${MODE:-full},$BASE,$RUNTIME,$TIME,$DATE"
 }
 
 #----------------------------------------------------------#

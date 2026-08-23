@@ -56,6 +56,7 @@ $v_memory_limit = $data[$v_package]["MEMORY_LIMIT"];
 $v_swap_limit = $data[$v_package]["SWAP_LIMIT"];
 $v_backups = $data[$v_package]["BACKUPS"];
 $v_backups_incremental = $data[$v_package]["BACKUPS_INCREMENTAL"];
+$v_backups_mode = ($data[$v_package]["BACKUPS_MODE"] ?? "") ?: "full";
 $v_date = $data[$v_package]["DATE"];
 $v_time = $data[$v_package]["TIME"];
 $v_status = "active";
@@ -143,6 +144,9 @@ if (!empty($_POST["save"])) {
 	if (!isset($_POST["v_backups_incremental"])) {
 		$errors[] = _("Incremental Backups");
 	}
+	if (!isset($_POST["v_backups_mode"])) {
+		$errors[] = _("Backup Mode");
+	}
 	if (!isset($_POST["v_disk_quota"])) {
 		$errors[] = _("Quota");
 	}
@@ -198,6 +202,7 @@ if (!empty($_POST["save"])) {
 		$v_cron_jobs = quoteshellarg($_POST["v_cron_jobs"]);
 		$v_backups = quoteshellarg($_POST["v_backups"]);
 		$v_backups_incremental = quoteshellarg($_POST["v_backups_incremental"]);
+		$v_backups_mode = quoteshellarg($_POST["v_backups_mode"]);
 		$v_disk_quota = quoteshellarg($_POST["v_disk_quota"]);
 		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 
@@ -233,6 +238,7 @@ if (!empty($_POST["save"])) {
 		$pkg .= "SHELL=" . $v_shell . "\n";
 		$pkg .= "BACKUPS=" . $v_backups . "\n";
 		$pkg .= "BACKUPS_INCREMENTAL=" . $v_backups_incremental . "\n";
+		$pkg .= "BACKUPS_MODE=" . $v_backups_mode . "\n";
 		$pkg .= "TIME=" . $v_time . "\n";
 		$pkg .= "DATE=" . $v_date . "\n";
 

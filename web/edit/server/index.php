@@ -148,7 +148,7 @@ $v_backup_dir = "/backup";
 if (!empty($_SESSION["BACKUP"])) {
 	$v_backup_dir = $_SESSION["BACKUP"];
 }
-$v_backup_gzip = "5";
+$v_backup_gzip = "3";
 if (!empty($_SESSION["BACKUP_GZIP"])) {
 	$v_backup_gzip = $_SESSION["BACKUP_GZIP"];
 }
@@ -169,11 +169,13 @@ foreach ($backup_types as $backup_type) {
 			$v_backup_password = "";
 			$v_backup_port = $v_remote_backup[$backup_type]["PORT"] ?? "";
 			$v_backup_bpath = $v_remote_backup[$backup_type]["BPATH"];
+			$v_backup_keep = $v_remote_backup[$backup_type]["BACKUPS_KEEP"] ?? "";
 			$v_backup_remote_adv = "yes";
 		} elseif (in_array($backup_type, ["rclone"])) {
 			$v_backup_type = $v_remote_backup[$backup_type]["TYPE"];
 			$v_rclone_host = $v_remote_backup[$backup_type]["HOST"];
 			$v_rclone_path = $v_remote_backup[$backup_type]["BPATH"];
+			$v_rclone_keep = $v_remote_backup[$backup_type]["BACKUPS_KEEP"] ?? "";
 			$v_backup_remote_adv = "yes";
 		}
 	}
@@ -209,6 +211,15 @@ if (empty($v_rclone_host)) {
 if (empty($v_rclone_path)) {
 	$v_rclone_path = "";
 }
+if (empty($v_backup_keep)) {
+	$v_backup_keep = "";
+}
+if (empty($v_rclone_keep)) {
+	$v_rclone_keep = "";
+}
+// The rclone option only makes sense with the binary on the box; the remote itself is created
+// as root (rclone config), which the panel cannot do - the template names that instead.
+$v_rclone_available = is_executable("/usr/bin/rclone") || is_executable("/usr/local/bin/rclone");
 
 if ($_SESSION["BACKUP_INCREMENTAL"] == "yes") {
 	$v_backup_incremental = "yes";
@@ -768,12 +779,16 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Change backup gzip level
+	// gzip stops at 9, zstd reaches 19 (#776). Only a level ABOVE 9 is lowered - the old code forced
+	// 9 on every gzip host, the slowest point of the range. Before the mode is written, because the
+	// CLI refuses a switch that would strand the level.
 	if (empty($_SESSION["error_msg"])) {
+		$v_gzip_target = (int) $_POST["v_backup_gzip"];
+		if ($_POST["v_backup_mode"] == "gzip" && $v_gzip_target > 9) {
+			$v_gzip_target = 9;
+		}
+		$_POST["v_backup_gzip"] = $v_gzip_target;
 		if ($_POST["v_backup_gzip"] != $v_backup_gzip) {
-			if ($_POST["v_backup_mode"] == "gzip") {
-				$_POST["v_backup_gzip"] = 9;
-			}
 			exec(
 				HESTIA_CMD .
 					"h-change-sys-config-value BACKUP_GZIP " .
@@ -806,19 +821,6 @@ if (!empty($_POST["save"])) {
 				$v_backup_mode = $_POST["v_backup_mode"];
 			}
 			$v_backup_adv = "yes";
-			if ($_POST["v_backup_mode"] == "gzip") {
-				$_POST["v_backup_gzip"] = 9;
-				if (empty($_SESSION["error_msg"])) {
-					$v_backup_gzip = $_POST["v_backup_gzip"];
-				}
-				exec(
-					HESTIA_CMD .
-						"h-change-sys-config-value BACKUP_GZIP " .
-						quoteshellarg($_POST["v_backup_gzip"]),
-					$output,
-					$return_var,
-				);
-			}
 		}
 	}
 
@@ -851,6 +853,7 @@ if (!empty($_POST["save"])) {
 				$v_backup_username = quoteshellarg($_POST["v_backup_username"]);
 				$backup_pass_file = secret_tmpfile($_POST["v_backup_password"]);
 				$v_backup_bpath = quoteshellarg($_POST["v_backup_bpath"]);
+				$v_backup_keep_arg = quoteshellarg($_POST["v_backup_keep"] ?? "");
 				if ($backup_pass_file !== false) {
 					exec(
 						HESTIA_CMD .
@@ -865,7 +868,9 @@ if (!empty($_POST["save"])) {
 							" " .
 							$v_backup_bpath .
 							" " .
-							$v_backup_port,
+							$v_backup_port .
+							" " .
+							$v_backup_keep_arg,
 						$output,
 						$return_var,
 					);
@@ -904,6 +909,7 @@ if (!empty($_POST["save"])) {
 			$v_rclone_host = quoteshellarg($_POST["v_rclone_host"]);
 			$v_backup_type = quoteshellarg($_POST["v_backup_type"]);
 			$v_rclone_path = quoteshellarg($_POST["v_rclone_path"]);
+			$v_rclone_keep_arg = quoteshellarg($_POST["v_rclone_keep"] ?? "");
 			exec(
 				HESTIA_CMD .
 					"h-add-backup-host " .
@@ -911,7 +917,9 @@ if (!empty($_POST["save"])) {
 					" " .
 					$v_rclone_host .
 					" '' '' " .
-					$v_rclone_path,
+					$v_rclone_path .
+					" '' " .
+					$v_rclone_keep_arg,
 				$output,
 				$return_var,
 			);
@@ -943,6 +951,7 @@ if (!empty($_POST["save"])) {
 				$v_backup_username = quoteshellarg($_POST["v_backup_username"]);
 				$backup_pass_file = secret_tmpfile($_POST["v_backup_password"]);
 				$v_backup_bpath = quoteshellarg($_POST["v_backup_bpath"]);
+				$v_backup_keep_arg = quoteshellarg($_POST["v_backup_keep"] ?? "");
 				if ($backup_pass_file !== false) {
 					exec(
 						HESTIA_CMD .
@@ -957,7 +966,9 @@ if (!empty($_POST["save"])) {
 							" " .
 							$v_backup_bpath .
 							" " .
-							$v_backup_port,
+							$v_backup_port .
+							" " .
+							$v_backup_keep_arg,
 						$output,
 						$return_var,
 					);
@@ -1006,6 +1017,7 @@ if (!empty($_POST["save"])) {
 					$v_backup_username = quoteshellarg($_POST["v_backup_username"]);
 					$backup_pass_file = secret_tmpfile($_POST["v_backup_password"]);
 					$v_backup_bpath = quoteshellarg($_POST["v_backup_bpath"]);
+				$v_backup_keep_arg = quoteshellarg($_POST["v_backup_keep"] ?? "");
 					if ($backup_pass_file !== false) {
 						exec(
 							HESTIA_CMD .
@@ -1020,7 +1032,9 @@ if (!empty($_POST["save"])) {
 								" " .
 								$v_backup_bpath .
 								" " .
-								$v_backup_port,
+								$v_backup_port .
+								" " .
+								$v_backup_keep_arg,
 							$output,
 							$return_var,
 						);

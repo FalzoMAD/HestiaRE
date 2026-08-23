@@ -19,6 +19,19 @@ format=${2-shell}
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+
+# parse_object_kv_list overwrites BACKUP: the record FIELD shares its name with the directory
+# GLOBAL the resolver reads (measured: every row said LOCAL=no because the resolver searched
+# inside the archive name). Juggled here so the resolver always sees the directory.
+backup_root="$BACKUP"
+local_of() {
+	local _n="$1" _keep="$BACKUP"
+	BACKUP="$backup_root"
+	if backup_archive_path "$user" "$_n"; then LOCAL='yes'; else LOCAL='no'; fi
+	BACKUP="$_keep"
+}
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -30,7 +43,10 @@ json_list() {
 	echo "{"
 	while read -r str; do
 		parse_object_kv_list "$str"
-		json_escape BACKUP TYPE SIZE WEB MAIL DB CRON UDIR RUNTIME TIME DATE
+		# LOCAL says what this box KNOWS: a copy is here (either allowed place) or it is not.
+		# Whether a remote still holds it is not asked here - the panel must not claim more.
+		local_of "$BACKUP"
+		json_escape BACKUP TYPE SIZE WEB MAIL DB CRON UDIR MAP MODE BASE LOCAL RUNTIME TIME DATE
 		printf '    "%s": {\n' "$BACKUP"
 		printf '        "TYPE": "%s",\n' "$TYPE"
 		printf '        "SIZE": "%s",\n' "$SIZE"
@@ -39,6 +55,10 @@ json_list() {
 		printf '        "DB": "%s",\n' "$DB"
 		printf '        "CRON": "%s",\n' "$CRON"
 		printf '        "UDIR": "%s",\n' "$UDIR"
+		printf '        "MAP": "%s",\n' "$MAP"
+		printf '        "MODE": "%s",\n' "${MODE:-full}"
+		printf '        "BASE": "%s",\n' "$BASE"
+		printf '        "LOCAL": "%s",\n' "$LOCAL"
 		printf '        "RUNTIME": "%s",\n' "$RUNTIME"
 		printf '        "TIME": "%s",\n' "$TIME"
 		printf '        "DATE": "%s"\n' "$DATE"
@@ -56,11 +76,12 @@ json_list() {
 # SHELL list function
 shell_list() {
 	IFS=$'\n'
-	echo "BACKUP   TYPE   SIZE  TIME  DATE"
-	echo "------   ----   ---   ----  ----"
+	echo "BACKUP   TYPE   SIZE  LOCAL  TIME  DATE"
+	echo "------   ----   ---   -----  ----  ----"
 	while read -r str; do
 		parse_object_kv_list "$str"
-		echo "$BACKUP $TYPE $SIZE $RUNTIME $DATE"
+		local_of "$BACKUP"
+		echo "$BACKUP $TYPE $SIZE $LOCAL $RUNTIME $DATE"
 	done < <(cat $USER_DATA/backup.conf)
 }
 
@@ -69,7 +90,8 @@ plain_list() {
 	IFS=$'\n'
 	while read -r str; do
 		parse_object_kv_list "$str"
-		echo -ne "$BACKUP\t$TYPE\t$SIZE\t$WEB\t$MAIL\t$CRON\t$UDIR\t"
+		local_of "$BACKUP"
+		echo -ne "$BACKUP\t$TYPE\t$SIZE\t$WEB\t$MAIL\t$CRON\t$UDIR\t$MAP\t${MODE:-full}\t$BASE\t$LOCAL\t"
 		echo -e "$RUNTIME\t$TIME\t$DATE"
 	done < <(cat $USER_DATA/backup.conf)
 }
@@ -77,11 +99,12 @@ plain_list() {
 # CSV list function
 csv_list() {
 	IFS=$'\n'
-	echo "BACKUP,TYPE,SIZE,WEB,MAIL,CRON,UDIR,RUNTIME,TIME,DATE"
+	echo "BACKUP,TYPE,SIZE,WEB,MAIL,CRON,UDIR,MAP,MODE,BASE,LOCAL,RUNTIME,TIME,DATE"
 	while read -r str; do
 		parse_object_kv_list "$str"
+		local_of "$BACKUP"
 		echo -n "$BACKUP,$TYPE,$SIZE,\"$WEB\",\"$MAIL\",\"$CRON\","
-		echo "\"$UDIR\",$RUNTIME,$TIME,$DATE"
+		echo "\"$UDIR\",$MAP,${MODE:-full},$BASE,$LOCAL,$RUNTIME,$TIME,$DATE"
 	done < <(cat $USER_DATA/backup.conf)
 }
 

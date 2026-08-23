@@ -245,7 +245,7 @@ seed_hestia_etc() {
 	_wcv "DISK_QUOTA" "no"
 	_wcv "RESOURCES_LIMIT" "no"
 	_wcv "BACKUP_SYSTEM" "local"
-	_wcv "BACKUP_GZIP" "4"
+	_wcv "BACKUP_GZIP" "3"
 	_wcv "BACKUP_MODE" "zstd"
 	_wcv "LANGUAGE" "en"
 	_wcv "LOGIN_STYLE" "default"

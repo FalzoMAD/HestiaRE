@@ -34,7 +34,10 @@ _on_error() {
 	local rc=$1 line=$2
 	echo "" >&2
 	echo "ERROR: h-install-hestia aborted (exit ${rc}, line ${line})." >&2
-	[ -f "$LOG" ] && { echo "       Last lines of ${LOG}:" >&2; tail -n 15 "$LOG" 2>/dev/null | sed 's/^/       | /' >&2 || true; }
+	[ -f "$LOG" ] && {
+		echo "       Last lines of ${LOG}:" >&2
+		tail -n 15 "$LOG" 2> /dev/null | sed 's/^/       | /' >&2 || true
+	}
 	echo "" >&2
 	echo "       Recovery: fix the cause shown above, then re-run the installer." >&2
 	echo "       Completed stages are skipped (see $CONF_DIR/.done.*); only the" >&2
@@ -45,7 +48,10 @@ _on_error() {
 trap '_on_error "$?" "$LINENO"' ERR
 
 # ── Thin validation (the env must already be seeded by install.sh) ──────────
-[ "$(id -u)" = "0" ] || { echo "ERROR: h-install-hestia must be run as root." >&2; exit 1; }
+[ "$(id -u)" = "0" ] || {
+	echo "ERROR: h-install-hestia must be run as root." >&2
+	exit 1
+}
 for _f in "$INSTALL_CONF" $CONF_DIR/hestia.env $CONF_DIR/conf/hestia.conf; do
 	[ -f "$_f" ] || {
 		echo "ERROR: $_f not found." >&2
@@ -59,17 +65,17 @@ done
 # errexit OFF: these libs expect to be sourced without set -e (a benign non-zero last statement must not abort the installer)
 set +e
 # shellcheck source=/etc/hestia/hestia.env
-source /etc/hestia/hestia.env                 # sets HESTIA
+source /etc/hestia/hestia.env # sets HESTIA
 # shellcheck source=/usr/local/hestia/include/main.sh
-source "$HESTIA/include/main.sh"                  # source_conf hestia.conf, BIN, dirs, error codes, user
+source "$HESTIA/include/main.sh" # source_conf hestia.conf, BIN, dirs, error codes, user
 # shellcheck source=/usr/local/hestia/include/helper.sh
-source "$HESTIA/include/helper.sh"                   # hestia_apt, load_os_profile, seed_hestia_etc
+source "$HESTIA/include/helper.sh" # hestia_apt, load_os_profile, seed_hestia_etc
 # shellcheck source=/usr/local/hestia/include/fail2ban.sh
-source "$HESTIA/include/fail2ban.sh"                # fail2ban_apply
+source "$HESTIA/include/fail2ban.sh" # fail2ban_apply
 # shellcheck source=/usr/local/hestia/include/web-model.sh
-source "$HESTIA/include/web-model.sh"             # configure_apache2, web_model_keyset, apache_remoteip_* (#120)
+source "$HESTIA/include/web-model.sh" # configure_apache2, web_model_keyset, apache_remoteip_* (#120)
 # shellcheck source=/etc/hestia/install.conf
-source "$INSTALL_CONF"                          # HESTIA_*, INSTALL_OS/PROFILE, COMPONENT_*, TOOLS_SELECTION
+source "$INSTALL_CONF" # HESTIA_*, INSTALL_OS/PROFILE, COMPONENT_*, TOOLS_SELECTION
 set -e
 
 [ -n "${HESTIA_HOSTNAME:-}" ] && [ -n "${HESTIA_ADMIN:-}" ] && [ -n "${HESTIA_EMAIL:-}" ] || {
@@ -87,7 +93,7 @@ load_os_profile "$INSTALL_OS"
 # ── Install-time variables ──────────────────────────────────────────────────
 # panel/reference PHP version from the manifest (sed, not jq — not guaranteed yet)
 PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$HESTIA/share/manifest.json" 2> /dev/null | head -n1)
-PHP_VER="${PHP_VER:-8.3}"                        # panel + default web PHP (Sury)
+PHP_VER="${PHP_VER:-8.3}" # panel + default web PHP (Sury)
 
 # write a config value to hestia.conf
 # Write a config value idempotently: replace an existing key (collapsing any duplicates to one) or append.
@@ -131,7 +137,10 @@ stage_fingerprint() {
 # Stage: base — APT repos, OS packages, system users, SSH, NTP, /proc
 # ════════════════════════════════════════════════════════════════════════════
 install_base() {
-	stage_done base && { echo "[ skip ] base already configured"; return 0; }
+	stage_done base && {
+		echo "[ skip ] base already configured"
+		return 0
+	}
 	echo "[ * ] Configuring APT..."
 	[ -f /etc/apt/apt.conf.d/80-retries ] || echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
 	echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/90nolang
@@ -145,9 +154,11 @@ install_base() {
 
 	echo "[ * ] Installing base packages..."
 	apt-get -qq update
+	# b3sum ships ahead of its consumer: the differential backup map (#712) hashes every byte, and
+	# BLAKE3 is the only cryptographic candidate that stays ahead of the compressor without sha_ni.
 	# shellcheck disable=SC2086
 	hestia_apt -y install \
-		acl at bc bsdmainutils bsdutils ca-certificates \
+		acl at b3sum bc bsdmainutils bsdutils ca-certificates \
 		cron curl dnsutils e2fslibs e2fsprogs expect flex ftp \
 		git gnupg idn2 imagemagick jq nftables \
 		lsb-release lsof mc net-tools openssh-server quota \
@@ -198,8 +209,8 @@ EOF
 		|| echo 'LS_COLORS="$LS_COLORS:di=00;33"' >> /etc/profile
 	proc_hardening_apply
 
-	# DH params in the base stage: nginx and dovecot both fatal without /etc/ssl/dhparam.pem, 
-    # so it must exist before any TLS service starts. Ship the curated file; regenerate only as a fallback.
+	# DH params in the base stage: nginx and dovecot both fatal without /etc/ssl/dhparam.pem,
+	# so it must exist before any TLS service starts. Ship the curated file; regenerate only as a fallback.
 	if [ -s "$HESTIA/share/hestia/dhparam.pem" ]; then
 		cp -f "$HESTIA/share/hestia/dhparam.pem" /etc/ssl/dhparam.pem
 	else
@@ -207,7 +218,10 @@ EOF
 		openssl dhparam -out /etc/ssl/dhparam.pem 2048
 	fi
 	chmod 644 /etc/ssl/dhparam.pem
-	[ -s /etc/ssl/dhparam.pem ] || { echo "ERROR: /etc/ssl/dhparam.pem missing after base stage" >&2; exit 1; }
+	[ -s /etc/ssl/dhparam.pem ] || {
+		echo "ERROR: /etc/ssl/dhparam.pem missing after base stage" >&2
+		exit 1
+	}
 
 	stage_mark base
 	echo "[ OK ] base complete"
@@ -217,7 +231,10 @@ EOF
 # Stage: panel — Caddy + hestia-php.service
 # ════════════════════════════════════════════════════════════════════════════
 install_panel() {
-	stage_done panel && { echo "[ skip ] panel already configured"; return 0; }
+	stage_done panel && {
+		echo "[ skip ] panel already configured"
+		return 0
+	}
 	echo "[ * ] Installing panel packages (Caddy, PHP $PHP_VER FPM)..."
 	# gd/bz2/pgsql (phpMyAdmin/Adminer) + intl/exif/sqlite3 (webmail) installed unconditionally
 	# so the panel PHP is self-contained; wired into the isolated conf.d by hestia-php-confd.
@@ -297,7 +314,10 @@ install_panel() {
 # configure_apache2 now lives in include/web-model.sh (shared with the model switch, #120)
 
 install_web() {
-	stage_done web && { echo "[ skip ] web already configured"; return 0; }
+	stage_done web && {
+		echo "[ skip ] web already configured"
+		return 0
+	}
 
 	# The model decides the install scope, not just who serves: apache-only means no nginx on the
 	# box at all. Mail-only needs one and gets it through the model - the wizard fixes that preset
@@ -343,20 +363,24 @@ install_web() {
 
 		echo "[ * ] Updating Cloudflare IP ranges..."
 		local cf_ips
-		cf_ips=$(curl -fsLm5 --retry 2 https://api.cloudflare.com/client/v4/ips 2>/dev/null || echo "")
+		cf_ips=$(curl -fsLm5 --retry 2 https://api.cloudflare.com/client/v4/ips 2> /dev/null || echo "")
 		if [ -n "$cf_ips" ] && [ "$(echo "$cf_ips" | jq -r '.success//""')" = "true" ]; then
 			{
-				echo "# Cloudflare IP Ranges"; echo ""; echo "# IPv4"
+				echo "# Cloudflare IP Ranges"
+				echo ""
+				echo "# IPv4"
 				echo "$cf_ips" | jq -r '.result.ipv4_cidrs[]//""' | sort | sed 's/^/set_real_ip_from /;s/$/;/'
-				echo ""; echo "# IPv6"
+				echo ""
+				echo "# IPv6"
 				echo "$cf_ips" | jq -r '.result.ipv6_cidrs[]//""' | sort | sed 's/^/set_real_ip_from /;s/$/;/'
-				echo ""; echo "real_ip_header CF-Connecting-IP;"
+				echo ""
+				echo "real_ip_header CF-Connecting-IP;"
 			} > /etc/nginx/conf.d/cloudflare.inc
 			echo "  Cloudflare ranges updated"
-	fi
-	update-rc.d nginx defaults > /dev/null 2>&1
-	# restart, not start: replace the distro default site and free :80 before apache2
-	systemctl restart nginx
+		fi
+		update-rc.d nginx defaults > /dev/null 2>&1
+		# restart, not start: replace the distro default site and free :80 before apache2
+		systemctl restart nginx
 	fi
 	# apache backend needs its packages+mods in place before the keyset lands
 	case "$web_model" in apache | both) configure_apache2 ;; esac
@@ -379,8 +403,8 @@ install_web() {
 	while IFS= read -r kv; do
 		wcv "${kv%%=*}" "${kv#*=}"
 	done < <(web_model_keyset "$web_model")
-	wcv "STATS_SYSTEM"             "awstats"
-	wcv "WEB_BACKEND"              "php-fpm"
+	wcv "STATS_SYSTEM" "awstats"
+	wcv "WEB_BACKEND" "php-fpm"
 
 	# Multi-PHP: only in sury_multi mode, driven by the wizard's version list.
 	# The panel/reference version ($PHP_VER) always goes through the same canonical
@@ -421,12 +445,12 @@ install_web() {
 
 	echo "[ * ] Configuring PHP settings (timezone, short_open_tag)..."
 	local ZONE pconf
-	ZONE=$(timedatectl 2>/dev/null | awk '/Timezone/{print $2}' || true)
+	ZONE=$(timedatectl 2> /dev/null | awk '/Timezone/{print $2}' || true)
 	ZONE="${ZONE:-UTC}"
-	for pconf in $(find /etc/php -name php.ini 2>/dev/null); do
+	while IFS= read -r pconf; do
 		sed -i "s%;date.timezone =%date.timezone = $ZONE%g" "$pconf"
 		sed -i 's%_open_tag = Off%_open_tag = On%g' "$pconf"
-	done
+	done < <(find /etc/php -name php.ini 2> /dev/null)
 	printf '#!/bin/sh\nfind -O3 /home/*/tmp/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\nfind -O3 %s/.sessions/ -ignore_readdir_race -depth -mindepth 1 -name '"'"'sess_*'"'"' -type f -cmin '"'"'+10080'"'"' -delete > /dev/null 2>&1\n' \
 		"$HESTIA" > /etc/cron.daily/php-session-cleanup
 	chmod 755 /etc/cron.daily/php-session-cleanup
@@ -434,7 +458,7 @@ install_web() {
 	cp -rf "$HESTIA/share/web/unassigned/index.html" /var/www/html/
 	cp -rf "$HESTIA/share/web/skel/document_errors/"* /var/www/document_errors/
 	mkdir -p /etc/logrotate.d/httpd-prerotate
-	cp -f "$HESTIA/share/apache2/httpd-prerotate/"* /etc/logrotate.d/httpd-prerotate/ 2>/dev/null || true
+	cp -f "$HESTIA/share/apache2/httpd-prerotate/"* /etc/logrotate.d/httpd-prerotate/ 2> /dev/null || true
 	rm -f /etc/cron.d/awstats
 
 	stage_mark web
@@ -445,7 +469,10 @@ install_web() {
 # Stage: db — MariaDB (+ phpMyAdmin / PostgreSQL / Redis per components)
 # ════════════════════════════════════════════════════════════════════════════
 install_db() {
-	stage_done db && { echo "[ skip ] db already configured"; return 0; }
+	stage_done db && {
+		echo "[ skip ] db already configured"
+		return 0
+	}
 
 	# MariaDB lifecycle lives in h-add-sys-mariadb. Hard-fail: the panel needs a DB.
 	if is_on "${COMPONENT_DB_MARIADB:-}"; then
@@ -484,7 +511,10 @@ install_db() {
 # Stage: mail — exim4, dovecot, rspamd, webmailer (only if mail block present)
 # ════════════════════════════════════════════════════════════════════════════
 install_mail() {
-	stage_done mail && { echo "[ skip ] mail already configured"; return 0; }
+	stage_done mail && {
+		echo "[ skip ] mail already configured"
+		return 0
+	}
 	echo "[ * ] Installing mail packages (exim4, dovecot)..."
 	# sieve packages are not here — the sieve addon installs them when selected
 	hestia_apt -y install \
@@ -520,7 +550,7 @@ install_mail() {
 	gpasswd -a dovecot mail > /dev/null 2>&1 || true
 	mkdir -p /etc/dovecot/conf.d
 	local DOVECOT_VER DCDIR
-	DOVECOT_VER=$(dovecot --version 2>/dev/null | cut -d. -f1,2 || echo "2.3")
+	DOVECOT_VER=$(dovecot --version 2> /dev/null | cut -d. -f1,2 || echo "2.3")
 	if [ "$(printf '%s\n2.4' "$DOVECOT_VER" | sort -V | head -1)" = "2.4" ]; then
 		DCDIR="$HESTIA/share/dovecot/2.4"
 	else
@@ -541,8 +571,8 @@ install_mail() {
 	update-rc.d dovecot defaults
 	systemctl start dovecot
 
-	wcv "MAIL_SYSTEM"  "exim4"
-	wcv "IMAP_SYSTEM"  "dovecot"
+	wcv "MAIL_SYSTEM" "exim4"
+	wcv "IMAP_SYSTEM" "dovecot"
 	# rspamd/sieve are modular addons — their commands write ANTISPAM_SYSTEM/SIEVE_SYSTEM.
 	# || true (like proftpd/clamav): a flaky addon install must not abort install_mail
 	if is_on "${COMPONENT_ADDON_RSPAMD:-}"; then
@@ -605,7 +635,10 @@ install_mail() {
 # Stage: security — fail2ban (optional), iptables, ipset, crowdsec (optional)
 # ════════════════════════════════════════════════════════════════════════════
 install_security() {
-	stage_done security && { echo "[ skip ] security already configured"; return 0; }
+	stage_done security && {
+		echo "[ skip ] security already configured"
+		return 0
+	}
 	# nftables and nothing else: it IS the backend (include/firewall.sh renders one inet table and shells
 	# /usr/sbin/nft), and it used to arrive only as a Recommends of iptables - which Debian's base image
 	# happens to satisfy and Ubuntu's does not. iptables and ipset are gone with the old renderer: no code
@@ -672,7 +705,10 @@ install_security() {
 # Stage: addons — proftpd / docker / filemanager (per components)
 # ════════════════════════════════════════════════════════════════════════════
 install_addons() {
-	stage_done addons && { echo "[ skip ] addons already configured"; return 0; }
+	stage_done addons && {
+		echo "[ skip ] addons already configured"
+		return 0
+	}
 	if is_on "${COMPONENT_ADDON_PROFTPD:-}"; then
 		echo "[ * ] Installing ProFTPD..."
 		"$BIN/h-add-sys-proftpd" >> "$LOG" 2>&1 || true
@@ -717,7 +753,7 @@ init_hestia_structure() {
 	chmod 750 "$HESTIA/conf" "$CONF_DIR/users" "$CONF_DIR/ips" "$HESTIA/log" \
 		"$CONF_DIR/firewall" "$CONF_DIR/packages" "$CONF_DIR/hooks"
 	chmod -R 750 "$CONF_DIR/queue"
-	chmod 660 /var/log/hestia/* 2>/dev/null || true
+	chmod 660 /var/log/hestia/* 2> /dev/null || true
 	chmod 770 "$HESTIA/.sessions"
 	echo "[ OK ] structure ready"
 }
@@ -726,7 +762,10 @@ init_hestia_structure() {
 # Stage: configure — admin user, SSL, sudoers, firewall, default domain, cron
 # ════════════════════════════════════════════════════════════════════════════
 configure_hestia() {
-	stage_done configure && { echo "[ skip ] configure already done"; return 0; }
+	stage_done configure && {
+		echo "[ skip ] configure already done"
+		return 0
+	}
 	local mail_present="no"
 	is_on "${COMPONENT_MAIL_BLOCK_PRESENT:-}" && mail_present="yes"
 
@@ -740,7 +779,7 @@ configure_hestia() {
 	mkdir -p /etc/sudoers.d
 	# flavor-aware + visudo-validated; shared with the update path
 	deploy_hestia_sudoers
-	cp -f "$HESTIA/share/hestia/logrotate" /etc/logrotate.d/hestia 2>/dev/null || true
+	cp -f "$HESTIA/share/hestia/logrotate" /etc/logrotate.d/hestia 2> /dev/null || true
 
 	# committed v-* symlinks ship in the tarball; don't blanket-create (orphans native
 	# commands) — just prune dangling ones left by a renamed/removed h-*
@@ -761,22 +800,22 @@ configure_hestia() {
 	cp -f "$HESTIA/share/firewall/rules.conf" "$CONF_DIR/firewall/rules.conf"
 	# Strip mail firewall rules when there is no mail block (was: profile != standard)
 	if [ "$mail_present" != "yes" ]; then
-		sed -i "/COMMENT='SMTP'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
-		sed -i "/COMMENT='IMAP'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
-		sed -i "/COMMENT='POP3'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
+		sed -i "/COMMENT='SMTP'/d" "$CONF_DIR/firewall/rules.conf" 2> /dev/null || true
+		sed -i "/COMMENT='IMAP'/d" "$CONF_DIR/firewall/rules.conf" 2> /dev/null || true
+		sed -i "/COMMENT='POP3'/d" "$CONF_DIR/firewall/rules.conf" 2> /dev/null || true
 	fi
 	# Strip FTP rule unless proftpd was selected
-	is_on "${COMPONENT_ADDON_PROFTPD:-}" || sed -i "/COMMENT='FTP'/d" "$CONF_DIR/firewall/rules.conf" 2>/dev/null || true
+	is_on "${COMPONENT_ADDON_PROFTPD:-}" || sed -i "/COMMENT='FTP'/d" "$CONF_DIR/firewall/rules.conf" 2> /dev/null || true
 
 	echo "[ * ] Setting hostname..."
 	"$BIN/h-change-sys-hostname" "$HESTIA_HOSTNAME" > /dev/null 2>&1 || true
 
 	echo "[ * ] Configuring OpenSSL TLS ciphers..."
 	local TLS13="TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384"
-	if ! grep -qw "^ssl_conf = ssl_sect$" /etc/ssl/openssl.cnf 2>/dev/null; then
+	if ! grep -qw "^ssl_conf = ssl_sect$" /etc/ssl/openssl.cnf 2> /dev/null; then
 		sed -i '/providers = provider_sect$/a ssl_conf = ssl_sect' /etc/ssl/openssl.cnf
 	fi
-	if ! grep -qw "^\[ssl_sect\]$" /etc/ssl/openssl.cnf 2>/dev/null; then
+	if ! grep -qw "^\[ssl_sect\]$" /etc/ssl/openssl.cnf 2> /dev/null; then
 		printf '\n[ssl_sect]\nsystem_default = hestia_openssl_sect\n\n[hestia_openssl_sect]\nCiphersuites = %s\nOptions = PrioritizeChaCha\n' \
 			"$TLS13" >> /etc/ssl/openssl.cnf
 	fi
@@ -803,15 +842,15 @@ configure_hestia() {
 	"$BIN/h-update-sys-ip" > /dev/null 2>&1 || true
 	local DEFAULT_NIC IP PUB_IP _reg_ip
 	DEFAULT_NIC="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end' | head -n1)"
-	IP="$(ip -4 -d -j addr show "$DEFAULT_NIC" 2>/dev/null \
-		| jq -r '.[] | .addr_info[] | if .scope == "global" then .local else empty end' 2>/dev/null \
+	IP="$(ip -4 -d -j addr show "$DEFAULT_NIC" 2> /dev/null \
+		| jq -r '.[] | .addr_info[] | if .scope == "global" then .local else empty end' 2> /dev/null \
 		| head -n1 || hostname -I | awk '{print $1}')"
 	# prefer the IP object h-update-sys-ip registered over our NIC detection
 	if [ -z "$IP" ] || [ ! -e "$CONF_DIR/ips/$IP" ]; then
-		_reg_ip="$(ls -t "$CONF_DIR/ips/" 2>/dev/null | head -n1)"
+		_reg_ip="$(ls -t "$CONF_DIR/ips/" 2> /dev/null | head -n1)"
 		[ -n "$_reg_ip" ] && IP="$_reg_ip"
 	fi
-	PUB_IP="$(curl -fsLm5 --retry 2 --ipv4 https://ip.hestiacp.com/ 2>/dev/null || echo "")"
+	PUB_IP="$(curl -fsLm5 --retry 2 --ipv4 https://ip.hestiacp.com/ 2> /dev/null || echo "")"
 	if [ -n "$PUB_IP" ] && [ "$PUB_IP" != "$IP" ]; then
 		# NAT: record PUB_IP as the NAT address of the local IP object; the default
 		# domain stays on the LOCAL IP (no ips/<public> object exists) with PUB_IP in
@@ -884,9 +923,16 @@ install_composer_upstream() {
 	if ! command -v composer > /dev/null 2>&1; then
 		local EXPECTED_CHECKSUM ACTUAL_CHECKSUM
 		EXPECTED_CHECKSUM="$(curl -fsS --max-time 30 https://composer.github.io/installer.sig)" \
-			|| { echo "ERROR: could not fetch the composer installer signature"; exit 1; }
+			|| {
+				echo "ERROR: could not fetch the composer installer signature"
+				exit 1
+			}
 		wget https://getcomposer.org/installer --timeout=30 --tries=3 --retry-connrefused --quiet -O composer-setup.php \
-			|| { rm -f composer-setup.php; echo "ERROR: could not download the composer installer"; exit 1; }
+			|| {
+				rm -f composer-setup.php
+				echo "ERROR: could not download the composer installer"
+				exit 1
+			}
 		ACTUAL_CHECKSUM="$(php -r "echo hash_file('sha384', 'composer-setup.php');")"
 		if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
 			rm -f composer-setup.php
@@ -898,7 +944,7 @@ install_composer_upstream() {
 		echo "  composer installed"
 	else
 		echo "  composer already present — upgrading"
-		composer self-update --quiet 2>/dev/null || true
+		composer self-update --quiet 2> /dev/null || true
 	fi
 }
 
@@ -922,7 +968,10 @@ install_tools() {
 					echo "  composer OS package already present"
 				else
 					hestia_apt -y install composer \
-						|| { echo "ERROR: composer OS package install failed"; exit 1; }
+						|| {
+							echo "ERROR: composer OS package install failed"
+							exit 1
+						}
 				fi
 				;;
 		esac
@@ -931,7 +980,10 @@ install_tools() {
 	# pinned + verified phar; no `wp cli update` - a re-run converges to the manifest pin
 	if ! command -v wp > /dev/null 2>&1; then
 		fetch_wp_cli_phar /usr/local/bin/wp \
-			|| { echo "ERROR: could not fetch/verify the pinned wp-cli phar"; exit 1; }
+			|| {
+				echo "ERROR: could not fetch/verify the pinned wp-cli phar"
+				exit 1
+			}
 		echo "  wp-cli installed"
 	else
 		echo "  wp-cli already present — re-pinning"
@@ -953,9 +1005,10 @@ finalize_install() {
 	fi
 
 	# stamp install.conf with install metadata (date + version)
-	local _ver; _ver=$(cat "$HESTIA/VERSION" 2>/dev/null || echo "dev")
-	grep -q '^INSTALL_DATE=' "$INSTALL_CONF" 2>/dev/null || echo "INSTALL_DATE=\"$(date +%F)\"" >> "$INSTALL_CONF"
-	if grep -q '^INSTALL_VERSION=' "$INSTALL_CONF" 2>/dev/null; then
+	local _ver
+	_ver=$(cat "$HESTIA/VERSION" 2> /dev/null || echo "dev")
+	grep -q '^INSTALL_DATE=' "$INSTALL_CONF" 2> /dev/null || echo "INSTALL_DATE=\"$(date +%F)\"" >> "$INSTALL_CONF"
+	if grep -q '^INSTALL_VERSION=' "$INSTALL_CONF" 2> /dev/null; then
 		sed -i "s|^INSTALL_VERSION=.*|INSTALL_VERSION=\"${_ver}\"|" "$INSTALL_CONF"
 	else
 		echo "INSTALL_VERSION=\"${_ver}\"" >> "$INSTALL_CONF"
@@ -963,9 +1016,9 @@ finalize_install() {
 
 	echo "[ * ] Restarting panel services (Caddy + hestia-php)..."
 	# restart both so configure-stage changes (SSL cert, panel port) take effect
-	systemctl restart caddy hestia-php 2>/dev/null || true
+	systemctl restart caddy hestia-php 2> /dev/null || true
 	chown hestia:hestia "$HESTIA/.sessions"
-	mkdir -p /backup && chmod 755 /backup
+	mkdir -p /backup && chmod 711 /backup
 	# Now, with the cron only as fallback: @reboot alone meant a box that is never rebooted never got
 	# a certificate. The web domain exists and the web server is up by here, so ACME can answer.
 	echo "[ * ] Requesting Let's Encrypt host certificate..."
@@ -988,7 +1041,7 @@ finalize_install() {
 	apt-get -qq update || true
 	hestia_apt -y upgrade || true
 	local HOST_IP
-	HOST_IP=$(ip -4 route get 8.8.8.8 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')
+	HOST_IP=$(ip -4 route get 8.8.8.8 2> /dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')
 	echo ""
 	echo "========================================================================"
 	echo " HestiaRE installation complete!"

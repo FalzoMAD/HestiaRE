@@ -38,11 +38,22 @@ is_object_valid 'backup' 'BACKUP' "$2"
 #                       Action                             #
 #----------------------------------------------------------#
 
+# Where the file actually is - customer folder or the flat hand-off spot. A found-but-unresolvable
+# name is refused here too: the deleting command is the last place allowed to fall back silently.
+# Not found at all (rc 1) keeps going - removing the record of a vanished file is this command's job.
 backup_folder="$BACKUP"
+backup_archive_path "$user" "$2"
+case $? in
+	0) backup_folder="${BACKUP_ARCHIVE%/*}" ;;
+	2) check_result "$E_INVALID" "$2 does not resolve to a file inside '$BACKUP'" ;;
+esac
 
 line=$(grep "BACKUP='$backup'" $USER_DATA/backup.conf)
 parse_object_kv_list "$line"
 
+# CAUTION: the =~ matches below are substring matches - ftp also hits TYPE='sftp'. The deleted
+# flag is what keeps that correct (first match wins), NOT the comparison itself. Whoever removes
+# or reorders the flag must switch these to comma-bounded matches first (the #792 chain lesson).
 deleted=0
 if [[ "$TYPE" =~ "sftp" ]]; then
 	sftp_delete "$backup"

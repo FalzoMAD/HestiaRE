@@ -20,12 +20,12 @@ umask 022
 HESTIA="${HESTIA:-/usr/local/hestia}"
 CONF_DIR="/etc/hestia"
 SOURCE_CONF="$CONF_DIR/source.conf"
-VERSION="$(cat "$HESTIA/VERSION" 2>/dev/null || echo dev)"
+VERSION="$(cat "$HESTIA/VERSION" 2> /dev/null || echo dev)"
 CHECK_ONLY=false
 [ "${1:-}" = "--check" ] && CHECK_ONLY=true
 
 # shellcheck disable=SC1090
-[ -f "$SOURCE_CONF" ] && . "$SOURCE_CONF" 2>/dev/null || true
+[ -f "$SOURCE_CONF" ] && . "$SOURCE_CONF" 2> /dev/null || true
 HESTIARE_SOURCE="${HESTIARE_SOURCE:-github}"
 HESTIARE_REPO_URL="${HESTIARE_REPO_URL:-}"
 HESTIARE_TOKEN="${HESTIARE_TOKEN:-}"
@@ -49,7 +49,10 @@ resolve_latest() {
 
 echo "Checking for updates..."
 LATEST="$(resolve_latest)"
-[ -n "$LATEST" ] && [ "$LATEST" != "null" ] || { echo "ERROR: could not determine latest release." >&2; exit 1; }
+[ -n "$LATEST" ] && [ "$LATEST" != "null" ] || {
+	echo "ERROR: could not determine latest release." >&2
+	exit 1
+}
 echo "Installed: $VERSION"
 echo "Available: $LATEST"
 
@@ -73,7 +76,7 @@ curl -fsSL "${AUTH[@]}" "$URL" -o /tmp/hestiare-update.tar.gz
 tar -xzf /tmp/hestiare-update.tar.gz -C /tmp
 rm -f /tmp/hestiare-update.tar.gz
 # Stop the panel around the copy so in-use files are not clobbered.
-systemctl stop caddy hestia-php 2>/dev/null || true
+systemctl stop caddy hestia-php 2> /dev/null || true
 cp -r "/tmp/hestiare-$LATEST/." "$HESTIA/"
 rm -rf "/tmp/hestiare-$LATEST"
 # No apt-package migration step: HestiaRE ships no hestia-* apt packages.
@@ -81,5 +84,5 @@ rm -rf "/tmp/hestiare-$LATEST"
 # while the panel is stopped, so the new code never reads the old paths.
 # shellcheck disable=SC1090
 [ -f "$HESTIA/include/helper.sh" ] && . "$HESTIA/include/helper.sh" && reapply_outside_tree || true
-systemctl start caddy hestia-php 2>/dev/null || true
+systemctl start caddy hestia-php 2> /dev/null || true
 echo "Update complete."

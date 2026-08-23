@@ -12,7 +12,15 @@ verify_csrf($_GET);
 // basename() → bare filename, no traversal: the pool reads more of the fs than caddy's file_server.
 $backup = basename($_GET["backup"]);
 
-if (!file_exists("/backup/" . $backup)) {
+// Two allowed places (#789): the customer folder first, then the flat hand-off spot where an
+// operator drops a migration archive by hand. $user_plain is look-aware, so an impersonating
+// admin resolves against the viewed customer's folder.
+$backup_path = "/backup/" . $user_plain . "/" . $backup;
+if (!file_exists($backup_path)) {
+	$backup_path = "/backup/" . $backup;
+}
+
+if (!file_exists($backup_path)) {
 	$v_backup = quoteshellarg($backup);
 	exec(
 		HESTIA_CMD . "h-schedule-user-backup-download " . $user . " " . $v_backup,
@@ -35,11 +43,11 @@ if (!file_exists("/backup/" . $backup)) {
 	// inc/main.php), not the raw session user, so an impersonating admin scopes to the customer (#438).
 	// A stored backup is static, so Range/resume is safe (3rd arg true).
 	if ($_SESSION["userContext"] === "admin") {
-		serve_download("/backup/" . $backup, "application/gzip", true);
+		serve_download($backup_path, "application/gzip", true);
 	}
 	if (!empty($user_plain) && $_SESSION["userContext"] != "admin") {
 		if (strpos($backup, $user_plain . ".") === 0) {
-			serve_download("/backup/" . $backup, "application/gzip", true);
+			serve_download($backup_path, "application/gzip", true);
 		}
 	}
 	// serve_download() exits; reaching here = a customer asked for a backup that isn't theirs.
