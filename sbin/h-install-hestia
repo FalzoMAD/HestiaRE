@@ -1018,7 +1018,7 @@ finalize_install() {
 	# restart both so configure-stage changes (SSL cert, panel port) take effect
 	systemctl restart caddy hestia-php 2> /dev/null || true
 	chown hestia:hestia "$HESTIA/.sessions"
-	mkdir -p /backup && chmod 755 /backup
+	mkdir -p /backup && chmod 711 /backup
 	# Now, with the cron only as fallback: @reboot alone meant a box that is never rebooted never got
 	# a certificate. The web domain exists and the web server is up by here, so ACME can answer.
 	echo "[ * ] Requesting Let's Encrypt host certificate..."

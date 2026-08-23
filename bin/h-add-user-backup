@@ -10,9 +10,9 @@
 # members are the finding.
 #
 # ARCHIVE is a basename. There is no path argument on purpose - this runs as root and reads the
-# file, so a command that takes a path would be a read oracle. The name is validated, resolved only
-# as $BACKUP/$ARCHIVE, and the result has to still be inside that directory, which is what catches
-# a symlink planted there.
+# file, so a command that takes a path would be a read oracle. The name is validated and resolved
+# against the two allowed places only (customer folder, then the flat hand-off spot), and the
+# result has to still be inside the directory it was found in - that catches a planted symlink.
 #
 # The record is marked ADOPTED so nothing rotates the operator's own file away: the nightly run
 # prunes by age, and the migration source would go first.
@@ -50,17 +50,13 @@ is_object_format_valid "$archive" 'backup'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 
-if [ ! -f "$BACKUP/$archive" ]; then
-	check_result "$E_NOTEXIST" "$archive doesn't exist in '$BACKUP'"
-fi
-
-# Second line under the name validator: -f follows a symlink, and $BACKUP is overridable from the
-# environment, so the file this runs on has to resolve back into the backup directory.
-archive_real=$(realpath -e -- "$BACKUP/$archive" 2> /dev/null)
-backup_real=$(realpath -e -- "$BACKUP" 2> /dev/null)
-if [ -z "$archive_real" ] || [ -z "$backup_real" ] || [ "${archive_real%/*}" != "$backup_real" ]; then
-	check_result "$E_INVALID" "$archive does not resolve to a file inside '$BACKUP'"
-fi
+backup_archive_path "$user" "$archive"
+case $? in
+	1) check_result "$E_NOTEXIST" "$archive doesn't exist in '$BACKUP/$user' or '$BACKUP'" ;;
+	2) check_result "$E_INVALID" "$archive does not resolve to a file inside '$BACKUP'" ;;
+esac
+archive_path="$BACKUP_ARCHIVE"
+archive_at="$BACKUP_ARCHIVE_DIR"
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -69,7 +65,7 @@ fi
 probedir=$(mktemp -d -p "${BACKUP_TEMP:-$BACKUP}" -t adopt.XXXXXX) || check_result "$E_NOTEXIST" "Can't create tmp dir"
 trap 'rm -rf "$probedir"' EXIT
 
-if ! backup_probe "$BACKUP/$archive" "$probedir"; then
+if ! backup_probe "$archive_path" "$probedir"; then
 	check_result "$E_PARSING" "$archive cannot be read as a backup archive"
 fi
 if [ "$PROBE_VESTA" = 'yes' ]; then
@@ -98,7 +94,7 @@ adopt_list() {
 	ADOPT_LIST="${ADOPT_LIST#,}"
 }
 # stat, not du -m: -m is a GNU extension, and the size is a byte count either way.
-size=$((($(stat -c %s "$BACKUP/$archive") + 1048575) / 1048576))
+size=$((($(stat -c %s "$archive_path") + 1048575) / 1048576))
 
 adopt_list "$PROBE_WEB"
 web_list="$ADOPT_LIST"
@@ -121,8 +117,8 @@ backup_str="$backup_str CRON='$([ "$PROBE_CRON" = 'yes' ] && echo 1)'"
 backup_str="$backup_str UDIR='$udir_list'"
 backup_str="$backup_str WEB_SYSTEM='$PROBE_WEB_SYSTEM' PROXY_SYSTEM='$PROBE_PROXY_SYSTEM'"
 backup_str="$backup_str ADOPTED='yes' RUNTIME='0'"
-backup_str="$backup_str TIME='$(stat -c %y "$BACKUP/$archive" | cut -f2 -d\  | cut -f1 -d.)'"
-backup_str="$backup_str DATE='$(stat -c %y "$BACKUP/$archive" | cut -f1 -d\ )'"
+backup_str="$backup_str TIME='$(stat -c %y "$archive_path" | cut -f2 -d\  | cut -f1 -d.)'"
+backup_str="$backup_str DATE='$(stat -c %y "$archive_path" | cut -f1 -d\ )'"
 
 # The same gate the restore uses before it trusts an archived line: this one is built here, but it
 # is built out of archive content.
@@ -148,6 +144,9 @@ update_user_value "$user" '$U_BACKUPS' "$U_BACKUPS"
 #                       Hestia                             #
 #----------------------------------------------------------#
 
+where="the customer folder $BACKUP/$user"
+[ "$archive_at" = 'root' ] && where="the hand-off location $BACKUP"
+echo "$archive adopted from $where"
 $BIN/h-log-action "system" "Info" "Backup" "Archive adopted (User: $user, Archive: $archive)."
 log_event "$OK" "$ARGUMENTS"
 

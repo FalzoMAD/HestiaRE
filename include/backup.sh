@@ -816,16 +816,57 @@ backup_record_file() {
 	esac
 }
 
+# ── Per-customer archive folder (#789) ──────────────────────────────────────────────────────────
+#
+# Two allowed places per archive: $BACKUP/$user (the normal one, every run writes here) and
+# $BACKUP itself (the hand-off spot - a migration archive an operator drops in by hand stays
+# flat). Resolution lives here and ONLY here, so the two-place rule cannot fork into
+# per-command variants.
+
+# backup_user_dir USER - create the customer's folder on first use. hestia owns it (the panel
+# pool reads as hestia), the customer's group may enter and list, nobody else - $BACKUP itself
+# is 711, so names are not enumerable. The group may not exist yet (a restore of a not-yet-
+# created customer downloads first); set when possible, the next backup run repairs it.
+backup_user_dir() {
+	[ -d "$BACKUP/$1" ] || mkdir -p "$BACKUP/$1"
+	chown hestia "$BACKUP/$1"
+	getent group "$1" > /dev/null 2>&1 && chgrp "$1" "$BACKUP/$1"
+	chmod 750 "$BACKUP/$1"
+}
+
+# backup_archive_path USER NAME - resolve NAME against the two allowed places, customer folder
+# first. NAME is a basename (the #661 validator allows no slash), but -e follows symlinks and
+# $BACKUP is environment-overridable, so the find must resolve back into exactly the directory
+# it was found in. Sets BACKUP_ARCHIVE (path) and BACKUP_ARCHIVE_DIR ('user'|'root').
+# Returns 1 = in neither place, 2 = found but does not resolve - refused loudly, a planted
+# symlink must not fall through to the other place.
+backup_archive_path() {
+	local _user="$1" _name="$2" _dir _real _dreal
+	BACKUP_ARCHIVE='' BACKUP_ARCHIVE_DIR=''
+	for _dir in "$BACKUP/$_user" "$BACKUP"; do
+		[ -e "$_dir/$_name" ] || continue
+		_real=$(realpath -e -- "$_dir/$_name" 2> /dev/null)
+		_dreal=$(realpath -e -- "$_dir" 2> /dev/null)
+		if [ -z "$_real" ] || [ -z "$_dreal" ] || [ "${_real%/*}" != "$_dreal" ] || [ ! -f "$_real" ]; then
+			return 2
+		fi
+		BACKUP_ARCHIVE="$_dir/$_name"
+		if [ "$_dir" = "$BACKUP" ]; then BACKUP_ARCHIVE_DIR='root'; else BACKUP_ARCHIVE_DIR='user'; fi
+		return 0
+	done
+	return 1
+}
+
 # Local storage
 # Defining local storage function
 local_backup() {
 
-	rm -f $BACKUP/$user.$backup_new_date.tar
+	rm -f $BACKUP/$user/$user.$backup_new_date.tar
 
 	# Checking retention. An adopted archive is the operator's own file - a migration source they put
 	# there - and it carries a date in its name like any other, so the rotation below would take it
 	# first. Excluded by NAME from the records, not by age.
-	backup_list=$(ls -lrt $BACKUP/ | awk '{print $9}' | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
+	backup_list=$(ls -lrt $BACKUP/$user/ 2> /dev/null | awk '{print $9}' | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
 	if [ -s "$USER_DATA/backup.conf" ]; then
 		while IFS= read -r _adopted; do
 			[ -n "$_adopted" ] || continue
@@ -840,8 +881,8 @@ local_backup() {
 			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar$//")
 			echo -e "$(date "+%F %T") Rotated: $backup_date" \
-				| tee -a $BACKUP/$user.log
-			rm -f $BACKUP/$backup
+				| tee -a $BACKUP/$user/$user.log
+			rm -f $BACKUP/$user/$backup
 		done
 	fi
 
@@ -849,7 +890,7 @@ local_backup() {
 	disk_usage=$(df $BACKUP | tail -n1 | tr ' ' '\n' | grep % | cut -f 1 -d %)
 	if [ "$disk_usage" -ge "$BACKUP_DISK_LIMIT" ]; then
 		rm -rf $tmpdir
-		rm -f $BACKUP/$user.log
+		rm -f $BACKUP/$user/$user.log
 		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		echo "Not enough disk space" | $SENDMAIL -s "$subj" "$email" "yes"
 		check_result "$E_DISK" "Not enough dsk space"
@@ -857,12 +898,12 @@ local_backup() {
 
 	# Creating final tarball
 	cd $tmpdir
-	tar -cf $BACKUP/$user.$backup_new_date.tar .
-	chmod 640 $BACKUP/$user.$backup_new_date.tar
-	chown "hestia":"$user" $BACKUP/$user.$backup_new_date.tar
+	tar -cf $BACKUP/$user/$user.$backup_new_date.tar .
+	chmod 640 $BACKUP/$user/$user.$backup_new_date.tar
+	chown "hestia":"$user" $BACKUP/$user/$user.$backup_new_date.tar
 	localbackup='yes'
-	echo -e "$(date "+%F %T") Local: $BACKUP/$user.$backup_new_date.tar" \
-		| tee -a $BACKUP/$user.log
+	echo -e "$(date "+%F %T") Local: $BACKUP/$user/$user.$backup_new_date.tar" \
+		| tee -a $BACKUP/$user/$user.log
 }
 
 # FTP Functions
@@ -954,7 +995,7 @@ ftp_backup() {
 			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar$//")
 			echo -e "$(date "+%F %T") Rotated ftp backup: $backup_date" \
-				| tee -a $BACKUP/$user.log
+				| tee -a $BACKUP/$user/$user.log
 			if [ -z $BPATH ]; then
 				ftpc "delete $backup"
 			else
@@ -965,9 +1006,9 @@ ftp_backup() {
 
 	# A diff without its base on THIS target is unrestorable there - a target enabled after the
 	# base run never received it. The listing is already fetched; ship the base first.
-	if [ -n "$diff_base" ] && [ -f "$BACKUP/$diff_base" ] && ! grep -qxF -- "$diff_base" <<< "$backup_list"; then
-		echo "$(date "+%F %T") Uploading base $diff_base missing on ftp target" | tee -a $BACKUP/$user.log
-		cd $BACKUP
+	if [ -n "$diff_base" ] && backup_archive_path "$user" "$diff_base" && ! grep -qxF -- "$diff_base" <<< "$backup_list"; then
+		echo "$(date "+%F %T") Uploading base $diff_base missing on ftp target" | tee -a $BACKUP/$user/$user.log
+		cd "${BACKUP_ARCHIVE%/*}"
 		if [ -z $BPATH ]; then
 			ftpc "put $diff_base"
 		else
@@ -977,7 +1018,7 @@ ftp_backup() {
 
 	# Uploading backup archive
 	if [ "$localbackup" = 'yes' ]; then
-		cd $BACKUP
+		cd $BACKUP/$user
 		if [ -z $BPATH ]; then
 			ftpc "put $user.$backup_new_date.tar"
 		else
@@ -985,8 +1026,8 @@ ftp_backup() {
 		fi
 	else
 		cd $tmpdir
-		tar -cf $BACKUP/$user.$backup_new_date.tar .
-		cd $BACKUP/
+		tar -cf $BACKUP/$user/$user.$backup_new_date.tar .
+		cd $BACKUP/$user/
 		if [ -z $BPATH ]; then
 			ftpc "put $user.$backup_new_date.tar"
 		else
@@ -1002,7 +1043,8 @@ ftp_download() {
 	if [ -z "$PORT" ]; then
 		PORT='21'
 	fi
-	cd $BACKUP
+	backup_user_dir "$user"
+	cd $BACKUP/$user
 	if [ -z $BPATH ]; then
 		ftpc "get $1"
 	else
@@ -1152,7 +1194,8 @@ sftp_download() {
 	if [ -z "$PORT" ]; then
 		PORT='22'
 	fi
-	cd $BACKUP
+	backup_user_dir "$user"
+	cd $BACKUP/$user
 	if [ -z $BPATH ]; then
 		sftpc "get $1" > /dev/null 2>&1
 	else
@@ -1204,7 +1247,7 @@ sftp_backup() {
 
 	# Debug info
 	echo -e "$(date "+%F %T") Remote: sftp://$HOST/$BPATH/$user.$backup_new_date.tar" \
-		| tee -a $BACKUP/$user.log
+		| tee -a $BACKUP/$user/$user.log
 
 	# Checking network connection and write permissions
 	if [ -z $BPATH ]; then
@@ -1239,7 +1282,7 @@ sftp_backup() {
 			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar.*$//")
 			echo -e "$(date "+%F %T") Rotated sftp backup: $backup_date" \
-				| tee -a $BACKUP/$user.log
+				| tee -a $BACKUP/$user/$user.log
 			if [ -z $BPATH ]; then
 				sftpc "rm $backup" > /dev/null 2>&1
 			else
@@ -1249,9 +1292,9 @@ sftp_backup() {
 	fi
 
 	# Same edge as on ftp: a base absent on this target makes every diff there unrestorable.
-	if [ -n "$diff_base" ] && [ -f "$BACKUP/$diff_base" ] && ! grep -qxF -- "$diff_base" <<< "$backup_list"; then
-		echo "$(date "+%F %T") Uploading base $diff_base missing on sftp target" | tee -a $BACKUP/$user.log
-		cd $BACKUP
+	if [ -n "$diff_base" ] && backup_archive_path "$user" "$diff_base" && ! grep -qxF -- "$diff_base" <<< "$backup_list"; then
+		echo "$(date "+%F %T") Uploading base $diff_base missing on sftp target" | tee -a $BACKUP/$user/$user.log
+		cd "${BACKUP_ARCHIVE%/*}"
 		if [ -z $BPATH ]; then
 			sftpc "put $diff_base" "chmod 0600 $diff_base" > /dev/null 2>&1
 		else
@@ -1260,9 +1303,9 @@ sftp_backup() {
 	fi
 
 	# Uploading backup archive
-	echo "$(date "+%F %T") Uploading $user.$backup_new_date.tar" | tee -a $BACKUP/$user.log
+	echo "$(date "+%F %T") Uploading $user.$backup_new_date.tar" | tee -a $BACKUP/$user/$user.log
 	if [ "$localbackup" = 'yes' ]; then
-		cd $BACKUP
+		cd $BACKUP/$user
 		if [ -z $BPATH ]; then
 			sftpc "put $user.$backup_new_date.tar" "chmod 0600 $user.$backup_new_date.tar" > /dev/null 2>&1
 		else
@@ -1270,8 +1313,8 @@ sftp_backup() {
 		fi
 	else
 		cd $tmpdir
-		tar -cf $BACKUP/$user.$backup_new_date.tar .
-		cd $BACKUP/
+		tar -cf $BACKUP/$user/$user.$backup_new_date.tar .
+		cd $BACKUP/$user/
 		if [ -z $BPATH ]; then
 			sftpc "put $user.$backup_new_date.tar" "chmod 0600 $user.$backup_new_date.tar" > /dev/null 2>&1
 		else
@@ -1287,16 +1330,16 @@ rclone_backup() {
 	echo -e "$(date "+%F %T") Upload With Rclone to $HOST: $user.$backup_new_date.tar"
 	if [ "$localbackup" != 'yes' ]; then
 		cd $tmpdir
-		tar -cf $BACKUP/$user.$backup_new_date.tar .
+		tar -cf $BACKUP/$user/$user.$backup_new_date.tar .
 	fi
-	cd $BACKUP/
+	cd $BACKUP/$user/
 
 	if [ -z "$BPATH" ]; then
 		# Same edge as on ftp/sftp; rclone lists only after the upload, so ask once beforehand.
-		if [ -n "$diff_base" ] && [ -f "$BACKUP/$diff_base" ] \
+		if [ -n "$diff_base" ] && backup_archive_path "$user" "$diff_base" \
 			&& ! rclone lsf $HOST: 2> /dev/null | cut -d' ' -f1 | grep -qxF -- "$diff_base"; then
-			echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user.log
-			rclone copy -v $diff_base $HOST:
+			echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user/$user.log
+			rclone copy -v "$BACKUP_ARCHIVE" $HOST:
 		fi
 		# $HOST: plain - $backup here would be the LOOP VARIABLE of an earlier transport's rotation
 		rclone copy -v $user.$backup_new_date.tar $HOST:
@@ -1315,10 +1358,10 @@ rclone_backup() {
 			done
 		fi
 	else
-		if [ -n "$diff_base" ] && [ -f "$BACKUP/$diff_base" ] \
+		if [ -n "$diff_base" ] && backup_archive_path "$user" "$diff_base" \
 			&& ! rclone lsf $HOST:$BPATH 2> /dev/null | cut -d' ' -f1 | grep -qxF -- "$diff_base"; then
-			echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user.log
-			rclone copy -v $diff_base $HOST:$BPATH
+			echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user/$user.log
+			rclone copy -v "$BACKUP_ARCHIVE" $HOST:$BPATH
 		fi
 		rclone copy -v $user.$backup_new_date.tar $HOST:$BPATH
 		if [ "$?" -ne 0 ]; then
@@ -1356,7 +1399,8 @@ rclone_download() {
 
 	# Defining rclone settings
 	source_conf "$HESTIA/conf/rclone.backup.conf"
-	cd $BACKUP
+	backup_user_dir "$user"
+	cd $BACKUP/$user
 	if [ -z "$BPATH" ]; then
 		rclone copy -v $HOST:/$1 ./
 	else
@@ -1631,7 +1675,7 @@ backup_diff_base() {
 		case "$_line" in *"ADOPTED='yes'"*) continue ;; esac
 		# Only a FULL archive is a base - no chains.
 		case "$_line" in *"MODE='diff'"*) continue ;; esac
-		[ -f "$BACKUP/$_name" ] || continue
+		backup_archive_path "$user" "$_name" || continue
 		[ -s "$_dir/$_name.map.zst" ] || continue
 		echo "$_name"
 		return 0

@@ -59,8 +59,8 @@ if [ "$disk_usage" -ge "$BACKUP_DISK_LIMIT" ]; then
 	check_result $E_DISK "Not enough disk space"
 fi
 
-# Checking local backup
-if [ ! -e "$BACKUP/$backup" ]; then
+# Checking local backup (customer folder first, then the flat hand-off spot)
+if ! backup_archive_path "$user" "$backup"; then
 	if [[ "$BACKUP_SYSTEM" =~ "sftp" ]] && [ -z "$downloaded" ]; then
 		sftp_download "$backup"
 		downloaded='yes'
@@ -79,10 +79,11 @@ if [ ! -e "$BACKUP/$backup" ]; then
 		sed -i "/h-download-backup $user /d" $CONF_DIR/queue/backup.pipe
 		check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '${BACKUP}' folder"
 	else
-		if [ -e "$BACKUP/$backup" ]; then
-			chmod 0640 $BACKUP/$backup
-			chown hestia:hestia $BACKUP/$backup
-			echo "rm $BACKUP/$backup" | at now + 1 day
+		# Downloads land in the customer folder; a fetched copy is temporary by design.
+		if [ -e "$BACKUP/$user/$backup" ]; then
+			chmod 0640 $BACKUP/$user/$backup
+			chown hestia:hestia $BACKUP/$user/$backup
+			echo "rm $BACKUP/$user/$backup" | at now + 1 day
 		fi
 	fi
 fi
@@ -92,8 +93,7 @@ fi
 #----------------------------------------------------------#
 
 # Send notification
-if [ -e "$BACKUP/$backup" ]; then
-	cd $BACKUP
+if backup_archive_path "$user" "$backup"; then
 	subj="Download of $backup completed for $user"
 	email=$(get_user_value '$CONTACT')
 	echo "Backup file $backup was retrieved from the remote server and will be available to download for 12 hours." | $SENDMAIL -s "$subj" "$email" "$notify"

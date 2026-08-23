@@ -38,7 +38,9 @@ is_object_valid 'backup' 'BACKUP' "$2"
 #                       Action                             #
 #----------------------------------------------------------#
 
+# Where the file actually is - customer folder or the flat hand-off spot.
 backup_folder="$BACKUP"
+backup_archive_path "$user" "$2" && backup_folder="${BACKUP_ARCHIVE%/*}"
 
 line=$(grep "BACKUP='$backup'" $USER_DATA/backup.conf)
 parse_object_kv_list "$line"

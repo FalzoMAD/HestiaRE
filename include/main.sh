@@ -1169,6 +1169,8 @@ is_login_name_reserved() {
 		docker containerd proftpd ftp clamav postgres postgresql redis opensearch filemanager
 		# MariaDB/MySQL database names, and sudo (that group always has sudo rights)
 		aria aria_log mysql_upgrade ib ib_buffer ddl ddl_recovery performance sudo
+		# h-backup-server writes server.*.tar into the same /backup namespace as customer archives
+		server
 	)
 	for r in "${reserved[@]}"; do
 		if [ "$name" = "$r" ]; then

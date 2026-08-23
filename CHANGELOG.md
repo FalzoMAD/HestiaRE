@@ -14,6 +14,18 @@ opens above it.
 
 ### Added
 
+- **Every customer's archives live in their own folder now** (#789). `/backup/$user/$user.<date>.tar`
+  replaces the flat `/backup/$user.<date>.tar`; the file name keeps its prefix, records keep bare
+  basenames, and the run log moves along (`/backup/$user/$user.log`). Reading commands accept two
+  places - the customer folder first, then `/backup` itself as the hand-off spot for a migration
+  archive an operator drops in by hand (adoption does not move it) - and every message names which
+  of the two it found. One resolver in `include/backup.sh` carries the two-place rule and the
+  symlink containment for all readers, CLI and panel. In the same move `/backup` went from 0755 to
+  0711 (measured first: only root lists it, the panel pool opens by name): local system users can
+  no longer enumerate customer names and backup dates, while each customer still reads their own
+  folder (0750, `hestia:$user`). `server` joined the reserved login names - `h-backup-server`
+  writes `server.*.tar` into the same namespace a customer of that name would claim.
+
 - **The backup mode is a package choice** (#712, stage 4). `BACKUPS_MODE='full'|'diff'|'restic'`
   lives next to `BACKUPS` in the package, defaults to `full` so nothing changes on its own, and
   refuses `restic` where the addon is not installed. The nightly `h-backup-users` dispatches per
