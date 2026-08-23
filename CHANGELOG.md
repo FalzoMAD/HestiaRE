@@ -24,7 +24,16 @@ opens above it.
   0711 (measured first: only root lists it, the panel pool opens by name): local system users can
   no longer enumerate customer names and backup dates, while each customer still reads their own
   folder (0750, `hestia:$user`). `server` joined the reserved login names - `h-backup-server`
-  writes `server.*.tar` into the same namespace a customer of that name would claim.
+  writes `server.*.tar` into the same namespace a customer of that name would claim. Two side
+  effects worth knowing: rotation now lists only the customer folder, so a hand-placed archive at
+  the hand-off spot can no longer be rotated away even without adoption (before, only the ADOPTED
+  record exclusion protected it); and an archive fetched back from a remote target carries the
+  same owner and mode as a locally written one (`hestia:$user` 0640), so one folder holds one
+  rights picture. Because that makes a fetched file customer-readable, the remote fetch is now
+  bound to ownership by data: `h-download-backup` and its scheduler refuse a name that has no
+  record for that customer, so nobody can pull another customer's archive off the shared remote
+  target into their own folder (restore keeps its own transport path - a DR box with empty
+  records is that flow, never this command).
 
 - **The backup mode is a package choice** (#712, stage 4). `BACKUPS_MODE='full'|'diff'|'restic'`
   lives next to `BACKUPS` in the package, defaults to `full` so nothing changes on its own, and
