@@ -14,6 +14,19 @@ opens above it.
 
 ### Added
 
+- **Remote backup targets fail loudly now** (#790, stage 1 of the remote-target round; stage-0
+  protocol on the docs branch). After every upload the target's fresh listing is asked whether
+  the archive - and a shipped diff base - actually arrived: the put pipelines discard their exit
+  codes, and an unreachable target used to produce a green run, a record, and an archive that
+  existed nowhere (a never-set variable also turned the failed-remote-only exit into a 0).
+  Restore and panel download now CHAIN every configured transport and let the arrived file
+  decide, instead of stopping after the first transport's silent no. A failed remote leg keeps
+  the local archive and its record, names the failed target in log and mail, and the record's
+  TYPE carries the targets actually reached. Fetched copies carry the same owner and mode as
+  locally written archives; an empty remote listing counts as 0, not 1; and
+  `h-add-backup-host rclone` no longer pipes an installer from the internet into bash - rclone
+  is an OS package.
+
 - **Every customer's archives live in their own folder now** (#789). `/backup/$user/$user.<date>.tar`
   replaces the flat `/backup/$user.<date>.tar`; the file name keeps its prefix, records keep bare
   basenames, and the run log moves along (`/backup/$user/$user.log`). Reading commands accept two
