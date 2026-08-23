@@ -134,13 +134,11 @@
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Type")) ?>:</span>
 					<?= tohtml($data[$key]["TYPE"]) ?>
-					<?php // Record outlives the file (#790): the archive may by now live only on a
-					// remote target. Named here, and download/restore fetch it transparently.
-					if (
-						!file_exists("/backup/" . $user_plain . "/" . $key) &&
-						!file_exists("/backup/" . $key)
-					) { ?>
-						<span class="u-text-small"><?= tohtml(_("(remote only)")) ?></span>
+					<?php // Record outlives the file (#790). LOCAL comes from the lister - the CLI
+					// resolver is the only place-logic - and the label claims exactly what was
+					// checked: no copy on this box. Whether a remote still holds it was not asked.
+					if (($data[$key]["LOCAL"] ?? "yes") !== "yes") { ?>
+						<span class="u-text-small"><?= tohtml(_("(no local copy)")) ?></span>
 					<?php } ?>
 					<?php if (($data[$key]["MODE"] ?? "") === "diff") { ?>
 						<span class="u-text-small" title="<?= tohtml(sprintf(_("Base: %s"), $data[$key]["BASE"] ?? "")) ?>">

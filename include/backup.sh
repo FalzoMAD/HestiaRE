@@ -908,11 +908,12 @@ local_backup() {
 
 # backup_target_keep TYPE - how many SETS this remote place retains. Its own BACKUPS_KEEP if
 # the target conf carries one, the customer's $BACKUPS otherwise - so with no per-target number
-# every place mirrors the package and nothing moves by default. Anything but pure digits falls
-# back to $BACKUPS: a garbage value must never read as keep=0, that would be a mass deletion.
+# every place mirrors the package and nothing moves by default. The pattern starts at 1: zero
+# and garbage both fall back to $BACKUPS, because a keep of 0 handed to the rotation would be
+# a mass deletion - "retain nothing" is not a retention setting (add-host refuses it by name).
 backup_target_keep() {
 	local _k
-	_k=$(sed -n "s/^BACKUPS_KEEP='\([0-9][0-9]*\)'.*/\1/p" "$HESTIA/conf/$1.backup.conf" 2> /dev/null | head -1)
+	_k=$(sed -n "s/^BACKUPS_KEEP='\([1-9][0-9]*\)'.*/\1/p" "$HESTIA/conf/$1.backup.conf" 2> /dev/null | head -1)
 	echo "${_k:-$BACKUPS}"
 }
 

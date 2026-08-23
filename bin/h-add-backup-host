@@ -44,10 +44,15 @@ source_conf "$HESTIA/conf/hestia.conf"
 #----------------------------------------------------------#
 
 if [ "$type" != 'local' ]; then
-	check_args '2' "$#" "TYPE HOST USERNAME PASSWORD [PATH] [PORT]"
+	check_args '2' "$#" "TYPE HOST USERNAME PASSWORD [PATH] [PORT] [KEEP]"
 	is_format_valid 'host' 'path' 'port'
 	if [ -n "$keep" ]; then
 		is_int_format_valid "$keep" 'keep'
+		# 0 is refused, not stored: handed to the rotation it means "delete everything on this
+		# target on the next run" - an admin typing 0 almost always means "leave empty".
+		if [ "$keep" -eq 0 ]; then
+			check_result "$E_INVALID" "keep 0 would retain nothing - leave it empty to mirror the package limit"
+		fi
 	fi
 	is_type_valid 'sftp,ftp,rclone' "$type"
 	is_username_format_valid "$user" "username"
