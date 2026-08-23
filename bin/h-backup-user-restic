@@ -96,10 +96,10 @@ fi
 restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf forget $restic_prune --prune
 
 # Send notification
-if [ -e "$BACKUP/$user.log" ] && [ "$notify" = "yes" ]; then
+if [ -e "$BACKUP/$user/$user.log" ] && [ "$notify" = "yes" ]; then
 	subj="$user → backup has been completed"
 	email=$(get_user_value '$CONTACT')
-	cat $BACKUP/$user.log | $SENDMAIL -s "$subj" "$email" "$notify"
+	cat $BACKUP/$user/$user.log | $SENDMAIL -s "$subj" "$email" "$notify"
 	$BIN/h-add-user-notification "$user" "Snapshot created successfully" "Snap shot of user successfully created"
 fi
 

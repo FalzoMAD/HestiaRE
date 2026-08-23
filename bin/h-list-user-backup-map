@@ -63,7 +63,8 @@ check_args '2' "$#" 'USER BACKUP [FORMAT]'
 is_format_valid 'user' 'backup'
 is_object_valid 'user' 'USER' "$user"
 # No is_backup_scheduled here: reading an archive is safe while something else is queued for it.
-[ -f "$BACKUP/$backup" ] || check_result "$E_NOTEXIST" "backup file $backup doesn't exist"
+backup_archive_path "$user" "$backup" || check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '$BACKUP/$user' or '$BACKUP'"
+archive_path="$BACKUP_ARCHIVE"
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -73,7 +74,7 @@ is_object_valid 'user' 'USER' "$user"
 # it would arrive as one unreadable run of fields. Streamed straight into the reader instead.
 #
 # An archive written before the map existed simply has no member - a fact to report, not a failure.
-if ! tar -tf "$BACKUP/$backup" 2> /dev/null | grep -qxF "./$BACKUP_CONTAINER/backup.map"; then
+if ! tar -tf "$archive_path" 2> /dev/null | grep -qxF "./$BACKUP_CONTAINER/backup.map"; then
 	case $format in
 		json) echo '{}' ;;
 		csv) echo "PATH,HASH,MODE,OWNER,LINK" ;;
@@ -86,14 +87,14 @@ fi
 case $format in
 	json)
 		echo '{'
-		tar -xOf "$BACKUP/$backup" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit
+		tar -xOf "$archive_path" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit
 		echo '}'
 		;;
 	csv)
 		echo "PATH,HASH,MODE,OWNER,LINK"
-		tar -xOf "$BACKUP/$backup" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit
+		tar -xOf "$archive_path" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit
 		;;
-	*) tar -xOf "$BACKUP/$backup" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit ;;
+	*) tar -xOf "$archive_path" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit ;;
 esac
 
 #----------------------------------------------------------#

@@ -32,6 +32,13 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 check_args '2' "$#" 'USER BACKUP'
 is_format_valid 'user' 'backup'
+is_object_valid 'user' 'USER' "$user"
+# The record is the ownership. The panel only ever schedules archives it listed for THIS
+# customer; a name some other customer's archive answers to must not become a queue job that
+# fetches it into this customer's folder (which is customer-readable since #789).
+if ! grep -qF "BACKUP='$backup'" "$USER_DATA/backup.conf" 2> /dev/null; then
+	check_result "$E_NOTEXIST" "no record of $backup for $user"
+fi
 
 #----------------------------------------------------------#
 #                       Action                             #

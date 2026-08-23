@@ -71,32 +71,40 @@ is_format_valid 'user' 'backup'
 if [[ ! -d "$BACKUP" ]]; then
 	mkdir -p "$BACKUP"
 fi
-if [ $(stat -c %a "$BACKUP") != 755 ]; then
-	chmod 755 "$BACKUP"
+# 711, not 755: customer names and run dates are not for local users to enumerate (#789).
+if [ $(stat -c %a "$BACKUP") != 711 ]; then
+	chmod 711 "$BACKUP"
 fi
 
-# Checking local backup
-if [ ! -e "$BACKUP/$backup" ]; then
-	if [[ "$BACKUP_SYSTEM" =~ "sftp" ]] && [ -z "$downloaded" ]; then
-		sftp_download "$backup"
-		downloaded='yes'
-	fi
-	if [[ "$BACKUP_SYSTEM" =~ "ftp" ]] && [ -z "$downloaded" ]; then
-		ftp_download "$backup"
-		downloaded='yes'
-	fi
-	if [[ "$BACKUP_SYSTEM" =~ "rclone" ]] && [ -z "$downloaded" ]; then
-		rclone_download "$backup"
-		downloaded='yes'
-	fi
-	if [ -z "$downloaded" ]; then
-		check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '${BACKUP}' folder"
-	fi
-fi
+# Checking local backup - customer folder first, then the flat hand-off spot (#789)
+backup_archive_path "$user" "$backup"
+case $? in
+	2) check_result "$E_INVALID" "$backup does not resolve to a file inside '${BACKUP}'" ;;
+	1)
+		if [[ "$BACKUP_SYSTEM" =~ "sftp" ]] && [ -z "$downloaded" ]; then
+			sftp_download "$backup"
+			downloaded='yes'
+		fi
+		if [[ "$BACKUP_SYSTEM" =~ "ftp" ]] && [ -z "$downloaded" ]; then
+			ftp_download "$backup"
+			downloaded='yes'
+		fi
+		if [[ "$BACKUP_SYSTEM" =~ "rclone" ]] && [ -z "$downloaded" ]; then
+			rclone_download "$backup"
+			downloaded='yes'
+		fi
+		if [ -z "$downloaded" ]; then
+			check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '$BACKUP/$user' or '${BACKUP}'"
+		fi
+		;;
+esac
 
-if [ ! -e "$BACKUP/$backup" ]; then
-	check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '${BACKUP}' folder"
+if ! backup_archive_path "$user" "$backup"; then
+	check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '$BACKUP/$user' or '${BACKUP}'"
 fi
+# Into plain variables NOW: the resolver globals get overwritten by the base lookup below.
+backup_path="$BACKUP_ARCHIVE"
+backup_at="$BACKUP_ARCHIVE_DIR"
 
 # Checking user existence on the server
 check_user=$(is_object_valid 'user' 'USER' "$user")
@@ -155,24 +163,28 @@ QUEUE_JOB="h-restore-user '$user' '$backup'"
 
 # Read the archive once, before anything is written, and say what this host will not be able to
 # restore from it. Answers that come out DURING a run arrive after the write they were about.
-if ! backup_probe "$BACKUP/$backup" "$tmpdir/.probe"; then
+if ! backup_probe "$backup_path" "$tmpdir/.probe"; then
 	rm -rf "$tmpdir"
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_PARSING" "$backup cannot be read as a backup archive"
 fi
 backup_mode="$PROBE_MODE"
 backup_report | tee -a "$tmpdir/restore.log"
+if [ "$backup_at" = 'root' ]; then
+	echo "   found at the hand-off location $BACKUP, not the customer folder" | tee -a "$tmpdir/restore.log"
+fi
 
 # Diff base checked NOW: a restore that discovers it at the third member has already written two.
-backup_diff_probe "$BACKUP/$backup" "$tmpdir/.diff"
+backup_diff_probe "$backup_path" "$tmpdir/.diff"
 if [ -n "$DIFF_BASE" ]; then
 	echo "   differential archive, base $DIFF_BASE" | tee -a "$tmpdir/restore.log"
-	if [ ! -f "$BACKUP/$DIFF_BASE" ]; then
+	if ! backup_archive_path "$user" "$DIFF_BASE"; then
 		rm -rf "$tmpdir"
 		queue_drop_job "$CONF_DIR/queue/backup.pipe"
-		check_result "$E_NOTEXIST" "$backup is differential and its base $DIFF_BASE is not in $BACKUP"
+		check_result "$E_NOTEXIST" "$backup is differential and its base $DIFF_BASE is not in $BACKUP/$user or $BACKUP"
 	fi
-	if ! tar -tf "$BACKUP/$DIFF_BASE" 2> /dev/null | grep -qxF "./$BACKUP_CONTAINER/backup.map"; then
+	base_path="$BACKUP_ARCHIVE"
+	if ! tar -tf "$base_path" 2> /dev/null | grep -qxF "./$BACKUP_CONTAINER/backup.map"; then
 		rm -rf "$tmpdir"
 		queue_drop_job "$CONF_DIR/queue/backup.pipe"
 		check_result "$E_PARSING" "base $DIFF_BASE carries no content map - it cannot serve as one"
@@ -180,7 +192,7 @@ if [ -n "$DIFF_BASE" ]; then
 	# MAPHASH: built against the local mirror, read against the base archive's map - a same-named
 	# archive from elsewhere passes every name check and fails exactly here.
 	base_maphash=$(sed -n "s/.*MAPHASH='\([^']*\)'.*/\1/p" "$tmpdir/.diff/backup.base")
-	base_maphash_live=$(tar -xOf "$BACKUP/$DIFF_BASE" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null \
+	base_maphash_live=$(tar -xOf "$base_path" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null \
 		| sha256sum | cut -d' ' -f1)
 	if [ -z "$base_maphash" ] || [ "$base_maphash" != "$base_maphash_live" ]; then
 		rm -rf "$tmpdir"
@@ -209,7 +221,7 @@ fi
 # refuses. The web list is derived ONCE, so the PHP question matches what this run touches.
 
 # Creating web domain restore list
-backup_domains=$(tar -tf $BACKUP/$backup | grep "^./web")
+backup_domains=$(tar -tf "$backup_path" | grep "^./web")
 if [ "$backup_mode" = "zstd" ]; then
 	backup_domains=$(echo "$backup_domains" | grep domain_data.tar.zst)
 else
@@ -313,7 +325,7 @@ if [ "$create_user" = 'yes' ]; then
 	echo -e "$(date "+%F %T") $user" | tee -a $tmpdir/restore.log
 
 	# Unpacking user container
-	tar xf "$BACKUP/$backup" -C "$tmpdir" --no-wildcards "./$BACKUP_CONTAINER" 2> /dev/null
+	tar xf "$backup_path" -C "$tmpdir" --no-wildcards "./$BACKUP_CONTAINER" 2> /dev/null
 	if [ "$?" -ne 0 ]; then
 		rm -rf $tmpdir
 		echo "Can't unpack user container" | $SENDMAIL -s "$subj" $email $notify
@@ -373,7 +385,7 @@ elif [ -z "$LEFTOVERS_PATTERNS" ]; then
 		| tee -a $tmpdir/restore.log
 else
 	leftovers_dir="$HOMEDIR/$user/leftovers/$(date '+%F_%H-%M-%S')"
-	backup_leftovers_export "$BACKUP/$backup" "$leftovers_dir" "$user"
+	backup_leftovers_export "$backup_path" "$leftovers_dir" "$user"
 	# What LANDED, not what was planned: the two differ exactly when something went wrong, and that
 	# is the moment the log must not claim the plan.
 	[ -n "$LEFTOVERS_DONE" ] \
@@ -394,7 +406,7 @@ fi
 
 # Unpacking pam container
 chown "$user" "$tmpdir"
-tar xf $BACKUP/$backup -C $tmpdir ./pam
+tar xf "$backup_path" -C $tmpdir ./pam
 if [ "$?" -ne 0 ]; then
 	rm -rf $tmpdir
 	echo "Can't unpack PAM container" | $SENDMAIL -s "$subj" $email $notify
@@ -438,7 +450,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		fi
 
 		# Unpacking domain container
-		tar xf $BACKUP/$backup -C $tmpdir ./web/$domain
+		tar xf "$backup_path" -C $tmpdir ./web/$domain
 		if [ "$?" -ne 0 ]; then
 			rm -rf $tmpdir
 			error="Can't unpack $domain web container"
@@ -650,7 +662,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		web_member="$tmpdir/web/$domain/domain_data.tar.zst"
 		[ "$backup_mode" = "zstd" ] || web_member="$tmpdir/web/$domain/domain_data.tar.gz"
 		if [ -n "$DIFF_BASE" ] && backup_member_needs_base "$tmpdir/.diff/backup.members" "web/$domain"; then
-			web_base=$(backup_diff_stage_base "$BACKUP/$DIFF_BASE" "web/$domain" "$(basename "$web_member")" "$tmpdir/.diff")
+			web_base=$(backup_diff_stage_base "$base_path" "web/$domain" "$(basename "$web_member")" "$tmpdir/.diff")
 			if [ -z "$web_base" ]; then
 				rm -rf $tmpdir
 				error="$domain is differential and its base member is missing from $DIFF_BASE"
@@ -658,7 +670,7 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_NOTEXIST" "$error"
 			fi
-			backup_diff_keep_list "$BACKUP/$DIFF_BASE" "$tmpdir/.diff/backup.map" "web/$domain" \
+			backup_diff_keep_list "$base_path" "$tmpdir/.diff/backup.map" "web/$domain" \
 				"$web_member" "$tmpdir/.diff/keep.web.nul"
 			chmod 644 "$tmpdir/.diff/keep.web.nul" 2> /dev/null
 			if [ -s "$tmpdir/.diff/keep.web.nul" ]; then
@@ -726,7 +738,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 	echo -e "\n-- MAIL --" | tee -a $tmpdir/restore.log
 
 	# Creating mail domain restore list
-	backup_domains=$(tar -tf $BACKUP/$backup | grep "^./mail")
+	backup_domains=$(tar -tf "$backup_path" | grep "^./mail")
 	backup_domains=$(echo "$backup_domains" | grep "mail.conf$")
 	backup_domains=$(echo "$backup_domains" | cut -f 3 -d /)
 	if [ -z "$mail" ] || [ "$mail" = '*' ]; then
@@ -762,7 +774,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		fi
 
 		# Unpacking domain container
-		tar xf $BACKUP/$backup -C $tmpdir ./mail/$domain
+		tar xf "$backup_path" -C $tmpdir ./mail/$domain
 
 		if [ "$?" -ne 0 ]; then
 			rm -rf $tmpdir
@@ -902,7 +914,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		[ "$backup_mode" = 'zstd' ] || mail_member="$tmpdir/mail/$domain/accounts.tar.gz"
 		if [ -n "$DIFF_BASE" ] && [ -e "$mail_member" ] \
 			&& backup_member_needs_base "$tmpdir/.diff/backup.members" "mail/$domain"; then
-			mail_base=$(backup_diff_stage_base "$BACKUP/$DIFF_BASE" "mail/$domain" "$(basename "$mail_member")" "$tmpdir/.diff")
+			mail_base=$(backup_diff_stage_base "$base_path" "mail/$domain" "$(basename "$mail_member")" "$tmpdir/.diff")
 			if [ -z "$mail_base" ]; then
 				rm -rf $tmpdir
 				error="$domain is differential and its base member is missing from $DIFF_BASE"
@@ -910,7 +922,7 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_NOTEXIST" "$error"
 			fi
-			backup_diff_keep_list "$BACKUP/$DIFF_BASE" "$tmpdir/.diff/backup.map" "mail/$domain" \
+			backup_diff_keep_list "$base_path" "$tmpdir/.diff/backup.map" "mail/$domain" \
 				"$mail_member" "$tmpdir/.diff/keep.mail.nul"
 			chmod 644 "$tmpdir/.diff/keep.mail.nul" 2> /dev/null
 			if [ -s "$tmpdir/.diff/keep.mail.nul" ]; then
@@ -984,7 +996,7 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 	echo -e "\n-- DB --" | tee -a $tmpdir/restore.log
 
 	# Creating database restore list
-	backup_databases=$(tar -tf $BACKUP/$backup | grep "^./db")
+	backup_databases=$(tar -tf "$backup_path" | grep "^./db")
 	backup_databases=$(echo "$backup_databases" | grep db.conf)
 	backup_databases=$(echo "$backup_databases" | cut -f 3 -d / | sort -u)
 	if [ -z "$db" ] || [ "$db" = '*' ]; then
@@ -1033,7 +1045,7 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 		check_config=$(grep -F "DB='$target_db'" $USER_DATA/db.conf)
 
 		# Unpacking database container
-		tar xf $BACKUP/$backup -C $tmpdir ./db/$database
+		tar xf "$backup_path" -C $tmpdir ./db/$database
 		if [ "$?" -ne 0 ]; then
 			rm -rf $tmpdir
 			error="Can't unpack $database database container"
@@ -1139,7 +1151,7 @@ if [ "$cron" != 'no' ] && [ -n "$CRON_SYSTEM" ]; then
 	echo -e "\n-- CRON --" | tee -a $tmpdir/restore.log
 
 	# Unpacking cron container
-	tar xf $BACKUP/$backup -C $tmpdir ./cron
+	tar xf "$backup_path" -C $tmpdir ./cron
 	if [ "$?" -ne 0 ]; then
 		rm -rf $tmpdir
 		error="Can't unpack cron container"
@@ -1172,13 +1184,13 @@ if [ "$udir" != 'no' ]; then
 	echo -e "\n-- USER FILES --" | tee -a $tmpdir/restore.log
 
 	# Unpacking user dir container
-	if [ -n "$(tar -tf $BACKUP/$backup | grep './user_dir')" ]; then
+	if [ -n "$(tar -tf "$backup_path" | grep './user_dir')" ]; then
 
 		# The names come from the directory the container unpacked into, NOT from `tar -t`. That
 		# prints a name carrying a backslash or a tab ESCAPED, and the per-entry extraction then
 		# asked for a file that is not there - which took the whole section down, including the
 		# entries that were fine. One pass over a compressed archive instead of one per entry, too.
-		tar xf "$BACKUP/$backup" -C "$tmpdir" --no-wildcards "./user_dir" 2> /dev/null
+		tar xf "$backup_path" -C "$tmpdir" --no-wildcards "./user_dir" 2> /dev/null
 		backup_dirs=$(cd "$tmpdir/user_dir" 2> /dev/null \
 			&& find . -maxdepth 1 -type f \( -name '*.tar.zst' -o -name '*.tar.gz' \) -printf '%f\n' \
 			| sed -e 's/\.tar\.zst$//' -e 's/\.tar\.gz$//' | sort)

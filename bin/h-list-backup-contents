@@ -13,9 +13,10 @@
 # $BACKUP and extracts record members as root - and it deliberately does not require the user to
 # exist, because on a migration it does not. What holds the line instead:
 #
-#   - the archive name is a basename: is_object_format_valid allows no '/', so $BACKUP/$backup
-#     cannot leave the directory, and the containment check below says so a second time in code
-#   - $BACKUP is root-owned 0755, so nobody else can plant a symlink in it
+#   - the archive name is a basename: is_object_format_valid allows no '/', and backup_archive_path
+#     cannot leave the two allowed places, and its containment says so a second time in code
+#   - $BACKUP is root-owned 0711 and the customer folder is hestia-owned, so nobody else can
+#     plant a symlink in either
 #   - the only non-root caller is the panel process, and it reaches h-* only through a route it
 #     builds itself; no route calls this command yet
 #
@@ -117,18 +118,13 @@ is_format_valid 'user' 'backup'
 # the account). Requiring it here refused the one situation this command was written for. Nothing is
 # lost by dropping it: existence was all it checked, never that the archive belongs to that user.
 
-if [ ! -f "$BACKUP/$backup" ]; then
-	check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '${BACKUP}' folder"
-fi
-
-# Second line under the name validator, in code rather than in a comment: the file this command
-# opens as root must sit inside the backup directory. `-f` above follows a symlink, so the existence
-# test alone would not say that, and $BACKUP itself is overridable from the environment.
-archive_real=$(realpath -e -- "$BACKUP/$backup" 2> /dev/null)
-backup_real=$(realpath -e -- "$BACKUP" 2> /dev/null)
-if [ -z "$archive_real" ] || [ -z "$backup_real" ] || [ "${archive_real%/*}" != "$backup_real" ]; then
-	check_result "$E_INVALID" "$backup does not resolve to a file inside '${BACKUP}'"
-fi
+# The resolver is the containment: two allowed places, symlinks refused.
+backup_archive_path "$user" "$backup"
+case $? in
+	1) check_result "$E_NOTEXIST" "backup file $backup doesn't exist in '$BACKUP/$user' or '${BACKUP}'" ;;
+	2) check_result "$E_INVALID" "$backup does not resolve to a file inside '${BACKUP}'" ;;
+esac
+archive_path="$BACKUP_ARCHIVE"
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -139,7 +135,7 @@ fi
 probedir=$(mktemp -d -p "${BACKUP_TEMP:-$BACKUP}" -t probe.XXXXXX) || check_result "$E_NOTEXIST" "Can't create tmp dir"
 trap 'rm -rf "$probedir"' EXIT
 
-if ! backup_probe "$BACKUP/$backup" "$probedir"; then
+if ! backup_probe "$archive_path" "$probedir"; then
 	check_result "$E_PARSING" "$backup cannot be read as a backup archive"
 fi
 

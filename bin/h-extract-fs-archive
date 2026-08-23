@@ -47,7 +47,7 @@ fi
 
 # Checking source path
 rpath=$(readlink -f "$src_file")
-if [ -z "$(echo $rpath | egrep "^/tmp|^$homedir|^$BACKUP/$user\.|^$BACKUP/tmp\.")" ]; then
+if [ -z "$(echo $rpath | egrep "^/tmp|^$homedir|^$BACKUP/$user\.|^$BACKUP/$user/$user\.|^$BACKUP/tmp\.")" ]; then
 	echo "Error: invalid source path $src_file"
 	exit 2
 fi
