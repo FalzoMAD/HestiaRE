@@ -14,6 +14,16 @@ opens above it.
 
 ### Added
 
+- **remote only is diff-capable now** (#790, stage 3). Base selection asks for REACHABILITY
+  instead of a local file: the local map mirror is what a diff is built from, and the base
+  archive itself may live on a remote only - eligible when a configured target's fresh listing
+  shows it (the record's word alone would collect diffs against a base that exists nowhere).
+  On restore the base follows the same transport chain as the archive, so a differential
+  restores onto a box that holds nothing locally. A run whose base is reachable nowhere says
+  "No reachable base archive - writing a full backup"; a transport that receives a diff while
+  holding neither the base nor a local copy warns that a restore from it alone needs another
+  source. Refusals name all searched places.
+
 - **A remote target may retain more than the package limit** (#790, stage 2). Every remote
   backup host takes an optional KEEP number (`h-add-backup-host ... [KEEP]`, editable in the
   server panel): its rotation keeps that many SETS while the local rotation keeps the package's
