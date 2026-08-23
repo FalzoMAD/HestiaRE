@@ -22,7 +22,11 @@ opens above it.
   restores onto a box that holds nothing locally. A run whose base is reachable nowhere says
   "No reachable base archive - writing a full backup"; a transport that receives a diff while
   holding neither the base nor a local copy warns that a restore from it alone needs another
-  source. Refusals name all searched places.
+  source. Refusals name what was
+  actually searched. Worth knowing: a remote restore leaves the fetched archive and base in the
+  customer folder on purpose - the next run counts them as local (rotation takes them, oldest
+  first, and the base check finds them without a remote round trip); they are a cache, not a
+  leak.
 
 - **A remote target may retain more than the package limit** (#790, stage 2). Every remote
   backup host takes an optional KEEP number (`h-add-backup-host ... [KEEP]`, editable in the

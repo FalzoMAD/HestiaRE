@@ -1433,20 +1433,21 @@ rclone_backup() {
 
 	if [ -z "$BPATH" ]; then
 		# Same edge as on ftp/sftp; rclone lists only after the upload, so ask once beforehand.
-		if [ -n "$diff_base" ] && ! backup_archive_path "$user" "$diff_base" \
+		# One listing, one truth: the same answer drives the warning and the upload branch.
+		if [ -n "$diff_base" ] \
 			&& ! rclone lsf $HOST: 2> /dev/null | cut -d' ' -f1 | grep -qxF -- "$diff_base"; then
-			echo "$(date "+%F %T") Warning: base $diff_base is not local and not on the rclone target - a restore needs another source for it" \
-				| tee -a $BACKUP/$user/$user.log
-		fi
-		if [ -n "$diff_base" ] && backup_archive_path "$user" "$diff_base" \
-			&& ! rclone lsf $HOST: 2> /dev/null | cut -d' ' -f1 | grep -qxF -- "$diff_base"; then
-			echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user/$user.log
-			if ! rclone copy -v "$BACKUP_ARCHIVE" $HOST:; then
-				error="base $diff_base did not arrive on the rclone target - every diff there would be unrestorable"
-				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				echo "$error"
-				errorcode="$E_CONNECT"
-				return "$E_CONNECT"
+			if ! backup_archive_path "$user" "$diff_base"; then
+				echo "$(date "+%F %T") Warning: base $diff_base is not local and not on the rclone target - a restore needs another source for it" \
+					| tee -a $BACKUP/$user/$user.log
+			else
+				echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user/$user.log
+				if ! rclone copy -v "$BACKUP_ARCHIVE" $HOST:; then
+					error="base $diff_base did not arrive on the rclone target - every diff there would be unrestorable"
+					echo "$error" | $SENDMAIL -s "$subj" $email $notify
+					echo "$error"
+					errorcode="$E_CONNECT"
+					return "$E_CONNECT"
+				fi
 			fi
 		fi
 		# $HOST: plain - $backup here would be the LOOP VARIABLE of an earlier transport's rotation
@@ -1472,20 +1473,21 @@ rclone_backup() {
 			done
 		fi
 	else
-		if [ -n "$diff_base" ] && ! backup_archive_path "$user" "$diff_base" \
+		# One listing, one truth: the same answer drives the warning and the upload branch.
+		if [ -n "$diff_base" ] \
 			&& ! rclone lsf $HOST:$BPATH 2> /dev/null | cut -d' ' -f1 | grep -qxF -- "$diff_base"; then
-			echo "$(date "+%F %T") Warning: base $diff_base is not local and not on the rclone target - a restore needs another source for it" \
-				| tee -a $BACKUP/$user/$user.log
-		fi
-		if [ -n "$diff_base" ] && backup_archive_path "$user" "$diff_base" \
-			&& ! rclone lsf $HOST:$BPATH 2> /dev/null | cut -d' ' -f1 | grep -qxF -- "$diff_base"; then
-			echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user/$user.log
-			if ! rclone copy -v "$BACKUP_ARCHIVE" $HOST:$BPATH; then
-				error="base $diff_base did not arrive on the rclone target - every diff there would be unrestorable"
-				echo "$error" | $SENDMAIL -s "$subj" $email $notify
-				echo "$error"
-				errorcode="$E_CONNECT"
-				return "$E_CONNECT"
+			if ! backup_archive_path "$user" "$diff_base"; then
+				echo "$(date "+%F %T") Warning: base $diff_base is not local and not on the rclone target - a restore needs another source for it" \
+					| tee -a $BACKUP/$user/$user.log
+			else
+				echo "$(date "+%F %T") Uploading base $diff_base missing on rclone target" | tee -a $BACKUP/$user/$user.log
+				if ! rclone copy -v "$BACKUP_ARCHIVE" $HOST:$BPATH; then
+					error="base $diff_base did not arrive on the rclone target - every diff there would be unrestorable"
+					echo "$error" | $SENDMAIL -s "$subj" $email $notify
+					echo "$error"
+					errorcode="$E_CONNECT"
+					return "$E_CONNECT"
+				fi
 			fi
 		fi
 		if ! rclone copy -v $user.$backup_new_date.tar $HOST:$BPATH; then
@@ -1793,11 +1795,12 @@ backup_map_keep() {
 }
 
 # backup_base_reachable NAME - can a diff against NAME be restored from somewhere this box can
-# reach? A local copy answers it (either allowed place); without one, a configured remote's
-# FRESH listing has to show the file - the record's word alone is not enough, or a hand-cleaned
-# target would collect diffs against a base that exists nowhere (the C5 class, one level up).
-# Sources each transport conf the way the transports do; PORT is reset per type so one conf's
-# value cannot leak into the next.
+# reach? A local copy answers it (either allowed place) and costs no remote round trip; without
+# one, a configured remote's FRESH listing has to show the file - the record's word alone is not
+# enough, or a hand-cleaned target would collect diffs against a base that exists nowhere (the
+# C5 class, one level up). Each target's conf is sourced inside a SUBSHELL with the connection
+# keys blanked first: neither the caller nor the next target inherits HOST/USERNAME/PASSWORD/
+# BPATH/PORT/PRIVATEKEY, and a conf missing a key cannot read the previous target's value.
 backup_base_reachable() {
 	local _n="$1" _t
 	backup_archive_path "$user" "$_n" && return 0
@@ -1807,12 +1810,14 @@ backup_base_reachable() {
 			*) continue ;;
 		esac
 		[ -f "$HESTIA/conf/$_t.backup.conf" ] || continue
-		PORT=''
-		source_conf "$HESTIA/conf/$_t.backup.conf"
-		if [ -z "$PORT" ]; then
-			if [ "$_t" = 'ftp' ]; then PORT='21'; else PORT='22'; fi
-		fi
-		if remote_file_present "$_t" "$_n"; then
+		if (
+			HOST='' USERNAME='' PASSWORD='' BPATH='' PORT='' PRIVATEKEY=''
+			source_conf "$HESTIA/conf/$_t.backup.conf"
+			if [ -z "$PORT" ]; then
+				if [ "$_t" = 'ftp' ]; then PORT='21'; else PORT='22'; fi
+			fi
+			remote_file_present "$_t" "$_n"
+		); then
 			return 0
 		fi
 	done
