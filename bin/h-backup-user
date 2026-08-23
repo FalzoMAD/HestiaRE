@@ -789,10 +789,11 @@ backup_mode_sel=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.c
 diff_base=''
 if [ "${backup_mode_sel:-full}" = 'diff' ] && [ "$map_records" -gt 0 ]; then
 	diff_base=$(backup_diff_base "$USER_DATA/backup.conf" "$USER_DATA/backup-maps") || diff_base=''
-	# Named, not silent: on remote-only (or after rotation) every run lands here and would look
-	# like "diff mode never engages" - stage-0 measured exactly that blindness.
+	# Named, not silent: after rotation (or against an emptied target) every run lands here and
+	# would look like "diff mode never engages" - stage-0 measured exactly that blindness. Since
+	# stage 3 a base may live on a remote only, so the word "local" would be wrong here.
 	if [ -z "$diff_base" ]; then
-		echo "$(date "+%F %T") No usable local base archive - writing a full backup" \
+		echo "$(date "+%F %T") No reachable base archive - writing a full backup" \
 			| tee -a $BACKUP/$user/$user.log
 	fi
 	if [ -n "$diff_base" ]; then

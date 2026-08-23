@@ -173,10 +173,25 @@ fi
 backup_diff_probe "$backup_path" "$tmpdir/.diff"
 if [ -n "$DIFF_BASE" ]; then
 	echo "   differential archive, base $DIFF_BASE" | tee -a "$tmpdir/restore.log"
+	# The base follows the same chain as the archive itself (#790 stage 3): on remote-only the
+	# base was never local, and a diff whose base a remote still holds must restore without help.
+	if ! backup_archive_path "$user" "$DIFF_BASE"; then
+		for remote_type in sftp ftp rclone; do
+			[[ ",$BACKUP_SYSTEM," == *",$remote_type,"* ]] || continue
+			${remote_type}_download "$DIFF_BASE"
+			backup_archive_path "$user" "$DIFF_BASE" && break
+		done
+	fi
 	if ! backup_archive_path "$user" "$DIFF_BASE"; then
 		rm -rf "$tmpdir"
 		queue_drop_job "$CONF_DIR/queue/backup.pipe"
-		check_result "$E_NOTEXIST" "$backup is differential and its base $DIFF_BASE is not in $BACKUP/$user or $BACKUP"
+		# The refusal claims exactly what was searched: the remote clause only when a remote
+		# was configured and therefore actually asked.
+		base_missing="$backup is differential and its base $DIFF_BASE is neither in $BACKUP/$user nor $BACKUP"
+		case ",$BACKUP_SYSTEM," in
+			*,ftp,* | *,sftp,* | *,rclone,*) base_missing="$base_missing, and no configured remote target has it" ;;
+		esac
+		check_result "$E_NOTEXIST" "$base_missing"
 	fi
 	base_path="$BACKUP_ARCHIVE"
 	if ! tar -tf "$base_path" 2> /dev/null | grep -qxF "./$BACKUP_CONTAINER/backup.map"; then
