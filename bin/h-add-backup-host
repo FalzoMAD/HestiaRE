@@ -144,7 +144,9 @@ if [ "$type" = 'sftp' ]; then
 fi
 
 if [ "$type" = 'rclone' ]; then
-	curl -s https://rclone.org/install.sh | bash /dev/null > /dev/null 2>&1
+	# No installer download here: rclone is an OS package, and an unbounded curl|bash in a
+	# config command is the external-download trap in its purest form.
+	which rclone > /dev/null 2>&1 || check_result "$E_NOTEXIST" "rclone is not installed (apt install rclone)"
 	# Verify account exists
 	if [ ! -z "$(cat /root/.config/rclone/rclone.conf | grep "\[$host\]")" ]; then
 		echo "test" > /tmp/hestia-backup.txt

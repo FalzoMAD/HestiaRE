@@ -51,6 +51,9 @@ esac
 line=$(grep "BACKUP='$backup'" $USER_DATA/backup.conf)
 parse_object_kv_list "$line"
 
+# CAUTION: the =~ matches below are substring matches - ftp also hits TYPE='sftp'. The deleted
+# flag is what keeps that correct (first match wins), NOT the comparison itself. Whoever removes
+# or reorders the flag must switch these to comma-bounded matches first (the #792 chain lesson).
 deleted=0
 if [[ "$TYPE" =~ "sftp" ]]; then
 	sftp_delete "$backup"
