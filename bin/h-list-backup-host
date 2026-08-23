@@ -27,13 +27,14 @@ json_list() {
 	case $type in
 		'sftp' | 'ftp' | 'rclone')
 			echo '{'
-			json_escape type HOST USERNAME PORT BPATH TIME DATE
+			json_escape type HOST USERNAME PORT BPATH BACKUPS_KEEP TIME DATE
 			printf '    "%s": {\n' "$type"
 			printf '        "HOST": "%s",\n' "$HOST"
 			printf '        "USERNAME": "%s",\n' "$USERNAME"
 			printf '        "PORT": "%s",\n' "$PORT"
 			printf '        "TYPE": "%s",\n' "$type"
 			printf '        "BPATH": "%s",\n' "$BPATH"
+			printf '        "BACKUPS_KEEP": "%s",\n' "$BACKUPS_KEEP"
 			printf '        "TIME": "%s",\n' "$TIME"
 			printf '        "DATE": "%s"\n' "$DATE"
 			echo '    }'
@@ -51,6 +52,7 @@ shell_list() {
 			echo "PORT:           $PORT"
 			echo "TYPE:           $type"
 			echo "PATH:           $BPATH"
+			echo "KEEP:           $BACKUPS_KEEP"
 			echo "TIME:           $TIME"
 			echo "DATE:           $DATE"
 			;;
@@ -61,7 +63,7 @@ shell_list() {
 plain_list() {
 	case $type in
 		'sftp' | 'ftp' | 'rclone')
-			echo -e "$HOST\t$USERNAME\t$PORT\t$type\t$BPATH\t$TIME\t$DATE"
+			echo -e "$HOST\t$USERNAME\t$PORT\t$type\t$BPATH\t$BACKUPS_KEEP\t$TIME\t$DATE"
 			;;
 	esac
 }

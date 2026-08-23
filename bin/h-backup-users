@@ -28,6 +28,10 @@ mysqlrepair --all-databases --check --auto-repair > /dev/null 2>&1
 if [ -z "$BACKUP_SYSTEM" ]; then
 	exit
 fi
+# The per-run exit codes finally get a reader (#790 stage 2): a degraded run - local archive
+# written, a remote leg failed - exits non-zero since stage 1, and until now only the per-user
+# mail said so. Collected here and summarised once, so the operator sees the night in one line.
+degraded=''
 for user in $("$BIN/h-list-users" list); do
 	check_suspend=$(grep "SUSPENDED='no'" $CONF_DIR/users/$user/user.conf)
 	log=$HESTIA/log/backup.log
@@ -45,16 +49,25 @@ for user in $("$BIN/h-list-users" list); do
 		# falls back to the archive path rather than failing silently at 5 in the morning.
 		mode=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$user/user.conf" | head -1)
 		if [ "${mode:-full}" = 'restic' ] && [ "$BACKUP_INCREMENTAL" = 'yes' ]; then
-			nice -n 19 ionice -c2 -n7 $BIN/h-backup-user-restic $user >> $log 2>&1
+			nice -n 19 ionice -c2 -n7 $BIN/h-backup-user-restic $user >> $log 2>&1 \
+				|| degraded="$degraded $user($?)"
 		else
 			if [ "${mode:-full}" = 'restic' ]; then
 				echo "Warning: $user is set to restic but the addon is not installed - archive backup instead" >> $log
 			fi
-			nice -n 19 ionice -c2 -n7 $BIN/h-backup-user $user >> $log 2>&1
+			nice -n 19 ionice -c2 -n7 $BIN/h-backup-user $user >> $log 2>&1 \
+				|| degraded="$degraded $user($?)"
 		fi
 		echo -e "\n--------------------------------\n\n" >> $log
 	fi
 done
+
+if [ -n "$degraded" ]; then
+	echo "=== runs that exited non-zero (degraded or failed):$degraded ===" >> $log
+	admin_email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" | cut -f 2 -d \')
+	echo "Nightly backup runs that exited non-zero (degraded or failed):$degraded" \
+		| $SENDMAIL -s "backup night finished with degraded runs" "$admin_email" 'yes'
+fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #

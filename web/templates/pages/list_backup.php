@@ -134,6 +134,14 @@
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Type")) ?>:</span>
 					<?= tohtml($data[$key]["TYPE"]) ?>
+					<?php // Record outlives the file (#790): the archive may by now live only on a
+					// remote target. Named here, and download/restore fetch it transparently.
+					if (
+						!file_exists("/backup/" . $user_plain . "/" . $key) &&
+						!file_exists("/backup/" . $key)
+					) { ?>
+						<span class="u-text-small"><?= tohtml(_("(remote only)")) ?></span>
+					<?php } ?>
 					<?php if (($data[$key]["MODE"] ?? "") === "diff") { ?>
 						<span class="u-text-small" title="<?= tohtml(sprintf(_("Base: %s"), $data[$key]["BASE"] ?? "")) ?>">
 							(<?= tohtml(_("differential")) ?>)

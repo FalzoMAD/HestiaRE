@@ -789,6 +789,12 @@ backup_mode_sel=$(sed -n "s/^BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.c
 diff_base=''
 if [ "${backup_mode_sel:-full}" = 'diff' ] && [ "$map_records" -gt 0 ]; then
 	diff_base=$(backup_diff_base "$USER_DATA/backup.conf" "$USER_DATA/backup-maps") || diff_base=''
+	# Named, not silent: on remote-only (or after rotation) every run lands here and would look
+	# like "diff mode never engages" - stage-0 measured exactly that blindness.
+	if [ -z "$diff_base" ]; then
+		echo "$(date "+%F %T") No usable local base archive - writing a full backup" \
+			| tee -a $BACKUP/$user/$user.log
+	fi
 	if [ -n "$diff_base" ]; then
 		base_map=$(mktemp)
 		# The count doubles as a form check: a desynced map counts 0 and forces a full run, the
@@ -910,7 +916,19 @@ echo "$backup_str" >> $USER_DATA/backup.conf
 # Record cleanup in FILE ORDER (the listers print the file as it stands). Adopted records always
 # stay - the file is not ours to rotate. The rest is kept per SET, derived exactly as the file
 # rotation derives it; the new record is already in the file, so no incoming adjustment.
-LC_ALL=C awk -v keep="$BACKUPS" -v q="'" '
+# The record outlives the file (#790 stage 2): record retention follows the LONGEST keep of
+# any configured place - the local file rotation keeps $BACKUPS, every remote place keeps its
+# own number, and the record stays as long as ANY of them still holds the archive. Ownership
+# stays bound to the record (#791), so a customer can schedule what only a remote still has.
+keep_records="$BACKUPS"
+for backup_type in $(echo -e "${BACKUP_SYSTEM//,/\\n}"); do
+	case $backup_type in
+		ftp | sftp | rclone) _k=$(backup_target_keep "$backup_type") ;;
+		*) continue ;;
+	esac
+	[ "$_k" -gt "$keep_records" ] && keep_records="$_k"
+done
+LC_ALL=C awk -v keep="$keep_records" -v q="'" '
 	function field(l, k,   i, r) {
 		i = index(l, k q)
 		if (i == 0) return ""
