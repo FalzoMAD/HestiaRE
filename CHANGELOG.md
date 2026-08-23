@@ -14,6 +14,22 @@ opens above it.
 
 ### Added
 
+- **A remote target may retain more than the package limit** (#790, stage 2). Every remote
+  backup host takes an optional KEEP number (`h-add-backup-host ... [KEEP]`, editable in the
+  server panel): its rotation keeps that many SETS while the local rotation keeps the package's
+  `BACKUPS` - "off-site laenger vorhalten" as a per-target number instead of an accident. The
+  record now outlives the local file: record retention follows the longest keep of any
+  configured place, so ownership (#791) still covers an archive that only a remote holds, the
+  backup list marks it "(no local copy)" - exactly what was checked, whether a remote still
+  holds it was not asked - and download/restore fetch it transparently over the stage-1 chain.
+  The listers carry that as a LOCAL field in every output format, derived through the same
+  resolver the CLI uses; a per-target keep of 0 is refused by name and a hand-edited 0 reads
+  as "mirror the package", never as "delete everything on this target". With no per-target number nothing moves - every place mirrors the package.
+  The nightly runner finally reads the per-run exit codes and mails one summary of degraded or
+  failed runs; a diff-mode run without a usable local base says so in the log instead of
+  silently writing fulls; and the panel offers rclone only where the binary exists, naming
+  that the remote itself is created as root via `rclone config`.
+
 - **Remote backup targets fail loudly now** (#790, stage 1 of the remote-target round; stage-0
   protocol on the docs branch). After every upload the target's fresh listing is asked whether
   the archive - and a shipped diff base - actually arrived: the put pipelines discard their exit

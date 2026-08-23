@@ -906,6 +906,17 @@ local_backup() {
 		| tee -a $BACKUP/$user/$user.log
 }
 
+# backup_target_keep TYPE - how many SETS this remote place retains. Its own BACKUPS_KEEP if
+# the target conf carries one, the customer's $BACKUPS otherwise - so with no per-target number
+# every place mirrors the package and nothing moves by default. The pattern starts at 1: zero
+# and garbage both fall back to $BACKUPS, because a keep of 0 handed to the rotation would be
+# a mass deletion - "retain nothing" is not a retention setting (add-host refuses it by name).
+backup_target_keep() {
+	local _k
+	_k=$(sed -n "s/^BACKUPS_KEEP='\([1-9][0-9]*\)'.*/\1/p" "$HESTIA/conf/$1.backup.conf" 2> /dev/null | head -1)
+	echo "${_k:-$BACKUPS}"
+}
+
 # remote_file_present TYPE NAME - is NAME on the target, asked from a FRESH listing? Content
 # over exit codes: the put pipelines discard theirs, and a chmod-000 target gave a green run,
 # a record, and an archive that existed nowhere (stage-0 protocol, C5). Same pipelines as the
@@ -1032,9 +1043,10 @@ ftp_backup() {
 		backup_list=$(ftpc "cd $BPATH" "ls" | tr -d "\r" | awk '{print $9}' | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
 	fi
 	backups_count=$(grep -c . <<< "$backup_list")
-	if [ "$backups_count" -ge "$BACKUPS" ]; then
+	target_keep=$(backup_target_keep ftp)
+	if [ "$backups_count" -ge "$target_keep" ]; then
 		for backup in $(echo "$backup_list" \
-			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
+			| backup_set_removals "$USER_DATA/backup.conf" "$target_keep" "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar$//")
 			echo -e "$(date "+%F %T") Rotated ftp backup: $backup_date" \
 				| tee -a $BACKUP/$user/$user.log
@@ -1335,9 +1347,10 @@ sftp_backup() {
 		backup_list=$(sftpc "cd $BPATH" "ls -l" | tr -d "\r" | awk '{print $9}' | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
 	fi
 	backups_count=$(grep -c . <<< "$backup_list")
-	if [ "$backups_count" -ge "$BACKUPS" ]; then
+	target_keep=$(backup_target_keep sftp)
+	if [ "$backups_count" -ge "$target_keep" ]; then
 		for backup in $(echo "$backup_list" \
-			| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
+			| backup_set_removals "$USER_DATA/backup.conf" "$target_keep" "$diff_base"); do
 			backup_date=$(echo $backup | sed -e "s/$user.//" -e "s/.tar.*$//")
 			echo -e "$(date "+%F %T") Rotated sftp backup: $backup_date" \
 				| tee -a $BACKUP/$user/$user.log
@@ -1433,9 +1446,10 @@ rclone_backup() {
 		# Only include *.tar files
 		backup_list=$(rclone lsf $HOST: | cut -d' ' -f1 | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
 		backups_count=$(grep -c . <<< "$backup_list")
-		if [ "$backups_count" -ge "$BACKUPS" ]; then
+		target_keep=$(backup_target_keep rclone)
+		if [ "$backups_count" -ge "$target_keep" ]; then
 			for backup in $(echo "$backup_list" \
-				| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
+				| backup_set_removals "$USER_DATA/backup.conf" "$target_keep" "$diff_base"); do
 				echo "Delete file: $backup"
 				rclone deletefile $HOST:/$backup
 			done
@@ -1463,9 +1477,10 @@ rclone_backup() {
 		# Only include *.tar files
 		backup_list=$(rclone lsf $HOST:$BPATH | cut -d' ' -f1 | grep -E "^${user}\.[0-9]{4}-.+\.tar$" | sort)
 		backups_count=$(grep -c . <<< "$backup_list")
-		if [ "$backups_count" -ge "$BACKUPS" ]; then
+		target_keep=$(backup_target_keep rclone)
+		if [ "$backups_count" -ge "$target_keep" ]; then
 			for backup in $(echo "$backup_list" \
-				| backup_set_removals "$USER_DATA/backup.conf" "$BACKUPS" "$diff_base"); do
+				| backup_set_removals "$USER_DATA/backup.conf" "$target_keep" "$diff_base"); do
 				echo "Delete file: $backup"
 				rclone deletefile $HOST:$BPATH/$backup
 			done

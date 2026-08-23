@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: add backup host
-# options: TYPE HOST USERNAME PASSWORD [PATH] [PORT]
+# options: TYPE HOST USERNAME PASSWORD [PATH] [PORT] [KEEP]
 #
 # example: h-add-backup-host sftp backup.acme.com admin 'P4$$w@rD'
 #
@@ -25,6 +25,9 @@ HIDE=4
 password=$(perl -e 'print quotemeta shift(@ARGV)' "${raw_password}")
 path=${5-/backup}
 port=$6
+# KEEP: how many sets THIS target retains (the divergence number, #790 stage 2). Empty = mirror
+# the customer package's BACKUPS.
+keep=$7
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -41,8 +44,16 @@ source_conf "$HESTIA/conf/hestia.conf"
 #----------------------------------------------------------#
 
 if [ "$type" != 'local' ]; then
-	check_args '2' "$#" "TYPE HOST USERNAME PASSWORD [PATH] [PORT]"
+	check_args '2' "$#" "TYPE HOST USERNAME PASSWORD [PATH] [PORT] [KEEP]"
 	is_format_valid 'host' 'path' 'port'
+	if [ -n "$keep" ]; then
+		is_int_format_valid "$keep" 'keep'
+		# 0 is refused, not stored: handed to the rotation it means "delete everything on this
+		# target on the next run" - an admin typing 0 almost always means "leave empty".
+		if [ "$keep" -eq 0 ]; then
+			check_result "$E_INVALID" "keep 0 would retain nothing - leave it empty to mirror the package limit"
+		fi
+	fi
 	is_type_valid 'sftp,ftp,rclone' "$type"
 	is_username_format_valid "$user" "username"
 	privatekey="no"
@@ -167,13 +178,13 @@ fi
 if [ $type == 'ftp' ] || [ $type = 'sftp' ]; then
 	new_timestamp
 	str="HOST='$host'\nUSERNAME='$user'\nPASSWORD='$password'\nPRIVATEKEY='$privatekey'"
-	str="$str\nBPATH='$path'\nPORT='$port'\nTIME='$time'\nDATE='$date'"
+	str="$str\nBPATH='$path'\nPORT='$port'\nBACKUPS_KEEP='$keep'\nTIME='$time'\nDATE='$date'"
 	echo -e "$str" > $HESTIA/conf/$type.backup.conf
 	chmod 660 $HESTIA/conf/$type.backup.conf
 elif [ $type == "rclone" ]; then
 	new_timestamp
 	str="HOST='$host'\nBPATH='$path'"
-	str="$str\nTIME='$time'\nDATE='$date'"
+	str="$str\nBACKUPS_KEEP='$keep'\nTIME='$time'\nDATE='$date'"
 	echo -e "$str" > $HESTIA/conf/$type.backup.conf
 fi
 

@@ -796,9 +796,11 @@
 								<option value="sftp">
 									SFTP
 								</option>
+								<?php if (!empty($v_rclone_available) || trim($v_backup_type, "'") === "rclone"): ?>
 								<option value="rclone">
 									Rclone
 								</option>
+								<?php endif; ?>
 							</select>
 						</div>
 						<div x-cloak x-show="backupType == 'ftp' || backupType == 'sftp' || backupType == ''">
@@ -864,6 +866,19 @@
 									value="<?= tohtml(trim($v_backup_bpath, "'")) ?>"
 								>
 							</div>
+							<div class="u-mb10">
+								<label for="v_backup_keep" class="form-label">
+									<?= tohtml(_("Retained sets on this target")) ?>
+								</label>
+								<input
+									type="text"
+									class="form-control"
+									name="v_backup_keep"
+									id="v_backup_keep"
+									value="<?= tohtml(trim($v_backup_keep, "'")) ?>"
+									placeholder="<?= tohtml(_("empty = follow the package limit")) ?>"
+								>
+							</div>
 						</div>
 						<div x-cloak x-show="backupType == 'rclone'">
 							<div class="u-mb10">
@@ -890,6 +905,22 @@
 									value="<?= tohtml(trim($v_rclone_path, "'")) ?>"
 								>
 							</div>
+							<div class="u-mb10">
+								<label for="v_rclone_keep" class="form-label">
+									<?= tohtml(_("Retained sets on this target")) ?>
+								</label>
+								<input
+									type="text"
+									class="form-control"
+									name="v_rclone_keep"
+									id="v_rclone_keep"
+									value="<?= tohtml(trim($v_rclone_keep, "'")) ?>"
+									placeholder="<?= tohtml(_("empty = follow the package limit")) ?>"
+								>
+							</div>
+							<p class="form-text">
+								<?= tohtml(_("Host is the name of an rclone remote configured as root (rclone config).")) ?>
+							</p>
 						</div>
 					</div>
 				</div>
