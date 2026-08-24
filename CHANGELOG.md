@@ -238,7 +238,19 @@ opens above it.
   with it. The space check finally runs against the filesystem the dumps land on instead of
   `/backup`, with the need derived from the live databases rather than from a record that may have
   stood still, and leftovers of a dead run are removed before it counts. A smoke guard holds
-  snapshots and packages against each other.
+  snapshots and packages against each other - and it now tells a repository it could not read from
+  an empty one: a failed `snapshots` call used to leave every package without a partner and report
+  the whole customer as orphaned artefacts, where the line was only a broken connection. The need
+  is measured on what a dump actually carries: `index_length` is out of the mysql side, which asked
+  for 62 MB for an 8 MB dump on a schema with four secondary indexes, while pgsql keeps
+  `pg_database_size` because `pg_dump --inserts` writes one statement per row and reaches 1.79x the
+  heap - dropping the indexes there would move the refusal from too eager to too late. The
+  exclusion lists are split with `read -a` instead of an unquoted expansion, so a `*` inside a list
+  no longer globs against the working directory into invented `--exclude` paths, and all five keys
+  of `backup-excludes.conf` are declared local instead of relying on the caller's subshell. A
+  failed `forget` is no longer discarded: it kept the run reporting success while retention
+  silently did not happen, and the packages would then have rotated against a survivor list nobody
+  wrote.
 
 - **A restic run writes two artefacts, and they belong together** (#217, stage 2a). Everything
   readable - records, SSL, PAM, the exclusion list, the per-domain and per-database records with
