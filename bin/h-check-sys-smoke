@@ -870,6 +870,7 @@ check_logrotate_parses() {
 # check_web_record_has_vhost - the upstream check reads files, so a domain whose vhost was skipped
 # looks clean by being absent. Expectation comes from the record: a docker domain in a proxy model
 # has its backend vhost removed on purpose, everything else needs the front (and the proxy it names).
+# Not covered: the SSL variant of a fragment, and whether the vhost inside is the right one.
 check_web_record_has_vhost() {
 	local u line d docker proxy sys fronts n=0 miss=0 first=""
 	if [ -z "$WEB_SYSTEM" ]; then
