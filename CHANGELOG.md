@@ -221,6 +221,24 @@ opens above it.
   non-numeric code instead of waving it through, so the next typo is a loud failure rather than a
   silenced check.
 
+- **The restic run honours the exclusion list, rotates both artefacts as one, and checks the right
+  disk** (#217, stage 2b). `restic backup` ran over the whole home without a single `--exclude`;
+  it now gets the path-producing part of `backup-excludes.conf` (web and mail domains, user
+  directories) while DB and CRON stay object exclusions that legitimately produce no path - and the
+  stage is never excluded, whatever a customer writes into the list, because that would drop their
+  own records and dumps out of their backup while the run stayed green. Retention comes from ONE
+  derivation: `forget` decides over the snapshots, and the packages follow the survivors through
+  their tags rather than through a second naming logic; the run that is writing right now is exempt,
+  because its pair is not yet in the list it would be measured against (#787). A policy that keeps
+  nothing is refused instead of handed to `forget`, `BACKUPS=0` now falls through
+  `is_backup_enabled` like it does in the archive path, and the monthly slot works for the first
+  time at all - the runner read `KEEP_MONTLY` while the configuration wrote `KEEP_MONTHLY`. Stale
+  locks are released before a run, never `--remove-all`, which would take a running job's own lock
+  with it. The space check finally runs against the filesystem the dumps land on instead of
+  `/backup`, with the need derived from the live databases rather than from a record that may have
+  stood still, and leftovers of a dead run are removed before it counts. A smoke guard holds
+  snapshots and packages against each other.
+
 - **A restic run writes two artefacts, and they belong together** (#217, stage 2a). Everything
   readable - records, SSL, PAM, the exclusion list, the per-domain and per-database records with
   their grants, cron - goes into a metadata package beside the repository
