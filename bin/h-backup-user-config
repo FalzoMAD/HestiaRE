@@ -4,8 +4,7 @@
 #
 # example: h-backup-user-config admin
 #
-# Two roots, both derived from the customer: everything readable goes into the package directory
-# that h-backup-user-restic packs, the raw database dumps into $HOMEDIR/$user/.dumps.
+# Readable metadata into the package directory, raw database dumps into $HOMEDIR/$user/.dumps.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -44,14 +43,13 @@ is_object_unsuspended 'user' 'USER' "$user"
 # Get current time
 start_time=$(date '+%s')
 
-# Derived, never taken as arguments: this command removes both as root (#217).
+# Derived, never arguments: both are removed as root below.
 tmpdir=$(restic_meta_dir "$user")
 dumpdir=$(restic_dump_dir "$user")
 
-# Leftovers of a dead run would count as occupied space and be packed as if they were this run's.
 rm -rf "$tmpdir" "$dumpdir"
 mkdir -p "$tmpdir" "$dumpdir"
-# Visible but not enterable: it carries every database of the account.
+# Visible but not enterable.
 chown root:root "$dumpdir"
 chmod 0700 "$dumpdir"
 
@@ -289,8 +287,7 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 		cd $tmpdir/db/$database/
 		grep -F "DB='$database'" $conf > hestia/db.conf
 
-		# Raw: a compressed dump changes over its whole length and kills deduplication (measured),
-		# and the repo format compresses on its own.
+		# Raw: compressing here would kill restic's deduplication.
 		mkdir -p "$dumpdir"
 		dump="$dumpdir/$database.$TYPE.sql"
 		grants="$tmpdir/db/$database/conf/$database.$TYPE.$DBUSER"
