@@ -1,10 +1,13 @@
 #!/bin/bash
-# info: backup system user config only
-# options: USER NOTIFY
+# info: stage a restic run - metadata into the package directory, raw dumps into the home
+# options: USER
 #
-# example: h-backup-user admin yes
+# example: h-backup-user-config admin
 #
-# This function is used for backing up user with all its domains and databases.
+# Stages one restic run in two roots, both derived from the customer: everything readable
+# (records, SSL, PAM, per-object records and grants, cron) into the package directory that
+# h-backup-user-restic turns into the .meta.tgz, and the raw database dumps into
+# $HOMEDIR/$user/.dumps so a single snapshot root covers them.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
