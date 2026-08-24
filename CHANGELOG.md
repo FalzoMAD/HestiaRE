@@ -210,6 +210,18 @@ opens above it.
 
 ### Fixed
 
+- **logrotate failed on every target because our roundcube rotation doubled the package's** (#798).
+  Both files list the same paths, and logrotate treats that as an error: it skips the second file
+  and exits 1, so `logrotate.service` stayed failed and every box read "degraded" since the day it
+  was installed - on ub26 that already hid a second failed unit. The header comment assumed a
+  silent override; it is a loud refusal. The package file is now diverted with `dpkg-divert`
+  (`h-delete-sys-roundcube` gives it back), and the divert target sits OUTSIDE `/etc/logrotate.d`:
+  logrotate reads every file in that directory whatever the suffix, measured with `.hestia-diverted`
+  and `.dpkg-divert` before it. Two new smoke guards came out of this round: one asks logrotate
+  itself to parse the configuration instead of keeping a list of known collisions, one holds every
+  web record against its rendered vhost - the upstream check from #797 reads files, so a domain
+  whose vhost was skipped would have looked clean by being absent.
+
 - **An unreachable remote target failed anonymously, and the mail saying so never left the box**
   (#796). `sftpc` had no `eof` branch: a session that dies at once - no route, refused, unknown
   name, the everyday failure - left `rc` unset, `exit $rc` died on a tcl error and the caller read
