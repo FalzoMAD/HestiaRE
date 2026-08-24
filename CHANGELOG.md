@@ -208,6 +208,30 @@ opens above it.
   existing host keeps a stale `conf/defaults/system.conf` until `h-update-sys-defaults` runs once;
   a fresh install writes it correctly from the start.
 
+### Changed
+
+- **restic is an addon now, and the customer's mode is the only truth** (#217, stage 1).
+  `h-add-sys-restic` / `h-delete-sys-restic` replace the unconditional install in the base package
+  block plus an inert checkbox in the tools list - the checkbox reinstalled a package that was
+  there anyway, which is how #217's definition of done came to be accidentally fulfilled. Removing
+  the addon refuses while a customer still runs in restic mode and keeps repositories and keys:
+  deleting the tool must not delete backups. `BACKUPS_INCREMENTAL` is gone from packages, commands,
+  registry and panel (pre-v1, no migration path); `BACKUPS_MODE` decides, `BACKUP_INCREMENTAL`
+  remains the server switch and now means "restic installed and a repository configured". Two
+  measured defects from the stage-0 inventory are closed with it: `h-add-backup-host-restic` no
+  longer runs `restic self-update`, which replaced the package-owned binary in place (0.14.0 ->
+  0.19.1 on deb12, `dpkg --verify` complaining) even when the command then refused its work, and it
+  creates a local repository path instead of refusing without saying so - because that refusal left
+  the box unconfigured, and the backup then wrote into a RELATIVE repository named after the
+  customer wherever the run happened to start. One gate (`is_restic_repo_configured`) resolves the
+  repository and carries the separator that 62 call sites used to compose by hand. A smoke guard
+  holds every customer in restic mode against the addon and the configuration.
+
+- **The wizard no longer offers ProFTPD on mail-only** (#217, side finding). It was not just shown
+  but preselected, on a profile that has no customer web server to upload to; the row is fixed off
+  and unasked now, and the firewall rule goes with it. Sieve is preselected there instead - a box
+  that exists for mail should filter mail.
+
 ### Fixed
 
 - **logrotate failed on every target because our roundcube rotation doubled the package's** (#798).
