@@ -143,6 +143,7 @@ echo "$(date "+%F %T") Metadata: $meta_pkg (snapshot $snap_id)" \
 # so an empty result is refused rather than passed to forget.
 restic_prune=''
 keep_last=$(get_user_value '$BACKUPS')
+case "$keep_last" in '' | 0 | *[!0-9]*) keep_last="$SNAPSHOTS" ;; esac
 case "$keep_last" in
 	'' | 0 | *[!0-9]*) ;;
 	*) restic_prune="--keep-last $keep_last" ;;
