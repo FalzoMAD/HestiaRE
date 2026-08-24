@@ -821,6 +821,31 @@ check_vhost_upstream_host() {
 		no "$hit vhost(s) proxy to a hostless upstream" "$first"
 	fi
 }
+# check_restic_mode_supported - a customer in BACKUPS_MODE='restic' without the addon or without a
+# configured repository gets no backup at all, and the nightly run says so only in the log.
+check_restic_mode_supported() {
+	local u m repo n=0 bad=0 first=""
+	# The same question the gate asks: a conf can exist with REPO empty (half-finished setup), and
+	# that customer would pass here while every command fails. Read, not called - the gate exits.
+	repo=$(sed -n "s/^REPO='\([^']*\)'.*/\1/p" "$HESTIA/conf/restic.conf" 2> /dev/null | head -1)
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		m=$(sed -n "s/^.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$u/user.conf" 2> /dev/null | head -1)
+		[ "$m" = 'restic' ] || continue
+		n=$((n + 1))
+		if ! restic version > /dev/null 2>&1; then
+			bad=$((bad + 1))
+			[ -z "$first" ] && first="$u is in restic mode but restic is not installed"
+		elif [ -z "$repo" ]; then
+			bad=$((bad + 1))
+			[ -z "$first" ] && first="$u is in restic mode but no repository is configured"
+		fi
+	done
+	if [ "$bad" -eq 0 ]; then
+		ok "restic mode is supported where it is set ($n customer(s))"
+	else
+		no "$bad customer(s) in restic mode without support" "$first"
+	fi
+}
 # check_logrotate_parses - a doubled path makes logrotate skip that file and exit 1, so the unit
 # stays failed. Only a collision with one of our files is ours; base-system ones are named, not red.
 check_logrotate_parses() {
@@ -1361,6 +1386,7 @@ check_web_templates_resolvable
 check_vhost_upstream_host
 check_web_record_has_vhost
 check_logrotate_parses
+check_restic_mode_supported
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_key_registries

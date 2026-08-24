@@ -80,7 +80,7 @@ plain_list() {
 	echo -e "$UDIR\t$RUNTIME\t$TIME\t$DATE"
 }
 
-source_conf $HESTIA/conf/restic.conf
+is_restic_repo_configured
 
 restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json dump $snapshot /home/$user/backup/backup.conf > /home/$user/tmp/backup.conf
 

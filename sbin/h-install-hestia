@@ -163,7 +163,7 @@ install_base() {
 		git gnupg idn2 imagemagick jq nftables \
 		lsb-release lsof mc net-tools openssh-server quota \
 		rrdtool rsyslog sysstat unzip util-linux vim-common \
-		wget whois xxd zip zstd bubblewrap restic sudo \
+		wget whois xxd zip zstd bubblewrap sudo \
 		apt-transport-https awstats \
 		$BASE_PKGS_EXTRA
 
@@ -720,6 +720,10 @@ install_addons() {
 	if is_on "${COMPONENT_ADDON_FILEMANAGER:-}"; then
 		echo "[ * ] Installing File Manager..."
 		"$BIN/h-add-sys-filemanager" >> "$LOG" 2>&1 || true
+	fi
+	if is_on "${COMPONENT_ADDON_RESTIC:-}"; then
+		echo "[ * ] Installing restic (incremental backup mode)..."
+		"$BIN/h-add-sys-restic" >> "$LOG" 2>&1 || true
 	fi
 	stage_mark addons
 	echo "[ OK ] addons complete"

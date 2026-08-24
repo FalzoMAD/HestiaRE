@@ -410,7 +410,7 @@ if (!$impersonatingAdmin) { ?>
 
 				<!-- Backups tab -->
 				<?php if (isset($_SESSION["BACKUP_SYSTEM"]) && !empty($_SESSION["BACKUP_SYSTEM"])) { ?>
-					<?php if ($panel[$user]["BACKUPS"] != "0" || $panel[$user]["U_BACKUPS"] != "0" || $panel[$user]["BACKUPS_INCREMENTAL"] == "yes") { ?>
+					<?php if ($panel[$user]["BACKUPS"] != "0" || $panel[$user]["U_BACKUPS"] != "0" || ($panel[$user]["BACKUPS_MODE"] ?? "") == "restic") { ?>
 						<li class="main-menu-item">
 							<a class="main-menu-item-link <?php if ($TAB == "BACKUP") {
 								echo "active";

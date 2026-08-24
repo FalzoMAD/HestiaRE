@@ -71,7 +71,6 @@ is_package_consistent() {
 		is_int_format_valid "$BANDWIDTH" 'BANDWIDTH'
 	fi
 	is_int_format_valid "$BACKUPS" 'BACKUPS'
-	is_boolean_format_valid "$BACKUPS_INCREMENTAL" 'BACKUPS_INCREMENTAL'
 	# An unknown value would read as "not diff" in the backup and silently mean full.
 	case "${BACKUPS_MODE:-full}" in
 		full | diff) ;;
@@ -150,7 +149,6 @@ DOCKER_LIMIT='$DOCKER_LIMIT'
 BANDWIDTH='$BANDWIDTH'
 SHELL='$SHELL'
 BACKUPS='$BACKUPS'
-BACKUPS_INCREMENTAL='$BACKUPS_INCREMENTAL'
 BACKUPS_MODE='${BACKUPS_MODE:-full}'
 TIME='$time'
 DATE='$date'

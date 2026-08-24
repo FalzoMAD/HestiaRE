@@ -46,7 +46,7 @@ check_args '3' "$#" "$args_usage"
 is_format_valid 'user'
 is_object_valid 'user' 'USER' "$user"
 
-source_conf $HESTIA/conf/restic.conf
+is_restic_repo_configured
 
 #----------------------------------------------------------#
 #                       Action                             #
