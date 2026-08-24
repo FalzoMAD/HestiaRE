@@ -960,7 +960,8 @@ backup_download_norm() {
 }
 
 # FTP Functions
-# Defining ftp command function
+# Defining ftp command function. /usr/bin/ftp exits 0 even when it cannot connect or the login is
+# refused (measured), so failure is read from its output and confirmed later by remote_file_present.
 ftpc() {
 	/usr/bin/ftp -np $HOST $PORT << EOF
     quote USER $USERNAME

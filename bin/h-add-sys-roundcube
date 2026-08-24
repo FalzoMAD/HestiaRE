@@ -240,10 +240,12 @@ chown caddy:caddy /var/log/roundcube
 chmod 750 /var/log/roundcube
 # the fail2ban roundcube-auth jail tails userlogins, so the log must rotate
 # A path listed in two files is an error to logrotate: it skips the second one and exits 1, which
-# leaves logrotate.service failed and the whole box degraded (#798). Divert, don't just outrank.
+# leaves logrotate.service failed and the whole box degraded (#798). The divert target must sit
+# OUTSIDE the directory - logrotate reads every file in it, whatever the suffix (measured).
 if ! dpkg-divert --list /etc/logrotate.d/roundcube-core | grep -q 'roundcube-core'; then
+	mkdir -p "$CONF_DIR/diverted"
 	dpkg-divert --quiet --local --rename \
-		--divert /etc/logrotate.d/roundcube-core.hestia-diverted \
+		--divert "$CONF_DIR/diverted/roundcube-core.logrotate" \
 		--add /etc/logrotate.d/roundcube-core
 fi
 cp -f "$HESTIA/share/roundcube/logrotate" /etc/logrotate.d/roundcube
