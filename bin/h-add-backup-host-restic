@@ -64,9 +64,6 @@ restic version > /dev/null 2>&1 \
 if [[ $repo == "/"* ]]; then
 	[ -d "$repo" ] || mkdir -p "$repo" || check_result "$E_NOTEXIST" "cannot create '$repo'"
 	chmod 0700 "$repo"
-	# Trailing separator, because the runner composes "$REPO$user" - without it the customer name
-	# is glued to the last path element.
-	[ "${repo: -1}" = '/' ] || repo="$repo/"
 fi
 
 # Check if $repo starts with rclone

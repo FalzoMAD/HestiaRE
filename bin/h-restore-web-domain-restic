@@ -40,8 +40,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 # This run's own queue line, for the abort path (see queue_drop_job).
 QUEUE_JOB="h-restore-web-domain-restic '$user' '$snapshot' '$web'"
 
-is_restic_repo_configured
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#

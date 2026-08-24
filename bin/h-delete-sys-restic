@@ -44,14 +44,16 @@ fi
 if dpkg -l restic 2> /dev/null | grep -q '^ii'; then
 	DEBIAN_FRONTEND=noninteractive apt-get -y -qq purge restic > /dev/null 2>&1
 fi
-rm -f "$HESTIA/conf/restic.conf"
+# conf/restic.conf stays: it is the only record of WHERE the repositories are, and it is inert
+# without the package. Removing it would have kept the data and lost the address.
+repo=$(sed -n "s/^REPO='\([^']*\)'.*/\1/p" "$HESTIA/conf/restic.conf" 2> /dev/null | head -1)
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
 $BIN/h-change-sys-config-value 'BACKUP_INCREMENTAL' 'no'
-echo "restic removed - existing repositories and keys were kept"
+echo "restic removed - repositories under ${repo:-(none configured)} and their keys were kept"
 log_event "$OK" "$ARGUMENTS"
 
 exit
