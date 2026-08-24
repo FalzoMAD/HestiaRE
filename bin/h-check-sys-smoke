@@ -803,6 +803,26 @@ check_vhost_nonempty() {
 		no "$miss empty vhost config(s)" "$first"
 	fi
 }
+# check_vhost_upstream_host - an upstream without a host ("http://:3000") is what a docker domain
+# renders when its owner has no DOCKER_IP. nginx and apache reject the whole configuration for it,
+# not just that file, so every later reload fails - including one that has nothing to do with the
+# domain. Read from the rendered fragments, because a custom template produces the same shape.
+check_vhost_upstream_host() {
+	local f n=0 hit=0 first=""
+	for f in "/etc/$WEB_SYSTEM/conf.d/domains"/*.conf "/etc/${PROXY_SYSTEM:-none}/conf.d/domains"/*.conf; do
+		[ -e "$f" ] || continue
+		n=$((n + 1))
+		if grep -qE '://:[0-9]+' "$f"; then
+			hit=$((hit + 1))
+			[ -z "$first" ] && first="$f proxies to a port without a host"
+		fi
+	done
+	if [ "$hit" -eq 0 ]; then
+		ok "no vhost proxies to a hostless upstream ($n checked)"
+	else
+		no "$hit vhost(s) proxy to a hostless upstream" "$first"
+	fi
+}
 # check_web_templates_resolvable - a record pointing at a template that no longer exists
 # renders nothing. add_web_config now refuses instead of writing an empty vhost, so the
 # damage is visible - but only on the next rebuild, which may be weeks away.
@@ -1257,6 +1277,7 @@ check_realip_header
 check_proc_hardening
 # a record pointing at a removed template only shows up on the next rebuild.
 check_web_templates_resolvable
+check_vhost_upstream_host
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_key_registries
