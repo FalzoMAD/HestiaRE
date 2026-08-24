@@ -1191,7 +1191,9 @@ restic_excludes() {
 
 # Upper bound for the raw dumps, from the live databases - a stale record would under-count.
 restic_dump_space_needed() {
-	local _u="$1" _line _db _type _sum=0 usage database TYPE HOST
+	# The connect helpers set USER/PASSWORD/PORT globally; contained here except PORT, which they
+	# unset first - that drops the local binding and the assignment lands outside.
+	local _u="$1" _line _db _type _sum=0 usage database TYPE HOST USER PASSWORD PORT mycnf host_str
 	[ -f "$CONF_DIR/users/$_u/db.conf" ] || {
 		echo 0
 		return 0
@@ -1205,12 +1207,21 @@ restic_dump_space_needed() {
 		HOST=$(sed -n "s/.*HOST='\([^']*\)'.*/\1/p" <<< "$_line")
 		usage=0
 		case "$_type" in
-			mysql) get_mysql_disk_usage 2> /dev/null ;;
+			# Not get_mysql_disk_usage: it adds index_length, which a dump does not carry - on a
+			# schema with four secondary indexes that asked for 62 MB for an 8 MB dump (measured).
+			mysql)
+				mysql_connect "$HOST"
+				usage=$(mysql_query "SELECT ROUND(SUM(data_length)/1024/1024) FROM information_schema.TABLES
+					WHERE table_schema='$database'" | tail -n1)
+				case "$usage" in '' | NULL | *[!0-9]*) usage=1 ;; esac
+				[ "$usage" -gt 0 ] || usage=1
+				;;
+			# pg_database_size stays: with --inserts the text can outgrow the heap (measured 1.79x).
 			pgsql) get_pgsql_disk_usage 2> /dev/null ;;
 		esac
 		_sum=$((_sum + ${usage:-0}))
 	done < "$CONF_DIR/users/$_u/db.conf"
-	# The dump is text where the tables are pages, so half again on top of data plus indexes.
+	# Half again on top: measured worst case 0.88 (mysql, on data) and 0.89 (pgsql, on database size).
 	echo $((_sum + _sum / 2))
 }
 
