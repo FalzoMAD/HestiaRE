@@ -225,7 +225,12 @@ check_result() {
 	# E_NOTEXISTS are misspellings. Refuse loudly instead of passing the failure through.
 	case "${1:-}" in
 		'' | *[!0-9]*)
-			echo "Error: ${2:-failure} (check_result called with a bad exit code '${1:-}')" >&2
+			# Loud, and it names the caller: the next person must not look for the cause in the
+			# command that merely reported the symptom. Own log line, own exit code.
+			echo "Error: $(basename "$0") called check_result with an unusable exit code" \
+				"'${1:-}'${2:+ while reporting: $2}" >&2
+			echo "$(date +'%F %T') $(basename "$0") unusable check_result code '${1:-}': ${2:-}" \
+				>> "$HESTIA/log/error.log" 2> /dev/null
 			exit "$E_INVALID"
 			;;
 	esac
