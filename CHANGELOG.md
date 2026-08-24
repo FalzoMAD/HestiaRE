@@ -210,6 +210,17 @@ opens above it.
 
 ### Changed
 
+- **Three guards never fired, because check_result was called with a code that does not exist**
+  (#217). `E_BACKUP` was referenced by the restic path and defined nowhere, so `check_result` got an
+  empty first argument, its own `[ $1 -ne 0 ]` errored out, the function returned and the command
+  carried on - a failed restic backup continued as if nothing had happened. Found by fault
+  injection while proving the other half of the snapshot/package pair, then swept: `E_LIMI` in
+  `h-change-user-package` (the `T` sat outside the quotes) and `E_NOTEXISTS` in
+  `h-update-web-domain-stat` are the same shape. `E_BACKUP` is defined now (22 - 21 was taken in
+  the panel), the two misspellings are corrected, and `check_result` refuses an empty or
+  non-numeric code instead of waving it through, so the next typo is a loud failure rather than a
+  silenced check.
+
 - **A restic run writes two artefacts, and they belong together** (#217, stage 2a). Everything
   readable - records, SSL, PAM, the exclusion list, the per-domain and per-database records with
   their grants, cron - goes into a metadata package beside the repository
