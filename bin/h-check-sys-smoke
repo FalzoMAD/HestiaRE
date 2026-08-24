@@ -872,10 +872,13 @@ check_restic_pairs() {
 		skip "restic not installed"
 		return
 	}
+	local json ids sid
 	for u in $("$BIN/h-list-users" list 2> /dev/null); do
 		[ -f "$CONF_DIR/users/$u/restic.conf" ] || continue
-		tags=$(restic --repo "$repo$u" --password-file "$CONF_DIR/users/$u/restic.conf" --json \
-			snapshots 2> /dev/null | grep -o '"meta:[^"]*"' | tr -d '"')
+		json=$(restic --repo "$repo$u" --password-file "$CONF_DIR/users/$u/restic.conf" --json \
+			snapshots 2> /dev/null)
+		tags=$(grep -o '"meta:[^"]*"' <<< "$json" | tr -d '"')
+		ids=$(grep -o '"short_id":"[^"]*"' <<< "$json" | cut -d'"' -f4)
 		for tag in $tags; do
 			n=$((n + 1))
 			[ -f "$BACKUP/$u/${tag#meta:}.meta.tgz" ] && continue
@@ -886,6 +889,9 @@ check_restic_pairs() {
 			[ -f "$pkg" ] || continue
 			tag="meta:$(basename "$pkg" .meta.tgz)"
 			grep -qxF "$tag" <<< "$tags" && continue
+			# Second direction: the snapshot the package names itself.
+			sid=$(tar -xzOf "$pkg" ./restic.meta 2> /dev/null | sed -n "s/^SNAPSHOT='\([^']*\)'.*/\1/p")
+			[ -n "$sid" ] && grep -qxF "$sid" <<< "$ids" && continue
 			orphan_pkg=$((orphan_pkg + 1))
 			[ -z "$first" ] && first="$u: package $(basename "$pkg") has no snapshot"
 		done

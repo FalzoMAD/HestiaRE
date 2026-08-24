@@ -160,15 +160,21 @@ fi
 # One derivation for both halves: forget decides on snapshots, the packages follow the survivors.
 restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf forget $restic_prune --prune \
 	> /dev/null 2>&1
-kept=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json snapshots 2> /dev/null \
-	| grep -o '"meta:[^"]*"' | tr -d '"')
-if [ -n "$kept" ]; then
+_snap_json=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json snapshots 2> /dev/null)
+kept_tags=$(grep -o '"meta:[^"]*"' <<< "$_snap_json" | tr -d '"')
+kept_ids=$(grep -o '"short_id":"[^"]*"' <<< "$_snap_json" | cut -d'"' -f4)
+if [ -n "$kept_ids" ]; then
 	for _pkg in "$BACKUP/$user/$user".*.meta.tgz; do
 		[ -f "$_pkg" ] || continue
 		_tag="meta:$(basename "$_pkg" .meta.tgz)"
 		# The run that is writing right now is not in the list it would be measured against (#787).
 		[ "$_tag" = "meta:$user.$stamp" ] && continue
-		grep -qxF "$_tag" <<< "$kept" || rm -f "$_pkg"
+		grep -qxF "$_tag" <<< "$kept_tags" && continue
+		# Both directions before deleting: a missing tag alone would drop a package whose snapshot
+		# is alive, and the restore reads the package.
+		_sid=$(tar -xzOf "$_pkg" ./restic.meta 2> /dev/null | sed -n "s/^SNAPSHOT='\([^']*\)'.*/\1/p")
+		[ -n "$_sid" ] && grep -qxF "$_sid" <<< "$kept_ids" && continue
+		rm -f "$_pkg"
 	done
 fi
 
