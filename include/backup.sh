@@ -1142,12 +1142,9 @@ ftp_delete() {
 }
 
 # SFTP Functions
-# sftp command function. rc must exist at the end: a session that dies at once (no route, refused,
-# unknown name - the common failure) matched no branch, so "exit $rc" died with a tcl error and the
-# caller saw 1 (E_ARGS); its case then matched neither code and the failure was mailed and logged as
-# an empty line. The fallback is at the END and only fires when nothing set rc - an eof branch is
-# the wrong place for it, because eof also arrives after the regular "exit" and would turn every
-# successful session into a connection failure (measured on the fleet).
+# sftp command function. rc must exist at the end - a session dying at once matched no branch and
+# "exit $rc" then died on a tcl error, which the caller read as 1 (E_ARGS) and could not name. The
+# fallback belongs at the END: eof also arrives after the regular exit and would fail every success.
 sftpc() {
 	if [ "$PRIVATEKEY" != "yes" ]; then
 		expect -f "-" "$@" << EOF

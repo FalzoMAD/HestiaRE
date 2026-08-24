@@ -343,10 +343,8 @@ add_web_config() {
 	# Docker domain: the front renders from templates/docker/, a backend vhost would only shadow
 	# the container. TPL/PROXY stay untouched so a model switch survives; suspend override wins.
 	if [ -n "$DOCKER" ] && [ -z "$WEBTPL_OVERRIDE" ]; then
-		# The front needs the owner's /24. DOCKER set without DOCKER_IP renders "http://:PORT",
-		# an upstream with no host - and nginx and apache refuse the WHOLE configuration over it,
-		# so one inconsistent record takes the box's web front down (measured after a restore under
-		# a new customer name). Name it, drop what an earlier render left, skip this domain.
+		# DOCKER without DOCKER_IP renders "http://:PORT", and nginx and apache refuse their WHOLE
+		# configuration over such an upstream - one record would take the box's web front down.
 		if [ -z "$(get_user_value '$DOCKER_IP')" ]; then
 			echo "Error: $domain is a docker domain but $user has no DOCKER_IP - $1 vhost not written" >&2
 			web_config_skipped=$((${web_config_skipped:-0} + 1))
