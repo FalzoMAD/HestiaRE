@@ -66,7 +66,9 @@ tmpdir=$(mktemp -p "/home/$user/tmp/" -d)
 if [ ! -f "$tmpdir/backup.conf" ]; then
 	restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" dump "$snapshot" "/home/$user/backup/backup.conf" > "$tmpdir/backup.conf"
 	if [ "$?" -ne 0 ]; then
-		check_result "$E_NOTEXIST" "Invalid snapshot"
+		# Since #217 the metadata is not inside the snapshot any more: it travels as the package
+		# beside the repository. The reader for it arrives with the restore path (stage 3).
+		check_result "$E_NOTEXIST" "snapshot $snapshot carries no metadata - look for $BACKUP/$user/*.meta.tgz"
 	fi
 fi
 

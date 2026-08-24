@@ -31,7 +31,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '1' "$#" 'USER'
+check_args '1' "$#" 'USER [META_DIR] [DUMP_DIR]'
 is_format_valid 'user'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
@@ -43,11 +43,18 @@ is_object_unsuspended 'user' 'USER' "$user"
 # Get current time
 start_time=$(date '+%s')
 
-tmpdir="/home/$user/backup/"
+# Two roots since #217: everything readable goes into the metadata package (the caller turns
+# META_DIR into it), only the raw dumps stay in the home so restic can see them in one snapshot.
+tmpdir="${2:-$(mktemp -d)}"
+dumpdir="${3:-$HOMEDIR/$user/.dumps}"
 
-# We delete the backup dir first make sure all old database has been cleared
-rm -fr "/home/$user/backup/"
-mkdir -p "$tmpdir"
+# Leftovers of a dead run block the next one: yesterday's dump still counts as occupied space,
+# and a stale metadata tree would be packed as if it were this run's.
+rm -rf "$tmpdir" "$dumpdir"
+mkdir -p "$tmpdir" "$dumpdir"
+# The customer sees the directory and cannot enter it: it carries every database of the account.
+chown root:root "$dumpdir"
+chmod 0700 "$dumpdir"
 
 backup_user_dir "$user"
 
@@ -283,15 +290,13 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 		cd $tmpdir/db/$database/
 		grep -F "DB='$database'" $conf > hestia/db.conf
 
-		dump="$tmpdir/db/$database/$database.$TYPE.sql"
-		if [ "$BACKUP_MODE" = 'zstd' ]; then
-			dumpgz="$tmpdir/db/$database/$database.$TYPE.sql.zst"
-		else
-			dumpgz="$tmpdir/db/$database/$database.$TYPE.sql.gz"
-		fi
-
+		# Raw, and outside the package: a compressed dump changes over its whole length on a small
+		# data change and destroys restic's deduplication - measured 3.8 against 8.2 MiB for the
+		# second run. The repo format compresses on its own, so raw costs nothing there.
+		mkdir -p "$dumpdir"
+		dump="$dumpdir/$database.$TYPE.sql"
 		grants="$tmpdir/db/$database/conf/$database.$TYPE.$DBUSER"
-		if [ ! -f "$dumpgz" ]; then
+		if [ ! -f "$dump" ]; then
 
 			WAIT_LOOP_ENTERED=0
 			while true; do
@@ -312,13 +317,6 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 				pgsql) dump_pgsql_database ;;
 			esac
 
-			# Compress dump
-			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				pzstd -$BACKUP_GZIP $dump
-				rm $dump
-			else
-				gzip -$BACKUP_GZIP $dump
-			fi
 		fi
 	done
 

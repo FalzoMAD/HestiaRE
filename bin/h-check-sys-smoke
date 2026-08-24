@@ -825,9 +825,9 @@ check_vhost_upstream_host() {
 # configured repository gets no backup at all, and the nightly run says so only in the log.
 check_restic_mode_supported() {
 	local u m repo n=0 bad=0 first=""
-	# The same question the gate asks: a conf can exist with REPO empty (half-finished setup), and
-	# that customer would pass here while every command fails. Read, not called - the gate exits.
-	repo=$(sed -n "s/^REPO='\([^']*\)'.*/\1/p" "$HESTIA/conf/restic.conf" 2> /dev/null | head -1)
+	# The same resolution the gate uses, called directly - the gate itself exits through
+	# check_result, and a conf with an empty REPO must not pass here while every command fails.
+	repo=$(restic_repo_base) || repo=""
 	for u in $("$BIN/h-list-users" list 2> /dev/null); do
 		m=$(sed -n "s/^.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$u/user.conf" 2> /dev/null | head -1)
 		[ "$m" = 'restic' ] || continue

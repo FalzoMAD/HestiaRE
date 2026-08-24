@@ -405,15 +405,23 @@ is_backup_enabled() {
 	fi
 }
 
-# One place decides where the repository is, and an empty value is refused: composing "$REPO$user"
-# with an unset REPO made restic create a relative repo wherever the run started (#217, Stufe 0).
+# Pure resolution: the repository base, normalised so callers can append the customer, or rc=1 when
+# nothing is configured. Whoever asks decides whether that is fatal - the smoke guard needs the same
+# answer without the exit that check_result performs.
+restic_repo_base() {
+	local _repo
+	[ -f "$HESTIA/conf/restic.conf" ] || return 1
+	_repo=$(sed -n "s/^REPO='\([^']*\)'.*/\1/p" "$HESTIA/conf/restic.conf" | head -1)
+	[ -n "$_repo" ] || return 1
+	case "$_repo" in */ | *:) ;; *) _repo="$_repo/" ;; esac
+	echo "$_repo"
+}
+
+# The gate around it. Without a repository, "$REPO$user" was just the customer name and restic
+# created a relative repo wherever the run started (#217, Stufe 0).
 is_restic_repo_configured() {
-	[ -f "$HESTIA/conf/restic.conf" ] && source_conf "$HESTIA/conf/restic.conf"
-	if [ -z "${REPO:-}" ]; then
-		check_result "$E_NOTEXIST" "no restic repository configured - run h-add-backup-host-restic"
-	fi
-	# The callers compose "$REPO$user", so the separator belongs here, once.
-	case "$REPO" in */ | *:) ;; *) REPO="$REPO/" ;; esac
+	REPO=$(restic_repo_base) \
+		|| check_result "$E_NOTEXIST" "no restic repository configured - run h-add-backup-host-restic"
 }
 
 # BACKUPS_MODE is the single truth about a customer's backup mode (#217): a second per-user
