@@ -960,8 +960,8 @@ backup_download_norm() {
 }
 
 # FTP Functions
-# Defining ftp command function. /usr/bin/ftp exits 0 even when it cannot connect or the login is
-# refused (measured), so failure is read from its output and confirmed later by remote_file_present.
+# Defining ftp command function. /usr/bin/ftp exits 0 even when it cannot connect, so failure is
+# read from the output.
 ftpc() {
 	/usr/bin/ftp -np $HOST $PORT << EOF
     quote USER $USERNAME
@@ -1142,10 +1142,13 @@ ftp_delete() {
 	fi
 }
 
+# Derived, never an argument: the stager removes both as root.
+restic_meta_dir() { echo "${BACKUP_TEMP:-$BACKUP}/restic-meta.$1"; }
+restic_dump_dir() { echo "$HOMEDIR/$1/.dumps"; }
+
 # SFTP Functions
-# sftp command function. rc must exist at the end - a session dying at once matched no branch and
-# "exit $rc" then died on a tcl error, which the caller read as 1 (E_ARGS) and could not name. The
-# fallback belongs at the END: eof also arrives after the regular exit and would fail every success.
+# sftp command function. The rc fallback belongs at the END: eof also arrives after the regular
+# exit and would fail every success.
 sftpc() {
 	if [ "$PRIVATEKEY" != "yes" ]; then
 		expect -f "-" "$@" << EOF
@@ -1350,7 +1353,6 @@ sftp_backup() {
 		case $rc in
 			$E_CONNECT) error="Can't login to sftp host $HOST" ;;
 			$E_FTP) error="Can't create temp folder on sftp $HOST" ;;
-			# A code nobody anticipated still gets a sentence - an empty one reads as "no reason".
 			*) error="sftp to $HOST failed with code $rc" ;;
 		esac
 		echo "$error" | $SENDMAIL -s "$subj" $email "yes"

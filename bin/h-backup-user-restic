@@ -51,6 +51,7 @@ is_restic_repo_configured
 if [ ! -f "$USER_DATA/restic.conf" ]; then
 	password=$(generate_password '' '32')
 	echo "$password" > $USER_DATA/restic.conf
+	chmod 0600 "$USER_DATA/restic.conf"
 
 	restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf init
 	if [ $? -ne 0 ]; then
@@ -66,16 +67,58 @@ else
 	fi
 fi
 
-# create backup of the user.conf an database
-$BIN/h-backup-user-config $user
+# One stamp for both artefacts of this run.
+stamp=$(date +"%Y-%m-%d_%H-%M-%S")
+meta_dir=$(restic_meta_dir "$user")
+dump_dir=$(restic_dump_dir "$user")
+meta_pkg="$BACKUP/$user/$user.$stamp.meta.tgz"
+backup_user_dir "$user"
+# Every exit removes the stage, not just the successful one.
+trap 'rm -rf "$meta_dir" "$dump_dir"' EXIT
+
+$BIN/h-backup-user-config "$user"
+
 export GOMAXPROCS=2
 export RESTIC_READ_CONCURRENCY=2
-ionice -c2 -n7 nice -n 19 restic --repo "$REPO$user" --limit-upload 10240 --read-concurrency 2 --password-file $USER_DATA/restic.conf backup /home/$user
+# Asked from the binary, not from the version.
+restic_opts=()
+restic backup --help 2>&1 | grep -q -- '--read-concurrency' && restic_opts+=(--read-concurrency 2)
+ionice -c2 -n7 nice -n 19 restic --repo "$REPO$user" --limit-upload 10240 "${restic_opts[@]}" \
+	--password-file $USER_DATA/restic.conf --tag "meta:$user.$stamp" backup /home/$user
 
 if [ $? -ne 0 ]; then
 	echo "Unable to create the backup" | $SENDMAIL -s "$subj" "$email" "yes"
 	check_result $E_BACKUP "Unable to backup user"
 fi
+
+snap_id=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json snapshots \
+	--tag "meta:$user.$stamp" 2> /dev/null | grep -o '"short_id":"[^"]*"' | tail -1 | cut -d'"' -f4)
+# A package that cannot name its snapshot is half a restore point.
+if [ -z "$snap_id" ]; then
+	echo "Snapshot written but its id could not be read - no metadata package for $user.$stamp, so the snapshot has no partner" \
+		| $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "cannot read the snapshot id for $user.$stamp - no package written, the snapshot stays an orphan"
+fi
+{
+	echo "USER='$user'"
+	echo "REPO='$REPO$user'"
+	echo "SNAPSHOT='$snap_id'"
+	echo "STAMP='$stamp'"
+	echo "HOST='$(hostname)'"
+	echo "VERSION='$(cat $HESTIA/VERSION 2> /dev/null)'"
+} > "$meta_dir/restic.meta"
+# Second key copy, with the artefact's lifetime (D1).
+cp -p "$USER_DATA/restic.conf" "$meta_dir/restic.key"
+if ! tar -czf "$meta_pkg" -C "$meta_dir" .; then
+	echo "Unable to write the metadata package $meta_pkg" | $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "cannot write $meta_pkg - the snapshot has no metadata beside it"
+fi
+# The panel pool reads it, the customer must not: it carries pam and the key.
+chown hestia:hestia "$meta_pkg"
+chmod 0640 "$meta_pkg"
+rm -rf "$meta_dir" "$dump_dir"
+echo "$(date "+%F %T") Metadata: $meta_pkg (snapshot $snap_id)" \
+	| tee -a $BACKUP/$user/$user.log
 
 if [[ -n "$SNAPSHOTS" && "$SNAPSHOTS" -ge 0 ]]; then
 	restic_prune="$restic_prune --keep-last $SNAPSHOTS"

@@ -821,13 +821,51 @@ check_vhost_upstream_host() {
 		no "$hit vhost(s) proxy to a hostless upstream" "$first"
 	fi
 }
-# check_restic_mode_supported - a customer in BACKUPS_MODE='restic' without the addon or without a
-# configured repository gets no backup at all, and the nightly run says so only in the log.
+# check_error_code_registry - the exit codes live twice, in the shell and in the panel, and nothing
+# holds them together. Known alias: E_FORBIDEN/E_FORBIDDEN share 10 on purpose.
+check_error_code_registry() {
+	local sh_file="$HESTIA/include/main.sh" php_file="$HESTIA/web/inc/helpers.php"
+	local name val conflict=0 dupes=0 n=0 first=""
+	if [ ! -f "$sh_file" ] || [ ! -f "$php_file" ]; then
+		skip "error code registries not both present"
+		return
+	fi
+	declare -A _sh=() _php=() _seen=()
+	while IFS='=' read -r name val; do
+		_sh[$name]=$val
+		n=$((n + 1))
+	done < <(grep -oE '^E_[A-Z_]+=[0-9]+' "$sh_file")
+	while read -r name val; do
+		_php[$name]=$val
+	done < <(sed -n 's/^const \(E_[A-Z_]*\) *= *\([0-9]*\);.*/ /p' "$php_file")
+	for name in "${!_sh[@]}"; do
+		[ -n "${_php[$name]:-}" ] || continue
+		if [ "${_sh[$name]}" != "${_php[$name]}" ]; then
+			conflict=$((conflict + 1))
+			[ -z "$first" ] && first="$name is ${_sh[$name]} in the shell and ${_php[$name]} in the panel"
+		fi
+	done
+	for name in "${!_php[@]}"; do
+		case "$name" in E_FORBIDEN | E_FORBIDDEN) continue ;; esac
+		val=${_php[$name]}
+		if [ -n "${_seen[$val]:-}" ]; then
+			dupes=$((dupes + 1))
+			[ -z "$first" ] && first="${_seen[$val]} and $name both use $val in the panel"
+		fi
+		_seen[$val]=$name
+	done
+	if [ "$conflict" -eq 0 ] && [ "$dupes" -eq 0 ]; then
+		ok "error codes agree between shell and panel ($n shell codes)"
+	else
+		no "$((conflict + dupes)) error code(s) out of step" "$first"
+	fi
+}
+# check_restic_mode_supported - restic mode without the addon or without a repository means no
+# backup at all, and the nightly run says so only in the log.
 check_restic_mode_supported() {
 	local u m repo n=0 bad=0 first=""
-	# The same question the gate asks: a conf can exist with REPO empty (half-finished setup), and
-	# that customer would pass here while every command fails. Read, not called - the gate exits.
-	repo=$(sed -n "s/^REPO='\([^']*\)'.*/\1/p" "$HESTIA/conf/restic.conf" 2> /dev/null | head -1)
+	# The gate's own resolution, called directly - the gate would exit through check_result.
+	repo=$(restic_repo_base) || repo=""
 	for u in $("$BIN/h-list-users" list 2> /dev/null); do
 		m=$(sed -n "s/^.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$u/user.conf" 2> /dev/null | head -1)
 		[ "$m" = 'restic' ] || continue
@@ -846,8 +884,8 @@ check_restic_mode_supported() {
 		no "$bad customer(s) in restic mode without support" "$first"
 	fi
 }
-# check_logrotate_parses - a doubled path makes logrotate skip that file and exit 1, so the unit
-# stays failed. Only a collision with one of our files is ours; base-system ones are named, not red.
+# check_logrotate_parses - a doubled path makes logrotate exit 1 and the unit stay failed. Only a
+# collision with one of our files is ours; base-system ones are named, not red.
 check_logrotate_parses() {
 	local out owned line path f pat mine ours=0 base=0 first="" basefiles="" mycount=0
 	if ! command -v logrotate > /dev/null 2>&1; then
@@ -1387,6 +1425,7 @@ check_vhost_upstream_host
 check_web_record_has_vhost
 check_logrotate_parses
 check_restic_mode_supported
+check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_key_registries

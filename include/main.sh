@@ -121,6 +121,7 @@ E_DB=17
 E_RRD=18
 E_UPDATE=19
 E_RESTART=20
+E_BACKUP=22
 
 # Detect operating system
 detect_os() {
@@ -217,6 +218,16 @@ log_history() {
 
 # Result checker
 check_result() {
+	# An unusable code silently disarms the check below.
+	case "${1:-}" in
+		'' | *[!0-9]*)
+			echo "Error: $(basename "$0") called check_result with an unusable exit code" \
+				"'${1:-}'${2:+ while reporting: $2}" >&2
+			echo "$(date +'%F %T') $(basename "$0") unusable check_result code '${1:-}': ${2:-}" \
+				>> "$HESTIA/log/error.log" 2> /dev/null
+			exit "$E_INVALID"
+			;;
+	esac
 	if [ $1 -ne 0 ]; then
 		local err_code="${3:-$1}"
 		if [[ -n "$CHECK_RESULT_CALLBACK" && "$(type -t "$CHECK_RESULT_CALLBACK")" == 'function' ]]; then
@@ -405,19 +416,21 @@ is_backup_enabled() {
 	fi
 }
 
-# One place decides where the repository is, and an empty value is refused: composing "$REPO$user"
-# with an unset REPO made restic create a relative repo wherever the run started (#217, Stufe 0).
-is_restic_repo_configured() {
-	[ -f "$HESTIA/conf/restic.conf" ] && source_conf "$HESTIA/conf/restic.conf"
-	if [ -z "${REPO:-}" ]; then
-		check_result "$E_NOTEXIST" "no restic repository configured - run h-add-backup-host-restic"
-	fi
-	# The callers compose "$REPO$user", so the separator belongs here, once.
-	case "$REPO" in */ | *:) ;; *) REPO="$REPO/" ;; esac
+# The normalised repository base, rc=1 when unset. Pure, so the smoke guard can ask too.
+restic_repo_base() {
+	local _repo
+	[ -f "$HESTIA/conf/restic.conf" ] || return 1
+	_repo=$(sed -n "s/^REPO='\([^']*\)'.*/\1/p" "$HESTIA/conf/restic.conf" | head -1)
+	[ -n "$_repo" ] || return 1
+	case "$_repo" in */ | *:) ;; *) _repo="$_repo/" ;; esac
+	echo "$_repo"
 }
 
-# BACKUPS_MODE is the single truth about a customer's backup mode (#217): a second per-user
-# switch could contradict it, and the two would take turns being right.
+is_restic_repo_configured() {
+	REPO=$(restic_repo_base) \
+		|| check_result "$E_NOTEXIST" "no restic repository configured - run h-add-backup-host-restic"
+}
+
 is_backup_mode_restic() {
 	local _mode
 	_mode=$(sed -n "s/^.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)

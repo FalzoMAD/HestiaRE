@@ -210,6 +210,34 @@ opens above it.
 
 ### Changed
 
+- **Three guards never fired, because check_result was called with a code that does not exist**
+  (#217). `E_BACKUP` was referenced by the restic path and defined nowhere, so `check_result` got an
+  empty first argument, its own `[ $1 -ne 0 ]` errored out, the function returned and the command
+  carried on - a failed restic backup continued as if nothing had happened. Found by fault
+  injection while proving the other half of the snapshot/package pair, then swept: `E_LIMI` in
+  `h-change-user-package` (the `T` sat outside the quotes) and `E_NOTEXISTS` in
+  `h-update-web-domain-stat` are the same shape. `E_BACKUP` is defined now (22 - 21 was taken in
+  the panel), the two misspellings are corrected, and `check_result` refuses an empty or
+  non-numeric code instead of waving it through, so the next typo is a loud failure rather than a
+  silenced check.
+
+- **A restic run writes two artefacts, and they belong together** (#217, stage 2a). Everything
+  readable - records, SSL, PAM, the exclusion list, the per-domain and per-database records with
+  their grants, cron - goes into a metadata package beside the repository
+  (`/backup/$user/$user.<stamp>.meta.tgz`, `hestia:hestia` 0640: the panel pool reads it, the
+  customer does not, because it carries pam and a copy of the repository key). Only the raw
+  database dumps stay in the home, in `/home/$user/.dumps` (root, 0700), so one snapshot root
+  covers them - raw because a compressed dump changes over its whole length on a small data change
+  and destroys deduplication (measured: 3.8 against 8.2 MiB for the second run, while the repo
+  format compresses on its own). With that, the customer's own `/etc/shadow` line is no longer in
+  a directory the file manager can read. Snapshot and package are one restore point: same stamp,
+  the snapshot carries the package name as a tag, the package names repository and snapshot id,
+  and the run fails if either half cannot be written. `--read-concurrency` is only passed when the
+  binary knows it, which brings Debian 12 (restic 0.14) back from being structurally dead.
+  **Interim, until stage 2b:** the packages do not rotate yet - the archive rotation does not see
+  them, its pattern ends in `.tar`, so `/backup/$user/` grows by one package per run until the
+  retention that treats snapshot and package as a unit lands.
+
 - **restic is an addon now, and the customer's mode is the only truth** (#217, stage 1).
   `h-add-sys-restic` / `h-delete-sys-restic` replace the unconditional install in the base package
   block plus an inert checkbox in the tools list - the checkbox reinstalled a package that was

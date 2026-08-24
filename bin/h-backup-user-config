@@ -1,10 +1,10 @@
 #!/bin/bash
-# info: backup system user config only
-# options: USER NOTIFY
+# info: stage a restic run - metadata into the package directory, raw dumps into the home
+# options: USER
 #
-# example: h-backup-user admin yes
+# example: h-backup-user-config admin
 #
-# This function is used for backing up user with all its domains and databases.
+# Readable metadata into the package directory, raw database dumps into $HOMEDIR/$user/.dumps.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -43,11 +43,15 @@ is_object_unsuspended 'user' 'USER' "$user"
 # Get current time
 start_time=$(date '+%s')
 
-tmpdir="/home/$user/backup/"
+# Derived, never arguments: both are removed as root below.
+tmpdir=$(restic_meta_dir "$user")
+dumpdir=$(restic_dump_dir "$user")
 
-# We delete the backup dir first make sure all old database has been cleared
-rm -fr "/home/$user/backup/"
-mkdir -p "$tmpdir"
+rm -rf "$tmpdir" "$dumpdir"
+mkdir -p "$tmpdir" "$dumpdir"
+# Visible but not enterable.
+chown root:root "$dumpdir"
+chmod 0700 "$dumpdir"
 
 backup_user_dir "$user"
 
@@ -283,15 +287,11 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 		cd $tmpdir/db/$database/
 		grep -F "DB='$database'" $conf > hestia/db.conf
 
-		dump="$tmpdir/db/$database/$database.$TYPE.sql"
-		if [ "$BACKUP_MODE" = 'zstd' ]; then
-			dumpgz="$tmpdir/db/$database/$database.$TYPE.sql.zst"
-		else
-			dumpgz="$tmpdir/db/$database/$database.$TYPE.sql.gz"
-		fi
-
+		# Raw: compressing here would kill restic's deduplication.
+		mkdir -p "$dumpdir"
+		dump="$dumpdir/$database.$TYPE.sql"
 		grants="$tmpdir/db/$database/conf/$database.$TYPE.$DBUSER"
-		if [ ! -f "$dumpgz" ]; then
+		if [ ! -f "$dump" ]; then
 
 			WAIT_LOOP_ENTERED=0
 			while true; do
@@ -312,13 +312,6 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 				pgsql) dump_pgsql_database ;;
 			esac
 
-			# Compress dump
-			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				pzstd -$BACKUP_GZIP $dump
-				rm $dump
-			else
-				gzip -$BACKUP_GZIP $dump
-			fi
 		fi
 	done
 
