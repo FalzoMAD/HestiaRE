@@ -227,8 +227,9 @@ opens above it.
   directories) while DB and CRON stay object exclusions that legitimately produce no path - and the
   stage is never excluded, whatever a customer writes into the list, because that would drop their
   own records and dumps out of their backup while the run stayed green. Retention comes from ONE
-  derivation: `forget` decides over the snapshots, and the packages follow the survivors through
-  their tags rather than through a second naming logic; the run that is writing right now is exempt,
+  derivation: `forget` decides over the snapshots, and the packages follow the survivors -
+  through the tag a snapshot carries AND the snapshot id the package names, so a lost tag alone
+  never drops a package whose data is still there; the run that is writing right now is exempt,
   because its pair is not yet in the list it would be measured against (#787). A policy that keeps
   nothing is refused instead of handed to `forget`, `BACKUPS=0` now falls through
   `is_backup_enabled` like it does in the archive path, and the monthly slot works for the first
