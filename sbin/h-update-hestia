@@ -84,5 +84,9 @@ rm -rf "/tmp/hestiare-$LATEST"
 # while the panel is stopped, so the new code never reads the old paths.
 # shellcheck disable=SC1090
 [ -f "$HESTIA/include/helper.sh" ] && . "$HESTIA/include/helper.sh" && reapply_outside_tree || true
+# The key registries under conf/defaults/ were written at install time. A release that adds or
+# drops a record key leaves them stale, and the repairs then work from yesterday's key list while
+# the smoke check reports drift on every updated box.
+"$HESTIA/bin/h-update-sys-defaults" > /dev/null 2>&1 || true
 systemctl start caddy hestia-php 2> /dev/null || true
 echo "Update complete."
