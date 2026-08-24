@@ -68,8 +68,11 @@ rm -f "/usr/share/roundcube/plugins/password/drivers/hestia.php"
 # Remove remaining config directory if it exists
 rm -rf "$RC_CONFIG_DIR"
 
-# Remove the logrotate fragment deployed by h-add-sys-roundcube
+# Remove the logrotate fragment deployed by h-add-sys-roundcube, and give the package its own back
 rm -f /etc/logrotate.d/roundcube
+if dpkg-divert --list /etc/logrotate.d/roundcube-core | grep -q 'roundcube-core'; then
+	dpkg-divert --quiet --local --rename --remove /etc/logrotate.d/roundcube-core
+fi
 
 # the User=caddy drop-ins for the packaged maintenance timers (units are gone with the purge)
 rm -rf /etc/systemd/system/roundcube-gc.service.d /etc/systemd/system/roundcube-cleandb.service.d

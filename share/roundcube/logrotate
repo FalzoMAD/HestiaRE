@@ -1,7 +1,6 @@
 # Roundcube logs as the caddy FPM pool user, so rotation must recreate the files caddy-owned; the
-# roundcube-core package rotates the same paths as www-data:adm, which would leave them unwritable.
-# Both files cover *.log, so logrotate skips whichever it reads second - ours wins because "roundcube"
-# sorts before "roundcube-core". Do not rename this file, and do not delete theirs: it is a dpkg conffile.
+# roundcube-core package would recreate them www-data:adm and unwritable. Its file is diverted away
+# by h-add-sys-roundcube: listing a path twice is an error to logrotate, not a silent override.
 /var/log/roundcube/*.log
 /var/log/roundcube/errors
 /var/log/roundcube/sendmail
