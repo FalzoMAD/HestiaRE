@@ -1142,10 +1142,12 @@ ftp_delete() {
 }
 
 # SFTP Functions
-# sftp command function. Every branch must set rc: without an eof branch a session that dies at
-# once (no route, refused, unknown name - the common failure) left rc unset, "exit $rc" died with
-# a tcl error, and the caller saw 1 (E_ARGS). Its case then matched neither code, so the failure
-# was mailed and logged as an empty line while the reason was known all along.
+# sftp command function. rc must exist at the end: a session that dies at once (no route, refused,
+# unknown name - the common failure) matched no branch, so "exit $rc" died with a tcl error and the
+# caller saw 1 (E_ARGS); its case then matched neither code and the failure was mailed and logged as
+# an empty line. The fallback is at the END and only fires when nothing set rc - an eof branch is
+# the wrong place for it, because eof also arrives after the regular "exit" and would turn every
+# successful session into a connection failure (measured on the fleet).
 sftpc() {
 	if [ "$PRIVATEKEY" != "yes" ]; then
 		expect -f "-" "$@" << EOF
@@ -1199,18 +1201,14 @@ sftpc() {
                     set output "Connection timeout."
                     set rc $E_CONNECT
                 }
-
-                eof {
-                    set output "Connection to $HOST failed."
-                    set rc $E_CONNECT
-                }
             }
 
+            if {[info exists rc] != 1} {
+                set output "Connection to $HOST failed."
+                set rc $E_CONNECT
+            }
             if {[info exists output] == 1} {
                 puts "\$output"
-            }
-            if {[info exists rc] != 1} {
-                set rc $E_CONNECT
             }
 
         exit \$rc
@@ -1263,18 +1261,14 @@ EOF
                     set output "Connection timeout."
                     set rc $E_CONNECT
                 }
-
-                eof {
-                    set output "Connection to $HOST failed."
-                    set rc $E_CONNECT
-                }
             }
 
+            if {[info exists rc] != 1} {
+                set output "Connection to $HOST failed."
+                set rc $E_CONNECT
+            }
             if {[info exists output] == 1} {
                 puts "\$output"
-            }
-            if {[info exists rc] != 1} {
-                set rc $E_CONNECT
             }
 
         exit \$rc
