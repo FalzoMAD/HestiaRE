@@ -1142,6 +1142,64 @@ ftp_delete() {
 	fi
 }
 
+# Path-producing exclusions only: DB and CRON exclude objects, not paths. The stage is never
+# excluded, whatever the customer writes into the list.
+restic_excludes() {
+	local _u="$1" _f="$CONF_DIR/users/$1/backup-excludes.conf" _e
+	[ -f "$_f" ] || return 0
+	local WEB='' MAIL='' USER=''
+	# shellcheck disable=SC1090
+	source "$_f" 2> /dev/null
+	case "$WEB" in
+		'*') echo "$HOMEDIR/$_u/web" ;;
+		?*) for _e in ${WEB//,/ }; do echo "$HOMEDIR/$_u/web/$_e"; done ;;
+	esac
+	case "$MAIL" in
+		'*') echo "$HOMEDIR/$_u/mail" ;;
+		?*) for _e in ${MAIL//,/ }; do echo "$HOMEDIR/$_u/mail/$_e"; done ;;
+	esac
+	case "$USER" in
+		'*')
+			for _e in "$HOMEDIR/$_u"/* "$HOMEDIR/$_u"/.[!.]*; do
+				[ -e "$_e" ] || continue
+				case "${_e##*/}" in web | mail | .dumps) continue ;; esac
+				echo "$_e"
+			done
+			;;
+		?*)
+			for _e in ${USER//,/ }; do
+				[ "$_e" = '.dumps' ] && continue
+				echo "$HOMEDIR/$_u/$_e"
+			done
+			;;
+	esac
+}
+
+# Upper bound for the raw dumps, from the live databases - a stale record would under-count.
+restic_dump_space_needed() {
+	local _u="$1" _line _db _type _sum=0 usage database TYPE HOST
+	[ -f "$CONF_DIR/users/$_u/db.conf" ] || {
+		echo 0
+		return 0
+	}
+	while read -r _line; do
+		_db=$(sed -n "s/.*DB='\([^']*\)'.*/\1/p" <<< "$_line")
+		_type=$(sed -n "s/.*TYPE='\([^']*\)'.*/\1/p" <<< "$_line")
+		[ -n "$_db" ] || continue
+		database="$_db"
+		TYPE="$_type"
+		HOST=$(sed -n "s/.*HOST='\([^']*\)'.*/\1/p" <<< "$_line")
+		usage=0
+		case "$_type" in
+			mysql) get_mysql_disk_usage 2> /dev/null ;;
+			pgsql) get_pgsql_disk_usage 2> /dev/null ;;
+		esac
+		_sum=$((_sum + ${usage:-0}))
+	done < "$CONF_DIR/users/$_u/db.conf"
+	# The dump is text where the tables are pages, so half again on top of data plus indexes.
+	echo $((_sum + _sum / 2))
+}
+
 # Derived, never an argument: the stager removes both as root.
 restic_meta_dir() { echo "${BACKUP_TEMP:-$BACKUP}/restic-meta.$1"; }
 restic_dump_dir() { echo "$HOMEDIR/$1/.dumps"; }
