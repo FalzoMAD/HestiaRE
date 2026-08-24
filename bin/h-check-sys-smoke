@@ -821,27 +821,56 @@ check_vhost_upstream_host() {
 		no "$hit vhost(s) proxy to a hostless upstream" "$first"
 	fi
 }
-# check_logrotate_parses - a path listed in two files is an error to logrotate: it skips the second
-# file and exits 1, so the unit stays failed and the box reads "degraded" over something unread.
+# check_logrotate_parses - a doubled path makes logrotate skip that file and exit 1, so the unit
+# stays failed. Only a collision with one of our files is ours; base-system ones are named, not red.
 check_logrotate_parses() {
-	local out errs first n
+	local out owned line path f pat mine ours=0 base=0 first="" basefiles="" mycount=0
 	if ! command -v logrotate > /dev/null 2>&1; then
 		skip "logrotate not installed"
 		return
 	fi
 	out=$(logrotate -d /etc/logrotate.conf 2>&1)
-	errs=$(grep -c '^error:' <<< "$out")
-	first=$(grep -m1 '^error:' <<< "$out")
-	n=$(find /etc/logrotate.d -maxdepth 1 -type f 2> /dev/null | wc -l)
-	if [ "$errs" -eq 0 ]; then
-		ok "logrotate parses its configuration ($n file(s))"
+	# ours = whatever no package claims, so a file added by hand counts as ours too
+	owned=$(dpkg -S /etc/logrotate.d/* 2> /dev/null | sed 's/^[^:]*: //')
+	for f in /etc/logrotate.d/*; do
+		[ -f "$f" ] || continue
+		grep -qxF "$f" <<< "$owned" || mycount=$((mycount + 1))
+	done
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		path=${line##*duplicate log entry for }
+		[ "$path" != "$line" ] || continue
+		mine=0
+		for f in /etc/logrotate.d/*; do
+			[ -f "$f" ] || continue
+			grep -qxF "$f" <<< "$owned" && continue
+			while read -r pat; do
+				# shellcheck disable=SC2254  # the config line IS a glob, matching it is the point
+				case "$path" in $pat) mine=1 ;; esac
+			done < <(grep -oE '^/[^ {]+' "$f")
+		done
+		if [ "$mine" = 1 ]; then
+			ours=$((ours + 1))
+			[ -z "$first" ] && first="${line#error: }"
+		else
+			base=$((base + 1))
+			f=${line#error: }
+			f=${f%%:*}
+			grep -qw "$f" <<< "$basefiles" || basefiles="${basefiles:+$basefiles, }$f"
+		fi
+	done <<< "$(grep '^error:' <<< "$out")"
+	if [ "$ours" -gt 0 ]; then
+		no "$ours logrotate collision(s) involving a file of ours" "$first"
+	elif [ "$base" -gt 0 ]; then
+		ok "logrotate: our $mycount file(s) collide with nothing - $base base-system conflict(s), not ours: $basefiles"
 	else
-		no "$errs logrotate configuration error(s)" "$first"
+		ok "logrotate parses its configuration (ours: $mycount file(s))"
 	fi
 }
 # check_web_record_has_vhost - the upstream check reads files, so a domain whose vhost was skipped
 # looks clean by being absent. Expectation comes from the record: a docker domain in a proxy model
 # has its backend vhost removed on purpose, everything else needs the front (and the proxy it names).
+# Not covered: the SSL variant of a fragment, and whether the vhost inside is the right one.
 check_web_record_has_vhost() {
 	local u line d docker proxy sys fronts n=0 miss=0 first=""
 	if [ -z "$WEB_SYSTEM" ]; then
