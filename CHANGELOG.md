@@ -218,7 +218,11 @@ opens above it.
   (`h-delete-sys-roundcube` gives it back), and the divert target sits OUTSIDE `/etc/logrotate.d`:
   logrotate reads every file in that directory whatever the suffix, measured with `.hestia-diverted`
   and `.dpkg-divert` before it. Two new smoke guards came out of this round: one asks logrotate
-  itself to parse the configuration instead of keeping a list of known collisions, one holds every
+  itself to parse the configuration instead of keeping a list of known collisions - and sorts what
+  it finds by ownership, because `/etc/logrotate.d` also holds what the base image brought along
+  (`cloud-init` on some Ubuntu images): a collision one of our files takes part in is a failure, a
+  duplicate purely between package files is named and stays green, or the guard would be
+  permanently red for something HestiaRE must not touch. One holds every
   web record against its rendered vhost - the upstream check from #797 reads files, so a domain
   whose vhost was skipped would have looked clean by being absent.
 
