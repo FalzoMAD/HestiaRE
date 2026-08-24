@@ -1145,18 +1145,30 @@ ftp_delete() {
 # Path-producing exclusions only: DB and CRON exclude objects, not paths. The stage is never
 # excluded, whatever the customer writes into the list.
 restic_excludes() {
-	local _u="$1" _f="$CONF_DIR/users/$1/backup-excludes.conf" _e
+	local _u="$1" _f="$CONF_DIR/users/$1/backup-excludes.conf" _e _list=()
 	[ -f "$_f" ] || return 0
-	local WEB='' MAIL='' USER=''
+	# All five keys local: the file sets them globally, and the caller's subshell is not our guard.
+	local WEB='' MAIL='' DB='' CRON='' USER=''
 	# shellcheck disable=SC1090
 	source "$_f" 2> /dev/null
+	# read -a, never an unquoted expansion: a '*' inside the list would glob against the cwd (#761).
 	case "$WEB" in
 		'*') echo "$HOMEDIR/$_u/web" ;;
-		?*) for _e in ${WEB//,/ }; do echo "$HOMEDIR/$_u/web/$_e"; done ;;
+		?*)
+			IFS=',' read -r -a _list <<< "$WEB"
+			for _e in "${_list[@]}"; do
+				[ -n "$_e" ] && echo "$HOMEDIR/$_u/web/$_e"
+			done
+			;;
 	esac
 	case "$MAIL" in
 		'*') echo "$HOMEDIR/$_u/mail" ;;
-		?*) for _e in ${MAIL//,/ }; do echo "$HOMEDIR/$_u/mail/$_e"; done ;;
+		?*)
+			IFS=',' read -r -a _list <<< "$MAIL"
+			for _e in "${_list[@]}"; do
+				[ -n "$_e" ] && echo "$HOMEDIR/$_u/mail/$_e"
+			done
+			;;
 	esac
 	case "$USER" in
 		'*')
@@ -1167,12 +1179,14 @@ restic_excludes() {
 			done
 			;;
 		?*)
-			for _e in ${USER//,/ }; do
-				[ "$_e" = '.dumps' ] && continue
+			IFS=',' read -r -a _list <<< "$USER"
+			for _e in "${_list[@]}"; do
+				case "$_e" in '' | .dumps) continue ;; esac
 				echo "$HOMEDIR/$_u/$_e"
 			done
 			;;
 	esac
+	return 0
 }
 
 # Upper bound for the raw dumps, from the live databases - a stale record would under-count.

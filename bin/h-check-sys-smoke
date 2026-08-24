@@ -863,7 +863,7 @@ check_error_code_registry() {
 # check_restic_pairs - a snapshot without its package cannot be restored, a package without its
 # snapshot describes nothing. Derived from the tags, so it also sees a package deleted by hand.
 check_restic_pairs() {
-	local u repo tags pkg tag n=0 orphan_snap=0 orphan_pkg=0 first=""
+	local u repo tags pkg tag n=0 orphan_snap=0 orphan_pkg=0 first="" unread=0 first_unread=""
 	repo=$(restic_repo_base) || {
 		ok "no restic repository configured - pairs not checked"
 		return
@@ -872,11 +872,19 @@ check_restic_pairs() {
 		skip "restic not installed"
 		return
 	}
-	local json ids sid
+	local json ids sid rc
 	for u in $("$BIN/h-list-users" list 2> /dev/null); do
 		[ -f "$CONF_DIR/users/$u/restic.conf" ] || continue
 		json=$(restic --repo "$repo$u" --password-file "$CONF_DIR/users/$u/restic.conf" --json \
 			snapshots 2> /dev/null)
+		rc=$?
+		# A repository that cannot be read is not an empty one: counting orphans here would blame
+		# every package for a broken line.
+		if [ "$rc" -ne 0 ]; then
+			unread=$((unread + 1))
+			[ -z "$first_unread" ] && first_unread="repository for $u could not be read (restic rc=$rc)"
+			continue
+		fi
 		tags=$(grep -o '"meta:[^"]*"' <<< "$json" | tr -d '"')
 		ids=$(grep -o '"short_id":"[^"]*"' <<< "$json" | cut -d'"' -f4)
 		for tag in $tags; do
@@ -896,7 +904,9 @@ check_restic_pairs() {
 			[ -z "$first" ] && first="$u: package $(basename "$pkg") has no snapshot"
 		done
 	done
-	if [ "$((orphan_snap + orphan_pkg))" -eq 0 ]; then
+	if [ "$unread" -gt 0 ]; then
+		no "$unread restic repository(s) could not be read - only $n pair(s) checked" "$first_unread"
+	elif [ "$((orphan_snap + orphan_pkg))" -eq 0 ]; then
 		ok "every restic snapshot has its package ($n pair(s))"
 	else
 		no "$((orphan_snap + orphan_pkg)) restic artefact(s) without a partner" "$first"

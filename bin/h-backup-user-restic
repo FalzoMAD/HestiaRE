@@ -158,8 +158,13 @@ if [ -z "$restic_prune" ]; then
 fi
 
 # One derivation for both halves: forget decides on snapshots, the packages follow the survivors.
-restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf forget $restic_prune --prune \
-	> /dev/null 2>&1
+# A discarded rc would let a failed forget pass as a retention that ran (Stufe 0), and the packages
+# would then rotate against a survivor list nobody wrote.
+if ! restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf forget $restic_prune \
+	--prune >> $BACKUP/$user/$user.log 2>&1; then
+	echo "Retention did not run for $user - the snapshots keep growing" | $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "restic forget failed for $user - retention did not run, see $BACKUP/$user/$user.log"
+fi
 _snap_json=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json snapshots 2> /dev/null)
 kept_tags=$(grep -o '"meta:[^"]*"' <<< "$_snap_json" | tr -d '"')
 kept_ids=$(grep -o '"short_id":"[^"]*"' <<< "$_snap_json" | cut -d'"' -f4)
