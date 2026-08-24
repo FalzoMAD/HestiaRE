@@ -71,13 +71,16 @@ fi
 # One stamp for both artefacts of this run: the package names the snapshot, the snapshot carries
 # the package name as a tag, and both were written from the same state (#217).
 stamp=$(date +"%Y-%m-%d_%H-%M-%S")
-meta_dir=$(mktemp -d -p "${BACKUP_TEMP:-$BACKUP}" "restic-meta.$user.XXXXXX")
+meta_dir=$(restic_meta_dir "$user")
+dump_dir=$(restic_dump_dir "$user")
 meta_pkg="$BACKUP/$user/$user.$stamp.meta.tgz"
-dump_dir="$HOMEDIR/$user/.dumps"
 backup_user_dir "$user"
+# No exit path leaves the stage behind, not just the successful one: a failed run would otherwise
+# park the customer's whole raw dump set in the home until the next night.
+trap 'rm -rf "$meta_dir" "$dump_dir"' EXIT
 
-# Metadata into the package root, raw dumps into the home so one snapshot root covers them.
-$BIN/h-backup-user-config "$user" "$meta_dir" "$dump_dir"
+# Metadata into the package directory, raw dumps into the home so one snapshot root covers them.
+$BIN/h-backup-user-config "$user"
 
 export GOMAXPROCS=2
 export RESTIC_READ_CONCURRENCY=2
@@ -89,7 +92,6 @@ ionice -c2 -n7 nice -n 19 restic --repo "$REPO$user" --limit-upload 10240 "${res
 	--password-file $USER_DATA/restic.conf --tag "meta:$user.$stamp" backup /home/$user
 
 if [ $? -ne 0 ]; then
-	rm -rf "$meta_dir"
 	echo "Unable to create the backup" | $SENDMAIL -s "$subj" "$email" "yes"
 	check_result $E_BACKUP "Unable to backup user"
 fi
@@ -97,6 +99,13 @@ fi
 # The snapshot exists now, so the package can name it - the other half of the pair.
 snap_id=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json snapshots \
 	--tag "meta:$user.$stamp" 2> /dev/null | grep -o '"short_id":"[^"]*"' | tail -1 | cut -d'"' -f4)
+# Both directions of the pair are enforced: a package that cannot name its snapshot is the half
+# that the restore reads, and "(snapshot unknown)" in a log line is not a restore point.
+if [ -z "$snap_id" ]; then
+	echo "Snapshot written but its id could not be read - no metadata package for $user.$stamp" \
+		| $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "cannot read the snapshot id for $user.$stamp - package not written"
+fi
 {
 	echo "USER='$user'"
 	echo "REPO='$REPO$user'"
@@ -110,7 +119,6 @@ snap_id=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --js
 cp -p "$USER_DATA/restic.conf" "$meta_dir/restic.key"
 # A snapshot without its package is half a restore point, so this failing fails the run.
 if ! tar -czf "$meta_pkg" -C "$meta_dir" .; then
-	rm -rf "$meta_dir" "$dump_dir"
 	echo "Unable to write the metadata package $meta_pkg" | $SENDMAIL -s "$subj" "$email" "yes"
 	check_result "$E_BACKUP" "cannot write $meta_pkg - the snapshot has no metadata beside it"
 fi
@@ -119,7 +127,7 @@ fi
 chown hestia:hestia "$meta_pkg"
 chmod 0640 "$meta_pkg"
 rm -rf "$meta_dir" "$dump_dir"
-echo "$(date "+%F %T") Metadata: $meta_pkg (snapshot ${snap_id:-unknown})" \
+echo "$(date "+%F %T") Metadata: $meta_pkg (snapshot $snap_id)" \
 	| tee -a $BACKUP/$user/$user.log
 
 if [[ -n "$SNAPSHOTS" && "$SNAPSHOTS" -ge 0 ]]; then

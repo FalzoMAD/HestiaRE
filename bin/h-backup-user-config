@@ -31,7 +31,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '1' "$#" 'USER [META_DIR] [DUMP_DIR]'
+check_args '1' "$#" 'USER'
 is_format_valid 'user'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
@@ -43,10 +43,12 @@ is_object_unsuspended 'user' 'USER' "$user"
 # Get current time
 start_time=$(date '+%s')
 
-# Two roots since #217: everything readable goes into the metadata package (the caller turns
-# META_DIR into it), only the raw dumps stay in the home so restic can see them in one snapshot.
-tmpdir="${2:-$(mktemp -d)}"
-dumpdir="${3:-$HOMEDIR/$user/.dumps}"
+# Two roots since #217: everything readable goes into the package directory (the caller turns it
+# into the tgz), only the raw dumps stay in the home so one snapshot root covers them. Both are
+# DERIVED from the customer - this command removes them as root, and a path argument would hand
+# that primitive to whoever may call it.
+tmpdir=$(restic_meta_dir "$user")
+dumpdir=$(restic_dump_dir "$user")
 
 # Leftovers of a dead run block the next one: yesterday's dump still counts as occupied space,
 # and a stale metadata tree would be packed as if it were this run's.

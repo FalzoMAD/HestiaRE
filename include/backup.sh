@@ -1142,6 +1142,12 @@ ftp_delete() {
 	fi
 }
 
+# Where a restic run stages, derived from the customer - never taken as an argument. The command
+# that stages also removes these two as root, and a path argument would make that a delete
+# primitive on the sudo surface (the #791 rule, one step sharper).
+restic_meta_dir() { echo "${BACKUP_TEMP:-$BACKUP}/restic-meta.$1"; }
+restic_dump_dir() { echo "$HOMEDIR/$1/.dumps"; }
+
 # SFTP Functions
 # sftp command function. rc must exist at the end - a session dying at once matched no branch and
 # "exit $rc" then died on a tcl error, which the caller read as 1 (E_ARGS) and could not name. The

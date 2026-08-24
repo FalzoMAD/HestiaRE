@@ -43,7 +43,9 @@ disk_usage='0'
 # answer different questions: the archive excludes it because images are pulled again,
 # while this is what the customer actually occupies on disk. Excluding it would
 # understate usage for exactly the customers using the most of it (#389).
-disk_usage=$(du -shm $HOMEDIR/$user --exclude $HOMEDIR/$user/web --exclude $HOMEDIR/$user/mail --exclude $HOMEDIR/$user/conf | cut -f 1)
+# .dumps is the restic stage, not the customer's data (#217): counting it would make the reported
+# usage jump by the whole raw dump set during a run, and stay there after a failed one.
+disk_usage=$(du -shm $HOMEDIR/$user --exclude $HOMEDIR/$user/web --exclude $HOMEDIR/$user/mail --exclude $HOMEDIR/$user/conf --exclude $HOMEDIR/$user/.dumps | cut -f 1)
 
 # Restoring old IFS
 IFS=$OLDIFS

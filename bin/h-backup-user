@@ -743,8 +743,10 @@ if [ "$USER" != '*' ]; then
 
 	# leftovers is what a previous restore handed over; archiving it would grow the archive over every
 	# roundtrip. A reserved name in the home from here on, like conf/web/mail/tmp - and in this fixed
-	# list rather than in backup-excludes.conf, which the customer can edit.
-	for udir in $(ls -a | grep -E -v "^conf$|^web$|^dns$|^tmp$|^mail$|^leftovers$|^\.\.$|^\.$"); do
+	# list rather than in backup-excludes.conf, which the customer can edit. .dumps is the restic
+	# stage (#217): a customer moved from restic to full would otherwise carry raw database dumps
+	# into the archive if a failed run left something there.
+	for udir in $(ls -a | grep -E -v "^conf$|^web$|^dns$|^tmp$|^mail$|^leftovers$|^\.dumps$|^\.\.$|^\.$"); do
 		exclusion=$(echo "$USER" | tr ',' '\n' | grep "^$udir$")
 		if [ -z "$exclusion" ]; then
 			((i++))
