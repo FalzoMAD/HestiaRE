@@ -405,10 +405,24 @@ is_backup_enabled() {
 	fi
 }
 
-is_incremental_backup_enabled() {
-	BACKUPS_INCREMENTAL=$(grep "^BACKUPS_INCREMENTAL=" $USER_DATA/user.conf | cut -f2 -d \')
-	if [ -z "$BACKUPS_INCREMENTAL" ] || [[ "$BACKUPS_INCREMENTAL" != "yes" ]]; then
-		check_result "$E_DISABLED" "incremental backups are disabled"
+# One place decides where the repository is, and an empty value is refused: composing "$REPO$user"
+# with an unset REPO made restic create a relative repo wherever the run started (#217, Stufe 0).
+is_restic_repo_configured() {
+	[ -f "$HESTIA/conf/restic.conf" ] && source_conf "$HESTIA/conf/restic.conf"
+	if [ -z "${REPO:-}" ]; then
+		check_result "$E_NOTEXIST" "no restic repository configured - run h-add-backup-host-restic"
+	fi
+	# The callers compose "$REPO$user", so the separator belongs here, once.
+	case "$REPO" in */ | *:) ;; *) REPO="$REPO/" ;; esac
+}
+
+# BACKUPS_MODE is the single truth about a customer's backup mode (#217): a second per-user
+# switch could contradict it, and the two would take turns being right.
+is_backup_mode_restic() {
+	local _mode
+	_mode=$(sed -n "s/^.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)
+	if [ "${_mode:-full}" != 'restic' ]; then
+		check_result "$E_DISABLED" "$user is not in restic backup mode (BACKUPS_MODE='${_mode:-full}')"
 	fi
 }
 

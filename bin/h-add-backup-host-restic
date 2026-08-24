@@ -1,10 +1,11 @@
 #!/bin/bash
-# info: add backup host
-# options: TYPE HOST USERNAME PASSWORD [PATH] [PORT]
+# info: set the restic repository and its retention policy
+# options: REPO SNAPSHOTS DAILY WEEKLY MONTHLY YEARLY
 #
-# example: h-add-backup-host sftp backup.acme.com admin 'P4$$w@rD'
+# example: h-add-backup-host-restic /backup/restic 3 -1 -1 -1 -1
 #
-# Add a new remote backup location. Currently SFTP, FTP and rclone are supported
+# REPO is a local path or an rclone remote (rclone:remote:path); -1 means "no limit" for a
+# retention slot. The header described a different command until #217 - --help lied.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -52,18 +53,20 @@ is_negative_one_or_int $yearly 'Yearly snapshots'
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Check if Restic is allready installed if not install it ...
-if ! which /usr/bin/restic > /dev/null 2>&1; then
-	apt install restic
-fi
-# Update restic to last release
-restic self-update > /dev/null 2>&1
+# No install and no self-update here: self-update replaced the package-owned binary in place
+# (measured: 0.14.0 -> 0.19.1, dpkg --verify complaining) - and it ran even when this command
+# then refused its work. Installing is the addon's job.
+restic version > /dev/null 2>&1 \
+	|| check_result "$E_NOTEXIST" "restic is not installed - run h-add-sys-restic first"
 
-# Check if $repo starts with a slash
+# A local repository path is created here: refusing without saying what to do left the box with
+# no configuration at all, and the backup then wrote into a relative directory (#217, Stufe 0).
 if [[ $repo == "/"* ]]; then
-	if [ ! -d "$repo" ]; then
-		check_result $E_NOTEXIST "Directory '$repo' does not exist"
-	fi
+	[ -d "$repo" ] || mkdir -p "$repo" || check_result "$E_NOTEXIST" "cannot create '$repo'"
+	chmod 0700 "$repo"
+	# Trailing separator, because the runner composes "$REPO$user" - without it the customer name
+	# is glued to the last path element.
+	[ "${repo: -1}" = '/' ] || repo="$repo/"
 fi
 
 # Check if $repo starts with rclone

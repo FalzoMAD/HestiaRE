@@ -1525,22 +1525,6 @@
       "note": ""
     },
     {
-      "path": "h-backup-users-restic",
-      "source_type": "derived",
-      "upstream_path": "bin/v-backup-users-restic",
-      "upstream_ref": "5eb9396",
-      "last_reconciled": "2026-08-18",
-      "divergence": {
-        "upstream_lines": 57,
-        "our_lines": 57,
-        "added": 10,
-        "removed": 10,
-        "pct": 17,
-        "measured_at": "2026-08-18"
-      },
-      "note": ""
-    },
-    {
       "path": "h-change-cron-job",
       "source_type": "derived",
       "upstream_path": "bin/v-change-cron-job",

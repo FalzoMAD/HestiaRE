@@ -61,15 +61,6 @@
 				<input type="text" class="form-control" name="v_backups" id="v_backups" value="<?= tohtml(trim($v_backups, "'")) ?>">
 			</div>
 			<div class="u-mb10">
-				<label for="v_backups_incremental" class="form-label"><?= tohtml(_("Incremental Backups")) ?></label>
-				<select class="form-select" name="v_backups_incremental" id="v_backups_incremental">
-					<option value="no"><?=_('Disabled')?></option>
-					<option value="yes" <?php if (!empty($v_backups_incremental) && 'yes' == trim($v_backups_incremental, "''")): ?>
-						selected
-					<?php endif; ?>><?=_('Enabled')?></option>
-				</select>
-			</div>
-			<div class="u-mb10">
 				<label for="v_backups_mode" class="form-label"><?= tohtml(_("Backup Mode")) ?></label>
 				<select class="form-select" name="v_backups_mode" id="v_backups_mode">
 					<option value="full"><?= tohtml(_("Full")) ?></option>

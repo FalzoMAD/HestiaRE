@@ -6,7 +6,7 @@
 				<a href="/schedule/backup/?<?= tohtml(http_build_query(["token" => $_SESSION["token"]])) ?>" class="button button-secondary"><i class="fas fa-circle-plus icon-green"></i><?= tohtml(_("Create Backup")) ?></a>
 				<a href="/list/backup/exclusions/" class="button button-secondary"><i class="fas fa-folder-minus icon-orange"></i><?= tohtml(_("Backup Exclusions")) ?></a>
 			<?php } ?>
-			<?php if ($panel[$user_plain]['BACKUPS_INCREMENTAL'] === 'yes') { ?>
+			<?php if (($panel[$user_plain]['BACKUPS_MODE'] ?? '') === 'restic') { ?>
 				<a href="/list/backup/incremental/" class="button button-secondary"><i class="fas fa-vault icon-blue"></i><?= tohtml(_("Incremental Backups")) ?></a>
 			<?php } ?>
 		</div>

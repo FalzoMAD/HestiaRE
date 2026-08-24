@@ -31,8 +31,6 @@ source $HESTIA/include/syshealth.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
-source_conf $HESTIA/conf/restic.conf
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -42,7 +40,7 @@ check_args '2' "$#" "$args_usage"
 is_format_valid 'user'
 is_object_valid 'user' 'USER' "$user"
 
-source_conf $HESTIA/conf/restic.conf
+is_restic_repo_configured
 
 #----------------------------------------------------------#
 #                       Action                             #

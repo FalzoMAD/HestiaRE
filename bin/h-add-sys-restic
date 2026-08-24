@@ -1,17 +1,16 @@
 #!/bin/bash
-# info: schedule user backup creation
-# options: USER
+# info: install restic for the incremental backup mode
+# options: NONE
 #
-# example: h-schedule-user-backup admin
+# example: h-add-sys-restic
 #
-# This function for scheduling user backup creation.
+# Installs the distribution's restic package. The version is whatever the OS ships (0.14 to
+# 0.18 across the four targets); capabilities are asked from the binary, never derived from
+# the number, and nothing here ever replaces a package-owned file.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
 #----------------------------------------------------------#
-
-# Argument definition
-user=$1
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -25,27 +24,28 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '1' "$#" 'USER'
-is_format_valid 'user'
-is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
-is_object_valid 'user' 'USER' "$user"
-is_backup_mode_restic
-
-is_backup_scheduled 'backup'
+check_args '0' "$#" 'NONE'
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Adding backup task to  the queue
-log=$HESTIA/log/backup.log
-echo "$BIN/h-backup-user-restic $user yes >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe
+if ! dpkg -l restic 2> /dev/null | grep -q '^ii'; then
+	echo "[ * ] Installing restic..."
+	DEBIAN_FRONTEND=noninteractive apt-get -y -qq install restic > /dev/null 2>&1
+fi
+
+# The package can be present while the binary is broken or diverted - ask the binary.
+if ! restic version > /dev/null 2>&1; then
+	check_result "$E_NOTEXIST" "restic is not runnable after the install"
+fi
+restic_version=$(restic version 2>&1 | awk '{print $2}' | head -1)
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Logging
+echo "restic $restic_version is installed - configure a repository with h-add-backup-host-restic"
 log_event "$OK" "$ARGUMENTS"
 
 exit

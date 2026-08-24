@@ -352,7 +352,9 @@
       "type": "checkbox",
       "label": "ProFTPD",
       "description": "FTP server",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true }
+      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false },
+      "fixed_no_prompt": { "mailonly": false },
+      "note": "Off and unasked on mailonly: without a customer web server there is nothing to upload to, and the firewall rule is dropped with it."
     },
 
     "ADDON_RSPAMD": {
@@ -371,8 +373,8 @@
       "label": "Sieve",
       "description": "Server-side mail filters (mail block only)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
-      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": false },
-      "note": "Hidden on nomail (no mail block)."
+      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": true },
+      "note": "Hidden on nomail (no mail block). Preselected on mailonly: a box that exists for mail should filter mail."
     },
 
     "ADDON_CLAMAV": {
@@ -405,6 +407,15 @@
       "note": "Preset nowhere. Not on mailonly: it points at /home/$user, i.e. the raw maildirs - a second way into the mailbox with no IMAP semantics. Exporting them is a real use case, so it stays installable by hand. TODO: PHP version/mode dependencies before production use."
     },
 
+    "ADDON_RESTIC": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "restic",
+      "description": "Incremental backup mode (per-customer repository). Without it a customer package cannot select BACKUPS_MODE='restic'.",
+      "default": false,
+      "note": "OS package, no pin: the repo format is compatible across 0.14 to 0.18 (measured), and capabilities are asked from the binary. Was in the base package block and in tools.selection until #217 - the checkbox there was inert because the base block installed it regardless."
+    },
+
     "ADDON_UTILITIES": {
       "group": "addons",
       "type": "checkbox",
@@ -426,7 +437,7 @@
       "question": "Which utilities to install?",
       "options": {
         "vorbelegt":  ["rsync", "net-tools", "vnstat", "parted", "telnet"],
-        "unbelegt":   ["borg-backup", "fio", "iperf3", "rclone", "rdiff-backup", "restic"]
+        "unbelegt":   ["borg-backup", "fio", "iperf3", "rclone", "rdiff-backup"]
       },
       "default": {
         "standard":  ["rsync", "net-tools", "vnstat", "parted", "telnet"],
@@ -436,7 +447,7 @@
         "nomail":    ["rsync", "net-tools", "vnstat", "parted", "telnet"],
         "mailonly":  ["rsync", "net-tools", "vnstat", "parted", "telnet"]
       },
-      "note": "restic: backend functions (v-backup-user-restic, v-backup-users-restic) already exist in the code, only the package install is missing - higher backlog priority than the other unset tools."
+      "note": "restic left this list with #217: it is an addon (ADDON_RESTIC) because it carries a backup mode, not a tool. A checkbox here would have installed a package that the base block installed anyway."
     }
   },
 
