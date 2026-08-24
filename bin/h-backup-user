@@ -861,6 +861,12 @@ for backup_type in $(echo -e "${BACKUP_SYSTEM//,/\\n}"); do
 done
 reached="${reached#,}"
 
+# Leave the tmpdir BEFORE removing it: local_backup() ends inside it, and every child started from
+# a deleted cwd dies on getcwd - exim refuses to start, so the mail below (the one that reports a
+# degraded run) was never sent. Measured on all four targets; the success path was fine only
+# because it cd'd away first.
+# A cd must never be what fails a finished backup, hence the fallback to /.
+cd "$BACKUP" 2> /dev/null || cd /
 # Removing tmpdir
 rm -rf $tmpdir
 if [[ "$errorcode" != "0" ]]; then
