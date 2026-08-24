@@ -4,10 +4,8 @@
 #
 # example: h-backup-user-config admin
 #
-# Stages one restic run in two roots, both derived from the customer: everything readable
-# (records, SSL, PAM, per-object records and grants, cron) into the package directory that
-# h-backup-user-restic turns into the .meta.tgz, and the raw database dumps into
-# $HOMEDIR/$user/.dumps so a single snapshot root covers them.
+# Two roots, both derived from the customer: everything readable goes into the package directory
+# that h-backup-user-restic packs, the raw database dumps into $HOMEDIR/$user/.dumps.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -46,18 +44,14 @@ is_object_unsuspended 'user' 'USER' "$user"
 # Get current time
 start_time=$(date '+%s')
 
-# Two roots since #217: everything readable goes into the package directory (the caller turns it
-# into the tgz), only the raw dumps stay in the home so one snapshot root covers them. Both are
-# DERIVED from the customer - this command removes them as root, and a path argument would hand
-# that primitive to whoever may call it.
+# Derived, never taken as arguments: this command removes both as root (#217).
 tmpdir=$(restic_meta_dir "$user")
 dumpdir=$(restic_dump_dir "$user")
 
-# Leftovers of a dead run block the next one: yesterday's dump still counts as occupied space,
-# and a stale metadata tree would be packed as if it were this run's.
+# Leftovers of a dead run would count as occupied space and be packed as if they were this run's.
 rm -rf "$tmpdir" "$dumpdir"
 mkdir -p "$tmpdir" "$dumpdir"
-# The customer sees the directory and cannot enter it: it carries every database of the account.
+# Visible but not enterable: it carries every database of the account.
 chown root:root "$dumpdir"
 chmod 0700 "$dumpdir"
 
@@ -295,9 +289,8 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 		cd $tmpdir/db/$database/
 		grep -F "DB='$database'" $conf > hestia/db.conf
 
-		# Raw, and outside the package: a compressed dump changes over its whole length on a small
-		# data change and destroys restic's deduplication - measured 3.8 against 8.2 MiB for the
-		# second run. The repo format compresses on its own, so raw costs nothing there.
+		# Raw: a compressed dump changes over its whole length and kills deduplication (measured),
+		# and the repo format compresses on its own.
 		mkdir -p "$dumpdir"
 		dump="$dumpdir/$database.$TYPE.sql"
 		grants="$tmpdir/db/$database/conf/$database.$TYPE.$DBUSER"

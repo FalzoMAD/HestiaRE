@@ -51,7 +51,7 @@ is_restic_repo_configured
 if [ ! -f "$USER_DATA/restic.conf" ]; then
 	password=$(generate_password '' '32')
 	echo "$password" > $USER_DATA/restic.conf
-	# The key is an implementation detail of the running account, not a customer-facing file.
+	# Implementation detail of the account, not a customer-facing file.
 	chmod 0600 "$USER_DATA/restic.conf"
 
 	restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf init
@@ -68,24 +68,21 @@ else
 	fi
 fi
 
-# One stamp for both artefacts of this run: the package names the snapshot, the snapshot carries
-# the package name as a tag, and both were written from the same state (#217).
+# One stamp for both artefacts: package names the snapshot, snapshot carries the package as a tag.
 stamp=$(date +"%Y-%m-%d_%H-%M-%S")
 meta_dir=$(restic_meta_dir "$user")
 dump_dir=$(restic_dump_dir "$user")
 meta_pkg="$BACKUP/$user/$user.$stamp.meta.tgz"
 backup_user_dir "$user"
-# No exit path leaves the stage behind, not just the successful one: a failed run would otherwise
-# park the customer's whole raw dump set in the home until the next night.
+# Every exit removes the stage - a failed run would park the raw dump set in the home till morning.
 trap 'rm -rf "$meta_dir" "$dump_dir"' EXIT
 
-# Metadata into the package directory, raw dumps into the home so one snapshot root covers them.
+# Metadata to the package dir, raw dumps into the home - one snapshot root covers both.
 $BIN/h-backup-user-config "$user"
 
 export GOMAXPROCS=2
 export RESTIC_READ_CONCURRENCY=2
-# Capabilities are asked from the binary, never derived from the version: 0.14 (Debian 12) has no
-# --read-concurrency and died on it unconditionally until now.
+# Asked from the binary, not from the version: 0.14 has no --read-concurrency and died on it.
 restic_opts=()
 restic backup --help 2>&1 | grep -q -- '--read-concurrency' && restic_opts+=(--read-concurrency 2)
 ionice -c2 -n7 nice -n 19 restic --repo "$REPO$user" --limit-upload 10240 "${restic_opts[@]}" \
@@ -96,11 +93,10 @@ if [ $? -ne 0 ]; then
 	check_result $E_BACKUP "Unable to backup user"
 fi
 
-# The snapshot exists now, so the package can name it - the other half of the pair.
+# The snapshot exists now, so the package can name it.
 snap_id=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json snapshots \
 	--tag "meta:$user.$stamp" 2> /dev/null | grep -o '"short_id":"[^"]*"' | tail -1 | cut -d'"' -f4)
-# Both directions of the pair are enforced: a package that cannot name its snapshot is the half
-# that the restore reads, and "(snapshot unknown)" in a log line is not a restore point.
+# A package that cannot name its snapshot is the half the restore reads - so this fails the run.
 if [ -z "$snap_id" ]; then
 	echo "Snapshot written but its id could not be read - no metadata package for $user.$stamp, so the snapshot has no partner" \
 		| $SENDMAIL -s "$subj" "$email" "yes"
@@ -114,16 +110,14 @@ fi
 	echo "HOST='$(hostname)'"
 	echo "VERSION='$(cat $HESTIA/VERSION 2> /dev/null)'"
 } > "$meta_dir/restic.meta"
-# The key travels with the artefact: the copy in $USER_DATA belongs to the running account and
-# dies with it, this one belongs to the package and lives as long as the package does (#217, D1).
+# Second key copy, with the artefact's lifetime - the one in $USER_DATA dies with the account (D1).
 cp -p "$USER_DATA/restic.conf" "$meta_dir/restic.key"
-# A snapshot without its package is half a restore point, so this failing fails the run.
+# A snapshot without its package is half a restore point.
 if ! tar -czf "$meta_pkg" -C "$meta_dir" .; then
 	echo "Unable to write the metadata package $meta_pkg" | $SENDMAIL -s "$subj" "$email" "yes"
 	check_result "$E_BACKUP" "cannot write $meta_pkg - the snapshot has no metadata beside it"
 fi
-# hestia:hestia 0640 - the panel pool reads the package, the customer does not: it carries pam and
-# the key. The archives next to it stay hestia:$user, so rights are per entry, not per folder.
+# hestia:hestia 0640: the panel pool reads it, the customer must not - it carries pam and the key.
 chown hestia:hestia "$meta_pkg"
 chmod 0640 "$meta_pkg"
 rm -rf "$meta_dir" "$dump_dir"

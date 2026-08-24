@@ -220,13 +220,11 @@ log_history() {
 
 # Result checker
 check_result() {
-	# An empty or non-numeric code made the test below error out, so the call did nothing at all -
-	# a guard defeated by a typo. Three of them were live: E_BACKUP was never defined, E_LIMI and
-	# E_NOTEXISTS are misspellings. Refuse loudly instead of passing the failure through.
+	# An unusable code made the test below error out, so the call did nothing - a guard defeated by
+	# a typo, and three were live (E_BACKUP undefined, E_LIMI, E_NOTEXISTS).
 	case "${1:-}" in
 		'' | *[!0-9]*)
-			# Loud, and it names the caller: the next person must not look for the cause in the
-			# command that merely reported the symptom. Own log line, own exit code.
+			# Names the caller, or the next person searches in the command that only reported it.
 			echo "Error: $(basename "$0") called check_result with an unusable exit code" \
 				"'${1:-}'${2:+ while reporting: $2}" >&2
 			echo "$(date +'%F %T') $(basename "$0") unusable check_result code '${1:-}': ${2:-}" \
@@ -422,9 +420,8 @@ is_backup_enabled() {
 	fi
 }
 
-# Pure resolution: the repository base, normalised so callers can append the customer, or rc=1 when
-# nothing is configured. Whoever asks decides whether that is fatal - the smoke guard needs the same
-# answer without the exit that check_result performs.
+# Pure: the normalised repository base, or rc=1 when nothing is configured. The caller decides
+# whether that is fatal - the smoke guard needs the answer without the gate's exit.
 restic_repo_base() {
 	local _repo
 	[ -f "$HESTIA/conf/restic.conf" ] || return 1
@@ -434,15 +431,13 @@ restic_repo_base() {
 	echo "$_repo"
 }
 
-# The gate around it. Without a repository, "$REPO$user" was just the customer name and restic
-# created a relative repo wherever the run started (#217, Stufe 0).
+# The gate around it: an unset REPO made restic create a relative repo wherever the run started.
 is_restic_repo_configured() {
 	REPO=$(restic_repo_base) \
 		|| check_result "$E_NOTEXIST" "no restic repository configured - run h-add-backup-host-restic"
 }
 
-# BACKUPS_MODE is the single truth about a customer's backup mode (#217): a second per-user
-# switch could contradict it, and the two would take turns being right.
+# BACKUPS_MODE is the single truth about a customer's mode (#217) - a second switch would argue.
 is_backup_mode_restic() {
 	local _mode
 	_mode=$(sed -n "s/^.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)

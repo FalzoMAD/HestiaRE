@@ -960,8 +960,8 @@ backup_download_norm() {
 }
 
 # FTP Functions
-# Defining ftp command function. /usr/bin/ftp exits 0 even when it cannot connect or the login is
-# refused (measured), so failure is read from its output and confirmed later by remote_file_present.
+# Defining ftp command function. /usr/bin/ftp exits 0 even when it cannot connect (measured), so
+# failure is read from the output and confirmed by remote_file_present.
 ftpc() {
 	/usr/bin/ftp -np $HOST $PORT << EOF
     quote USER $USERNAME
@@ -1142,16 +1142,15 @@ ftp_delete() {
 	fi
 }
 
-# Where a restic run stages, derived from the customer - never taken as an argument. The command
-# that stages also removes these two as root, and a path argument would make that a delete
-# primitive on the sudo surface (the #791 rule, one step sharper).
+# Derived from the customer, never an argument: the stager removes both as root, and a path
+# argument would put that primitive on the sudo surface (#791, one step sharper).
 restic_meta_dir() { echo "${BACKUP_TEMP:-$BACKUP}/restic-meta.$1"; }
 restic_dump_dir() { echo "$HOMEDIR/$1/.dumps"; }
 
 # SFTP Functions
-# sftp command function. rc must exist at the end - a session dying at once matched no branch and
-# "exit $rc" then died on a tcl error, which the caller read as 1 (E_ARGS) and could not name. The
-# fallback belongs at the END: eof also arrives after the regular exit and would fail every success.
+# sftp command function. rc must exist at the end - a session dying at once matched no branch, so
+# "exit $rc" died on a tcl error and the caller read 1. The fallback belongs at the END: eof also
+# arrives after the regular exit and would fail every success.
 sftpc() {
 	if [ "$PRIVATEKEY" != "yes" ]; then
 		expect -f "-" "$@" << EOF
