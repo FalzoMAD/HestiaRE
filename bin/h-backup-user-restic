@@ -108,7 +108,12 @@ snap_id=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --js
 # The key travels with the artefact: the copy in $USER_DATA belongs to the running account and
 # dies with it, this one belongs to the package and lives as long as the package does (#217, D1).
 cp -p "$USER_DATA/restic.conf" "$meta_dir/restic.key"
-tar -czf "$meta_pkg" -C "$meta_dir" .
+# A snapshot without its package is half a restore point, so this failing fails the run.
+if ! tar -czf "$meta_pkg" -C "$meta_dir" .; then
+	rm -rf "$meta_dir" "$dump_dir"
+	echo "Unable to write the metadata package $meta_pkg" | $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "cannot write $meta_pkg - the snapshot has no metadata beside it"
+fi
 # hestia:hestia 0640 - the panel pool reads the package, the customer does not: it carries pam and
 # the key. The archives next to it stay hestia:$user, so rights are per entry, not per folder.
 chown hestia:hestia "$meta_pkg"
