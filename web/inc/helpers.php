@@ -27,6 +27,7 @@ const E_RRD = 18;
 const E_UPDATE = 19;
 const E_RESTART = 20;
 const E_API_DISABLED = 21;
+const E_BACKUP = 22;
 
 if (!function_exists("tohtml")) {
 	function tohtml(string|int|float|bool|null $str): string

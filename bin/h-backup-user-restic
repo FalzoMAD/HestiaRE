@@ -102,9 +102,9 @@ snap_id=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --js
 # Both directions of the pair are enforced: a package that cannot name its snapshot is the half
 # that the restore reads, and "(snapshot unknown)" in a log line is not a restore point.
 if [ -z "$snap_id" ]; then
-	echo "Snapshot written but its id could not be read - no metadata package for $user.$stamp" \
+	echo "Snapshot written but its id could not be read - no metadata package for $user.$stamp, so the snapshot has no partner" \
 		| $SENDMAIL -s "$subj" "$email" "yes"
-	check_result "$E_BACKUP" "cannot read the snapshot id for $user.$stamp - package not written"
+	check_result "$E_BACKUP" "cannot read the snapshot id for $user.$stamp - no package written, the snapshot stays an orphan"
 fi
 {
 	echo "USER='$user'"

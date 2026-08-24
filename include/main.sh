@@ -121,6 +121,9 @@ E_DB=17
 E_RRD=18
 E_UPDATE=19
 E_RESTART=20
+# Referenced by the restic path since it was inherited, but never defined: check_result then got an
+# empty code, its own test errored out, and a failed backup carried on as if nothing had happened.
+E_BACKUP=22
 
 # Detect operating system
 detect_os() {
@@ -217,6 +220,15 @@ log_history() {
 
 # Result checker
 check_result() {
+	# An empty or non-numeric code made the test below error out, so the call did nothing at all -
+	# a guard defeated by a typo. Three of them were live: E_BACKUP was never defined, E_LIMI and
+	# E_NOTEXISTS are misspellings. Refuse loudly instead of passing the failure through.
+	case "${1:-}" in
+		'' | *[!0-9]*)
+			echo "Error: ${2:-failure} (check_result called with a bad exit code '${1:-}')" >&2
+			exit "$E_INVALID"
+			;;
+	esac
 	if [ $1 -ne 0 ]; then
 		local err_code="${3:-$1}"
 		if [[ -n "$CHECK_RESULT_CALLBACK" && "$(type -t "$CHECK_RESULT_CALLBACK")" == 'function' ]]; then
