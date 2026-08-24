@@ -861,6 +861,9 @@ for backup_type in $(echo -e "${BACKUP_SYSTEM//,/\\n}"); do
 done
 reached="${reached#,}"
 
+# Leave the tmpdir before removing it: local_backup() ends inside it, and a child started from a
+# deleted cwd dies on getcwd - exim did, so the mail reporting a degraded run never went out.
+cd "$BACKUP" 2> /dev/null || cd /
 # Removing tmpdir
 rm -rf $tmpdir
 if [[ "$errorcode" != "0" ]]; then

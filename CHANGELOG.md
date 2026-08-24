@@ -210,6 +210,42 @@ opens above it.
 
 ### Fixed
 
+- **logrotate failed on every target because our roundcube rotation doubled the package's** (#798).
+  Both files list the same paths, and logrotate treats that as an error: it skips the second file
+  and exits 1, so `logrotate.service` stayed failed and every box read "degraded" since the day it
+  was installed - on ub26 that already hid a second failed unit. The header comment assumed a
+  silent override; it is a loud refusal. The package file is now diverted with `dpkg-divert`
+  (`h-delete-sys-roundcube` gives it back), and the divert target sits OUTSIDE `/etc/logrotate.d`:
+  logrotate reads every file in that directory whatever the suffix, measured with `.hestia-diverted`
+  and `.dpkg-divert` before it. Two new smoke guards came out of this round: one asks logrotate
+  itself to parse the configuration instead of keeping a list of known collisions, one holds every
+  web record against its rendered vhost - the upstream check from #797 reads files, so a domain
+  whose vhost was skipped would have looked clean by being absent.
+
+- **An unreachable remote target failed anonymously, and the mail saying so never left the box**
+  (#796). `sftpc` had no `eof` branch: a session that dies at once - no route, refused, unknown
+  name, the everyday failure - left `rc` unset, `exit $rc` died on a tcl error and the caller read
+  1 (E_ARGS). Its `case` then matched neither E_CONNECT nor E_FTP, so an EMPTY reason was mailed
+  and logged while the cause was known all along, and the nightly summary reported the customer as
+  "(1)". Every branch sets rc now, a trailing guard catches any branch added later, and an
+  unexpected code gets named instead of passed through silently. Second half: the failure path of
+  `h-backup-user` ran with a deleted working directory (`local_backup` ends inside the tmpdir that
+  is removed one line earlier), so exim refused to start - "getting initial cwd failed" - and
+  exactly the mail that reports a degraded run was dropped. Measured on all four targets against
+  the accepted-message count in the exim log, with a healthy send as the control; the success path
+  was never affected because it changes directory first.
+
+- **A docker domain without DOCKER_IP made the whole web configuration unreadable** (#797). A
+  restore under a different customer name brings `DOCKER='default'` back without giving the new
+  customer an address, and the renderer wrote the empty value into the template: `http://:3000`.
+  nginx and apache reject their ENTIRE configuration over such an upstream, so one inconsistent
+  record stops every later reload, including one for an unrelated customer - measured on deb12
+  (nginx) and deb13 (apache), with the same archive restored under its own name as the control.
+  The contradictory record is now named and skipped the way a missing template is, and a fragment
+  from an earlier render is removed so a rebuild repairs the box instead of leaving the break in
+  place. A smoke guard reads the rendered fragments for a hostless upstream. Whether a restore
+  under a new name should claim its own /24 is a model decision and stays open in #797.
+
 - **Removing sieve destroyed the mail server on two of four targets** (#780). Debian 13 and Ubuntu
   26.04 ship a `dovecot-core` that *depends on* `dovecot-sieve`, so `h-delete-sys-sieve`'s purge took
   core, imapd and pop3d with it - measured, five packages against the two intended, dovecot dead and
