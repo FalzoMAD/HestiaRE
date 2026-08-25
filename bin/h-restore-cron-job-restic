@@ -56,17 +56,11 @@ meta_pkg=$(restic_pkg_for_snapshot "$user" "$snapshot")
 if [ -z "$meta_pkg" ]; then
 	check_result "$E_NOTEXIST" "no metadata package for snapshot $snapshot of $user - look for $BACKUP/$user/*.meta.tgz"
 fi
-# A customer without cron jobs is an ordinary state, and the full restore calls this command for
-# everybody: ask whether the member exists before judging its content.
-if ! tar --no-wildcards -tzf "$meta_pkg" ./cron/cron.conf > /dev/null 2>&1; then
-	echo "$user has no cron jobs in snapshot $snapshot - nothing to restore"
-	log_event "$OK" "$ARGUMENTS"
-	exit
-fi
-restic_meta_cat "$meta_pkg" cron/cron.conf > "$tmpdir/cron.conf"
-# Present but unreadable is a different case: it would overwrite the live record with nothing.
-if [ ! -s "$tmpdir/cron.conf" ]; then
-	check_result "$E_PARSING" "$meta_pkg carries an unreadable cron/cron.conf"
+# Decide on the read, not on the size: a customer without cron jobs has an empty but perfectly
+# good record, and the full restore calls this command for everybody. Only a failed read is an
+# error - it would otherwise overwrite the live record with nothing.
+if ! restic_meta_cat "$meta_pkg" cron/cron.conf > "$tmpdir/cron.conf"; then
+	check_result "$E_PARSING" "$meta_pkg has no readable cron/cron.conf"
 fi
 
 # Restoring cron jobs
