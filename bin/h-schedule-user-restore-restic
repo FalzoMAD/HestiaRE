@@ -39,14 +39,13 @@ is_object_valid 'user' 'USER' "$user"
 # is in this customer's repository before it goes into the pipe. This makes scheduling touch the
 # repository - on a remote target that is a network call, not a format check.
 is_restic_repo_configured
+# The failure is bound to the command, not to the line order: a `$?` two lines down dies silently
+# the day someone inserts a statement between them, because an assignment of its own returns 0.
+# An unreadable repository is not a missing snapshot either - this is the path a customer clicks,
+# and telling them their snapshot is gone because the line was down is a false statement.
 snap_json=$(restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" --json snapshots \
-	"$snapshot" 2> /dev/null)
-# rc first, content second: an unreadable repository is not a missing snapshot, and this is the path
-# a customer clicks - telling them their snapshot is gone because the line was down is a false
-# statement, not a cautious one.
-if [ "$?" -ne 0 ]; then
-	check_result "$E_CONNECT" "the restic repository of $user could not be read - snapshot $snapshot not checked"
-fi
+	"$snapshot" 2> /dev/null) \
+	|| check_result "$E_CONNECT" "the restic repository of $user could not be read - snapshot $snapshot not checked"
 if ! grep -q '"short_id"' <<< "$snap_json"; then
 	check_result "$E_NOTEXIST" "no snapshot $snapshot in the repository of $user"
 fi

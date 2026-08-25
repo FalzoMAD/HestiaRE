@@ -141,12 +141,11 @@ if [ -z "$BACKUP_TEMP" ]; then
 fi
 
 # Creating temporary directory
-tmpdir=$(mktemp -p $BACKUP_TEMP -d)
-if [ "$?" -ne 0 ]; then
-	echo "Can't create tmp dir $tmpdir" | $SENDMAIL -s "$subj" $email $notify
+tmpdir=$(mktemp -p $BACKUP_TEMP -d) || {
+	echo "Can't create tmp dir in $BACKUP_TEMP" | $SENDMAIL -s "$subj" $email $notify
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "Can't create tmp dir"
-fi
+}
 
 # Parts that did not come back. Collected through the run and reported at the end, so one broken
 # object does not abandon the rest and does not pass as a success either.
