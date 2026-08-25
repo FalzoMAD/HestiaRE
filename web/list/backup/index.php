@@ -13,11 +13,12 @@ include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 // ?archives=1 is the way back: a restic customer still has the archives from before the switch and
 // their exports, and both live in this list - without the escape the button here would bounce
 // straight back into the redirect.
-if (
-	($panel[$user_plain]["BACKUPS_MODE"] ?? "") === "restic" &&
-	empty($_GET["backup"]) &&
-	empty($_GET["archives"])
-) {
+//
+// Read here, not from $panel: that array is built inside render_page, so at this point it does not
+// exist yet and every customer would look like an archive customer. Measured over HTTP - the tab
+// answered 200 with no redirect for a restic customer.
+$backup_mode = cli_json("h-list-user $user json")[$user_plain]["BACKUPS_MODE"] ?? "";
+if ($backup_mode === "restic" && empty($_GET["backup"]) && empty($_GET["archives"])) {
 	header("Location: /list/backup/incremental/?" . http_build_query(["token" => $_SESSION["token"]]));
 	exit();
 }
