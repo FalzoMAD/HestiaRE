@@ -1142,6 +1142,89 @@ ftp_delete() {
 	fi
 }
 
+# Path-producing exclusions only: DB and CRON exclude objects, not paths. The stage is never
+# excluded, whatever the customer writes into the list.
+restic_excludes() {
+	local _u="$1" _f="$CONF_DIR/users/$1/backup-excludes.conf" _e _list=()
+	[ -f "$_f" ] || return 0
+	# All five keys local: the file sets them globally, and the caller's subshell is not our guard.
+	local WEB='' MAIL='' DB='' CRON='' USER=''
+	# shellcheck disable=SC1090
+	source "$_f" 2> /dev/null
+	# read -a, never an unquoted expansion: a '*' inside the list would glob against the cwd (#761).
+	case "$WEB" in
+		'*') echo "$HOMEDIR/$_u/web" ;;
+		?*)
+			IFS=',' read -r -a _list <<< "$WEB"
+			for _e in "${_list[@]}"; do
+				[ -n "$_e" ] && echo "$HOMEDIR/$_u/web/$_e"
+			done
+			;;
+	esac
+	case "$MAIL" in
+		'*') echo "$HOMEDIR/$_u/mail" ;;
+		?*)
+			IFS=',' read -r -a _list <<< "$MAIL"
+			for _e in "${_list[@]}"; do
+				[ -n "$_e" ] && echo "$HOMEDIR/$_u/mail/$_e"
+			done
+			;;
+	esac
+	case "$USER" in
+		'*')
+			for _e in "$HOMEDIR/$_u"/* "$HOMEDIR/$_u"/.[!.]*; do
+				[ -e "$_e" ] || continue
+				case "${_e##*/}" in web | mail | .dumps) continue ;; esac
+				echo "$_e"
+			done
+			;;
+		?*)
+			IFS=',' read -r -a _list <<< "$USER"
+			for _e in "${_list[@]}"; do
+				case "$_e" in '' | .dumps) continue ;; esac
+				echo "$HOMEDIR/$_u/$_e"
+			done
+			;;
+	esac
+	return 0
+}
+
+# Upper bound for the raw dumps, from the live databases - a stale record would under-count.
+restic_dump_space_needed() {
+	# The connect helpers set USER/PASSWORD/PORT globally; contained here except PORT, which they
+	# unset first - that drops the local binding and the assignment lands outside.
+	local _u="$1" _line _db _type _sum=0 usage database TYPE HOST USER PASSWORD PORT mycnf host_str
+	[ -f "$CONF_DIR/users/$_u/db.conf" ] || {
+		echo 0
+		return 0
+	}
+	while read -r _line; do
+		_db=$(sed -n "s/.*DB='\([^']*\)'.*/\1/p" <<< "$_line")
+		_type=$(sed -n "s/.*TYPE='\([^']*\)'.*/\1/p" <<< "$_line")
+		[ -n "$_db" ] || continue
+		database="$_db"
+		TYPE="$_type"
+		HOST=$(sed -n "s/.*HOST='\([^']*\)'.*/\1/p" <<< "$_line")
+		usage=0
+		case "$_type" in
+			# Not get_mysql_disk_usage: it adds index_length, which a dump does not carry - on a
+			# schema with four secondary indexes that asked for 62 MB for an 8 MB dump (measured).
+			mysql)
+				mysql_connect "$HOST"
+				usage=$(mysql_query "SELECT ROUND(SUM(data_length)/1024/1024) FROM information_schema.TABLES
+					WHERE table_schema='$database'" | tail -n1)
+				case "$usage" in '' | NULL | *[!0-9]*) usage=1 ;; esac
+				[ "$usage" -gt 0 ] || usage=1
+				;;
+			# pg_database_size stays: with --inserts the text can outgrow the heap (measured 1.79x).
+			pgsql) get_pgsql_disk_usage 2> /dev/null ;;
+		esac
+		_sum=$((_sum + ${usage:-0}))
+	done < "$CONF_DIR/users/$_u/db.conf"
+	# Half again on top: measured worst case 0.88 (mysql, on data) and 0.89 (pgsql, on database size).
+	echo $((_sum + _sum / 2))
+}
+
 # Derived, never an argument: the stager removes both as root.
 restic_meta_dir() { echo "${BACKUP_TEMP:-$BACKUP}/restic-meta.$1"; }
 restic_dump_dir() { echo "$HOMEDIR/$1/.dumps"; }

@@ -221,6 +221,37 @@ opens above it.
   non-numeric code instead of waving it through, so the next typo is a loud failure rather than a
   silenced check.
 
+- **The restic run honours the exclusion list, rotates both artefacts as one, and checks the right
+  disk** (#217, stage 2b). `restic backup` ran over the whole home without a single `--exclude`;
+  it now gets the path-producing part of `backup-excludes.conf` (web and mail domains, user
+  directories) while DB and CRON stay object exclusions that legitimately produce no path - and the
+  stage is never excluded, whatever a customer writes into the list, because that would drop their
+  own records and dumps out of their backup while the run stayed green. Retention comes from ONE
+  derivation: `forget` decides over the snapshots, and the packages follow the survivors -
+  through the tag a snapshot carries AND the snapshot id the package names, so a lost tag alone
+  never drops a package whose data is still there; the run that is writing right now is exempt,
+  because its pair is not yet in the list it would be measured against (#787). A policy that keeps
+  nothing is refused instead of handed to `forget`, `BACKUPS=0` now falls through
+  `is_backup_enabled` like it does in the archive path, and the monthly slot works for the first
+  time at all - the runner read `KEEP_MONTLY` while the configuration wrote `KEEP_MONTHLY`. Stale
+  locks are released before a run, never `--remove-all`, which would take a running job's own lock
+  with it. The space check finally runs against the filesystem the dumps land on instead of
+  `/backup`, with the need derived from the live databases rather than from a record that may have
+  stood still, and leftovers of a dead run are removed before it counts. A smoke guard holds
+  snapshots and packages against each other - and it now tells a repository it could not read from
+  an empty one: a failed `snapshots` call used to leave every package without a partner and report
+  the whole customer as orphaned artefacts, where the line was only a broken connection. The need
+  is measured on what a dump actually carries: `index_length` is out of the mysql side, which asked
+  for 62 MB for an 8 MB dump on a schema with four secondary indexes, while pgsql keeps
+  `pg_database_size` because `pg_dump --inserts` writes one statement per row and reaches 1.79x the
+  heap - dropping the indexes there would move the refusal from too eager to too late. The
+  exclusion lists are split with `read -a` instead of an unquoted expansion, so a `*` inside a list
+  no longer globs against the working directory into invented `--exclude` paths, and all five keys
+  of `backup-excludes.conf` are declared local instead of relying on the caller's subshell. A
+  failed `forget` is no longer discarded: it kept the run reporting success while retention
+  silently did not happen, and the packages would then have rotated against a survivor list nobody
+  wrote.
+
 - **A restic run writes two artefacts, and they belong together** (#217, stage 2a). Everything
   readable - records, SSL, PAM, the exclusion list, the per-domain and per-database records with
   their grants, cron - goes into a metadata package beside the repository
