@@ -14,6 +14,31 @@ opens above it.
 
 ### Added
 
+- **A customer's restic backups have an explicit way out, a report and a portable export**
+  (#217, stages 4 and 5). Deleting a customer keeps their backups - in every mode - so
+  `h-delete-user-backups-restic` is the explicit way to remove them: it names repository, size,
+  snapshot and package count first and acts only on the consent word, and it deliberately accepts a
+  customer who is already gone, because that is the case it is mostly needed for.
+  `h-list-sys-backup-orphans-restic` names what is left over; it walks the repository DIRECTORIES
+  under the base rather than the customer list, for the same reason, and reports an unreadable
+  repository as its own kind instead of blaming every package in it for a broken line. The manual
+  full export is not a fourth mode but one ordinary archive run (`h-export-user-backup`), so what
+  comes out is the format that adoption, probe, report and restore already handle - that is how a
+  restic customer migrates without ever rebuilding an archive out of snapshots. Its record carries
+  `MODE='export'` and `ADOPTED='yes'`, which keeps it out of the rotation through the mechanism
+  operator-placed files already use (adopted names leave the list BEFORE counting, so an export
+  neither rotates nor pushes another archive out), and `BACKUP_EXPORT_LIMIT` (default 2) refuses
+  and names the existing exports rather than clearing the oldest away. In the panel the Backups tab
+  branches on `BACKUPS_MODE` instead of hiding snapshots behind a second button, with `?archives=1`
+  as the way back to the archives from before the switch and to the exports, which are marked as
+  such with why: retention does not rotate them. Two defects fell out of measuring it over HTTP
+  rather than reading the source: the branch never fired, because `$panel` is built inside
+  `render_page` and did not exist where it was read, and the snapshot list answered `400 Potential
+  CSRF use detected` to any request without a Referer once it became the tab's landing page - a
+  click inside the panel carries one and would never have shown it. Existing installations report
+  `key registries out of sync` once for the new key until `h-update-sys-defaults` runs, which
+  `h-update-hestia` does on every update.
+
 - **remote only is diff-capable now** (#790, stage 3). Base selection asks for REACHABILITY
   instead of a local file: the local map mirror is what a diff is built from, and the base
   archive itself may live on a remote only - eligible when a configured target's fresh listing
