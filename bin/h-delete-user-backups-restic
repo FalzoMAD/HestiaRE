@@ -1,0 +1,83 @@
+#!/bin/bash
+# info: delete the restic repository and metadata packages of a user
+# options: USER [CONSENT]
+#
+# example: h-delete-user-backups-restic user 'all'
+#
+# The explicit way to remove a customer's backups. Deleting a customer never deletes them, so this
+# command exists to say so out loud - and it works for a customer who is already gone, which is the
+# case it is mostly needed for.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user=$1
+consent=${2-}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'USER [CONSENT]'
+# Not is_object_valid: the customer may be deleted already, and their backups are exactly what is
+# left. The format check still bounds the name that gets joined onto the paths below.
+is_format_valid 'user'
+
+repo=$(restic_repo_base) || check_result "$E_NOTEXIST" "no restic repository configured"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+repo_dir="$repo$user"
+pkg_count=$(ls -1 "$BACKUP/$user/$user".*.meta.tgz 2> /dev/null | wc -l)
+snap_count=0
+repo_size=''
+if [ -d "$repo_dir" ]; then
+	repo_size=$(du -sh "$repo_dir" 2> /dev/null | cut -f1)
+	if [ -f "$CONF_DIR/users/$user/restic.conf" ]; then
+		snap_count=$(restic --repo "$repo_dir" --password-file "$CONF_DIR/users/$user/restic.conf" \
+			--json snapshots 2> /dev/null | grep -o '"short_id"' | wc -l)
+	fi
+fi
+
+if [ ! -d "$repo_dir" ] && [ "$pkg_count" -eq 0 ]; then
+	check_result "$E_NOTEXIST" "$user has no restic repository and no metadata packages"
+fi
+
+# Named before it is destroyed, and only on an explicit yes: there is no second copy of a repository
+# once it is gone, and the customer record that could describe it may not exist any more.
+echo "About to delete, permanently:"
+echo "  repository $repo_dir${repo_size:+ ($repo_size)}${snap_count:+, $snap_count snapshot(s)}"
+echo "  $pkg_count metadata package(s) in $BACKUP/$user/"
+if [ "$consent" != 'all' ]; then
+	echo
+	check_result "$E_FORBIDEN" "no consent - re-run with 'all' as the second argument to delete these"
+fi
+
+rm -rf "$repo_dir"
+rm -f "$BACKUP/$user/$user".*.meta.tgz
+# The archives of an archive-mode customer are not ours to take: only the restic artefacts go.
+rmdir "$BACKUP/$user" 2> /dev/null
+
+echo "Deleted the restic backups of $user"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Warning" "Backup" "Restic backups deleted (User: $user, snapshots: $snap_count, packages: $pkg_count)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

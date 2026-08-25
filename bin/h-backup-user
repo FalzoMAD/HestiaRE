@@ -914,7 +914,13 @@ backup_str="$backup_str CRON='$cron_list'"
 backup_str="$backup_str UDIR='${udir_list// /,}'"
 backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
 backup_str="$backup_str MAP='$map_records'"
-backup_str="$backup_str MODE='$([ -n "$diff_base" ] && echo diff || echo full)' BASE='$diff_base'"
+# An export is the same archive, marked: ADOPTED keeps it out of the rotation through the mechanism
+# that already exists for operator-placed files, and MODE says what it is in every listing.
+if [ "${BACKUP_EXPORT:-no}" = 'yes' ]; then
+	backup_str="$backup_str MODE='export' BASE='' ADOPTED='yes'"
+else
+	backup_str="$backup_str MODE='$([ -n "$diff_base" ] && echo diff || echo full)' BASE='$diff_base'"
+fi
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 

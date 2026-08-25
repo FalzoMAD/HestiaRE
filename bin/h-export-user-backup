@@ -1,0 +1,66 @@
+#!/bin/bash
+# info: write a portable archive of a user, in any backup mode
+# options: USER [NOTIFY]
+#
+# example: h-export-user-backup user
+#
+# No fourth mode: this runs the ordinary archive backup once. What comes out is the format that
+# adoption, probe, report and restore already handle, which is how a restic customer migrates
+# without a rebuild path from snapshots. BACKUPS_MODE stays the only truth, and retention does not
+# touch the result - it is marked as an export and stays out of the rotation.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user=$1
+notify=${2-no}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'USER [NOTIFY]'
+is_format_valid 'user'
+is_object_valid 'user' 'USER' "$user"
+is_object_unsuspended 'user' 'USER' "$user"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+# An export is a deliberate artefact, so the limit refuses and names what is already there instead
+# of clearing the oldest away (D5). Unset means two.
+limit="${BACKUP_EXPORT_LIMIT:-2}"
+case "$limit" in '' | *[!0-9]*) limit=2 ;; esac
+existing=$(grep -E "(^| )MODE='export'( |$)" "$USER_DATA/backup.conf" 2> /dev/null \
+	| sed -n "s/^BACKUP='\([^']*\)'.*/\1/p")
+count=$(grep -c . <<< "$existing")
+if [ "$count" -ge "$limit" ]; then
+	echo "Exports of $user ($count, limit $limit):"
+	sed 's/^/  /' <<< "$existing"
+	check_result "$E_LIMIT" "$user already has $count export(s) - delete one with h-delete-user-backup before writing another"
+fi
+
+# The ordinary run, told to mark its record. Nothing else about it changes: same tar, same members,
+# same map, same listing.
+BACKUP_EXPORT='yes' $BIN/h-backup-user "$user" "$notify"
+check_result $? "the export run of $user failed"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+log_event "$OK" "$ARGUMENTS"
+
+exit
