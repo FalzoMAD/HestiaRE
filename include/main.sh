@@ -423,7 +423,15 @@ WEBMAIL_KNOWN_CLIENTS='roundcube tachyon'
 # carry no digit in about 6 % of draws, and a database with a password policy rejects exactly those.
 # The filter can also return fewer characters than asked for, which used to pass silently.
 generate_password() {
-	local matrix="${1:-A-Za-z0-9}" length="${2:-16}" attempt=0 pass=''
+	local matrix="${1:-A-Za-z0-9}" length="${2:-16}" attempt=0 pass='' classes=0
+	[[ "$matrix" == *A-Z* ]] && classes=$((classes + 1))
+	[[ "$matrix" == *a-z* ]] && classes=$((classes + 1))
+	[[ "$matrix" == *0-9* ]] && classes=$((classes + 1))
+	# The only request that cannot be met is fewer characters than classes, and that is knowable
+	# before the first draw. Caught here, the loop below cannot run out.
+	if [ "$length" -lt "$classes" ]; then
+		check_result "$E_INVALID" "cannot fit $classes character classes into $length characters"
+	fi
 	while [ "$attempt" -lt 100 ]; do
 		attempt=$((attempt + 1))
 		pass=$(head -c 4096 /dev/urandom | tr -dc "$matrix" | head -c "$length")
@@ -434,8 +442,8 @@ generate_password() {
 		printf "%s" "$pass"
 		return 0
 	done
-	# Only an impossible request gets here (fewer characters than classes). Loud, because the caller
-	# runs us in a command substitution where an exit would be swallowed.
+	# Unreachable after the check above. If it were ever reached, printing the last candidate beats
+	# printing nothing: a caller that passes an empty password on could create an account without one.
 	echo "Warning: no password matching '$matrix' in $length characters after $attempt tries" >&2
 	printf "%s" "$pass"
 	return 1

@@ -36,10 +36,18 @@ is_object_format_valid "$snapshot" 'snapshot'
 is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 # The name alone says nothing about who owns the snapshot, and the queue runs as root: check that it
-# is in this customer's repository before it goes into the pipe.
+# is in this customer's repository before it goes into the pipe. This makes scheduling touch the
+# repository - on a remote target that is a network call, not a format check.
 is_restic_repo_configured
-if ! restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" --json snapshots \
-	"$snapshot" 2> /dev/null | grep -q '"short_id"'; then
+snap_json=$(restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" --json snapshots \
+	"$snapshot" 2> /dev/null)
+# rc first, content second: an unreadable repository is not a missing snapshot, and this is the path
+# a customer clicks - telling them their snapshot is gone because the line was down is a false
+# statement, not a cautious one.
+if [ "$?" -ne 0 ]; then
+	check_result "$E_CONNECT" "the restic repository of $user could not be read - snapshot $snapshot not checked"
+fi
+if ! grep -q '"short_id"' <<< "$snap_json"; then
 	check_result "$E_NOTEXIST" "no snapshot $snapshot in the repository of $user"
 fi
 is_backup_scheduled 'restore'
