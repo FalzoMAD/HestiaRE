@@ -1225,6 +1225,38 @@ restic_dump_space_needed() {
 	echo $((_sum + _sum / 2))
 }
 
+# The package that belongs to a snapshot: over the tag the snapshot carries, and if that is gone,
+# over the snapshot id the packages name - the same two directions as the pairing guard.
+restic_pkg_for_snapshot() {
+	local _u="$1" _s="$2" _key="$CONF_DIR/users/$1/restic.conf" _repo _json _sid _stamp _pkg
+	_repo=$(restic_repo_base) || return 1
+	_json=$(restic --repo "$_repo$_u" --password-file "$_key" --json snapshots "$_s" 2> /dev/null) || return 1
+	_sid=$(grep -o '"short_id":"[^"]*"' <<< "$_json" | head -1 | cut -d'"' -f4)
+	[ -n "$_sid" ] || return 1
+	_stamp=$(grep -o "\"meta:$_u\.[^\"]*\"" <<< "$_json" | head -1 | tr -d '"')
+	if [ -n "$_stamp" ] && [ -f "$BACKUP/$_u/${_stamp#meta:}.meta.tgz" ]; then
+		echo "$BACKUP/$_u/${_stamp#meta:}.meta.tgz"
+		return 0
+	fi
+	for _pkg in "$BACKUP/$_u/$_u".*.meta.tgz; do
+		[ -f "$_pkg" ] || continue
+		[ "$(tar -xzOf "$_pkg" ./restic.meta 2> /dev/null | sed -n "s/^SNAPSHOT='\([^']*\)'.*/\1/p")" = "$_sid" ] || continue
+		echo "$_pkg"
+		return 0
+	done
+	return 1
+}
+
+# One reader and one unpacker for the package - the restore path never looks into the snapshot for
+# metadata again, it moved out of the home in stage 2a.
+restic_meta_cat() { tar -xzOf "$1" "./$2" 2> /dev/null; }
+restic_meta_unpack() {
+	local _pkg="$1" _dest="$2"
+	shift 2
+	mkdir -p "$_dest" || return 1
+	tar -xzf "$_pkg" -C "$_dest" "$@" 2> /dev/null
+}
+
 # Derived, never an argument: the stager removes both as root.
 restic_meta_dir() { echo "${BACKUP_TEMP:-$BACKUP}/restic-meta.$1"; }
 restic_dump_dir() { echo "$HOMEDIR/$1/.dumps"; }

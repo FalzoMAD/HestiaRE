@@ -1,10 +1,10 @@
 #!/bin/bash
-# info: restore file or folder
-# options: USER SNAPSHOT path
+# info: restore a file or folder from a restic snapshot
+# options: USER SNAPSHOT PATH [NOTIFY]
 #
-# example: h-restore-user user snapshot path
+# example: h-restore-file-restic user latest /home/user/web/example.com
 #
-# This function for restoring database from restic snapshot.
+# Restores one path out of a snapshot, bounded to the customer's home.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -29,6 +29,8 @@ source $HESTIA/include/ip.sh
 source $HESTIA/include/rebuild.sh
 # shellcheck source=/usr/local/hestia/include/syshealth.sh
 source $HESTIA/include/syshealth.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -47,21 +49,29 @@ is_restic_repo_configured
 #                       Action                             #
 #----------------------------------------------------------#
 
-tmpdir=$(mktemp -p /home/$user/tmp/ -d)
-if [ ! -f "$tmpdir/backup.conf" ]; then
-	restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf dump $snapshot /home/$user/backup/backup.conf > $tmpdir/backup.conf
-	if [ "$?" -ne 0 ]; then
-		check_result "$E_NOTEXIST" "Unable to download snapshot data"
-	fi
+# The command restores as root: a path outside the customer's home would write anywhere.
+case "$file" in
+	"$HOMEDIR/$user" | "$HOMEDIR/$user"/*) ;;
+	*) check_result "$E_FORBIDEN" "$file is outside $HOMEDIR/$user" ;;
+esac
+case "$file" in
+	"$(restic_dump_dir "$user")" | "$(restic_dump_dir "$user")"/*)
+		check_result "$E_FORBIDEN" "$file is the raw dump stage, restore the database instead"
+		;;
+esac
+if [ -z "$(restic_pkg_for_snapshot "$user" "$snapshot")" ]; then
+	check_result "$E_NOTEXIST" "no metadata package for snapshot $snapshot of $user - look for $BACKUP/$user/*.meta.tgz"
 fi
 
-restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf restore $snapshot --include $file --target /
+restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" \
+	--include "$file" --target /
+if [ "$?" -ne 0 ]; then
+	check_result "$E_NOTEXIST" "$file is not in snapshot $snapshot"
+fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
-
-rm -fr $tmpdir
 
 # Update user counters
 $BIN/h-update-user-counters $user
@@ -71,7 +81,7 @@ $BIN/h-update-sys-ip-counters
 sed -i "/h-restore-file-restic '$user' '$snapshot' '$file' /d" $CONF_DIR/queue/backup.pipe
 
 # Logging
-$BIN/h-log-action "system" "Info" "Backup" "DNS Domain successfully restored (User: $user, Snapshot: $snapshot, Databse: $database)."
-$BIN/h-log-action "$user" "Info" "Backup" "DNS Domain successfully restored (User: $user, Snapshot: $snapshot, Databse: $database)."
+$BIN/h-log-action "system" "Info" "Backup" "File successfully restored (User: $user, Snapshot: $snapshot, File: $file)."
+$BIN/h-log-action "$user" "Info" "Backup" "File successfully restored (User: $user, Snapshot: $snapshot, File: $file)."
 log_event "$OK" "$ARGUMENTS"
 exit

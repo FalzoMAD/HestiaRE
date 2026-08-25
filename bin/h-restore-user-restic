@@ -1,10 +1,10 @@
 #!/bin/bash
-# info: restore user via Restic
-# options: USER SNAPSHOT WEB DNS MAIL DB CRON UDIR
+# info: restore user from a restic snapshot
+# options: USER SNAPSHOT [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR] [NOTIFY]
 #
-# example: h-restore-user-restic user snapshot
+# example: h-restore-user-restic user latest
 #
-# This function for restoring database from restic snapshot.
+# Restores a customer from a restic snapshot and its metadata package.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -34,6 +34,8 @@ source $HESTIA/include/ip.sh
 source $HESTIA/include/rebuild.sh
 # shellcheck source=/usr/local/hestia/include/syshealth.sh
 source $HESTIA/include/syshealth.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -41,8 +43,8 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-args_usage='USER SNAPSHOT KEY [NOTIFY]'
-check_args '3' "$#" "$args_usage"
+args_usage='USER SNAPSHOT [WEB] [DNS] [MAIL] [DB] [CRON] [UDIR] [NOTIFY]'
+check_args '2' "$#" "$args_usage"
 is_format_valid 'user'
 is_object_valid 'user' 'USER' "$user"
 
@@ -53,18 +55,16 @@ is_restic_repo_configured
 #----------------------------------------------------------#
 
 tmpdir=$(mktemp -p /home/$user/tmp/ -d)
-if [ ! -f "$tmpdir/backup.conf" ]; then
-	restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" dump "$snapshot" "/home/$user/backup/backup.conf" > "$tmpdir/backup.conf"
-	if [ "$?" -ne 0 ]; then
-		# The metadata travels as the package beside the repository since #217.
-		check_result "$E_NOTEXIST" "snapshot $snapshot carries no metadata - look for $BACKUP/$user/*.meta.tgz"
-	fi
-fi
+trap 'rm -rf "$tmpdir"' EXIT
 
-# Download user data
-restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" --include "/home/$user/backup/" --target "$tmpdir"
-if [ "$?" -ne 0 ]; then
-	check_result "$E_NOTEXIST" "Unable to download user data"
+# The metadata travels as the package beside the repository since stage 2a, not inside the snapshot.
+meta_pkg=$(restic_pkg_for_snapshot "$user" "$snapshot")
+if [ -z "$meta_pkg" ]; then
+	check_result "$E_NOTEXIST" "no metadata package for snapshot $snapshot of $user - look for $BACKUP/$user/*.meta.tgz"
+fi
+restic_meta_cat "$meta_pkg" backup.conf > "$tmpdir/backup.conf"
+if [ ! -s "$tmpdir/backup.conf" ]; then
+	check_result "$E_PARSING" "$meta_pkg carries no backup.conf - the snapshot cannot be described"
 fi
 
 # Restore web domains
@@ -80,7 +80,10 @@ if [ -n "$cron" ]; then
 fi
 if [ "$udir" = "yes" ]; then
 	echo "[ * ] Restore user files"
-	restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" --exclude "/home/$user/web/" --exclude "/home/$user/conf" --exclude "/home/$user/mail" --target /
+	# The stage is root-owned raw dumps: the database restore takes them from the snapshot itself.
+	restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" \
+		--exclude "/home/$user/web/" --exclude "/home/$user/conf" --exclude "/home/$user/mail" \
+		--exclude "$(restic_dump_dir "$user")" --target /
 	if [ "$?" -ne 0 ]; then
 		check_result "$E_NOTEXIST" "Unable to download user folders"
 	fi
@@ -93,8 +96,6 @@ rebuild_user_conf
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-rm -fr "$tmpdir"
-
 # Update user counters
 $BIN/h-update-user-counters $user
 $BIN/h-update-user-counters "$ROOT_USER"
@@ -103,7 +104,7 @@ $BIN/h-update-sys-ip-counters
 sed -i "/h-restore-user-restic '$user' '$snapshot' /d" $CONF_DIR/queue/backup.pipe
 
 # Logging
-$BIN/h-log-action "system" "Info" "Backup" "Mail domain successfully restored (User: $user, Snapshot: $snapshot, Databse: $database)."
-$BIN/h-log-action "$user" "Info" "Backup" "Mail domain successfully restored (User: $user, Snapshot: $snapshot, Databse: $database)."
+$BIN/h-log-action "system" "Info" "Backup" "User successfully restored (User: $user, Snapshot: $snapshot)."
+$BIN/h-log-action "$user" "Info" "Backup" "User successfully restored (User: $user, Snapshot: $snapshot)."
 log_event "$OK" "$ARGUMENTS"
 exit
