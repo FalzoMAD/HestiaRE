@@ -880,8 +880,18 @@ check_protected_names() {
 			[ -z "$first" ] && first="$name is both a $reg key and a protected name"
 		done
 	done
+	# Derived from the data, not from the compiled lists: a name can be a config key without being
+	# in any registry (BACKUP_TEMP was, and the floor swallowed it in silence). If a conf on this
+	# box carries a protected name as a key, the floor is dropping something real.
+	local pat live
+	pat="^($(tr -s ' \n' '||' <<< "$SOURCE_CONF_PROTECTED" | sed -e 's/^|//' -e 's/|$//'))="
+	live=$(grep -lE "$pat" "$HESTIA/conf"/*.conf "$CONF_DIR/users"/*/user.conf \
+		"$CONF_DIR/users"/*/backup-excludes.conf "$CONF_DIR/packages"/*.pkg "$CONF_DIR/ips"/* \
+		2> /dev/null | head -3 | tr '\n' ' ')
 	if [ "$bad" -gt 0 ]; then
 		no "$bad protected name(s) collide with a real config key" "$first"
+	elif [ -n "$live" ]; then
+		no "a protected name is used as a key in a live config" "$live"
 	else
 		ok "protected names hold and collide with no config key ($n names, $nregs registries)"
 	fi
