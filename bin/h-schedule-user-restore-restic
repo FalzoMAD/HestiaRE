@@ -21,6 +21,8 @@ value=$4
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -56,6 +58,25 @@ is_backup_scheduled 'restore'
 #----------------------------------------------------------#
 
 log=$HESTIA/log/restore.log
+
+# The value is checked against the ARCHIVED list, not against today's records: a restore exists to
+# bring back what is gone from this host, so the record on disk is the wrong reference (#813).
+if [ -n "$object" ] && [ "$object" != "cron" ]; then
+	meta_pkg=$(restic_pkg_for_snapshot "$user" "$snapshot")
+	if [ -z "$meta_pkg" ]; then
+		check_result "$E_NOTEXIST" "no metadata package for snapshot $snapshot of $user"
+	fi
+	archived=$(restic_meta_cat "$meta_pkg" backup.conf) \
+		|| check_result "$E_PARSING" "$meta_pkg has no readable backup.conf"
+	case "$object" in
+		web) field=$(sed -n "s/.*WEB='\([^']*\)'.*/\1/p" <<< "$archived") ;;
+		mail) field=$(sed -n "s/.*MAIL='\([^']*\)'.*/\1/p" <<< "$archived") ;;
+		db) field=$(sed -n "s/.*DB='\([^']*\)'.*/\1/p" <<< "$archived") ;;
+	esac
+	if ! grep -qx "$value" <<< "$(tr ',' '\n' <<< "$field")"; then
+		check_result "$E_NOTEXIST" "snapshot $snapshot holds no $object called $value for $user"
+	fi
+fi
 
 if [ -z "$object" ]; then
 	echo "$BIN/h-restore-user-restic '$user' '$snapshot' '' '' '' '' '' '' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe

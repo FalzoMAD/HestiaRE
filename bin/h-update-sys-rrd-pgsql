@@ -86,11 +86,11 @@ for host in $hosts; do
 	fi
 
 	if [ "$period" = 'daily' ]; then
-		# Defining host credentials
+		# Defining host credentials. parse_object_kv_list, not eval: the loop turned record text
+		# into variables with neither the name nor the value checked - the last place in the tree
+		# with that shape (#807 hardened the parser for exactly this).
 		host_str=$(grep "HOST='$host'" $conf)
-		for key in $host_str; do
-			eval ${key%%=*}=${key#*=}
-		done
+		parse_object_kv_list "$host_str"
 
 		export PGPASSWORD="$PASSWORD"
 		sql="psql -h $HOST -U $USER"

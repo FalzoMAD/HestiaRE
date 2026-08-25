@@ -860,6 +860,33 @@ check_error_code_registry() {
 		no "$((conflict + dupes)) error code(s) out of step" "$first"
 	fi
 }
+# check_eval_sites - two named files used to be guarded one by one, which is a list nobody measures:
+# a new eval in a third file would have gone unseen. Derived instead - every eval used as a command
+# in bin/h-* and include/*.sh is found, and only the two that have a reason may remain. The pattern
+# looks for eval in command position; the word inside a comment matched a looser one, including this
+# guard's own text.
+check_eval_sites() {
+	local found allowed="h-add-web-domain-ssl main.sh" f base extra='' n=0
+	found=$(grep -rlE '(^|[;&|][[:space:]]*)[[:space:]]*eval[[:space:]]' "$HESTIA/bin"/h-* \
+		"$HESTIA/include"/*.sh 2> /dev/null | grep -v '/v-' | sort -u)
+	# The two legitimate ones must turn up; an empty sweep looked at nothing and must not pass.
+	if [ -z "$found" ]; then
+		no "the eval sweep found no file at all" "grep over $HESTIA/bin and $HESTIA/include returned nothing"
+		return
+	fi
+	for f in $found; do
+		n=$((n + 1))
+		base=$(basename "$f")
+		case " $allowed " in *" $base "*) continue ;; esac
+		extra="$extra $base"
+	done
+	if [ -n "$extra" ]; then
+		no "eval over record text outside the two known places" "$extra"
+	else
+		ok "no new eval sites ($n file(s) carry one, both known)"
+	fi
+}
+
 # check_protected_names - the floor that stops a record from binding PATH or BIN (#807). Two ways
 # it could go green while protecting nothing: the list empties, or a name in it is also a real
 # config key, in which case the floor locks that key out of every conf. Both are checked here, and
@@ -1482,13 +1509,8 @@ echo "-- security invariants --"
 check_sudo_secret_leak
 # GHSA-fcq6: auth gate must not compare a bare $ROOT_USER (legit: $_SESSION["ROOT_USER"])
 check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$HESTIA/web"
-# GHSA-cr7q: search-object commands must not eval raw conf-field payloads
-check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
-	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
-# GHSA-xffx class: include/ip.sh must not go back to eval-ing an IP conf as bash - it now parses via the
-# hardened source_conf and derefs with ${!var}. A reintroduced `eval` would re-open the sink.
-check_source_absent "no raw eval in include/ip.sh (GHSA-xffx class)" '(^|[^_])eval[[:space:]]' \
-	"$HESTIA/include/ip.sh"
+# GHSA-cr7q and the GHSA-xffx class were guarded file by file here; check_eval_sites covers both and
+# every other file besides, so the two named checks would only be a list to forget.
 # GHSA-xffx class: source_conf must keep its identifier guard on the key, or a
 # `key[$(cmd)]=` line in any parsed conf executes cmd through declare -g. Positive
 # check: the sink is shared by ~500 callers, so losing the guard is a silent hole.
@@ -1539,6 +1561,7 @@ check_restic_mode_supported
 check_restic_pairs
 check_protected_names
 check_protected_names_effective
+check_eval_sites
 check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
