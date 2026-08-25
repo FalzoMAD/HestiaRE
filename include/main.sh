@@ -7,6 +7,52 @@
 #===========================================================================#
 
 # Source conf function for correct variable initialisation
+# Names a record must never bind. The value is validated everywhere; the NAME was not, so a
+# restored user.conf carrying a line PATH=/tmp/x rebound PATH in the root shell that reads it and
+# the next relative chown/grep ran from the attacker's directory. Measured, #807.
+#
+# Deliberately NOT here, because each is a legitimate key in some conf and would be locked out:
+# ROOT_USER (hestia.conf), REPO (restic.conf), BACKUP (backup records). They are covered by the
+# allowlist at the boundary instead - the floor cannot protect a name that also has honest work.
+SOURCE_CONF_PROTECTED="PATH IFS ENV BASH_ENV BASHOPTS SHELLOPTS CDPATH GLOBIGNORE PROMPT_COMMAND
+PS1 PS2 PS3 PS4 LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT HISTFILE BASH_XTRACEFD FUNCNAME
+HESTIA HESTIA_PHP BIN SBIN CONF_DIR HOMEDIR USER_DATA BACKUP_TEMP SENDMAIL SOURCE_CONF_PROTECTED"
+
+is_protected_key() {
+	case " ${SOURCE_CONF_PROTECTED//$'\n'/ } " in *" $1 "*) return 0 ;; esac
+	return 1
+}
+
+# An archived record is hostile input. Only keys the registry knows reach the instance: the floor
+# above stops the shell names, this stops the rest - including names that are legitimate in another
+# file and therefore cannot be in the floor (ROOT_USER in hestia.conf, REPO in restic.conf). The
+# archive itself is not modified; a dropped key is named on stderr, and a filter that keeps nothing
+# fails instead of installing an empty record.
+copy_record_filtered() {
+	local _src="$1" _dst="$2" _type="$3" _allow _lhs _line _kept=0 _tmp
+	command -v syshealth_known_keys > /dev/null 2>&1 || return 1
+	_allow=" $(syshealth_known_keys "$_type") " || return 1
+	[ -n "${_allow// /}" ] || return 1
+	[ -f "$_src" ] || return 1
+	_tmp=$(mktemp "$_dst.XXXXXX") || return 1
+	while IFS= read -r _line || [ -n "$_line" ]; do
+		[ -n "${_line// /}" ] || continue
+		_lhs=${_line%%=*}
+		case "$_allow" in
+			*" $_lhs "*)
+				printf '%s\n' "$_line" >> "$_tmp"
+				_kept=$((_kept + 1))
+				;;
+			*) echo "Warning: dropping unknown key '$_lhs' from the archived $_type record" >&2 ;;
+		esac
+	done < "$_src"
+	if [ "$_kept" -eq 0 ]; then
+		rm -f "$_tmp"
+		return 1
+	fi
+	chmod 660 "$_tmp" && mv -f "$_tmp" "$_dst"
+}
+
 source_conf() {
 	while IFS='= ' read -r lhs rhs; do
 		if [[ ! $lhs =~ ^\ *# && -n $lhs ]]; then
@@ -15,6 +61,12 @@ source_conf() {
 			# subscript (the GHSA-xffx-jj33-p2px class) - a hardening of the sink that covers every caller,
 			# not just the one command that reads an attacker-supplied file.
 			[[ $lhs =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+			# The identifier check above accepts PATH and BIN: those are valid identifiers, just
+			# not valid config keys (#807). Loud, because a record carrying one is an attack.
+			if is_protected_key "$lhs"; then
+				echo "Warning: $1 tries to bind the protected name $lhs - ignored" >&2
+				continue
+			fi
 			rhs="${rhs%%^\#*}" # Del in line right comments
 			rhs="${rhs%%*( )}" # Del trailing spaces
 			rhs="${rhs%\'*}"   # Del opening string quotes
@@ -543,7 +595,7 @@ _parse_object_kv_list_php() {
 
 	str=${@//$'\n'/ }
 	validated_output=$(
-		"$HESTIA_PHP" -- "$str" << 'EOPHP'
+		SOURCE_CONF_PROTECTED="$SOURCE_CONF_PROTECTED" "$HESTIA_PHP" -- "$str" << 'EOPHP'
 <?php
 declare(strict_types=1);
 
@@ -590,6 +642,20 @@ while ($unparsed !== '') {
     }
 
     $key_name = $m[1];
+
+    // Same protection as source_conf: the form of the key was checked, the NAME was not, so a
+    // record could bind PATH or BIN in the calling shell (#807). Hard failure - our own records
+    // never carry these, so one that does is an attack, not a version skew.
+    $protected = getenv('SOURCE_CONF_PROTECTED') ?: '';
+    $protected = preg_split('/\s+/', trim($protected), -1, PREG_SPLIT_NO_EMPTY);
+    if ($protected === []) {
+        // An empty list would silently protect nothing.
+        fail('Protected name list is empty - refusing to parse.');
+    }
+    if (in_array($key_name, $protected, true)) {
+        fail('Refused key name: ' . $key_name . ' is a protected shell or path name.');
+    }
+
     $unparsed = substr($unparsed, strlen($m[0]));
 
     $key_value = '';
