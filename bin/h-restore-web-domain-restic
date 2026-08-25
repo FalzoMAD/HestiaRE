@@ -56,14 +56,24 @@ is_restic_repo_configured
 #----------------------------------------------------------#
 
 tmpdir=$(mktemp -p /home/$user/tmp/ -d)
-if [ ! -f "$tmpdir/backup.conf" ]; then
-	restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" dump "$snapshot" "/home/$user/backup/backup.conf" > "$tmpdir/backup.conf"
-	if [ "$?" -ne 0 ]; then
-		check_result "$E_NOTEXIST" "Unable to download from snapshot"
-	fi
+trap 'rm -rf "$tmpdir"' EXIT
+
+# The metadata travels as the package beside the repository since stage 2a, not inside the snapshot.
+meta_pkg=$(restic_pkg_for_snapshot "$user" "$snapshot")
+if [ -z "$meta_pkg" ]; then
+	check_result "$E_NOTEXIST" "no metadata package for snapshot $snapshot of $user - look for $BACKUP/$user/*.meta.tgz"
 fi
-restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" dump "$snapshot" "/home/$user/backup/pam/passwd" > "$tmpdir/passwd"
-old_uid=$(cut -f 3 -d : $tmpdir/passwd)
+restic_meta_cat "$meta_pkg" backup.conf > "$tmpdir/backup.conf"
+if [ ! -s "$tmpdir/backup.conf" ]; then
+	check_result "$E_PARSING" "$meta_pkg carries no backup.conf - the snapshot cannot be described"
+fi
+restic_meta_cat "$meta_pkg" pam/passwd > "$tmpdir/passwd"
+old_uid=$(cut -f 3 -d : "$tmpdir/passwd")
+# Same guard as the full restore: without it every chown below matches nothing and the restored
+# files keep the archived owner.
+if [ -z "$old_uid" ]; then
+	check_result "$E_PARSING" "$meta_pkg carries no pam/passwd - the old uid cannot be read"
+fi
 
 domains=""
 parse_object_kv_list "$(cat $tmpdir/backup.conf)"
@@ -97,14 +107,14 @@ for domain in "${domains[@]}"; do
 				check_result "$E_PARSING" "$error"
 			fi
 		fi
-		restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" --include "/home/$user/backup/web/$domain" --target "$tmpdir"
-		if [ "$?" -ne 0 ]; then
-			check_result $E_NOTEXIST "Unable to download domain from snapshot"
+		restic_meta_unpack "$meta_pkg" "$tmpdir" "./web/$domain"
+		if [ ! -s "$tmpdir/web/$domain/hestia/web.conf" ]; then
+			check_result "$E_NOTEXIST" "$meta_pkg carries no record for web domain $domain"
 		fi
 
 		# Restoring web.conf
 		if [ -z "$check_config" ]; then
-			parse_object_kv_list "$(cat $tmpdir/home/$user/backup/web/$domain/hestia/web.conf)"
+			parse_object_kv_list "$(cat $tmpdir/web/$domain/hestia/web.conf)"
 
 			# Deleting conflicting aliases
 			for dom_alias in ${ALIAS//,/ }; do
@@ -177,16 +187,16 @@ for domain in "${domains[@]}"; do
 			# Copying SSL certificates
 			if [ "$SSL" = 'yes' ]; then
 
-				if [ -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.crt" ]; then
-					cp -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.crt" "$USER_DATA/ssl/"
-					if [ -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.ca" ]; then
-						cp -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.ca" "$USER_DATA/ssl/"
+				if [ -f "$tmpdir/web/$domain/hestia/$domain.crt" ]; then
+					cp -f "$tmpdir/web/$domain/hestia/$domain.crt" "$USER_DATA/ssl/"
+					if [ -f "$tmpdir/web/$domain/hestia/$domain.ca" ]; then
+						cp -f "$tmpdir/web/$domain/hestia/$domain.ca" "$USER_DATA/ssl/"
 					fi
-					if [ -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.pem" ]; then
-						cp -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.pem" "$USER_DATA/ssl/"
+					if [ -f "$tmpdir/web/$domain/hestia/$domain.pem" ]; then
+						cp -f "$tmpdir/web/$domain/hestia/$domain.pem" "$USER_DATA/ssl/"
 					fi
-					if [ -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.key" ]; then
-						cp -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.key" "$USER_DATA/ssl/"
+					if [ -f "$tmpdir/web/$domain/hestia/$domain.key" ]; then
+						cp -f "$tmpdir/web/$domain/hestia/$domain.key" "$USER_DATA/ssl/"
 					fi
 				fi
 			fi
@@ -229,7 +239,7 @@ for domain in "${domains[@]}"; do
 		if [ ! -d "$HOMEDIR/$user/conf/web/$domain/" ]; then
 			mkdir -p $HOMEDIR/$user/conf/web/$domain/
 		fi
-		for file in $tmpdir/home/$user/backup/web/$domain/conf/*; do
+		for file in $tmpdir/web/$domain/conf/*; do
 			if [[ "$file" == *.ca ]] || [[ "$file" == *.crt ]] || [[ "$file" == *.key ]] || [[ "$file" == *.pem ]] || [[ "$file" == *.conf ]]; then
 				continue
 			fi
@@ -250,9 +260,20 @@ for domain in "${domains[@]}"; do
 
 		[[ -d $HOMEDIR/$user/web/$domain/stats ]] && chmod u+w "$HOMEDIR/$user/web/$domain/stats"
 
-		restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" --include "/home/$user/web/$domain" --target /
+		# restic refuses to write a symlink that exists, and the vhost rebuild above just created the
+		# log links - two of them turned every restore of an existing domain into a Fatal. Removing
+		# them is the portable fix: --exclude cannot join --include, and --overwrite is 0.17+.
+		find "$HOMEDIR/$user/web/$domain/logs" -maxdepth 1 -type l -delete 2> /dev/null
+		restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" \
+			--include "/home/$user/web/$domain" --target /
 		if [ "$?" -ne 0 ]; then
 			check_result "$E_NOTEXIST" "Unable to download user data"
+		fi
+		# The links only come back if the snapshot carries them - a customer exclusion would leave
+		# the domain without logs and say nothing. One owner for that knowledge: the rebuild.
+		if [ ! -L "$HOMEDIR/$user/web/$domain/logs/$domain.log" ] \
+			|| [ ! -L "$HOMEDIR/$user/web/$domain/logs/$domain.error.log" ]; then
+			rebuild_web_domain_conf
 		fi
 		if [ "$new_user" = "yes" ]; then
 			echo "[ * ] Fix permissions"

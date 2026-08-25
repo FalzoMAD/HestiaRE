@@ -1,6 +1,6 @@
 #!/bin/bash
-# info: backup system user with all its objects
-# options: USER SNAPSHOT FOLDER
+# info: list the files of a folder inside a restic snapshot
+# options: USER SNAPSHOT FOLDER [FORMAT]
 #
 # example: h-backup-user admin yes
 #

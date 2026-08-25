@@ -221,6 +221,29 @@ opens above it.
   non-numeric code instead of waving it through, so the next typo is a loud failure rather than a
   silenced check.
 
+- **The restore path reads the metadata where it lives** (#217, stage 3). Stage 2a moved the
+  metadata out of the snapshot into the package beside the repository and the dumps into `.dumps`;
+  nine commands still read them from `/home/$user/backup`, a tree no restic snapshot has carried
+  since - every restore died at its first metadata read. One resolver finds a snapshot's package,
+  over the tag the snapshot carries AND over the snapshot id the packages name, so a lost tag alone
+  does not hide a package whose data is still there; one reader and one unpacker serve its members.
+  Databases come raw out of `.dumps` now, which removes the decompression branch for a `.sql.zst`
+  nobody writes any more. Five defects fell out on the way, all of which looked like working code:
+  the cron restore had no check on what it read and copied the result straight over the live
+  `cron.conf`, so a failed read **overwrote the customer's cron table with an empty file**; the full
+  restore never restored `backup-excludes.conf` because a misplaced quote turned the path into an
+  argument of `cp -r` and a `2>/dev/null` swallowed the complaint; the file restore accepted any
+  path and wrote it as root, and is bounded to the customer's home now, with the raw dump stage
+  refused by name; six of the ten commands never sourced `include/backup.sh`; and the headers, arg
+  checks and log lines described other commands (`h-restore-user-restic` demanded three mandatory
+  arguments for a command that needs two, the file restore logged "DNS Domain successfully
+  restored", three listers announced themselves as a backup command). Separately, the web restore
+  could never finish for an existing domain: `rebuild_web_domain_conf` creates the two log symlinks
+  and restic refuses to write a symlink that exists, so the run ended in `Fatal` **after** the
+  content was already back - and the permission repair, the counters and the log entry never ran.
+  The links are removed before the restore and come back from the snapshot; `--exclude` cannot join
+  `--include` and `--overwrite` needs restic 0.17, so neither is portable across the fleet.
+
 - **The restic run honours the exclusion list, rotates both artefacts as one, and checks the right
   disk** (#217, stage 2b). `restic backup` ran over the whole home without a single `--exclude`;
   it now gets the path-producing part of `backup-excludes.conf` (web and mail domains, user

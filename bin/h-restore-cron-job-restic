@@ -29,6 +29,8 @@ source $HESTIA/include/ip.sh
 source $HESTIA/include/rebuild.sh
 # shellcheck source=/usr/local/hestia/include/syshealth.sh
 source $HESTIA/include/syshealth.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -48,8 +50,18 @@ is_restic_repo_configured
 #----------------------------------------------------------#
 
 tmpdir=$(mktemp -p /home/$user/tmp/ -d)
+trap 'rm -rf "$tmpdir"' EXIT
 
-restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" --json dump "$snapshot" "/home/$user/backup/cron/cron.conf" > "$tmpdir/cron.conf"
+meta_pkg=$(restic_pkg_for_snapshot "$user" "$snapshot")
+if [ -z "$meta_pkg" ]; then
+	check_result "$E_NOTEXIST" "no metadata package for snapshot $snapshot of $user - look for $BACKUP/$user/*.meta.tgz"
+fi
+# Decide on the read, not on the size: a customer without cron jobs has an empty but perfectly
+# good record, and the full restore calls this command for everybody. Only a failed read is an
+# error - it would otherwise overwrite the live record with nothing.
+if ! restic_meta_cat "$meta_pkg" cron/cron.conf > "$tmpdir/cron.conf"; then
+	check_result "$E_PARSING" "$meta_pkg has no readable cron/cron.conf"
+fi
 
 # Restoring cron jobs
 cp "$tmpdir/cron.conf" "$USER_DATA/cron.conf"

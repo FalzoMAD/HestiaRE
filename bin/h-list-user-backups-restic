@@ -1,6 +1,6 @@
 #!/bin/bash
-# info: backup system user with all its objects
-# options: USER NOTIFY
+# info: list the restic snapshots of a user
+# options: USER [FORMAT]
 #
 # example: h-backup-user admin yes
 #
