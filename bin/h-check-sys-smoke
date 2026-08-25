@@ -865,13 +865,15 @@ check_error_code_registry() {
 # config key, in which case the floor locks that key out of every conf. Both are checked here, and
 # the second is checked against the key registries rather than a second hand-kept list.
 check_protected_names() {
-	local n bad=0 first="" reg
+	local n bad=0 first="" reg regs nregs
+	regs="web mail mail_accounts user cron db system ip backup_excludes"
+	nregs=$(wc -w <<< "$regs")
 	n=$(wc -w <<< "$SOURCE_CONF_PROTECTED")
 	if [ "${n:-0}" -lt 10 ]; then
 		no "protected name list is empty or short ($n)" "SOURCE_CONF_PROTECTED in include/main.sh"
 		return
 	fi
-	for reg in web mail mail_accounts user cron db system ip backup_excludes; do
+	for reg in $regs; do
 		for name in $(syshealth_known_keys "$reg"); do
 			is_protected_key "$name" || continue
 			bad=$((bad + 1))
@@ -881,7 +883,7 @@ check_protected_names() {
 	if [ "$bad" -gt 0 ]; then
 		no "$bad protected name(s) collide with a real config key" "$first"
 	else
-		ok "protected names hold and collide with no config key ($n names, 8 registries)"
+		ok "protected names hold and collide with no config key ($n names, $nregs registries)"
 	fi
 }
 # check_protected_names_effective - the list above is a claim; this is the effect. A record that
