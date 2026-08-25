@@ -1249,12 +1249,14 @@ restic_pkg_for_snapshot() {
 
 # One reader and one unpacker for the package - the restore path never looks into the snapshot for
 # metadata again, it moved out of the home in stage 2a.
-restic_meta_cat() { tar -xzOf "$1" "./$2" 2> /dev/null; }
+# --no-wildcards: the member names carry record values (domain, database), and a name holding a
+# glob would pull foreign objects out of the package (the #2d rule for archive-controlled names).
+restic_meta_cat() { tar --no-wildcards -xzOf "$1" "./$2" 2> /dev/null; }
 restic_meta_unpack() {
 	local _pkg="$1" _dest="$2"
 	shift 2
 	mkdir -p "$_dest" || return 1
-	tar -xzf "$_pkg" -C "$_dest" "$@" 2> /dev/null
+	tar --no-wildcards -xzf "$_pkg" -C "$_dest" "$@" 2> /dev/null
 }
 
 # Derived, never an argument: the stager removes both as root.

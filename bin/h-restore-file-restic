@@ -49,7 +49,12 @@ is_restic_repo_configured
 #                       Action                             #
 #----------------------------------------------------------#
 
-# The command restores as root: a path outside the customer's home would write anywhere.
+# The command restores as root: a path outside the customer's home would write anywhere. A prefix
+# test is text, and /home/alfa/../bravo passes it - so the components are refused first, and the
+# boundary holds on its own instead of leaning on what restic happens to match.
+case "$file" in
+	*/../* | */.. | ../* | ..) check_result "$E_FORBIDEN" "$file contains a .. component" ;;
+esac
 case "$file" in
 	"$HOMEDIR/$user" | "$HOMEDIR/$user"/*) ;;
 	*) check_result "$E_FORBIDEN" "$file is outside $HOMEDIR/$user" ;;

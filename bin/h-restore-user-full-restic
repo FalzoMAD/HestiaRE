@@ -80,7 +80,8 @@ restic_meta_unpack "$meta_pkg" "$tmpdir" ./hestia ./pam
 
 cp "$tmpdir/hestia/user.conf" "$USER_DATA/"
 cp -r "$tmpdir/hestia/ssl" "$USER_DATA/" > /dev/null 2>&1
-cp "$tmpdir/hestia/backup-excludes.conf" "$USER_DATA/" > /dev/null 2>&1
+# Optional, so say that instead of silencing cp - the suppression is what hid the broken quote.
+[ -f "$tmpdir/hestia/backup-excludes.conf" ] && cp "$tmpdir/hestia/backup-excludes.conf" "$USER_DATA/"
 
 # Without it every chown below matches nothing and the home stays owned by the old uid.
 old_uid=$(cut -f 3 -d : "$tmpdir/pam/passwd")
