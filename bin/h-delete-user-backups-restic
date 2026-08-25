@@ -42,13 +42,19 @@ repo=$(restic_repo_base) || check_result "$E_NOTEXIST" "no restic repository con
 
 repo_dir="$repo$user"
 pkg_count=$(ls -1 "$BACKUP/$user/$user".*.meta.tgz 2> /dev/null | wc -l)
-snap_count=0
+# Not readable is not zero: after the customer is gone so is their key, and printing "0 snapshots"
+# would understate what is about to be destroyed.
+snap_count='unknown (no key to open the repository)'
 repo_size=''
 if [ -d "$repo_dir" ]; then
 	repo_size=$(du -sh "$repo_dir" 2> /dev/null | cut -f1)
 	if [ -f "$CONF_DIR/users/$user/restic.conf" ]; then
-		snap_count=$(restic --repo "$repo_dir" --password-file "$CONF_DIR/users/$user/restic.conf" \
-			--json snapshots 2> /dev/null | grep -o '"short_id"' | wc -l)
+		if _json=$(restic --repo "$repo_dir" --password-file "$CONF_DIR/users/$user/restic.conf" \
+			--json snapshots 2> /dev/null); then
+			snap_count="$(grep -o '"short_id"' <<< "$_json" | wc -l) snapshot(s)"
+		else
+			snap_count='unknown (the repository could not be read)'
+		fi
 	fi
 fi
 
@@ -59,7 +65,7 @@ fi
 # Named before it is destroyed, and only on an explicit yes: there is no second copy of a repository
 # once it is gone, and the customer record that could describe it may not exist any more.
 echo "About to delete, permanently:"
-echo "  repository $repo_dir${repo_size:+ ($repo_size)}${snap_count:+, $snap_count snapshot(s)}"
+echo "  repository $repo_dir${repo_size:+ ($repo_size)}, $snap_count"
 echo "  $pkg_count metadata package(s) in $BACKUP/$user/"
 if [ "$consent" != 'all' ]; then
 	echo
@@ -77,7 +83,7 @@ echo "Deleted the restic backups of $user"
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-$BIN/h-log-action "system" "Warning" "Backup" "Restic backups deleted (User: $user, snapshots: $snap_count, packages: $pkg_count)."
+$BIN/h-log-action "system" "Warning" "Backup" "Restic backups deleted (User: $user, $snap_count, packages: $pkg_count)."
 log_event "$OK" "$ARGUMENTS"
 
 exit
