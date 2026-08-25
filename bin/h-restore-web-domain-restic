@@ -255,7 +255,12 @@ for domain in "${domains[@]}"; do
 
 		[[ -d $HOMEDIR/$user/web/$domain/stats ]] && chmod u+w "$HOMEDIR/$user/web/$domain/stats"
 
-		restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" --include "/home/$user/web/$domain" --target /
+		# restic refuses to write a symlink that exists, and the vhost rebuild above just created the
+		# log links - two of them turned every restore of an existing domain into a Fatal. Removing
+		# them is the portable fix: --exclude cannot join --include, and --overwrite is 0.17+.
+		find "$HOMEDIR/$user/web/$domain/logs" -maxdepth 1 -type l -delete 2> /dev/null
+		restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" \
+			--include "/home/$user/web/$domain" --target /
 		if [ "$?" -ne 0 ]; then
 			check_result "$E_NOTEXIST" "Unable to download user data"
 		fi
