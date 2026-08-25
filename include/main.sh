@@ -419,16 +419,34 @@ WEBMAIL_KNOWN_CLIENTS='roundcube tachyon'
 
 # Random password generator. The default matrix (A-Za-z0-9) is sed-replacement-safe (no /, &, \)
 # and callers rely on that when substituting into configs - a custom matrix must keep the property.
+# A random draw misses a requested class often enough to matter: 16 characters out of A-Za-z0-9
+# carry no digit in about 6 % of draws, and a database with a password policy rejects exactly those.
+# The filter can also return fewer characters than asked for, which used to pass silently.
 generate_password() {
-	matrix=$1
-	length=$2
-	if [ -z "$matrix" ]; then
-		matrix="A-Za-z0-9"
+	local matrix="${1:-A-Za-z0-9}" length="${2:-16}" attempt=0 pass='' classes=0
+	[[ "$matrix" == *A-Z* ]] && classes=$((classes + 1))
+	[[ "$matrix" == *a-z* ]] && classes=$((classes + 1))
+	[[ "$matrix" == *0-9* ]] && classes=$((classes + 1))
+	# The only request that cannot be met is fewer characters than classes, and that is knowable
+	# before the first draw. Caught here, the loop below cannot run out.
+	if [ "$length" -lt "$classes" ]; then
+		check_result "$E_INVALID" "cannot fit $classes character classes into $length characters"
 	fi
-	if [ -z "$length" ]; then
-		length=16
-	fi
-	head /dev/urandom | tr -dc $matrix | head -c$length
+	while [ "$attempt" -lt 100 ]; do
+		attempt=$((attempt + 1))
+		pass=$(head -c 4096 /dev/urandom | tr -dc "$matrix" | head -c "$length")
+		[ "${#pass}" -eq "$length" ] || continue
+		[[ "$matrix" == *A-Z* && ! "$pass" =~ [[:upper:]] ]] && continue
+		[[ "$matrix" == *a-z* && ! "$pass" =~ [[:lower:]] ]] && continue
+		[[ "$matrix" == *0-9* && ! "$pass" =~ [[:digit:]] ]] && continue
+		printf "%s" "$pass"
+		return 0
+	done
+	# Unreachable after the check above. If it were ever reached, printing the last candidate beats
+	# printing nothing: a caller that passes an empty password on could create an account without one.
+	echo "Warning: no password matching '$matrix' in $length characters after $attempt tries" >&2
+	printf "%s" "$pass"
+	return 1
 }
 
 # Package existence check
