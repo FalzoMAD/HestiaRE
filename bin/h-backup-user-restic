@@ -79,14 +79,28 @@ trap 'rm -rf "$meta_dir" "$dump_dir"' EXIT
 # Leftovers first, or yesterday's dump counts as occupied space in the check below.
 rm -rf "$meta_dir" "$dump_dir"
 
-# Against the filesystem the dumps land on, not against /backup.
-need=$(restic_dump_space_needed "$user")
-free=$(df -Pm "$HOMEDIR/$user" | tail -1 | awk '{print $4}')
-if [ "${need:-0}" -gt 0 ] && [ "${free:-0}" -lt "$need" ]; then
-	echo "Not enough space for the database dumps of $user: $need MB needed, $free MB free" \
-		| $SENDMAIL -s "$subj" "$email" "yes"
-	check_result "$E_DISK" "$user needs $need MB for its dumps, $HOMEDIR/$user has $free MB"
-fi
+# Measured, not estimated (#805): one dry dump per database says what the stage will really hold.
+need=$(restic_dump_size_measured "$user") \
+	|| check_result "$E_DB" "cannot measure the dumps of $user - a database did not dump"
+# The dumps land in the stage and go into the repository, so both want that many bytes. On one
+# device they add up; on two they do not. A remote repository takes no local space at all.
+repo_need=0
+repo_dir=""
+case "$REPO" in
+	*://* | *:*/*) ;;
+	*) [ -d "$REPO" ] && repo_dir="$REPO" && repo_need="$need" ;;
+esac
+# The home stands in for the stage: the stage does not exist yet at this point, and it is created
+# inside the home, so it is the same filesystem. Bound to the command, not to the line order.
+refusal=$(space_budget_refused "$HOMEDIR/$user:$need" "${repo_dir:-/nonexistent}:$repo_need") || {
+	case "$?" in
+		1)
+			echo "Not enough space for the backup of $user: $refusal" | $SENDMAIL -s "$subj" "$email" "yes"
+			check_result "$E_DISK" "$user: $refusal"
+			;;
+		*) check_result "$E_DISK" "cannot read the free space for the backup of $user" ;;
+	esac
+}
 
 # Only stale locks, never --remove-all: a running nightly job would lose its own.
 restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf unlock > /dev/null 2>&1
