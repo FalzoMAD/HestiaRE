@@ -35,6 +35,13 @@ is_format_valid 'user'
 is_object_format_valid "$snapshot" 'snapshot'
 is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
+# The name alone says nothing about who owns the snapshot, and the queue runs as root: check that it
+# is in this customer's repository before it goes into the pipe.
+is_restic_repo_configured
+if ! restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" --json snapshots \
+	"$snapshot" 2> /dev/null | grep -q '"short_id"'; then
+	check_result "$E_NOTEXIST" "no snapshot $snapshot in the repository of $user"
+fi
 is_backup_scheduled 'restore'
 
 #----------------------------------------------------------#

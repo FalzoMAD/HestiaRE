@@ -419,16 +419,26 @@ WEBMAIL_KNOWN_CLIENTS='roundcube tachyon'
 
 # Random password generator. The default matrix (A-Za-z0-9) is sed-replacement-safe (no /, &, \)
 # and callers rely on that when substituting into configs - a custom matrix must keep the property.
+# A random draw misses a requested class often enough to matter: 16 characters out of A-Za-z0-9
+# carry no digit in about 6 % of draws, and a database with a password policy rejects exactly those.
+# The filter can also return fewer characters than asked for, which used to pass silently.
 generate_password() {
-	matrix=$1
-	length=$2
-	if [ -z "$matrix" ]; then
-		matrix="A-Za-z0-9"
-	fi
-	if [ -z "$length" ]; then
-		length=16
-	fi
-	head /dev/urandom | tr -dc $matrix | head -c$length
+	local matrix="${1:-A-Za-z0-9}" length="${2:-16}" attempt=0 pass=''
+	while [ "$attempt" -lt 100 ]; do
+		attempt=$((attempt + 1))
+		pass=$(head -c 4096 /dev/urandom | tr -dc "$matrix" | head -c "$length")
+		[ "${#pass}" -eq "$length" ] || continue
+		[[ "$matrix" == *A-Z* && ! "$pass" =~ [[:upper:]] ]] && continue
+		[[ "$matrix" == *a-z* && ! "$pass" =~ [[:lower:]] ]] && continue
+		[[ "$matrix" == *0-9* && ! "$pass" =~ [[:digit:]] ]] && continue
+		printf "%s" "$pass"
+		return 0
+	done
+	# Only an impossible request gets here (fewer characters than classes). Loud, because the caller
+	# runs us in a command substitution where an exit would be swallowed.
+	echo "Warning: no password matching '$matrix' in $length characters after $attempt tries" >&2
+	printf "%s" "$pass"
+	return 1
 }
 
 # Package existence check
