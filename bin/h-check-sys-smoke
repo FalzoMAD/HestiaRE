@@ -871,7 +871,7 @@ check_protected_names() {
 		no "protected name list is empty or short ($n)" "SOURCE_CONF_PROTECTED in include/main.sh"
 		return
 	fi
-	for reg in web mail mail_accounts user cron db system ip; do
+	for reg in web mail mail_accounts user cron db system ip backup_excludes; do
 		for name in $(syshealth_known_keys "$reg"); do
 			is_protected_key "$name" || continue
 			bad=$((bad + 1))
@@ -888,17 +888,20 @@ check_protected_names() {
 # tries to bind PATH must not change it, and a harmless one must still bind, in the same run.
 check_protected_names_effective() {
 	local tmp before after
+	local name_before="$NAME"
 	before="$PATH"
 	tmp=$(mktemp)
 	printf "NAME='probe'\nPATH=/tmp/hestia-smoke-should-not-happen\n" > "$tmp"
 	NAME=''
 	source_conf "$tmp" 2> /dev/null
 	after="$PATH"
+	local bound="$NAME"
+	NAME="$name_before"
 	rm -f "$tmp"
 	if [ "$before" != "$after" ]; then
 		PATH="$before"
 		no "a config file rebound PATH (#807)" "source_conf accepted a protected name"
-	elif [ "$NAME" != "probe" ]; then
+	elif [ "$bound" != "probe" ]; then
 		no "the protected-name probe never bound anything" "source_conf read nothing - the check proves nothing"
 	else
 		ok "a config file cannot rebind PATH, an ordinary key still binds"

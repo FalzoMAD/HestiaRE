@@ -82,8 +82,12 @@ restic_meta_unpack "$meta_pkg" "$tmpdir" ./hestia ./pam
 copy_record_filtered "$tmpdir/hestia/user.conf" "$USER_DATA/user.conf" user \
 	|| check_result "$E_PARSING" "the archived user.conf of $user carries no usable keys"
 cp -r "$tmpdir/hestia/ssl" "$USER_DATA/" > /dev/null 2>&1
-# Optional, so say that instead of silencing cp - the suppression is what hid the broken quote.
-[ -f "$tmpdir/hestia/backup-excludes.conf" ] && cp "$tmpdir/hestia/backup-excludes.conf" "$USER_DATA/"
+# Filtered like user.conf: it runs through source_conf later, and an absent one is normal (#807).
+if [ -f "$tmpdir/hestia/backup-excludes.conf" ]; then
+	copy_record_filtered "$tmpdir/hestia/backup-excludes.conf" \
+		"$USER_DATA/backup-excludes.conf" backup_excludes \
+		|| echo "Warning: the archived backup-excludes.conf carries no usable keys and was skipped"
+fi
 
 # Without it every chown below matches nothing and the home stays owned by the old uid.
 old_uid=$(cut -f 3 -d : "$tmpdir/pam/passwd")

@@ -359,6 +359,14 @@ if [ "$create_user" = 'yes' ]; then
 		[[ " $BACKUP_USER_DATA_CORE user.conf ssl packages web-system origin " == *" $_name "* ]] && continue
 		# Out of the archive and joined onto a path we write to: a plain basename or nothing.
 		case "$_name" in '' | .* | */* | *[!A-Za-z0-9._-]*) continue ;; esac
+		# Anything that later runs through source_conf is filtered by its key set. A poisoned
+		# exclusion list cannot bind PATH any more, but it could still set MAIL_SYSTEM='' and skip
+		# the mail section of every future backup while the run stays green (#807).
+		if [ "$_name" = "backup-excludes.conf" ]; then
+			copy_record_filtered "$_entry" "$USER_DATA/$_name" backup_excludes \
+				|| echo "Warning!: the archived $_name carries no usable keys and was skipped" | tee -a $tmpdir/restore.log
+			continue
+		fi
 		cp -r "$_entry" "$USER_DATA/" \
 			|| echo "Warning!: $_name from the archive could not be written to the data directory" | tee -a $tmpdir/restore.log
 	done
@@ -374,7 +382,10 @@ if [ "$create_user" = 'yes' ]; then
 			if [ -e "$_dest" ]; then
 				echo "$(date "+%F %T") package $(basename "$_pkg") exists on target, kept unchanged" >> $tmpdir/restore.log 2> /dev/null || true
 			else
-				cp -f "$_pkg" "$_dest"
+				# Package files are source_conf'd too, and their keys are a subset of the user set
+				# (measured: no package key is outside it).
+				copy_record_filtered "$_pkg" "$_dest" user \
+					|| echo "Warning!: the archived package $(basename "$_pkg") carries no usable keys and was skipped" | tee -a $tmpdir/restore.log
 			fi
 		done
 	fi
