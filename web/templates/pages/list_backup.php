@@ -6,8 +6,10 @@
 				<a href="/schedule/backup/?<?= tohtml(http_build_query(["token" => $_SESSION["token"]])) ?>" class="button button-secondary"><i class="fas fa-circle-plus icon-green"></i><?= tohtml(_("Create Backup")) ?></a>
 				<a href="/list/backup/exclusions/" class="button button-secondary"><i class="fas fa-folder-minus icon-orange"></i><?= tohtml(_("Backup Exclusions")) ?></a>
 			<?php } ?>
-			<?php if (($panel[$user_plain]['BACKUPS_MODE'] ?? '') === 'restic') { ?>
-				<a href="/list/backup/incremental/" class="button button-secondary"><i class="fas fa-vault icon-blue"></i><?= tohtml(_("Incremental Backups")) ?></a>
+			<?php // A restic customer lands on the snapshot list directly, so this is the way back to
+			// the archives they may still have from before the switch - and to their exports.
+			if (($panel[$user_plain]['BACKUPS_MODE'] ?? '') === 'restic') { ?>
+				<a href="/list/backup/incremental/?<?= tohtml(http_build_query(["token" => $_SESSION["token"]])) ?>" class="button button-secondary"><i class="fas fa-vault icon-blue"></i><?= tohtml(_("Snapshots")) ?></a>
 			<?php } ?>
 		</div>
 		<div class="toolbar-right">
@@ -139,6 +141,13 @@
 					// checked: no copy on this box. Whether a remote still holds it was not asked.
 					if (($data[$key]["LOCAL"] ?? "yes") !== "yes") { ?>
 						<span class="u-text-small"><?= tohtml(_("(no local copy)")) ?></span>
+					<?php } ?>
+					<?php // Named, because retention does not touch it: an export is a deliberate
+					// artefact and stays until someone deletes it.
+					if (($data[$key]["MODE"] ?? "") === "export") { ?>
+						<span class="u-text-small" title="<?= tohtml(_("Kept until deleted - retention does not rotate exports")) ?>">
+							(<?= tohtml(_("export")) ?>)
+						</span>
 					<?php } ?>
 					<?php if (($data[$key]["MODE"] ?? "") === "diff") { ?>
 						<span class="u-text-small" title="<?= tohtml(sprintf(_("Base: %s"), $data[$key]["BASE"] ?? "")) ?>">

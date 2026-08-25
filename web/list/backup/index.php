@@ -7,6 +7,21 @@ $TAB = "BACKUP";
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
+// One tab, branching by mode (#217 stage 5): BACKUPS_MODE is the single truth about a customer's
+// mode, so the Backups tab shows what that customer actually has instead of hiding snapshots behind
+// a second button. The snapshot views keep their own URLs for links that already exist.
+// ?archives=1 is the way back: a restic customer still has the archives from before the switch and
+// their exports, and both live in this list - without the escape the button here would bounce
+// straight back into the redirect.
+if (
+	($panel[$user_plain]["BACKUPS_MODE"] ?? "") === "restic" &&
+	empty($_GET["backup"]) &&
+	empty($_GET["archives"])
+) {
+	header("Location: /list/backup/incremental/?" . http_build_query(["token" => $_SESSION["token"]]));
+	exit();
+}
+
 // Data & Render page
 if (empty($_GET["backup"])) {
 	$data = cli_json("h-list-user-backups $user json");
