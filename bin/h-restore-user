@@ -345,7 +345,9 @@ if [ "$create_user" = 'yes' ]; then
 
 	# Restoring user.conf
 	mkdir $USER_DATA
-	cp $tmpdir/$BACKUP_CONTAINER/user.conf $USER_DATA/
+	# Filtered, not copied: the archive is hostile input (#807).
+	copy_record_filtered "$tmpdir/$BACKUP_CONTAINER/user.conf" "$USER_DATA/user.conf" user \
+		|| check_result "$E_PARSING" "the archived user.conf of $user carries no usable keys"
 	cp -r $tmpdir/$BACKUP_CONTAINER/ssl $USER_DATA/ > /dev/null 2>&1
 
 	# Everything else the container holds. Skipped: BACKUP_USER_DATA_CORE, plus what this side does

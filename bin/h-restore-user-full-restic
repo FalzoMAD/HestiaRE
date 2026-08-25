@@ -78,7 +78,9 @@ if [ ! -s "$tmpdir/backup.conf" ]; then
 fi
 restic_meta_unpack "$meta_pkg" "$tmpdir" ./hestia ./pam
 
-cp "$tmpdir/hestia/user.conf" "$USER_DATA/"
+# Filtered, not copied: the archive is hostile input (#807).
+copy_record_filtered "$tmpdir/hestia/user.conf" "$USER_DATA/user.conf" user \
+	|| check_result "$E_PARSING" "the archived user.conf of $user carries no usable keys"
 cp -r "$tmpdir/hestia/ssl" "$USER_DATA/" > /dev/null 2>&1
 # Optional, so say that instead of silencing cp - the suppression is what hid the broken quote.
 [ -f "$tmpdir/hestia/backup-excludes.conf" ] && cp "$tmpdir/hestia/backup-excludes.conf" "$USER_DATA/"
