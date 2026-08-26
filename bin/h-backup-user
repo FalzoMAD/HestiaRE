@@ -295,13 +295,16 @@ if ! tmpdir=$(mktemp -p $BACKUP_TEMP -d); then
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create tmp dir"
 fi
-# Hash tables live OUTSIDE tmpdir (everything in tmpdir lands in the tarball); the trap covers
-# every abort path, which the per-path rm -rf $tmpdir calls never did for this directory.
+# Hash tables live OUTSIDE tmpdir (everything in tmpdir lands in the tarball).
 if ! maptbl=$(mktemp -d); then
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create map table dir"
 fi
-trap 'rm -rf "$maptbl"' EXIT
+# Both directories, and on EVERY exit: the staging tree is where a crashed run leaves its half-built
+# members, and only two of the paths out of here removed it - the success path and one error branch.
+# Every check_result in between simply left it behind, which is how a 34 MB leftover from an aborted
+# run turned up on the fleet. A backup that refuses to finish must not also refuse to tidy up.
+trap 'rm -rf "$maptbl" "$tmpdir"' EXIT
 
 # Backup sys configs
 echo "-- SYSTEM --" | tee $BACKUP/$user/$user.log
@@ -528,9 +531,15 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 
 		# --sort=name and gzip -n (#712): an unchanged tree produces identical bytes twice.
 		if [ "$BACKUP_MODE" = 'zstd' ]; then
-			tar --sort=name "${fargs[@]}" -cpf- . | pzstd -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.zst
+			_member="$tmpdir/web/$domain/domain_data.tar.zst"
 		else
-			tar --sort=name "${fargs[@]}" -cpf- . | gzip -n -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.gz
+			_member="$tmpdir/web/$domain/domain_data.tar.gz"
+		fi
+		if ! backup_member_write "$_member" --sort=name "${fargs[@]}" -cpf- .; then
+			echo "Backup of $user aborted: web/$domain could not be written - the archive would be incomplete" \
+				| $SENDMAIL -s "$subj" "$email" "yes"
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
+			check_result "$E_DISK" "$user: web/$domain could not be written to $_member - refusing to finish a partial archive"
 		fi
 		backup_map_hash_verify "$maptbl/web.$domain.tbl"
 	done
@@ -615,9 +624,15 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 				|| echo "$(date "+%F %T") Warning: hash pass failed for mail/$domain - its hashes are withdrawn, the member stays effectively whole" \
 				| tee -a $BACKUP/$user/$user.log
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar --sort=name -cpf- "${accounts[@]}" | pzstd -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.zst
+				_member="$tmpdir/mail/$domain/accounts.tar.zst"
 			else
-				tar --sort=name -cpf- "${accounts[@]}" | gzip -n -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.gz
+				_member="$tmpdir/mail/$domain/accounts.tar.gz"
+			fi
+			if ! backup_member_write "$_member" --sort=name -cpf- "${accounts[@]}"; then
+				echo "Backup of $user aborted: mail/$domain could not be written - the archive would be incomplete" \
+					| $SENDMAIL -s "$subj" "$email" "yes"
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
+				check_result "$E_DISK" "$user: mail/$domain could not be written to $_member - refusing to finish a partial archive"
 			fi
 			backup_map_hash_verify "$maptbl/mail.$domain.tbl" "${accounts[@]}"
 		fi
@@ -795,9 +810,15 @@ if [ "$USER" != '*' ]; then
 
 			# Backup files and dirs
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | pzstd -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.zst
+				_member="$tmpdir/user_dir/$udir.tar.zst"
 			else
-				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | gzip -n -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.gz
+				_member="$tmpdir/user_dir/$udir.tar.gz"
+			fi
+			if ! backup_member_write "$_member" --anchored --sort=name -cpf- "${fargs[@]}" $udir; then
+				echo "Backup of $user aborted: user_dir/$udir could not be written - the archive would be incomplete" \
+					| $SENDMAIL -s "$subj" "$email" "yes"
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
+				check_result "$E_DISK" "$user: user_dir/$udir could not be written to $_member - refusing to finish a partial archive"
 			fi
 
 		fi

@@ -206,6 +206,29 @@ backup_origin_field() {
 	sed -n "s/.*[[:space:]]$1='\([^']*\)'.*/\1/p" <<< " $PROBE_ORIGIN"
 }
 
+# backup_member_write DEST TAR-ARG... - build one compressed member, and let BOTH ends of the pipe
+# decide. The status of `tar ... | pzstd ... > file` is the compressor's alone, and even that was
+# never read: a staging filesystem that filled up produced a truncated member and the run reported
+# success over it - measured, 8 of 31 MB, `zstd -t` saying "premature end", the record written and
+# the outer tar perfectly readable (#823). A half archive that looks whole is worse than none, so
+# this returns false and every caller aborts.
+#
+# The compressor is chosen by the DEST extension, so the caller names the file it wants and the two
+# never disagree about which one was written.
+backup_member_write() {
+	local _dest="$1"
+	shift
+	local -a _st
+	if [ "${_dest##*.}" = 'zst' ]; then
+		tar "$@" | pzstd -"$BACKUP_GZIP" - > "$_dest"
+		_st=("${PIPESTATUS[@]}")
+	else
+		tar "$@" | gzip -n -"$BACKUP_GZIP" - > "$_dest"
+		_st=("${PIPESTATUS[@]}")
+	fi
+	[ "${_st[0]}" -eq 0 ] && [ "${_st[1]}" -eq 0 ]
+}
+
 # backup_probe ARCHIVE WORKDIR - describe an archive. Sets PROBE_* and extracts the record members
 # into WORKDIR, so the caller can read them without unpacking the archive again.
 backup_probe() {
