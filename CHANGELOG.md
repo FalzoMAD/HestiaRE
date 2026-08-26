@@ -316,6 +316,20 @@ opens above it.
 
 ### Fixed
 
+- **Every failed panel login wrote "Method not supported by crypt(3)." into the FPM log** (#817).
+  yescrypt is the PAM default on all four targets, and that branch handed `mkpasswd` the WHOLE
+  shadow hash as its salt. crypt(3) then hashes against the setting prefix, mkpasswd finds its
+  result differs from what it was given and exits 2 with that message - so the line meant "wrong
+  password" while reading like a libcrypt that cannot do yescrypt, the one fault it would matter
+  to see. mkpasswd now gets only the setting and is a plain hash function again; the comparison
+  against /etc/shadow was and remains the step that decides, so nothing about accept/refuse
+  changes. A genuine failure (absent binary, libcrypt without yescrypt) is logged by name in
+  `auth.log` instead of hiding among the wrong passwords. A new smoke check asks the question by
+  doing what the login does - hash a probe, reproduce it from its own setting - so the outage
+  mode "nobody can log in and the panel says invalid password" is caught before a user meets it.
+  Note the failure still reaches fail2ban: the panel hands the refusal to `h-check-user-hash`,
+  which writes its own "failed to login" line.
+
 - **logrotate failed on every target because our roundcube rotation doubled the package's** (#798).
   Both files list the same paths, and logrotate treats that as an error: it skips the second file
   and exits 1, so `logrotate.service` stayed failed and every box read "degraded" since the day it
