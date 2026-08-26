@@ -61,7 +61,9 @@ fi
 reverted=0
 if [ -f "$USER_DATA/web.conf" ]; then
 	for dom in $(grep -o "DOMAIN='[^']*'" "$USER_DATA/web.conf" | cut -f 2 -d \'); do
-		grep -q "DOMAIN='$dom'.*DOCKER='[^']" "$USER_DATA/web.conf" || continue
+		# Escaped, not -F: the pattern carries a deliberate .*, so it must stay a regex - but the
+		# domain's own dots would match any character (#583 class).
+		grep -q "DOMAIN='${dom//./\\.}'.*DOCKER='[^']" "$USER_DATA/web.conf" || continue
 		"$BIN/h-delete-web-domain-docker" "$user" "$dom" > /dev/null 2>&1 \
 			&& reverted=$((reverted + 1)) \
 			|| echo "Warning: could not revert docker on $dom - it still points at the removed container."

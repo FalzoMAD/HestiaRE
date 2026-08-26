@@ -922,9 +922,11 @@ echo "$(date "+%F %T") Runtime: $run_time $min" | tee -a $BACKUP/$user/$user.log
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Removing duplicate
+# Removing duplicate. The name is a PATTERN here, and an unescaped dot matches any character - the
+# class #583 swept once already, missed at these record sites (#819).
 touch $USER_DATA/backup.conf
-sed -i "/$user.$backup_new_date.tar/d" $USER_DATA/backup.conf
+_arc="$user.$backup_new_date.tar"
+sed -i "/${_arc//./\\.}/d" $USER_DATA/backup.conf
 
 # Registering new backup
 backup_str="BACKUP='$user.$backup_new_date.tar'"
