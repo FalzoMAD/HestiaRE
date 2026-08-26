@@ -261,22 +261,31 @@ start_time=$(date '+%s')
 subj="$user → backup failed"
 email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" | cut -f 2 -d \')
 
-# Validate available disk space (take usage * 2, due to the backup handling)
-let u_disk=$(($(get_user_disk_usage) * 2))
-let v_disk=$(echo "$(stat -f --format='%a*%S' $BACKUP) / 1024 / 1024" | bc)
-
-if [ "$u_disk" -gt "$v_disk" ]; then
-	let u_disk_original=$(get_user_disk_usage)
-	# Always notify on failure
-	echo "Not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb). https://hestiacp.com/docs/server-administration/backup-restore.html" | $SENDMAIL -s "$subj" "$email" "yes"
-	# Deleting task from queue
-	queue_drop_job "$CONF_DIR/queue/backup.pipe"
-	check_result "$E_LIMIT" "not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb)."
-fi
-
+# BACKUP_TEMP first, because the check below has to know it: the tree is built THERE and the archive
+# lands in $BACKUP. The old check asked stat -f about $BACKUP alone - the wrong filesystem whenever
+# the two differ - and it stood ahead of this default, so it could not have read the value anyway.
 if [ -z "$BACKUP_TEMP" ]; then
 	BACKUP_TEMP=$BACKUP
 fi
+
+# Booked per DEVICE (#805): the staging tree and the finished archive each want about the usage. On
+# one filesystem that adds up to the same 2x the old check used; on two it stops asking one of them
+# about the other's free space. Measured once - du over web, mail and the home is not a thing to run
+# twice, least of all on a box whose disk is already too full.
+_need=$(($(get_user_disk_usage) * 1048576))
+refusal=$(space_budget_refused "$BACKUP_TEMP:$_need" "$BACKUP:$_need") || {
+	case "$?" in
+		1)
+			echo "Not enough disk space for the backup of $user: $refusal" | $SENDMAIL -s "$subj" "$email" "yes"
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
+			check_result "$E_LIMIT" "$user: $refusal"
+			;;
+		*)
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
+			check_result "$E_LIMIT" "cannot read the free space for the backup of $user ($BACKUP_TEMP, $BACKUP)"
+			;;
+	esac
+}
 
 # Creating temporary directory
 # Checked at the source - a check via $? behind any later line is dead (measured: two inserted
@@ -708,8 +717,11 @@ if [ -n "$CRON_SYSTEM" ] && [ "$CRON" != '*' ]; then
 	mkdir $tmpdir/cron/
 
 	# Backup cron.conf
-	cp $USER_DATA/cron.conf $tmpdir/cron/
-	cron_record=$(wc -l $USER_DATA/cron.conf | cut -f 1 -d ' ')
+	cp $USER_DATA/cron.conf $tmpdir/cron/ 2> /dev/null
+	# From stdin and guarded: with the file absent, wc printed nothing and the count below tripped
+	# over an empty string ("integer expression expected") instead of reporting no jobs.
+	cron_record=0
+	[ -f "$USER_DATA/cron.conf" ] && cron_record=$(wc -l < "$USER_DATA/cron.conf")
 
 	if [ -e "/var/spool/cron/$user" ]; then
 		cron_list="$cron_record"
@@ -760,6 +772,10 @@ if [ "$USER" != '*' ]; then
 		fi
 	done
 
+	# Saved, because both are lifted again at the end of the loop: an IFS left at newline reaches
+	# every later step - the map writer, the diff builder, all four transports and the record
+	# bookkeeping - and turns a local convenience into an inherited property nobody sees.
+	_ifs_saved=$IFS
 	IFS=$'\n'
 	set -f
 	i=0
@@ -787,6 +803,7 @@ if [ "$USER" != '*' ]; then
 		fi
 	done
 	set +f
+	IFS=$_ifs_saved
 	udir_list=$(echo "$udir_list" | sed -e "s/  */\ /g" -e "s/^ //")
 
 	# Print total

@@ -128,19 +128,31 @@ BACKUP_USER_DATA_CORE='web.conf mail.conf db.conf cron.conf mail backup.conf dns
 # The text identifying a queued job - command plus the arguments that tell it apart. One per
 # queueable command.
 QUEUE_JOB=''
+# One drop per run, tracked here and not by each caller (there are forty of them).
+QUEUE_JOB_DROPPED=''
 
-# queue_drop_job PIPE - remove the first line QUEUE_JOB prefixes.
+# queue_drop_job PIPE - remove the first line QUEUE_JOB prefixes, at most once per run.
 #
 # A prefix, not an identity: two restores of one archive for one customer differ only in their
 # selectors, and either may go. The prefix must end at a word boundary or it also matches a longer
 # token (a.tar would take a.tar.gz, u1 would take u12), so it is padded here rather than left to
 # each caller.
 #
+# AT MOST ONCE, because a prefix that may take any matching line must not be allowed to take two:
+# every remote transport drops on its error path and then RETURNS, so a run with a working local
+# target carries on to the end and drops again - and the second drop takes the NEXT queued line for
+# that customer. A failed remote silently cancelled a scheduled backup that way.
+#
+# The flag is set even when no line matched, on purpose: a run gets one attempt, full stop. Trying
+# again later could only succeed on a line that appeared meanwhile, which belongs to someone else.
+#
 # Deleting a line does not stop it running in the pass already under way: sed -i writes a new inode
 # and the running bash finishes the one it opened.
 queue_drop_job() {
 	local _pipe="$1" _job="$QUEUE_JOB" _n
 	[ -n "$_job" ] || return 0
+	[ -n "$QUEUE_JOB_DROPPED" ] && return 0
+	QUEUE_JOB_DROPPED='yes'
 	[ -f "$_pipe" ] || return 0
 	case "$_job" in *"'" | *" ") ;; *) _job="$_job " ;; esac
 	_n=$(grep -nF -m1 -- "$_job" "$_pipe" 2> /dev/null | cut -d: -f1)
@@ -2081,7 +2093,8 @@ backup_diff_build() {
 			backup_map_changed "$_bm" "$_cur" "$_pre" > "$_list"
 			_work=$(mktemp -d)
 			_opt=$(backup_map_taropt "$_arc")
-			# An ARRAY: h-backup-user sets IFS=newline, a codec string would arrive as one word.
+			# An ARRAY, not a string: a caller's IFS decides how a string splits, and this one has to
+			# work whatever it is set to.
 			case "$_arc" in
 				*.zst) _codec=(pzstd -q "-$BACKUP_GZIP" -) ;;
 				*) _codec=(gzip -n "-$BACKUP_GZIP" -) ;;
