@@ -112,6 +112,9 @@ function prevent_get_csrf()
 					"/list/db/index.php",
 					"/list/cron/index.php",
 					"/list/backup/index.php",
+					// The Backups tab lands a restic customer here (#217 stage 5), so this is an
+					// entry route now - without it a bookmark or a link from outside answers 400.
+					"/list/backup/incremental/index.php",
 					"/reset/index.php",
 				])
 			) {

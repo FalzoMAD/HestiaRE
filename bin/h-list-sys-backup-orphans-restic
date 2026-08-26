@@ -1,0 +1,143 @@
+#!/bin/bash
+# info: list restic backup artefacts without a partner
+# options: [FORMAT]
+#
+# example: h-list-sys-backup-orphans-restic
+#
+# Snapshots without their metadata package, packages without their snapshot, and whole
+# repositories of customers who no longer exist. Deleting a customer keeps their backups, so
+# something has to name what is left over.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+format=${1-shell}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+# JSON list function
+json_list() {
+	echo '['
+	echo "$report" | while IFS='|' read -r kind owner item detail; do
+		[ -n "$kind" ] || continue
+		# json_escape, not hand-quoting (#717): every emitter goes through the one definition, or
+		# the first value carrying a " or a backslash produces a document nobody can decode.
+		json_escape kind owner item detail
+		echo "  {\"KIND\": \"$kind\", \"OWNER\": \"$owner\", \"ITEM\": \"$item\", \"DETAIL\": \"$detail\"},"
+	done | sed '$ s/,$//'
+	echo ']'
+}
+
+# SHELL list function
+shell_list() {
+	echo "$report" | while IFS='|' read -r kind owner item detail; do
+		[ -n "$kind" ] || continue
+		printf '%-18s %-16s %-40s %s\n' "$kind" "$owner" "$item" "$detail"
+	done
+}
+
+# PLAIN list function
+plain_list() {
+	echo "$report" | while IFS='|' read -r kind owner item detail; do
+		[ -n "$kind" ] || continue
+		echo -e "$kind\t$owner\t$item\t$detail"
+	done
+}
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '0' "$#" '[FORMAT]'
+
+repo=$(restic_repo_base) || check_result "$E_NOTEXIST" "no restic repository configured"
+command -v restic > /dev/null 2>&1 || check_result "$E_NOTEXIST" "restic is not installed"
+# The sweep below globs the base as a directory. On a remote base the glob stays literal, the loop
+# never runs, and the report would read "0 finding(s)" for a box on which nothing was looked at.
+# Said out loud rather than left to the reach counters, which only a careful reader reaches.
+if ! restic_repo_is_local "$repo"; then
+	check_result "$E_NOTEXIST" "the repository base $repo is remote - this report only inspects a local base, so it can say nothing about what is there"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+report=''
+checked=0
+unreadable=0
+
+# Every repository directory under the base, not the customer list: a deleted customer is exactly
+# the case this report exists for, and they are gone from the list by then.
+for repo_dir in "$repo"*; do
+	[ -d "$repo_dir" ] || continue
+	u=$(basename "$repo_dir")
+	checked=$((checked + 1))
+	if [ ! -d "$CONF_DIR/users/$u" ]; then
+		size=$(du -sh "$repo_dir" 2> /dev/null | cut -f1)
+		report="$report
+repo-no-customer|$u|$repo_dir|$size, no user record - h-delete-user-backups-restic removes it"
+		continue
+	fi
+	key="$CONF_DIR/users/$u/restic.conf"
+	[ -f "$key" ] || {
+		report="$report
+repo-no-key|$u|$repo_dir|the customer has no restic.conf - the repository cannot be opened"
+		continue
+	}
+	# An unreadable repository is not an empty one: counting its packages as orphans would blame
+	# every one of them for a broken line. Bound to the command, not to the line order.
+	json=$(restic --repo "$repo_dir" --password-file "$key" --json snapshots 2> /dev/null) || {
+		unreadable=$((unreadable + 1))
+		report="$report
+repo-unreadable|$u|$repo_dir|restic could not read it - not checked for orphans"
+		continue
+	}
+	tags=$(grep -o '"meta:[^"]*"' <<< "$json" | tr -d '"')
+	ids=$(grep -o '"short_id":"[^"]*"' <<< "$json" | cut -d'"' -f4)
+	for tag in $tags; do
+		[ -f "$BACKUP/$u/${tag#meta:}.meta.tgz" ] && continue
+		report="$report
+snapshot-no-package|$u|${tag#meta:}|the snapshot is kept - only its metadata is missing"
+	done
+	for pkg in "$BACKUP/$u/$u".*.meta.tgz; do
+		[ -f "$pkg" ] || continue
+		tag="meta:$(basename "$pkg" .meta.tgz)"
+		grep -qxF "$tag" <<< "$tags" && continue
+		sid=$(tar --no-wildcards -xzOf "$pkg" ./restic.meta 2> /dev/null | sed -n "s/^SNAPSHOT='\([^']*\)'.*/\1/p")
+		[ -n "$sid" ] && grep -qxF "$sid" <<< "$ids" && continue
+		report="$report
+package-no-snapshot|$u|$(basename "$pkg")|describes a snapshot that is gone - safe to remove"
+	done
+done
+
+report=$(sed '/^$/d' <<< "$report")
+
+# Listing data
+case $format in
+	json) json_list ;;
+	plain) plain_list ;;
+	shell) shell_list ;;
+esac
+
+if [ "$format" = 'shell' ]; then
+	echo
+	echo "$(grep -c . <<< "$report") finding(s) in $checked repository directory(s), $unreadable unreadable"
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+log_event "$OK" "$ARGUMENTS"
+
+exit

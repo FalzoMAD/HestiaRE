@@ -506,6 +506,17 @@ restic_repo_base() {
 	echo "$_repo"
 }
 
+# Is the repository base a local directory? Only an absolute path is. Our addon takes a local path
+# or rclone:remote:path, and restic itself also speaks sftp:, rest: and s3: - none of those is a
+# path, so a glob over one stays literal and an rm -rf on it removes nothing while the caller
+# believes it deleted. A relative path is not local either: it resolves against whatever directory
+# the command happened to start in. Anything unrecognised counts as remote on purpose - for a
+# destructive command that is the safe direction to be wrong in.
+restic_repo_is_local() {
+	case "$1" in /*) return 0 ;; esac
+	return 1
+}
+
 is_restic_repo_configured() {
 	REPO=$(restic_repo_base) \
 		|| check_result "$E_NOTEXIST" "no restic repository configured - run h-add-backup-host-restic"

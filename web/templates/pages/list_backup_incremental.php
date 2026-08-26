@@ -7,6 +7,11 @@
 				<i class="fas fa-circle-plus icon-green"></i><?= tohtml(_("Create Snapshot")) ?>
 			</a>
 		<?php } ?>
+		<?php /* archives=1 skips the mode redirect: the archives from before the switch and the
+		exports are ordinary archives and live in the other list. */ ?>
+		<a href="/list/backup/?<?= tohtml(http_build_query(["archives" => 1, "token" => $_SESSION["token"]])) ?>" class="button button-secondary">
+			<i class="fas fa-box-archive icon-orange"></i><?= tohtml(_("Archives &amp; Exports")) ?>
+		</a>
 		</div>
 		<div class="toolbar-right">
 			<?php if ($read_only !== "true") { ?>
