@@ -901,6 +901,35 @@ check_eval_sites() {
 	fi
 }
 
+# check_record_name_patterns - a record name goes into grep and sed as a PATTERN, and an archive or
+# domain name carries dots, which match any character. #583 swept that class once; it came back at
+# the backup record sites (#819), so the reference set is derived here instead of remembered: every
+# grep or sed in bin/ and include/ whose pattern splices a shell variable next to BACKUP=' or
+# DOMAIN=' must either use -F or escape through ${v//./\\.}.
+#
+# Does NOT cover: the KEY='$var' shape is all it recognises - h-backup-user splices a bare
+# "$user.$stamp.tar" with no key in front, which this pattern cannot see without flagging half the
+# tree. Nor patterns in web/ or share/, a name reached through an intermediate variable, or
+# characters other than the dot (* ? [ ] are equally special; no record name has carried one yet).
+check_record_name_patterns() {
+	local scanned=0 bad='' f hits
+	for f in "$HESTIA/bin"/h-* "$HESTIA/include"/*.sh; do
+		[ -f "$f" ] || continue
+		scanned=$((scanned + 1))
+		hits=$(sed '/^[[:space:]]*#/d' "$f" \
+			| grep -nE "(grep|sed)[^|]*(^|[^A-Z_])(BACKUP|DOMAIN)='\\\$" \
+			| grep -v -- '-[a-zA-Z]*F' | grep -v '//\./' || true)
+		[ -n "$hits" ] && bad="$bad $(basename "$f")"
+	done
+	if [ "$scanned" -lt 400 ]; then
+		no "the record-pattern sweep scanned only $scanned file(s)" "expected all of $HESTIA/bin/h-* and $HESTIA/include/*.sh"
+	elif [ -n "$bad" ]; then
+		no "a record name is spliced into a pattern unescaped" "$bad - use grep -F or \${v//./\\.}"
+	else
+		ok "record names reach grep and sed escaped or literal ($scanned file(s) scanned)"
+	fi
+}
+
 # check_yescrypt_hashing - the panel login of every account whose /etc/shadow entry is yescrypt runs
 # through mkpasswd from the whois package, and yescrypt is the PAM default on all four targets. If
 # the binary is gone or its libcrypt cannot do yescrypt, NOBODY logs in and the panel says "invalid
@@ -1643,6 +1672,7 @@ check_protected_names_effective
 check_record_only_protected
 check_eval_sites
 check_yescrypt_hashing
+check_record_name_patterns
 check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
