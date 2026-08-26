@@ -146,6 +146,9 @@ tmpdir=$(mktemp -p $BACKUP_TEMP -d) || {
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "Can't create tmp dir"
 }
+# On EVERY exit: ten of the aborts below have no rm of their own and left the unpacked members
+# behind, pam material included.
+trap 'rm -rf "$tmpdir"' EXIT
 
 # Parts that did not come back. Collected through the run and reported at the end, so one broken
 # object does not abandon the rest and does not pass as a success either.

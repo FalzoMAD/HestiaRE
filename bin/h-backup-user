@@ -261,22 +261,28 @@ start_time=$(date '+%s')
 subj="$user → backup failed"
 email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" | cut -f 2 -d \')
 
-# Validate available disk space (take usage * 2, due to the backup handling)
-let u_disk=$(($(get_user_disk_usage) * 2))
-let v_disk=$(echo "$(stat -f --format='%a*%S' $BACKUP) / 1024 / 1024" | bc)
-
-if [ "$u_disk" -gt "$v_disk" ]; then
-	let u_disk_original=$(get_user_disk_usage)
-	# Always notify on failure
-	echo "Not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb). https://hestiacp.com/docs/server-administration/backup-restore.html" | $SENDMAIL -s "$subj" "$email" "yes"
-	# Deleting task from queue
-	queue_drop_job "$CONF_DIR/queue/backup.pipe"
-	check_result "$E_LIMIT" "not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb)."
-fi
-
+# Before the check below, which needs it: the tree is built in BACKUP_TEMP, the archive lands in
+# $BACKUP.
 if [ -z "$BACKUP_TEMP" ]; then
 	BACKUP_TEMP=$BACKUP
 fi
+
+# Booked per DEVICE (#805): staging tree and finished archive each want about the usage, which on
+# one filesystem adds up and on two does not. Measured once - du over the whole home is not cheap.
+_need=$(($(get_user_disk_usage) * 1048576))
+refusal=$(space_budget_refused "$BACKUP_TEMP:$_need" "$BACKUP:$_need") || {
+	case "$?" in
+		1)
+			echo "Not enough disk space for the backup of $user: $refusal" | $SENDMAIL -s "$subj" "$email" "yes"
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
+			check_result "$E_LIMIT" "$user: $refusal"
+			;;
+		*)
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
+			check_result "$E_LIMIT" "cannot read the free space for the backup of $user ($BACKUP_TEMP, $BACKUP)"
+			;;
+	esac
+}
 
 # Creating temporary directory
 # Checked at the source - a check via $? behind any later line is dead (measured: two inserted
@@ -286,13 +292,13 @@ if ! tmpdir=$(mktemp -p $BACKUP_TEMP -d); then
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create tmp dir"
 fi
-# Hash tables live OUTSIDE tmpdir (everything in tmpdir lands in the tarball); the trap covers
-# every abort path, which the per-path rm -rf $tmpdir calls never did for this directory.
+# Hash tables live OUTSIDE tmpdir (everything in tmpdir lands in the tarball).
 if ! maptbl=$(mktemp -d); then
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create map table dir"
 fi
-trap 'rm -rf "$maptbl"' EXIT
+# Both, on EVERY exit: an abort leaves its half-built members in the staging tree otherwise.
+trap 'rm -rf "$maptbl" "$tmpdir"' EXIT
 
 # Backup sys configs
 echo "-- SYSTEM --" | tee $BACKUP/$user/$user.log
@@ -519,9 +525,12 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 
 		# --sort=name and gzip -n (#712): an unchanged tree produces identical bytes twice.
 		if [ "$BACKUP_MODE" = 'zstd' ]; then
-			tar --sort=name "${fargs[@]}" -cpf- . | pzstd -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.zst
+			_member="$tmpdir/web/$domain/domain_data.tar.zst"
 		else
-			tar --sort=name "${fargs[@]}" -cpf- . | gzip -n -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.gz
+			_member="$tmpdir/web/$domain/domain_data.tar.gz"
+		fi
+		if ! backup_member_write "$_member" --sort=name "${fargs[@]}" -cpf- .; then
+			backup_member_abort "$user" "web/$domain" "$_member"
 		fi
 		backup_map_hash_verify "$maptbl/web.$domain.tbl"
 	done
@@ -606,9 +615,12 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 				|| echo "$(date "+%F %T") Warning: hash pass failed for mail/$domain - its hashes are withdrawn, the member stays effectively whole" \
 				| tee -a $BACKUP/$user/$user.log
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar --sort=name -cpf- "${accounts[@]}" | pzstd -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.zst
+				_member="$tmpdir/mail/$domain/accounts.tar.zst"
 			else
-				tar --sort=name -cpf- "${accounts[@]}" | gzip -n -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.gz
+				_member="$tmpdir/mail/$domain/accounts.tar.gz"
+			fi
+			if ! backup_member_write "$_member" --sort=name -cpf- "${accounts[@]}"; then
+				backup_member_abort "$user" "mail/$domain" "$_member"
 			fi
 			backup_map_hash_verify "$maptbl/mail.$domain.tbl" "${accounts[@]}"
 		fi
@@ -682,12 +694,17 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 				pgsql) dump_pgsql_database ;;
 			esac
 
-			# Compress dump
+			# The source goes only once the compressed file is there AND complete: a truncated .zst
+			# beside a deleted original is the one outcome with no way back. A dump is checked for
+			# its engine's end marker, not just for a status - #823 with the extra tooth.
+			_member="$dump.$(backup_codec_suffix)"
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				pzstd -$BACKUP_GZIP $dump
-				rm $dump
+				pzstd -$BACKUP_GZIP $dump && rm -f $dump
 			else
 				gzip -n -$BACKUP_GZIP $dump
+			fi
+			if ! backup_dump_complete "$_member"; then
+				backup_member_abort "$user" "database $database" "$_member"
 			fi
 		fi
 	done
@@ -708,8 +725,10 @@ if [ -n "$CRON_SYSTEM" ] && [ "$CRON" != '*' ]; then
 	mkdir $tmpdir/cron/
 
 	# Backup cron.conf
-	cp $USER_DATA/cron.conf $tmpdir/cron/
-	cron_record=$(wc -l $USER_DATA/cron.conf | cut -f 1 -d ' ')
+	cp $USER_DATA/cron.conf $tmpdir/cron/ 2> /dev/null
+	# From stdin and guarded: an absent file left the count empty and the test below died on it.
+	cron_record=0
+	[ -f "$USER_DATA/cron.conf" ] && cron_record=$(wc -l < "$USER_DATA/cron.conf")
 
 	if [ -e "/var/spool/cron/$user" ]; then
 		cron_list="$cron_record"
@@ -760,6 +779,8 @@ if [ "$USER" != '*' ]; then
 		fi
 	done
 
+	# Saved: both are lifted at the end of the loop, or newline splitting reaches every later step.
+	_ifs_saved=$IFS
 	IFS=$'\n'
 	set -f
 	i=0
@@ -779,14 +800,18 @@ if [ "$USER" != '*' ]; then
 
 			# Backup files and dirs
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | pzstd -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.zst
+				_member="$tmpdir/user_dir/$udir.tar.zst"
 			else
-				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | gzip -n -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.gz
+				_member="$tmpdir/user_dir/$udir.tar.gz"
+			fi
+			if ! backup_member_write "$_member" --anchored --sort=name -cpf- "${fargs[@]}" $udir; then
+				backup_member_abort "$user" "user_dir/$udir" "$_member"
 			fi
 
 		fi
 	done
 	set +f
+	IFS=$_ifs_saved
 	udir_list=$(echo "$udir_list" | sed -e "s/  */\ /g" -e "s/^ //")
 
 	# Print total
