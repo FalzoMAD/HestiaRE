@@ -127,7 +127,8 @@ if ! record_line_valid "$backup_str"; then
 fi
 
 touch $USER_DATA/backup.conf
-sed -i "/BACKUP='$archive'/d" $USER_DATA/backup.conf
+# Escaped: the archive name is a pattern here, and a bare dot matches any character (#583 class).
+sed -i "/BACKUP='${archive//./\\.}'/d" $USER_DATA/backup.conf
 echo "$backup_str" >> $USER_DATA/backup.conf
 chmod 660 $USER_DATA/backup.conf
 

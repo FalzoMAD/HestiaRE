@@ -1,0 +1,98 @@
+#!/bin/bash
+# info: delete the restic repository and metadata packages of a user
+# options: USER [CONSENT]
+#
+# example: h-delete-user-backups-restic user 'all'
+#
+# The explicit way to remove a customer's backups. Deleting a customer never deletes them, so this
+# command exists to say so out loud - and it works for a customer who is already gone, which is the
+# case it is mostly needed for.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+user=$1
+consent=${2-}
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '1' "$#" 'USER [CONSENT]'
+# Not is_object_valid: the customer may be deleted already, and their backups are exactly what is
+# left. The format check still bounds the name that gets joined onto the paths below.
+is_format_valid 'user'
+
+repo=$(restic_repo_base) || check_result "$E_NOTEXIST" "no restic repository configured"
+# A remote base is not a path: the rm -rf below would remove nothing while the rm -f took the
+# metadata packages - and those carry the only other copy of the repository key. The result would be
+# an intact repository nobody can open any more, reported as a successful deletion.
+if ! restic_repo_is_local "$repo"; then
+	echo "The repository base is $repo, which is not a local path."
+	echo "Delete it where it lives (for an rclone target: rclone purge <remote>:<path>/$user),"
+	echo "then remove $BACKUP/$user/$user.*.meta.tgz here."
+	check_result "$E_FORBIDEN" "cannot delete a remote repository from here - the packages hold the only spare key, so removing them alone would lock the data away instead of deleting it"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+repo_dir="$repo$user"
+pkg_count=$(ls -1 "$BACKUP/$user/$user".*.meta.tgz 2> /dev/null | wc -l)
+# Not readable is not zero: after the customer is gone so is their key, and printing "0 snapshots"
+# would understate what is about to be destroyed.
+snap_count='unknown (no key to open the repository)'
+repo_size=''
+if [ -d "$repo_dir" ]; then
+	repo_size=$(du -sh "$repo_dir" 2> /dev/null | cut -f1)
+	if [ -f "$CONF_DIR/users/$user/restic.conf" ]; then
+		if _json=$(restic --repo "$repo_dir" --password-file "$CONF_DIR/users/$user/restic.conf" \
+			--json snapshots 2> /dev/null); then
+			snap_count="$(grep -o '"short_id"' <<< "$_json" | wc -l) snapshot(s)"
+		else
+			snap_count='unknown (the repository could not be read)'
+		fi
+	fi
+fi
+
+if [ ! -d "$repo_dir" ] && [ "$pkg_count" -eq 0 ]; then
+	check_result "$E_NOTEXIST" "$user has no restic repository and no metadata packages"
+fi
+
+# Named before it is destroyed, and only on an explicit yes: there is no second copy of a repository
+# once it is gone, and the customer record that could describe it may not exist any more.
+echo "About to delete, permanently:"
+echo "  repository $repo_dir${repo_size:+ ($repo_size)}, $snap_count"
+echo "  $pkg_count metadata package(s) in $BACKUP/$user/"
+if [ "$consent" != 'all' ]; then
+	echo
+	check_result "$E_FORBIDEN" "no consent - re-run with 'all' as the second argument to delete these"
+fi
+
+rm -rf "$repo_dir"
+rm -f "$BACKUP/$user/$user".*.meta.tgz
+# The archives of an archive-mode customer are not ours to take: only the restic artefacts go.
+rmdir "$BACKUP/$user" 2> /dev/null
+
+echo "Deleted the restic backups of $user"
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-log-action "system" "Warning" "Backup" "Restic backups deleted (User: $user, $snap_count, packages: $pkg_count)."
+log_event "$OK" "$ARGUMENTS"
+
+exit

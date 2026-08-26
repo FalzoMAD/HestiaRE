@@ -14,6 +14,39 @@ opens above it.
 
 ### Added
 
+- **A customer's restic backups have an explicit way out, a report and a portable export**
+  (#217, stages 4 and 5). Deleting a customer keeps their backups - in every mode - so
+  `h-delete-user-backups-restic` is the explicit way to remove them: it names repository, size,
+  snapshot and package count first and acts only on the consent word, and it deliberately accepts a
+  customer who is already gone, because that is the case it is mostly needed for.
+  `h-list-sys-backup-orphans-restic` names what is left over; it walks the repository DIRECTORIES
+  under the base rather than the customer list, for the same reason, and reports an unreadable
+  repository as its own kind instead of blaming every package in it for a broken line. The manual
+  full export is not a fourth mode but one ordinary archive run (`h-backup-user USER NOTIFY yes`,
+  wrapped by `h-export-user-backup`), so what comes out is the format that adoption, probe, report
+  and restore already handle - that is how a restic customer migrates without ever rebuilding an
+  archive out of snapshots. Its record carries `MODE='export'` and `ADOPTED='yes'`, which keeps it
+  out of the rotation through the mechanism operator-placed files already use (adopted names leave
+  the list BEFORE counting, so an export neither rotates nor pushes another archive out), and
+  `BACKUP_EXPORT_LIMIT` (default 2) refuses and names the existing exports rather than clearing the
+  oldest away. Both the marker and the limit live in `h-backup-user`, reached by an ARGUMENT and
+  not by an environment prefix: the consent word was made an argument for that reason (GHSA-2xw3),
+  and a limit in the wrapper would have missed everyone calling the inner command directly - which
+  is anyone who uses the CLI. Neither command touches a REMOTE repository base: `sftp:` and
+  `rclone:` targets are not paths, so the deletion would have removed the metadata packages (which
+  carry the only spare copy of the repository key) while the repository itself stayed, and reported
+  success; the orphan report would have swept a base its glob never expanded. Both now refuse by
+  name and say where to look instead. In the panel the Backups tab
+  branches on `BACKUPS_MODE` instead of hiding snapshots behind a second button, with `?archives=1`
+  as the way back to the archives from before the switch and to the exports, which are marked as
+  such with why: retention does not rotate them. Two defects fell out of measuring it over HTTP
+  rather than reading the source: the branch never fired, because `$panel` is built inside
+  `render_page` and did not exist where it was read, and the snapshot list answered `400 Potential
+  CSRF use detected` to any request without a Referer once it became the tab's landing page - a
+  click inside the panel carries one and would never have shown it. Existing installations report
+  `key registries out of sync` once for the new key until `h-update-sys-defaults` runs, which
+  `h-update-hestia` does on every update.
+
 - **remote only is diff-capable now** (#790, stage 3). Base selection asks for REACHABILITY
   instead of a local file: the local map mirror is what a diff is built from, and the base
   archive itself may live on a remote only - eligible when a configured target's fresh listing
@@ -208,7 +241,179 @@ opens above it.
   existing host keeps a stale `conf/defaults/system.conf` until `h-update-sys-defaults` runs once;
   a fresh install writes it correctly from the start.
 
+### Changed
+
+- **Three guards never fired, because check_result was called with a code that does not exist**
+  (#217). `E_BACKUP` was referenced by the restic path and defined nowhere, so `check_result` got an
+  empty first argument, its own `[ $1 -ne 0 ]` errored out, the function returned and the command
+  carried on - a failed restic backup continued as if nothing had happened. Found by fault
+  injection while proving the other half of the snapshot/package pair, then swept: `E_LIMI` in
+  `h-change-user-package` (the `T` sat outside the quotes) and `E_NOTEXISTS` in
+  `h-update-web-domain-stat` are the same shape. `E_BACKUP` is defined now (22 - 21 was taken in
+  the panel), the two misspellings are corrected, and `check_result` refuses an empty or
+  non-numeric code instead of waving it through, so the next typo is a loud failure rather than a
+  silenced check.
+
+- **The restore path reads the metadata where it lives** (#217, stage 3). Stage 2a moved the
+  metadata out of the snapshot into the package beside the repository and the dumps into `.dumps`;
+  nine commands still read them from `/home/$user/backup`, a tree no restic snapshot has carried
+  since - every restore died at its first metadata read. One resolver finds a snapshot's package,
+  over the tag the snapshot carries AND over the snapshot id the packages name, so a lost tag alone
+  does not hide a package whose data is still there; one reader and one unpacker serve its members.
+  Databases come raw out of `.dumps` now, which removes the decompression branch for a `.sql.zst`
+  nobody writes any more. Five defects fell out on the way, all of which looked like working code:
+  the cron restore had no check on what it read and copied the result straight over the live
+  `cron.conf`, so a failed read **overwrote the customer's cron table with an empty file**; the full
+  restore never restored `backup-excludes.conf` because a misplaced quote turned the path into an
+  argument of `cp -r` and a `2>/dev/null` swallowed the complaint; the file restore accepted any
+  path and wrote it as root, and is bounded to the customer's home now, with the raw dump stage
+  refused by name; six of the ten commands never sourced `include/backup.sh`; and the headers, arg
+  checks and log lines described other commands (`h-restore-user-restic` demanded three mandatory
+  arguments for a command that needs two, the file restore logged "DNS Domain successfully
+  restored", three listers announced themselves as a backup command). Separately, the web restore
+  could never finish for an existing domain: `rebuild_web_domain_conf` creates the two log symlinks
+  and restic refuses to write a symlink that exists, so the run ended in `Fatal` **after** the
+  content was already back - and the permission repair, the counters and the log entry never ran.
+  The links are removed before the restore and come back from the snapshot; `--exclude` cannot join
+  `--include` and `--overwrite` needs restic 0.17, so neither is portable across the fleet.
+
+- **The restic run honours the exclusion list, rotates both artefacts as one, and checks the right
+  disk** (#217, stage 2b). `restic backup` ran over the whole home without a single `--exclude`;
+  it now gets the path-producing part of `backup-excludes.conf` (web and mail domains, user
+  directories) while DB and CRON stay object exclusions that legitimately produce no path - and the
+  stage is never excluded, whatever a customer writes into the list, because that would drop their
+  own records and dumps out of their backup while the run stayed green. Retention comes from ONE
+  derivation: `forget` decides over the snapshots, and the packages follow the survivors -
+  through the tag a snapshot carries AND the snapshot id the package names, so a lost tag alone
+  never drops a package whose data is still there; the run that is writing right now is exempt,
+  because its pair is not yet in the list it would be measured against (#787). A policy that keeps
+  nothing is refused instead of handed to `forget`, `BACKUPS=0` now falls through
+  `is_backup_enabled` like it does in the archive path, and the monthly slot works for the first
+  time at all - the runner read `KEEP_MONTLY` while the configuration wrote `KEEP_MONTHLY`. Stale
+  locks are released before a run, never `--remove-all`, which would take a running job's own lock
+  with it. The space check finally runs against the filesystem the dumps land on instead of
+  `/backup`, with the need derived from the live databases rather than from a record that may have
+  stood still, and leftovers of a dead run are removed before it counts. A smoke guard holds
+  snapshots and packages against each other - and it now tells a repository it could not read from
+  an empty one: a failed `snapshots` call used to leave every package without a partner and report
+  the whole customer as orphaned artefacts, where the line was only a broken connection. The need
+  is measured on what a dump actually carries: `index_length` is out of the mysql side, which asked
+  for 62 MB for an 8 MB dump on a schema with four secondary indexes, while pgsql keeps
+  `pg_database_size` because `pg_dump --inserts` writes one statement per row and reaches 1.79x the
+  heap - dropping the indexes there would move the refusal from too eager to too late. The
+  exclusion lists are split with `read -a` instead of an unquoted expansion, so a `*` inside a list
+  no longer globs against the working directory into invented `--exclude` paths, and all five keys
+  of `backup-excludes.conf` are declared local instead of relying on the caller's subshell. A
+  failed `forget` is no longer discarded: it kept the run reporting success while retention
+  silently did not happen, and the packages would then have rotated against a survivor list nobody
+  wrote.
+
+- **A restic run writes two artefacts, and they belong together** (#217, stage 2a). Everything
+  readable - records, SSL, PAM, the exclusion list, the per-domain and per-database records with
+  their grants, cron - goes into a metadata package beside the repository
+  (`/backup/$user/$user.<stamp>.meta.tgz`, `hestia:hestia` 0640: the panel pool reads it, the
+  customer does not, because it carries pam and a copy of the repository key). Only the raw
+  database dumps stay in the home, in `/home/$user/.dumps` (root, 0700), so one snapshot root
+  covers them - raw because a compressed dump changes over its whole length on a small data change
+  and destroys deduplication (measured: 3.8 against 8.2 MiB for the second run, while the repo
+  format compresses on its own). With that, the customer's own `/etc/shadow` line is no longer in
+  a directory the file manager can read. Snapshot and package are one restore point: same stamp,
+  the snapshot carries the package name as a tag, the package names repository and snapshot id,
+  and the run fails if either half cannot be written. `--read-concurrency` is only passed when the
+  binary knows it, which brings Debian 12 (restic 0.14) back from being structurally dead.
+  **Interim, until stage 2b:** the packages do not rotate yet - the archive rotation does not see
+  them, its pattern ends in `.tar`, so `/backup/$user/` grows by one package per run until the
+  retention that treats snapshot and package as a unit lands.
+
+- **restic is an addon now, and the customer's mode is the only truth** (#217, stage 1).
+  `h-add-sys-restic` / `h-delete-sys-restic` replace the unconditional install in the base package
+  block plus an inert checkbox in the tools list - the checkbox reinstalled a package that was
+  there anyway, which is how #217's definition of done came to be accidentally fulfilled. Removing
+  the addon refuses while a customer still runs in restic mode and keeps repositories and keys:
+  deleting the tool must not delete backups. `BACKUPS_INCREMENTAL` is gone from packages, commands,
+  registry and panel (pre-v1, no migration path); `BACKUPS_MODE` decides, `BACKUP_INCREMENTAL`
+  remains the server switch and now means "restic installed and a repository configured". Two
+  measured defects from the stage-0 inventory are closed with it: `h-add-backup-host-restic` no
+  longer runs `restic self-update`, which replaced the package-owned binary in place (0.14.0 ->
+  0.19.1 on deb12, `dpkg --verify` complaining) even when the command then refused its work, and it
+  creates a local repository path instead of refusing without saying so - because that refusal left
+  the box unconfigured, and the backup then wrote into a RELATIVE repository named after the
+  customer wherever the run happened to start. One gate (`is_restic_repo_configured`) resolves the
+  repository and carries the separator that 62 call sites used to compose by hand. A smoke guard
+  holds every customer in restic mode against the addon and the configuration.
+
+- **The wizard no longer offers ProFTPD on mail-only** (#217, side finding). It was not just shown
+  but preselected, on a profile that has no customer web server to upload to; the row is fixed off
+  and unasked now, and the firewall rule goes with it. Sieve is preselected there instead - a box
+  that exists for mail should filter mail.
+
 ### Fixed
+
+- **An archive restored from is now adopted, so it stops being a rotation candidate** (#820).
+  A hand-placed migration archive is only ever recorded by `h-add-user-backup`; the restore just
+  resolves it and reads it, and wrote no record at all. Inside `/backup/$user/` that is a silent
+  loss: without a record the file counts as its own set, so `BACKUPS='1'` removes it on the next
+  run - measured, the same archive placed flat survived and the adopted one survived, only the
+  unrecorded one in the customer folder was gone. Restoring from an archive is the clearest
+  statement that it is wanted, so `h-restore-user` now adopts it when no record names it. It goes
+  through `h-add-user-backup`, not a second record builder, so an auto-adopted record is the one a
+  hand adoption writes; it runs at the end, because the restore may create the account itself; and
+  a failure to adopt warns instead of failing the restore, which by then is finished and correct.
+  A flat archive stays where it is - adoption never moves anything.
+
+- **Every failed panel login wrote "Method not supported by crypt(3)." into the FPM log** (#817).
+  yescrypt is the PAM default on all four targets, and that branch handed `mkpasswd` the WHOLE
+  shadow hash as its salt. crypt(3) then hashes against the setting prefix, mkpasswd finds its
+  result differs from what it was given and exits 2 with that message - so the line meant "wrong
+  password" while reading like a libcrypt that cannot do yescrypt, the one fault it would matter
+  to see. mkpasswd now gets only the setting and is a plain hash function again; the comparison
+  against /etc/shadow was and remains the step that decides, so nothing about accept/refuse
+  changes. A genuine failure (absent binary, libcrypt without yescrypt) is logged by name in
+  `auth.log` instead of hiding among the wrong passwords. A new smoke check asks the question by
+  doing what the login does - hash a probe, reproduce it from its own setting - so the outage
+  mode "nobody can log in and the panel says invalid password" is caught before a user meets it.
+  Note the failure still reaches fail2ban: the panel hands the refusal to `h-check-user-hash`,
+  which writes its own "failed to login" line.
+
+- **logrotate failed on every target because our roundcube rotation doubled the package's** (#798).
+  Both files list the same paths, and logrotate treats that as an error: it skips the second file
+  and exits 1, so `logrotate.service` stayed failed and every box read "degraded" since the day it
+  was installed - on ub26 that already hid a second failed unit. The header comment assumed a
+  silent override; it is a loud refusal. The package file is now diverted with `dpkg-divert`
+  (`h-delete-sys-roundcube` gives it back), and the divert target sits OUTSIDE `/etc/logrotate.d`:
+  logrotate reads every file in that directory whatever the suffix, measured with `.hestia-diverted`
+  and `.dpkg-divert` before it. Two new smoke guards came out of this round: one asks logrotate
+  itself to parse the configuration instead of keeping a list of known collisions - and sorts what
+  it finds by ownership, because `/etc/logrotate.d` also holds what the base image brought along
+  (`cloud-init` on some Ubuntu images): a collision one of our files takes part in is a failure, a
+  duplicate purely between package files is named and stays green, or the guard would be
+  permanently red for something HestiaRE must not touch. One holds every
+  web record against its rendered vhost - the upstream check from #797 reads files, so a domain
+  whose vhost was skipped would have looked clean by being absent.
+
+- **An unreachable remote target failed anonymously, and the mail saying so never left the box**
+  (#796). `sftpc` had no `eof` branch: a session that dies at once - no route, refused, unknown
+  name, the everyday failure - left `rc` unset, `exit $rc` died on a tcl error and the caller read
+  1 (E_ARGS). Its `case` then matched neither E_CONNECT nor E_FTP, so an EMPTY reason was mailed
+  and logged while the cause was known all along, and the nightly summary reported the customer as
+  "(1)". Every branch sets rc now, a trailing guard catches any branch added later, and an
+  unexpected code gets named instead of passed through silently. Second half: the failure path of
+  `h-backup-user` ran with a deleted working directory (`local_backup` ends inside the tmpdir that
+  is removed one line earlier), so exim refused to start - "getting initial cwd failed" - and
+  exactly the mail that reports a degraded run was dropped. Measured on all four targets against
+  the accepted-message count in the exim log, with a healthy send as the control; the success path
+  was never affected because it changes directory first.
+
+- **A docker domain without DOCKER_IP made the whole web configuration unreadable** (#797). A
+  restore under a different customer name brings `DOCKER='default'` back without giving the new
+  customer an address, and the renderer wrote the empty value into the template: `http://:3000`.
+  nginx and apache reject their ENTIRE configuration over such an upstream, so one inconsistent
+  record stops every later reload, including one for an unrelated customer - measured on deb12
+  (nginx) and deb13 (apache), with the same archive restored under its own name as the control.
+  The contradictory record is now named and skipped the way a missing template is, and a fragment
+  from an earlier render is removed so a rebuild repairs the box instead of leaving the break in
+  place. A smoke guard reads the rendered fragments for a hostless upstream. Whether a restore
+  under a new name should claim its own /24 is a model decision and stays open in #797.
 
 - **Removing sieve destroyed the mail server on two of four targets** (#780). Debian 13 and Ubuntu
   26.04 ship a `dovecot-core` that *depends on* `dovecot-sieve`, so `h-delete-sys-sieve`'s purge took

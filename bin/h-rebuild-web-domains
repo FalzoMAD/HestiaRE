@@ -134,7 +134,7 @@ done
 # Balance line, not exit code: web-model.sh treats a nonzero rebuild as switch failure,
 # and one broken record must not veto a model switch
 if [ "${web_config_skipped:-0}" -gt 0 ]; then
-	echo "Warning: $web_config_skipped vhost config(s) skipped over missing templates (see errors above)."
+	echo "Warning: $web_config_skipped vhost config(s) skipped over an unusable record (see errors above)."
 fi
 
 #----------------------------------------------------------#

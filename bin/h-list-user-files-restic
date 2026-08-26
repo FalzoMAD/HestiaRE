@@ -1,6 +1,6 @@
 #!/bin/bash
-# info: backup system user with all its objects
-# options: USER SNAPSHOT FOLDER
+# info: list the files of a folder inside a restic snapshot
+# options: USER SNAPSHOT FOLDER [FORMAT]
 #
 # example: h-backup-user admin yes
 #
@@ -42,7 +42,7 @@ is_object_unsuspended 'user' 'USER' "$user"
 #                       Action                             #
 #----------------------------------------------------------#
 
-source_conf $HESTIA/conf/restic.conf
+is_restic_repo_configured
 
 restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json ls $snapshot $folder
 

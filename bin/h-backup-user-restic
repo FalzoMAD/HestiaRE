@@ -36,7 +36,8 @@ is_format_valid 'user'
 is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
-is_incremental_backup_enabled
+is_backup_mode_restic
+is_backup_enabled
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -46,11 +47,12 @@ is_incremental_backup_enabled
 subj="$user → backup failed"
 email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" | cut -f 2 -d \')
 
-source_conf $HESTIA/conf/restic.conf
+is_restic_repo_configured
 
 if [ ! -f "$USER_DATA/restic.conf" ]; then
 	password=$(generate_password '' '32')
 	echo "$password" > $USER_DATA/restic.conf
+	chmod 0600 "$USER_DATA/restic.conf"
 
 	restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf init
 	if [ $? -ne 0 ]; then
@@ -66,34 +68,159 @@ else
 	fi
 fi
 
-# create backup of the user.conf an database
-$BIN/h-backup-user-config $user
+# One stamp for both artefacts of this run.
+stamp=$(date +"%Y-%m-%d_%H-%M-%S")
+meta_dir=$(restic_meta_dir "$user")
+dump_dir=$(restic_dump_dir "$user")
+meta_pkg="$BACKUP/$user/$user.$stamp.meta.tgz"
+backup_user_dir "$user"
+# Every exit removes the stage, not just the successful one.
+trap 'rm -rf "$meta_dir" "$dump_dir"' EXIT
+# Leftovers first, or yesterday's dump counts as occupied space in the check below.
+rm -rf "$meta_dir" "$dump_dir"
+
+# Measured, not estimated (#805): one dry dump per database says what the stage will really hold.
+need=$(restic_dump_size_measured "$user") \
+	|| check_result "$E_DB" "cannot measure the dumps of $user - a database did not dump"
+# The dumps land in the stage and go into the repository, so both want that many bytes. On one
+# device they add up; on two they do not. A remote repository takes no local space at all.
+repo_need=0
+repo_dir=""
+case "$REPO" in
+	*://* | *:*/*) ;;
+	*)
+		if [ -d "$REPO" ]; then
+			repo_dir="$REPO"
+			repo_need="$need"
+			# A first snapshot carries the whole home in as well, and that is the bigger of the two
+			# posts. Booked only when the repository holds nothing for this user yet - a later run
+			# adds a delta this cannot know; that term is named in space_budget_refused, not booked.
+			# A repository that cannot be read counts as first-run: over-booking is the safe way for
+			# a barrier to be wrong.
+			if ! restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" --json snapshots \
+				--latest 1 2> /dev/null | grep -q '"short_id"'; then
+				home_bytes=$(restic_home_size_measured "$user") \
+					|| check_result "$E_DISK" "cannot measure the home tree of $user - du failed on $HOMEDIR/$user"
+				repo_need=$((repo_need + home_bytes))
+			fi
+		fi
+		;;
+esac
+# The home stands in for the stage: the stage does not exist yet at this point, and it is created
+# inside the home, so it is the same filesystem. The repository is an argument only when it is
+# local - no placeholder path, so the function may treat a missing directory as an error rather
+# than silently dropping its demand. Bound to the command, not to the line order.
+budget=("$HOMEDIR/$user:$need")
+[ -n "$repo_dir" ] && budget+=("$repo_dir:$repo_need")
+refusal=$(space_budget_refused "${budget[@]}") || {
+	case "$?" in
+		1)
+			echo "Not enough space for the backup of $user: $refusal" | $SENDMAIL -s "$subj" "$email" "yes"
+			check_result "$E_DISK" "$user: $refusal"
+			;;
+		*) check_result "$E_DISK" "cannot read the free space for the backup of $user" ;;
+	esac
+}
+
+# Only stale locks, never --remove-all: a running nightly job would lose its own.
+restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf unlock > /dev/null 2>&1
+
+# Its status is read: the staging writes backup.conf LAST, so a run that dies half way leaves a
+# package describing only the sections it got through - and this used to report success over it.
+if ! $BIN/h-backup-user-config "$user"; then
+	echo "Staging the metadata of $user failed - no snapshot written" | $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "h-backup-user-config failed for $user - refusing to write a snapshot with half its metadata"
+fi
+
 export GOMAXPROCS=2
 export RESTIC_READ_CONCURRENCY=2
-ionice -c2 -n7 nice -n 19 restic --repo "$REPO$user" --limit-upload 10240 --read-concurrency 2 --password-file $USER_DATA/restic.conf backup /home/$user
+# Asked from the binary, not from the version.
+restic_opts=()
+restic backup --help 2>&1 | grep -q -- '--read-concurrency' && restic_opts+=(--read-concurrency 2)
+# The customer's exclusion list, path-producing entries only (include/backup.sh).
+while read -r _x; do
+	[ -n "$_x" ] && restic_opts+=(--exclude "$_x")
+done < <(restic_excludes "$user")
+ionice -c2 -n7 nice -n 19 restic --repo "$REPO$user" --limit-upload 10240 "${restic_opts[@]}" \
+	--password-file $USER_DATA/restic.conf --tag "meta:$user.$stamp" backup /home/$user
 
 if [ $? -ne 0 ]; then
 	echo "Unable to create the backup" | $SENDMAIL -s "$subj" "$email" "yes"
 	check_result $E_BACKUP "Unable to backup user"
 fi
 
-if [[ -n "$SNAPSHOTS" && "$SNAPSHOTS" -ge 0 ]]; then
-	restic_prune="$restic_prune --keep-last $SNAPSHOTS"
+snap_id=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json snapshots \
+	--tag "meta:$user.$stamp" 2> /dev/null | grep -o '"short_id":"[^"]*"' | tail -1 | cut -d'"' -f4)
+# A package that cannot name its snapshot is half a restore point.
+if [ -z "$snap_id" ]; then
+	echo "Snapshot written but its id could not be read - no metadata package for $user.$stamp, so the snapshot has no partner" \
+		| $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "cannot read the snapshot id for $user.$stamp - no package written, the snapshot stays an orphan"
 fi
-if [[ -n "$KEEP_DAILY" && "$KEEP_DAILY" -ge 0 ]]; then
-	restic_prune="$restic_prune --keep-daily $KEEP_DAILY"
+{
+	echo "USER='$user'"
+	echo "REPO='$REPO$user'"
+	echo "SNAPSHOT='$snap_id'"
+	echo "STAMP='$stamp'"
+	echo "HOST='$(hostname)'"
+	echo "VERSION='$(cat $HESTIA/VERSION 2> /dev/null)'"
+} > "$meta_dir/restic.meta"
+# Second key copy, with the artefact's lifetime (D1).
+cp -p "$USER_DATA/restic.conf" "$meta_dir/restic.key"
+if ! tar -czf "$meta_pkg" -C "$meta_dir" .; then
+	echo "Unable to write the metadata package $meta_pkg" | $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "cannot write $meta_pkg - the snapshot has no metadata beside it"
 fi
-if [[ -n "$KEEP_WEEKLY" && "$KEEP_WEEKLY" -ge 0 ]]; then
-	restic_prune="$restic_prune --keep-weekly $KEEP_WEEKLY"
-fi
-if [[ -n "$KEEP_MONTLY" && "$KEEP_MONTLY" -ge 0 ]]; then
-	restic_prune="$restic_prune --keep-monthly $KEEP_MONTLY"
-fi
-if [[ -n "$KEEP_YEARLY" && "$KEEP_YEARLY" -ge 0 ]]; then
-	restic_prune="$restic_prune --keep-yearly $KEEP_YEARLY"
+# The panel pool reads it, the customer must not: it carries pam and the key.
+chown hestia:hestia "$meta_pkg"
+chmod 0640 "$meta_pkg"
+rm -rf "$meta_dir" "$dump_dir"
+echo "$(date "+%F %T") Metadata: $meta_pkg (snapshot $snap_id)" \
+	| tee -a $BACKUP/$user/$user.log
+
+# The customer's number first, the server-wide slots on top. A policy of nothing keeps nothing,
+# so an empty result is refused rather than passed to forget.
+restic_prune=''
+keep_last=$(get_user_value '$BACKUPS')
+case "$keep_last" in '' | 0 | *[!0-9]*) keep_last="$SNAPSHOTS" ;; esac
+case "$keep_last" in
+	'' | 0 | *[!0-9]*) ;;
+	*) restic_prune="--keep-last $keep_last" ;;
+esac
+for _slot in "daily:$KEEP_DAILY" "weekly:$KEEP_WEEKLY" "monthly:$KEEP_MONTHLY" "yearly:$KEEP_YEARLY"; do
+	_v=${_slot#*:}
+	case "$_v" in '' | *[!0-9]*) continue ;; esac
+	restic_prune="$restic_prune --keep-${_slot%%:*} $_v"
+done
+if [ -z "$restic_prune" ]; then
+	check_result "$E_INVALID" "no retention policy for $user - forget without one keeps everything"
 fi
 
-restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf forget $restic_prune --prune
+# One derivation for both halves: forget decides on snapshots, the packages follow the survivors.
+# A discarded rc would let a failed forget pass as a retention that ran (Stufe 0), and the packages
+# would then rotate against a survivor list nobody wrote.
+if ! restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf forget $restic_prune \
+	--prune >> $BACKUP/$user/$user.log 2>&1; then
+	echo "Retention did not run for $user - the snapshots keep growing" | $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "restic forget failed for $user - retention did not run, see $BACKUP/$user/$user.log"
+fi
+_snap_json=$(restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json snapshots 2> /dev/null)
+kept_tags=$(grep -o '"meta:[^"]*"' <<< "$_snap_json" | tr -d '"')
+kept_ids=$(grep -o '"short_id":"[^"]*"' <<< "$_snap_json" | cut -d'"' -f4)
+if [ -n "$kept_ids" ]; then
+	for _pkg in "$BACKUP/$user/$user".*.meta.tgz; do
+		[ -f "$_pkg" ] || continue
+		_tag="meta:$(basename "$_pkg" .meta.tgz)"
+		# The run that is writing right now is not in the list it would be measured against (#787).
+		[ "$_tag" = "meta:$user.$stamp" ] && continue
+		grep -qxF "$_tag" <<< "$kept_tags" && continue
+		# Both directions before deleting: a missing tag alone would drop a package whose snapshot
+		# is alive, and the restore reads the package.
+		_sid=$(tar -xzOf "$_pkg" ./restic.meta 2> /dev/null | sed -n "s/^SNAPSHOT='\([^']*\)'.*/\1/p")
+		[ -n "$_sid" ] && grep -qxF "$_sid" <<< "$kept_ids" && continue
+		rm -f "$_pkg"
+	done
+fi
 
 # Send notification
 if [ -e "$BACKUP/$user/$user.log" ] && [ "$notify" = "yes" ]; then

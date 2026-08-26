@@ -141,12 +141,14 @@ if [ -z "$BACKUP_TEMP" ]; then
 fi
 
 # Creating temporary directory
-tmpdir=$(mktemp -p $BACKUP_TEMP -d)
-if [ "$?" -ne 0 ]; then
-	echo "Can't create tmp dir $tmpdir" | $SENDMAIL -s "$subj" $email $notify
+tmpdir=$(mktemp -p $BACKUP_TEMP -d) || {
+	echo "Can't create tmp dir in $BACKUP_TEMP" | $SENDMAIL -s "$subj" $email $notify
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "Can't create tmp dir"
-fi
+}
+# On EVERY exit: ten of the aborts below have no rm of their own and left the unpacked members
+# behind, pam material included.
+trap 'rm -rf "$tmpdir"' EXIT
 
 # Parts that did not come back. Collected through the run and reported at the end, so one broken
 # object does not abandon the rest and does not pass as a success either.
@@ -345,7 +347,9 @@ if [ "$create_user" = 'yes' ]; then
 
 	# Restoring user.conf
 	mkdir $USER_DATA
-	cp $tmpdir/$BACKUP_CONTAINER/user.conf $USER_DATA/
+	# Filtered, not copied: the archive is hostile input (#807).
+	copy_record_filtered "$tmpdir/$BACKUP_CONTAINER/user.conf" "$USER_DATA/user.conf" user \
+		|| check_result "$E_PARSING" "the archived user.conf of $user carries no usable keys"
 	cp -r $tmpdir/$BACKUP_CONTAINER/ssl $USER_DATA/ > /dev/null 2>&1
 
 	# Everything else the container holds. Skipped: BACKUP_USER_DATA_CORE, plus what this side does
@@ -357,6 +361,14 @@ if [ "$create_user" = 'yes' ]; then
 		[[ " $BACKUP_USER_DATA_CORE user.conf ssl packages web-system origin " == *" $_name "* ]] && continue
 		# Out of the archive and joined onto a path we write to: a plain basename or nothing.
 		case "$_name" in '' | .* | */* | *[!A-Za-z0-9._-]*) continue ;; esac
+		# Anything that later runs through source_conf is filtered by its key set. A poisoned
+		# exclusion list cannot bind PATH any more, but it could still set MAIL_SYSTEM='' and skip
+		# the mail section of every future backup while the run stays green (#807).
+		if [ "$_name" = "backup-excludes.conf" ]; then
+			copy_record_filtered "$_entry" "$USER_DATA/$_name" backup_excludes \
+				|| echo "Warning!: the archived $_name carries no usable keys and was skipped" | tee -a $tmpdir/restore.log
+			continue
+		fi
 		cp -r "$_entry" "$USER_DATA/" \
 			|| echo "Warning!: $_name from the archive could not be written to the data directory" | tee -a $tmpdir/restore.log
 	done
@@ -372,7 +384,10 @@ if [ "$create_user" = 'yes' ]; then
 			if [ -e "$_dest" ]; then
 				echo "$(date "+%F %T") package $(basename "$_pkg") exists on target, kept unchanged" >> $tmpdir/restore.log 2> /dev/null || true
 			else
-				cp -f "$_pkg" "$_dest"
+				# Package files are source_conf'd too, and their keys are a subset of the user set
+				# (measured: no package key is outside it).
+				copy_record_filtered "$_pkg" "$_dest" user \
+					|| echo "Warning!: the archived package $(basename "$_pkg") carries no usable keys and was skipped" | tee -a $tmpdir/restore.log
 			fi
 		done
 	fi
@@ -906,6 +921,21 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		# Restoring email accounts
 		cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/$domain.conf $USER_DATA/mail/
 
+		# The autoreply text is CONTENT, not a rendered file: rebuild_mail_domain_conf recreates
+		# accounts, aliases, antispam, passwd, fwd_only and limits from the records, but nothing can
+		# recreate a message nobody stored. Both copies come back - the record-side one and the one
+		# exim reads - or the account restores with AUTOREPLY='yes' and no text behind it (#826).
+		if compgen -G "$tmpdir/mail/$domain/$BACKUP_CONTAINER/*@$domain.msg" > /dev/null; then
+			cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/*@$domain.msg $USER_DATA/mail/
+			chmod 660 $USER_DATA/mail/*@$domain.msg
+		fi
+		if compgen -G "$tmpdir/mail/$domain/conf/autoreply.*.msg" > /dev/null; then
+			mkdir -p $HOMEDIR/$user/conf/mail/$domain
+			cp -f $tmpdir/mail/$domain/conf/autoreply.*.msg $HOMEDIR/$user/conf/mail/$domain/
+			chown $MAIL_USER:mail $HOMEDIR/$user/conf/mail/$domain/autoreply.*.msg
+			chmod 660 $HOMEDIR/$user/conf/mail/$domain/autoreply.*.msg
+		fi
+
 		domain_idn=$domain
 		format_domain_idn
 
@@ -1335,6 +1365,22 @@ sed -i "/h-restore-user $user /d" $CONF_DIR/queue/backup.pipe
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
+
+# An archive nobody adopted is invisible in every listing and, inside the customer folder, a
+# rotation candidate: without a record it counts as its own set, so BACKUPS='1' takes it on the next
+# run (measured). Having restored from it is the clearest statement that it is wanted. Through
+# h-add-user-backup and not a second record builder, so an auto-adopted record is byte for byte the
+# one a hand adoption writes. At the END because the restore may create the account itself, and the
+# adoption checks that it exists.
+#
+# -qF: the archive name carries dots, which as a regex match any character (the #583 class).
+if ! grep -qF "BACKUP='$backup'" "$USER_DATA/backup.conf" 2> /dev/null; then
+	if ! $BIN/h-add-user-backup "$user" "$backup"; then
+		# Never fatal - the restore is done and correct either way. Said out loud because the
+		# archive stays unlisted, and inside the customer folder rotatable, until someone adopts it.
+		echo "Warning: $backup could not be adopted - it stays unlisted and, in $BACKUP/$user, rotatable"
+	fi
+fi
 
 # Update user counters
 $BIN/h-update-user-counters "$user"

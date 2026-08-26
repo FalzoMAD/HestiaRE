@@ -45,11 +45,10 @@ is_ip46_format_valid "$client_ip"
 
 # Create the temporary database user; ownership/suspension of user and
 # database are validated there. The command schedules its own TTL cleanup.
-creds=$("$BIN/h-add-database-temp-user" "$user" "$database" mysql)
-if [ $? -ne 0 ]; then
+creds=$("$BIN/h-add-database-temp-user" "$user" "$database" mysql) || {
 	echo "Error: Unable to create temp user"
 	exit 2
-fi
+}
 dbuser=$(echo "$creds" | jq -r '.login.user')
 dbpass=$(echo "$creds" | jq -r '.login.password')
 if [ -z "$dbuser" ] || [ "$dbuser" = "null" ]; then

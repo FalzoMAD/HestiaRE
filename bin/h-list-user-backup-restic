@@ -1,6 +1,6 @@
 #!/bin/bash
-# info: backup system user with all its objects
-# options: USER NOTIFY
+# info: list one restic snapshot of a user
+# options: USER SNAPSHOT [FORMAT]
 #
 # example: h-backup-user admin yes
 #
@@ -80,13 +80,18 @@ plain_list() {
 	echo -e "$UDIR\t$RUNTIME\t$TIME\t$DATE"
 }
 
-source_conf $HESTIA/conf/restic.conf
+is_restic_repo_configured
 
-restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json dump $snapshot /home/$user/backup/backup.conf > /home/$user/tmp/backup.conf
-
-parse_object_kv_list "$(cat /home/$user/tmp/backup.conf)"
-
-rm /home/$user/tmp/backup.conf
+# The metadata travels as the package beside the repository since stage 2a, not inside the snapshot.
+meta_pkg=$(restic_pkg_for_snapshot "$user" "$snapshot")
+if [ -z "$meta_pkg" ]; then
+	check_result "$E_NOTEXIST" "no metadata package for snapshot $snapshot of $user - look for $BACKUP/$user/*.meta.tgz"
+fi
+backup_conf=$(restic_meta_cat "$meta_pkg" backup.conf)
+if [ -z "$backup_conf" ]; then
+	check_result "$E_PARSING" "$meta_pkg carries no backup.conf - the snapshot cannot be described"
+fi
+parse_object_kv_list "$backup_conf"
 # Listing data
 case $format in
 	json) json_list ;;

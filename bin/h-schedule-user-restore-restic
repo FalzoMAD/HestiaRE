@@ -21,6 +21,8 @@ value=$4
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -35,13 +37,57 @@ is_format_valid 'user'
 is_object_format_valid "$snapshot" 'snapshot'
 is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
+# The name alone says nothing about who owns the snapshot, and the queue runs as root: check that it
+# is in this customer's repository before it goes into the pipe. This makes scheduling touch the
+# repository - on a remote target that is a network call, not a format check.
+is_restic_repo_configured
+# The failure is bound to the command, not to the line order: a `$?` two lines down dies silently
+# the day someone inserts a statement between them, because an assignment of its own returns 0.
+# An unreadable repository is not a missing snapshot either - this is the path a customer clicks,
+# and telling them their snapshot is gone because the line was down is a false statement.
+snap_json=$(restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" --json snapshots \
+	"$snapshot" 2> /dev/null) \
+	|| check_result "$E_CONNECT" "the restic repository of $user could not be read - snapshot $snapshot not checked"
+if ! grep -q '"short_id"' <<< "$snap_json"; then
+	check_result "$E_NOTEXIST" "no snapshot $snapshot in the repository of $user"
+fi
 is_backup_scheduled 'restore'
+# The dispatch below implements exactly these four. Naming an unsupported value HERE keeps the
+# archive check from answering for an object it never looked up: without a default branch its case
+# left the field empty and the refusal then read "snapshot ... holds no udir called ..." - a claim
+# about the archive's contents produced by a branch that does not exist.
+case "$object" in
+	'' | web | mail | db | cron) ;;
+	*) check_result "$E_INVALID" "restore of '$object' is not supported - use web, mail, db or cron" ;;
+esac
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
 log=$HESTIA/log/restore.log
+
+# The value is checked against the ARCHIVED list, not against today's records: a restore exists to
+# bring back what is gone from this host, so the record on disk is the wrong reference (#813).
+if [ -n "$object" ] && [ "$object" != "cron" ]; then
+	meta_pkg=$(restic_pkg_for_snapshot "$user" "$snapshot")
+	if [ -z "$meta_pkg" ]; then
+		check_result "$E_NOTEXIST" "no metadata package for snapshot $snapshot of $user"
+	fi
+	archived=$(restic_meta_cat "$meta_pkg" backup.conf) \
+		|| check_result "$E_PARSING" "$meta_pkg has no readable backup.conf"
+	# Exhaustive: the guard in Verifications already rejected everything but these three and cron.
+	case "$object" in
+		web) field=$(sed -n "s/.*WEB='\([^']*\)'.*/\1/p" <<< "$archived") ;;
+		mail) field=$(sed -n "s/.*MAIL='\([^']*\)'.*/\1/p" <<< "$archived") ;;
+		db) field=$(sed -n "s/.*DB='\([^']*\)'.*/\1/p" <<< "$archived") ;;
+	esac
+	# -F: a domain name carries dots, and as a regex . matches any character - archived aXb.com
+	# would let a.b.com through and the restore would run on a name that was never in the snapshot.
+	if ! grep -qxF "$value" <<< "$(tr ',' '\n' <<< "$field")"; then
+		check_result "$E_NOTEXIST" "snapshot $snapshot holds no $object called $value for $user"
+	fi
+fi
 
 if [ -z "$object" ]; then
 	echo "$BIN/h-restore-user-restic '$user' '$snapshot' '' '' '' '' '' '' 'yes' >> $log 2>&1" >> $CONF_DIR/queue/backup.pipe

@@ -40,8 +40,6 @@ source_conf "$HESTIA/conf/hestia.conf"
 # This run's own queue line, for the abort path (see queue_drop_job).
 QUEUE_JOB="h-restore-web-domain-restic '$user' '$snapshot' '$web'"
 
-source_conf $HESTIA/conf/restic.conf
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -51,21 +49,31 @@ check_args '3' "$#" "$args_usage"
 is_format_valid 'user'
 is_object_valid 'user' 'USER' "$user"
 
-source_conf $HESTIA/conf/restic.conf
+is_restic_repo_configured
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
 tmpdir=$(mktemp -p /home/$user/tmp/ -d)
-if [ ! -f "$tmpdir/backup.conf" ]; then
-	restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" dump "$snapshot" "/home/$user/backup/backup.conf" > "$tmpdir/backup.conf"
-	if [ "$?" -ne 0 ]; then
-		check_result "$E_NOTEXIST" "Unable to download from snapshot"
-	fi
+trap 'rm -rf "$tmpdir"' EXIT
+
+# The metadata travels as the package beside the repository since stage 2a, not inside the snapshot.
+meta_pkg=$(restic_pkg_for_snapshot "$user" "$snapshot")
+if [ -z "$meta_pkg" ]; then
+	check_result "$E_NOTEXIST" "no metadata package for snapshot $snapshot of $user - look for $BACKUP/$user/*.meta.tgz"
 fi
-restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" dump "$snapshot" "/home/$user/backup/pam/passwd" > "$tmpdir/passwd"
-old_uid=$(cut -f 3 -d : $tmpdir/passwd)
+restic_meta_cat "$meta_pkg" backup.conf > "$tmpdir/backup.conf"
+if [ ! -s "$tmpdir/backup.conf" ]; then
+	check_result "$E_PARSING" "$meta_pkg carries no backup.conf - the snapshot cannot be described"
+fi
+restic_meta_cat "$meta_pkg" pam/passwd > "$tmpdir/passwd"
+old_uid=$(cut -f 3 -d : "$tmpdir/passwd")
+# Same guard as the full restore: without it every chown below matches nothing and the restored
+# files keep the archived owner.
+if [ -z "$old_uid" ]; then
+	check_result "$E_PARSING" "$meta_pkg carries no pam/passwd - the old uid cannot be read"
+fi
 
 domains=""
 parse_object_kv_list "$(cat $tmpdir/backup.conf)"
@@ -99,14 +107,21 @@ for domain in "${domains[@]}"; do
 				check_result "$E_PARSING" "$error"
 			fi
 		fi
-		restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" --include "/home/$user/backup/web/$domain" --target "$tmpdir"
-		if [ "$?" -ne 0 ]; then
-			check_result $E_NOTEXIST "Unable to download domain from snapshot"
+		restic_meta_unpack "$meta_pkg" "$tmpdir" "./web/$domain"
+		if [ ! -s "$tmpdir/web/$domain/hestia/web.conf" ]; then
+			check_result "$E_NOTEXIST" "$meta_pkg carries no record for web domain $domain"
 		fi
 
 		# Restoring web.conf
 		if [ -z "$check_config" ]; then
-			parse_object_kv_list "$(cat $tmpdir/home/$user/backup/web/$domain/hestia/web.conf)"
+			# The archived line IS the record, as on the archive path since #705: read once, gated,
+			# then edited in place. Rebuilt from a hand-listed field set it dropped every key this
+			# code had not heard of - BOTLIMIT, CROWDSEC, DIR_LIST, AUTH_* and WP among them (#828).
+			archived_record=$(head -n1 "$tmpdir/web/$domain/hestia/web.conf")
+			if ! record_line_valid "$archived_record"; then
+				check_result "$E_PARSING" "$domain web record is not a KEY='VALUE' line - refusing to restore it"
+			fi
+			restore_parse_record prev_web_keys "$archived_record"
 
 			# Deleting conflicting aliases
 			for dom_alias in ${ALIAS//,/ }; do
@@ -179,16 +194,16 @@ for domain in "${domains[@]}"; do
 			# Copying SSL certificates
 			if [ "$SSL" = 'yes' ]; then
 
-				if [ -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.crt" ]; then
-					cp -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.crt" "$USER_DATA/ssl/"
-					if [ -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.ca" ]; then
-						cp -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.ca" "$USER_DATA/ssl/"
+				if [ -f "$tmpdir/web/$domain/hestia/$domain.crt" ]; then
+					cp -f "$tmpdir/web/$domain/hestia/$domain.crt" "$USER_DATA/ssl/"
+					if [ -f "$tmpdir/web/$domain/hestia/$domain.ca" ]; then
+						cp -f "$tmpdir/web/$domain/hestia/$domain.ca" "$USER_DATA/ssl/"
 					fi
-					if [ -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.pem" ]; then
-						cp -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.pem" "$USER_DATA/ssl/"
+					if [ -f "$tmpdir/web/$domain/hestia/$domain.pem" ]; then
+						cp -f "$tmpdir/web/$domain/hestia/$domain.pem" "$USER_DATA/ssl/"
 					fi
-					if [ -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.key" ]; then
-						cp -f "$tmpdir/home/$user/backup/web/$domain/hestia/$domain.key" "$USER_DATA/ssl/"
+					if [ -f "$tmpdir/web/$domain/hestia/$domain.key" ]; then
+						cp -f "$tmpdir/web/$domain/hestia/$domain.key" "$USER_DATA/ssl/"
 					fi
 				fi
 			fi
@@ -198,21 +213,41 @@ for domain in "${domains[@]}"; do
 				HTTP3='yes'
 			fi
 
-			# Merging web.conf keys
-			str="DOMAIN='$domain' IP='$IP' IP6='$IP6' ALIAS='$ALIAS'"
-			str="$str CUSTOM_DOCROOT='$CUSTOM_DOCROOT' CUSTOM_PHPROOT='$CUSTOM_PHPROOT'"
-			str="$str REDIRECT='$REDIRECT' REDIRECT_CODE='$REDIRECT_CODE'"
-			str="$str FASTCGI_CACHE='$FASTCGI_CACHE' FASTCGI_DURATION='$FASTCGI_DURATION'"
-			str="$str PROXY_CACHE='$PROXY_CACHE' PROXY_CACHE_DURATION='$PROXY_CACHE_DURATION'"
-			str="$str TPL='$TPL' SSL='$SSL' SSL_HOME='$SSL_HOME' SSL_HSTS='$SSL_HSTS'"
-			str="$str SSL_FORCE='$SSL_FORCE' HTTP3='$HTTP3' DOCKER='$DOCKER' DOCKER_PORT='$DOCKER_PORT' DOCKER_OCTET='$DOCKER_OCTET' LETSENCRYPT='$LETSENCRYPT' FTP_USER='$FTP_USER'"
-			str="$str FTP_MD5='$FTP_MD5' FTP_PATH='$FTP_PATH'"
-			str="$str BACKEND='$BACKEND' PHP_VERSION='$PHP_VERSION' PROXY='$PROXY'"
-			str="$str PROXY_EXT='$PROXY_EXT' STATS='$STATS'"
-			str="$str STATS_USER='$STATS_USER' STATS_CRYPT='$STATS_CRYPT'"
-			str="$str U_DISK='$U_DISK' U_BANDWIDTH='0' OFFLINE='$OFFLINE' SUSPENDED='no'"
-			str="$str TIME='$(date +%T)' DATE='$(date +%F)'"
-			echo $str >> $USER_DATA/web.conf
+			# Merging web.conf keys. The archived record is the base: everything the box wrote is
+			# kept, and only the fields below are rewritten, each for a named reason - so a field
+			# this code has never heard of survives without anyone remembering it.
+			str="$archived_record"
+			record_set_field str DOMAIN "$domain"
+			record_set_field str IP "$IP"
+			record_set_field str IP6 "$IP6"
+			record_set_field str ALIAS "$ALIAS"
+			record_set_field str TPL "$TPL"
+			record_set_field str PROXY "$PROXY"
+			record_set_field str HTTP3 "$HTTP3"
+			record_set_field str BACKEND "$BACKEND"
+			record_set_field str PHP_VERSION "$PHP_VERSION"
+			record_set_field str FTP_USER "$FTP_USER"
+			record_set_field str CUSTOM_DOCROOT "$CUSTOM_DOCROOT"
+			record_set_field str CUSTOM_PHPROOT "$CUSTOM_PHPROOT"
+			record_set_field str U_BANDWIDTH '0'
+			# SUSPENDED stays as archived, as on the archive path: every vhost writer goes through
+			# prepare_web_domain_values, so a restored 'yes' is served as locked rather than only
+			# looking locked in the panel.
+			record_set_field str TIME "$(date +%T)"
+			record_set_field str DATE "$(date +%F)"
+			# PHP_PROFILE exists only inside the package; live records carry it as BACKEND.
+			record_del_field str PHP_PROFILE
+
+			# Derived from the archived record, so the reference cannot shrink to nothing.
+			restored_keys=" $(record_keys "$str" | tr '\n' ' ') "
+			for _k in $(record_keys "$archived_record"); do
+				case "$_k" in PHP_PROFILE) continue ;; esac
+				case "$restored_keys" in
+					*" $_k "*) : ;;
+					*) echo "Warning!: $domain web record lost key $_k during restore" ;;
+				esac
+			done
+			echo "$str" >> $USER_DATA/web.conf
 
 			# The old caching template is a switch now
 			if [ "$restore_proxy_effect" = 'cache' ] && [ "$PROXY_SYSTEM" = 'nginx' ]; then
@@ -231,7 +266,7 @@ for domain in "${domains[@]}"; do
 		if [ ! -d "$HOMEDIR/$user/conf/web/$domain/" ]; then
 			mkdir -p $HOMEDIR/$user/conf/web/$domain/
 		fi
-		for file in $tmpdir/home/$user/backup/web/$domain/conf/*; do
+		for file in $tmpdir/web/$domain/conf/*; do
 			if [[ "$file" == *.ca ]] || [[ "$file" == *.crt ]] || [[ "$file" == *.key ]] || [[ "$file" == *.pem ]] || [[ "$file" == *.conf ]]; then
 				continue
 			fi
@@ -252,9 +287,20 @@ for domain in "${domains[@]}"; do
 
 		[[ -d $HOMEDIR/$user/web/$domain/stats ]] && chmod u+w "$HOMEDIR/$user/web/$domain/stats"
 
-		restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" --include "/home/$user/web/$domain" --target /
+		# restic refuses to write a symlink that exists, and the vhost rebuild above just created the
+		# log links - two of them turned every restore of an existing domain into a Fatal. Removing
+		# them is the portable fix: --exclude cannot join --include, and --overwrite is 0.17+.
+		find "$HOMEDIR/$user/web/$domain/logs" -maxdepth 1 -type l -delete 2> /dev/null
+		restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" restore "$snapshot" \
+			--include "/home/$user/web/$domain" --target /
 		if [ "$?" -ne 0 ]; then
 			check_result "$E_NOTEXIST" "Unable to download user data"
+		fi
+		# The links only come back if the snapshot carries them - a customer exclusion would leave
+		# the domain without logs and say nothing. One owner for that knowledge: the rebuild.
+		if [ ! -L "$HOMEDIR/$user/web/$domain/logs/$domain.log" ] \
+			|| [ ! -L "$HOMEDIR/$user/web/$domain/logs/$domain.error.log" ]; then
+			rebuild_web_domain_conf
 		fi
 		if [ "$new_user" = "yes" ]; then
 			echo "[ * ] Fix permissions"

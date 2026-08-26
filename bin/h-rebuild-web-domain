@@ -97,7 +97,7 @@ rebuild_web_domain_conf
 
 # Balance line, not exit code (see h-rebuild-web-domains)
 if [ "${web_config_skipped:-0}" -gt 0 ]; then
-	echo "Warning: $web_config_skipped vhost config(s) skipped over missing templates (see errors above)."
+	echo "Warning: $web_config_skipped vhost config(s) skipped over an unusable record (see errors above)."
 fi
 
 #----------------------------------------------------------#

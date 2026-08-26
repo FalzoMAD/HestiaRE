@@ -48,7 +48,7 @@ case $? in
 	2) check_result "$E_INVALID" "$2 does not resolve to a file inside '$BACKUP'" ;;
 esac
 
-line=$(grep "BACKUP='$backup'" $USER_DATA/backup.conf)
+line=$(grep -F "BACKUP='$backup'" $USER_DATA/backup.conf)
 parse_object_kv_list "$line"
 
 # CAUTION: the =~ matches below are substring matches - ftp also hits TYPE='sftp'. The deleted
@@ -75,7 +75,8 @@ if [ "$ADOPTED" = 'yes' ]; then
 fi
 
 # Deleting backup
-sed -i "/BACKUP='$2' /d" "$USER_DATA/backup.conf"
+# Escaped: the archive name is a pattern here, and a bare dot matches any character (#583 class).
+sed -i "/BACKUP='${2//./\\.}' /d" "$USER_DATA/backup.conf"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

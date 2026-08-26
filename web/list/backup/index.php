@@ -7,6 +7,14 @@ $TAB = "BACKUP";
 // Main include
 include $_SERVER["DOCUMENT_ROOT"] . "/inc/main.php";
 
+// Not from $panel: that is built inside render_page, so here every customer would read as archive mode.
+// ?archives=1 is the escape - a restic customer's pre-switch archives and exports live in this list.
+$backup_mode = cli_json("h-list-user $user json")[$user_plain]["BACKUPS_MODE"] ?? "";
+if ($backup_mode === "restic" && empty($_GET["backup"]) && empty($_GET["archives"])) {
+	header("Location: /list/backup/incremental/?" . http_build_query(["token" => $_SESSION["token"]]));
+	exit();
+}
+
 // Data & Render page
 if (empty($_GET["backup"])) {
 	$data = cli_json("h-list-user-backups $user json");

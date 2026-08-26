@@ -1,6 +1,6 @@
 #!/bin/bash
-# info: backup system user with all its objects
-# options: USER NOTIFY
+# info: list the restic snapshots of a user
+# options: USER [FORMAT]
 #
 # example: h-backup-user admin yes
 #
@@ -41,7 +41,7 @@ is_object_unsuspended 'user' 'USER' "$user"
 #                       Action                             #
 #----------------------------------------------------------#
 
-source_conf $HESTIA/conf/restic.conf
+is_restic_repo_configured
 
 function json_list() {
 	restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf --json snapshots

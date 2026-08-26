@@ -803,6 +803,416 @@ check_vhost_nonempty() {
 		no "$miss empty vhost config(s)" "$first"
 	fi
 }
+# check_vhost_upstream_host - "http://:3000" (docker domain, owner without DOCKER_IP) makes nginx
+# and apache reject the whole configuration. Read the rendered files: a custom template does it too.
+check_vhost_upstream_host() {
+	local f n=0 hit=0 first=""
+	for f in "/etc/$WEB_SYSTEM/conf.d/domains"/*.conf "/etc/${PROXY_SYSTEM:-none}/conf.d/domains"/*.conf; do
+		[ -e "$f" ] || continue
+		n=$((n + 1))
+		if grep -qE '://:[0-9]+' "$f"; then
+			hit=$((hit + 1))
+			[ -z "$first" ] && first="$f proxies to a port without a host"
+		fi
+	done
+	if [ "$hit" -eq 0 ]; then
+		ok "no vhost proxies to a hostless upstream ($n checked)"
+	else
+		no "$hit vhost(s) proxy to a hostless upstream" "$first"
+	fi
+}
+# check_error_code_registry - the exit codes live twice, in the shell and in the panel, and nothing
+# holds them together. Known alias: E_FORBIDEN/E_FORBIDDEN share 10 on purpose.
+check_error_code_registry() {
+	local sh_file="$HESTIA/include/main.sh" php_file="$HESTIA/web/inc/helpers.php"
+	local name val conflict=0 dupes=0 n=0 first=""
+	if [ ! -f "$sh_file" ] || [ ! -f "$php_file" ]; then
+		skip "error code registries not both present"
+		return
+	fi
+	declare -A _sh=() _php=() _seen=()
+	while IFS='=' read -r name val; do
+		_sh[$name]=$val
+		n=$((n + 1))
+	done < <(grep -oE '^E_[A-Z_]+=[0-9]+' "$sh_file")
+	while read -r name val; do
+		_php[$name]=$val
+	done < <(sed -n 's/^const \(E_[A-Z_]*\) *= *\([0-9]*\);.*/ /p' "$php_file")
+	for name in "${!_sh[@]}"; do
+		[ -n "${_php[$name]:-}" ] || continue
+		if [ "${_sh[$name]}" != "${_php[$name]}" ]; then
+			conflict=$((conflict + 1))
+			[ -z "$first" ] && first="$name is ${_sh[$name]} in the shell and ${_php[$name]} in the panel"
+		fi
+	done
+	for name in "${!_php[@]}"; do
+		case "$name" in E_FORBIDEN | E_FORBIDDEN) continue ;; esac
+		val=${_php[$name]}
+		if [ -n "${_seen[$val]:-}" ]; then
+			dupes=$((dupes + 1))
+			[ -z "$first" ] && first="${_seen[$val]} and $name both use $val in the panel"
+		fi
+		_seen[$val]=$name
+	done
+	if [ "$conflict" -eq 0 ] && [ "$dupes" -eq 0 ]; then
+		ok "error codes agree between shell and panel ($n shell codes)"
+	else
+		no "$((conflict + dupes)) error code(s) out of step" "$first"
+	fi
+}
+# check_eval_sites - two named files used to be guarded one by one, which is a list nobody measures:
+# a new eval in a third file would have gone unseen. Derived instead - every eval used as a command
+# in bin/h-* and include/*.sh is found, and only the two that have a reason may remain.
+#
+# Whole-line comments are dropped BEFORE the search so the search can stay broad. Command position
+# is more than line start, ; & and |: `then eval`, `do eval` and `else eval` sit in it too, and the
+# narrow pattern that was here first missed all three - the very blind spot a hand-kept list has.
+# A trailing # is never stripped (it is not a comment in $#, ${v#p}, heredocs), so a comment that
+# writes "eval " can still match. That direction is a loud false positive; the other one is the hole
+# this guard exists to close.
+#
+# Does NOT cover: sbin/, web/, share/, and eval reached through a variable or an alias.
+check_eval_sites() {
+	local allowed="h-add-web-domain-ssl main.sh" f base extra='' hit='' miss='' scanned=0 carry=0
+	for f in "$HESTIA/bin"/h-* "$HESTIA/include"/*.sh; do
+		[ -f "$f" ] || continue
+		scanned=$((scanned + 1))
+		sed '/^[[:space:]]*#/d' "$f" | grep -qE '(^|[^[:alnum:]_])eval[[:space:]]' || continue
+		carry=$((carry + 1))
+		base=$(basename "$f")
+		hit="$hit $base"
+		case " $allowed " in *" $base "*) continue ;; esac
+		extra="$extra $base"
+	done
+	# Both known sites must still turn up. A sweep that looked at nothing, or one that lost sight of
+	# a site it used to see, shrank its reference set - which is worse than no guard, because green
+	# then means "looked at less" instead of "found nothing".
+	for base in $allowed; do
+		case " $hit " in *" $base "*) ;; *) miss="$miss $base" ;; esac
+	done
+	if [ "$scanned" -lt 400 ]; then
+		no "the eval-sweep scanned only $scanned file(s)" "expected all of $HESTIA/bin/h-* and $HESTIA/include/*.sh"
+	elif [ -n "$extra" ]; then
+		no "eval-use over record text outside the two known places" "$extra"
+	elif [ -n "$miss" ]; then
+		no "a known eval-site stopped matching - sweep or file changed" "$miss"
+	else
+		ok "no new eval-sites ($carry of $scanned scanned file(s) carry one, both known)"
+	fi
+}
+
+# check_record_name_patterns - a record name goes into grep and sed as a PATTERN, and an archive or
+# domain name carries dots, which match any character. #583 swept that class once; it came back at
+# the backup record sites (#819), so the reference set is derived here instead of remembered: every
+# grep or sed in bin/ and include/ whose pattern splices a shell variable next to BACKUP=' or
+# DOMAIN=' must either use -F or escape through ${v//./\\.}.
+#
+# Does NOT cover: the KEY='$var' shape is all it recognises - h-backup-user splices a bare
+# "$user.$stamp.tar" with no key in front, which this pattern cannot see without flagging half the
+# tree. Nor patterns in web/ or share/, a name reached through an intermediate variable, or
+# characters other than the dot (* ? [ ] are equally special; no record name has carried one yet).
+check_record_name_patterns() {
+	local scanned=0 bad='' f hits
+	for f in "$HESTIA/bin"/h-* "$HESTIA/include"/*.sh; do
+		[ -f "$f" ] || continue
+		scanned=$((scanned + 1))
+		hits=$(sed '/^[[:space:]]*#/d' "$f" \
+			| grep -nE "(grep|sed)[^|]*(^|[^A-Z_])(BACKUP|DOMAIN)='\\\$" \
+			| grep -v -- '-[a-zA-Z]*F' | grep -v '//\./' || true)
+		[ -n "$hits" ] && bad="$bad $(basename "$f")"
+	done
+	if [ "$scanned" -lt 400 ]; then
+		no "the record-pattern sweep scanned only $scanned file(s)" "expected all of $HESTIA/bin/h-* and $HESTIA/include/*.sh"
+	elif [ -n "$bad" ]; then
+		no "a record name is spliced into a pattern unescaped" "$bad - use grep -F or \${v//./\\.}"
+	else
+		ok "record names reach grep and sed escaped or literal ($scanned file(s) scanned)"
+	fi
+}
+
+# check_yescrypt_hashing - the panel login of every account whose /etc/shadow entry is yescrypt runs
+# through mkpasswd from the whois package, and yescrypt is the PAM default on all four targets. If
+# the binary is gone or its libcrypt cannot do yescrypt, NOBODY logs in and the panel says "invalid
+# password" - a total outage wearing the mask of a typo. So this asks by doing the thing the login
+# does: hash a known string, then reproduce it from its own setting, which is the exact comparison
+# h-check-user-password makes against the shadow entry.
+#
+# Does NOT cover md5/sha-512/des accounts - those go through h-generate-password-hash (perl crypt).
+check_yescrypt_hashing() {
+	local ref again setting probe='hestia-smoke-probe'
+	if ! command -v mkpasswd > /dev/null 2>&1; then
+		no "mkpasswd is missing - no yescrypt account can log in" "the whois package provides it"
+		return
+	fi
+	ref=$(mkpasswd -m yescrypt "$probe" 2> /dev/null)
+	case "$ref" in
+		'$y$'*) ;;
+		*)
+			no "mkpasswd cannot produce a yescrypt hash" "it returned '${ref:-nothing}' - check libcrypt"
+			return
+			;;
+	esac
+	setting="${ref%\$*}\$"
+	again=$(mkpasswd "$probe" "$setting" 2> /dev/null)
+	if [ "$again" != "$ref" ]; then
+		no "yescrypt hashing does not reproduce from its own setting" "every panel login would be refused"
+	else
+		ok "yescrypt hashing works and reproduces from its setting"
+	fi
+}
+
+# check_protected_names - the floor that stops a record from binding PATH or BIN (#807). Two ways
+# it could go green while protecting nothing: the list empties, or a name in it is also a real
+# config key, in which case the floor locks that key out of every conf. Both are checked here, and
+# the second is checked against the key registries rather than a second hand-kept list.
+check_protected_names() {
+	local n bad=0 first="" reg regs nregs
+	regs="web mail mail_accounts user cron db system ip backup_excludes"
+	nregs=$(wc -w <<< "$regs")
+	n=$(wc -w <<< "$SOURCE_CONF_PROTECTED")
+	if [ "${n:-0}" -lt 10 ]; then
+		no "protected name list is empty or short ($n)" "SOURCE_CONF_PROTECTED in include/main.sh"
+		return
+	fi
+	for reg in $regs; do
+		for name in $(syshealth_known_keys "$reg"); do
+			is_protected_key "$name" || continue
+			bad=$((bad + 1))
+			[ -z "$first" ] && first="$name is both a $reg key and a protected name"
+		done
+	done
+	# Derived from the data, not from the compiled lists: a name can be a config key without being
+	# in any registry (BACKUP_TEMP was, and the floor swallowed it in silence). If a conf on this
+	# box carries a protected name as a key, the floor is dropping something real.
+	local pat live
+	pat="^($(tr -s ' \n' '||' <<< "$SOURCE_CONF_PROTECTED" | sed -e 's/^|//' -e 's/|$//'))="
+	live=$(grep -lE "$pat" "$HESTIA/conf"/*.conf "$CONF_DIR/users"/*/user.conf \
+		"$CONF_DIR/users"/*/backup-excludes.conf "$CONF_DIR/packages"/*.pkg "$CONF_DIR/ips"/* \
+		2> /dev/null | head -3 | tr '\n' ' ')
+	if [ "$bad" -gt 0 ]; then
+		no "$bad protected name(s) collide with a real config key" "$first"
+	elif [ -n "$live" ]; then
+		no "a protected name is used as a key in a live config" "$live"
+	else
+		ok "protected names hold and collide with no config key ($n names, $nregs registries)"
+	fi
+}
+# check_record_only_protected - RECORD_ONLY_PROTECTED carries names source_conf MUST accept (they
+# are honest hestia.conf / restic.conf keys) while the record parser must refuse them. Floor and
+# list differ only in WHERE a name is allowed, so the question this asks is: does one of them ever
+# appear as a key in a RECORD? BACKUP is deliberately absent from the list because it is one.
+#
+# Does NOT cover records inside an archive - refusing those is the parser's job, not this check's.
+check_record_only_protected() {
+	local n names f reads=0 bad='' pat
+	names="$RECORD_ONLY_PROTECTED"
+	n=$(wc -w <<< "$names")
+	if [ "${n:-0}" -lt 1 ]; then
+		no "the record-only protected list is empty" "RECORD_ONLY_PROTECTED in include/main.sh"
+		return
+	fi
+	pat="^[[:space:]]*($(tr -s ' \n' '||' <<< "$names" | sed -e 's/^|//' -e 's/|$//'))="
+	for f in "$CONF_DIR/users"/*/*.conf "$CONF_DIR/users"/*/mail/*.conf "$CONF_DIR/packages"/*.pkg; do
+		[ -f "$f" ] || continue
+		# Positive control per file: it must yield a key at all. Without it a clean result is
+		# indistinguishable from a sweep that read nothing.
+		if grep -qE '^[A-Z][A-Z0-9_]*=' "$f"; then
+			reads=$((reads + 1))
+		fi
+		if grep -qE "$pat" "$f"; then
+			bad="$bad $(basename "$(dirname "$f")")/$(basename "$f")"
+		fi
+	done
+	if [ "$reads" -eq 0 ]; then
+		no "the record sweep read no key from any record file" "looked under $CONF_DIR/users and $CONF_DIR/packages"
+	elif [ -n "$bad" ]; then
+		no "a record-only protected name is used as a record key" "$bad"
+	else
+		ok "record-only names appear in no record ($n names, $reads record file(s) read)"
+	fi
+}
+# check_protected_names_effective - the list above is a claim; this is the effect. A record that
+# tries to bind PATH must not change it, and a harmless one must still bind, in the same run.
+check_protected_names_effective() {
+	local tmp before after
+	local name_before="$NAME"
+	before="$PATH"
+	tmp=$(mktemp)
+	printf "NAME='probe'\nPATH=/tmp/hestia-smoke-should-not-happen\n" > "$tmp"
+	NAME=''
+	source_conf "$tmp" 2> /dev/null
+	after="$PATH"
+	local bound="$NAME"
+	NAME="$name_before"
+	rm -f "$tmp"
+	if [ "$before" != "$after" ]; then
+		PATH="$before"
+		no "a config file rebound PATH (#807)" "source_conf accepted a protected name"
+	elif [ "$bound" != "probe" ]; then
+		no "the protected-name probe never bound anything" "source_conf read nothing - the check proves nothing"
+	else
+		ok "a config file cannot rebind PATH, an ordinary key still binds"
+	fi
+}
+# check_restic_pairs - a snapshot without its package cannot be restored, a package without its
+# snapshot describes nothing. Derived from the tags, so it also sees a package deleted by hand.
+check_restic_pairs() {
+	local u repo tags pkg tag n=0 orphan_snap=0 orphan_pkg=0 first="" unread=0 first_unread=""
+	repo=$(restic_repo_base) || {
+		ok "no restic repository configured - pairs not checked"
+		return
+	}
+	command -v restic > /dev/null 2>&1 || {
+		skip "restic not installed"
+		return
+	}
+	local json ids sid rc
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		[ -f "$CONF_DIR/users/$u/restic.conf" ] || continue
+		json=$(restic --repo "$repo$u" --password-file "$CONF_DIR/users/$u/restic.conf" --json \
+			snapshots 2> /dev/null)
+		rc=$?
+		# A repository that cannot be read is not an empty one: counting orphans here would blame
+		# every package for a broken line.
+		if [ "$rc" -ne 0 ]; then
+			unread=$((unread + 1))
+			[ -z "$first_unread" ] && first_unread="repository for $u could not be read (restic rc=$rc)"
+			continue
+		fi
+		tags=$(grep -o '"meta:[^"]*"' <<< "$json" | tr -d '"')
+		ids=$(grep -o '"short_id":"[^"]*"' <<< "$json" | cut -d'"' -f4)
+		for tag in $tags; do
+			n=$((n + 1))
+			[ -f "$BACKUP/$u/${tag#meta:}.meta.tgz" ] && continue
+			orphan_snap=$((orphan_snap + 1))
+			[ -z "$first" ] && first="$u: snapshot tagged $tag has no package"
+		done
+		for pkg in "$BACKUP/$u/$u".*.meta.tgz; do
+			[ -f "$pkg" ] || continue
+			tag="meta:$(basename "$pkg" .meta.tgz)"
+			grep -qxF "$tag" <<< "$tags" && continue
+			# Second direction: the snapshot the package names itself.
+			sid=$(tar -xzOf "$pkg" ./restic.meta 2> /dev/null | sed -n "s/^SNAPSHOT='\([^']*\)'.*/\1/p")
+			[ -n "$sid" ] && grep -qxF "$sid" <<< "$ids" && continue
+			orphan_pkg=$((orphan_pkg + 1))
+			[ -z "$first" ] && first="$u: package $(basename "$pkg") has no snapshot"
+		done
+	done
+	if [ "$unread" -gt 0 ]; then
+		no "$unread restic repository(s) could not be read - only $n pair(s) checked" "$first_unread"
+	elif [ "$((orphan_snap + orphan_pkg))" -eq 0 ]; then
+		ok "every restic snapshot has its package ($n pair(s))"
+	else
+		no "$((orphan_snap + orphan_pkg)) restic artefact(s) without a partner" "$first"
+	fi
+}
+# check_restic_mode_supported - restic mode without the addon or without a repository means no
+# backup at all, and the nightly run says so only in the log.
+check_restic_mode_supported() {
+	local u m repo n=0 bad=0 first=""
+	# The gate's own resolution, called directly - the gate would exit through check_result.
+	repo=$(restic_repo_base) || repo=""
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		m=$(sed -n "s/^.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$u/user.conf" 2> /dev/null | head -1)
+		[ "$m" = 'restic' ] || continue
+		n=$((n + 1))
+		if ! restic version > /dev/null 2>&1; then
+			bad=$((bad + 1))
+			[ -z "$first" ] && first="$u is in restic mode but restic is not installed"
+		elif [ -z "$repo" ]; then
+			bad=$((bad + 1))
+			[ -z "$first" ] && first="$u is in restic mode but no repository is configured"
+		fi
+	done
+	if [ "$bad" -eq 0 ]; then
+		ok "restic mode is supported where it is set ($n customer(s))"
+	else
+		no "$bad customer(s) in restic mode without support" "$first"
+	fi
+}
+# check_logrotate_parses - a doubled path makes logrotate exit 1 and the unit stay failed. Only a
+# collision with one of our files is ours; base-system ones are named, not red.
+check_logrotate_parses() {
+	local out owned line path f pat mine ours=0 base=0 first="" basefiles="" mycount=0
+	if ! command -v logrotate > /dev/null 2>&1; then
+		skip "logrotate not installed"
+		return
+	fi
+	out=$(logrotate -d /etc/logrotate.conf 2>&1)
+	# ours = whatever no package claims, so a file added by hand counts as ours too
+	owned=$(dpkg -S /etc/logrotate.d/* 2> /dev/null | sed 's/^[^:]*: //')
+	for f in /etc/logrotate.d/*; do
+		[ -f "$f" ] || continue
+		grep -qxF "$f" <<< "$owned" || mycount=$((mycount + 1))
+	done
+	while IFS= read -r line; do
+		[ -n "$line" ] || continue
+		path=${line##*duplicate log entry for }
+		[ "$path" != "$line" ] || continue
+		mine=0
+		for f in /etc/logrotate.d/*; do
+			[ -f "$f" ] || continue
+			grep -qxF "$f" <<< "$owned" && continue
+			while read -r pat; do
+				# shellcheck disable=SC2254  # the config line IS a glob, matching it is the point
+				case "$path" in $pat) mine=1 ;; esac
+			done < <(grep -oE '^/[^ {]+' "$f")
+		done
+		if [ "$mine" = 1 ]; then
+			ours=$((ours + 1))
+			[ -z "$first" ] && first="${line#error: }"
+		else
+			base=$((base + 1))
+			f=${line#error: }
+			f=${f%%:*}
+			grep -qw "$f" <<< "$basefiles" || basefiles="${basefiles:+$basefiles, }$f"
+		fi
+	done <<< "$(grep '^error:' <<< "$out")"
+	if [ "$ours" -gt 0 ]; then
+		no "$ours logrotate collision(s) involving a file of ours" "$first"
+	elif [ "$base" -gt 0 ]; then
+		ok "logrotate: our $mycount file(s) collide with nothing - $base base-system conflict(s), not ours: $basefiles"
+	else
+		ok "logrotate parses its configuration (ours: $mycount file(s))"
+	fi
+}
+# check_web_record_has_vhost - the upstream check reads files, so a domain whose vhost was skipped
+# looks clean by being absent. Expectation comes from the record: a docker domain in a proxy model
+# has its backend vhost removed on purpose, everything else needs the front (and the proxy it names).
+# Not covered: the SSL variant of a fragment, and whether the vhost inside is the right one.
+check_web_record_has_vhost() {
+	local u line d docker proxy sys fronts n=0 miss=0 first=""
+	if [ -z "$WEB_SYSTEM" ]; then
+		skip "no web system - vhost coverage not checked"
+		return
+	fi
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		[ -f "$CONF_DIR/users/$u/web.conf" ] || continue
+		while IFS= read -r line; do
+			d=$(sed -n "s/.*DOMAIN='\([^']*\)'.*/\1/p" <<< "$line")
+			[ -n "$d" ] || continue
+			docker=$(sed -n "s/.* DOCKER='\([^']*\)'.*/\1/p" <<< "$line")
+			proxy=$(sed -n "s/.* PROXY='\([^']*\)'.*/\1/p" <<< "$line")
+			if [ -n "$docker" ] && [ -n "$PROXY_SYSTEM" ] && [ "$WEB_SYSTEM" != "$PROXY_SYSTEM" ]; then
+				fronts="$PROXY_SYSTEM"
+			else
+				fronts="$WEB_SYSTEM"
+				[ -n "$PROXY_SYSTEM" ] && [ -n "$proxy" ] && fronts="$fronts $PROXY_SYSTEM"
+			fi
+			for sys in $fronts; do
+				n=$((n + 1))
+				[ -f "/etc/$sys/conf.d/domains/$d.conf" ] && continue
+				miss=$((miss + 1))
+				[ -z "$first" ] && first="$u/$d has no $sys vhost"
+			done
+		done < "$CONF_DIR/users/$u/web.conf"
+	done
+	if [ "$miss" -eq 0 ]; then
+		ok "every web record has its vhost ($n checked)"
+	else
+		no "$miss web record(s) without a vhost" "$first"
+	fi
+}
 # check_web_templates_resolvable - a record pointing at a template that no longer exists
 # renders nothing. add_web_config now refuses instead of writing an empty vhost, so the
 # damage is visible - but only on the next rebuild, which may be weeks away.
@@ -1207,13 +1617,8 @@ echo "-- security invariants --"
 check_sudo_secret_leak
 # GHSA-fcq6: auth gate must not compare a bare $ROOT_USER (legit: $_SESSION["ROOT_USER"])
 check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$HESTIA/web"
-# GHSA-cr7q: search-object commands must not eval raw conf-field payloads
-check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
-	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
-# GHSA-xffx class: include/ip.sh must not go back to eval-ing an IP conf as bash - it now parses via the
-# hardened source_conf and derefs with ${!var}. A reintroduced `eval` would re-open the sink.
-check_source_absent "no raw eval in include/ip.sh (GHSA-xffx class)" '(^|[^_])eval[[:space:]]' \
-	"$HESTIA/include/ip.sh"
+# GHSA-cr7q and the GHSA-xffx class were guarded file by file here; check_eval_sites covers both and
+# every other file besides, so the two named checks would only be a list to forget.
 # GHSA-xffx class: source_conf must keep its identifier guard on the key, or a
 # `key[$(cmd)]=` line in any parsed conf executes cmd through declare -g. Positive
 # check: the sink is shared by ~500 callers, so losing the guard is a silent hole.
@@ -1257,6 +1662,18 @@ check_realip_header
 check_proc_hardening
 # a record pointing at a removed template only shows up on the next rebuild.
 check_web_templates_resolvable
+check_vhost_upstream_host
+check_web_record_has_vhost
+check_logrotate_parses
+check_restic_mode_supported
+check_restic_pairs
+check_protected_names
+check_protected_names_effective
+check_record_only_protected
+check_eval_sites
+check_yescrypt_hashing
+check_record_name_patterns
+check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_key_registries

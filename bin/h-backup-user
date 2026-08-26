@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: backup system user with all its objects
-# options: USER NOTIFY
+# options: USER [NOTIFY] [EXPORT]
 #
 # example: h-backup-user admin yes
 #
@@ -13,6 +13,9 @@
 # Argument definition
 user=$1
 notify=${2-no}
+# An ARGUMENT, not an environment prefix: the consent word in C.5 was made an argument for the same
+# reason (GHSA-2xw3), and a second control channel through the environment reopens what that closed.
+export_run=${3-no}
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -200,14 +203,34 @@ get_user_disk_usage() {
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '1' "$#" 'USER [NOTIFY]'
+check_args '1' "$#" 'USER [NOTIFY] [EXPORT]'
 is_format_valid 'user'
+case "$export_run" in
+	yes | no) ;;
+	*) check_result "$E_INVALID" "EXPORT must be yes or no" ;;
+esac
 is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 if [ "$POLICY_BACKUP_SUSPENDED_USERS" != "yes" ]; then
 	is_object_unsuspended 'user' 'USER' "$user"
 fi
 is_backup_enabled
+# The limit belongs where the exempt record is written, not in the wrapper: this command is what
+# anyone calls directly, and the record it writes carries ADOPTED='yes' - which no rotation ever
+# touches. An export is a deliberate artefact, so the limit refuses and names what is already there
+# instead of clearing the oldest away (D5). Unset means two.
+if [ "$export_run" = 'yes' ]; then
+	_limit="${BACKUP_EXPORT_LIMIT:-2}"
+	case "$_limit" in '' | *[!0-9]*) _limit=2 ;; esac
+	_existing=$(grep -E "(^| )MODE='export'( |$)" "$USER_DATA/backup.conf" 2> /dev/null \
+		| sed -n "s/^BACKUP='\([^']*\)'.*/\1/p")
+	_count=$(grep -c . <<< "$_existing")
+	if [ "$_count" -ge "$_limit" ]; then
+		echo "Exports of $user ($_count, limit $_limit):"
+		sed 's/^/  /' <<< "$_existing"
+		check_result "$E_LIMIT" "$user already has $_count export(s) - delete one with h-delete-user-backup before writing another"
+	fi
+fi
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -238,22 +261,28 @@ start_time=$(date '+%s')
 subj="$user → backup failed"
 email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" | cut -f 2 -d \')
 
-# Validate available disk space (take usage * 2, due to the backup handling)
-let u_disk=$(($(get_user_disk_usage) * 2))
-let v_disk=$(echo "$(stat -f --format='%a*%S' $BACKUP) / 1024 / 1024" | bc)
-
-if [ "$u_disk" -gt "$v_disk" ]; then
-	let u_disk_original=$(get_user_disk_usage)
-	# Always notify on failure
-	echo "Not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb). https://hestiacp.com/docs/server-administration/backup-restore.html" | $SENDMAIL -s "$subj" "$email" "yes"
-	# Deleting task from queue
-	queue_drop_job "$CONF_DIR/queue/backup.pipe"
-	check_result "$E_LIMIT" "not enough disk space available ($v_disk mb) to perform the backup  of $user. ( $u_disk_original mb * 2 = $u_disk mb)."
-fi
-
+# Before the check below, which needs it: the tree is built in BACKUP_TEMP, the archive lands in
+# $BACKUP.
 if [ -z "$BACKUP_TEMP" ]; then
 	BACKUP_TEMP=$BACKUP
 fi
+
+# Booked per DEVICE (#805): staging tree and finished archive each want about the usage, which on
+# one filesystem adds up and on two does not. Measured once - du over the whole home is not cheap.
+_need=$(($(get_user_disk_usage) * 1048576))
+refusal=$(space_budget_refused "$BACKUP_TEMP:$_need" "$BACKUP:$_need") || {
+	case "$?" in
+		1)
+			echo "Not enough disk space for the backup of $user: $refusal" | $SENDMAIL -s "$subj" "$email" "yes"
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
+			check_result "$E_LIMIT" "$user: $refusal"
+			;;
+		*)
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
+			check_result "$E_LIMIT" "cannot read the free space for the backup of $user ($BACKUP_TEMP, $BACKUP)"
+			;;
+	esac
+}
 
 # Creating temporary directory
 # Checked at the source - a check via $? behind any later line is dead (measured: two inserted
@@ -263,13 +292,13 @@ if ! tmpdir=$(mktemp -p $BACKUP_TEMP -d); then
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create tmp dir"
 fi
-# Hash tables live OUTSIDE tmpdir (everything in tmpdir lands in the tarball); the trap covers
-# every abort path, which the per-path rm -rf $tmpdir calls never did for this directory.
+# Hash tables live OUTSIDE tmpdir (everything in tmpdir lands in the tarball).
 if ! maptbl=$(mktemp -d); then
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create map table dir"
 fi
-trap 'rm -rf "$maptbl"' EXIT
+# Both, on EVERY exit: an abort leaves its half-built members in the staging tree otherwise.
+trap 'rm -rf "$maptbl" "$tmpdir"' EXIT
 
 # Backup sys configs
 echo "-- SYSTEM --" | tee $BACKUP/$user/$user.log
@@ -496,9 +525,12 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 
 		# --sort=name and gzip -n (#712): an unchanged tree produces identical bytes twice.
 		if [ "$BACKUP_MODE" = 'zstd' ]; then
-			tar --sort=name "${fargs[@]}" -cpf- . | pzstd -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.zst
+			_member="$tmpdir/web/$domain/domain_data.tar.zst"
 		else
-			tar --sort=name "${fargs[@]}" -cpf- . | gzip -n -"$BACKUP_GZIP" - > $tmpdir/web/$domain/domain_data.tar.gz
+			_member="$tmpdir/web/$domain/domain_data.tar.gz"
+		fi
+		if ! backup_member_write "$_member" --sort=name "${fargs[@]}" -cpf- .; then
+			backup_member_abort "$user" "web/$domain" "$_member"
 		fi
 		backup_map_hash_verify "$maptbl/web.$domain.tbl"
 	done
@@ -558,7 +590,10 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 		conf="$USER_DATA/mail.conf"
 		grep -F "DOMAIN='$domain'" $conf > hestia/mail.conf
 		cp $USER_DATA/mail/$domain.* hestia/
-		if [ -n "$(ls $USER_DATA/mail/ | grep *@$domain)" ]; then
+		# compgen, not `ls | grep *@$domain`: that glob was expanded against the WORKING DIRECTORY
+		# before grep saw it, so the per-account files - the autoreply texts among them - never got
+		# archived (#826).
+		if compgen -G "$USER_DATA/mail/*@$domain.*" > /dev/null; then
 			cp $USER_DATA/mail/*@$domain.* hestia/
 		fi
 
@@ -583,9 +618,12 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 				|| echo "$(date "+%F %T") Warning: hash pass failed for mail/$domain - its hashes are withdrawn, the member stays effectively whole" \
 				| tee -a $BACKUP/$user/$user.log
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar --sort=name -cpf- "${accounts[@]}" | pzstd -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.zst
+				_member="$tmpdir/mail/$domain/accounts.tar.zst"
 			else
-				tar --sort=name -cpf- "${accounts[@]}" | gzip -n -"$BACKUP_GZIP" - > $tmpdir/mail/$domain/accounts.tar.gz
+				_member="$tmpdir/mail/$domain/accounts.tar.gz"
+			fi
+			if ! backup_member_write "$_member" --sort=name -cpf- "${accounts[@]}"; then
+				backup_member_abort "$user" "mail/$domain" "$_member"
 			fi
 			backup_map_hash_verify "$maptbl/mail.$domain.tbl" "${accounts[@]}"
 		fi
@@ -659,12 +697,17 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 				pgsql) dump_pgsql_database ;;
 			esac
 
-			# Compress dump
+			# The source goes only once the compressed file is there AND complete: a truncated .zst
+			# beside a deleted original is the one outcome with no way back. A dump is checked for
+			# its engine's end marker, not just for a status - #823 with the extra tooth.
+			_member="$dump.$(backup_codec_suffix)"
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				pzstd -$BACKUP_GZIP $dump
-				rm $dump
+				pzstd -$BACKUP_GZIP $dump && rm -f $dump
 			else
 				gzip -n -$BACKUP_GZIP $dump
+			fi
+			if ! backup_dump_complete "$_member"; then
+				backup_member_abort "$user" "database $database" "$_member"
 			fi
 		fi
 	done
@@ -685,8 +728,10 @@ if [ -n "$CRON_SYSTEM" ] && [ "$CRON" != '*' ]; then
 	mkdir $tmpdir/cron/
 
 	# Backup cron.conf
-	cp $USER_DATA/cron.conf $tmpdir/cron/
-	cron_record=$(wc -l $USER_DATA/cron.conf | cut -f 1 -d ' ')
+	cp $USER_DATA/cron.conf $tmpdir/cron/ 2> /dev/null
+	# From stdin and guarded: an absent file left the count empty and the test below died on it.
+	cron_record=0
+	[ -f "$USER_DATA/cron.conf" ] && cron_record=$(wc -l < "$USER_DATA/cron.conf")
 
 	if [ -e "/var/spool/cron/$user" ]; then
 		cron_list="$cron_record"
@@ -737,14 +782,17 @@ if [ "$USER" != '*' ]; then
 		fi
 	done
 
+	# Saved: both are lifted at the end of the loop, or newline splitting reaches every later step.
+	_ifs_saved=$IFS
 	IFS=$'\n'
 	set -f
 	i=0
 
 	# leftovers is what a previous restore handed over; archiving it would grow the archive over every
 	# roundtrip. A reserved name in the home from here on, like conf/web/mail/tmp - and in this fixed
-	# list rather than in backup-excludes.conf, which the customer can edit.
-	for udir in $(ls -a | grep -E -v "^conf$|^web$|^dns$|^tmp$|^mail$|^leftovers$|^\.\.$|^\.$"); do
+	# list rather than in backup-excludes.conf, which the customer can edit. .dumps is the restic
+	# stage - a mode switch would otherwise carry raw database dumps into the archive.
+	for udir in $(ls -a | grep -E -v "^conf$|^web$|^dns$|^tmp$|^mail$|^leftovers$|^\.dumps$|^\.\.$|^\.$"); do
 		exclusion=$(echo "$USER" | tr ',' '\n' | grep "^$udir$")
 		if [ -z "$exclusion" ]; then
 			((i++))
@@ -755,14 +803,18 @@ if [ "$USER" != '*' ]; then
 
 			# Backup files and dirs
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | pzstd -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.zst
+				_member="$tmpdir/user_dir/$udir.tar.zst"
 			else
-				tar --anchored --sort=name -cpf- "${fargs[@]}" $udir | gzip -n -"$BACKUP_GZIP" - > $tmpdir/user_dir/$udir.tar.gz
+				_member="$tmpdir/user_dir/$udir.tar.gz"
+			fi
+			if ! backup_member_write "$_member" --anchored --sort=name -cpf- "${fargs[@]}" $udir; then
+				backup_member_abort "$user" "user_dir/$udir" "$_member"
 			fi
 
 		fi
 	done
 	set +f
+	IFS=$_ifs_saved
 	udir_list=$(echo "$udir_list" | sed -e "s/  */\ /g" -e "s/^ //")
 
 	# Print total
@@ -861,6 +913,9 @@ for backup_type in $(echo -e "${BACKUP_SYSTEM//,/\\n}"); do
 done
 reached="${reached#,}"
 
+# Leave the tmpdir before removing it: local_backup() ends inside it, and a child started from a
+# deleted cwd dies on getcwd - exim did, so the mail reporting a degraded run never went out.
+cd "$BACKUP" 2> /dev/null || cd /
 # Removing tmpdir
 rm -rf $tmpdir
 if [[ "$errorcode" != "0" ]]; then
@@ -895,9 +950,11 @@ echo "$(date "+%F %T") Runtime: $run_time $min" | tee -a $BACKUP/$user/$user.log
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Removing duplicate
+# Removing duplicate. The name is a PATTERN here, and an unescaped dot matches any character - the
+# class #583 swept once already, missed at these record sites (#819).
 touch $USER_DATA/backup.conf
-sed -i "/$user.$backup_new_date.tar/d" $USER_DATA/backup.conf
+_arc="$user.$backup_new_date.tar"
+sed -i "/${_arc//./\\.}/d" $USER_DATA/backup.conf
 
 # Registering new backup
 backup_str="BACKUP='$user.$backup_new_date.tar'"
@@ -910,7 +967,13 @@ backup_str="$backup_str CRON='$cron_list'"
 backup_str="$backup_str UDIR='${udir_list// /,}'"
 backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
 backup_str="$backup_str MAP='$map_records'"
-backup_str="$backup_str MODE='$([ -n "$diff_base" ] && echo diff || echo full)' BASE='$diff_base'"
+# An export is the same archive, marked: ADOPTED keeps it out of the rotation through the mechanism
+# that already exists for operator-placed files, and MODE says what it is in every listing.
+if [ "$export_run" = 'yes' ]; then
+	backup_str="$backup_str MODE='export' BASE='' ADOPTED='yes'"
+else
+	backup_str="$backup_str MODE='$([ -n "$diff_base" ] && echo diff || echo full)' BASE='$diff_base'"
+fi
 backup_str="$backup_str RUNTIME='$run_time' TIME='$time' DATE='$date'"
 echo "$backup_str" >> $USER_DATA/backup.conf
 

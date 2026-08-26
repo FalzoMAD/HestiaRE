@@ -7,6 +7,62 @@
 #===========================================================================#
 
 # Source conf function for correct variable initialisation
+# Names a record must never bind. The value is validated everywhere; the NAME was not, so a
+# restored user.conf carrying a line PATH=/tmp/x rebound PATH in the root shell that reads it and
+# the next relative chown/grep ran from the attacker's directory. Measured, #807.
+#
+# Deliberately NOT here, because each is a legitimate key in some conf and would be locked out:
+# ROOT_USER (hestia.conf), REPO (restic.conf), BACKUP (backup records), BACKUP_TEMP (an optional
+# hestia.conf knob - h-restore-user, h-import-cpanel and h-import-directadmin read it and fall back
+# to $BACKUP). The floor cannot protect a name that also has honest work.
+SOURCE_CONF_PROTECTED="PATH IFS ENV BASH_ENV BASHOPTS SHELLOPTS CDPATH GLOBIGNORE PROMPT_COMMAND
+PS1 PS2 PS3 PS4 LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT HISTFILE BASH_XTRACEFD FUNCNAME
+HESTIA HESTIA_PHP BIN SBIN CONF_DIR HOMEDIR USER_DATA SENDMAIL SOURCE_CONF_PROTECTED"
+
+# Two sinks, two floors. source_conf reads CONFIGS, where these three are honest keys, so it must
+# keep accepting them. parse_object_kv_list reads RECORDS, where they are not fields at all - only
+# BACKUP is one (the archive name), which is why BACKUP is absent here. Taking BACKUP_TEMP off the
+# floor for hestia.conf's sake would otherwise have dropped it on the record side too, where an
+# archived backup.conf reaches the parser (h-restore-{web-domain,mail-domain,database}-restic) and
+# could rebind the directory a later mktemp writes into. Measured: on all four targets BACKUP is a
+# record key in three files per box, these three in none.
+RECORD_ONLY_PROTECTED="ROOT_USER REPO BACKUP_TEMP"
+
+is_protected_key() {
+	case " ${SOURCE_CONF_PROTECTED//$'\n'/ } " in *" $1 "*) return 0 ;; esac
+	return 1
+}
+
+# An archived record is hostile input. Only keys the registry knows reach the instance: the floor
+# above stops the shell names, this stops the rest - including names that are legitimate in another
+# file and therefore cannot be in the floor (ROOT_USER in hestia.conf, REPO in restic.conf). The
+# archive itself is not modified; a dropped key is named on stderr, and a filter that keeps nothing
+# fails instead of installing an empty record.
+copy_record_filtered() {
+	local _src="$1" _dst="$2" _type="$3" _allow _lhs _line _kept=0 _tmp
+	command -v syshealth_known_keys > /dev/null 2>&1 || return 1
+	_allow=" $(syshealth_known_keys "$_type") " || return 1
+	[ -n "${_allow// /}" ] || return 1
+	[ -f "$_src" ] || return 1
+	_tmp=$(mktemp "$_dst.XXXXXX") || return 1
+	while IFS= read -r _line || [ -n "$_line" ]; do
+		[ -n "${_line// /}" ] || continue
+		_lhs=${_line%%=*}
+		case "$_allow" in
+			*" $_lhs "*)
+				printf '%s\n' "$_line" >> "$_tmp"
+				_kept=$((_kept + 1))
+				;;
+			*) echo "Warning: dropping unknown key '$_lhs' from the archived $_type record" >&2 ;;
+		esac
+	done < "$_src"
+	if [ "$_kept" -eq 0 ]; then
+		rm -f "$_tmp"
+		return 1
+	fi
+	chmod 660 "$_tmp" && mv -f "$_tmp" "$_dst"
+}
+
 source_conf() {
 	while IFS='= ' read -r lhs rhs; do
 		if [[ ! $lhs =~ ^\ *# && -n $lhs ]]; then
@@ -15,6 +71,12 @@ source_conf() {
 			# subscript (the GHSA-xffx-jj33-p2px class) - a hardening of the sink that covers every caller,
 			# not just the one command that reads an attacker-supplied file.
 			[[ $lhs =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+			# The identifier check above accepts PATH and BIN: those are valid identifiers, just
+			# not valid config keys (#807). Loud, because a record carrying one is an attack.
+			if is_protected_key "$lhs"; then
+				echo "Warning: $1 tries to bind the protected name $lhs - ignored" >&2
+				continue
+			fi
 			rhs="${rhs%%^\#*}" # Del in line right comments
 			rhs="${rhs%%*( )}" # Del trailing spaces
 			rhs="${rhs%\'*}"   # Del opening string quotes
@@ -121,6 +183,7 @@ E_DB=17
 E_RRD=18
 E_UPDATE=19
 E_RESTART=20
+E_BACKUP=22
 
 # Detect operating system
 detect_os() {
@@ -217,6 +280,16 @@ log_history() {
 
 # Result checker
 check_result() {
+	# An unusable code silently disarms the check below.
+	case "${1:-}" in
+		'' | *[!0-9]*)
+			echo "Error: $(basename "$0") called check_result with an unusable exit code" \
+				"'${1:-}'${2:+ while reporting: $2}" >&2
+			echo "$(date +'%F %T') $(basename "$0") unusable check_result code '${1:-}': ${2:-}" \
+				>> "$HESTIA/log/error.log" 2> /dev/null
+			exit "$E_INVALID"
+			;;
+	esac
 	if [ $1 -ne 0 ]; then
 		local err_code="${3:-$1}"
 		if [[ -n "$CHECK_RESULT_CALLBACK" && "$(type -t "$CHECK_RESULT_CALLBACK")" == 'function' ]]; then
@@ -356,16 +429,34 @@ WEBMAIL_KNOWN_CLIENTS='roundcube tachyon'
 
 # Random password generator. The default matrix (A-Za-z0-9) is sed-replacement-safe (no /, &, \)
 # and callers rely on that when substituting into configs - a custom matrix must keep the property.
+# A random draw misses a requested class often enough to matter: 16 characters out of A-Za-z0-9
+# carry no digit in about 6 % of draws, and a database with a password policy rejects exactly those.
+# The filter can also return fewer characters than asked for, which used to pass silently.
 generate_password() {
-	matrix=$1
-	length=$2
-	if [ -z "$matrix" ]; then
-		matrix="A-Za-z0-9"
+	local matrix="${1:-A-Za-z0-9}" length="${2:-16}" attempt=0 pass='' classes=0
+	[[ "$matrix" == *A-Z* ]] && classes=$((classes + 1))
+	[[ "$matrix" == *a-z* ]] && classes=$((classes + 1))
+	[[ "$matrix" == *0-9* ]] && classes=$((classes + 1))
+	# The only request that cannot be met is fewer characters than classes, and that is knowable
+	# before the first draw. Caught here, the loop below cannot run out.
+	if [ "$length" -lt "$classes" ]; then
+		check_result "$E_INVALID" "cannot fit $classes character classes into $length characters"
 	fi
-	if [ -z "$length" ]; then
-		length=16
-	fi
-	head /dev/urandom | tr -dc $matrix | head -c$length
+	while [ "$attempt" -lt 100 ]; do
+		attempt=$((attempt + 1))
+		pass=$(head -c 4096 /dev/urandom | tr -dc "$matrix" | head -c "$length")
+		[ "${#pass}" -eq "$length" ] || continue
+		[[ "$matrix" == *A-Z* && ! "$pass" =~ [[:upper:]] ]] && continue
+		[[ "$matrix" == *a-z* && ! "$pass" =~ [[:lower:]] ]] && continue
+		[[ "$matrix" == *0-9* && ! "$pass" =~ [[:digit:]] ]] && continue
+		printf "%s" "$pass"
+		return 0
+	done
+	# Unreachable after the check above. If it were ever reached, printing the last candidate beats
+	# printing nothing: a caller that passes an empty password on could create an account without one.
+	echo "Warning: no password matching '$matrix' in $length characters after $attempt tries" >&2
+	printf "%s" "$pass"
+	return 1
 }
 
 # Package existence check
@@ -405,10 +496,37 @@ is_backup_enabled() {
 	fi
 }
 
-is_incremental_backup_enabled() {
-	BACKUPS_INCREMENTAL=$(grep "^BACKUPS_INCREMENTAL=" $USER_DATA/user.conf | cut -f2 -d \')
-	if [ -z "$BACKUPS_INCREMENTAL" ] || [[ "$BACKUPS_INCREMENTAL" != "yes" ]]; then
-		check_result "$E_DISABLED" "incremental backups are disabled"
+# The normalised repository base, rc=1 when unset. Pure, so the smoke guard can ask too.
+restic_repo_base() {
+	local _repo
+	[ -f "$HESTIA/conf/restic.conf" ] || return 1
+	_repo=$(sed -n "s/^REPO='\([^']*\)'.*/\1/p" "$HESTIA/conf/restic.conf" | head -1)
+	[ -n "$_repo" ] || return 1
+	case "$_repo" in */ | *:) ;; *) _repo="$_repo/" ;; esac
+	echo "$_repo"
+}
+
+# Is the repository base a local directory? Only an absolute path is. Our addon takes a local path
+# or rclone:remote:path, and restic itself also speaks sftp:, rest: and s3: - none of those is a
+# path, so a glob over one stays literal and an rm -rf on it removes nothing while the caller
+# believes it deleted. A relative path is not local either: it resolves against whatever directory
+# the command happened to start in. Anything unrecognised counts as remote on purpose - for a
+# destructive command that is the safe direction to be wrong in.
+restic_repo_is_local() {
+	case "$1" in /*) return 0 ;; esac
+	return 1
+}
+
+is_restic_repo_configured() {
+	REPO=$(restic_repo_base) \
+		|| check_result "$E_NOTEXIST" "no restic repository configured - run h-add-backup-host-restic"
+}
+
+is_backup_mode_restic() {
+	local _mode
+	_mode=$(sed -n "s/^.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$USER_DATA/user.conf" | head -1)
+	if [ "${_mode:-full}" != 'restic' ]; then
+		check_result "$E_DISABLED" "$user is not in restic backup mode (BACKUPS_MODE='${_mode:-full}')"
 	fi
 }
 
@@ -516,7 +634,7 @@ _parse_object_kv_list_php() {
 
 	str=${@//$'\n'/ }
 	validated_output=$(
-		"$HESTIA_PHP" -- "$str" << 'EOPHP'
+		SOURCE_CONF_PROTECTED="$SOURCE_CONF_PROTECTED $RECORD_ONLY_PROTECTED" "$HESTIA_PHP" -- "$str" << 'EOPHP'
 <?php
 declare(strict_types=1);
 
@@ -563,6 +681,20 @@ while ($unparsed !== '') {
     }
 
     $key_name = $m[1];
+
+    // Same protection as source_conf: the form of the key was checked, the NAME was not, so a
+    // record could bind PATH or BIN in the calling shell (#807). Hard failure - our own records
+    // never carry these, so one that does is an attack, not a version skew.
+    $protected = getenv('SOURCE_CONF_PROTECTED') ?: '';
+    $protected = preg_split('/\s+/', trim($protected), -1, PREG_SPLIT_NO_EMPTY);
+    if ($protected === []) {
+        // An empty list would silently protect nothing.
+        fail('Protected name list is empty - refusing to parse.');
+    }
+    if (in_array($key_name, $protected, true)) {
+        fail('Refused key name: ' . $key_name . ' is a protected shell or path name.');
+    }
+
     $unparsed = substr($unparsed, strlen($m[0]));
 
     $key_value = '';

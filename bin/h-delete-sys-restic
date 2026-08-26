@@ -1,0 +1,59 @@
+#!/bin/bash
+# info: remove restic and the incremental backup mode
+# options: NONE
+#
+# example: h-delete-sys-restic
+#
+# Removes the restic package and clears the server switch. Customer repositories and their
+# keys are NOT touched - deleting the tool must not delete backups (h-delete-user-backups-restic
+# is the explicit way). Refuses while a customer still runs in restic mode.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '0' "$#" 'NONE'
+
+# Derived from the records, not from a flag: a customer left in restic mode would silently
+# stop being backed up at all.
+in_mode=''
+for _u in $("$BIN/h-list-users" list 2> /dev/null); do
+	_m=$(sed -n "s/^.*BACKUPS_MODE='\([^']*\)'.*/\1/p" "$CONF_DIR/users/$_u/user.conf" 2> /dev/null | head -1)
+	[ "$_m" = 'restic' ] && in_mode="$in_mode $_u"
+done
+if [ -n "$in_mode" ]; then
+	check_result "$E_INUSE" "still in restic mode:$in_mode - move them to another backup mode first"
+fi
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+if dpkg -l restic 2> /dev/null | grep -q '^ii'; then
+	DEBIAN_FRONTEND=noninteractive apt-get -y -qq purge restic > /dev/null 2>&1
+fi
+# conf/restic.conf stays: it is the only record of WHERE the repositories are, and it is inert
+# without the package. Removing it would have kept the data and lost the address.
+repo=$(sed -n "s/^REPO='\([^']*\)'.*/\1/p" "$HESTIA/conf/restic.conf" 2> /dev/null | head -1)
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+$BIN/h-change-sys-config-value 'BACKUP_INCREMENTAL' 'no'
+echo "restic removed - repositories under ${repo:-(none configured)} and their keys were kept"
+log_event "$OK" "$ARGUMENTS"
+
+exit
