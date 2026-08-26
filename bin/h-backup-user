@@ -261,17 +261,14 @@ start_time=$(date '+%s')
 subj="$user → backup failed"
 email=$(grep CONTACT "$CONF_DIR/users/$ROOT_USER/user.conf" | cut -f 2 -d \')
 
-# BACKUP_TEMP first, because the check below has to know it: the tree is built THERE and the archive
-# lands in $BACKUP. The old check asked stat -f about $BACKUP alone - the wrong filesystem whenever
-# the two differ - and it stood ahead of this default, so it could not have read the value anyway.
+# Before the check below, which needs it: the tree is built in BACKUP_TEMP, the archive lands in
+# $BACKUP.
 if [ -z "$BACKUP_TEMP" ]; then
 	BACKUP_TEMP=$BACKUP
 fi
 
-# Booked per DEVICE (#805): the staging tree and the finished archive each want about the usage. On
-# one filesystem that adds up to the same 2x the old check used; on two it stops asking one of them
-# about the other's free space. Measured once - du over web, mail and the home is not a thing to run
-# twice, least of all on a box whose disk is already too full.
+# Booked per DEVICE (#805): staging tree and finished archive each want about the usage, which on
+# one filesystem adds up and on two does not. Measured once - du over the whole home is not cheap.
 _need=$(($(get_user_disk_usage) * 1048576))
 refusal=$(space_budget_refused "$BACKUP_TEMP:$_need" "$BACKUP:$_need") || {
 	case "$?" in
@@ -300,10 +297,7 @@ if ! maptbl=$(mktemp -d); then
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "can't create map table dir"
 fi
-# Both directories, and on EVERY exit: the staging tree is where a crashed run leaves its half-built
-# members, and only two of the paths out of here removed it - the success path and one error branch.
-# Every check_result in between simply left it behind, which is how a 34 MB leftover from an aborted
-# run turned up on the fleet. A backup that refuses to finish must not also refuse to tidy up.
+# Both, on EVERY exit: an abort leaves its half-built members in the staging tree otherwise.
 trap 'rm -rf "$maptbl" "$tmpdir"' EXIT
 
 # Backup sys configs
@@ -536,10 +530,7 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			_member="$tmpdir/web/$domain/domain_data.tar.gz"
 		fi
 		if ! backup_member_write "$_member" --sort=name "${fargs[@]}" -cpf- .; then
-			echo "Backup of $user aborted: web/$domain could not be written - the archive would be incomplete" \
-				| $SENDMAIL -s "$subj" "$email" "yes"
-			queue_drop_job "$CONF_DIR/queue/backup.pipe"
-			check_result "$E_DISK" "$user: web/$domain could not be written to $_member - refusing to finish a partial archive"
+			backup_member_abort "$user" "web/$domain" "$_member"
 		fi
 		backup_map_hash_verify "$maptbl/web.$domain.tbl"
 	done
@@ -629,10 +620,7 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 				_member="$tmpdir/mail/$domain/accounts.tar.gz"
 			fi
 			if ! backup_member_write "$_member" --sort=name -cpf- "${accounts[@]}"; then
-				echo "Backup of $user aborted: mail/$domain could not be written - the archive would be incomplete" \
-					| $SENDMAIL -s "$subj" "$email" "yes"
-				queue_drop_job "$CONF_DIR/queue/backup.pipe"
-				check_result "$E_DISK" "$user: mail/$domain could not be written to $_member - refusing to finish a partial archive"
+				backup_member_abort "$user" "mail/$domain" "$_member"
 			fi
 			backup_map_hash_verify "$maptbl/mail.$domain.tbl" "${accounts[@]}"
 		fi
@@ -706,12 +694,17 @@ if [ -n "$DB_SYSTEM" ] && [ "$DB" != '*' ]; then
 				pgsql) dump_pgsql_database ;;
 			esac
 
-			# Compress dump
+			# The source goes only once the compressed file is there AND complete: a truncated .zst
+			# beside a deleted original is the one outcome with no way back. A dump is checked for
+			# its engine's end marker, not just for a status - #823 with the extra tooth.
+			_member="$dump.$(backup_codec_suffix)"
 			if [ "$BACKUP_MODE" = 'zstd' ]; then
-				pzstd -$BACKUP_GZIP $dump
-				rm $dump
+				pzstd -$BACKUP_GZIP $dump && rm -f $dump
 			else
 				gzip -n -$BACKUP_GZIP $dump
+			fi
+			if ! backup_dump_complete "$_member"; then
+				backup_member_abort "$user" "database $database" "$_member"
 			fi
 		fi
 	done
@@ -733,8 +726,7 @@ if [ -n "$CRON_SYSTEM" ] && [ "$CRON" != '*' ]; then
 
 	# Backup cron.conf
 	cp $USER_DATA/cron.conf $tmpdir/cron/ 2> /dev/null
-	# From stdin and guarded: with the file absent, wc printed nothing and the count below tripped
-	# over an empty string ("integer expression expected") instead of reporting no jobs.
+	# From stdin and guarded: an absent file left the count empty and the test below died on it.
 	cron_record=0
 	[ -f "$USER_DATA/cron.conf" ] && cron_record=$(wc -l < "$USER_DATA/cron.conf")
 
@@ -787,9 +779,7 @@ if [ "$USER" != '*' ]; then
 		fi
 	done
 
-	# Saved, because both are lifted again at the end of the loop: an IFS left at newline reaches
-	# every later step - the map writer, the diff builder, all four transports and the record
-	# bookkeeping - and turns a local convenience into an inherited property nobody sees.
+	# Saved: both are lifted at the end of the loop, or newline splitting reaches every later step.
 	_ifs_saved=$IFS
 	IFS=$'\n'
 	set -f
@@ -815,10 +805,7 @@ if [ "$USER" != '*' ]; then
 				_member="$tmpdir/user_dir/$udir.tar.gz"
 			fi
 			if ! backup_member_write "$_member" --anchored --sort=name -cpf- "${fargs[@]}" $udir; then
-				echo "Backup of $user aborted: user_dir/$udir could not be written - the archive would be incomplete" \
-					| $SENDMAIL -s "$subj" "$email" "yes"
-				queue_drop_job "$CONF_DIR/queue/backup.pipe"
-				check_result "$E_DISK" "$user: user_dir/$udir could not be written to $_member - refusing to finish a partial archive"
+				backup_member_abort "$user" "user_dir/$udir" "$_member"
 			fi
 
 		fi

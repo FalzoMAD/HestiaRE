@@ -146,10 +146,8 @@ tmpdir=$(mktemp -p $BACKUP_TEMP -d) || {
 	queue_drop_job "$CONF_DIR/queue/backup.pipe"
 	check_result "$E_NOTEXIST" "Can't create tmp dir"
 }
-# On EVERY exit, not only the successful one: thirty-five check_result calls sit below this line and
-# none of them removed the directory, so an aborted restore left its unpacked members behind - one
-# was found on the fleet at 34 MB, holding a pam/shadow line. The success path removes it too; a
-# second rm on a gone directory costs nothing.
+# On EVERY exit: ten of the aborts below have no rm of their own and left the unpacked members
+# behind, pam material included.
 trap 'rm -rf "$tmpdir"' EXIT
 
 # Parts that did not come back. Collected through the run and reported at the end, so one broken
