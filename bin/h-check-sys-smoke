@@ -860,6 +860,47 @@ check_error_code_registry() {
 		no "$((conflict + dupes)) error code(s) out of step" "$first"
 	fi
 }
+# check_eval_sites - two named files used to be guarded one by one, which is a list nobody measures:
+# a new eval in a third file would have gone unseen. Derived instead - every eval used as a command
+# in bin/h-* and include/*.sh is found, and only the two that have a reason may remain.
+#
+# Whole-line comments are dropped BEFORE the search so the search can stay broad. Command position
+# is more than line start, ; & and |: `then eval`, `do eval` and `else eval` sit in it too, and the
+# narrow pattern that was here first missed all three - the very blind spot a hand-kept list has.
+# A trailing # is never stripped (it is not a comment in $#, ${v#p}, heredocs), so a comment that
+# writes "eval " can still match. That direction is a loud false positive; the other one is the hole
+# this guard exists to close.
+#
+# Does NOT cover: sbin/, web/, share/, and eval reached through a variable or an alias.
+check_eval_sites() {
+	local allowed="h-add-web-domain-ssl main.sh" f base extra='' hit='' miss='' scanned=0 carry=0
+	for f in "$HESTIA/bin"/h-* "$HESTIA/include"/*.sh; do
+		[ -f "$f" ] || continue
+		scanned=$((scanned + 1))
+		sed '/^[[:space:]]*#/d' "$f" | grep -qE '(^|[^[:alnum:]_])eval[[:space:]]' || continue
+		carry=$((carry + 1))
+		base=$(basename "$f")
+		hit="$hit $base"
+		case " $allowed " in *" $base "*) continue ;; esac
+		extra="$extra $base"
+	done
+	# Both known sites must still turn up. A sweep that looked at nothing, or one that lost sight of
+	# a site it used to see, shrank its reference set - which is worse than no guard, because green
+	# then means "looked at less" instead of "found nothing".
+	for base in $allowed; do
+		case " $hit " in *" $base "*) ;; *) miss="$miss $base" ;; esac
+	done
+	if [ "$scanned" -lt 400 ]; then
+		no "the eval-sweep scanned only $scanned file(s)" "expected all of $HESTIA/bin/h-* and $HESTIA/include/*.sh"
+	elif [ -n "$extra" ]; then
+		no "eval-use over record text outside the two known places" "$extra"
+	elif [ -n "$miss" ]; then
+		no "a known eval-site stopped matching - sweep or file changed" "$miss"
+	else
+		ok "no new eval-sites ($carry of $scanned scanned file(s) carry one, both known)"
+	fi
+}
+
 # check_protected_names - the floor that stops a record from binding PATH or BIN (#807). Two ways
 # it could go green while protecting nothing: the list empties, or a name in it is also a real
 # config key, in which case the floor locks that key out of every conf. Both are checked here, and
@@ -880,10 +921,54 @@ check_protected_names() {
 			[ -z "$first" ] && first="$name is both a $reg key and a protected name"
 		done
 	done
+	# Derived from the data, not from the compiled lists: a name can be a config key without being
+	# in any registry (BACKUP_TEMP was, and the floor swallowed it in silence). If a conf on this
+	# box carries a protected name as a key, the floor is dropping something real.
+	local pat live
+	pat="^($(tr -s ' \n' '||' <<< "$SOURCE_CONF_PROTECTED" | sed -e 's/^|//' -e 's/|$//'))="
+	live=$(grep -lE "$pat" "$HESTIA/conf"/*.conf "$CONF_DIR/users"/*/user.conf \
+		"$CONF_DIR/users"/*/backup-excludes.conf "$CONF_DIR/packages"/*.pkg "$CONF_DIR/ips"/* \
+		2> /dev/null | head -3 | tr '\n' ' ')
 	if [ "$bad" -gt 0 ]; then
 		no "$bad protected name(s) collide with a real config key" "$first"
+	elif [ -n "$live" ]; then
+		no "a protected name is used as a key in a live config" "$live"
 	else
 		ok "protected names hold and collide with no config key ($n names, $nregs registries)"
+	fi
+}
+# check_record_only_protected - RECORD_ONLY_PROTECTED carries names source_conf MUST accept (they
+# are honest hestia.conf / restic.conf keys) while the record parser must refuse them. Floor and
+# list differ only in WHERE a name is allowed, so the question this asks is: does one of them ever
+# appear as a key in a RECORD? BACKUP is deliberately absent from the list because it is one.
+#
+# Does NOT cover records inside an archive - refusing those is the parser's job, not this check's.
+check_record_only_protected() {
+	local n names f reads=0 bad='' pat
+	names="$RECORD_ONLY_PROTECTED"
+	n=$(wc -w <<< "$names")
+	if [ "${n:-0}" -lt 1 ]; then
+		no "the record-only protected list is empty" "RECORD_ONLY_PROTECTED in include/main.sh"
+		return
+	fi
+	pat="^[[:space:]]*($(tr -s ' \n' '||' <<< "$names" | sed -e 's/^|//' -e 's/|$//'))="
+	for f in "$CONF_DIR/users"/*/*.conf "$CONF_DIR/users"/*/mail/*.conf "$CONF_DIR/packages"/*.pkg; do
+		[ -f "$f" ] || continue
+		# Positive control per file: it must yield a key at all. Without it a clean result is
+		# indistinguishable from a sweep that read nothing.
+		if grep -qE '^[A-Z][A-Z0-9_]*=' "$f"; then
+			reads=$((reads + 1))
+		fi
+		if grep -qE "$pat" "$f"; then
+			bad="$bad $(basename "$(dirname "$f")")/$(basename "$f")"
+		fi
+	done
+	if [ "$reads" -eq 0 ]; then
+		no "the record sweep read no key from any record file" "looked under $CONF_DIR/users and $CONF_DIR/packages"
+	elif [ -n "$bad" ]; then
+		no "a record-only protected name is used as a record key" "$bad"
+	else
+		ok "record-only names appear in no record ($n names, $reads record file(s) read)"
 	fi
 }
 # check_protected_names_effective - the list above is a claim; this is the effect. A record that
@@ -1472,13 +1557,8 @@ echo "-- security invariants --"
 check_sudo_secret_leak
 # GHSA-fcq6: auth gate must not compare a bare $ROOT_USER (legit: $_SESSION["ROOT_USER"])
 check_source_absent "no bare \$ROOT_USER auth gate (GHSA-fcq6)" '\$ROOT_USER' "$HESTIA/web"
-# GHSA-cr7q: search-object commands must not eval raw conf-field payloads
-check_source_absent "no raw eval in search-object (GHSA-cr7q)" '(^|[^_])eval[[:space:]]' \
-	"$HESTIA/bin/h-search-user-object" "$HESTIA/bin/h-search-object"
-# GHSA-xffx class: include/ip.sh must not go back to eval-ing an IP conf as bash - it now parses via the
-# hardened source_conf and derefs with ${!var}. A reintroduced `eval` would re-open the sink.
-check_source_absent "no raw eval in include/ip.sh (GHSA-xffx class)" '(^|[^_])eval[[:space:]]' \
-	"$HESTIA/include/ip.sh"
+# GHSA-cr7q and the GHSA-xffx class were guarded file by file here; check_eval_sites covers both and
+# every other file besides, so the two named checks would only be a list to forget.
 # GHSA-xffx class: source_conf must keep its identifier guard on the key, or a
 # `key[$(cmd)]=` line in any parsed conf executes cmd through declare -g. Positive
 # check: the sink is shared by ~500 callers, so losing the guard is a silent hole.
@@ -1529,6 +1609,8 @@ check_restic_mode_supported
 check_restic_pairs
 check_protected_names
 check_protected_names_effective
+check_record_only_protected
+check_eval_sites
 check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
