@@ -52,6 +52,14 @@ if ! grep -q '"short_id"' <<< "$snap_json"; then
 	check_result "$E_NOTEXIST" "no snapshot $snapshot in the repository of $user"
 fi
 is_backup_scheduled 'restore'
+# The dispatch below implements exactly these four. Naming an unsupported value HERE keeps the
+# archive check from answering for an object it never looked up: without a default branch its case
+# left the field empty and the refusal then read "snapshot ... holds no udir called ..." - a claim
+# about the archive's contents produced by a branch that does not exist.
+case "$object" in
+	'' | web | mail | db | cron) ;;
+	*) check_result "$E_INVALID" "restore of '$object' is not supported - use web, mail, db or cron" ;;
+esac
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -68,12 +76,15 @@ if [ -n "$object" ] && [ "$object" != "cron" ]; then
 	fi
 	archived=$(restic_meta_cat "$meta_pkg" backup.conf) \
 		|| check_result "$E_PARSING" "$meta_pkg has no readable backup.conf"
+	# Exhaustive: the guard in Verifications already rejected everything but these three and cron.
 	case "$object" in
 		web) field=$(sed -n "s/.*WEB='\([^']*\)'.*/\1/p" <<< "$archived") ;;
 		mail) field=$(sed -n "s/.*MAIL='\([^']*\)'.*/\1/p" <<< "$archived") ;;
 		db) field=$(sed -n "s/.*DB='\([^']*\)'.*/\1/p" <<< "$archived") ;;
 	esac
-	if ! grep -qx "$value" <<< "$(tr ',' '\n' <<< "$field")"; then
+	# -F: a domain name carries dots, and as a regex . matches any character - archived aXb.com
+	# would let a.b.com through and the restore would run on a name that was never in the snapshot.
+	if ! grep -qxF "$value" <<< "$(tr ',' '\n' <<< "$field")"; then
 		check_result "$E_NOTEXIST" "snapshot $snapshot holds no $object called $value for $user"
 	fi
 fi

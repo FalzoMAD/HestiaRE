@@ -14,11 +14,19 @@
 # Deliberately NOT here, because each is a legitimate key in some conf and would be locked out:
 # ROOT_USER (hestia.conf), REPO (restic.conf), BACKUP (backup records), BACKUP_TEMP (an optional
 # hestia.conf knob - h-restore-user, h-import-cpanel and h-import-directadmin read it and fall back
-# to $BACKUP). The floor cannot protect a name that also has honest work; the archive side is
-# covered by the allowlist at the boundary, and none of the registries carries these names.
+# to $BACKUP). The floor cannot protect a name that also has honest work.
 SOURCE_CONF_PROTECTED="PATH IFS ENV BASH_ENV BASHOPTS SHELLOPTS CDPATH GLOBIGNORE PROMPT_COMMAND
 PS1 PS2 PS3 PS4 LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT HISTFILE BASH_XTRACEFD FUNCNAME
 HESTIA HESTIA_PHP BIN SBIN CONF_DIR HOMEDIR USER_DATA SENDMAIL SOURCE_CONF_PROTECTED"
+
+# Two sinks, two floors. source_conf reads CONFIGS, where these three are honest keys, so it must
+# keep accepting them. parse_object_kv_list reads RECORDS, where they are not fields at all - only
+# BACKUP is one (the archive name), which is why BACKUP is absent here. Taking BACKUP_TEMP off the
+# floor for hestia.conf's sake would otherwise have dropped it on the record side too, where an
+# archived backup.conf reaches the parser (h-restore-{web-domain,mail-domain,database}-restic) and
+# could rebind the directory a later mktemp writes into. Measured: on all four targets BACKUP is a
+# record key in three files per box, these three in none.
+RECORD_ONLY_PROTECTED="ROOT_USER REPO BACKUP_TEMP"
 
 is_protected_key() {
 	case " ${SOURCE_CONF_PROTECTED//$'\n'/ } " in *" $1 "*) return 0 ;; esac
@@ -615,7 +623,7 @@ _parse_object_kv_list_php() {
 
 	str=${@//$'\n'/ }
 	validated_output=$(
-		SOURCE_CONF_PROTECTED="$SOURCE_CONF_PROTECTED" "$HESTIA_PHP" -- "$str" << 'EOPHP'
+		SOURCE_CONF_PROTECTED="$SOURCE_CONF_PROTECTED $RECORD_ONLY_PROTECTED" "$HESTIA_PHP" -- "$str" << 'EOPHP'
 <?php
 declare(strict_types=1);
 
