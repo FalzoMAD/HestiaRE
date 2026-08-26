@@ -29,6 +29,9 @@ json_list() {
 	echo '['
 	echo "$report" | while IFS='|' read -r kind owner item detail; do
 		[ -n "$kind" ] || continue
+		# json_escape, not hand-quoting (#717): every emitter goes through the one definition, or
+		# the first value carrying a " or a backslash produces a document nobody can decode.
+		json_escape kind owner item detail
 		echo "  {\"KIND\": \"$kind\", \"OWNER\": \"$owner\", \"ITEM\": \"$item\", \"DETAIL\": \"$detail\"},"
 	done | sed '$ s/,$//'
 	echo ']'
@@ -58,6 +61,12 @@ check_args '0' "$#" '[FORMAT]'
 
 repo=$(restic_repo_base) || check_result "$E_NOTEXIST" "no restic repository configured"
 command -v restic > /dev/null 2>&1 || check_result "$E_NOTEXIST" "restic is not installed"
+# The sweep below globs the base as a directory. On a remote base the glob stays literal, the loop
+# never runs, and the report would read "0 finding(s)" for a box on which nothing was looked at.
+# Said out loud rather than left to the reach counters, which only a careful reader reaches.
+if ! restic_repo_is_local "$repo"; then
+	check_result "$E_NOTEXIST" "the repository base $repo is remote - this report only inspects a local base, so it can say nothing about what is there"
+fi
 
 #----------------------------------------------------------#
 #                       Action                             #

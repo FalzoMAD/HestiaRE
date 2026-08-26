@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: backup system user with all its objects
-# options: USER NOTIFY
+# options: USER [NOTIFY] [EXPORT]
 #
 # example: h-backup-user admin yes
 #
@@ -13,6 +13,9 @@
 # Argument definition
 user=$1
 notify=${2-no}
+# An ARGUMENT, not an environment prefix: the consent word in C.5 was made an argument for the same
+# reason (GHSA-2xw3), and a second control channel through the environment reopens what that closed.
+export_run=${3-no}
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -200,14 +203,34 @@ get_user_disk_usage() {
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '1' "$#" 'USER [NOTIFY]'
+check_args '1' "$#" 'USER [NOTIFY] [EXPORT]'
 is_format_valid 'user'
+case "$export_run" in
+	yes | no) ;;
+	*) check_result "$E_INVALID" "EXPORT must be yes or no" ;;
+esac
 is_system_enabled "$BACKUP_SYSTEM" 'BACKUP_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 if [ "$POLICY_BACKUP_SUSPENDED_USERS" != "yes" ]; then
 	is_object_unsuspended 'user' 'USER' "$user"
 fi
 is_backup_enabled
+# The limit belongs where the exempt record is written, not in the wrapper: this command is what
+# anyone calls directly, and the record it writes carries ADOPTED='yes' - which no rotation ever
+# touches. An export is a deliberate artefact, so the limit refuses and names what is already there
+# instead of clearing the oldest away (D5). Unset means two.
+if [ "$export_run" = 'yes' ]; then
+	_limit="${BACKUP_EXPORT_LIMIT:-2}"
+	case "$_limit" in '' | *[!0-9]*) _limit=2 ;; esac
+	_existing=$(grep -E "(^| )MODE='export'( |$)" "$USER_DATA/backup.conf" 2> /dev/null \
+		| sed -n "s/^BACKUP='\([^']*\)'.*/\1/p")
+	_count=$(grep -c . <<< "$_existing")
+	if [ "$_count" -ge "$_limit" ]; then
+		echo "Exports of $user ($_count, limit $_limit):"
+		sed 's/^/  /' <<< "$_existing"
+		check_result "$E_LIMIT" "$user already has $_count export(s) - delete one with h-delete-user-backup before writing another"
+	fi
+fi
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -916,7 +939,7 @@ backup_str="$backup_str WEB_SYSTEM='$WEB_SYSTEM' PROXY_SYSTEM='$PROXY_SYSTEM'"
 backup_str="$backup_str MAP='$map_records'"
 # An export is the same archive, marked: ADOPTED keeps it out of the rotation through the mechanism
 # that already exists for operator-placed files, and MODE says what it is in every listing.
-if [ "${BACKUP_EXPORT:-no}" = 'yes' ]; then
+if [ "$export_run" = 'yes' ]; then
 	backup_str="$backup_str MODE='export' BASE='' ADOPTED='yes'"
 else
 	backup_str="$backup_str MODE='$([ -n "$diff_base" ] && echo diff || echo full)' BASE='$diff_base'"

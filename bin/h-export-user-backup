@@ -39,23 +39,14 @@ is_object_unsuspended 'user' 'USER' "$user"
 #                       Action                             #
 #----------------------------------------------------------#
 
-# An export is a deliberate artefact, so the limit refuses and names what is already there instead
-# of clearing the oldest away (D5). Unset means two.
-limit="${BACKUP_EXPORT_LIMIT:-2}"
-case "$limit" in '' | *[!0-9]*) limit=2 ;; esac
-existing=$(grep -E "(^| )MODE='export'( |$)" "$USER_DATA/backup.conf" 2> /dev/null \
-	| sed -n "s/^BACKUP='\([^']*\)'.*/\1/p")
-count=$(grep -c . <<< "$existing")
-if [ "$count" -ge "$limit" ]; then
-	echo "Exports of $user ($count, limit $limit):"
-	sed 's/^/  /' <<< "$existing"
-	check_result "$E_LIMIT" "$user already has $count export(s) - delete one with h-delete-user-backup before writing another"
-fi
-
-# The ordinary run, told to mark its record. Nothing else about it changes: same tar, same members,
-# same map, same listing.
-BACKUP_EXPORT='yes' $BIN/h-backup-user "$user" "$notify"
-check_result $? "the export run of $user failed"
+# The ordinary run, told by ARGUMENT to mark its record. Nothing else about it changes: same tar,
+# same members, same map, same listing. BACKUP_EXPORT_LIMIT is enforced in there, where the exempt
+# record is actually written - a limit in this wrapper would miss everyone who calls h-backup-user
+# directly, which is anyone who uses the CLI at all.
+# Its exit code, not a second message: the inner command already names the reason - the limit with
+# the exports it found, or whatever the backup itself failed on - and a generic line under it only
+# invites the reader to look for a different cause.
+$BIN/h-backup-user "$user" "$notify" yes || exit $?
 
 #----------------------------------------------------------#
 #                       Hestia                             #

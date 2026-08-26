@@ -22,13 +22,21 @@ opens above it.
   `h-list-sys-backup-orphans-restic` names what is left over; it walks the repository DIRECTORIES
   under the base rather than the customer list, for the same reason, and reports an unreadable
   repository as its own kind instead of blaming every package in it for a broken line. The manual
-  full export is not a fourth mode but one ordinary archive run (`h-export-user-backup`), so what
-  comes out is the format that adoption, probe, report and restore already handle - that is how a
-  restic customer migrates without ever rebuilding an archive out of snapshots. Its record carries
-  `MODE='export'` and `ADOPTED='yes'`, which keeps it out of the rotation through the mechanism
-  operator-placed files already use (adopted names leave the list BEFORE counting, so an export
-  neither rotates nor pushes another archive out), and `BACKUP_EXPORT_LIMIT` (default 2) refuses
-  and names the existing exports rather than clearing the oldest away. In the panel the Backups tab
+  full export is not a fourth mode but one ordinary archive run (`h-backup-user USER NOTIFY yes`,
+  wrapped by `h-export-user-backup`), so what comes out is the format that adoption, probe, report
+  and restore already handle - that is how a restic customer migrates without ever rebuilding an
+  archive out of snapshots. Its record carries `MODE='export'` and `ADOPTED='yes'`, which keeps it
+  out of the rotation through the mechanism operator-placed files already use (adopted names leave
+  the list BEFORE counting, so an export neither rotates nor pushes another archive out), and
+  `BACKUP_EXPORT_LIMIT` (default 2) refuses and names the existing exports rather than clearing the
+  oldest away. Both the marker and the limit live in `h-backup-user`, reached by an ARGUMENT and
+  not by an environment prefix: the consent word was made an argument for that reason (GHSA-2xw3),
+  and a limit in the wrapper would have missed everyone calling the inner command directly - which
+  is anyone who uses the CLI. Neither command touches a REMOTE repository base: `sftp:` and
+  `rclone:` targets are not paths, so the deletion would have removed the metadata packages (which
+  carry the only spare copy of the repository key) while the repository itself stayed, and reported
+  success; the orphan report would have swept a base its glob never expanded. Both now refuse by
+  name and say where to look instead. In the panel the Backups tab
   branches on `BACKUPS_MODE` instead of hiding snapshots behind a second button, with `?archives=1`
   as the way back to the archives from before the switch and to the exports, which are marked as
   such with why: retention does not rotate them. Two defects fell out of measuring it over HTTP

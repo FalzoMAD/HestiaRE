@@ -35,6 +35,15 @@ check_args '1' "$#" 'USER [CONSENT]'
 is_format_valid 'user'
 
 repo=$(restic_repo_base) || check_result "$E_NOTEXIST" "no restic repository configured"
+# A remote base is not a path: the rm -rf below would remove nothing while the rm -f took the
+# metadata packages - and those carry the only other copy of the repository key. The result would be
+# an intact repository nobody can open any more, reported as a successful deletion.
+if ! restic_repo_is_local "$repo"; then
+	echo "The repository base is $repo, which is not a local path."
+	echo "Delete it where it lives (for an rclone target: rclone purge <remote>:<path>/$user),"
+	echo "then remove $BACKUP/$user/$user.*.meta.tgz here."
+	check_result "$E_FORBIDEN" "cannot delete a remote repository from here - the packages hold the only spare key, so removing them alone would lock the data away instead of deleting it"
+fi
 
 #----------------------------------------------------------#
 #                       Action                             #
