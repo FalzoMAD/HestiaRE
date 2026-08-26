@@ -1189,15 +1189,17 @@ restic_excludes() {
 	return 0
 }
 
-# Upper bound for the raw dumps, from the live databases - a stale record would under-count.
-restic_dump_space_needed() {
-	# The connect helpers set USER/PASSWORD/PORT globally; contained here except PORT, which they
-	# unset first - that drops the local binding and the assignment lands outside.
-	local _u="$1" _line _db _type _sum=0 usage database TYPE HOST USER PASSWORD PORT mycnf host_str
+# What the dumps really weigh, measured with the very command that writes them - a probe with its
+# own command line drifts from the real one the day a flag changes. Roughly a minute per 9 GB, which
+# is nothing against a backup run (#805). Returns bytes; a failed dump returns 1 and no number.
+restic_dump_size_measured() {
+	local _u="$1" _line _db _type _sum=0 _bytes _rc _scratch
+	local database TYPE HOST USER PASSWORD PORT mycnf host_str
 	[ -f "$CONF_DIR/users/$_u/db.conf" ] || {
 		echo 0
 		return 0
 	}
+	_scratch=$(mktemp -d) || return 1
 	while read -r _line; do
 		_db=$(sed -n "s/.*DB='\([^']*\)'.*/\1/p" <<< "$_line")
 		_type=$(sed -n "s/.*TYPE='\([^']*\)'.*/\1/p" <<< "$_line")
@@ -1205,24 +1207,95 @@ restic_dump_space_needed() {
 		database="$_db"
 		TYPE="$_type"
 		HOST=$(sed -n "s/.*HOST='\([^']*\)'.*/\1/p" <<< "$_line")
-		usage=0
-		case "$_type" in
-			# Not get_mysql_disk_usage: it adds index_length, which a dump does not carry - on a
-			# schema with four secondary indexes that asked for 62 MB for an 8 MB dump (measured).
-			mysql)
-				mysql_connect "$HOST"
-				usage=$(mysql_query "SELECT ROUND(SUM(data_length)/1024/1024) FROM information_schema.TABLES
-					WHERE table_schema='$database'" | tail -n1)
-				case "$usage" in '' | NULL | *[!0-9]*) usage=1 ;; esac
-				[ "$usage" -gt 0 ] || usage=1
+		# The dump's own exit code, never wc's: a dump that fails measures zero bytes and would wave
+		# through the very check it feeds. The subshell also contains the dump helpers' `rm -rf
+		# $tmpdir` and their `exit` on error.
+		_bytes=$(
+			tmpdir="$_scratch"
+			notify='no'
+			case "$_type" in
+				mysql)
+					mysql_connect "$HOST"
+					mysql_dump /dev/stdout "$_db" | wc -c
+					exit "${PIPESTATUS[0]}"
+					;;
+				pgsql)
+					psql_connect "$HOST"
+					psql_dump /dev/stdout "$_db" | wc -c
+					exit "${PIPESTATUS[0]}"
+					;;
+				*) exit 1 ;;
+			esac
+		)
+		_rc=$?
+		case "$_rc:$_bytes" in
+			0:*[0-9]) _sum=$((_sum + _bytes)) ;;
+			*)
+				rm -rf "$_scratch"
+				return 1
 				;;
-			# pg_database_size stays: with --inserts the text can outgrow the heap (measured 1.79x).
-			pgsql) get_pgsql_disk_usage 2> /dev/null ;;
 		esac
-		_sum=$((_sum + ${usage:-0}))
 	done < "$CONF_DIR/users/$_u/db.conf"
-	# Half again on top: measured worst case 0.88 (mysql, on data) and 0.89 (pgsql, on database size).
-	echo $((_sum + _sum / 2))
+	rm -rf "$_scratch"
+	echo "$_sum"
+}
+
+# What a first snapshot will add: the home tree the backup actually walks. The exclude list comes
+# from restic_excludes, the same one restic is handed, so a customer exclusion cannot make the two
+# disagree - a second hand-built list would drift on the day someone excludes a directory. Bytes;
+# returns 1 and no number if du cannot read the tree.
+restic_home_size_measured() {
+	local _u="$1" _x _ex=() _out
+	while read -r _x; do
+		[ -n "$_x" ] && _ex+=(--exclude="$_x")
+	done < <(restic_excludes "$_u")
+	_out=$(nice -n 19 du -sb "${_ex[@]}" "$HOMEDIR/$_u" 2> /dev/null | cut -f1)
+	case "$_out" in '' | *[!0-9]*) return 1 ;; esac
+	echo "$_out"
+}
+
+# The demands of one run, booked per FILESYSTEM: two paths on one device share its free space, so
+# there they add up, and on separate devices each stands alone. Identified by device number, not by
+# path text - /backup can be a symlink or a bind mount. Upstream books a full backup at twice the
+# archive for the same reason, only without measuring. A reserve on top, because filling a device to
+# the last byte hurts every customer on it, not just this run.
+#
+# Does NOT cover: what a repeat snapshot adds to an existing repository. That is the delta against
+# what the repository already holds, and nothing short of the backup itself knows it - restic's own
+# stats would be a remembered number, the very kind that was dropped for the dumps. So a later run
+# is booked at its dumps only, and a repository that grows past the reserve is caught by the run
+# after it, not by this one.
+space_budget_refused() {
+	local _spec _path _need _dev _free _total _reserve _first _df
+	declare -A _by_dev=()
+	declare -A _paths=()
+	for _spec in "$@"; do
+		_path="${_spec%:*}"
+		_need="${_spec##*:}"
+		# Every argument must mean something. A path that should be there and is not used to be
+		# skipped in silence, which dropped its whole demand and let the barrier say yes.
+		case "$_need" in '' | *[!0-9]*) return 2 ;; esac
+		[ -d "$_path" ] || return 2
+		[ "$_need" -gt 0 ] || continue
+		_dev=$(stat -c %d "$_path" 2> /dev/null) || return 2
+		_by_dev[$_dev]=$((${_by_dev[$_dev]:-0} + _need))
+		_paths[$_dev]="${_paths[$_dev]:+${_paths[$_dev]} and }$_path"
+	done
+	for _dev in "${!_by_dev[@]}"; do
+		_first=${_paths[$_dev]%% and *}
+		# One df, one moment: two calls gave the two numbers of the comparison different ages.
+		_df=$(df -PB1 "$_first" 2> /dev/null) || return 2
+		read -r _total _free <<< "$(awk 'END {print $2, $4}' <<< "$_df")"
+		case "$_total" in '' | *[!0-9]*) return 2 ;; esac
+		case "$_free" in '' | *[!0-9]*) return 2 ;; esac
+		_reserve=$((_total / 20))
+		if [ "$((${_by_dev[$_dev]} + _reserve))" -gt "$_free" ]; then
+			echo "${_paths[$_dev]} needs $((${_by_dev[$_dev]} / 1048576)) MB plus a" \
+				"$((_reserve / 1048576)) MB reserve, $((_free / 1048576)) MB free"
+			return 1
+		fi
+	done
+	return 0
 }
 
 # The package that belongs to a snapshot: over the tag the snapshot carries, and if that is gone,
