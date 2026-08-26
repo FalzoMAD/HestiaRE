@@ -1240,29 +1240,53 @@ restic_dump_size_measured() {
 	echo "$_sum"
 }
 
+# What a first snapshot will add: the home tree the backup actually walks. The exclude list comes
+# from restic_excludes, the same one restic is handed, so a customer exclusion cannot make the two
+# disagree - a second hand-built list would drift on the day someone excludes a directory. Bytes;
+# returns 1 and no number if du cannot read the tree.
+restic_home_size_measured() {
+	local _u="$1" _x _ex=() _out
+	while read -r _x; do
+		[ -n "$_x" ] && _ex+=(--exclude="$_x")
+	done < <(restic_excludes "$_u")
+	_out=$(nice -n 19 du -sb "${_ex[@]}" "$HOMEDIR/$_u" 2> /dev/null | cut -f1)
+	case "$_out" in '' | *[!0-9]*) return 1 ;; esac
+	echo "$_out"
+}
+
 # The demands of one run, booked per FILESYSTEM: two paths on one device share its free space, so
 # there they add up, and on separate devices each stands alone. Identified by device number, not by
 # path text - /backup can be a symlink or a bind mount. Upstream books a full backup at twice the
 # archive for the same reason, only without measuring. A reserve on top, because filling a device to
 # the last byte hurts every customer on it, not just this run.
+#
+# Does NOT cover: what a repeat snapshot adds to an existing repository. That is the delta against
+# what the repository already holds, and nothing short of the backup itself knows it - restic's own
+# stats would be a remembered number, the very kind that was dropped for the dumps. So a later run
+# is booked at its dumps only, and a repository that grows past the reserve is caught by the run
+# after it, not by this one.
 space_budget_refused() {
-	local _spec _path _need _dev _free _total _reserve _first
+	local _spec _path _need _dev _free _total _reserve _first _df
 	declare -A _by_dev=()
 	declare -A _paths=()
 	for _spec in "$@"; do
 		_path="${_spec%:*}"
 		_need="${_spec##*:}"
-		case "$_need" in '' | *[!0-9]*) continue ;; esac
+		# Every argument must mean something. A path that should be there and is not used to be
+		# skipped in silence, which dropped its whole demand and let the barrier say yes.
+		case "$_need" in '' | *[!0-9]*) return 2 ;; esac
+		[ -d "$_path" ] || return 2
 		[ "$_need" -gt 0 ] || continue
-		[ -d "$_path" ] || continue
 		_dev=$(stat -c %d "$_path" 2> /dev/null) || return 2
 		_by_dev[$_dev]=$((${_by_dev[$_dev]:-0} + _need))
 		_paths[$_dev]="${_paths[$_dev]:+${_paths[$_dev]} and }$_path"
 	done
 	for _dev in "${!_by_dev[@]}"; do
 		_first=${_paths[$_dev]%% and *}
-		_free=$(df -PB1 "$_first" | tail -1 | awk '{print $4}')
-		_total=$(df -PB1 "$_first" | tail -1 | awk '{print $2}')
+		# One df, one moment: two calls gave the two numbers of the comparison different ages.
+		_df=$(df -PB1 "$_first" 2> /dev/null) || return 2
+		read -r _total _free <<< "$(awk 'END {print $2, $4}' <<< "$_df")"
+		case "$_total" in '' | *[!0-9]*) return 2 ;; esac
 		case "$_free" in '' | *[!0-9]*) return 2 ;; esac
 		_reserve=$((_total / 20))
 		if [ "$((${_by_dev[$_dev]} + _reserve))" -gt "$_free" ]; then

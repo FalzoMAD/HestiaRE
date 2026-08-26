@@ -88,11 +88,31 @@ repo_need=0
 repo_dir=""
 case "$REPO" in
 	*://* | *:*/*) ;;
-	*) [ -d "$REPO" ] && repo_dir="$REPO" && repo_need="$need" ;;
+	*)
+		if [ -d "$REPO" ]; then
+			repo_dir="$REPO"
+			repo_need="$need"
+			# A first snapshot carries the whole home in as well, and that is the bigger of the two
+			# posts. Booked only when the repository holds nothing for this user yet - a later run
+			# adds a delta this cannot know; that term is named in space_budget_refused, not booked.
+			# A repository that cannot be read counts as first-run: over-booking is the safe way for
+			# a barrier to be wrong.
+			if ! restic --repo "$REPO$user" --password-file "$USER_DATA/restic.conf" --json snapshots \
+				--latest 1 2> /dev/null | grep -q '"short_id"'; then
+				home_bytes=$(restic_home_size_measured "$user") \
+					|| check_result "$E_DISK" "cannot measure the home tree of $user - du failed on $HOMEDIR/$user"
+				repo_need=$((repo_need + home_bytes))
+			fi
+		fi
+		;;
 esac
 # The home stands in for the stage: the stage does not exist yet at this point, and it is created
-# inside the home, so it is the same filesystem. Bound to the command, not to the line order.
-refusal=$(space_budget_refused "$HOMEDIR/$user:$need" "${repo_dir:-/nonexistent}:$repo_need") || {
+# inside the home, so it is the same filesystem. The repository is an argument only when it is
+# local - no placeholder path, so the function may treat a missing directory as an error rather
+# than silently dropping its demand. Bound to the command, not to the line order.
+budget=("$HOMEDIR/$user:$need")
+[ -n "$repo_dir" ] && budget+=("$repo_dir:$repo_need")
+refusal=$(space_budget_refused "${budget[@]}") || {
 	case "$?" in
 		1)
 			echo "Not enough space for the backup of $user: $refusal" | $SENDMAIL -s "$subj" "$email" "yes"
