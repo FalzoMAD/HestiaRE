@@ -901,6 +901,37 @@ check_eval_sites() {
 	fi
 }
 
+# check_yescrypt_hashing - the panel login of every account whose /etc/shadow entry is yescrypt runs
+# through mkpasswd from the whois package, and yescrypt is the PAM default on all four targets. If
+# the binary is gone or its libcrypt cannot do yescrypt, NOBODY logs in and the panel says "invalid
+# password" - a total outage wearing the mask of a typo. So this asks by doing the thing the login
+# does: hash a known string, then reproduce it from its own setting, which is the exact comparison
+# h-check-user-password makes against the shadow entry.
+#
+# Does NOT cover md5/sha-512/des accounts - those go through h-generate-password-hash (perl crypt).
+check_yescrypt_hashing() {
+	local ref again setting probe='hestia-smoke-probe'
+	if ! command -v mkpasswd > /dev/null 2>&1; then
+		no "mkpasswd is missing - no yescrypt account can log in" "the whois package provides it"
+		return
+	fi
+	ref=$(mkpasswd -m yescrypt "$probe" 2> /dev/null)
+	case "$ref" in
+		'$y$'*) ;;
+		*)
+			no "mkpasswd cannot produce a yescrypt hash" "it returned '${ref:-nothing}' - check libcrypt"
+			return
+			;;
+	esac
+	setting="${ref%\$*}\$"
+	again=$(mkpasswd "$probe" "$setting" 2> /dev/null)
+	if [ "$again" != "$ref" ]; then
+		no "yescrypt hashing does not reproduce from its own setting" "every panel login would be refused"
+	else
+		ok "yescrypt hashing works and reproduces from its setting"
+	fi
+}
+
 # check_protected_names - the floor that stops a record from binding PATH or BIN (#807). Two ways
 # it could go green while protecting nothing: the list empties, or a name in it is also a real
 # config key, in which case the floor locks that key out of every conf. Both are checked here, and
@@ -1611,6 +1642,7 @@ check_protected_names
 check_protected_names_effective
 check_record_only_protected
 check_eval_sites
+check_yescrypt_hashing
 check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
