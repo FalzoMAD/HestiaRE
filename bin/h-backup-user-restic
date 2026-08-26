@@ -125,7 +125,12 @@ refusal=$(space_budget_refused "${budget[@]}") || {
 # Only stale locks, never --remove-all: a running nightly job would lose its own.
 restic --repo "$REPO$user" --password-file $USER_DATA/restic.conf unlock > /dev/null 2>&1
 
-$BIN/h-backup-user-config "$user"
+# Its status is read: the staging writes backup.conf LAST, so a run that dies half way leaves a
+# package describing only the sections it got through - and this used to report success over it.
+if ! $BIN/h-backup-user-config "$user"; then
+	echo "Staging the metadata of $user failed - no snapshot written" | $SENDMAIL -s "$subj" "$email" "yes"
+	check_result "$E_BACKUP" "h-backup-user-config failed for $user - refusing to write a snapshot with half its metadata"
+fi
 
 export GOMAXPROCS=2
 export RESTIC_READ_CONCURRENCY=2

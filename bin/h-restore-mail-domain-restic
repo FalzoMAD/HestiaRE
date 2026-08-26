@@ -212,6 +212,20 @@ for domain in "${domains[@]}"; do
 		# Restoring email accounts
 		cp -f $tmpdir/mail/$domain/hestia/$domain.conf $USER_DATA/mail/
 
+		# The autoreply text is CONTENT and nothing regenerates it - without this the account comes
+		# back with AUTOREPLY='yes' and no text behind it (#826). Both copies: the record-side one
+		# and the one exim reads.
+		if compgen -G "$tmpdir/mail/$domain/hestia/*@$domain.msg" > /dev/null; then
+			cp -f $tmpdir/mail/$domain/hestia/*@$domain.msg $USER_DATA/mail/
+			chmod 660 $USER_DATA/mail/*@$domain.msg
+		fi
+		if compgen -G "$tmpdir/mail/$domain/conf/autoreply.*.msg" > /dev/null; then
+			mkdir -p $HOMEDIR/$user/conf/mail/$domain
+			cp -f $tmpdir/mail/$domain/conf/autoreply.*.msg $HOMEDIR/$user/conf/mail/$domain/
+			chown $MAIL_USER:mail $HOMEDIR/$user/conf/mail/$domain/autoreply.*.msg
+			chmod 660 $HOMEDIR/$user/conf/mail/$domain/autoreply.*.msg
+		fi
+
 		domain_idn=$domain
 		format_domain_idn
 

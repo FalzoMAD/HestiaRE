@@ -921,6 +921,21 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		# Restoring email accounts
 		cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/$domain.conf $USER_DATA/mail/
 
+		# The autoreply text is CONTENT, not a rendered file: rebuild_mail_domain_conf recreates
+		# accounts, aliases, antispam, passwd, fwd_only and limits from the records, but nothing can
+		# recreate a message nobody stored. Both copies come back - the record-side one and the one
+		# exim reads - or the account restores with AUTOREPLY='yes' and no text behind it (#826).
+		if compgen -G "$tmpdir/mail/$domain/$BACKUP_CONTAINER/*@$domain.msg" > /dev/null; then
+			cp -f $tmpdir/mail/$domain/$BACKUP_CONTAINER/*@$domain.msg $USER_DATA/mail/
+			chmod 660 $USER_DATA/mail/*@$domain.msg
+		fi
+		if compgen -G "$tmpdir/mail/$domain/conf/autoreply.*.msg" > /dev/null; then
+			mkdir -p $HOMEDIR/$user/conf/mail/$domain
+			cp -f $tmpdir/mail/$domain/conf/autoreply.*.msg $HOMEDIR/$user/conf/mail/$domain/
+			chown $MAIL_USER:mail $HOMEDIR/$user/conf/mail/$domain/autoreply.*.msg
+			chmod 660 $HOMEDIR/$user/conf/mail/$domain/autoreply.*.msg
+		fi
+
 		domain_idn=$domain
 		format_domain_idn
 

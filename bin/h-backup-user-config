@@ -147,11 +147,11 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			elif [ -e "$HOMEDIR/$user/conf/web/$domain.$WEB_SYSTEM.ssl.conf" ]; then
 				cp $HOMEDIR/$user/conf/web/$domain.$WEB_SYSTEM.ssl.conf* conf/
 			else
-				# legacy format: all domain configs in single file
-				tpl_file=$(web_template_file "$WEB_SYSTEM" "$TPL" 'stpl')
-				conf="$HOMEDIR/$user/conf/web/s$WEB_SYSTEM.conf"
-				get_web_config_lines "$tpl_file" "$conf"
-				sed -n "$top_line,$bottom_line p" $conf > conf/s$WEB_SYSTEM.conf
+				# Same as the archive path since #593: a merged template keeps the SSL block in the
+				# .conf, so there is no standalone .ssl.conf and only the include fragments are
+				# copied. The old form here parsed a .stpl that merged templates do not have, and
+				# killed the whole staging (#826).
+				cp $HOMEDIR/$user/conf/web/$domain/$WEB_SYSTEM.ssl.conf_* conf/ 2> /dev/null || true
 			fi
 		fi
 
@@ -177,11 +177,11 @@ if [ -n "$WEB_SYSTEM" ] && [ "$WEB" != '*' ]; then
 			elif [ -e "$HOMEDIR/$user/conf/web/$domain.$PROXY_SYSTEM.ssl.conf" ]; then
 				cp $HOMEDIR/$user/conf/web/$domain.$PROXY_SYSTEM.ssl.conf* conf/
 			else
-				# legacy format: all domain configs in single file
-				tpl_file=$(web_template_file "$PROXY_SYSTEM" "$PROXY" 'stpl')
-				conf="$HOMEDIR/$user/conf/web/s$PROXY_SYSTEM.conf"
-				get_web_config_lines "$tpl_file" "$conf"
-				sed -n "$top_line,$bottom_line p" $conf > conf/s$PROXY_SYSTEM.conf
+				# Same as the archive path since #593: a merged template keeps the SSL block in the
+				# .conf, so there is no standalone .ssl.conf and only the include fragments are
+				# copied. The old form here parsed a .stpl that merged templates do not have, and
+				# killed the whole staging (#826).
+				cp $HOMEDIR/$user/conf/web/$domain/$PROXY_SYSTEM.ssl.conf_* conf/ 2> /dev/null || true
 			fi
 		fi
 
@@ -243,7 +243,9 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 		conf="$USER_DATA/mail.conf"
 		grep -F "DOMAIN='$domain'" $conf > hestia/mail.conf
 		cp $USER_DATA/mail/$domain.* hestia/
-		if [ -n "$(ls $USER_DATA/mail/ | grep *@$domain)" ]; then
+		# compgen, not `ls | grep *@$domain`: that glob was expanded against the WORKING DIRECTORY
+		# before grep saw it, so the per-account files never got packed (#826).
+		if compgen -G "$USER_DATA/mail/*@$domain.*" > /dev/null; then
 			cp $USER_DATA/mail/*@$domain.* hestia/
 		fi
 	done
