@@ -1348,6 +1348,22 @@ sed -i "/h-restore-user $user /d" $CONF_DIR/queue/backup.pipe
 #                       Hestia                             #
 #----------------------------------------------------------#
 
+# An archive nobody adopted is invisible in every listing and, inside the customer folder, a
+# rotation candidate: without a record it counts as its own set, so BACKUPS='1' takes it on the next
+# run (measured). Having restored from it is the clearest statement that it is wanted. Through
+# h-add-user-backup and not a second record builder, so an auto-adopted record is byte for byte the
+# one a hand adoption writes. At the END because the restore may create the account itself, and the
+# adoption checks that it exists.
+#
+# -qF: the archive name carries dots, which as a regex match any character (the #583 class).
+if ! grep -qF "BACKUP='$backup'" "$USER_DATA/backup.conf" 2> /dev/null; then
+	if ! $BIN/h-add-user-backup "$user" "$backup"; then
+		# Never fatal - the restore is done and correct either way. Said out loud because the
+		# archive stays unlisted, and inside the customer folder rotatable, until someone adopts it.
+		echo "Warning: $backup could not be adopted - it stays unlisted and, in $BACKUP/$user, rotatable"
+	fi
+fi
+
 # Update user counters
 $BIN/h-update-user-counters "$user"
 $BIN/h-update-user-counters "$ROOT_USER"
