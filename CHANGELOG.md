@@ -316,6 +316,18 @@ opens above it.
 
 ### Fixed
 
+- **An archive restored from is now adopted, so it stops being a rotation candidate** (#820).
+  A hand-placed migration archive is only ever recorded by `h-add-user-backup`; the restore just
+  resolves it and reads it, and wrote no record at all. Inside `/backup/$user/` that is a silent
+  loss: without a record the file counts as its own set, so `BACKUPS='1'` removes it on the next
+  run - measured, the same archive placed flat survived and the adopted one survived, only the
+  unrecorded one in the customer folder was gone. Restoring from an archive is the clearest
+  statement that it is wanted, so `h-restore-user` now adopts it when no record names it. It goes
+  through `h-add-user-backup`, not a second record builder, so an auto-adopted record is the one a
+  hand adoption writes; it runs at the end, because the restore may create the account itself; and
+  a failure to adopt warns instead of failing the restore, which by then is finished and correct.
+  A flat archive stays where it is - adoption never moves anything.
+
 - **Every failed panel login wrote "Method not supported by crypt(3)." into the FPM log** (#817).
   yescrypt is the PAM default on all four targets, and that branch handed `mkpasswd` the WHOLE
   shadow hash as its salt. crypt(3) then hashes against the setting prefix, mkpasswd finds its
