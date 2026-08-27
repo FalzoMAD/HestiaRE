@@ -12,1039 +12,204 @@ opens above it.
 
 ## Unreleased
 
-### Added
+_Nothing yet._
 
-- **A customer's restic backups have an explicit way out, a report and a portable export**
-  (#217, stages 4 and 5). Deleting a customer keeps their backups - in every mode - so
-  `h-delete-user-backups-restic` is the explicit way to remove them: it names repository, size,
-  snapshot and package count first and acts only on the consent word, and it deliberately accepts a
-  customer who is already gone, because that is the case it is mostly needed for.
-  `h-list-sys-backup-orphans-restic` names what is left over; it walks the repository DIRECTORIES
-  under the base rather than the customer list, for the same reason, and reports an unreadable
-  repository as its own kind instead of blaming every package in it for a broken line. The manual
-  full export is not a fourth mode but one ordinary archive run (`h-backup-user USER NOTIFY yes`,
-  wrapped by `h-export-user-backup`), so what comes out is the format that adoption, probe, report
-  and restore already handle - that is how a restic customer migrates without ever rebuilding an
-  archive out of snapshots. Its record carries `MODE='export'` and `ADOPTED='yes'`, which keeps it
-  out of the rotation through the mechanism operator-placed files already use (adopted names leave
-  the list BEFORE counting, so an export neither rotates nor pushes another archive out), and
-  `BACKUP_EXPORT_LIMIT` (default 2) refuses and names the existing exports rather than clearing the
-  oldest away. Both the marker and the limit live in `h-backup-user`, reached by an ARGUMENT and
-  not by an environment prefix: the consent word was made an argument for that reason (GHSA-2xw3),
-  and a limit in the wrapper would have missed everyone calling the inner command directly - which
-  is anyone who uses the CLI. Neither command touches a REMOTE repository base: `sftp:` and
-  `rclone:` targets are not paths, so the deletion would have removed the metadata packages (which
-  carry the only spare copy of the repository key) while the repository itself stayed, and reported
-  success; the orphan report would have swept a base its glob never expanded. Both now refuse by
-  name and say where to look instead. In the panel the Backups tab
-  branches on `BACKUPS_MODE` instead of hiding snapshots behind a second button, with `?archives=1`
-  as the way back to the archives from before the switch and to the exports, which are marked as
-  such with why: retention does not rotate them. Two defects fell out of measuring it over HTTP
-  rather than reading the source: the branch never fired, because `$panel` is built inside
-  `render_page` and did not exist where it was read, and the snapshot list answered `400 Potential
-  CSRF use detected` to any request without a Referer once it became the tab's landing page - a
-  click inside the panel carries one and would never have shown it. Existing installations report
-  `key registries out of sync` once for the new key until `h-update-sys-defaults` runs, which
-  `h-update-hestia` does on every update.
+## v0.17.0 (2026-08-27)
 
-- **remote only is diff-capable now** (#790, stage 3). Base selection asks for REACHABILITY
-  instead of a local file: the local map mirror is what a diff is built from, and the base
-  archive itself may live on a remote only - eligible when a configured target's fresh listing
-  shows it (the record's word alone would collect diffs against a base that exists nowhere).
-  On restore the base follows the same transport chain as the archive, so a differential
-  restores onto a box that holds nothing locally. A run whose base is reachable nowhere says
-  "No reachable base archive - writing a full backup"; a transport that receives a diff while
-  holding neither the base nor a local copy warns that a restore from it alone needs another
-  source. Refusals name what was
-  actually searched. Worth knowing: a remote restore leaves the fetched archive and base in the
-  customer folder on purpose - the next run counts them as local (rotation takes them, oldest
-  first, and the base check finds them without a remote round trip); they are a cache, not a
-  leak.
-
-- **A remote target may retain more than the package limit** (#790, stage 2). Every remote
-  backup host takes an optional KEEP number (`h-add-backup-host ... [KEEP]`, editable in the
-  server panel): its rotation keeps that many SETS while the local rotation keeps the package's
-  `BACKUPS` - "off-site laenger vorhalten" as a per-target number instead of an accident. The
-  record now outlives the local file: record retention follows the longest keep of any
-  configured place, so ownership (#791) still covers an archive that only a remote holds, the
-  backup list marks it "(no local copy)" - exactly what was checked, whether a remote still
-  holds it was not asked - and download/restore fetch it transparently over the stage-1 chain.
-  The listers carry that as a LOCAL field in every output format, derived through the same
-  resolver the CLI uses; a per-target keep of 0 is refused by name and a hand-edited 0 reads
-  as "mirror the package", never as "delete everything on this target". With no per-target number nothing moves - every place mirrors the package.
-  The nightly runner finally reads the per-run exit codes and mails one summary of degraded or
-  failed runs; a diff-mode run without a usable local base says so in the log instead of
-  silently writing fulls; and the panel offers rclone only where the binary exists, naming
-  that the remote itself is created as root via `rclone config`.
-
-- **Remote backup targets fail loudly now** (#790, stage 1 of the remote-target round; stage-0
-  protocol on the docs branch). After every upload the target's fresh listing is asked whether
-  the archive - and a shipped diff base - actually arrived: the put pipelines discard their exit
-  codes, and an unreachable target used to produce a green run, a record, and an archive that
-  existed nowhere (a never-set variable also turned the failed-remote-only exit into a 0).
-  Restore and panel download now CHAIN every configured transport and let the arrived file
-  decide, instead of stopping after the first transport's silent no. A failed remote leg keeps
-  the local archive and its record, names the failed target in log and mail, and the record's
-  TYPE carries the targets actually reached. Fetched copies carry the same owner and mode as
-  locally written archives; an empty remote listing counts as 0, not 1; and
-  `h-add-backup-host rclone` no longer pipes an installer from the internet into bash - rclone
-  is an OS package. A degraded run - local archive written, a remote leg failed - now exits
-  non-zero AFTER all bookkeeping (record, counters, mail), so scripts see the degradation
-  without losing the archive's record; and the transport chains match comma-bounded, because
-  ftp is a substring of sftp and first-match-only had masked exactly that.
-
-- **Every customer's archives live in their own folder now** (#789). `/backup/$user/$user.<date>.tar`
-  replaces the flat `/backup/$user.<date>.tar`; the file name keeps its prefix, records keep bare
-  basenames, and the run log moves along (`/backup/$user/$user.log`). Reading commands accept two
-  places - the customer folder first, then `/backup` itself as the hand-off spot for a migration
-  archive an operator drops in by hand (adoption does not move it) - and every message names which
-  of the two it found. One resolver in `include/backup.sh` carries the two-place rule and the
-  symlink containment for all readers, CLI and panel. In the same move `/backup` went from 0755 to
-  0711 (measured first: only root lists it, the panel pool opens by name): local system users can
-  no longer enumerate customer names and backup dates, while each customer still reads their own
-  folder (0750, `hestia:$user`). `server` joined the reserved login names - `h-backup-server`
-  writes `server.*.tar` into the same namespace a customer of that name would claim. Two side
-  effects worth knowing: rotation now lists only the customer folder, so a hand-placed archive at
-  the hand-off spot can no longer be rotated away even without adoption (before, only the ADOPTED
-  record exclusion protected it); and an archive fetched back from a remote target carries the
-  same owner and mode as a locally written one (`hestia:$user` 0640), so one folder holds one
-  rights picture. Because that makes a fetched file customer-readable, the remote fetch is now
-  bound to ownership by data: `h-download-backup` and its scheduler refuse a name that has no
-  record for that customer, so nobody can pull another customer's archive off the shared remote
-  target into their own folder (restore keeps its own transport path - a DR box with empty
-  records is that flow, never this command).
-
-- **The backup mode is a package choice** (#712, stage 4). `BACKUPS_MODE='full'|'diff'|'restic'`
-  lives next to `BACKUPS` in the package, defaults to `full` so nothing changes on its own, and
-  refuses `restic` where the addon is not installed. The nightly `h-backup-users` dispatches per
-  customer instead of running the archive path for everybody: a restic customer gets the restic run,
-  everyone else the archive run, and a restic mode without the addon falls back to the archive with
-  a named warning rather than silently backing up nothing. `h-backup-users-restic` now skips
-  customers whose mode is not restic, so a manual invocation no longer duplicates the nightly run.
-  The package pages offer the mode (restic only where the addon is, but a package already saying
-  restic keeps its option so an unrelated save cannot flip it), and the backup list marks a
-  differential archive with its base. Like every package key, the mode reaches a customer on
-  assignment (`h-change-user-package`) or creation - editing a package does NOT re-propagate to
-  the customers already sitting on it.
-
-- **OPERATIONAL NOTE - the repaired remote rotation deletes on its first run.** The ftp/sftp
-  listings arrived CRLF-tainted from expect's pty, `tar$` never matched, and remote rotation on
-  those targets was structurally dead: archives accumulated regardless of `BACKUPS`. Fixed - which
-  means the FIRST nightly run against a grown target counts them for the first time and removes
-  everything beyond retention, under the new set-counting rule. Harmless on this project today (no
-  live boxes), destructive on any grown target this ever gets deployed to: the fix is correct and
-  its first run is the mass deletion.
-
-- **Retention understands differential sets** (#712, stage 3). `BACKUPS` counts SETS - one full
-  plus the diffs naming it - in all four transports and in the record file, which use the same
-  derivation and cannot disagree about what a set is. `BACKUPS='3'` with weekly fulls therefore
-  means three weeks of history, the same figure it means for a full-only customer, where every
-  archive is its own set and nothing changes. A diff restores only together with its base, so a
-  base is kept as long as its set is. The obvious rule, "removing a full removes its diffs", is the wrong way round and was
-  measured to be destructive: with one full and three diffs hanging off it, rotating the full wiped
-  the entire history in one run. Verified: four archives are all retained, and the fifth run rotates
-  the oldest diff while the base stays. The probe now announces a differential archive and names the
-  members that are incomplete without their base, so a report says it before anyone restores.
-  Found on `BACKUPS='1'` and fixed: the rotation runs before the new archive exists in the records,
-  so the base the current run diffs against was invisible to the keep set - the run deleted its own
-  base seconds before writing the diff against it. The base is now passed into the removal
-  calculation explicitly, in all four transports.
-
-- **Differential backups** (#712, stage 2). A customer set to `BACKUPS_MODE='diff'` gets an archive
-  whose web and mail members carry only what changed against the newest full archive; everything
-  else - records, databases, home entries, the map - stays whole, so listing, probe, report and
-  preflight need the base for nothing. Members are built whole first and rebuilt from that, never
-  from the live tree; the map's paths come from the member and its hashes from the tree before the
-  member was tarred, and the stat tripwire (stage 1) drops the hash of anything the tree touched in
-  between - so a stale entry reads as changed, never as covered. A member the base never had, or one whose diff would not save at least half, stays
-  whole and says so. Restoring reads the archive directly - two passes, the base filtered to what
-  both maps still agree on, then the diff over it. A path deleted since the base is in neither list
-  and is simply never written. Measured on a real tree: a 189 KB member became 233 bytes, and the
-  restored tree matched the state at diff time exactly, including the deletion, a mode-only change
-  and a retargeted symlink; restoring the base instead reproduces the base state, so the check can
-  tell the two apart.
-- **`h-restore-user` refuses a differential archive whose base is missing** (#712), before the first
-  write rather than at the third member. Two more refusals guard the same edge: the base's content
-  map must hash to the MAPHASH the diff recorded at build time (a same-named archive from elsewhere,
-  or a mirror that had diverged, fails exactly there), and an archive whose backup.members marks
-  differential members while backup.base is missing or unreadable refuses instead of unpacking the
-  diff members as if they were whole - a tree of only the changed files that looks complete.
-
-- **Every backup now carries a content map** (#712, stage 1). One record per entry - path, BLAKE3
-  hash, mode, owner, symlink target - over the two member types a later run can diff against, web
-  and mail. Paths, types, modes and owners are read OUT of the finished members - web excludes by
-  pattern and mail passes an explicit account list, so no second enumeration would stay in step with
-  both, and what the map lists is what the archive holds. Content hashes are taken from the live
-  tree BEFORE the member is tarred, batched (per-file hashing through tar's --to-command cost 836 of
-  838 seconds on a 153k-file maildir - measured, the hashing itself is ~2s). The order makes almost every
-  race benign: the map is never newer than the archive, so a file changing mid-run is re-shipped by
-  the next diff instead of silently treated as already covered. The one exception is the return
-  case - changed in the window, later reverted to exactly the hashed bytes, which would read as
-  "unchanged" against a base that physically holds the other version - and a stat tripwire closes
-  it: files whose size or mtime moved between the hash pass and after the tar get the withdrawn
-  marker `-` as their hash - distinct from the empty hash a directory or symlink carries by type,
-  and compared as changed even against itself, so the same file racing two runs in a row cannot
-  read as unchanged. The over-inclusion side, always. Accepted price, stated so nobody mistakes it
-  for an accident: the map roughly quadruples the run for a mail-heavy customer (7.8s to 29.9s on
-  153k files) - the savings target storage, never runtime. Hardlink members get real records
-  this way - --to-command never even handed them over. It travels inside the archive so a foreign box can read it, and is mirrored under
-  `$USER_DATA/backup-maps` so a later run can compare without fetching a remote archive back; a
-  mirror is dropped when its archive leaves the record. `h-list-user-backup-map` reads it back, and
-  the entry count lands in the backup record as `MAP`. Nothing changes about restoring - the map is
-  the missing piece for differential backups and for comparing a roundtrip by content rather than by
-  record (#342).
-- **Archives are byte-identical for an unchanged tree** (#712). `tar --sort=name` on the member tars
-  and `gzip -n` wherever gzip writes one: member order no longer follows readdir, and the gzip header
-  carries no name or timestamp. Measured: two runs over an unchanged tree produce identical members
-  and identical maps, and changing one file makes both differ.
-
-- **Sieve is reachable for customers, and moving mail to Spam now trains the filter** (#780). The
-  engine was installed, ManageSieve was listening, and nothing could reach it: the panel offers no
-  filter screen and roundcube was not loading the `managesieve` plugin, so a customer could only
-  write rules with a mail client that speaks the protocol itself. Two settings fixed that - the
-  plugin (its package was already installed) and Tachyon's per-domain `Sieve.enabled`, whose block
-  already pointed at localhost:4190 and only had the flag off. Both are gated on `SIEVE_SYSTEM` and
-  derived in one place, `include/sieve.sh`, because the engine and the two webmails are separate
-  addons installable in any order; `default.json` is included because Tachyon clones it for every
-  mail domain added later. Filters and vacation now exist in both webmails without a panel login.
-- **Moving a message into or out of the Spam folder teaches rspamd** (#780). The pieces were half
-  present: `sieve_imapsieve` was loaded and advertised in the managesieve capability list, while the
-  hook that would fire it - `imap_sieve` in the IMAP protocol's plugin list - was missing along with
-  the rules and the scripts. The chain is complete now, on the `Spam` folder rather than the `Junk`
-  that every recipe assumes, because exim files spam into `.Spam` with a final verdict. The learner
-  reaches rspamd's controller socket through dovecot's own `mail_access_groups`, which keeps the
-  grant on dovecot's mail processes: no login holds it, and a customer's own script cannot use it
-  because `pipe` is offered to global scripts only. The classifier stays global, so one customer's
-  correction still trains the box; every learn is logged to syslog with the account that caused it,
-  so a box whose hit rate drifts can be traced to whoever moved the mail. Switching to per-user
-  statistics stays a config key - the learner already passes the account. Wiring the learner is a
-  degradation and not a failure: filters and vacation work without it, so a missing trigger, group
-  or compiled script is named and carried into the exit code rather than announced as success.
-
-- **`b3sum` joins the base packages** (#712). The differential backup map hashes every byte of a
-  customer's web and mail trees on every run, so the hash has to stay well ahead of the compressor.
-  Measured on two machines that both lack `sha_ni` - the normal case on virtualised servers, where
-  the CPU model masks the flag - BLAKE3 runs 2.8x faster than SHA-256 on a real file tree and 9x on
-  large files, single-threaded in both cases - and it is a cryptographic hash as well, so the faster
-  option is not the weaker one and nothing is traded away. That the map could later double as an
-  integrity statement is a bonus, not the reason. It is an OS package on all four targets, and 1.2.0
-  through 1.8.2 produce identical digests, so a stored map survives a distro upgrade. The consumer
-  itself is not built yet.
-
-### Removed
-
-- **Demo mode is gone** (#759). Inherited from upstream, where it exists to keep a public demo box
-  from being changed: a config key that made 365 commands refuse to do anything, plus the command
-  that set it, its entry in the config listers and the key registry, and a panel branch that hid the
-  login history. There will be no demo box here, and a switch that turns every write off is a large
-  surface with no purpose - one that nothing tested and nothing would have noticed going wrong. An
-  existing host keeps a stale `conf/defaults/system.conf` until `h-update-sys-defaults` runs once;
-  a fresh install writes it correctly from the start.
-
-### Changed
-
-- **Three guards never fired, because check_result was called with a code that does not exist**
-  (#217). `E_BACKUP` was referenced by the restic path and defined nowhere, so `check_result` got an
-  empty first argument, its own `[ $1 -ne 0 ]` errored out, the function returned and the command
-  carried on - a failed restic backup continued as if nothing had happened. Found by fault
-  injection while proving the other half of the snapshot/package pair, then swept: `E_LIMI` in
-  `h-change-user-package` (the `T` sat outside the quotes) and `E_NOTEXISTS` in
-  `h-update-web-domain-stat` are the same shape. `E_BACKUP` is defined now (22 - 21 was taken in
-  the panel), the two misspellings are corrected, and `check_result` refuses an empty or
-  non-numeric code instead of waving it through, so the next typo is a loud failure rather than a
-  silenced check.
-
-- **The restore path reads the metadata where it lives** (#217, stage 3). Stage 2a moved the
-  metadata out of the snapshot into the package beside the repository and the dumps into `.dumps`;
-  nine commands still read them from `/home/$user/backup`, a tree no restic snapshot has carried
-  since - every restore died at its first metadata read. One resolver finds a snapshot's package,
-  over the tag the snapshot carries AND over the snapshot id the packages name, so a lost tag alone
-  does not hide a package whose data is still there; one reader and one unpacker serve its members.
-  Databases come raw out of `.dumps` now, which removes the decompression branch for a `.sql.zst`
-  nobody writes any more. Five defects fell out on the way, all of which looked like working code:
-  the cron restore had no check on what it read and copied the result straight over the live
-  `cron.conf`, so a failed read **overwrote the customer's cron table with an empty file**; the full
-  restore never restored `backup-excludes.conf` because a misplaced quote turned the path into an
-  argument of `cp -r` and a `2>/dev/null` swallowed the complaint; the file restore accepted any
-  path and wrote it as root, and is bounded to the customer's home now, with the raw dump stage
-  refused by name; six of the ten commands never sourced `include/backup.sh`; and the headers, arg
-  checks and log lines described other commands (`h-restore-user-restic` demanded three mandatory
-  arguments for a command that needs two, the file restore logged "DNS Domain successfully
-  restored", three listers announced themselves as a backup command). Separately, the web restore
-  could never finish for an existing domain: `rebuild_web_domain_conf` creates the two log symlinks
-  and restic refuses to write a symlink that exists, so the run ended in `Fatal` **after** the
-  content was already back - and the permission repair, the counters and the log entry never ran.
-  The links are removed before the restore and come back from the snapshot; `--exclude` cannot join
-  `--include` and `--overwrite` needs restic 0.17, so neither is portable across the fleet.
-
-- **The restic run honours the exclusion list, rotates both artefacts as one, and checks the right
-  disk** (#217, stage 2b). `restic backup` ran over the whole home without a single `--exclude`;
-  it now gets the path-producing part of `backup-excludes.conf` (web and mail domains, user
-  directories) while DB and CRON stay object exclusions that legitimately produce no path - and the
-  stage is never excluded, whatever a customer writes into the list, because that would drop their
-  own records and dumps out of their backup while the run stayed green. Retention comes from ONE
-  derivation: `forget` decides over the snapshots, and the packages follow the survivors -
-  through the tag a snapshot carries AND the snapshot id the package names, so a lost tag alone
-  never drops a package whose data is still there; the run that is writing right now is exempt,
-  because its pair is not yet in the list it would be measured against (#787). A policy that keeps
-  nothing is refused instead of handed to `forget`, `BACKUPS=0` now falls through
-  `is_backup_enabled` like it does in the archive path, and the monthly slot works for the first
-  time at all - the runner read `KEEP_MONTLY` while the configuration wrote `KEEP_MONTHLY`. Stale
-  locks are released before a run, never `--remove-all`, which would take a running job's own lock
-  with it. The space check finally runs against the filesystem the dumps land on instead of
-  `/backup`, with the need derived from the live databases rather than from a record that may have
-  stood still, and leftovers of a dead run are removed before it counts. A smoke guard holds
-  snapshots and packages against each other - and it now tells a repository it could not read from
-  an empty one: a failed `snapshots` call used to leave every package without a partner and report
-  the whole customer as orphaned artefacts, where the line was only a broken connection. The need
-  is measured on what a dump actually carries: `index_length` is out of the mysql side, which asked
-  for 62 MB for an 8 MB dump on a schema with four secondary indexes, while pgsql keeps
-  `pg_database_size` because `pg_dump --inserts` writes one statement per row and reaches 1.79x the
-  heap - dropping the indexes there would move the refusal from too eager to too late. The
-  exclusion lists are split with `read -a` instead of an unquoted expansion, so a `*` inside a list
-  no longer globs against the working directory into invented `--exclude` paths, and all five keys
-  of `backup-excludes.conf` are declared local instead of relying on the caller's subshell. A
-  failed `forget` is no longer discarded: it kept the run reporting success while retention
-  silently did not happen, and the packages would then have rotated against a survivor list nobody
-  wrote.
-
-- **A restic run writes two artefacts, and they belong together** (#217, stage 2a). Everything
-  readable - records, SSL, PAM, the exclusion list, the per-domain and per-database records with
-  their grants, cron - goes into a metadata package beside the repository
-  (`/backup/$user/$user.<stamp>.meta.tgz`, `hestia:hestia` 0640: the panel pool reads it, the
-  customer does not, because it carries pam and a copy of the repository key). Only the raw
-  database dumps stay in the home, in `/home/$user/.dumps` (root, 0700), so one snapshot root
-  covers them - raw because a compressed dump changes over its whole length on a small data change
-  and destroys deduplication (measured: 3.8 against 8.2 MiB for the second run, while the repo
-  format compresses on its own). With that, the customer's own `/etc/shadow` line is no longer in
-  a directory the file manager can read. Snapshot and package are one restore point: same stamp,
-  the snapshot carries the package name as a tag, the package names repository and snapshot id,
-  and the run fails if either half cannot be written. `--read-concurrency` is only passed when the
-  binary knows it, which brings Debian 12 (restic 0.14) back from being structurally dead.
-  **Interim, until stage 2b:** the packages do not rotate yet - the archive rotation does not see
-  them, its pattern ends in `.tar`, so `/backup/$user/` grows by one package per run until the
-  retention that treats snapshot and package as a unit lands.
-
-- **restic is an addon now, and the customer's mode is the only truth** (#217, stage 1).
-  `h-add-sys-restic` / `h-delete-sys-restic` replace the unconditional install in the base package
-  block plus an inert checkbox in the tools list - the checkbox reinstalled a package that was
-  there anyway, which is how #217's definition of done came to be accidentally fulfilled. Removing
-  the addon refuses while a customer still runs in restic mode and keeps repositories and keys:
-  deleting the tool must not delete backups. `BACKUPS_INCREMENTAL` is gone from packages, commands,
-  registry and panel (pre-v1, no migration path); `BACKUPS_MODE` decides, `BACKUP_INCREMENTAL`
-  remains the server switch and now means "restic installed and a repository configured". Two
-  measured defects from the stage-0 inventory are closed with it: `h-add-backup-host-restic` no
-  longer runs `restic self-update`, which replaced the package-owned binary in place (0.14.0 ->
-  0.19.1 on deb12, `dpkg --verify` complaining) even when the command then refused its work, and it
-  creates a local repository path instead of refusing without saying so - because that refusal left
-  the box unconfigured, and the backup then wrote into a RELATIVE repository named after the
-  customer wherever the run happened to start. One gate (`is_restic_repo_configured`) resolves the
-  repository and carries the separator that 62 call sites used to compose by hand. A smoke guard
-  holds every customer in restic mode against the addon and the configuration.
-
-- **The wizard no longer offers ProFTPD on mail-only** (#217, side finding). It was not just shown
-  but preselected, on a profile that has no customer web server to upload to; the row is fixed off
-  and unasked now, and the firewall rule goes with it. Sieve is preselected there instead - a box
-  that exists for mail should filter mail.
-
-### Changed
-
-- **Two backups of the same customer in one second no longer collide** (#841). Archive and package
-  names carry a one-second stamp, and `local_backup` starts by removing the file of that name - so
-  the second run silently replaced the first. Measured with retention deliberately high enough that
-  rotation could take nothing: ten quick runs left **five** archives. In differential mode that is
-  data loss rather than a lost copy, because a diff can replace the very base it was built against,
-  and the restore then refuses the set by name (`map hash mismatch`) - which is the guard doing its
-  job, one step too late. A run now waits a second right where it stamps, so the next stamp cannot
-  be the same one; the same ten runs leave ten archives. The wait sits at all three stamping
-  commands, the restic one included, where a collision would pair a snapshot with the wrong
-  metadata package. It costs a second per customer on a nightly sweep.
-
-- **A differential payload member no longer answers to the name of a whole one** (#840). Inside an
-  archive, a diffed `domain_data.tar.zst` held only the changed paths while carrying the same name
-  as a complete one - the name said the wrong thing, and anything reading the archive without also
-  reading `backup.members` unpacked a fragment as if it were the whole. It is written as
-  `domain_data.diff.tar.zst` now (`accounts.diff.tar.*` for mail), which is what it is. The restore
-  resolves diff-named first and whole-named second, so archives written before this keep restoring
-  unchanged; the base lookup keeps asking for the whole name, because a base member always is one.
-  A domain whose payload is in the listing but not on disk after unpacking is now refused by name
-  instead of failing as a tar error on a guessed path - the resolver can say "no payload for this
-  domain", and that is worth saying. Measured side effect worth having: HestiaCP derives its domain
-  list by grepping for
-  `domain_data.tar.zst`, so handing it a diff archive now restores no web domains at all instead of
-  silently producing empty docroots - measured, 1 of 5, 0 of 5 and 0 of 3785 files before, an empty
-  WEB section after. A smoke guard holds the namer and the restore's grep together, both used as
-  shipped, and checks the pre-#840 fallback on real files.
-
-### Fixed
-
-- **A failed addon install no longer hides behind a green installer line** (#843). Seven addon
-  calls in `h-install-hestia` swallow their errors on purpose - a flaky install must not abort the
-  stage - but nothing looked afterwards: `[ OK ] addons complete` printed unconditionally, and a
-  wizard choice that never arrived was visible only in the install log. The smoke run, which
-  closes every install, now recounts each requested addon by its artefact (the config key it
-  writes, or the binary for restic) and names what is missing. The addon set is derived from the
-  installer file itself, so a new swallowed addon without a mapping fails the recount instead of
-  shipping unverified, and an empty derivation fails too. Verified on deb12 and deb13 with a
-  positive control: a faked docker request on the docker-less box came back as a named FAIL.
-
-- **A restic restore no longer erases the customer's HTTP/3 switch** (#835). The field carries the
-  intent and the fragment carries intent AND capability, so a domain landing on a box without
-  `http_v3` keeps `HTTP3='yes'` and picks the listen up again on a capable box. The restic path
-  wrote the capability answer back into the record, so on such a box an archived `yes` came out as
-  `no` and the switch was gone for good. Measured on deb12 with both arms against the same fixture:
-  the archive arm returned `yes`, the restic arm `no`, with two untouched domains as the control.
-  The write-back is simply dropped - `rebuild_web_domain_conf` already reconciles the fragment
-  through the same gate, so it was redundant for the fragment and destructive for the record.
-
-- **An export travels under a webmail client name other panels know** (#837). Only we call the
-  SnappyMail fork `tachyon`, so HestiaCP answered a restore of our archive with `Error: tachyon type
-  is invalid` and left the mail domain without webmail. An export - the migration artefact - now
-  writes `snappymail` and keeps the original in `hestia/export-map`, which our own restore reads
-  back, so an export between two HestiaRE boxes is unchanged. The line under "what this host cannot
-  restore" asks about the value that will actually be written, not the one in the archive, so a
-  translated export is not reported as a loss it does not cause. It buys acceptance, not
-  installation: HestiaCP checks the value against its own `WEBMAIL_SYSTEM`, so a box without
-  snappymail refuses it the same way.
-
-- **An archive restore no longer drops an unread copy of the backup map into the customer's config**
-  (#839). `hestia/backup.map` was not on the container's skip list, so every archive restore left it
-  in `$USER_DATA/` - 665 KB uncompressed for a four-domain customer, measured, and read by nothing:
-  the diff mirror is written and read by the backup side under `backup-maps/` and compressed.
-  `backup.base` and `backup.members` leaked the same way out of every diff archive. The list is now
-  one constant, `BACKUP_CONTAINER_META`, and a smoke guard derives what the writers actually emit
-  into the container and fails when a name is neither meta nor handled by name - a hand-kept list
-  that nothing measures is how all three got there.
-
-- **A webmail client the target does not have is now named instead of vanishing** (#837). Restoring
-  a mail domain whose archived client this box does not offer degrades to the disabled vhost - which
-  is right, a dead proxy would be worse - but the record kept the archived name, so the panel claimed
-  webmail the domain no longer served. Measured HestiaCP -> HestiaRE: `WEBMAIL='roundcube'` onto a
-  tachyon-only box left a vhost with no `proxy_pass`, and the report said nothing; its only webmail
-  line is about settings and address books. It now names the domain, the archived client and what
-  this host offers. Whether the restore should also remap the client the way it remaps `TPL` and
-  `BACKEND` is left open - naming it is the conservative half.
-
-- **An archive from a box without a proxy no longer switches static serving off on the target**
-  (#836). In an nginx-only model `PROXY_EXT` is empty because there is no reverse proxy; carried
-  verbatim onto a box that has one, it renders `location ~* ^.+\.()$` - a list matching nothing -
-  and nginx hands every request to apache. Nothing breaks, which is why nobody would notice. The
-  archive states its own source model in `hestia/web-system`, so the target default fills in only
-  when the source had no proxy at all; an empty list from a proxied source is the customer's own
-  setting and stays. The default list moves to `default_proxy_ext()` so domain creation and restore
-  read the same one. Not covered: the restic arm, whose metadata carries no model marker and whose
-  repository lives on the box it came from - that needs revisiting with the live model switch (#120).
-
-- **An archive restored from is now adopted, so it stops being a rotation candidate** (#820).
-  A hand-placed migration archive is only ever recorded by `h-add-user-backup`; the restore just
-  resolves it and reads it, and wrote no record at all. Inside `/backup/$user/` that is a silent
-  loss: without a record the file counts as its own set, so `BACKUPS='1'` removes it on the next
-  run - measured, the same archive placed flat survived and the adopted one survived, only the
-  unrecorded one in the customer folder was gone. Restoring from an archive is the clearest
-  statement that it is wanted, so `h-restore-user` now adopts it when no record names it. It goes
-  through `h-add-user-backup`, not a second record builder, so an auto-adopted record is the one a
-  hand adoption writes; it runs at the end, because the restore may create the account itself; and
-  a failure to adopt warns instead of failing the restore, which by then is finished and correct.
-  A flat archive stays where it is - adoption never moves anything.
-
-- **Every failed panel login wrote "Method not supported by crypt(3)." into the FPM log** (#817).
-  yescrypt is the PAM default on all four targets, and that branch handed `mkpasswd` the WHOLE
-  shadow hash as its salt. crypt(3) then hashes against the setting prefix, mkpasswd finds its
-  result differs from what it was given and exits 2 with that message - so the line meant "wrong
-  password" while reading like a libcrypt that cannot do yescrypt, the one fault it would matter
-  to see. mkpasswd now gets only the setting and is a plain hash function again; the comparison
-  against /etc/shadow was and remains the step that decides, so nothing about accept/refuse
-  changes. A genuine failure (absent binary, libcrypt without yescrypt) is logged by name in
-  `auth.log` instead of hiding among the wrong passwords. A new smoke check asks the question by
-  doing what the login does - hash a probe, reproduce it from its own setting - so the outage
-  mode "nobody can log in and the panel says invalid password" is caught before a user meets it.
-  Note the failure still reaches fail2ban: the panel hands the refusal to `h-check-user-hash`,
-  which writes its own "failed to login" line.
-
-- **logrotate failed on every target because our roundcube rotation doubled the package's** (#798).
-  Both files list the same paths, and logrotate treats that as an error: it skips the second file
-  and exits 1, so `logrotate.service` stayed failed and every box read "degraded" since the day it
-  was installed - on ub26 that already hid a second failed unit. The header comment assumed a
-  silent override; it is a loud refusal. The package file is now diverted with `dpkg-divert`
-  (`h-delete-sys-roundcube` gives it back), and the divert target sits OUTSIDE `/etc/logrotate.d`:
-  logrotate reads every file in that directory whatever the suffix, measured with `.hestia-diverted`
-  and `.dpkg-divert` before it. Two new smoke guards came out of this round: one asks logrotate
-  itself to parse the configuration instead of keeping a list of known collisions - and sorts what
-  it finds by ownership, because `/etc/logrotate.d` also holds what the base image brought along
-  (`cloud-init` on some Ubuntu images): a collision one of our files takes part in is a failure, a
-  duplicate purely between package files is named and stays green, or the guard would be
-  permanently red for something HestiaRE must not touch. One holds every
-  web record against its rendered vhost - the upstream check from #797 reads files, so a domain
-  whose vhost was skipped would have looked clean by being absent.
-
-- **An unreachable remote target failed anonymously, and the mail saying so never left the box**
-  (#796). `sftpc` had no `eof` branch: a session that dies at once - no route, refused, unknown
-  name, the everyday failure - left `rc` unset, `exit $rc` died on a tcl error and the caller read
-  1 (E_ARGS). Its `case` then matched neither E_CONNECT nor E_FTP, so an EMPTY reason was mailed
-  and logged while the cause was known all along, and the nightly summary reported the customer as
-  "(1)". Every branch sets rc now, a trailing guard catches any branch added later, and an
-  unexpected code gets named instead of passed through silently. Second half: the failure path of
-  `h-backup-user` ran with a deleted working directory (`local_backup` ends inside the tmpdir that
-  is removed one line earlier), so exim refused to start - "getting initial cwd failed" - and
-  exactly the mail that reports a degraded run was dropped. Measured on all four targets against
-  the accepted-message count in the exim log, with a healthy send as the control; the success path
-  was never affected because it changes directory first.
-
-- **A docker domain without DOCKER_IP made the whole web configuration unreadable** (#797). A
-  restore under a different customer name brings `DOCKER='default'` back without giving the new
-  customer an address, and the renderer wrote the empty value into the template: `http://:3000`.
-  nginx and apache reject their ENTIRE configuration over such an upstream, so one inconsistent
-  record stops every later reload, including one for an unrelated customer - measured on deb12
-  (nginx) and deb13 (apache), with the same archive restored under its own name as the control.
-  The contradictory record is now named and skipped the way a missing template is, and a fragment
-  from an earlier render is removed so a rebuild repairs the box instead of leaving the break in
-  place. A smoke guard reads the rendered fragments for a hostless upstream. Whether a restore
-  under a new name should claim its own /24 is a model decision and stays open in #797.
-
-- **Removing sieve destroyed the mail server on two of four targets** (#780). Debian 13 and Ubuntu
-  26.04 ship a `dovecot-core` that *depends on* `dovecot-sieve`, so `h-delete-sys-sieve`'s purge took
-  core, imapd and pop3d with it - measured, five packages against the two intended, dovecot dead and
-  `/etc/dovecot/conf.d` emptied for the removal of an optional addon. The existing comment read the
-  symptom as flakiness ("the purge may stop dovecot"). The package now stays where core requires it
-  and only its configuration goes, decided from the dependency rather than from a version number,
-  because the packaging is the thing that changes here.
-
-- **The backup compression level was one number on two scales, unchecked, with four defaults**
-  (#776). `BACKUP_GZIP` feeds both `gzip -N` (valid 1-9) and `pzstd -N` (valid 1-19), and nothing
-  validated it: `h-change-sys-config-value BACKUP_GZIP 12` on a gzip host was accepted and then
-  killed every backup at compression time. Both directions are now refused by name, at the point the
-  value is set rather than at 3 a.m. in a nightly run - a level out of range, a level the current
-  mode cannot reach, and a switch to gzip that would strand a zstd-only level. The panel used to
-  answer the same problem by forcing the level to 9 for every gzip host, silently overwriting a
-  deliberate choice with the slowest point of the whole range; it now caps at 9 only when the chosen
-  level exceeds it, and does so before writing the mode, because the CLI refuses a switch that would
-  strand it. The four defaults - 9 in `include/main.sh`, 4 from the installer and from
-  `syshealth`, 5 as the panel's display fallback - are one value now. It is 3, measured: over four
-  WordPress installations the knee sits between 3 and 6, level 19 costs 68x the time of level 1 for
-  24% less output, and `gzip -9` is 21x slower than `pzstd -3` while producing a larger archive. An
-  existing host keeps whatever it has; `repair_key` only fills a missing or empty value.
-
-- **"Back" led to the administrator's own profile, not to the customer being managed** (#779).
-  Opening another user's SSH keys or logs through the pencil icon - without impersonating them -
-  produced a Back button pointing at the admin's own page, while the Login History button next to it
-  correctly carried the customer. The condition chain had no branch for "an admin manages someone
-  else without impersonation": the first branch requires a non-empty `look`, which only impersonation
-  sets, so it fell through to a fallback that uses the viewer's own identity. The new branch reads
-  `userContext`, because a back link is scoping and not a protective policy (#438). Verified by
-  clicking through a real browser: with the fix an admin lands on the managed customer, on their own
-  pages nothing changes, and an impersonating session is byte-identical to before - the same run
-  against the unfixed templates fails, so the result is not a dead test. Adopted from an upstream
-  report and reimplemented, and the affected set is derived here rather than inherited: of the 64
-  back buttons under `web/templates/pages/`, exactly two resolve the target from the session, and
-  the other pages that accept a `?user` either already carry the right shape or have no back button
-  at all. It coincides with upstream's list minus the two files that belong to the REST API, but the
-  coincidence is the result, not the method.
-- **A long SSH key overflowed its cell instead of wrapping** (#779). `overflow-wrap: break-word`
-  breaks a word only when it would not fit on a line of its own, not when it bursts its container,
-  and the only caller of `.u-text-break` in the tree is the SSH key list - where the content is a
-  base64 blob with no break opportunity at all. The class has a general name and one specific
-  purpose, so its definition now says what it is for and that prose is not it: `anywhere` breaks
-  mid-word, which is right for base64 and wrong for a sentence.
-
-- **The shell lint gate did not look at `sbin/`** (#777). Its file predicate listed `bin/h-*`,
-  `include/*.sh`, `install.sh` and `.gitea/tools/*.sh`; `sbin/` was carved out of `bin/` after the
-  gate was written and never added, so the installer, the umbrella command and the PHP wrappers sat
-  outside both tiers - a change to `h-install-hestia` was answered with "no changed shell files",
-  green because nothing had been read. Eight more shipped scripts under `share/` and `web/locale`
-  were missing for the same reason. The predicate now covers all of them, and because a path list
-  goes stale on every move, a new check measures it against a set derived from content (shebang or
-  `.sh` name) and fails on anything shell it does not cover - including the case where the sweep
-  itself reads nothing. A second check holds `.editorconfig` to the same surface, because it is a
-  second hand-kept list of it and nothing measured it: `shfmt` resolves its settings by path from
-  that file, so on a house-formatted tree a run with no flags has to agree - where it does not, the
-  path is outside the block. It carries its own probe, and a probe that cannot tell the two settings
-  apart fails the run instead of passing it. All failure directions were provoked and observed. The
-  interpreter set follows what shellcheck has a dialect for; zsh and csh stay out on purpose, since
-  pulling one in would redden a tier nothing here can judge, and that assumption is written at the
-  line rather than left implicit. The six files this
-  exposed are formatted (proven semantics-preserving, not merely re-indented), a `profile.d`
-  fragment states its dialect so shellcheck can judge it, and two findings in the installer and the
-  jail shell are fixed. Whole-tree coverage goes from 553 to 568 files, formatting debt from 6 to 0.
-
-- **Two addon installers announced work they had not done** (#772). Run against a host that already
-  had ProFTPD or Docker, they printed "Installing ProFTPD" and "Adding the Docker repository" and
-  went through the motions again, while their guarded siblings say "already installed" and stop.
-  A message that claims an action nobody performed is read as evidence of the state before it - and
-  it was, during a cleanup, which is how a working ProFTPD came to be removed. Both now check the
-  package and the registration together, so a package the OS dragged in without our configuration
-  still counts as not installed and a fresh install is not turned away.
-
-- **The PHP fallback could not be agreed to from the panel** (#608). A restore whose archive carries
-  a PHP version this host does not have needs an explicit yes, and the queue has no terminal to ask
-  at - so a panel restore of such an archive refused, and the message named a token only the CLI
-  could pass. The backup page now carries that choice, named after the version the domains would
-  land on, and both the whole-archive button and the bulk action send it.
-
-### Fixed
-
-- **The restic bulk restore restored the wrong thing, or nothing** (#767). Selecting mail domains
-  scheduled a database restore, databases could not be selected at all because the branch for them
-  was missing, and the branch for user directories tested a variable that was never set - against a
-  control the page does not render and an object type the scheduler does not accept. What did run
-  passed a comma-separated list to a command that takes one value and rejects a comma, so even the
-  web branch only ever worked for a single selection. Each selected object is now scheduled on its
-  own. Two debug dumps of the POST body went with it.
-
-### Fixed
-
-- **A lint run that measured nothing reported the cleanest possible result** (#770). The format
-  ratchet compared how many files are exempt now against how many were exempt on the base branch,
-  and an unreadable base counting zero failed closed - but a current side counting zero did not,
-  because zero is not greater than zero. With the exempt list now empty, zero is also the expected
-  result, so a run that read no files at all was indistinguishable from a clean one. Both sides now
-  report how many files they looked at, and a side that looked at none fails.
-
-### Changed
-
-- **The 32 shell files the format check had exempted are formatted** (#770). They were unformatted
-  before the gate existed, so it skipped them - which left the check blind on exactly the files most
-  likely to need it, `include/main.sh` and `install.sh` among them. The list is now empty and every
-  shell file is measured. Whitespace and a few redundant semicolons only: each file was compared
-  against its previous revision in minified form, and the fleet smoke run passes on all four targets.
-
-### Removed
-
-- **The backup pages no longer offer DNS** (#713). Zones stopped being backed up when the
-  subsystem went, but the panel kept a DNS column, a list of zones with checkboxes and per-zone
-  restore links, and the restore handlers still accepted what those checkboxes posted - all of it
-  fed by a field the backup fills with nothing. The `[DNS]` argument of `h-restore-user` stays, as
-  does the empty `DNS=` in the backup record: both are HestiaCP compatibility, and the panel now
-  passes the argument unset rather than offering a way to fill it.
-
-### Fixed
-
-- **The shell format check passed on files it had never measured** (#713). It compared a file
-  against its state on the base branch by piping that revision into `shfmt`, but `shfmt` picks up
-  `.editorconfig` from the file's path and content on standard input has none - so the base was
-  judged by the tool's own defaults, came back unformatted whatever it contained, and every
-  freshly introduced misformat was waved through as inherited debt. The settings are now passed
-  explicitly, and the set of files the check exempts is counted on both sides: it may shrink,
-  never grow.
-
-- **Saving the backup exclusions cleared the cron exclusion** (#768). A customer set to skip their
-  cron jobs kept that setting only until someone opened the exclusions page and pressed save: the
-  form had no cron field, so the handler wrote an empty one over it, and the next backup silently
-  carried the jobs again. The page now offers the field and the lister reports it. A single job name
-  is refused rather than stored: the backup tests the value only against `*`, so anything else would
-  have been accepted, shown back and then ignored.
-
-- **A restore that could not take a whole section reported success** (#754). Three databases handed
-  to the customer because the box has no database engine ended in a zero exit status, while a single
-  database that could not be loaded - the same loss reached by another branch - ended in red. Which
-  one you got depended on whether the section was entered at all, not on what the customer was left
-  with. A section this host has no subsystem for now counts as a part that did not come back, and so
-  does a docker setup that could not be re-enabled. What is handed over because this product does
-  not do it at all - DNS zones - still does not colour the status: a HestiaCP migration is not a
-  failed restore for carrying zones we never claimed to keep.
-
-- **A restore under a different customer name deleted the source customer's database and reported
-  success** (#764). Restoring an archive under a new name on the same box - what a careful operator
-  does as a rehearsal before migrating - dropped the live database the archive came from, left its
-  record claiming it was still there, and ended with a zero exit status. The deletion took the name
-  out of the **archive** while everything else worked on the target's name; where the two coincide,
-  which is every same-name restore, nothing showed. The name to clear now comes from the customer
-  being restored into, and the check that it belongs to them sits in the delete itself rather than
-  in its callers, so the next caller cannot arrive without it. A refusal is named and counts as a
-  part that did not come back.
-
-- **A second FTP account came back under the old customer's name** (#764). The conversion replaced
-  the first occurrence of the source prefix in the whole colon-separated field, so the second
-  account kept it - and a name carrying the prefix in the middle lost it from there instead. Each
-  entry is converted on its own now, anchored at the front, the way the database name already was.
-
-- **A restore dropped the customer's panel notifications without a word** (#713). The backup copied
-  a fixed list of names out of the customer's data directory, and a list only ever covers the files
-  that existed when it was written - `notifications.conf` never made it in. Both sides now walk the
-  directory and skip a named set instead, each entry with its reason next to it, so the next file
-  added there travels by default rather than by amendment. What stays out: the customer's restic
-  repository password, the records the sections rebuild themselves, and the panel login history,
-  which is a per-box view of who was signed in - down to IP addresses, browser fingerprints and
-  session ids - rather than something a customer takes along.
-
-- **The restore report says that webmail settings and address books are not in the archive** (#713).
-  They live in one table set per box, shared by every mailbox, so the server backup carries them -
-  but silence on the point made "my contacts are gone" a discovery for after the restore.
-
-- Smaller: a new account no longer gets an empty `dns` directory and `dns.conf` for a subsystem that
-  was removed, and a MySQL password statement can no longer survive from one database into the next
-  in a rebuild loop (#713).
-
-- **A restore under a different customer name pointed the site's password protection into the old
-  customer's home** (#756). The `.htaccess` fragments travel inside the archive with an absolute
-  path written into them, and the rebuild only wrote its own when none was there - which after a
-  restore is never. Where that path did not exist the domain answered 403 even with the right
-  password; where it did, the site was gated by **another customer's** password file. Both files
-  are now derived from the record on every rebuild, so they name the customer who actually owns the
-  domain, and an account the record no longer knows is dropped from the file instead of living on
-  in it. An account the record names but carries no hash for is named and left out rather than
-  written as a line that can never match. Where the record names no account at all the fragments go
-  rather than staying behind, and the pair belonging to the web server this host does not run is
-  dropped too - it is inert until the web model is switched, and then it is not.
-
-- **A restore over an existing customer called a fresh archive "pre-#120" and said nothing about a
-  web model that really did differ** (#753). The banner inside the run read a member that is only
-  unpacked when the account is created, so on the most common path it never saw it. It is gone
-  rather than repaired: the preflight report already carries the same sentence, from the probe, and
-  before anything is written - two reports of one fact are two chances to disagree.
-
-- **The consent error pointed at a token that could not satisfy it** (#755). Refusing on
-  `php-fallback` while suggesting `all` sent the operator in a circle, because `all` deliberately
-  does not cover it. The message now names the tokens that were actually refused, says what `all`
-  stands for, and the command's own example no longer teaches the form that does not work.
-
-- **A restored domain kept its CrowdSec or bot-limit setting on a host that cannot render it, and
-  the report called the archive fully restorable** (#755). Those protections survive as settings on
-  purpose - they take effect if the module arrives later - but silence made an inactive protection
-  look like a live one. The report names them, asking the renderers' own capability checks rather
-  than a second copy of the condition. It reads them only where the module is installed, so the one
-  function whose job is to be honest before anything is written cannot be what fails without it.
-
-- Smaller: a zstd database dump no longer prints its size into the middle of the restore log, where
-  it read like an error, and a `*` in an archived bot-limit value no longer expands against the
-  working directory (#755).
-
-- **Rebuilding a single database set the customer's database count to 1** (#757). The singular
-  command had inherited the accumulator of its plural sibling without that command's flush in front
-  of the loop, so it wrote "whatever the variable held, plus one" as the customer's total - and the
-  next deletion took it to 0, which is what the panel and the counter check then showed. Disk usage
-  carried the same shape, claiming one database's usage as all of it. A command that touches one
-  object no longer claims a total; the plural form owns the counting and the disk queue owns the
-  usage. The counter check now also watches the suspended mirrors, which are derivable from the
-  records like the rest and were the one group in its exclusion list without a reason - so a value
-  knocked out of step becomes visible instead of waiting for somebody to rebuild the customer.
-
-- **A PostgreSQL database came back from a restore with its password destroyed** (#752). The rows
-  all returned and the customer's application could no longer connect, which reads as a broken app
-  rather than as a restore - and on a same-box restore nothing said a word. The hash was being
-  parsed out of `psql`'s aligned table: the backup took the first line, which is the column
-  heading, and the create and password-change paths filtered for `md5`, which matches no SCRAM
-  hash at all. Every pgsql record was therefore written with an empty password, and the rebuild
-  wrote that emptiness into `pg_authid`. The hash is now read as a value, an empty one never
-  replaces a credential that works, and the run says when it kept one. The same guard covers MySQL,
-  which was only safe because its own read path happened to work.
-
-- **A restored PostgreSQL role could not log in at all** (#752). The rebuild created it with a bare
-  `CREATE ROLE`, which is `NOLOGIN` in PostgreSQL - so a restored database was unreachable whatever
-  its password said, and that is why the empty password went unnoticed for so long. Roles get
-  `LOGIN` as they always did on the add path, but only together with a password: a role that has
-  none stays shut, because turning it into a login role would open it wherever `pg_hba.conf`
-  carries a `trust` line.
-
-- **A database restored onto another host without a password now says so, and the run ends
-  accordingly** (#752). The two cases had been reported with one sentence: on the same host an
-  existing password is kept, on a fresh host - the migration case - the account is created without
-  one and nothing can connect to the database at all. Saying "kept unchanged" there claimed a
-  credential that never existed. The second case is now named as such and counts as a part that
-  did not come back, so a queue or a script sees it rather than finding it in the log.
-
-- **A customer whose `user.conf` lost a package limit was locked out of their own package** (#711).
-  An absent or empty limit is not a limit of zero, but that is how the comparison read it, so every
-  attempt to add a web domain, mail domain, database or cron job was refused with a message blaming
-  the customer's package - measured, with no domains at all. The limit is now taken from the
-  customer's package file when the record cannot answer, and a defect in the record never presents
-  itself as a limit somebody has hit. `user.conf` repair seeds real values from that same package
-  file instead of inserting empty ones, and says so rather than guessing when the package is gone.
-
-- **`user.conf` could end up with the same key twice** (#711). The repair that ran before the
-  generic one addressed its insert with a bare `/MAIL_ACCOUNTS/`, which also matches
-  `U_MAIL_ACCOUNTS`, so `RATE_LIMIT` was written after both - and `FILE_MANAGER` after both of
-  those. Which value then won depended on the reader: `source_conf` keeps the last, `grep | head -1`
-  the first. The two repairs are now one, and it also removes the extra lines a box is already
-  carrying - keeping the one `source_conf` was using, and saying which - because a duplicate that is
-  only prevented from now on stays on every box that already has it.
-
-- **A user's login shell could be set from the caller's environment** (#711). Where the record had
-  no `SHELL`, the rebuild fell back to the ambient `$SHELL`, and where that was unset `grep -w ""`
-  matched every line of `/etc/shells` - handing `# /etc/shells: valid login shells` to `useradd`.
-  The shell now comes from the record, falls back to a named default off the curated allowlist, and
-  can never be a comment line.
-
-- **The config repair worked against a smaller key set than the code writes** (#711). Every field a
-  command stores with `add_object_key` or `update_object_value` has to be in `syshealth_known_keys`,
-  or the repair functions call a record healthy while fields they never heard of are missing from
-  it. Web records gain `CROWDSEC`, `BOTLIMIT`, `ALLOW_USERS` and `LETSENCRYPT_FAIL_COUNT`; mail
-  records gain `LETSENCRYPT_FAIL_COUNT`, the six `U_SMTP_RELAY*` and the five `U_SPAM_*` fields. A
-  value that is already set is never touched, and an empty one is inert for every one of these
-  fields - checked per field rather than by analogy. `sanitize_config_file` clears exactly the
-  registered keys between two objects, so the unregistered ones stayed set for the next one; no
-  current path acts on that, because the readers take the record and the one function that reads
-  such a value as a plain variable only ever handles one domain per process, but it stopped being
-  something the caller's process model has to keep true.
-
-- **The webmail store on a box without a database engine was not backed up** (#710). Where there is
-  no engine, Roundcube keeps every mailbox's identities, address books and settings in a SQLite file
-  under `/var/lib/roundcube/db/` - which is exactly the state the server backup exists for, and the
-  only one it was missing. It is snapshotted with SQLite's own `.backup` rather than copied, because
-  these run in WAL mode and a plain copy taken mid-transaction can lose commits that are already
-  durable. On the way back the archived file is verified whole before the live one is touched at
-  all, so a damaged archive leaves the running webmail alone, and the replacement is a single
-  rename that carries the existing owner and mode. Where the `sqlite3` client is absent the restore
-  declines rather than installing something it cannot check - unlike a database too broken to dump,
-  a missing client is a prerequisite one `apt` away.
+Closes the backup and restore program (#240): restic as a per-customer mode, differential
+backups, remote targets that fail loudly, per-customer storage, and a restore that reads,
+asks and reports before it writes.
 
 ### Added
 
-- **The state that belongs to the box has its own backup** (#710). The webmail databases hold every
-  mailbox's identities, address books and settings in one table set, so no per-customer archive can
-  carry them without carrying other customers' rows; the same is true of `hestia.conf`, the hosting
-  packages and the firewall sources. `h-backup-server` takes them, `h-list-server-backups` shows what
-  each archive holds, and `h-restore-server` puts back the components that are named. There is
-  deliberately no whole-archive verb: restoring all of it would overwrite the configuration of a
-  running host in one step, so a run without a component refuses before it writes anything. Naming a
-  component says which live state to replace, not that replacing it is intended, so each one is
-  consented to before the first write - the question names the paths and databases this host would
-  actually lose, and without a terminal the consent has to arrive in the argument or nothing is
-  written. A database is dropped and recreated rather than loaded on top, because a table the
-  archive predates would otherwise survive into a schema that never existed; a dump that did not
-  finish is refused before the target is touched, on the way in as well as on the way out, and a
-  copy of the live database is taken first so that a load which fails for some other reason is
-  rolled back instead of leaving a half-built schema. A run that did not restore everything says so
-  in a closing summary and ends in a failing exit status, rather than reporting success with the
-  detail buried in warnings. What a
-  box can back up is derived from what it actually has, never from a fixed list - a target without a
-  database engine produces a webmail component of directories and no dumps. The archive is root's
-  alone at 0600, because `/etc/roundcube` carries the `des_key` and the database password.
+- **restic is an addon, and the customer's package decides the mode** (#217).
+  `h-add-sys-restic`/`h-delete-sys-restic` replace the unconditional install;
+  `BACKUPS_MODE='full'|'diff'|'restic'` lives in the package, and the nightly run dispatches per
+  customer. A restic run writes two artefacts that belong together - the snapshot and a metadata
+  package beside the repository (records, SSL, PAM, cron, a spare copy of the repository key) -
+  and retention treats them as a unit: `forget` decides over the snapshots, the packages follow
+  the survivors. The restore path reads the metadata from the package; before, it read a tree no
+  snapshot has carried, so every restic restore died at its first metadata read. Removing the
+  addon refuses while a customer still runs in restic mode: deleting the tool must not delete
+  backups. `h-delete-user-backups-restic` is the explicit, consent-worded way out,
+  `h-list-sys-backup-orphans-restic` names what is left over, and `h-export-user-backup` writes
+  one ordinary archive out of a restic customer - the migration artefact, exempt from rotation,
+  travelling under `snappymail` instead of our `tachyon` so a foreign panel accepts it (#837).
 
-- **An archive put into the backup folder by hand becomes visible to the panel** (#709).
-  `h-add-user-backup` writes the `backup.conf` record a foreign archive never had, and writes it
-  from the archive's own members rather than from its name - the name is a claim, the members are
-  the finding. Until now a HestiaCP archive could only be restored from the command line, and
-  nothing said so. It takes a basename and no path, resolves only inside the backup folder, and the
-  record is marked `ADOPTED`: the nightly rotation prunes by age and would otherwise take the
-  migration source first, and deleting the entry now forgets the record while leaving the operator's
-  file where they put it.
+- **Differential backups** (#712). A customer in diff mode gets archives whose web and mail
+  members carry only what changed against the newest full; everything else stays whole. Every
+  backup now carries a content map (path, BLAKE3 hash, mode, owner - `b3sum` joins the base
+  packages), taken so a file changing mid-run is re-shipped rather than treated as covered. A
+  diff member is named `domain_data.diff.tar.zst` - the name says what it is (#840) - and the
+  restore refuses a diff whose base is missing or fails the recorded map hash, before the first
+  write. `BACKUPS` counts SETS now, one full plus its diffs; a base is kept as long as its set
+  is, because rotating the full first wiped the entire history in one run. Archives are
+  byte-identical for an unchanged tree.
 
-- **What a restore cannot put back is handed to the customer instead of left in the archive** (#708).
-  DNS zones with their records and rendered zone files, custom web templates, and the raw members of
-  any section this host has no subsystem for - a database dump this box cannot load among them - land
-  in `~/leftovers/<timestamp>/`, owned by the customer at 0700, with the loss report beside them. A
-  dump in hand is somewhere else in minutes; inside an archive it has to be found first. `leftovers`
-  joins `conf`, `web`, `mail`, `tmp` and `dns` as a reserved name in the home: a directory a customer
-  had under that name before would stop being archived.
+- **Remote backup targets fail loudly, keep more, and can hold the only copy** (#790). After
+  every upload the target's fresh listing is asked whether the archive actually arrived - an
+  unreachable target used to produce a green run and an archive that existed nowhere. Restore
+  and panel download chain every configured transport; a degraded run keeps the local archive,
+  names the failed target in log and mail, and exits non-zero after all bookkeeping. Every
+  remote host takes an optional KEEP - its rotation keeps that many sets while the local one
+  keeps the package's number - records outlive the local file, and a diff base may live on a
+  remote only. **OPERATIONAL NOTE:** the ftp/sftp listings arrived CRLF-tainted and remote
+  rotation was structurally dead; the first run against a grown target counts the accumulated
+  archives for the first time and removes everything beyond retention.
 
-  Same derivation as the loss report, so the two cannot drift, and the same consent rules as every
-  other section. "Nothing to hand over" is printed rather than left as silence, and a run that named
-  objects says so instead - it was asked for those, not for the rest of the archive. The directory is
-  on the backup's fixed exclusion list, so it does not grow into the next archive.
+- **Every customer's archives live in their own folder** (#789). `/backup/$user/$user.<date>.tar`
+  replaces the flat layout; readers accept two places - the customer folder, then `/backup`
+  itself as the hand-off spot for a migration archive dropped in by hand. `/backup` went from
+  0755 to 0711, so local users can no longer enumerate customer names and backup dates; `server`
+  joined the reserved login names; `h-download-backup` refuses a name that has no record for
+  that customer. Restoring from an unrecorded archive adopts it (#820) - without a record the
+  migration source counted as its own set and `BACKUPS='1'` removed it on the next run.
 
-- **An archive says who wrote it** (#707). `hestia/origin` carries producer, version, format,
-  compression mode and timestamp, and the report prints them. It is forensics, never detection:
-  no archive written before today has one and a HestiaCP archive never will, so anything keying on
-  it would be deciding by its absence. Where it disagrees with the members - it claims gzip and the
-  archive is zstd - the members are what the restore acts on and the report says both. Verified
-  inert in the other direction on a real HestiaCP 1.10.3 box: a HestiaRE archive restores there
-  cleanly and the extra member is ignored.
+- **The state that belongs to the box has its own backup** (#710). Webmail databases,
+  `hestia.conf`, the hosting packages and the firewall sources fit in no per-customer archive;
+  `h-backup-server` takes them, `h-restore-server` puts back only components that are named and
+  consented to. The SQLite webmail store on a box without a database engine is snapshotted with
+  SQLite's own `.backup`, and was backed up by nothing before.
 
-- **A backup archive can be inspected before a restore touches anything** (#707).
-  `h-list-backup-contents` reads the archive FILE rather than the `backup.conf` record, so an
-  archive put into `/backup` by hand - a HestiaCP one - can be looked at at all; until now nothing
-  could see it. The same report runs as the restore's preflight, before the first write.
+- **A restore reads, asks and reports before it writes** (#707/#708/#709).
+  `h-list-backup-contents` inspects the archive FILE - a HestiaCP archive placed by hand can be
+  looked at at all - and the same report runs as the restore's preflight. Consent is collected
+  per section before the first write, as a prompt or a `CONSENT` argument, the panel's
+  PHP-fallback choice included (#608). What cannot be put back lands in the customer's
+  `~/leftovers/` next to the loss report; a section this host has no subsystem for is named,
+  skipped and counts as a part that did not come back - a pgsql dump on a MariaDB-only box took
+  the whole run down before. `h-add-user-backup` adopts a hand-placed archive from its members,
+  and an archive says who wrote it (`hestia/origin`).
 
-  It answers what the restore used to answer only by doing it, or not at all: DNS zones **by name**,
-  because that is the question somebody moving off HestiaCP is actually asking; sections that would
-  be dropped in full because this host has no such subsystem, **with the object count**; templates
-  and PHP versions that will be rewritten; record keys and package limits this host has no use for.
-  An empty report is printed in words - "nothing falls away" and "the probe read nothing" had no
-  way of looking different before.
-
-- **A database whose engine this host does not run is named, and skipped instead of fatal** (#707).
-  `DB_SYSTEM` is a comma list - a HestiaCP box routinely carries `pgsql,mysql` - and the import was
-  a `case` over the type with no default branch, so a postgres dump on a MariaDB-only host took the
-  whole run down at that object. Measured against a real HestiaCP archive: three web domains and two
-  mail domains were already written, and the second database, every cron job and the entire home
-  directory never arrived. The preflight names it before the first write, and the restore finishes
-  everything else and then exits non-zero saying what did not come back.
-
-- **A restore asks before it writes, section by section** (#707). The only question it used to ask
-  sat inside the web section, so refusing it left the account, its data directory and its home
-  behind - a customer that exists and holds nothing. Consent is collected before the first write
-  now, and the run either has it for everything it plans to do or it has not started at all. Naming
-  objects in a selector is itself the consent for that section, so the panel's per-object restore
-  and the four `h-restore-*` wrappers work exactly as before; with a terminal the run prompts per
-  section; and where nobody can be asked - the queue, the panel - the consent travels as a `CONSENT`
-  argument from a closed set (`all`, the five sections, `php-fallback`). An argument rather than an
-  environment prefix, because the queue line is executed by bash and an env prefix in front of it
-  would put operator input into a command line (#661). Sections this host cannot serve are never
-  asked about; the report already says they will be dropped.
-
-  `all` deliberately does **not** cover `php-fallback`: moving a customer's domains onto a different
-  PHP version is not "restore everything", and #591 exists because that used to happen quietly.
+- **Sieve is reachable for customers, and moving mail to Spam trains the filter** (#780). The
+  engine was installed, ManageSieve was listening, and nothing could reach it; both webmails now
+  load their sieve integration. Moving a message into or out of Spam teaches rspamd through
+  imapsieve, on the `Spam` folder exim actually files into; every learn is logged with the
+  account that caused it.
 
 ### Security
 
-- **A restore selector reaches the queue through a closed character set** (#707). The five selectors
-  are spliced into the line `h-update-sys-queue` runs through `bash` as root, and they only had a
-  deny list of three characters in front of them - a pipe, a semicolon, a backtick and a `$(` all
-  went in. Not exploitable: they land inside single quotes and the one character that ends those was
-  already refused. But a deny list holds only as long as the quoting around it does, and it was a
-  too-wide allowed set that put a pipe on that line once before. A home entry with a space still
-  passes, because `my documents` is a name a customer can really have; one with a tab is refused,
-  because `tar` prints that escaped in the listing the restore matches against, so such a selector
-  used to be accepted and then quietly select nothing.
+- **The restore trusts nothing it did not write** (#705/#706/#707). An archived record must be
+  exactly `KEY='VALUE'` before it joins a live config; the exclusion list goes through the
+  hardened reader instead of a raw `source`; the restore selectors reach the root-executed queue
+  line through a closed character set; a Vesta archive is refused by name.
 
-
-- **The backup exclusion list is read through the hardened reader** (#706). Three places still used
-  a raw `source` on a file the customer's panel writes, while the fourth already used `source_conf`
-  - the same shape as the upstream advisory that reader exists for. `add_object_key`'s existence
-  check is anchored too: unanchored, a key that is a suffix of one already in the record counted as
-  present and was silently never added.
-
-- **The listers print their values with `printf`, not by splicing them into an `echo`** (#728). The
-  JSON emitters built their output as one big quoted string with `'$VAR'` holes, which leaves the
-  value unquoted - so the shell split and globbed it *after* `json_escape` had run. Whitespace runs
-  inside a value collapsed, and a value holding a `*` was replaced by the filenames in the working
-  directory: text that never went through the escaper, so a filename containing a `"` opens a
-  second key in the document. 53 emitters, 693 values. Where a lister happened to have set
-  `IFS=$'\n'` for an unrelated loop it was inert - by luck, not by design.
-
-- **A record is quoted on its way into the parser, at every call site** (#723). Forty-six `h-*` and
-  helper calls handed the record over unquoted, so the shell split and globbed it before either
-  parser saw a character: a cron record holding `MIN='*'` picked up any file named `MIN='...'` in
-  the working directory and the parsed value became that filename. A customer only has to create
-  one such file in a directory an admin later runs a command from. Two of the forty-six are shared
-  helpers - `get_object_values` and `get_domain_values`, the latter with 42 calling files. Unquoted
-  also collapsed runs of whitespace inside a value.
+- **Record values stopped being shell-expanded on their way to the panel** (#723/#728). 46 call
+  sites handed records to the parsers unquoted and 53 JSON emitters spliced values into `echo`,
+  so a `*` in a value globbed against the working directory and a crafted filename could open a
+  second JSON key. Values travel quoted and through `printf` now.
 
 - **A failing `mktemp` no longer lets the panel write into an unset path** (#703). Thirty save
-  routes took `exec("mktemp")` and used `$output[0]` without checking it, so a failure produced an
-  empty path: `fopen()` on it aborts the request with a fatal, and the certificate or service
-  config the route was about to hand to the CLI is gone with it. They now go through
-  `private_tmpfile()` / `private_tmpdir()`, which return `false` and make the caller branch. The
-  login route is covered too - it wrote the password hash the same way. The backup exclusion list
-  also stopped leaving its tempfile behind.
+  routes used the result unchecked; they now branch instead of writing a certificate or a
+  password hash to a path built from an empty string.
 
-- **An archived record is checked before it is trusted** (#705). Appending the archived line
-  verbatim is what preserves the fields, but it also puts a line this box did not write into a live
-  config, and not every reader goes through the tokenizer - some parse with `sed` on quote
-  boundaries, and the listers splice into JSON. A record must now be exactly `KEY='VALUE'`, with the
-  quote, backslash, backtick, doublequote and newline refused; `$` stays allowed because the crypt
-  hashes carry it. Mail records were appended with no check at all before. The three archive parses
-  are quoted now - unquoted, the archive content word-split and globbed before the parser saw it.
+### Changed
+
+- **`check_result` refuses an empty or non-numeric error code** (#217). `E_BACKUP` was referenced
+  and defined nowhere, so three guards silently never fired; the next typo of this class is a
+  loud failure.
+
+- **The backup compression level is validated where it is set** (#776). `BACKUP_GZIP` feeds two
+  scales (gzip 1-9, zstd 1-19) and nothing checked either, so an out-of-range value killed every
+  backup at 3 a.m.; the four competing defaults are one value now, measured at the knee.
+
+- **The shell lint gate covers everything that is shell** (#777/#770). `sbin/` sat outside both
+  tiers, so a change to the installer was answered with "no changed shell files"; the predicate
+  now derives from content, a run that measured nothing fails, and the format-exempt list is empty.
 
 ### Removed
 
-- **Vesta archives are refused instead of half-supported** (#707). The restore carried a container
-  variable through twenty-six path joins and a `sed` over `cron.conf` so that a `./vesta` archive
-  could be read - a permanent constraint on every path in the restore, for a panel that has not
-  produced an archive in years. The container is a constant now, and a Vesta archive is detected,
-  named in the report and refused before the first write.
+- **Demo mode** (#759). A config key that made 365 commands refuse to do anything, for a public
+  demo box that will never exist here.
+
+- **The backup pages no longer offer DNS** (#713). Zones stopped being backed up when the
+  subsystem went; the panel kept the column and handlers, fed by a field the backup fills with
+  nothing. The `[DNS]` argument and the empty `DNS=` record stay as HestiaCP compatibility.
 
 ### Fixed
 
-- **A home entry whose name carries a backslash or a tab comes back** (#736). The restore built its
-  list of home entries from `tar -t`, which prints such names *escaped*, and then asked for a file
-  under the escaped name - so the unpack failed and took the whole section with it, including the
-  entries that were fine. A customer creates that state themselves, with one folder copied out of a
-  Windows share, and it only shows when the restore is needed. The names come from the directory the
-  container unpacked into now, which cannot disagree with itself, and a single entry that cannot be
-  read is named as a failure instead of abandoning the rest. Inherited: HestiaCP 1.10.3 does the
-  same.
+- **A PostgreSQL database came back from a restore with its password destroyed** (#752). The hash
+  was parsed out of `psql`'s aligned table - the backup took the column heading - and the bare
+  `CREATE ROLE` on the way back was `NOLOGIN` on top, so the role could not log in whatever its
+  password said. The hash is read as a value, an empty one never replaces a working credential,
+  and a role restored without a password is named and colours the exit status.
 
-- **Removing CrowdSec no longer leaves its domains answering 500** (#743). The uninstall took away
-  the bouncer and the init config and left every per-domain fragment behind, still calling
-  `require("hestia_bouncer")` - and since the directive keeps parsing while the lua module is
-  installed, `nginx -t` stayed green and the reload put the breakage live on the spot. The fragments
-  go with it now, found in the tree rather than from the records, because one can outlive the other.
-  The records keep their `yes`, so reinstalling brings the protection back.
+- **A restore under a different customer name deleted the source customer's database and reported
+  success** (#764). The deletion took the name out of the archive while everything else worked on
+  the target's name - invisible on every same-name restore. The name now comes from the customer
+  being restored into, and the ownership check sits in the delete itself.
 
-- **A domain carrying `CROWDSEC='yes'` no longer breaks the whole nginx config on a box without
-  CrowdSec** (#741). The per-domain fragment was written from the record and gated only on the web
-  model, so an nginx that has no bouncer got a `rewrite_by_lua_block` it cannot parse - and that
-  invalidates the entire configuration, not the one domain. Nothing looks wrong until something
-  reloads, at which point every site on the box is affected. The fragment is now intent *and*
-  capability, decided by the artefact the CrowdSec apply step installs; the record keeps its `yes`,
-  so moving back to a CrowdSec box restores the protection. Reachable on any rebuild, and the normal
-  way in is a restore between two HestiaRE hosts with different addons.
+- **Suspending a web domain switched its forced HTTPS and HSTS off for good** (#720). The rebuild
+  called delete-then-add and the add half refuses on a suspended domain; unsuspending never
+  brought the settings back. A suspended domain now renders the suspend template around its
+  existing fragments, and a domain that was suspended when archived comes back suspended.
 
-- **The directory-listing switch stopped printing a `sed` error on every rebuild** (#731). It patched
-  the SSL vhost as a second file, which the merged template has not produced since both blocks moved
-  into one - so every unsuspend and every restore of an SSL domain wrote a "cannot read
-  apache2.ssl.conf" line to stderr while doing the right thing. The one `sed` already covers both
-  blocks; the second only runs where a legacy pair actually exists.
+- **A restored web domain keeps every field it had** (#705). The record was rebuilt from a
+  hand-written key list, so password protection and the newer switches did not come back - and
+  the repair re-inserted them empty, so the record looked healthy. The archived line is the
+  record now, edited in place. A DKIM record without its private key is a named failure instead
+  of a green restore that fails every message.
 
-- **A queued job removes its own line, not every line naming the customer** (#733). The cleanup on
-  every abort path matched ` <customer> `, and since the scheduler quotes a restore's arguments the
-  pattern never matched the restore's own line - it matched the customer's queued *backup* instead.
-  So a refused restore deleted the backup that was waiting and left itself in the queue to fail
-  again on every tick, both without a word. The line is now located as fixed text by command,
-  customer and archive, and only the first hit is removed.
+- **A record value containing a quote no longer breaks the JSON the panel reads** (#704/#719).
+  85 emitters escape through one function; the search commands stop emitting an escaped copy of
+  the record.
 
+- **One inconsistent record no longer stops every reload on the box** (#797/#741/#743). A docker
+  domain restored without its address rendered `http://:3000`, a `CROWDSEC='yes'` domain on a box
+  without the bouncer rendered a lua block nginx cannot parse - either invalidates the ENTIRE web
+  configuration. Both fragments are now intent AND capability, the contradictory record is named
+  and skipped, and removing CrowdSec takes its per-domain fragments with it.
 
-- **Suspending a web domain no longer switches its forced HTTPS and HSTS off for good** (#720). The
-  rebuild re-renders those switches by calling delete and then add. The add half refuses on a
-  suspended domain, the delete half has already written `no` into the record - so a suspend printed
-  four `is suspended` errors and left the domain with `SSL_FORCE='no'`, `SSL_HSTS='no'`, no proxy or
-  FastCGI cache and, in a restore, no FTP account. Unsuspending did not bring any of it back: the
-  domain came out of a suspension no longer redirecting to HTTPS. A suspended domain renders the
-  suspend template, which includes the existing fragments unchanged, so the rebuild leaves them
-  alone until the domain is unsuspended.
+- **logrotate was failed on every target since install day** (#798). Our roundcube rotation
+  doubled the package's paths, which logrotate treats as an error; the package file is diverted
+  now, and a smoke guard asks logrotate itself to parse the configuration.
 
-- **A domain that was suspended when it was archived comes back suspended** (#720). The restore
-  forced `SUSPENDED='no'`, so a locked domain was served again the moment it was restored. It keeps
-  the archived value now; `SUSPENDED_WEB` is recounted from the records as before.
+- **An unreachable remote target failed anonymously, and the mail saying so never left the box**
+  (#796). The sftp wrapper had no branch for a session that dies at once, so an empty reason was
+  mailed; and the failure path ran with a deleted working directory, so exim refused to start and
+  exactly the mail that reports a degraded run was dropped.
 
-- **A customer directory with a space in its name no longer aborts the restore** (#706). The restore
-  walked the list of home directories with an unquoted `for`, so `my documents` became two names and
-  the run died on `Can't unpack my user dir container` - after the web, mail and database sections
-  had already been written. The four lists that come out of the archive rather than out of a
-  validator are read line by line now, and the certificate copy globs instead of parsing `ls`, where
-  the domain was also spliced unquoted into a regex and its dots matched any character.
+- **Removing sieve destroyed the mail server on two of four targets** (#780). Their
+  `dovecot-core` depends on `dovecot-sieve`, so the purge took core, imapd and pop3d with it; the
+  package stays where core requires it and only the configuration goes.
 
-- **Restoring an archive under a different customer name no longer duplicates every database
-  record** (#721). The existence check looked for the archived name while the record carries the
-  renamed one, so it never matched: the fresh branch ran every time, and a second restore of the
-  same archive appended everything again - two records became four. It also meant the branch that
-  protects a database already on the target was unreachable in exactly that case.
+- **Every failed panel login wrote "Method not supported by crypt(3)." into the FPM log** (#817).
+  The yescrypt branch handed `mkpasswd` the whole shadow hash as its salt, so "wrong password"
+  read like a libcrypt defect - the one fault it would matter to see.
 
-- **The two search commands report the record, not an escaped copy of it** (#719).
-  `parse_object_kv_list_non_eval` escaped `"` and `$` on the way in and never undid it, so every
-  value it parsed carried the backslashes: `h-search-object` and `h-search-user-object` emitted
-  `\"` where the record holds `"`. The escaping protected nothing - the data reaches the parser
-  through a quoted expansion and is assigned through another, so neither character is ever
-  re-expanded. The same function also read its pairs through word splitting, which globs, so a
-  record value containing a `*` came back as a filename from the working directory.
-  **The search output changes shape**: it was wrong before, and anyone parsing it gets correct
-  values now. The only consumer in the tree is the panel's search page, where this is plainly a
-  correction; upstream carries the identical escaping, so `v-search-object` and
-  `v-search-user-object` now differ from HestiaCP's output - deliberately, because HestiaCP's is
-  the broken one.
+- **A customer whose `user.conf` lost a package limit was locked out of their own package**
+  (#711). An absent limit read as zero; it now falls back to the package file, the repair seeds
+  real values instead of empty ones, and duplicate keys are removed instead of only prevented.
 
-- **A record value containing a quote no longer breaks the JSON the panel reads** (#704). The
-  `h-*` commands build JSON by string concatenation, so a `"` or a backslash anywhere in a
-  record - a domain alias, a notification, a certificate subject, a log line - produced a document
-  `json_decode` rejects, and the panel showed an empty page instead of the object. Escaping now
-  happens once, in `json_escape` (`include/main.sh`), applied by all 85 emitters. Three listers
-  carried a local half-fix that covered the fields upstream #5585 named and missed the rest. A hand
-  check on the `docs` branch (`tests/lint/`) derives both the spliced and the escaped names
-  from the source, so a field added later cannot slip past unescaped - and reports the opposite
-  defect too, a value escaped by hand as well as by the helper, which is how a doubled `\"` reached
-  the panel from five emitters. Alongside it, 17 listers read the record with `read` and no `-r`,
-  so a backslash in any value was eaten before anything was escaped at all.
+- **Two backups of the same customer in one second silently replaced each other** (#841). In diff
+  mode that is data loss - a diff can replace the very base it was built against. A run now waits
+  a second right where it stamps.
 
-- **A restored web domain keeps every field it had** (#705). The restore rebuilt the record from a
-  hand-written list of keys, so anything the list did not know simply did not come back: the
-  domain's `AUTH_USER`/`AUTH_HASH` - its password protection - along with `WP`, `DIR_LIST`,
-  `CROWDSEC` and `BOTLIMIT`. The repair pass then re-inserted those keys empty, so the record looked
-  healthy afterwards and the page was open. It only fires when the domain is new on the target,
-  which is exactly migration and disaster recovery. The archived line is the record now, edited in
-  place, with only named fields rewritten - a field added later survives without anyone remembering
-  it. The same applies to the database record.
+- **Rebuilding a single database set the customer's database count to 1** (#757). The singular
+  command inherited its plural sibling's accumulator without the flush, claiming one database's
+  count and usage as the customer's total.
 
-- **A DKIM record without its private key is now a named failure** (#705). An archive whose record
-  says `DKIM='yes'` but carries no `.pem` left a `cp` error on stderr while the restore reported
-  success: the panel showed DKIM on, exim signed nothing, and the published TXT record kept
-  announcing a key - so every message failed DKIM rather than merely being unsigned. The restore
-  finishes the rest and then exits non-zero naming what did not come back.
+- **A failed addon install no longer hides behind a green installer line** (#843). Seven
+  installer calls swallow their errors on purpose; the closing smoke run now recounts each
+  requested addon by its artefact and names what is missing, the addon set derived from the
+  installer file itself so a new one cannot ship unverified.
 
-- Smaller inherited ones, all in the backup path: a dead `google_download` call left over from the
-  B2 removal, `egrep` in five places, and `sftp_delete` printing the backup name and the remote path
-  on stdout - which the panel showed the customer as part of the error message when a remote delete
-  failed.
+- **An archive from a box without a proxy no longer switches static serving off on the target**
+  (#836); a webmail client the target does not offer is named instead of silently serving
+  nothing (#837); a restic restore no longer erases the HTTP/3 switch (#835).
+
+- **"Back" led to the administrator's own profile, not to the customer being managed** (#779),
+  when managing without impersonation; and a long SSH key wraps instead of bursting its cell.
+
+- Smaller inherited ones, almost all in the backup path: a home entry with a space, tab or
+  backslash in its name aborted or lost the section (#706/#736), a restore under a new name
+  duplicated every database record (#721) and pointed password protection into the old
+  customer's home (#756), a refused restore deleted the customer's queued backup instead of its
+  own line (#733), saving the exclusions page cleared the cron exclusion (#768), the restic bulk
+  restore restored the wrong thing or nothing (#767), two addon installers announced work they
+  had not done (#772), restored notifications and the second FTP account came back wrong
+  (#713/#764), and a restore no longer reports success when a whole section could not come
+  back (#754).
 
 ## v0.16.0 (2026-08-18)
 
@@ -1053,251 +218,76 @@ reordering (#621) and the read-side hardening of the panel (#578/#649).
 
 ### Added
 
-- **WordPress as a panel-managed web-domain option** (#682). A checkbox under the PHP version
-  installs a complete WordPress as the customer, through the pinned wp-cli running the domain's own
-  backend PHP: verified en_US core with the panel language as a language pack, a database, a cron
-  entry instead of wp-cron, and admin credentials shown exactly once. An installed site offers admin
-  login, core update and a delete behind a typed-domain confirmation. Unticking detaches - the site
-  keeps running, the panel lets go - and the custom document root disappears while WordPress is
-  managed, because pointing the domain elsewhere would orphan the installation.
-
-- **Both webmailers at once, chosen per mail domain** (#584). The runtime always supported
-  coexistence; the entry path did not. The wizard question is a checklist now, one row per client,
-  so a third client is one more row instead of doubling a radio's options. The `WEBMAIL` record's
-  value domain is decided on write and known statically rather than by install state, so a client
-  that is merely absent keeps its record and heals when it returns.
-
-- **A user's hosting package travels with its backup and is restored** (#663). A restore onto a box
-  that never had that package recreates it instead of leaving the user pointing at nothing.
-  Add-only: a package of that name already on the target is kept as it is, even with different
-  values - the admin owns the target definition.
+- **WordPress as a panel-managed web-domain option** (#682): a checkbox installs a complete
+  WordPress as the customer through the pinned wp-cli - core, database, cron, credentials shown
+  once - with admin login, core update and delete behind a typed confirmation. Unticking
+  detaches; the site keeps running.
+- **Both webmailers at once, chosen per mail domain** (#584); the `WEBMAIL` value domain is
+  decided on write, so an absent client keeps its record and heals when it returns.
+- **A user's hosting package travels with its backup** (#663) and is recreated on a box that
+  never had it - add-only, an existing definition is the admin's.
 
 ### Security
 
-- **A validator character class let `|` through into a `bash`-executed queue line** (#393, GHSA-47mf
-  class). Nine validators wrote their allowed set as `[-|\.|_[:alnum:]]`, where `|` is a *member* of
-  the bracket expression rather than alternation. `h-schedule-user-backup-download` writes its
-  validated name unquoted into a queue line that root runs through `bash`, so a backup name like
-  `x|command` was a shell pipe - reachable from the panel's download form.
-
-- **Panel-set passwords no longer land in cleartext in auth.log** (#693/#694, external report). sudo
-  logs every allowed command line verbatim to authpriv, argv included, into a rotating file that
-  ends up in backups; inherited unchanged from upstream. Classic sudo takes `Defaults:hestia
-  !log_allowed` (denials keep logging), sudo-rs validates no logging option at all and gets an
-  rsyslog drop rule instead. Underneath, the secrets left argv entirely: they travel to the `h-*`
-  commands through a 0600 tempfile, so only a path reaches the process arguments. The smoke check
-  asserts both layers per run by pushing a throwaway marker through an allowed call.
-
-- **Certificate uploads could have been written to the filesystem root** (#682 review). The SSL
-  blocks in the web-domain form read `$mktemp_output[0]` unconditionally; on a failed `mktemp -d`
-  that index is unset, so certificate, key and CA landed in `/` under the panel user,
-  world-readable. They come from `private_tmpdir()` now, which returns false instead of a path.
-
-- **Four panel gates decided permissively when their input was missing** (#578). An unreadable
-  system config left the session without a single policy key, and an absent key is the open reading
-  at every gate - the password reset was allowed although the admin had switched it off; the panel
-  answers 503 now rather than deciding without its own configuration. `$is_real_root_user` compared
-  two empty strings. A suspended customer was served 13883 bytes of complete HTML because the check
-  ran after the headers were gone. And the logout did not rotate the session id.
-
-- **A customer could set a control the policy had taken away from them** (#649). With
-  `POLICY_USER_CHANGE_THEME=no` the theme select is not rendered, but the handler read the key
-  whenever a request carried one. Value controls decide on the server-side gate now, not on the
-  presence of the key.
+- **A validator character class let `|` through into a `bash`-executed queue line** (#393):
+  nine validators wrote `[-|\.|_[:alnum:]]`, where `|` is a member, and a backup name reached
+  root's queue as a shell pipe from the panel's download form.
+- **Panel-set passwords no longer land in cleartext in auth.log** (#693/#694): sudo logged every
+  allowed argv; secrets now travel through 0600 tempfiles and the logging is off on both sudo
+  flavors, asserted per smoke run.
+- **Four panel gates decided permissively when their input was missing** (#578): an unreadable
+  config left every policy key absent, and absent read as allowed; the panel answers 503 now.
+  A suspended customer was served whole pages, and the logout did not rotate the session id.
+- **A customer could set a control the policy had taken away** (#649): handlers read POST keys
+  the form never rendered; value controls decide on the server-side gate now. Certificate
+  uploads stopped trusting an unchecked `mktemp` (#682).
 
 ### Changed
 
-- **SnappyMail is replaced by Tachyon, its fork** (#584). Upstream has been dormant since October
-  2024 with the maintainer gone, and no security-patch channel for an internet-facing login is
-  disqualifying. Tachyon keeps the identical layout, config keys and plugin ecosystem, so the
-  integration carries over as a rename. The three plugins are pinned release assets, sha256-verified
-  before anything is touched - deliberately not fetched through Tachyon's own installer, which reads
-  a package list from a moving branch and would hand the component that changes system passwords to
-  an unpinned address. No migration for existing SnappyMail installs.
-
-- **Webmailers no longer require MariaDB - SQLite is the recorded fallback** (#584). Both add
-  commands decide the backend once at install time and record it in the app's own config: MySQL when
-  the box has it, otherwise SQLite. A MariaDB added later never flips an existing install, and
-  `hestia update` stays aware of the exception through that artefact.
-
-- **The mailonly preset stops asking and installing what a mail box has no use for** (#656/#689).
-  The database screen is gone; PostgreSQL, Redis, phpMyAdmin, Composer, Docker and the file manager
-  are off without a question, each still installable by hand. The forced MariaDB install went with
-  the sqlite webmail backend that removed its only consumer.
-
-- **Composer comes from the OS package by default, and the source is switchable on a live box**
-  (#237, closes #208). Every install used the upstream installer, whose composer then never updates.
-  `h-update-sys-composer os|upstream` installs and verifies the new source **before** removing the
-  old one, which is mandatory: `/usr/local/bin` shadows `/usr/bin`, so a leftover phar would
-  silently mask the OS package.
-
-- **wp-cli is pinned and verified, and the PHP-tooling downloads are bounded** (#237). The phar came
-  from a moving build address with no checksum. It is a manifest pin now, fetched by one helper, and
-  `wp cli update` is gone from our paths. `h-add-user-composer`'s update path actually runs:
-  `[ -f "$update" ]` asked whether a file named "yes" exists, so selfupdate had been dead since
-  inheritance.
-
-- **The panel forms are reordered around what people actually change** (#621/#239). The web-domain
-  form puts the 503 switch, the backend block, statistics and SSL above the fold and everything else
-  behind a button that moved into the toolbar; edit-user got the same treatment. The database and
-  mail-account forms lost their folds entirely - the button took about as much room as the fields it
-  hid. The bottom Save row's indent is not a measured number: an invisible copy of the same button
-  reserves the width, because the toolbar's Save is as wide as its translation.
-
-- **`func/` is now `include/`, and `func/internal/` is dissolved** (#4). 18 files, ~1876 references.
-  The two that mattered beyond a path rewrite are the lint gate's `is_shell()` regex and the
-  `.editorconfig` glob: both decide which files get checked at all, so a stale one would have made
-  the gate go green by looking at 18 files less.
-
-- **Hosting packages move to `/etc/hestia/packages/`** (#663). They are instance state, created from
-  the panel, so they belong under `CONF_DIR` rather than in the install root that an update replaces
-  wholesale. The shipped ones are samples now, seeded only when absent.
-
-- **What the panel must not reach moved to `sbin/`** (#209). `bin/` held more than commands: the PHP
-  wrappers and the install, uninstall and update entry points. A directory is a boundary that cannot
-  rot; a list of 213 command names would have.
-
-- **The panel certificate and the mail SNI links leave the install root** (#564). The certificate
-  lives in `/etc/ssl/hestia/` - not under `/etc/hestia/`, which is `0700` and unreadable for caddy,
-  exim and proftpd - and the exim SNI directory moved into the service's own configuration.
-
-- **A conditionally rendered control now reads through the gate that rendered it** (#649). A control
-  the form did not render sends no key, and every form carried its own idea of what that means -
-  three separate patches of the same class in one week. `post_or_keep()` and `post_checkbox()` hold
-  the rule, and each gate is named once so view and POST read the same expression.
-
-- **The panel reads a CLI result in one place** (#578). `cli_json()` declares `: array`, so "always
-  an array" is checked rather than agreed, and the remaining 61 hand-written decodes go through it.
-  A scalar result takes the new `cli_value()`, which answers `null`.
-
-- **PHP has a format contract again** (#647). Upstream formats with prettier, which needs node and
-  cannot run on our runner, so nothing had enforced the style since the fork.
-  `.php-cs-fixer.dist.php` pins PSR-12 with tabs and the tree was formatted once.
-
-- **What the installer creates no longer depends on the admin's umask.** deb13 and ub26 ship no
-  `UMASK` line in `login.defs`, so 24 paths came out group-writable there - the same class that made
-  cron silently refuse the Let's Encrypt fallback. Pinned once in the installer and the updater.
-
-- **MariaDB installs 11.8 by default** (#656) on the standard and nomail presets; 11.4 stays
-  selectable because Magento 2.4.9 is approved against it. **Notification-mail overrides** are read
-  from a path that can hold them (#393) - the reader looked one level above the samples, so no
-  override ever loaded. **`h-update-user-cgroup`** refuses to run while `RESOURCES_LIMIT` is off
-  (#650): all four callers already gated, but the safety lived outside the command.
-
-- **PROVENANCE recomputed for all four folders** against `upstream/hestiacp@5eb9396` (snapshot
-  2026-08-14), with `include/` measured for the first time since it was `func/`. The raw churn rose
-  where this release moved our own files rather than where upstream moved: the PHP formatting run
-  and the `func/` rename account for nearly all of it (bin 12 -> 15%, web 8 -> 18%, include 28 ->
-  29%, share unchanged at 8%). The 40 compiled catalogues keep their own pinned ref. `share/` gained
-  the six files the reorganisations had left unlisted and lost two paths that had moved.
-  CODEMAP/STRUCTURE carry the mail-template move, and the upstream pins were re-verified: tachyon
-  3.2.2 and wp-cli 2.12.0 are still the latest and still match their recorded hashes, and 8.5 is
-  still the newest GA PHP, so `php_supported` does not move.
+- **SnappyMail is replaced by Tachyon, its fork** (#584): upstream is dormant with no
+  security-patch channel for an internet-facing login. Plugins are pinned, sha256-verified
+  release assets. Webmailers fall back to SQLite where MariaDB is absent, recorded at install
+  time, which let mailonly stop installing a database engine at all (#656/#689).
+- **Composer comes from the OS package by default** (#237), switchable live; wp-cli is a
+  verified manifest pin instead of a moving build address.
+- **The panel forms are reordered around what people actually change** (#621/#239).
+- **`func/` is `include/`, packages live under `/etc/hestia/`, and what the panel must not
+  reach moved to `sbin/`** (#4/#663/#209) - a directory boundary instead of a 213-name list.
+  The panel certificate left the unreadable install root (#564).
+- **A conditionally rendered control reads through the gate that rendered it** (#649)
+  (`post_or_keep`/`post_checkbox`), and the panel decodes CLI results in one place (#578).
+- **PHP has a format contract again** (#647): PSR-12 with tabs, formatted once. Installer
+  output no longer depends on the admin's umask. MariaDB defaults to 11.8 (#656).
+- **PROVENANCE recomputed** against upstream 5eb9396; the churn rise is our own formatting and
+  renames, not upstream movement.
 
 ### Removed
 
-- **The custom preset** (#195). The standard path already asks everything relevant and the other
-  presets carry their specialities; custom only re-asked the same questions without defaults, plus
-  the implicit architecture questions nobody should answer ad hoc. A configuration beyond every
-  preset means writing `/etc/hestia/install.conf` by hand.
-
-- **The Backblaze B2 backup backend** (#696). Unused, and dropping it removes an external binary
-  download from the backup path and the last plaintext-argv secret. Remaining: local, sftp, ftp,
-  rclone, restic.
-
-- **`migrate_data_layout`**, replaced by `reapply_outside_tree` (#663). It carried moves that no
-  release has referenced since v0.13.0, twenty tags back, while update covers at most one minor - so
-  none of them could fire. 159 lines down to 31.
+- **The custom preset** (#195) - the standard path already asks everything relevant; beyond
+  every preset means editing `install.conf` by hand. **The Backblaze B2 backend** (#696) and
+  **`migrate_data_layout`** (#663), whose moves no supported update could still reference.
 
 ### Fixed
 
-- **Adding a subdomain under an SSL domain rendered SSL vhosts without a certificate and took nginx
-  *and* apache down** (#683, first tester-reported issue). The ownership check parsed the parent's
-  record in place and leaked every key into the add command's namespace, so the merged template kept
-  its SSL block for the new domain before that domain's own record was written - and the dead vhost
-  then blocked the restart Let's Encrypt would have needed to repair it. The same leak sat in
-  mail-domain add and web-alias add, the latter surviving only by ordering luck.
-
-- **23 panel pages died instead of showing an empty list when a CLI call failed** (#578). They read
-  a command's JSON without looking at its exit code, and `json_decode("")` is `null`, on which the
-  first `ksort()` is a TypeError - on the list pages, the first thing a user sees after logging in.
-  Upstream of them sat `check_return_code_redirect()`, which sent a `Location` header without
-  stopping, so 14 call sites carried on parsing a record their command had never produced.
-
-- **Panel action pages consumed results their command never produced** (#670). Found by rendering
-  all 144 pages against a fresh install: an uncaught `TypeError` on `/schedule/restore/` without a
-  backup id, 15 pages "checking" the return code of an `exec()` a surrounding `if` had skipped, and
-  `/search/` shelling out a `grep` with no pattern. The sweep now produces 0 new log lines, down
-  from 47.
-
-- **A package could not be saved from the panel on an apache web role** (#644), which is three of
-  the four models: the web-template select renders empty there, an empty select submits no key, and
-  the handler read one that was never sent. Four more of the class sat in the same file, including a
-  three-`r` typo that left the shell check dead while an absent control demoted the package to
-  `nologin`, and a system-package lock that read `$_GET` while the write used `$_POST`.
-
-- **Saving a user replaced the theme they had chosen** (#645). No option carried `selected`, because
-  the marker was keyed on a session variable rather than on the value being rendered - and an
-  unmarked select submits its first option, `dark`.
-
-- **The system configuration repair never ran** (#654). `h-repair-sys-config` sources only
-  `include/main.sh`, so both modes answered `command not found` - and then logged the repair as
-  executed. With it working, a running box gained 25 absent keys, most of the `POLICY_*` set among
-  them, which had been reaching the panel as `""` - the permissive side at every gate. An empty
-  value counts as absent now.
-
-- **The panel never took over its own Let's Encrypt certificate** (#656). `UPDATE_HOSTNAME_SSL` has
-  been in the key registry since the fork with no repair block behind it, so it was absent on every
-  box while both readers gate on `== "yes"`. Measured on a public box: LE issued, the certificate
-  sat in the user's domain directory, and Caddy served the self-signed one from install day. The
-  certificate is requested at the end of the install now, not only from an `@reboot` cron that cron
-  refused anyway because the installer's umask had left it group-writable.
-
-- **phpMyAdmin dragged apache2 onto a box that has no apache2** (#656). Its unversioned `php-*`
-  dependencies resolve to `libapache2-mod-phpX` on some targets, and that apache2 binds `*:80`,
-  after which nginx cannot - measured on a fresh Ubuntu 26.04 mailonly install with no webmail vhost
-  and no ACME termination. Ubuntu 24.04 resolved the same dependencies without it, so it cannot be
-  decided per release.
-
-- **Seven calls still reached the `sbin/` commands through `bin/`** (#209). They referenced them as
-  `"$BIN/x"` - a variable, so a grep for the path found none of them. A fresh install died in the
-  panel stage, and `hestia install`, `update` and `uninstall` dispatched into nothing.
-
-- **Two commands refused every call that passed their optional argument** (#564).
-  `is_format_valid` takes variable *names*; `h-add-mail-domain-ssl` and `h-restart-system` handed it
-  the value, so the Let's Encrypt path for a mail domain was impossible.
-
-- **Every domain rebuild on an apache-only box wrote to `/etc/nginx`** (#642). `nginx -v` without
-  the binary prints an error that carries no `/` for `cut` to split on and sorts above every real
-  version, so the box read as "nginx 1.25.1 or newer". The probe fails closed now.
-
-- **The FPM pools pinned a locale that does not exist** (#239). All five set `env[LANG] =
-  en_US.UTF-8`, which none of the four targets generates - awstats alone put 280 perl warnings into
-  the panel log per stats run. Pinned to `C.UTF-8`, which is built into glibc.
-
-- **The Docker disable confirmation never appeared** (#621). The guard registered itself only when
-  the checkbox read as checked at page load - but Alpine drives that box and the module runs first,
-  so it unhooked itself exactly when Docker was on. Underneath sat a second one: `preventDefault()`
-  does not stop other listeners, and the submit handler ends in `mainForm.submit()`.
-
-- **Binary files were bucketed by a measurement that cannot see them** (#551). `git diff --numstat`
-  reports `-` for a binary, which the provenance manifests recorded as 0% churn - so every image,
-  font and compiled catalogue read as unchanged from upstream, including three that plainly are not.
-  Binaries are compared by hash now, with no pct at all. The 40 compiled catalogues are pinned to
-  the snapshot they arrived with, because measured against a newer upstream they describe upstream's
-  translation work rather than anything of ours.
-
-- **The wizard offered Sury's pre-release PHP 8.6, which the installer then refused** (#688).
-  Discovery keyed on package availability while `h-add-web-php` validates against `php_supported`:
-  two reference sets, no agreement check. The wizard offers the intersection now.
-
-- Smaller inherited ones: `.php-cs-fixer.dist.php` still pointed at `func/` and the formatter
-  therefore refused to run at all (#4), `SERVER_ADDR` does not exist under Caddy so an IP allow-list
-  branch in `reset/mail/` could never fire (#670), a configure re-run rewrote admin-created hosting
-  packages through a `sed` that ranged over the whole glob (#663), three saves wrote a field nobody
-  touched and one ran a delete on a box with no nginx role (#649), HTTP/3 and cache duration ran on
-  every save instead of on a change (#649), the SSH key list warned on a user without keys (#649),
-  and four dead ends turned up by clicking every page (#644).
+- **Adding a subdomain under an SSL domain rendered certificate-less SSL vhosts and took nginx
+  and apache down** (#683): a record parse leaked the parent's keys into the add command's
+  namespace. The same leak sat in mail-domain and web-alias add.
+- **23 panel pages died instead of showing an empty list when a CLI call failed** (#578), and
+  action pages consumed results their command never produced (#670).
+- **A package could not be saved from the panel on an apache web role** (#644), and saving a
+  user replaced their chosen theme (#645) - absent-control reads, both.
+- **The system configuration repair never ran** (#654): `command not found`, logged as
+  executed. Working, it seeded 25 absent keys, most of the `POLICY_*` set.
+- **The panel never took over its own Let's Encrypt certificate** (#656): the repair key was
+  registered with no repair behind it, and the fallback cron was refused over its own umask.
+- **phpMyAdmin dragged apache2 onto boxes that have none** (#656), which then bound *:80.
+- **Binary files were bucketed by a measurement that cannot see them** (#551): numstat's `-`
+  read as 0% churn; binaries compare by hash now, catalogues pinned to their snapshot.
+- Smaller inherited ones: seven calls still reached `sbin/` through `$BIN` (#209), two commands
+  refused their own optional argument (#564), every rebuild on apache-only wrote to
+  `/etc/nginx` over a failing version probe (#642), the FPM pools pinned a locale none of the
+  targets generates (#239), the Docker disable confirmation never appeared (#621), and the
+  wizard offered a pre-release PHP the installer then refused (#688).
 
 ## v0.15.0 (2026-08-13)
 
@@ -1306,78 +296,49 @@ read side of the object accessors with it.
 
 ### Added
 
-- **Docker per customer, from the daemon to the domain** (#389/#566/#592/#618/#619). Each enabled
-  customer gets a *companion* account running a rootless daemon and its own loopback /24, so a
-  tutorial compose file publishes with no address in it, plus a per-domain switch that makes the
-  front proxy to the container - no backend vhost, no FPM pool, LE and CrowdSec and bot limits
-  still attached. Separation between customers is one rendered nft rule per /24, derived from the
-  records so it survives a firewall rebuild. Resource cap through the package, on the companion's
-  systemd slice where the daemon and all containers live.
-- **HTTP/3 (QUIC) as a per-domain switch** (#613), replacing three template variants: a checkbox
-  that works on any template, offered only where nginx is built with `http_v3` (deb12 and ub24 are
-  not - the old variants broke `nginx -t` there).
-- **Suspension and the offline switch render from `share/`** (#586). Suspending used to pick from
-  the selectable tree, which apache never had, so on apache-only the vhost came out empty and the
-  domain served the box default page. **Proxy caching became a switch** too (#587), on any template.
-- **Panel users get their uid from a dedicated band** (#388), deterministic per username, with the
-  companion block one thousand below and a smoke guard on the preconditions - a collision only
-  surfaces much later.
-- **DNSBL management from the CLI** (#555).
+- **Docker per customer, from the daemon to the domain** (#389/#566/#592/#618/#619): a
+  companion account running a rootless daemon on its own loopback /24, a per-domain switch that
+  makes the front proxy to the container, per-customer separation as rendered nft rules, and the
+  resource cap on the companion's systemd slice.
+- **HTTP/3 as a per-domain switch** (#613), offered only where nginx has `http_v3`;
+  **suspension, offline and proxy caching render from `share/`** on any template (#586/#587);
+  **panel uids come from a dedicated band** (#388); **DNSBL management from the CLI** (#555).
 
 ### Changed
 
-- **A template is one file, and a domain has one vhost config** (#593). The `.tpl`/`.stpl` pair is
-  gone, which removes the "fixed in the .tpl, forgotten in the .stpl" divergence class. Restore
-  discards archived vhosts and re-renders, so a HestiaCP two-file backup restores as one merged
-  vhost and the format stays bidirectional.
-- **The PHP version is its own field** (#591, closes #550). `PHP_VERSION` carries the version,
-  `BACKEND` only the pool profile. The archive carries both plus HestiaCP's `PHP-<ver>`, and a
-  restore aborts before the first write if an archived version is not installed - never silently.
-- **`templates/` holds only what somebody chooses** (#588/#589/#590). The apache vhost, the proxy
-  vhost, suspend/offline, skeleton, awstats and mail bodies moved to `share/`; the six apache
-  templates went entirely, since both apache models already rendered the php-fpm variant. Every
-  write passes through `accept_web_template`, which maps a legacy value onto its replacement **with
-  its side effect** - a restored `caching` domain comes back with the cache switch on.
-- **The web model decides the install scope** (#639). apache-only means no nginx on the box at all.
-  Mail-only still gets one for the webmail vhost and ACME, because the wizard fixes that preset to
-  NGINX - an exception carried by the model.
-- **An install stage is only skipped for the answers it ran with** (#636): stage markers carry the
-  fingerprint of their `install.conf`.
-- **`/proc` hardening lives in `/etc/fstab`**, not an `@reboot` cron, with its exemption gid
-  resolved at every boot. **Scanner bans drop, credential bans still reject** (#555).
+- **A template is one file, and a domain has one vhost config** (#593): the `.tpl`/`.stpl`
+  divergence class is gone, and a HestiaCP two-file backup restores as one merged vhost.
+- **The PHP version is its own field** (#591): `BACKEND` carries only the pool profile, and a
+  restore aborts before the first write when the archived version is not installed.
+- **`templates/` holds only what somebody chooses** (#588/#589/#590); every write maps legacy
+  values through `accept_web_template` with their side effects.
+- **The web model decides the install scope** (#639): apache-only means no nginx on the box;
+  mail-only keeps one for webmail and ACME, an exception carried by the model.
+- **An install stage is only skipped for the answers it ran with** (#636).
 
 ### Removed
 
-- **The DNS leftovers** (#619): `DNS_TEMPLATE`, `DNS_DOMAINS`, `DNS_RECORDS`, `NS`, `SUSPENDED_DNS`
-  and the `U_DNS_*` counters, out of packages, user records and every listing format. The DKIM
-  record view stays - that formats mail-stack data for somebody else's DNS.
+- **The DNS leftovers** (#619): templates, counters and records, out of packages and listings.
+  The DKIM record view stays.
 
 ### Fixed
 
-- **Object reads matched a domain as a regular expression** (#594). The dot is a wildcard, so with
-  `a.b.com` and `aXb.com` on one box a read on one could return the other's record, and
-  `add_object_key` could write into the wrong one. Nine accessors and 54 call sites match literally
-  now; the backup exclusion parsers, which had matched by prefix, compare by index.
-- **An alias owned by another customer was never refused** (#601). `is_web_alias_new` compared
-  `"$user"` with `"$user"` - the loop had overwritten the caller's name with the owner from the
-  file path.
-- **HSTS did nothing on an apache front** (#638): the fragment carried nginx syntax whatever the
-  front was, and no apache template included it - switch on, record `yes`, no header.
-- **A user named after a service died at `groupadd`** (#625): `h-add-user` checked `/etc/passwd` but
-  never `/etc/group`. Both are checked now, plus the accounts our own components create later.
+- **Object reads matched a domain as a regular expression** (#594): with `a.b.com` and
+  `aXb.com` on one box, reads and writes could land on the other's record. Literal now, across
+  nine accessors and 54 call sites.
+- **HSTS did nothing on an apache front** (#638): the fragment carried nginx syntax and no
+  apache template included it.
 - **A dead SnappyMail mirror produced a green install with no webmail** (#573): an unbounded
-  download in an install path is a hang, and a script without `set -e` turns a failed download into
-  a green install of nothing.
-- **A failing CLI call took the login page down** and let the post-password gates pass (#575).
-- **Backup retention could delete another user's archives** (#556), and restic restored only the
-  first domain or database of a multi-object user (#555).
-- **The panel served its own includes, templates and locale data over HTTP** (#554), and the
-  Cloudflare realip fallback trusted a client-controlled header (#553).
-- Smaller inherited ones: a Let's Encrypt account whose `user.key` no longer matched failed forever
-  (#555), the ip domain counter drifted one under the truth per backup-restore cycle (#599), a
-  domain name acting as a regex could delete another customer's cache zone (#583), a missing web
-  template wrote a silent 0-byte vhost (#586), `h-change-sys-php` took effect one round late (#585),
-  two config repairs never ran (#559), and the FTP account commands disagreed about the name (#625).
+  download and no `set -e`.
+- **Backup retention could delete another user's archives** (#556); restic restored only the
+  first of a multi-object selection (#555); a failing CLI call took the login page down (#575);
+  the panel served its own includes over HTTP (#554) and trusted a client-controlled realip
+  header (#553).
+- Smaller inherited ones: an alias owned by another customer was never refused (#601), a user
+  named after a service died at `groupadd` (#625), a stale LE account key failed forever
+  (#555), the ip domain counter drifted per backup-restore cycle (#599), a domain acting as a
+  regex could delete another customer's cache zone (#583), and a missing template wrote a
+  silent 0-byte vhost (#586).
 
 ## v0.14.0 (2026-08-06)
 
