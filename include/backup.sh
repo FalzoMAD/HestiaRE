@@ -372,6 +372,27 @@ backup_report() {
 			"$(backup_report_count "$PROBE_MAIL")"
 	fi
 
+	# A webmail client this host does not have degrades to the disabled vhost while the record keeps
+	# the archived name - the domain then serves nothing and only the report can say so.
+	_wm=''
+	while IFS= read -r _dom; do
+		[ -n "$_dom" ] || continue
+		_file=$(backup_record_file mail "$_dom")
+		[ -s "$_file" ] || continue
+		_client=$(sed -n "s/.*WEBMAIL='\([^']*\)'.*/\1/p" <<< "$(head -n1 "$_file")")
+		if [ -n "$_client" ] && [ "$_client" != 'disabled' ] \
+			&& ! grep -qw "$_client" <<< "${WEBMAIL_SYSTEM//,/ }"; then
+			_wm="$_wm$_dom: $_client"$'\n'
+		fi
+	done <<< "$PROBE_MAIL"
+	if [ -n "$_wm" ]; then
+		_found=1
+		printf '   webmail on %s mail domain(s) - the archived client is not installed here (this host offers: %s),\n' \
+			"$(backup_report_count "$_wm")" "${WEBMAIL_SYSTEM:-none}"
+		printf '   so they get the disabled vhost until h-add-mail-domain-webmail names one this host has:\n'
+		sed '/^$/d;s/^/      /' <<< "$_wm"
+	fi
+
 	# Protections a domain asks for that this host cannot render. The setting survives on purpose, so only
 	# the report can say it does nothing here. Asked of the renderers, and only where present.
 	[ -f "$HESTIA/include/crowdsec.sh" ] && { type crowdsec_domain_capable > /dev/null 2>&1 || source "$HESTIA/include/crowdsec.sh"; }

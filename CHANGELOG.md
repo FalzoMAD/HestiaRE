@@ -358,6 +358,15 @@ opens above it.
   The write-back is simply dropped - `rebuild_web_domain_conf` already reconciles the fragment
   through the same gate, so it was redundant for the fragment and destructive for the record.
 
+- **A webmail client the target does not have is now named instead of vanishing** (#837). Restoring
+  a mail domain whose archived client this box does not offer degrades to the disabled vhost - which
+  is right, a dead proxy would be worse - but the record kept the archived name, so the panel claimed
+  webmail the domain no longer served. Measured HestiaCP -> HestiaRE: `WEBMAIL='roundcube'` onto a
+  tachyon-only box left a vhost with no `proxy_pass`, and the report said nothing; its only webmail
+  line is about settings and address books. It now names the domain, the archived client and what
+  this host offers. Whether the restore should also remap the client the way it remaps `TPL` and
+  `BACKEND` is left open - naming it is the conservative half.
+
 - **An archive from a box without a proxy no longer switches static serving off on the target**
   (#836). In an nginx-only model `PROXY_EXT` is empty because there is no reverse proxy; carried
   verbatim onto a box that has one, it renders `location ~* ^.+\.()$` - a list matching nothing -
