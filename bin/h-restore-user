@@ -1336,11 +1336,24 @@ if [ -d "$HOMEDIR/$user/.companion" ] && [ -x "$BIN/h-add-user-docker" ]; then
 			-exec chown -h "$new_companion" {} \;
 	fi
 
-	if ! "$BIN/h-add-user-docker" "$user" >> $tmpdir/restore.log 2>&1; then
+	# The archived /24 is kept when it is still free, and h-add-user-docker allocates a new one when
+	# another customer holds it. That has to be SAID: an application with hardcoded addresses finds
+	# out by breaking otherwise. Its output went to a log inside the tmpdir, which is removed at the
+	# end of the run - so nobody ever saw the line naming the holder (#800).
+	docker_ip_archived=$(get_user_value '$DOCKER_IP')
+	# tee, and the status from PIPESTATUS: through a pipe `if !` would read tee's.
+	"$BIN/h-add-user-docker" "$user" 2>&1 | tee -a $tmpdir/restore.log
+	if [ "${PIPESTATUS[0]}" -ne 0 ]; then
 		echo "Warning!: could not re-enable Docker for $user - see the log above." | tee -a $tmpdir/restore.log
 		# The customer had docker and does not have it here, which is the same kind of loss as a
 		# section this box cannot take.
 		restore_failures="$restore_failures$(printf '\n  docker for %s (could not be re-enabled on this host)' "$user")"
+	else
+		docker_ip_now=$(get_user_value '$DOCKER_IP')
+		if [ -n "$docker_ip_archived" ] && [ "$docker_ip_archived" != "$docker_ip_now" ]; then
+			echo "Warning!: the docker subnet moved from ${docker_ip_archived%.*}.0/24 to ${docker_ip_now%.*}.0/24 - an application with a hardcoded address needs its configuration updated" \
+				| tee -a $tmpdir/restore.log
+		fi
 	fi
 fi
 
