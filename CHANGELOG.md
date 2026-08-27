@@ -347,6 +347,35 @@ opens above it.
   and unasked now, and the firewall rule goes with it. Sieve is preselected there instead - a box
   that exists for mail should filter mail.
 
+### Changed
+
+- **Two backups of the same customer in one second no longer collide** (#841). Archive and package
+  names carry a one-second stamp, and `local_backup` starts by removing the file of that name - so
+  the second run silently replaced the first. Measured with retention deliberately high enough that
+  rotation could take nothing: ten quick runs left **five** archives. In differential mode that is
+  data loss rather than a lost copy, because a diff can replace the very base it was built against,
+  and the restore then refuses the set by name (`map hash mismatch`) - which is the guard doing its
+  job, one step too late. A run now waits a second right where it stamps, so the next stamp cannot
+  be the same one; the same ten runs leave ten archives. The wait sits at all three stamping
+  commands, the restic one included, where a collision would pair a snapshot with the wrong
+  metadata package. It costs a second per customer on a nightly sweep.
+
+- **A differential payload member no longer answers to the name of a whole one** (#840). Inside an
+  archive, a diffed `domain_data.tar.zst` held only the changed paths while carrying the same name
+  as a complete one - the name said the wrong thing, and anything reading the archive without also
+  reading `backup.members` unpacked a fragment as if it were the whole. It is written as
+  `domain_data.diff.tar.zst` now (`accounts.diff.tar.*` for mail), which is what it is. The restore
+  resolves diff-named first and whole-named second, so archives written before this keep restoring
+  unchanged; the base lookup keeps asking for the whole name, because a base member always is one.
+  A domain whose payload is in the listing but not on disk after unpacking is now refused by name
+  instead of failing as a tar error on a guessed path - the resolver can say "no payload for this
+  domain", and that is worth saying. Measured side effect worth having: HestiaCP derives its domain
+  list by grepping for
+  `domain_data.tar.zst`, so handing it a diff archive now restores no web domains at all instead of
+  silently producing empty docroots - measured, 1 of 5, 0 of 5 and 0 of 3785 files before, an empty
+  WEB section after. A smoke guard holds the namer and the restore's grep together, both used as
+  shipped, and checks the pre-#840 fallback on real files.
+
 ### Fixed
 
 - **A restic restore no longer erases the customer's HTTP/3 switch** (#835). The field carries the

@@ -70,6 +70,7 @@ fi
 
 # One stamp for both artefacts of this run.
 stamp=$(date +"%Y-%m-%d_%H-%M-%S")
+backup_stamp_settle
 meta_dir=$(restic_meta_dir "$user")
 dump_dir=$(restic_dump_dir "$user")
 meta_pkg="$BACKUP/$user/$user.$stamp.meta.tgz"

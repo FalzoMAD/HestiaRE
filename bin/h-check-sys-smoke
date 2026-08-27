@@ -421,6 +421,53 @@ check_webmail_value_domain() {
 	no "webmail templates outside the value domain:$missing" "extend WEBMAIL_KNOWN_CLIENTS in include/main.sh"
 }
 
+# Two files have to agree on how a diff payload is spelled: backup.sh names it, h-restore-user greps
+# for it. Both are used AS SHIPPED here - the namer in a subshell, the pattern lifted out of the
+# restore - so a rename on one side cannot go unnoticed. Plus the fallback that keeps pre-#840
+# archives restorable: diff-named wins, whole-named still resolves.
+check_backup_diff_member_name() {
+	local ext n p d w r pats missing='' seen=0
+	# BOTH codecs: the restore greps twice, once per codec, and a drift in the gzip line would sail
+	# past a guard that only ever looks at the zstd one.
+	pats=$(grep -oE "grep -E 'domain_data[^']*'" "$HESTIA/bin/h-restore-user" | cut -d"'" -f2)
+	if [ "$(grep -c . <<< "$pats")" -ne 2 ]; then
+		no "diff-member guard found $(grep -c . <<< "$pats") domain-list pattern(s), expected 2" \
+			"the restore's domain-list greps moved or changed shape"
+		return
+	fi
+	for ext in zst gz; do
+		n=$(bash -c "source /etc/hestia/hestia.env; source \$HESTIA/include/backup.sh; backup_diff_member_name web/x/domain_data.tar.$ext" 2> /dev/null)
+		p=$(grep -F "$ext" <<< "$pats" | head -1)
+		if [ -z "$n" ] || [ -z "$p" ]; then
+			missing="$missing $ext(no-name-or-pattern)"
+			continue
+		fi
+		seen=$((seen + 1))
+		grep -qE "$p" <<< "$n" || missing="$missing $ext"
+		# The fallback that keeps pre-#840 archives restorable, per codec: diff-named wins when both
+		# are there, whole-named still resolves when it is alone.
+		d=$(mktemp -d) || return
+		: > "$d/domain_data.tar.$ext"
+		: > "$d/domain_data.diff.tar.$ext"
+		r=$(bash -c "source /etc/hestia/hestia.env; source \$HESTIA/include/backup.sh; backup_payload_path '$d' domain_data.tar.$ext" 2> /dev/null)
+		rm -f "$d/domain_data.diff.tar.$ext"
+		w=$(bash -c "source /etc/hestia/hestia.env; source \$HESTIA/include/backup.sh; backup_payload_path '$d' domain_data.tar.$ext" 2> /dev/null)
+		rm -rf "$d"
+		[ "${r##*/}" = "domain_data.diff.tar.$ext" ] && [ "${w##*/}" = "domain_data.tar.$ext" ] \
+			|| missing="$missing $ext(fallback:${r##*/}/${w##*/})"
+	done
+	if [ "$seen" -ne 2 ]; then
+		no "diff-member guard checked $seen of 2 codecs" "the namer or the patterns did not answer for both"
+		return
+	fi
+	[ -z "$missing" ] && {
+		ok "diff payload name agrees across writer and restore for both codecs, fallback resolves"
+		return
+	}
+	no "diff payload name or fallback disagrees:$missing" \
+		"backup_diff_member_name, backup_payload_path and the restore's greps must match"
+}
+
 # BACKUP_CONTAINER_META is hand-kept, and the restore copies anything not on it into $USER_DATA -
 # twice already a member the backup side added leaked there unread (#839). So derive what the writers
 # actually emit into hestia/ and assert every name is either meta or explicitly handled. An empty
@@ -1579,6 +1626,7 @@ fi
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
 check_webmail_value_domain
 check_backup_container_meta
+check_backup_diff_member_name
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	check_webmail_payload roundcube /etc/roundcube/config.inc.php
 	check_socket /run/hestia-webmail-roundcube.sock "roundcube FPM"

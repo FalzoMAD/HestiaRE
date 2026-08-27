@@ -1880,7 +1880,8 @@ backup_map_member() {
 }
 
 # backup_map_write TMPDIR MAPFILE TBLDIR - the map for everything this archive diffs against: web and mail.
-# The other members are always written whole, so they have nothing to compare.
+# The other members are always written whole, so they have nothing to compare. Whole names only, on
+# purpose: this runs BEFORE backup_diff_build, so no member has been renamed to a diff yet.
 backup_map_write() {
 	local _tmp="$1" _out="$2" _tbldir="$3" _d _arc _n
 	: > "$_out"
@@ -2074,7 +2075,9 @@ backup_diff_build() {
 			_sz_diff=$(stat -c %s "$_arc.diff" 2> /dev/null || echo 0)
 			# An empty diff is the normal quiet case; only a ZERO-BYTE file means the build failed.
 			if [ "$_sz_diff" -gt 0 ] && [ $((_sz_diff * 100)) -lt $((_sz_full * BACKUP_DIFF_MEMBER_PCT)) ]; then
-				mv -f "$_arc.diff" "$_arc"
+				_out=$(backup_diff_member_name "$_arc")
+				mv -f "$_arc.diff" "$_out"
+				rm -f "$_arc"
 				_kind='diff'
 			else
 				rm -f "$_arc.diff"
@@ -2086,6 +2089,38 @@ backup_diff_build() {
 	# MAPHASH = "the base I was built against"; a same-named archive from elsewhere fails it.
 	printf "BASE='%s' MAPHASH='%s'\n" "$_base" "$(sha256sum "$_bm" | cut -d' ' -f1)" \
 		> "$_tmp/$BACKUP_CONTAINER/backup.base"
+}
+
+# Called right after a run stamps its name. Archive and package names have one-second resolution, so
+# two runs for the same customer inside one second land on the same name and the second silently
+# replaces the first (#841) - holding the second here means the next stamp cannot be this one.
+backup_stamp_settle() {
+	sleep 1
+}
+
+# backup_diff_member_name PATH - domain_data.tar.zst -> domain_data.diff.tar.zst. A diff payload
+# holds only the changed paths, so it must not answer to the name of a whole one.
+backup_diff_member_name() {
+	local _b="${1##*/}" _d="${1%/*}"
+	[ "$_d" = "$1" ] && _d='.'
+	echo "$_d/${_b%%.*}.diff.${_b#*.}"
+}
+
+# backup_payload_path DIR BASENAME - the payload as it actually lies. Diff-named first, then the
+# whole name: archives written before #840 spelled their diffs like whole members, and those must
+# keep restoring. Prints nothing and returns 1 when neither is there.
+backup_payload_path() {
+	local _w="$1/$2" _d
+	_d=$(backup_diff_member_name "$_w")
+	[ -f "$_d" ] && {
+		echo "$_d"
+		return 0
+	}
+	[ -f "$_w" ] && {
+		echo "$_w"
+		return 0
+	}
+	return 1
 }
 
 # backup_map_prefix_count MAPFILE PREFIX - how many entries a member has in a map.

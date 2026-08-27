@@ -58,6 +58,7 @@ fi
 #----------------------------------------------------------#
 
 stamp=$(date +%F_%H-%M-%S)
+backup_stamp_settle
 tmpdir=$(mktemp -p "${BACKUP_TEMP:-$BACKUP}" -d) || check_result "$E_NOTEXIST" "Can't create tmp dir"
 trap 'rm -rf "$tmpdir"' EXIT
 # 0700 from the start: /etc/roundcube carries des_key and the database password, so the tree is
