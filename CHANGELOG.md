@@ -117,6 +117,12 @@ asks and reports before it writes.
   tiers, so a change to the installer was answered with "no changed shell files"; the predicate
   now derives from content, a run that measured nothing fails, and the format-exempt list is empty.
 
+- **PROVENANCE recomputed** against upstream 640220c (2026-08-25); the churn rise is our own
+  backup cycle and comment rounds, not upstream movement, and the 40 compiled catalogues keep
+  their pinned ref. The pins re-verified: tachyon 3.2.2 and wp-cli 2.12.0 still match their
+  published assets, 8.5 is still the newest GA PHP. Tachyon released a 4.x major on 2026-08-25/26
+  after six quiet weeks - deliberately not bumped, it gets its own evaluation round (#846).
+
 ### Removed
 
 - **Demo mode** (#759). A config key that made 365 commands refuse to do anything, for a public
