@@ -611,6 +611,14 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			record_set_field str ALIAS "$ALIAS"
 			record_set_field str TPL "$TPL"
 			record_set_field str PROXY "$PROXY"
+			# An archive from a box without a proxy carries PROXY_EXT='' - on a target that HAS one
+			# that empties the static-offload location instead of stating intent, and nginx then
+			# hands every request to apache. Only when the source had no proxy: an empty list from a
+			# proxied source is the customer's own setting and stays.
+			if [ -n "$PROXY_SYSTEM" ] && [ -z "$PROXY_EXT" ] && [ -z "$PROBE_PROXY_SYSTEM" ]; then
+				PROXY_EXT=$(default_proxy_ext)
+			fi
+			record_set_field str PROXY_EXT "$PROXY_EXT"
 			record_set_field str HTTP3 "$HTTP3"
 			record_set_field str BACKEND "$BACKEND"
 			record_set_field str PHP_VERSION "$PHP_VERSION"

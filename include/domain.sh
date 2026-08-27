@@ -598,6 +598,31 @@ web_http3_front_ssl_port() {
 }
 
 # write the quic fragment for the current domain; $1 is the resolved front IP (get_real_ip)
+# The static-offload list nginx serves in front of apache. Shared with the restore, which needs
+# the target's default when an archive from a proxy-less box arrives on a box that has one.
+default_proxy_ext() {
+	local ext
+	# Code
+	ext="css,htm,html,js,mjs,json,xml"
+	# Image (from https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types)
+	ext="$ext,apng,avif,bmp,cur,gif,ico,jfif,jpg,jpeg,pjp,pjpeg,png,svg,tif,tiff,webp"
+	# Audio from (https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Audio_codecs)
+	ext="$ext,aac,caf,flac,m4a,midi,mp3,ogg,opus,wav"
+	# Video (from https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Video_codecs)
+	ext="$ext,3gp,av1,avi,m4v,mkv,mov,mpg,mpeg,mp4,mp4v,webm"
+	# Fonts
+	ext="$ext,otf,ttf,woff,woff2"
+	# Productivity
+	ext="$ext,doc,docx,odf,odp,ods,odt,pdf,ppt,pptx,rtf,txt,xls,xlsx"
+	# Archive
+	ext="$ext,7z,bz2,gz,rar,tar,tgz,zip"
+	# Binaries
+	ext="$ext,apk,appx,bin,dmg,exe,img,iso,jar,msi"
+	# Other
+	ext="$ext,webmanifest"
+	echo "$ext"
+}
+
 add_web_http3_config() {
 	# plain quic, no reuseport: nginx accepts many quic listens on one ip:port, while reuseport
 	# would need one-per-ip bookkeeping that a decoupled fragment must not own

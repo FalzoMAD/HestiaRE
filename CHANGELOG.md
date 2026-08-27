@@ -349,6 +349,25 @@ opens above it.
 
 ### Fixed
 
+- **A restic restore no longer erases the customer's HTTP/3 switch** (#835). The field carries the
+  intent and the fragment carries intent AND capability, so a domain landing on a box without
+  `http_v3` keeps `HTTP3='yes'` and picks the listen up again on a capable box. The restic path
+  wrote the capability answer back into the record, so on such a box an archived `yes` came out as
+  `no` and the switch was gone for good. Measured on deb12 with both arms against the same fixture:
+  the archive arm returned `yes`, the restic arm `no`, with two untouched domains as the control.
+  The write-back is simply dropped - `rebuild_web_domain_conf` already reconciles the fragment
+  through the same gate, so it was redundant for the fragment and destructive for the record.
+
+- **An archive from a box without a proxy no longer switches static serving off on the target**
+  (#836). In an nginx-only model `PROXY_EXT` is empty because there is no reverse proxy; carried
+  verbatim onto a box that has one, it renders `location ~* ^.+\.()$` - a list matching nothing -
+  and nginx hands every request to apache. Nothing breaks, which is why nobody would notice. The
+  archive states its own source model in `hestia/web-system`, so the target default fills in only
+  when the source had no proxy at all; an empty list from a proxied source is the customer's own
+  setting and stays. The default list moves to `default_proxy_ext()` so domain creation and restore
+  read the same one. Not covered: the restic arm, whose metadata carries no model marker and whose
+  repository lives on the box it came from - that needs revisiting with the live model switch (#120).
+
 - **An archive restored from is now adopted, so it stops being a rotation candidate** (#820).
   A hand-placed migration archive is only ever recorded by `h-add-user-backup`; the restore just
   resolves it and reads it, and wrote no record at all. Inside `/backup/$user/` that is a silent
