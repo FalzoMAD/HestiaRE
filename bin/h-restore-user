@@ -696,7 +696,15 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		# --overwrite would write THROUGH a shared inode. Measured on all four targets.
 		web_whole="domain_data.tar.zst"
 		[ "$backup_mode" = "zstd" ] || web_whole="domain_data.tar.gz"
-		web_member=$(backup_payload_path "$tmpdir/web/$domain" "$web_whole") || web_member="$tmpdir/web/$domain/$web_whole"
+		# The domain got here BECAUSE the listing showed a payload, so neither spelling being on disk
+		# means the archive is not what it said - named here rather than as a tar error further down.
+		if ! web_member=$(backup_payload_path "$tmpdir/web/$domain" "$web_whole"); then
+			rm -rf $tmpdir
+			error="$domain carries no $web_whole in $backup - the archive is incomplete"
+			echo "$error" | $SENDMAIL -s "$subj" $email $notify
+			queue_drop_job "$CONF_DIR/queue/backup.pipe"
+			check_result "$E_NOTEXIST" "$error"
+		fi
 		if [ -n "$DIFF_BASE" ] && backup_member_needs_base "$tmpdir/.diff/backup.members" "web/$domain"; then
 			# The base's member is a WHOLE one whatever this archive calls its diff.
 			web_base=$(backup_diff_stage_base "$base_path" "web/$domain" "$web_whole" "$tmpdir/.diff")
@@ -970,6 +978,8 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		# restore adds to the mailbox, exactly as it does from a full archive (#744).
 		mail_whole="accounts.tar.zst"
 		[ "$backup_mode" = 'zstd' ] || mail_whole="accounts.tar.gz"
+		# No refusal here, unlike web: a mail domain without accounts legitimately has no payload,
+		# and every use below is already guarded by [ -e ].
 		mail_member=$(backup_payload_path "$tmpdir/mail/$domain" "$mail_whole") || mail_member="$tmpdir/mail/$domain/$mail_whole"
 		if [ -n "$DIFF_BASE" ] && [ -e "$mail_member" ] \
 			&& backup_member_needs_base "$tmpdir/.diff/backup.members" "mail/$domain"; then

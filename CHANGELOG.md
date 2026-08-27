@@ -367,7 +367,10 @@ opens above it.
   `domain_data.diff.tar.zst` now (`accounts.diff.tar.*` for mail), which is what it is. The restore
   resolves diff-named first and whole-named second, so archives written before this keep restoring
   unchanged; the base lookup keeps asking for the whole name, because a base member always is one.
-  Measured side effect worth having: HestiaCP derives its domain list by grepping for
+  A domain whose payload is in the listing but not on disk after unpacking is now refused by name
+  instead of failing as a tar error on a guessed path - the resolver can say "no payload for this
+  domain", and that is worth saying. Measured side effect worth having: HestiaCP derives its domain
+  list by grepping for
   `domain_data.tar.zst`, so handing it a diff archive now restores no web domains at all instead of
   silently producing empty docroots - measured, 1 of 5, 0 of 5 and 0 of 3785 files before, an empty
   WEB section after. A smoke guard holds the namer and the restore's grep together, both used as

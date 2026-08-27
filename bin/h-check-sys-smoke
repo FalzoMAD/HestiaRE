@@ -426,34 +426,46 @@ check_webmail_value_domain() {
 # restore - so a rename on one side cannot go unnoticed. Plus the fallback that keeps pre-#840
 # archives restorable: diff-named wins, whole-named still resolves.
 check_backup_diff_member_name() {
-	local n pat d w r
-	n=$(bash -c 'source /etc/hestia/hestia.env; source $HESTIA/include/backup.sh; backup_diff_member_name web/x/domain_data.tar.zst' 2> /dev/null)
-	pat=$(grep -oE "grep -E 'domain_data[^']*'" "$HESTIA/bin/h-restore-user" | head -1 | cut -d"'" -f2)
-	if [ -z "$n" ] || [ -z "$pat" ]; then
-		no "diff-member guard read no name ('$n') or no pattern ('$pat')" \
-			"backup_diff_member_name or the restore's domain-list grep moved"
+	local ext n p d w r pats missing='' seen=0
+	# BOTH codecs: the restore greps twice, once per codec, and a drift in the gzip line would sail
+	# past a guard that only ever looks at the zstd one.
+	pats=$(grep -oE "grep -E 'domain_data[^']*'" "$HESTIA/bin/h-restore-user" | cut -d"'" -f2)
+	if [ "$(grep -c . <<< "$pats")" -ne 2 ]; then
+		no "diff-member guard found $(grep -c . <<< "$pats") domain-list pattern(s), expected 2" \
+			"the restore's domain-list greps moved or changed shape"
 		return
 	fi
-	if ! grep -qE "$pat" <<< "$n"; then
-		no "the restore's domain list does not match the diff payload name $n" \
-			"the grep in h-restore-user and backup_diff_member_name disagree"
+	for ext in zst gz; do
+		n=$(bash -c "source /etc/hestia/hestia.env; source \$HESTIA/include/backup.sh; backup_diff_member_name web/x/domain_data.tar.$ext" 2> /dev/null)
+		p=$(grep -F "$ext" <<< "$pats" | head -1)
+		if [ -z "$n" ] || [ -z "$p" ]; then
+			missing="$missing $ext(no-name-or-pattern)"
+			continue
+		fi
+		seen=$((seen + 1))
+		grep -qE "$p" <<< "$n" || missing="$missing $ext"
+		# The fallback that keeps pre-#840 archives restorable, per codec: diff-named wins when both
+		# are there, whole-named still resolves when it is alone.
+		d=$(mktemp -d) || return
+		: > "$d/domain_data.tar.$ext"
+		: > "$d/domain_data.diff.tar.$ext"
+		r=$(bash -c "source /etc/hestia/hestia.env; source \$HESTIA/include/backup.sh; backup_payload_path '$d' domain_data.tar.$ext" 2> /dev/null)
+		rm -f "$d/domain_data.diff.tar.$ext"
+		w=$(bash -c "source /etc/hestia/hestia.env; source \$HESTIA/include/backup.sh; backup_payload_path '$d' domain_data.tar.$ext" 2> /dev/null)
+		rm -rf "$d"
+		[ "${r##*/}" = "domain_data.diff.tar.$ext" ] && [ "${w##*/}" = "domain_data.tar.$ext" ] \
+			|| missing="$missing $ext(fallback:${r##*/}/${w##*/})"
+	done
+	if [ "$seen" -ne 2 ]; then
+		no "diff-member guard checked $seen of 2 codecs" "the namer or the patterns did not answer for both"
 		return
 	fi
-	# The fallback, on real files: with both present the diff must win, with only the whole one
-	# present it must still resolve - that is what keeps archives from before #840 restorable.
-	d=$(mktemp -d) || return
-	: > "$d/domain_data.tar.zst"
-	: > "$d/domain_data.diff.tar.zst"
-	r=$(bash -c "source /etc/hestia/hestia.env; source \$HESTIA/include/backup.sh; backup_payload_path '$d' domain_data.tar.zst" 2> /dev/null)
-	rm -f "$d/domain_data.diff.tar.zst"
-	w=$(bash -c "source /etc/hestia/hestia.env; source \$HESTIA/include/backup.sh; backup_payload_path '$d' domain_data.tar.zst" 2> /dev/null)
-	rm -rf "$d"
-	if [ "${r##*/}" != 'domain_data.diff.tar.zst' ] || [ "${w##*/}" != 'domain_data.tar.zst' ]; then
-		no "payload resolver picked '${r##*/}' / '${w##*/}'" \
-			"expected the diff name when present and the whole name as fallback"
+	[ -z "$missing" ] && {
+		ok "diff payload name agrees across writer and restore for both codecs, fallback resolves"
 		return
-	fi
-	ok "diff payload name agrees across writer and restore, and the pre-#840 fallback resolves"
+	}
+	no "diff payload name or fallback disagrees:$missing" \
+		"backup_diff_member_name, backup_payload_path and the restore's greps must match"
 }
 
 # BACKUP_CONTAINER_META is hand-kept, and the restore copies anything not on it into $USER_DATA -
