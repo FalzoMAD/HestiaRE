@@ -378,6 +378,16 @@ opens above it.
 
 ### Fixed
 
+- **A failed addon install no longer hides behind a green installer line** (#843). Seven addon
+  calls in `h-install-hestia` swallow their errors on purpose - a flaky install must not abort the
+  stage - but nothing looked afterwards: `[ OK ] addons complete` printed unconditionally, and a
+  wizard choice that never arrived was visible only in the install log. The smoke run, which
+  closes every install, now recounts each requested addon by its artefact (the config key it
+  writes, or the binary for restic) and names what is missing. The addon set is derived from the
+  installer file itself, so a new swallowed addon without a mapping fails the recount instead of
+  shipping unverified, and an empty derivation fails too. Verified on deb12 and deb13 with a
+  positive control: a faked docker request on the docker-less box came back as a named FAIL.
+
 - **A restic restore no longer erases the customer's HTTP/3 switch** (#835). The field carries the
   intent and the fragment carries intent AND capability, so a domain landing on a box without
   `http_v3` keeps `HTTP3='yes'` and picks the listen up again on a capable box. The restic path

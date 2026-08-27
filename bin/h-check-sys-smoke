@@ -498,6 +498,52 @@ check_backup_container_meta() {
 	no "container member(s) neither meta nor handled:$missing" "add them to BACKUP_CONTAINER_META in include/backup.sh"
 }
 
+# Seven addon installs in h-install-hestia swallow their errors (|| true, deliberately: a flaky
+# addon must not abort the install), and nothing recounted afterwards - a failed one left a green
+# install with the wizard's choice silently unmet (#843). This recounts every requested one by its
+# artefact. The set comes out of the installer file itself, so a new swallowed addon without a
+# mapping here fails instead of shipping unverified; an empty derivation fails too. NOT covered:
+# addons installed without || true - their failure aborts the install and needs no recount.
+check_addons_swallowed() {
+	local addons a gate key svc mail_only n=0
+	addons=$(grep -oE 'h-add-sys-[a-z]+" >> "\$LOG" 2>&1 \|\| true' "$HESTIA/sbin/h-install-hestia" 2> /dev/null \
+		| grep -oE 'h-add-sys-[a-z]+' | sed 's/^h-add-sys-//' | sort -u)
+	if [ -z "$addons" ]; then
+		no "addon recount derived an empty set from h-install-hestia" "the || true call pattern moved - update the derivation"
+		return
+	fi
+	for a in $addons; do
+		key='' svc='' mail_only=''
+		case $a in
+			rspamd) key="${ANTISPAM_SYSTEM:-}" svc=rspamd mail_only=yes ;;
+			sieve) key="${SIEVE_SYSTEM:-}" mail_only=yes ;; # managesieve runs inside dovecot, no own daemon
+			clamav) key="${ANTIVIRUS_SYSTEM:-}" svc=clamav-daemon mail_only=yes ;;
+			proftpd) key="${FTP_SYSTEM:-}" svc=proftpd ;;
+			docker) key="${DOCKER_SYSTEM:-}" ;; # rootless per-user, no system daemon
+			filemanager) key="${FILE_MANAGER_PORT:-}" ;;
+			restic) key=$(command -v restic || true) ;;
+			*)
+				no "addon $a: the installer swallows its errors, this recount has no artefact mapping" "add one here"
+				continue
+				;;
+		esac
+		gate="COMPONENT_ADDON_${a^^}"
+		is_on "${!gate:-}" || continue
+		# the installer only attempts mail-tier addons inside install_mail
+		[ -n "$mail_only" ] && ! is_on "${COMPONENT_MAIL_BLOCK_PRESENT:-}" && continue
+		n=$((n + 1))
+		if [ -n "$key" ]; then
+			ok "addon $a installed (artefact present)"
+			[ -n "$svc" ] && check_service "$svc" "$a"
+		else
+			no "addon $a requested but its artefact is missing" "the installer swallowed the failure - see the install log"
+		fi
+	done
+	if [ "$n" -eq 0 ]; then
+		skip "addon recount (none of the swallowed addons requested)"
+	fi
+}
+
 # A web jail must watch the CURRENT web system's dir. After a switch that forgets to re-gate, its logpath
 # points at the old stack - a REAL path, so the "what does a jail watch" guard cannot see it, and the next
 # restart from any cause leaves it watching a stack with no traffic. Compared against the WEB_SYSTEM dir.
@@ -1610,7 +1656,8 @@ if is_on "${COMPONENT_ADDON_FAIL2BAN:-}"; then
 	check_fail2ban_backends
 	check_fail2ban_web_logpath
 fi
-is_on "${COMPONENT_ADDON_CLAMAV:-}" && check_service clamav-daemon "clamav"
+# clamav's service check moved into the addon recount, which also verifies the other six
+check_addons_swallowed
 is_on "${COMPONENT_ADDON_CROWDSEC:-}" && check_service crowdsec "crowdsec"
 # Layer separation runs whenever either system is present (marker or extension), not gated on a component.
 { [ -f "$CONF_DIR/firewall/crowdsec.conf" ] || [ "$FIREWALL_EXTENSION" = 'fail2ban' ]; } && check_firewall_layer_separation
