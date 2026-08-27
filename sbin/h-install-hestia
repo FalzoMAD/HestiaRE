@@ -726,7 +726,9 @@ install_addons() {
 		"$BIN/h-add-sys-restic" >> "$LOG" 2>&1 || true
 	fi
 	stage_mark addons
-	echo "[ OK ] addons complete"
+	# stage-level only: each || true above swallows a flaky addon failure, and the closing
+	# smoke run recounts every requested addon by artefact and names what is missing
+	echo "[ OK ] addons stage finished"
 }
 
 # ════════════════════════════════════════════════════════════════════════════
