@@ -353,12 +353,14 @@ if [ "$create_user" = 'yes' ]; then
 	cp -r $tmpdir/$BACKUP_CONTAINER/ssl $USER_DATA/ > /dev/null 2>&1
 
 	# Everything else the container holds. Skipped: BACKUP_USER_DATA_CORE, plus what this side does
-	# itself - user.conf and ssl above, packages below, web-system and origin, which describe the
-	# archive. A superset on purpose: this is the side that takes in foreign archives.
+	# itself - user.conf and ssl above, packages below, web-system, origin and export-map, which
+	# describe the archive. backup.map too: the diff mirror is built by the BACKUP under
+	# backup-maps/ and compressed, so a copy here is an unread stray that grows with the customer.
+	# A superset on purpose: this is the side that takes in foreign archives.
 	for _entry in "$tmpdir/$BACKUP_CONTAINER"/*; do
 		[ -e "$_entry" ] || continue
 		_name=$(basename "$_entry")
-		[[ " $BACKUP_USER_DATA_CORE user.conf ssl packages web-system origin " == *" $_name "* ]] && continue
+		[[ " $BACKUP_USER_DATA_CORE user.conf ssl packages web-system origin export-map backup.map " == *" $_name "* ]] && continue
 		# Out of the archive and joined onto a path we write to: a plain basename or nothing.
 		case "$_name" in '' | .* | */* | *[!A-Za-z0-9._-]*) continue ;; esac
 		# Anything that later runs through source_conf is filtered by its key set. A poisoned
@@ -829,6 +831,14 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
 				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
+			fi
+			# An export translated fields it knew a foreign panel would refuse. We speak the original
+			# vocabulary, so it goes back; a client this box does not have then degrades and is
+			# reported exactly as it would have been without the export.
+			if [ -n "$PROBE_EXPORT_MAP" ]; then
+				_orig=$(awk -F'\t' -v d="$domain" '$1 == "mail" && $2 == d && $3 == "WEBMAIL" {print $4}' \
+					"$PROBE_EXPORT_MAP")
+				[ -n "$_orig" ] && record_set_field archived_record WEBMAIL "$_orig"
 			fi
 			echo "$archived_record" >> $USER_DATA/mail.conf
 		fi

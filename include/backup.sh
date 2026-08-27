@@ -205,7 +205,7 @@ backup_probe() {
 	PROBE_MODE='gzip'
 	PROBE_VESTA='no'
 	PROBE_WEB='' PROBE_MAIL='' PROBE_DB='' PROBE_UDIR='' PROBE_DNS='' PROBE_TPL=''
-	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM=''
+	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM='' PROBE_EXPORT_MAP=''
 	PROBE_ORIGIN='' PROBE_RECORDS="$_wd"
 	PROBE_DIFF_BASE='' PROBE_DIFF_MEMBERS=''
 
@@ -242,6 +242,7 @@ backup_probe() {
 	mkdir -p "$_wd" || return 1
 	tar -xf "$_arc" -C "$_wd" --wildcards --no-wildcards-match-slash \
 		"./$BACKUP_CONTAINER/user.conf" "./$BACKUP_CONTAINER/web-system" "./$BACKUP_CONTAINER/origin" \
+		"./$BACKUP_CONTAINER/export-map" \
 		2> /dev/null || true
 	tar -xf "$_arc" -C "$_wd" --wildcards \
 		"./$BACKUP_CONTAINER/packages/*" "./web/*/$BACKUP_CONTAINER/web.conf" \
@@ -254,6 +255,8 @@ backup_probe() {
 		PROBE_PROXY_SYSTEM=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$_dir/web-system")
 	fi
 	[ -f "$_dir/origin" ] && PROBE_ORIGIN=$(head -n1 "$_dir/origin")
+	# Only an export carries this: the fields it translated for foreign readers, with their originals.
+	[ -f "$_dir/export-map" ] && PROBE_EXPORT_MAP="$_dir/export-map"
 
 	# A differential archive has to say so before anyone restores it: everything else it carries is
 	# complete, but these members are not, and the base is the only thing that completes them.
@@ -380,6 +383,13 @@ backup_report() {
 		_file=$(backup_record_file mail "$_dom")
 		[ -s "$_file" ] || continue
 		_client=$(sed -n "s/.*WEBMAIL='\([^']*\)'.*/\1/p" <<< "$(head -n1 "$_file")")
+		# An export travels under a translated client name and the restore puts the original back,
+		# so the check has to ask about the value that will actually be written.
+		if [ -n "$PROBE_EXPORT_MAP" ]; then
+			_orig=$(awk -F'\t' -v d="$_dom" '$1 == "mail" && $2 == d && $3 == "WEBMAIL" {print $4}' \
+				"$PROBE_EXPORT_MAP")
+			[ -n "$_orig" ] && _client="$_orig"
+		fi
 		if [ -n "$_client" ] && [ "$_client" != 'disabled' ] \
 			&& ! grep -qw "$_client" <<< "${WEBMAIL_SYSTEM//,/ }"; then
 			_wm="$_wm$_dom: $_client"$'\n'

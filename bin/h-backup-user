@@ -589,6 +589,14 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 		# Backup mail.conf
 		conf="$USER_DATA/mail.conf"
 		grep -F "DOMAIN='$domain'" $conf > hestia/mail.conf
+		# Tachyon is our name for a Roundcube fork and nobody else knows it - a foreign panel refuses
+		# the value outright. An export is the migration artefact, so it travels under the name both
+		# sides share; hestia/export-map keeps the original and our own restore puts it back. This is
+		# the only pair that needs it.
+		if [ "$export_run" = 'yes' ] && grep -q "WEBMAIL='tachyon'" "$tmpdir/mail/$domain/hestia/mail.conf"; then
+			sed -i "s/WEBMAIL='tachyon'/WEBMAIL='roundcube'/" "$tmpdir/mail/$domain/hestia/mail.conf"
+			printf 'mail\t%s\tWEBMAIL\ttachyon\n' "$domain" >> "$tmpdir/hestia/export-map"
+		fi
 		cp $USER_DATA/mail/$domain.* hestia/
 		# compgen, not `ls | grep *@$domain`: that glob was expanded against the WORKING DIRECTORY
 		# before grep saw it, so the per-account files - the autoreply texts among them - never got
