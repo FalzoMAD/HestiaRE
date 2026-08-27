@@ -179,6 +179,13 @@ of snapshots. Its record carries `MODE='export'` and `ADOPTED='yes'`, so retenti
 touches it. `BACKUP_EXPORT_LIMIT` (default 2) refuses and names the existing exports
 rather than clearing the oldest away.
 
+One thing an export does differently: it writes the webmail client under the name other
+panels share. Tachyon is our name for a Roundcube fork, and HestiaCP refuses the value
+outright, leaving the mail domain without webmail. So an export writes `roundcube` and
+keeps the original in `hestia/export-map`; restoring it here reads that back, so an
+export between two HestiaRE boxes is as lossless as an ordinary archive. Nothing else in
+the archive is translated.
+
 ---
 
 ## In the panel
