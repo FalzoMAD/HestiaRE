@@ -234,10 +234,12 @@ fi
 
 # Creating web domain restore list
 backup_domains=$(tar -tf "$backup_path" | grep "^./web")
+# Both spellings: a diff payload is named domain_data.diff.tar.* (#840), and archives from before
+# that spelled it like a whole member.
 if [ "$backup_mode" = "zstd" ]; then
-	backup_domains=$(echo "$backup_domains" | grep domain_data.tar.zst)
+	backup_domains=$(echo "$backup_domains" | grep -E 'domain_data(\.diff)?\.tar\.zst')
 else
-	backup_domains=$(echo "$backup_domains" | grep domain_data.tar.gz)
+	backup_domains=$(echo "$backup_domains" | grep -E 'domain_data(\.diff)?\.tar\.gz')
 fi
 backup_domains=$(echo "$backup_domains" | cut -f 3 -d /)
 if [ -z "$web" ] || [ "$web" = '*' ]; then
@@ -692,10 +694,12 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		#
 		# No --unlink-first (fails on non-empty dirs); tar already unlinks and recreates, only
 		# --overwrite would write THROUGH a shared inode. Measured on all four targets.
-		web_member="$tmpdir/web/$domain/domain_data.tar.zst"
-		[ "$backup_mode" = "zstd" ] || web_member="$tmpdir/web/$domain/domain_data.tar.gz"
+		web_whole="domain_data.tar.zst"
+		[ "$backup_mode" = "zstd" ] || web_whole="domain_data.tar.gz"
+		web_member=$(backup_payload_path "$tmpdir/web/$domain" "$web_whole") || web_member="$tmpdir/web/$domain/$web_whole"
 		if [ -n "$DIFF_BASE" ] && backup_member_needs_base "$tmpdir/.diff/backup.members" "web/$domain"; then
-			web_base=$(backup_diff_stage_base "$base_path" "web/$domain" "$(basename "$web_member")" "$tmpdir/.diff")
+			# The base's member is a WHOLE one whatever this archive calls its diff.
+			web_base=$(backup_diff_stage_base "$base_path" "web/$domain" "$web_whole" "$tmpdir/.diff")
 			if [ -z "$web_base" ]; then
 				rm -rf $tmpdir
 				error="$domain is differential and its base member is missing from $DIFF_BASE"
@@ -719,12 +723,12 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 		fi
 
 		if [ "$backup_mode" = "zstd" ]; then
-			user_exec tar -I pzstd -xpf $tmpdir/web/$domain/domain_data.tar.zst \
+			user_exec tar -I pzstd -xpf "$web_member" \
 				-C "$HOMEDIR/$user/web/$domain/" \
 				--anchored \
 				--exclude='logs/*'
 		else
-			user_exec tar -xzpf $tmpdir/web/$domain/domain_data.tar.gz \
+			user_exec tar -xzpf "$web_member" \
 				-C "$HOMEDIR/$user/web/$domain/" \
 				--anchored \
 				--exclude='logs/*'
@@ -964,11 +968,13 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		# Same two passes as web, through the extractor that drops privileges. Mail has no
 		# equivalent of the public_html wipe above, so a deletion does NOT take effect here - the
 		# restore adds to the mailbox, exactly as it does from a full archive (#744).
-		mail_member="$tmpdir/mail/$domain/accounts.tar.zst"
-		[ "$backup_mode" = 'zstd' ] || mail_member="$tmpdir/mail/$domain/accounts.tar.gz"
+		mail_whole="accounts.tar.zst"
+		[ "$backup_mode" = 'zstd' ] || mail_whole="accounts.tar.gz"
+		mail_member=$(backup_payload_path "$tmpdir/mail/$domain" "$mail_whole") || mail_member="$tmpdir/mail/$domain/$mail_whole"
 		if [ -n "$DIFF_BASE" ] && [ -e "$mail_member" ] \
 			&& backup_member_needs_base "$tmpdir/.diff/backup.members" "mail/$domain"; then
-			mail_base=$(backup_diff_stage_base "$base_path" "mail/$domain" "$(basename "$mail_member")" "$tmpdir/.diff")
+			# The base's member is a WHOLE one whatever this archive calls its diff.
+			mail_base=$(backup_diff_stage_base "$base_path" "mail/$domain" "$mail_whole" "$tmpdir/.diff")
 			if [ -z "$mail_base" ]; then
 				rm -rf $tmpdir
 				error="$domain is differential and its base member is missing from $DIFF_BASE"
@@ -986,36 +992,19 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 		fi
 
 		# Restoring emails
-		if [ $backup_mode = 'zstd' ]; then
-			if [ -e "$tmpdir/mail/$domain/accounts.tar.zst" ]; then
-				$BIN/h-extract-fs-archive "$user" "$tmpdir/mail/$domain/accounts.tar.zst" "$HOMEDIR/$user/mail/$domain_idn/"
-				if [ "$?" -ne 0 ]; then
-					rm -rf $tmpdir
-					error="Can't unpack $domain mail account container"
-					echo "$error" | $SENDMAIL -s "$subj" $email $notify
-					queue_drop_job "$CONF_DIR/queue/backup.pipe"
-					check_result "$E_PARSING" "$error"
-				fi
-
-				# Chowning as owner needs to be user:mail instead of user:user
-				find $HOMEDIR/$user/mail/$domain_idn -user $user \
-					-exec chown -h $user:mail {} \;
+		if [ -e "$mail_member" ]; then
+			$BIN/h-extract-fs-archive "$user" "$mail_member" "$HOMEDIR/$user/mail/$domain_idn/"
+			if [ "$?" -ne 0 ]; then
+				rm -rf $tmpdir
+				error="Can't unpack $domain mail account container"
+				echo "$error" | $SENDMAIL -s "$subj" $email $notify
+				queue_drop_job "$CONF_DIR/queue/backup.pipe"
+				check_result "$E_PARSING" "$error"
 			fi
-		else
-			if [ -e "$tmpdir/mail/$domain/accounts.tar.gz" ]; then
-				$BIN/h-extract-fs-archive "$user" "$tmpdir/mail/$domain/accounts.tar.gz" "$HOMEDIR/$user/mail/$domain_idn/"
-				if [ "$?" -ne 0 ]; then
-					rm -rf $tmpdir
-					error="Can't unpack $domain mail account container"
-					echo "$error" | $SENDMAIL -s "$subj" $email $notify
-					queue_drop_job "$CONF_DIR/queue/backup.pipe"
-					check_result "$E_PARSING" "$error"
-				fi
 
-				# Chowning as owner needs to be user:mail instead of user:user
-				find $HOMEDIR/$user/mail/$domain_idn -user $user \
-					-exec chown -h $user:mail {} \;
-			fi
+			# Chowning as owner needs to be user:mail instead of user:user
+			find $HOMEDIR/$user/mail/$domain_idn -user $user \
+				-exec chown -h $user:mail {} \;
 		fi
 		# Chowning mail conf files to exim user
 		if [ -d "$HOMEDIR/$user/conf/mail/$domain" ]; then

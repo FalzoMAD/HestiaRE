@@ -347,6 +347,21 @@ opens above it.
   and unasked now, and the firewall rule goes with it. Sieve is preselected there instead - a box
   that exists for mail should filter mail.
 
+### Changed
+
+- **A differential payload member no longer answers to the name of a whole one** (#840). Inside an
+  archive, a diffed `domain_data.tar.zst` held only the changed paths while carrying the same name
+  as a complete one - the name said the wrong thing, and anything reading the archive without also
+  reading `backup.members` unpacked a fragment as if it were the whole. It is written as
+  `domain_data.diff.tar.zst` now (`accounts.diff.tar.*` for mail), which is what it is. The restore
+  resolves diff-named first and whole-named second, so archives written before this keep restoring
+  unchanged; the base lookup keeps asking for the whole name, because a base member always is one.
+  Measured side effect worth having: HestiaCP derives its domain list by grepping for
+  `domain_data.tar.zst`, so handing it a diff archive now restores no web domains at all instead of
+  silently producing empty docroots - measured, 1 of 5, 0 of 5 and 0 of 3785 files before, an empty
+  WEB section after. A smoke guard holds the namer and the restore's grep together, both used as
+  shipped, and checks the pre-#840 fallback on real files.
+
 ### Fixed
 
 - **A restic restore no longer erases the customer's HTTP/3 switch** (#835). The field carries the
