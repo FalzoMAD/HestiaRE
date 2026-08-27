@@ -301,7 +301,7 @@ backup_local_keys() {
 # is PRINTED: "nothing falls away" must not look like "the probe read nothing".
 backup_report() {
 	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys _installed
-	local _o_mode _o_fmt _o_who _prot _dom _file _bl _e _bl_list
+	local _o_mode _o_fmt _o_who _prot _dom _file _bl _e _bl_list _dip _dnet _dholder
 
 	echo "-- ARCHIVE --"
 	printf '   %s compressed\n' "$PROBE_MODE"
@@ -441,6 +441,23 @@ backup_report() {
 
 	echo "-- WHAT WILL BE REWRITTEN --"
 	_found=0
+
+	# The archived docker /24 is kept when it is free and reallocated when another customer holds it.
+	# The customer's applications may carry that address, so the answer belongs HERE - before the run
+	# - and not only in a line the restore prints on its way past (#800).
+	_dip=$(sed -n "s/.*DOCKER_IP='\([^']*\)'.*/\1/p" "$PROBE_RECORDS/$BACKUP_CONTAINER/user.conf" 2> /dev/null | head -1)
+	if [ -n "$_dip" ]; then
+		# -F on the net: it carries dots, and as a regex they match any character.
+		_dnet="${_dip%.*}"
+		_dholder=$(grep -lF "DOCKER_IP='$_dnet." "$CONF_DIR"/users/*/user.conf 2> /dev/null \
+			| grep -Fxv "$CONF_DIR/users/$user/user.conf" | head -1)
+		if [ -n "$_dholder" ]; then
+			_found=1
+			printf '   docker subnet %s.0/24 is held by %s - the restore takes another one, and an\n' \
+				"$_dnet" "$(basename "$(dirname "$_dholder")")"
+			printf '   application with a hardcoded address needs its configuration updated\n'
+		fi
+	fi
 
 	# A different web model on the archive side means custom includes may not apply.
 	if [ -n "$PROBE_WEB" ]; then

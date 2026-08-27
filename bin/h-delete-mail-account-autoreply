@@ -58,7 +58,10 @@ fi
 #----------------------------------------------------------#
 
 # Deleting autoreply message
-rm -f $USER_DATA/mail/$domain/$account@$domain.msg
+# No $domain/ level: h-add-mail-account-autoreply writes $USER_DATA/mail/$account@$domain.msg, so
+# this removed a path that never existed and left the record-side copy behind - which a backup then
+# carried and a restore put back.
+rm -f $USER_DATA/mail/$account@$domain.msg
 
 # Update config
 update_object_value "mail/$domain" 'ACCOUNT' "$account" '$AUTOREPLY' 'no'
