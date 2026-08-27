@@ -446,6 +446,15 @@ add_web_config() {
 
 	process_http2_directive "$conf"
 
+	# DIR_LIST lives only in the GENERATED vhost - the template hardcodes -Indexes - so every
+	# regeneration drops it while the record keeps saying yes. rebuild_web_domain_conf re-applies it;
+	# the eleven commands that regenerate directly did not, and h-add-web-domain-ssl was merely the
+	# one a roundtrip happened to hit (#831). Here rather than in each of them, so a twelfth cannot
+	# forget. Not while suspended: that template hardcodes -Indexes on purpose.
+	if [ "$DIR_LIST" = 'yes' ] && [ -z "$WEBTPL_OVERRIDE" ]; then
+		sed -i "s/-Index/+Index/g" "$conf"
+	fi
+
 	chown root:$user $conf
 	chmod 640 $conf
 
