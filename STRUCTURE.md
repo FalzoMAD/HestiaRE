@@ -511,6 +511,23 @@ referenced the directory at all. No runtime migration exists or is needed - `h-u
 copies the tree without removing, so an updated box would keep a stale `func/` that nothing
 sources; per the no-migration-before-v1 rule the answer is a reinstall, not a shim.
 
+## 12. Backup storage: flat `/backup` (0755) -> per-customer folders (0711/0750)
+
+**Upstream.** Every archive of every customer sits flat in `/backup` at 0755: any local
+system user can enumerate customer names, backup dates and sizes.
+
+**HestiaRE.** `/backup` is 0711 and holds one folder per customer
+(`/backup/$user/$user.<date>.tar`, 0750 `hestia:$user`); the run log lives inside. The flat
+level remains only as the hand-off spot for a migration archive an operator drops in by
+hand, plus `server.<stamp>.tar` for box state (`h-backup-server`, #710) - `server` is a
+reserved login name for that reason. Records keep bare basenames, so the backup FORMAT is
+untouched and bidirectional compatibility holds: a HestiaCP archive placed at the hand-off
+spot restores, and our archives restore there (#789).
+
+**Why.** Path privacy and one rights picture per customer. One resolver in
+`include/backup.sh` (`backup_archive_path`) carries the two-place rule and the symlink
+containment for every reader, CLI and panel.
+
 ---
 
 ## Known inconsistencies (flagged, not yet resolved)

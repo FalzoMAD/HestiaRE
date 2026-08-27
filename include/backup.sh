@@ -108,6 +108,10 @@ BACKUP_CONTAINER='hestia'
 # BACKUP_USER_DATA_CORE - data-dir entries that travel in NEITHER direction: rebuilt per object
 # (web|mail|db|cron.conf, mail), box-local (backup.conf), gone (dns), or secret (restic.conf, auth.log).
 BACKUP_USER_DATA_CORE='web.conf mail.conf db.conf cron.conf mail backup.conf dns.conf dns restic.conf auth.log'
+# What the container says about the ARCHIVE rather than about the customer: written into hestia/ by
+# the backup side, read by probe and restore, never copied into $USER_DATA. h-check-sys-smoke holds
+# this against what the writers actually emit, because a hand-kept list is how the last two leaked.
+BACKUP_CONTAINER_META='web-system origin export-map backup.map backup.base backup.members'
 
 # The text identifying a queued job - command plus the arguments that tell it apart. One per
 # queueable command.
@@ -205,7 +209,7 @@ backup_probe() {
 	PROBE_MODE='gzip'
 	PROBE_VESTA='no'
 	PROBE_WEB='' PROBE_MAIL='' PROBE_DB='' PROBE_UDIR='' PROBE_DNS='' PROBE_TPL=''
-	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM=''
+	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM='' PROBE_EXPORT_MAP=''
 	PROBE_ORIGIN='' PROBE_RECORDS="$_wd"
 	PROBE_DIFF_BASE='' PROBE_DIFF_MEMBERS=''
 
@@ -242,6 +246,7 @@ backup_probe() {
 	mkdir -p "$_wd" || return 1
 	tar -xf "$_arc" -C "$_wd" --wildcards --no-wildcards-match-slash \
 		"./$BACKUP_CONTAINER/user.conf" "./$BACKUP_CONTAINER/web-system" "./$BACKUP_CONTAINER/origin" \
+		"./$BACKUP_CONTAINER/export-map" \
 		2> /dev/null || true
 	tar -xf "$_arc" -C "$_wd" --wildcards \
 		"./$BACKUP_CONTAINER/packages/*" "./web/*/$BACKUP_CONTAINER/web.conf" \
@@ -254,6 +259,8 @@ backup_probe() {
 		PROBE_PROXY_SYSTEM=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$_dir/web-system")
 	fi
 	[ -f "$_dir/origin" ] && PROBE_ORIGIN=$(head -n1 "$_dir/origin")
+	# Only an export carries this: what it translated for foreign readers, with the originals.
+	[ -f "$_dir/export-map" ] && PROBE_EXPORT_MAP="$_dir/export-map"
 
 	# A differential archive has to say so before anyone restores it: everything else it carries is
 	# complete, but these members are not, and the base is the only thing that completes them.
@@ -301,7 +308,7 @@ backup_local_keys() {
 # is PRINTED: "nothing falls away" must not look like "the probe read nothing".
 backup_report() {
 	local _found=0 _n _obj _rec _keys _unknown _tpl _eff _ver _missing _pkg _local _hostkeys _installed
-	local _o_mode _o_fmt _o_who _prot _dom _file _bl _e _bl_list
+	local _o_mode _o_fmt _o_who _prot _dom _file _bl _e _bl_list _dip _dnet _dholder
 
 	echo "-- ARCHIVE --"
 	printf '   %s compressed\n' "$PROBE_MODE"
@@ -370,6 +377,33 @@ backup_report() {
 		_found=1
 		printf '   webmail settings and address books for %s mail domain(s) - shared per box, so the server backup carries them\n' \
 			"$(backup_report_count "$PROBE_MAIL")"
+	fi
+
+	# An uninstalled webmail client degrades to the disabled vhost while the record keeps the archived
+	# name, so the domain serves nothing and only the report can say so.
+	_wm=''
+	while IFS= read -r _dom; do
+		[ -n "$_dom" ] || continue
+		_file=$(backup_record_file mail "$_dom")
+		[ -s "$_file" ] || continue
+		_client=$(sed -n "s/.*WEBMAIL='\([^']*\)'.*/\1/p" <<< "$(head -n1 "$_file")")
+		# Ask about the value the restore will WRITE, not the translated one an export carries.
+		if [ -n "$PROBE_EXPORT_MAP" ]; then
+			_orig=$(awk -F'\t' -v d="$_dom" '$1 == "mail" && $2 == d && $3 == "WEBMAIL" {print $4}' \
+				"$PROBE_EXPORT_MAP")
+			[ -n "$_orig" ] && _client="$_orig"
+		fi
+		if [ -n "$_client" ] && [ "$_client" != 'disabled' ] \
+			&& ! grep -qwF -- "$_client" <<< "${WEBMAIL_SYSTEM//,/ }"; then
+			_wm="$_wm$_dom: $_client"$'\n'
+		fi
+	done <<< "$PROBE_MAIL"
+	if [ -n "$_wm" ]; then
+		_found=1
+		printf '   webmail on %s mail domain(s) - the archived client is not installed here (this host offers: %s),\n' \
+			"$(backup_report_count "$_wm")" "${WEBMAIL_SYSTEM:-none}"
+		printf '   so they get the disabled vhost until h-add-mail-domain-webmail names one this host has:\n'
+		sed '/^$/d;s/^/      /' <<< "$_wm"
 	fi
 
 	# Protections a domain asks for that this host cannot render. The setting survives on purpose, so only
@@ -441,6 +475,23 @@ backup_report() {
 
 	echo "-- WHAT WILL BE REWRITTEN --"
 	_found=0
+
+	# The archived docker /24 is kept when it is free and reallocated when another customer holds it.
+	# The customer's applications may carry that address, so the answer belongs HERE - before the run
+	# - and not only in a line the restore prints on its way past (#800).
+	_dip=$(sed -n "s/.*DOCKER_IP='\([^']*\)'.*/\1/p" "$PROBE_RECORDS/$BACKUP_CONTAINER/user.conf" 2> /dev/null | head -1)
+	if [ -n "$_dip" ]; then
+		# -F on the net: it carries dots, and as a regex they match any character.
+		_dnet="${_dip%.*}"
+		_dholder=$(grep -lF "DOCKER_IP='$_dnet." "$CONF_DIR"/users/*/user.conf 2> /dev/null \
+			| grep -Fxv "$CONF_DIR/users/$user/user.conf" | head -1)
+		if [ -n "$_dholder" ]; then
+			_found=1
+			printf '   docker subnet %s.0/24 is held by %s - the restore takes another one, and an\n' \
+				"$_dnet" "$(basename "$(dirname "$_dholder")")"
+			printf '   application with a hardcoded address needs its configuration updated\n'
+		fi
+	fi
 
 	# A different web model on the archive side means custom includes may not apply.
 	if [ -n "$PROBE_WEB" ]; then
@@ -1829,7 +1880,8 @@ backup_map_member() {
 }
 
 # backup_map_write TMPDIR MAPFILE TBLDIR - the map for everything this archive diffs against: web and mail.
-# The other members are always written whole, so they have nothing to compare.
+# The other members are always written whole, so they have nothing to compare. Whole names only, on
+# purpose: this runs BEFORE backup_diff_build, so no member has been renamed to a diff yet.
 backup_map_write() {
 	local _tmp="$1" _out="$2" _tbldir="$3" _d _arc _n
 	: > "$_out"
@@ -2023,7 +2075,9 @@ backup_diff_build() {
 			_sz_diff=$(stat -c %s "$_arc.diff" 2> /dev/null || echo 0)
 			# An empty diff is the normal quiet case; only a ZERO-BYTE file means the build failed.
 			if [ "$_sz_diff" -gt 0 ] && [ $((_sz_diff * 100)) -lt $((_sz_full * BACKUP_DIFF_MEMBER_PCT)) ]; then
-				mv -f "$_arc.diff" "$_arc"
+				_out=$(backup_diff_member_name "$_arc")
+				mv -f "$_arc.diff" "$_out"
+				rm -f "$_arc"
 				_kind='diff'
 			else
 				rm -f "$_arc.diff"
@@ -2035,6 +2089,38 @@ backup_diff_build() {
 	# MAPHASH = "the base I was built against"; a same-named archive from elsewhere fails it.
 	printf "BASE='%s' MAPHASH='%s'\n" "$_base" "$(sha256sum "$_bm" | cut -d' ' -f1)" \
 		> "$_tmp/$BACKUP_CONTAINER/backup.base"
+}
+
+# Called right after a run stamps its name. Archive and package names have one-second resolution, so
+# two runs for the same customer inside one second land on the same name and the second silently
+# replaces the first (#841) - holding the second here means the next stamp cannot be this one.
+backup_stamp_settle() {
+	sleep 1
+}
+
+# backup_diff_member_name PATH - domain_data.tar.zst -> domain_data.diff.tar.zst. A diff payload
+# holds only the changed paths, so it must not answer to the name of a whole one.
+backup_diff_member_name() {
+	local _b="${1##*/}" _d="${1%/*}"
+	[ "$_d" = "$1" ] && _d='.'
+	echo "$_d/${_b%%.*}.diff.${_b#*.}"
+}
+
+# backup_payload_path DIR BASENAME - the payload as it actually lies. Diff-named first, then the
+# whole name: archives written before #840 spelled their diffs like whole members, and those must
+# keep restoring. Prints nothing and returns 1 when neither is there.
+backup_payload_path() {
+	local _w="$1/$2" _d
+	_d=$(backup_diff_member_name "$_w")
+	[ -f "$_d" ] && {
+		echo "$_d"
+		return 0
+	}
+	[ -f "$_w" ] && {
+		echo "$_w"
+		return 0
+	}
+	return 1
 }
 
 # backup_map_prefix_count MAPFILE PREFIX - how many entries a member has in a map.
