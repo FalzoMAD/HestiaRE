@@ -38,7 +38,7 @@ LOG_DIR="/var/log/hestia"
 
 # GitHub defaults — can be overridden by /etc/hestia/source.conf
 # (set HESTIARE_SOURCE=gitea + HESTIARE_REPO_URL for private Gitea releases)
-GITHUB_REPO="FalzoMAD/HestiaRE"
+GITHUB_REPO="HestiaRE/Hestia"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}"
 GITHUB_RAW="https://github.com/${GITHUB_REPO}/releases/download"
 
