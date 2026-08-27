@@ -637,7 +637,7 @@
       "presets": "6 manifest presets (standard/compact/latest/singlephp/nomail/mailonly) drive COMPONENT_* in the wizard; h-install-hestia consumes COMPONENT_* directly (no profile-name dispatch). No custom preset on purpose (#195) - a config beyond every preset = hand-written install.conf",
       "bootstrap_flow": "curl | bash install.sh → OS detect → apt prereqs → download+extract tarball → include/wizard.sh → seed_hestia_etc → sbin/h-install-hestia",
       "release_sources": {
-        "github": "https://github.com/FalzoMAD/HestiaRE (default)",
+        "github": "https://github.com/HestiaRE/Hestia (default)",
         "gitea": "Configurable via /etc/hestia/source.conf"
       },
       "install_conf": "/etc/hestia/install.conf — written by include/wizard.sh; HESTIA_* params + COMPONENT_* selections; sourced by h-install-hestia; COMPONENT_* kept current by h-add-*/h-delete-* via set_install_component",

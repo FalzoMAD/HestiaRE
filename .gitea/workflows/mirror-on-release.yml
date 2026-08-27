@@ -36,8 +36,12 @@ jobs:
           fi
           git clone --mirror "file://${src}" "$workdir/repo.git"
           cd "$workdir/repo.git"
+          # The mirror target, spelled out rather than derived: the Gitea path above follows a
+          # rename by itself, this one does not. Moving the mirror means changing this line and
+          # the PUSH_TOKEN secret. It fails loudly if only one of the two is done - the token is
+          # scoped to its repository.
           git push --prune \
-            "https://x-access-token:${PUSH_TOKEN}@github.com/FalzoMAD/HestiaRE.git" \
+            "https://x-access-token:${PUSH_TOKEN}@github.com/HestiaRE/Hestia.git" \
             'refs/heads/main:refs/heads/main' \
             'refs/heads/upstream/*:refs/heads/upstream/*' \
             'refs/tags/*:refs/tags/*'
