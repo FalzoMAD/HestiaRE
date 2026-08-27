@@ -358,19 +358,24 @@ opens above it.
   The write-back is simply dropped - `rebuild_web_domain_conf` already reconciles the fragment
   through the same gate, so it was redundant for the fragment and destructive for the record.
 
-- **An export travels under a webmail client name a foreign panel accepts** (#837). Tachyon is our
-  name for a Roundcube fork and nobody else knows it, so HestiaCP answered a restore of our archive
-  with `Error: tachyon type is invalid` and left the mail domain without webmail. An export - the
-  migration artefact - now writes `roundcube` and keeps the original in `hestia/export-map`, which
-  our own restore reads back, so an export between two HestiaRE boxes is unchanged. The line under
-  "what this host cannot restore" asks about the value that will actually be written, not the one in
-  the archive, so a translated export is not reported as a loss it does not cause.
+- **An export travels under a webmail client name other panels know** (#837). Only we call the
+  SnappyMail fork `tachyon`, so HestiaCP answered a restore of our archive with `Error: tachyon type
+  is invalid` and left the mail domain without webmail. An export - the migration artefact - now
+  writes `snappymail` and keeps the original in `hestia/export-map`, which our own restore reads
+  back, so an export between two HestiaRE boxes is unchanged. The line under "what this host cannot
+  restore" asks about the value that will actually be written, not the one in the archive, so a
+  translated export is not reported as a loss it does not cause. It buys acceptance, not
+  installation: HestiaCP checks the value against its own `WEBMAIL_SYSTEM`, so a box without
+  snappymail refuses it the same way.
 
 - **An archive restore no longer drops an unread copy of the backup map into the customer's config**
   (#839). `hestia/backup.map` was not on the container's skip list, so every archive restore left it
   in `$USER_DATA/` - 665 KB uncompressed for a four-domain customer, measured, and read by nothing:
-  the diff mirror is written and read by the backup side under `backup-maps/` and compressed. Found
-  by the skip-list sweep for the export map, not by looking for it.
+  the diff mirror is written and read by the backup side under `backup-maps/` and compressed.
+  `backup.base` and `backup.members` leaked the same way out of every diff archive. The list is now
+  one constant, `BACKUP_CONTAINER_META`, and a smoke guard derives what the writers actually emit
+  into the container and fails when a name is neither meta nor handled by name - a hand-kept list
+  that nothing measures is how all three got there.
 
 - **A webmail client the target does not have is now named instead of vanishing** (#837). Restoring
   a mail domain whose archived client this box does not offer degrades to the disabled vhost - which

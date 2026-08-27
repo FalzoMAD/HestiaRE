@@ -598,8 +598,8 @@ web_http3_front_ssl_port() {
 }
 
 # write the quic fragment for the current domain; $1 is the resolved front IP (get_real_ip)
-# The static-offload list nginx serves in front of apache. Shared with the restore, which needs
-# the target's default when an archive from a proxy-less box arrives on a box that has one.
+# The static-offload list nginx serves in front of apache. Shared with the restore, which needs the
+# target's default when a proxy-less archive lands on a box that has a proxy.
 default_proxy_ext() {
 	local ext
 	# Code

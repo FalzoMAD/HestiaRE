@@ -421,6 +421,29 @@ check_webmail_value_domain() {
 	no "webmail templates outside the value domain:$missing" "extend WEBMAIL_KNOWN_CLIENTS in include/main.sh"
 }
 
+# BACKUP_CONTAINER_META is hand-kept, and the restore copies anything not on it into $USER_DATA -
+# twice already a member the backup side added leaked there unread (#839). So derive what the writers
+# actually emit into hestia/ and assert every name is either meta or explicitly handled. An empty
+# derived set fails: it would mean the grep, not the code, changed.
+check_backup_container_meta() {
+	local n found=0 missing=''
+	for n in $(grep -ohE '(\$tmpdir|\$_tmp|\$_wd)/(hestia|\$BACKUP_CONTAINER)/[A-Za-z0-9._-]+' \
+		"$HESTIA/bin/h-backup-user" "$HESTIA/include/backup.sh" 2> /dev/null | sed -E 's#.*/##' | sort -u); do
+		found=$((found + 1))
+		# user.conf, ssl and packages are the three the restore handles by name.
+		[[ " $BACKUP_CONTAINER_META user.conf ssl packages " == *" $n "* ]] || missing="$missing $n"
+	done
+	if [ "$found" -eq 0 ]; then
+		no "container-member guard derived no members" "the writers or the path spelling moved - re-check the sweep"
+		return
+	fi
+	[ -z "$missing" ] && {
+		ok "every archive container member is meta or handled by name ($found seen)"
+		return
+	}
+	no "container member(s) neither meta nor handled:$missing" "add them to BACKUP_CONTAINER_META in include/backup.sh"
+}
+
 # A web jail must watch the CURRENT web system's dir. After a switch that forgets to re-gate, its logpath
 # points at the old stack - a REAL path, so the "what does a jail watch" guard cannot see it, and the next
 # restart from any cause leaves it watching a stack with no traffic. Compared against the WEB_SYSTEM dir.
@@ -1548,6 +1571,7 @@ fi
 # adminer/webmail: no own daemon — served by a caddy FPM pool, so check the socket
 is_on "${COMPONENT_ADDON_ADMINER:-}" && check_socket /run/hestia-adminer.sock "adminer FPM"
 check_webmail_value_domain
+check_backup_container_meta
 if echo "$WEBMAIL_SYSTEM" | grep -qw 'roundcube'; then
 	check_webmail_payload roundcube /etc/roundcube/config.inc.php
 	check_socket /run/hestia-webmail-roundcube.sock "roundcube FPM"
