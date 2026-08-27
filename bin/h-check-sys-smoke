@@ -426,12 +426,19 @@ check_webmail_value_domain() {
 # actually emit into hestia/ and assert every name is either meta or explicitly handled. An empty
 # derived set fails: it would mean the grep, not the code, changed.
 check_backup_container_meta() {
-	local n found=0 missing=''
+	local n meta found=0 missing='' src="$HESTIA/include/backup.sh"
+	# Both sides out of the file, so neither depends on this script sourcing backup.sh, and an empty
+	# reference set fails instead of agreeing with everything.
+	meta=$(sed -n "s/^BACKUP_CONTAINER_META='\([^']*\)'.*/\1/p" "$src")
+	if [ -z "$meta" ]; then
+		no "container-member guard read no BACKUP_CONTAINER_META" "the constant moved or emptied in include/backup.sh"
+		return
+	fi
 	for n in $(grep -ohE '(\$tmpdir|\$_tmp|\$_wd)/(hestia|\$BACKUP_CONTAINER)/[A-Za-z0-9._-]+' \
-		"$HESTIA/bin/h-backup-user" "$HESTIA/include/backup.sh" 2> /dev/null | sed -E 's#.*/##' | sort -u); do
+		"$HESTIA/bin/h-backup-user" "$src" 2> /dev/null | sed -E 's#.*/##' | sort -u); do
 		found=$((found + 1))
 		# user.conf, ssl and packages are the three the restore handles by name.
-		[[ " $BACKUP_CONTAINER_META user.conf ssl packages " == *" $n "* ]] || missing="$missing $n"
+		[[ " $meta user.conf ssl packages " == *" $n "* ]] || missing="$missing $n"
 	done
 	if [ "$found" -eq 0 ]; then
 		no "container-member guard derived no members" "the writers or the path spelling moved - re-check the sweep"
