@@ -888,6 +888,7 @@ time_n_date=$(date +'%T %F')
 time=$(echo "$time_n_date" | cut -f 1 -d \ )
 date=$(echo "$time_n_date" | cut -f 2 -d \ )
 backup_new_date=$(date +"%Y-%m-%d_%H-%M-%S")
+backup_stamp_settle
 
 # The local mirror: a later run reads the base map from here instead of fetching the archive back
 # from a remote target. The archive carries its own copy regardless, so it stays readable elsewhere.

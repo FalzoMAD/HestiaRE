@@ -2091,6 +2091,13 @@ backup_diff_build() {
 		> "$_tmp/$BACKUP_CONTAINER/backup.base"
 }
 
+# Called right after a run stamps its name. Archive and package names have one-second resolution, so
+# two runs for the same customer inside one second land on the same name and the second silently
+# replaces the first (#841) - holding the second here means the next stamp cannot be this one.
+backup_stamp_settle() {
+	sleep 1
+}
+
 # backup_diff_member_name PATH - domain_data.tar.zst -> domain_data.diff.tar.zst. A diff payload
 # holds only the changed paths, so it must not answer to the name of a whole one.
 backup_diff_member_name() {

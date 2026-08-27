@@ -349,6 +349,17 @@ opens above it.
 
 ### Changed
 
+- **Two backups of the same customer in one second no longer collide** (#841). Archive and package
+  names carry a one-second stamp, and `local_backup` starts by removing the file of that name - so
+  the second run silently replaced the first. Measured with retention deliberately high enough that
+  rotation could take nothing: ten quick runs left **five** archives. In differential mode that is
+  data loss rather than a lost copy, because a diff can replace the very base it was built against,
+  and the restore then refuses the set by name (`map hash mismatch`) - which is the guard doing its
+  job, one step too late. A run now waits a second right where it stamps, so the next stamp cannot
+  be the same one; the same ten runs leave ten archives. The wait sits at all three stamping
+  commands, the restic one included, where a collision would pair a snapshot with the wrong
+  metadata package. It costs a second per customer on a nightly sweep.
+
 - **A differential payload member no longer answers to the name of a whole one** (#840). Inside an
   archive, a diffed `domain_data.tar.zst` held only the changed paths while carrying the same name
   as a complete one - the name said the wrong thing, and anything reading the archive without also
