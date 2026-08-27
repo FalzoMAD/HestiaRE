@@ -589,6 +589,12 @@ if [ -n "$MAIL_SYSTEM" ] && [ "$MAIL" != '*' ]; then
 		# Backup mail.conf
 		conf="$USER_DATA/mail.conf"
 		grep -F "DOMAIN='$domain'" $conf > hestia/mail.conf
+		# Only we call the SnappyMail fork tachyon, and a foreign panel refuses the unknown value. An
+		# export therefore travels as snappymail, with the original in hestia/export-map for our own restore.
+		if [ "$export_run" = 'yes' ] && grep -q "WEBMAIL='tachyon'" "$tmpdir/mail/$domain/hestia/mail.conf"; then
+			sed -i "s/WEBMAIL='tachyon'/WEBMAIL='snappymail'/" "$tmpdir/mail/$domain/hestia/mail.conf"
+			printf 'mail\t%s\tWEBMAIL\ttachyon\n' "$domain" >> "$tmpdir/hestia/export-map"
+		fi
 		cp $USER_DATA/mail/$domain.* hestia/
 		# compgen, not `ls | grep *@$domain`: that glob was expanded against the WORKING DIRECTORY
 		# before grep saw it, so the per-account files - the autoreply texts among them - never got

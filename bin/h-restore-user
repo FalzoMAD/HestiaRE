@@ -352,13 +352,13 @@ if [ "$create_user" = 'yes' ]; then
 		|| check_result "$E_PARSING" "the archived user.conf of $user carries no usable keys"
 	cp -r $tmpdir/$BACKUP_CONTAINER/ssl $USER_DATA/ > /dev/null 2>&1
 
-	# Everything else the container holds. Skipped: BACKUP_USER_DATA_CORE, plus what this side does
-	# itself - user.conf and ssl above, packages below, web-system and origin, which describe the
-	# archive. A superset on purpose: this is the side that takes in foreign archives.
+	# Everything else the container holds. Skipped: BACKUP_USER_DATA_CORE and BACKUP_CONTAINER_META
+	# (about the archive, not the customer), plus user.conf and ssl above and packages below.
+	# A superset on purpose: this is the side that takes in foreign archives.
 	for _entry in "$tmpdir/$BACKUP_CONTAINER"/*; do
 		[ -e "$_entry" ] || continue
 		_name=$(basename "$_entry")
-		[[ " $BACKUP_USER_DATA_CORE user.conf ssl packages web-system origin " == *" $_name "* ]] && continue
+		[[ " $BACKUP_USER_DATA_CORE $BACKUP_CONTAINER_META user.conf ssl packages " == *" $_name "* ]] && continue
 		# Out of the archive and joined onto a path we write to: a plain basename or nothing.
 		case "$_name" in '' | .* | */* | *[!A-Za-z0-9._-]*) continue ;; esac
 		# Anything that later runs through source_conf is filtered by its key set. A poisoned
@@ -611,6 +611,14 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 			record_set_field str ALIAS "$ALIAS"
 			record_set_field str TPL "$TPL"
 			record_set_field str PROXY "$PROXY"
+			# An empty PROXY_EXT from a proxy-less source empties the static-offload location on a
+			# target that has one. Only with the marker present: without it (HestiaCP, pre-#120) an
+			# empty value is unknown, not proxy-less, and could be the customer's own setting.
+			if [ -n "$PROXY_SYSTEM" ] && [ -z "$PROXY_EXT" ] \
+				&& [ -n "$PROBE_WEB_SYSTEM" ] && [ -z "$PROBE_PROXY_SYSTEM" ]; then
+				PROXY_EXT=$(default_proxy_ext)
+			fi
+			record_set_field str PROXY_EXT "$PROXY_EXT"
 			record_set_field str HTTP3 "$HTTP3"
 			record_set_field str BACKEND "$BACKEND"
 			record_set_field str PHP_VERSION "$PHP_VERSION"
@@ -821,6 +829,12 @@ if [ "$mail" != 'no' ] && [ -n "$MAIL_SYSTEM" ]; then
 				echo "$error" | $SENDMAIL -s "$subj" $email $notify
 				queue_drop_job "$CONF_DIR/queue/backup.pipe"
 				check_result "$E_PARSING" "$error"
+			fi
+			# An export translated for readers who do not speak our vocabulary; we do, so it goes back.
+			if [ -n "$PROBE_EXPORT_MAP" ]; then
+				_orig=$(awk -F'\t' -v d="$domain" '$1 == "mail" && $2 == d && $3 == "WEBMAIL" {print $4}' \
+					"$PROBE_EXPORT_MAP")
+				[ -n "$_orig" ] && record_set_field archived_record WEBMAIL "$_orig"
 			fi
 			echo "$archived_record" >> $USER_DATA/mail.conf
 		fi

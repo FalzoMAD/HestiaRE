@@ -108,6 +108,10 @@ BACKUP_CONTAINER='hestia'
 # BACKUP_USER_DATA_CORE - data-dir entries that travel in NEITHER direction: rebuilt per object
 # (web|mail|db|cron.conf, mail), box-local (backup.conf), gone (dns), or secret (restic.conf, auth.log).
 BACKUP_USER_DATA_CORE='web.conf mail.conf db.conf cron.conf mail backup.conf dns.conf dns restic.conf auth.log'
+# What the container says about the ARCHIVE rather than about the customer: written into hestia/ by
+# the backup side, read by probe and restore, never copied into $USER_DATA. h-check-sys-smoke holds
+# this against what the writers actually emit, because a hand-kept list is how the last two leaked.
+BACKUP_CONTAINER_META='web-system origin export-map backup.map backup.base backup.members'
 
 # The text identifying a queued job - command plus the arguments that tell it apart. One per
 # queueable command.
@@ -205,7 +209,7 @@ backup_probe() {
 	PROBE_MODE='gzip'
 	PROBE_VESTA='no'
 	PROBE_WEB='' PROBE_MAIL='' PROBE_DB='' PROBE_UDIR='' PROBE_DNS='' PROBE_TPL=''
-	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM=''
+	PROBE_CRON='no' PROBE_PACKAGES='' PROBE_WEB_SYSTEM='' PROBE_PROXY_SYSTEM='' PROBE_EXPORT_MAP=''
 	PROBE_ORIGIN='' PROBE_RECORDS="$_wd"
 	PROBE_DIFF_BASE='' PROBE_DIFF_MEMBERS=''
 
@@ -242,6 +246,7 @@ backup_probe() {
 	mkdir -p "$_wd" || return 1
 	tar -xf "$_arc" -C "$_wd" --wildcards --no-wildcards-match-slash \
 		"./$BACKUP_CONTAINER/user.conf" "./$BACKUP_CONTAINER/web-system" "./$BACKUP_CONTAINER/origin" \
+		"./$BACKUP_CONTAINER/export-map" \
 		2> /dev/null || true
 	tar -xf "$_arc" -C "$_wd" --wildcards \
 		"./$BACKUP_CONTAINER/packages/*" "./web/*/$BACKUP_CONTAINER/web.conf" \
@@ -254,6 +259,8 @@ backup_probe() {
 		PROBE_PROXY_SYSTEM=$(sed -n "s/.*PROXY_SYSTEM='\([^']*\)'.*/\1/p" "$_dir/web-system")
 	fi
 	[ -f "$_dir/origin" ] && PROBE_ORIGIN=$(head -n1 "$_dir/origin")
+	# Only an export carries this: what it translated for foreign readers, with the originals.
+	[ -f "$_dir/export-map" ] && PROBE_EXPORT_MAP="$_dir/export-map"
 
 	# A differential archive has to say so before anyone restores it: everything else it carries is
 	# complete, but these members are not, and the base is the only thing that completes them.
@@ -370,6 +377,33 @@ backup_report() {
 		_found=1
 		printf '   webmail settings and address books for %s mail domain(s) - shared per box, so the server backup carries them\n' \
 			"$(backup_report_count "$PROBE_MAIL")"
+	fi
+
+	# An uninstalled webmail client degrades to the disabled vhost while the record keeps the archived
+	# name, so the domain serves nothing and only the report can say so.
+	_wm=''
+	while IFS= read -r _dom; do
+		[ -n "$_dom" ] || continue
+		_file=$(backup_record_file mail "$_dom")
+		[ -s "$_file" ] || continue
+		_client=$(sed -n "s/.*WEBMAIL='\([^']*\)'.*/\1/p" <<< "$(head -n1 "$_file")")
+		# Ask about the value the restore will WRITE, not the translated one an export carries.
+		if [ -n "$PROBE_EXPORT_MAP" ]; then
+			_orig=$(awk -F'\t' -v d="$_dom" '$1 == "mail" && $2 == d && $3 == "WEBMAIL" {print $4}' \
+				"$PROBE_EXPORT_MAP")
+			[ -n "$_orig" ] && _client="$_orig"
+		fi
+		if [ -n "$_client" ] && [ "$_client" != 'disabled' ] \
+			&& ! grep -qwF -- "$_client" <<< "${WEBMAIL_SYSTEM//,/ }"; then
+			_wm="$_wm$_dom: $_client"$'\n'
+		fi
+	done <<< "$PROBE_MAIL"
+	if [ -n "$_wm" ]; then
+		_found=1
+		printf '   webmail on %s mail domain(s) - the archived client is not installed here (this host offers: %s),\n' \
+			"$(backup_report_count "$_wm")" "${WEBMAIL_SYSTEM:-none}"
+		printf '   so they get the disabled vhost until h-add-mail-domain-webmail names one this host has:\n'
+		sed '/^$/d;s/^/      /' <<< "$_wm"
 	fi
 
 	# Protections a domain asks for that this host cannot render. The setting survives on purpose, so only

@@ -349,6 +349,53 @@ opens above it.
 
 ### Fixed
 
+- **A restic restore no longer erases the customer's HTTP/3 switch** (#835). The field carries the
+  intent and the fragment carries intent AND capability, so a domain landing on a box without
+  `http_v3` keeps `HTTP3='yes'` and picks the listen up again on a capable box. The restic path
+  wrote the capability answer back into the record, so on such a box an archived `yes` came out as
+  `no` and the switch was gone for good. Measured on deb12 with both arms against the same fixture:
+  the archive arm returned `yes`, the restic arm `no`, with two untouched domains as the control.
+  The write-back is simply dropped - `rebuild_web_domain_conf` already reconciles the fragment
+  through the same gate, so it was redundant for the fragment and destructive for the record.
+
+- **An export travels under a webmail client name other panels know** (#837). Only we call the
+  SnappyMail fork `tachyon`, so HestiaCP answered a restore of our archive with `Error: tachyon type
+  is invalid` and left the mail domain without webmail. An export - the migration artefact - now
+  writes `snappymail` and keeps the original in `hestia/export-map`, which our own restore reads
+  back, so an export between two HestiaRE boxes is unchanged. The line under "what this host cannot
+  restore" asks about the value that will actually be written, not the one in the archive, so a
+  translated export is not reported as a loss it does not cause. It buys acceptance, not
+  installation: HestiaCP checks the value against its own `WEBMAIL_SYSTEM`, so a box without
+  snappymail refuses it the same way.
+
+- **An archive restore no longer drops an unread copy of the backup map into the customer's config**
+  (#839). `hestia/backup.map` was not on the container's skip list, so every archive restore left it
+  in `$USER_DATA/` - 665 KB uncompressed for a four-domain customer, measured, and read by nothing:
+  the diff mirror is written and read by the backup side under `backup-maps/` and compressed.
+  `backup.base` and `backup.members` leaked the same way out of every diff archive. The list is now
+  one constant, `BACKUP_CONTAINER_META`, and a smoke guard derives what the writers actually emit
+  into the container and fails when a name is neither meta nor handled by name - a hand-kept list
+  that nothing measures is how all three got there.
+
+- **A webmail client the target does not have is now named instead of vanishing** (#837). Restoring
+  a mail domain whose archived client this box does not offer degrades to the disabled vhost - which
+  is right, a dead proxy would be worse - but the record kept the archived name, so the panel claimed
+  webmail the domain no longer served. Measured HestiaCP -> HestiaRE: `WEBMAIL='roundcube'` onto a
+  tachyon-only box left a vhost with no `proxy_pass`, and the report said nothing; its only webmail
+  line is about settings and address books. It now names the domain, the archived client and what
+  this host offers. Whether the restore should also remap the client the way it remaps `TPL` and
+  `BACKEND` is left open - naming it is the conservative half.
+
+- **An archive from a box without a proxy no longer switches static serving off on the target**
+  (#836). In an nginx-only model `PROXY_EXT` is empty because there is no reverse proxy; carried
+  verbatim onto a box that has one, it renders `location ~* ^.+\.()$` - a list matching nothing -
+  and nginx hands every request to apache. Nothing breaks, which is why nobody would notice. The
+  archive states its own source model in `hestia/web-system`, so the target default fills in only
+  when the source had no proxy at all; an empty list from a proxied source is the customer's own
+  setting and stays. The default list moves to `default_proxy_ext()` so domain creation and restore
+  read the same one. Not covered: the restic arm, whose metadata carries no model marker and whose
+  repository lives on the box it came from - that needs revisiting with the live model switch (#120).
+
 - **An archive restored from is now adopted, so it stops being a rotation candidate** (#820).
   A hand-placed migration archive is only ever recorded by `h-add-user-backup`; the restore just
   resolves it and reads it, and wrote no record at all. Inside `/backup/$user/` that is a silent
