@@ -40,6 +40,19 @@ web_model_keyset() {
 				"PROXY_PORT=80" \
 				"PROXY_SSL_PORT=443"
 			;;
+		mailfront | MAILFRONT)
+			# no customer web at all (#193): WEB_SYSTEM stays EMPTY so every web
+			# command's is_system_enabled guard refuses, while nginx fronts the
+			# webmail vhosts and ACME under its own key. Ports kept - the webmail
+			# templates render %web_port%/%web_ssl_port% against the front.
+			printf '%s\n' \
+				"WEB_SYSTEM=" \
+				"WEB_PORT=80" \
+				"WEB_SSL_PORT=443" \
+				"WEB_SSL=openssl" \
+				"PROXY_SYSTEM=" \
+				"WEBMAIL_FRONT=nginx"
+			;;
 		nginx | NGINX | *)
 			printf '%s\n' \
 				"WEB_SYSTEM=nginx" \
@@ -219,25 +232,28 @@ web_current_model() {
 		echo "both"
 	elif [ "$WEB_SYSTEM" = "apache2" ]; then
 		echo "apache"
+	elif [ -z "$WEB_SYSTEM" ] && [ -n "${WEBMAIL_FRONT:-}" ]; then
+		echo "mailfront"
 	else
 		echo "unknown"
 	fi
 }
 
 web_model_uses_apache() { case "$1" in both | apache) return 0 ;; *) return 1 ;; esac }
-web_model_uses_nginx() { case "$1" in both | nginx) return 0 ;; *) return 1 ;; esac }
+web_model_uses_nginx() { case "$1" in both | nginx | mailfront) return 0 ;; *) return 1 ;; esac }
 
 web_model_label() {
 	case "$1" in
 		nginx) echo "nginx-only" ;;
 		both) echo "both - nginx front, apache2 backend" ;;
 		apache) echo "apache-only" ;;
+		mailfront) echo "mailfront - nginx for webmail/ACME only, no customer web" ;;
 		*) echo "$1" ;;
 	esac
 }
 
-# The 8 keys the model owns; flip = change each emitted key, clear the rest.
-WEB_MODEL_KEYS="WEB_SYSTEM WEB_RGROUPS WEB_PORT WEB_SSL_PORT WEB_SSL PROXY_SYSTEM PROXY_PORT PROXY_SSL_PORT"
+# The 9 keys the model owns; flip = change each emitted key, clear the rest.
+WEB_MODEL_KEYS="WEB_SYSTEM WEB_RGROUPS WEB_PORT WEB_SSL_PORT WEB_SSL PROXY_SYSTEM PROXY_PORT PROXY_SSL_PORT WEBMAIL_FRONT"
 
 web_model_flip_keyset() {
 	local target="$1" kv key emitted=""
@@ -753,6 +769,10 @@ web_component_op() {
 	current=$(web_current_model)
 	[ "$current" = "unknown" ] && {
 		echo "Refused: no web stack is configured (empty WEB_SYSTEM); this is not the axis a web-model command changes." >&2
+		return 1
+	}
+	[ "$current" = "mailfront" ] && {
+		echo "Refused: this box is mailfront (webmail/ACME nginx only, no customer web, #193) - the model switch does not add a customer web stack to a mailonly box." >&2
 		return 1
 	}
 

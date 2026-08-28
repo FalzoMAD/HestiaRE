@@ -1675,6 +1675,8 @@ check_sudoers /etc/sudoers.d/hestia "hestia grant"
 echo "-- services --"
 [ -n "$WEB_SYSTEM" ] && [ "$WEB_SYSTEM" != 'nginx' ] && check_service "$WEB_SYSTEM" "web"
 [ -n "$PROXY_SYSTEM" ] && [ "$PROXY_SYSTEM" != 'remote' ] && check_service "$PROXY_SYSTEM" "reverse proxy"
+# mailfront (#193): customer web absent by design, but the webmail/ACME front must run
+[ -z "$WEB_SYSTEM" ] && [ -n "${WEBMAIL_FRONT:-}" ] && check_service "$WEBMAIL_FRONT" "webmail front"
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_service "$MAIL_SYSTEM" "mail"
 [ -n "$IMAP_SYSTEM" ] && [ "$IMAP_SYSTEM" != 'remote' ] && check_service "$IMAP_SYSTEM" "imap"
 [ -n "$ANTISPAM_SYSTEM" ] && [ "$ANTISPAM_SYSTEM" != 'remote' ] && check_service "$ANTISPAM_SYSTEM" "antispam"
@@ -1751,7 +1753,7 @@ fi
 
 # --- Ports implied by the active config ---
 echo "-- ports --"
-if [ -n "$PROXY_SYSTEM" ] || [ -n "$WEB_SYSTEM" ]; then
+if [ -n "$PROXY_SYSTEM" ] || [ -n "$(webmail_front)" ]; then
 	check_port 80 "http"
 	check_port 443 "https"
 fi
@@ -1774,7 +1776,9 @@ fi
 # --- Critical log markers ---
 echo "-- logs --"
 check_log_clean "/var/log/hestia-php-fpm.log" "PHP (Fatal|Parse) error|\[emergency\]|\[alert\]" "panel FPM"
-[ -n "$PROXY_SYSTEM" ] && check_log_clean "/var/log/nginx/error.log" "\[emerg\]|\[alert\]" "nginx"
+if [ -n "$PROXY_SYSTEM" ] || [ -n "${WEBMAIL_FRONT:-}" ]; then
+	check_log_clean "/var/log/nginx/error.log" "\[emerg\]|\[alert\]" "nginx"
+fi
 [ "$WEB_SYSTEM" = 'apache2' ] && check_log_clean "/var/log/apache2/error.log" "\[.*:emerg\]|\[.*:alert\]" "apache2"
 # exim writes serious problems to a dedicated paniclog — non-empty means trouble
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_file_empty "/var/log/exim4/paniclog" "exim paniclog"

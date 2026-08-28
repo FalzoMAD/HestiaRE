@@ -325,7 +325,7 @@ for auth in $authz; do
 			fi
 		fi
 	fi
-	if [ "$WEB_SYSTEM" = 'nginx' ]; then
+	if [ "$(webmail_front)" = 'nginx' ]; then
 		$BIN/h-restart-web
 		check_result $? "Web restart failed" > /dev/null
 	fi

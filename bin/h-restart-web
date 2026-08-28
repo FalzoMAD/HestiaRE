@@ -59,6 +59,10 @@ is_format_valid 'restart'
 # restart as the lock owner; an outside reload here would load a half-flipped config.
 if web_freeze_held; then exit 0; fi
 
+# mailfront: no customer web, but the webmail front still needs its reload
+# cycle - reuse the whole body with the front as the effective system (#193)
+[ -z "$WEB_SYSTEM" ] && WEB_SYSTEM=$(webmail_front)
+
 # Exit
 if [ -z "$WEB_SYSTEM" ] || [ "$WEB_SYSTEM" = 'remote' ]; then
 	exit
