@@ -741,6 +741,16 @@ check_exim_sendonly() {
 		no "exim send-only routing" "generated config carries no dnslookup router - remote delivery is off (regenerate: update-exim4.conf)"
 		return
 	fi
+	# runtime vs disk (the #191 master-image pattern): a daemon started before the
+	# regeneration still carries the old config in memory. Narrow but real: the
+	# per-message exim spawn reads disk, the stale daemon owns the queue retries.
+	local started gen_m
+	started=$(date -d "$(systemctl show -p ActiveEnterTimestamp --value exim4 2> /dev/null)" +%s 2> /dev/null)
+	gen_m=$(stat -c %Y "$gen" 2> /dev/null)
+	if [ -n "$started" ] && [ -n "$gen_m" ] && [ "$gen_m" -gt "$started" ]; then
+		no "exim daemon predates its generated config" "restart exim4 to load it (queue retries run on the old one)"
+		return
+	fi
 	if ! command -v ss > /dev/null 2>&1; then
 		no "exim send-only listeners" "ss not available - the listener half is NOT verifiable, not clean"
 		return

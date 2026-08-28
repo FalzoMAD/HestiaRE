@@ -1414,6 +1414,12 @@ $BIN/h-update-user-counters "$ROOT_USER"
 $BIN/h-update-sys-ip-counters
 
 # Logging
+# A restore is the one path that creates domains without the add commands (rebuild-based),
+# so it must close the jail lifecycle itself: on a fresh box it creates the FIRST logs
+# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+declare -F fail2ban_regate_web_apply > /dev/null 2>&1 || source "$HESTIA/include/fail2ban.sh"
+fail2ban_regate_web_apply
+
 $BIN/h-log-action "system" "Info" "Backup" "Restored backup contents (User: $user, Archive: $backup)."
 $BIN/h-log-action "$user" "Info" "Backup" "Restored backup contents (Archive: $backup)."
 
