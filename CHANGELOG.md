@@ -25,6 +25,10 @@ opens above it.
   shipped (imap from 8.4 on, resolute's built-in opcache) are dropped loudly instead of killing the
   install, cli+fpm stay mandatory. Asking h-add-web-php for a version the configured repos cannot
   install arms Sury on demand - the retrofit stays a single command.
+- **Roundcube survives PHP 8.5** (#191). resolute's Roundcube 1.6.11 still declares array_first()
+  unguarded and dies on a redeclare fatal against 8.5's new core function; the pool now disables
+  the two natives (PHP 8.0+ semantics allow the userland redefinition), which is inert everywhere
+  else and stays correct once the upstream polyfill fix reaches the package.
 - **A PHP security update no longer leaves the panel on a deleted binary** (#191). The distro
   postinst only restarts its own unit; an apt Post-Invoke hook now restarts hestia-php exactly when
   its master image is gone from disk - which happens unattended once the panel runs OS PHP. The
