@@ -12,7 +12,13 @@ opens above it.
 
 ## Unreleased
 
-_Nothing yet._
+### Changed
+
+- **The standard and compact presets diverge again** (#850). standard now preselects the four
+  newest PHP versions, Redis alongside MariaDB, both webmailers, restic and sieve; compact keeps
+  the three PHP versions below the newest, fixes MariaDB to the OS default without asking, and
+  preselects only CrowdSec, Fail2ban and rspamd - the utilities screen stays closed unless opted
+  in. The CrowdSec mode texts got shorter.
 
 ## v0.17.0 (2026-08-27)
 
