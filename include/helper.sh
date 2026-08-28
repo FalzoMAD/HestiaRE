@@ -120,6 +120,25 @@ os_default_php() {
 		| awk -F'|' '{print $2}' | grep -oE '[0-9]+\.[0-9]+' | head -n1
 }
 
+# ── PHP package availability probe (#191) ───────────────────────────────────
+# A pure-OS box does not carry everything the Sury list has: imap is gone from
+# 8.4+ entirely, resolute builds opcache into the core, exif is a virtual name
+# provided by -common. apt -s sees real and virtual packages alike. Echo the
+# installable subset and warn per drop - a silent shrink would hide a broken
+# repo, a hard fail would kill the install over an extension the OS never
+# shipped. The caller enforces its own essentials (cli/fpm) on the result.
+filter_installable_php_pkgs() {
+	local p keep=""
+	for p in "$@"; do
+		if apt-get -qq -s install "$p" > /dev/null 2>&1; then
+			keep="$keep $p"
+		else
+			echo "[ ! ] $p is not available from the configured repos - skipped" >&2
+		fi
+	done
+	echo "${keep# }"
+}
+
 # ── Sury PHP repository (shared by wizard + installer) ──────────────────────
 # Idempotent, single canonical definition (keyring + signed-by + source file) -
 # two diverging ones trip apt's "Conflicting values set for option Signed-By".

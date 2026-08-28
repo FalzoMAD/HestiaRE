@@ -700,7 +700,20 @@ check_panel_php_version() {
 		no "panel PHP $v binaries (cli+fpm)" "php-version names $v but /usr/bin/php$v or /usr/sbin/php-fpm$v is missing"
 		return
 	fi
-	ok "panel PHP $v (php-version file, cli and fpm binaries present)"
+	# a PHP package update replaces the binary; the distro postinst does not know
+	# hestia-php.service, so without the apt hook the master serves the old image
+	local pid exe
+	pid=$(systemctl show -p MainPID --value hestia-php 2> /dev/null)
+	if [ -n "$pid" ] && [ "$pid" != 0 ]; then
+		exe=$(readlink "/proc/$pid/exe" 2> /dev/null)
+		case "$exe" in
+			*" (deleted)")
+				no "panel FPM master runs a deleted PHP image" "a PHP update replaced the binary - restart hestia-php (sbin/hestia-php-refresh should have)"
+				return
+				;;
+		esac
+	fi
+	ok "panel PHP $v (php-version file, binaries present, master image on disk)"
 }
 
 check_panel_locale() {

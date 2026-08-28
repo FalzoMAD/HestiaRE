@@ -539,7 +539,7 @@
       }
     },
     "panel_php_service": {
-      "description": "Dedicated PHP-FPM service for the HestiaRE panel. Runs as hestia-php.service using Sury php8.3-fpm binary with an isolated pool. Replaces compiled hestia-php package.",
+      "description": "Dedicated PHP-FPM service for the HestiaRE panel. Runs as hestia-php.service on the OS-default reference version (/etc/php/hestia/php-version, #191) with an isolated conf.d and pool",
       "entry_points": [
         "share/panel-php/hestia-php.service"
       ],
@@ -557,6 +557,8 @@
         "sbin/hestia-php-fpm",
         "sbin/hestia-php",
         "sbin/hestia-php-confd",
+        "sbin/hestia-php-refresh",
+        "share/panel-php/apt-refresh.conf",
         "bin/h-change-sys-panel-php",
         "bin/h-delete-web-php"
       ],
