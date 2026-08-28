@@ -14,6 +14,26 @@ opens above it.
 
 ### Changed
 
+- **The panel PHP version is the OS default, not a Sury pin** (#191). deb12 runs the panel on 8.2,
+  deb13 on 8.4, ub24 on 8.3, ub26 on 8.5 - derived from the OS php meta at install (Sury-filtered,
+  since the sury meta shadows the OS one) and recorded in install.conf and
+  /etc/php/hestia/php-version. The OS-packaged panel apps (Roundcube, phpMyAdmin) now run on the
+  PHP their distro actually tests them against. In sury_multi mode the packages still come from
+  Sury; an OS default missing from php_supported fails loudly at the wizard.
+- **singlephp keeps its promise: no Sury on the box** (#191). In os_single mode the installer skips
+  the Sury repo entirely; panel and customer PHP come from the OS. Extension names the OS never
+  shipped (imap from 8.4 on, resolute's built-in opcache) are dropped loudly instead of killing the
+  install, cli+fpm stay mandatory. Asking h-add-web-php for a version the configured repos cannot
+  install arms Sury on demand - the retrofit stays a single command.
+- **Roundcube survives PHP 8.5** (#191). resolute's Roundcube 1.6.11 still declares array_first()
+  unguarded and dies on a redeclare fatal against 8.5's new core function; the pool now disables
+  the two natives (PHP 8.0+ semantics allow the userland redefinition), which is inert everywhere
+  else and stays correct once the upstream polyfill fix reaches the package.
+- **A PHP security update no longer leaves the panel on a deleted binary** (#191). The distro
+  postinst only restarts its own unit; an apt Post-Invoke hook now restarts hestia-php exactly when
+  its master image is gone from disk - which happens unattended once the panel runs OS PHP. The
+  smoke test flags a stale master.
+
 - **Adminer 6.0.1 and Alpine.js 3.16.3 vendored** (#851). The Adminer pin had fallen two security
   rounds behind (a 5.5.1 GHSA, the 6.0.x XSS/CSRF hardening incl. the trust-auth server lockout);
   the login-servers SSRF dropdown works unchanged under 6. Alpine 3.16 is a bugfix minor.

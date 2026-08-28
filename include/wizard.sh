@@ -40,6 +40,7 @@ INSTALL_PROFILE=""
 FASTTRACK_PRESET=""
 AUTO_MODE=false
 PHP_VERSIONS_AVAILABLE=""
+REFERENCE_PHP=""
 OS_MARIADB_VERSION=""
 TOOLS_SELECTION=""
 declare -A COMP_VALUES
@@ -355,7 +356,29 @@ fn_discover_mariadb_version() {
 	echo "[ * ] OS MariaDB version: $OS_MARIADB_VERSION"
 }
 
+# Panel/reference PHP = the OS default (#191), derived via the shared
+# os_default_php (Sury-filtered). Hard errors instead of fallbacks: a wrong
+# reference here means the installer pins the panel to a version the OS never
+# shipped, and an unsupported one dies later in h-add-web-php anyway - say it
+# here, with the fix.
+fn_derive_reference_php() {
+	REFERENCE_PHP=$(os_default_php)
+	if [ -z "$REFERENCE_PHP" ]; then
+		echo "ERROR: could not derive the OS default PHP version (apt-cache madison php came back empty)." >&2
+		exit 1
+	fi
+	case " $(fn_php_supported_list) " in
+		*" $REFERENCE_PHP "*) ;;
+		*)
+			echo "ERROR: OS default PHP $REFERENCE_PHP is not in php_supported - bump the list in share/manifest.json for this OS." >&2
+			exit 1
+			;;
+	esac
+	echo "[ * ] Panel PHP reference: $REFERENCE_PHP (OS default)"
+}
+
 fn_pre_discovery() {
+	fn_derive_reference_php
 	local php_mode
 	php_mode=$(fn_component_default PHP_MODE "$INSTALL_PROFILE")
 	[ "$php_mode" = "sury_multi" ] && fn_discover_php_versions
@@ -521,8 +544,7 @@ _ask_checklist() {
 	# reference PHP is always installed by the installer - keep it out of the checklist, show a note
 	local text="$question"
 	if [ "$dynamic_source" = "sury_repo_metadata" ]; then
-		local ref
-		ref=$(mq '.components.PANEL_PHP.reference_version // empty')
+		local ref="$REFERENCE_PHP"
 		if [ -n "$ref" ]; then
 			local -a filtered=()
 			for opt in "${all_opts[@]}"; do [ "$opt" = "$ref" ] || filtered+=("$opt"); done
@@ -641,8 +663,7 @@ fn_fasttrack_value() {
 				rule=$(mq --arg id "$id" --arg p "$INSTALL_PROFILE" '.components[$id].default_rule[$p] // empty')
 				if [ -n "$rule" ] && [ "$rule" != "null" ]; then sel=$(fn_apply_default_rule "$rule" "$PHP_VERSIONS_AVAILABLE"); fi
 				# reference version is installed by the installer, not selected here
-				local ref
-				ref=$(mq '.components.PANEL_PHP.reference_version // empty')
+				local ref="$REFERENCE_PHP"
 				if [ -n "$ref" ]; then
 					local v out=""
 					for v in $sel; do [ "$v" = "$ref" ] || out="$out $v"; done
@@ -849,6 +870,9 @@ fn_write_install_conf() {
 		echo "HESTIA_EMAIL=\"${HESTIA_EMAIL}\""
 		echo "INSTALL_OS=\"${OS}\""
 		echo "INSTALL_PROFILE=\"${INSTALL_PROFILE}\""
+		# panel/reference PHP, derived from the OS default (#191); the installer
+		# reads this instead of a manifest pin and re-derives when hand-omitted
+		echo "PHP_REFERENCE_VERSION=\"${REFERENCE_PHP}\""
 		echo ""
 		echo "# Components"
 		for id in "${ids[@]}"; do echo "COMPONENT_${id}=\"${COMP_VALUES[$id]:-}\""; done

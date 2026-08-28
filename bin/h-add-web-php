@@ -78,8 +78,43 @@ if ! echo "$DB_SYSTEM" | grep -w 'pgsql' > /dev/null; then
 	mph=$(echo "$mph" | sed -e "s/php$version-pgsql//")
 fi
 
+# Sury retrofit (#191): an os_single box carries no Sury repo. Asking for a version
+# the configured repos cannot install IS the retrofit path - arm Sury then. Keyed on
+# installability, not on a recorded mode: a hand-removed repo heals the same way.
+# Fresh lists first, or a stale cache turns an installable OS version into a retrofit -
+# and a FAILED update must stop here: reading a mirror outage as "not available" would
+# permanently put Sury on a box whose preset promises none.
+apt-get -qq update || check_result "$E_CONNECT" "apt-get update failed - cannot judge package availability"
+if ! apt-get -qq -s install "php$version-fpm" > /dev/null 2>&1; then
+	# shellcheck source=/usr/local/hestia/include/helper.sh
+	source "$HESTIA/include/helper.sh"
+	codename=$(
+		. /etc/os-release
+		echo "$VERSION_CODENAME"
+	)
+	echo "php$version is not available from the configured repos - adding the Sury repo"
+	add_sury_repo "$codename" || check_result "$E_CONNECT" "Sury repo setup failed"
+
+	apt-get -qq update || check_result "$E_CONNECT" "apt-get update failed after adding the Sury repo"
+fi
+
+# Some names exist in no repo at all (imap has no package from 8.4 on): drop them
+# loudly instead of failing the whole install, but cli+fpm must survive the filter.
+# shellcheck source=/usr/local/hestia/include/helper.sh
+command -v filter_installable_php_pkgs > /dev/null 2>&1 || source "$HESTIA/include/helper.sh"
+# shellcheck disable=SC2086
+mph=$(filter_installable_php_pkgs "imap:8.4 opcache:8.5 exif" $mph) \
+	|| check_result "$E_CONNECT" "package availability probe failed - repos unreachable or broken"
+case " $mph " in *" php$version-fpm "*) ;; *)
+	check_result "$E_NOTEXIST" "php$version-fpm is not installable from the configured repos"
+	;;
+esac
+case " $mph " in *" php$version-cli "*) ;; *)
+	check_result "$E_NOTEXIST" "php$version-cli is not installable from the configured repos"
+	;;
+esac
+
 # Install php packages
-apt-get -qq update
 apt-get -y -qq -o Dpkg::Options::="--force-confold" install $mph > /dev/null 2>&1 &
 
 BACK_PID=$!

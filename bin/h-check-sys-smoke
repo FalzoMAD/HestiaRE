@@ -686,6 +686,46 @@ check_v_symlinks_resolve() {
 # (that is how this was found). The expected value is READ FROM the deployed pool, not written here,
 # so changing the pin cannot leave the check testing yesterday's value.
 # NOT covered: locales a customer's own PHP or a cron job sets for itself.
+# The panel PHP version is a file, not a constant (#191): /etc/php/hestia/php-version
+# names whatever the wrappers and hestia-php.service run. An empty file or a version
+# whose binaries are gone means every panel request dies at exec - say which half broke.
+check_panel_php_version() {
+	local v
+	v=$(cat /etc/php/hestia/php-version 2> /dev/null)
+	if [ -z "$v" ]; then
+		no "panel PHP version file" "/etc/php/hestia/php-version is empty or missing - the hestia-php wrappers fall back blind"
+		return
+	fi
+	if [ ! -x "/usr/bin/php$v" ] || [ ! -x "/usr/sbin/php-fpm$v" ]; then
+		no "panel PHP $v binaries (cli+fpm)" "php-version names $v but /usr/bin/php$v or /usr/sbin/php-fpm$v is missing"
+		return
+	fi
+	# a PHP package update replaces the binary; the distro postinst does not know
+	# hestia-php.service, so without the apt hook the master serves the old image
+	local pid exe
+	pid=$(systemctl show -p MainPID --value hestia-php 2> /dev/null)
+	if [ -z "$pid" ] || [ "$pid" = 0 ]; then
+		# master not running: the service check above already flags that red -
+		# do not claim an image state nothing looked at
+		ok "panel PHP $v (php-version file and binaries present; master not running, see the service check)"
+		return
+	fi
+	exe=$(readlink "/proc/$pid/exe" 2> /dev/null)
+	case "$exe" in
+		*" (deleted)")
+			no "panel FPM master runs a deleted PHP image" "a PHP update replaced the binary - restart hestia-php (sbin/hestia-php-refresh should have)"
+			return
+			;;
+	esac
+	# same string carries the version: file says $v, master may still run the old one
+	# (a version switch without the restart is exactly this state)
+	if [ -n "$exe" ] && [ "${exe##*/}" != "php-fpm$v" ]; then
+		no "panel FPM master runs ${exe##*/} but php-version says $v" "restart hestia-php to load the recorded version"
+		return
+	fi
+	ok "panel PHP $v (php-version file, binaries present, master image on disk)"
+}
+
 check_panel_locale() {
 	local pool=/etc/php/hestia/fpm/pool.d/panel.conf want
 	if [ ! -f "$pool" ]; then
@@ -1625,6 +1665,7 @@ echo "=== HestiaRE smoke test ==="
 echo "-- panel --"
 check_service caddy "panel webserver"
 check_service hestia-php "panel PHP-FPM"
+check_panel_php_version
 check_port "${BACKEND_PORT:-8083}" "panel"
 check_http "https://127.0.0.1:${BACKEND_PORT:-8083}/login/" "panel login page"
 # invalid sudoers → no privileged panel action works

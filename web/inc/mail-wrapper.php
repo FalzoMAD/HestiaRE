@@ -1,4 +1,4 @@
-#!/usr/bin/php8.3
+#!/usr/local/hestia/sbin/hestia-php
 <?php
 
 if (empty($argv[1])) {
