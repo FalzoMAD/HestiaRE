@@ -28,7 +28,7 @@ indent_size = 2
 # continuation lines, and indented case arms.
 # The three extensionless scripts are named one by one because their directories also hold
 # non-shell files; the gate's own coverage check is what keeps that list from going stale.
-[{bin/h-*,sbin/*,include/*.sh,install.sh,.gitea/tools/*.sh,share/**.sh,web/locale/*.sh,share/apache2/httpd-prerotate/awstats,share/bubblewrap/jailbash,share/security/hestia-jail.init,share/dovecot/sieve-learn/hestia-rspamd-learn}]
+[{bin/h-*,sbin/*,include/*.sh,install.sh,.gitea/tools/*.sh,share/**.sh,web/locale/*.sh,share/apache2/httpd-prerotate/awstats,share/bubblewrap/jailbash,share/security/hestia-jail.init,share/dovecot/sieve-learn/hestia-rspamd-learn,share/quota/initramfs/hestia-quota.hook,share/quota/initramfs/hestia-quota.premount}]
 switch_case_indent = true
 space_redirects = true
 binary_next_line = true

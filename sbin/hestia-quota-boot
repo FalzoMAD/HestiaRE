@@ -1,0 +1,13 @@
+#!/bin/bash
+# Boot-time project quota apply (#211): quotaon -P on ext4 (enforcement is runtime
+# state - nothing else restores it after a reboot, measured) plus the one-time
+# pending->active flip. Installed as a persistent unit by quota_arm; see
+# include/quota.sh for the whole design.
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source "$HESTIA/include/main.sh"
+# shellcheck source=/usr/local/hestia/include/quota.sh
+source "$HESTIA/include/quota.sh"
+source_conf "$HESTIA/conf/hestia.conf"
+quota_boot_apply
+exit 0

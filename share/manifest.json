@@ -466,6 +466,6 @@
   "_open_questions": [
     "DKIM mechanism: confirmed - the existing HestiaCP Exim+OpenSSL path stays, no rspamd dkim_signing",
     "nginx-lite for mailonly: check later whether a leaner nginx build without PHP-hosting modules suffices",
-    "Filesystem quota and resource limitation: deliberately not included in the manifest (maturity/bug history in the original upstream), backlog item: re-evaluate later and decide whether the associated h-* commands are removed or kept"
+    "Filesystem quota: decided in #211 - project quota is base behaviour, the installer arms it whenever the /home filesystem supports it (PROJECT_QUOTA key carries the measured state); deliberately NOT a manifest component. Resource limitation (cgroups) still awaits its own decision in #212"
   ]
 }

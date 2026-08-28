@@ -1427,19 +1427,6 @@
 						</select>
 					</div>
 					<div class="u-mb10">
-						<label for="v_quota" class="form-label">
-							<?= tohtml(_("File System Disk Quota")) ?>
-						</label>
-						<select class="form-select" name="v_quota" id="v_quota">
-							<option value="no">
-								<?= tohtml(_("No")) ?>
-							</option>
-							<option value="yes" <?= tohtml($_SESSION["DISK_QUOTA"] == "yes" ? "selected" : "") ?>>
-								<?= tohtml(_("Yes")) ?>
-							</option>
-						</select>
-					</div>
-					<div class="u-mb10">
 						<label for="v_firewall" class="form-label">
 							<?= tohtml(_("Firewall")) ?>
 						</label>

@@ -308,7 +308,8 @@ seed_hestia_etc() {
 	_wcv() { echo "$1='$2'" >> "$conf_dir/hestia.conf"; }
 	_wcv "BACKEND_PORT" "$port"
 	_wcv "CRON_SYSTEM" "cron"
-	_wcv "DISK_QUOTA" "no"
+	# capability state, not a switch (#211): quota_arm overwrites it from measurement
+	_wcv "PROJECT_QUOTA" "none:unprobed"
 	_wcv "RESOURCES_LIMIT" "no"
 	_wcv "BACKUP_SYSTEM" "local"
 	_wcv "BACKUP_GZIP" "3"

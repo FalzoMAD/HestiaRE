@@ -1,0 +1,14 @@
+#!/bin/sh
+# HestiaRE (#211): copy tune2fs into the initramfs for the one-shot quota arming.
+# e2fsck ships in the initramfs, tune2fs does NOT (measured deb13+ub24) - without
+# this the premount script dies on command-not-found and the box stays pending
+# forever with nothing saying why.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+. /usr/share/initramfs-tools/hook-functions
+copy_exec /sbin/tune2fs
