@@ -19,6 +19,10 @@ opens above it.
   inherited guard, the panel hides the web area - while nginx keeps fronting the webmail vhosts
   and ACME under its own WEBMAIL_FRONT key. The webmail chain reads the front everywhere it used
   WEB_SYSTEM; on every other model the two are identical.
+- **The fail2ban web jails key on existing logs** (#193). The gate enabled them unconditionally
+  and fail2ban refuses to start over a logpath glob that matches nothing - a fresh box without
+  CrowdSec died on the first fail2ban start (the prune the code commented was never written).
+  The first domain arms them, the last one disarms them, both from the domain lifecycle.
 - **nomail can actually send** (#192). Exim ran with Debian's default local-delivery-only config,
   so panel mail to any remote admin address was silently undeliverable; the installer now sets
   the internet type with loopback-only listeners - accept from localhost, deliver anywhere out.

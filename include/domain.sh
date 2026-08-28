@@ -960,22 +960,26 @@ add_webmail_config() {
 		# today they coincide in every model that reaches this line, but that is a
 		# coincidence, not a meaning
 		if [ -n "$1" ]; then
-			forcessl="$HOMEDIR/$user/conf/mail/$domain/$front.forcessl.conf"
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 		fi
 		if [ -n "$PROXY_SYSTEM" ]; then
-			forcessl="$HOMEDIR/$user/conf/mail/$domain/$PROXY_SYSTEM.forcessl.conf"
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 		fi
 
-		# Add rewrite rules to force HTTPS/SSL connections
-		if [ -n "$PROXY_SYSTEM" ] || [ "$front" = 'nginx' ]; then
-			echo 'return 301 https://$server_name$request_uri;' > $forcessl
-		else
-			echo 'RewriteEngine On' > $forcessl
-			echo 'RewriteRule ^(.*)$ https://%{HTTP_HOST}$1 [R=301,L]' >> $forcessl
+		# The forcessl file carries ITS OWN owner, independent of $1: the templates
+		# include it by the name %web_system% renders to - the proxy where one
+		# exists, the front otherwise. Empty owner = no file, not ".forcessl.conf".
+		local fs_owner="${PROXY_SYSTEM:-$front}"
+		if [ -n "$fs_owner" ]; then
+			forcessl="$HOMEDIR/$user/conf/mail/$domain/$fs_owner.forcessl.conf"
+			if [ -n "$PROXY_SYSTEM" ] || [ "$front" = 'nginx' ]; then
+				echo 'return 301 https://$server_name$request_uri;' > $forcessl
+			else
+				echo 'RewriteEngine On' > $forcessl
+				echo 'RewriteRule ^(.*)$ https://%{HTTP_HOST}$1 [R=301,L]' >> $forcessl
+			fi
 		fi
 
 		# Remove old configurations

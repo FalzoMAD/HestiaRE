@@ -93,7 +93,7 @@
       "fixed_no_prompt": {
         "mailonly": "MAILFRONT"
       },
-      "note": "Fixed to NGINX on mailonly, not asked (Roundcube reverse proxy + ACME termination). Repo source (OS vs. Sury Apache / nginx.org) follows repo_strategy, see WEB_REPO_SOURCE."
+      "note": "Fixed to MAILFRONT on mailonly, not asked (#193): nginx serves webmail vhosts + ACME termination, but WEB_SYSTEM stays EMPTY - no customer web, every web command refuses, WEBMAIL_FRONT carries the nginx. Repo source (OS vs. Sury Apache / nginx.org) follows repo_strategy, see WEB_REPO_SOURCE."
     },
 
     "WEB_REPO_SOURCE": {

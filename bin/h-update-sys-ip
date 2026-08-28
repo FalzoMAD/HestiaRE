@@ -94,7 +94,7 @@ if [ -n "$old_ip" ]; then
 	ws="$WEB_SYSTEM"
 	[ -z "$ws" ] && ws=$(webmail_front)
 	if [ -n "$ws" ]; then
-		cd /etc/$ws/conf.d
+		cd /etc/$ws/conf.d || check_result "$E_NOTEXIST" "/etc/$ws/conf.d missing"
 
 		if [ -e "$old_ip.conf" ]; then
 			mv $old_ip.conf $new_ip.conf

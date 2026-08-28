@@ -53,6 +53,12 @@ if [ -n "$WEBMAIL_ALIAS" ]; then
 	# Delete webmail configuration
 	del_webmail_config
 	del_webmail_ssl_config
+	rm -f "/var/log/$front/domains/$WEBMAIL_ALIAS.$domain.log"* \
+		"/var/log/$front/domains/$WEBMAIL_ALIAS.$domain.error"*
+	# the LAST log leaving must disarm the jails, or the next fail2ban start dies
+	# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+	declare -F fail2ban_regate_web_apply > /dev/null 2>&1 || source "$HESTIA/include/fail2ban.sh"
+	fail2ban_regate_web_apply
 
 else
 	echo "Error: WEBMAIL_ALIAS is not defined in hestia.conf."

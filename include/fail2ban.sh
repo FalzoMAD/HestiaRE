@@ -72,9 +72,28 @@ fail2ban_web_logdir() {
 	# mailfront (#193): the only public HTTP surface there is the webmail login on
 	# the front, and its vhosts log into the same domains dir - the web jails keep
 	# watching it. A decision, not a side effect of the emptiness check.
+	# Same rule as webmail_front() in include/main.sh, re-derived from the FILE on
+	# purpose (see the WEB_SYSTEM note above: the installer shell never sees keys
+	# it just wrote). If the fallback order ever changes, change BOTH homes.
 	[ -n "$ws" ] || ws="$(sed -n "s/^WEBMAIL_FRONT='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)"
 	[ -n "$ws" ] || return 1
 	echo "/var/log/$ws/domains"
+}
+
+# Gate + apply only when the decision changed. Called from the domain lifecycle
+# (h-add/delete-web-domain, h-add/delete-mail-domain-webmail): the jails hang on
+# existing logs now, so the FIRST domain must arm them and the LAST one must
+# disarm them - silently-off protection and a fail2ban that cannot start are the
+# two failure modes this transition owns. No-op when nothing changed.
+fail2ban_regate_web_apply() {
+	[ -f "$F2B_OURS" ] || return 0
+	local before after
+	before=$(md5sum "$F2B_OURS" 2> /dev/null)
+	fail2ban_gate_web_jail
+	after=$(md5sum "$F2B_OURS" 2> /dev/null)
+	if [ "$before" != "$after" ]; then
+		systemctl reload-or-restart fail2ban 2> /dev/null || true
+	fi
 }
 
 fail2ban_gate_web_jail() {
