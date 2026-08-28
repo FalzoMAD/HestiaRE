@@ -86,6 +86,11 @@ if getent passwd "${user}-docker" > /dev/null 2>&1; then
 	$BIN/h-delete-user-docker "$user" > /dev/null 2>&1
 fi
 
+# Project quota limit reset - the uid dies with the userdel below, so it is read
+# here. Not about disk space: repquota must not list limits of dead projects, a
+# report with corpses in it stops being read (#211).
+_quota_uid=$(id -u "$user" 2> /dev/null)
+
 # Deleting system user
 /usr/sbin/userdel -f "$user" >> /dev/null 2>&1
 if [ $? -ne 0 ]; then
@@ -108,6 +113,12 @@ rm -rf $USER_DATA
 
 # Co-maintain the SSH AllowUsers allowlist (no-op unless the operator seeded/activated one)
 manage_sshd_allowusers del "$user"
+
+# shellcheck source=/usr/local/hestia/include/quota.sh
+declare -F quota_is_active > /dev/null 2>&1 || source "$HESTIA/include/quota.sh"
+if [ -n "$_quota_uid" ] && quota_is_active && quota_home_fs; then
+	setquota -P "$_quota_uid" 0 0 0 0 "$QUOTA_MNT" 2> /dev/null
+fi
 
 # Updating admin counter
 if [ "$user" != "$ROOT_USER" ]; then

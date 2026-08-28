@@ -256,3 +256,29 @@ quota_boot_apply() {
 	fi
 	return 0
 }
+
+# --- per-user application (#211 stage 2) ---------------------------------------
+
+quota_is_active() { [ "${PROJECT_QUOTA%%:*}" = 'active' ]; }
+
+# Assigns the customer's project id (= uid, collision-free and derivable) to the
+# home with the inheritance flag. Recursion is gated on the home dir already
+# carrying id+P: a tree that predates the arming gets exactly ONE recursive pass
+# (minutes on a maildir-heavy home), every later call is a no-op - and a fresh
+# home recurses over a handful of skeleton dirs, so restore can rely on
+# "assigned before unpacking" without a special case. Errors are quiet on
+# purpose: symlinks and immutable conf files refuse the ioctl, and their few
+# blocks are not worth failing a rebuild over.
+quota_project_assign() {
+	local user="$1" uid home cur flags
+	quota_is_active || return 0
+	uid=$(id -u "$user" 2> /dev/null) || return 0
+	home="${HOMEDIR:-/home}/$user"
+	[ -d "$home" ] || return 0
+	read -r cur flags _ < <(lsattr -pd "$home" 2> /dev/null)
+	if [ "$cur" = "$uid" ] && [[ "$flags" == *P* ]]; then
+		return 0
+	fi
+	chattr -R -p "$uid" +P "$home" 2> /dev/null
+	return 0
+}

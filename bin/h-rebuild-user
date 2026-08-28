@@ -46,10 +46,9 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Update disk quota
-if [ "$DISK_QUOTA" = 'yes' ]; then
-	$BIN/h-update-user-quota "$user"
-fi
+# Project quota (self-gated on PROJECT_QUOTA, #211); rebuild_user_conf below
+# carries the one-time recursive project-id migration for pre-arming trees.
+$BIN/h-update-user-quota "$user"
 
 # Update cgroup
 if [ "$RESOURCES_LIMIT" = 'yes' ]; then

@@ -52,6 +52,8 @@ source $HESTIA/include/rebuild.sh
 source $HESTIA/include/docker.sh
 # shellcheck source=/usr/local/hestia/include/syshealth.sh
 source $HESTIA/include/syshealth.sh
+# shellcheck source=/usr/local/hestia/include/quota.sh
+source $HESTIA/include/quota.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -395,8 +397,25 @@ if [ "$create_user" = 'yes' ]; then
 	fi
 
 	# Creates the account with a freshly allocated uid, before anything is unpacked, so
-	# tar can resolve the archived owner name onto it.
+	# tar can resolve the archived owner name onto it. It also puts the project id on
+	# the fresh home, so everything the sections below unpack inherits it (#211).
 	rebuild_user_conf
+fi
+
+if quota_is_active && quota_home_fs; then
+	# XFS enforces project quota against root (ext4 does not, both measured) - a
+	# restore into a full home would die mid-run. Lift the cap for the duration.
+	# Reapplied FROM THE TRAP, not sequentially: an aborted restore must not leave
+	# the customer unlimited while every later look at the box reads as correct.
+	setquota -P "$(id -u "$user" 2> /dev/null)" 0 0 0 0 "$QUOTA_MNT" 2> /dev/null
+	trap 'rm -rf "$tmpdir"; "$BIN/h-update-user-quota" "$user" > /dev/null 2>&1' EXIT
+else
+	# The package field travels in the backup, the capability does not: name the
+	# loss instead of letting enforcement vanish silently on a none-box (#211).
+	_dq=$(get_user_value '$DISK_QUOTA')
+	if [ -n "$_dq" ] && [ "$_dq" != 'unlimited' ]; then
+		echo "NOTE: the package carries DISK_QUOTA=${_dq}MB but this box does not enforce it (PROJECT_QUOTA=${PROJECT_QUOTA:-unset})" | tee -a $tmpdir/restore.log
+	fi
 fi
 
 # What this host cannot restore, handed over rather than left inside the archive. Timestamped, so a
