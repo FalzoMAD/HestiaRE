@@ -174,12 +174,15 @@ apache_remoteip_disable() {
 # remoteip via apache_remoteip_enable. Needs process_http2_directive (include/domain.sh)
 # and WEBTPL (include/main.sh) in the caller's scope.
 rebuild_ip_web_config() {
-	local ip="$1"
-	if [ -n "$WEB_SYSTEM" ]; then
-		local web_conf="/etc/$WEB_SYSTEM/conf.d/$ip.conf"
+	local ip="$1" web_sys="$WEB_SYSTEM"
+	# mailfront (#193): no customer web, but the front must own the default
+	# listeners on 80/443 - the webmail vhosts and ACME hang off exactly these
+	[ -z "$web_sys" ] && web_sys="${WEBMAIL_FRONT:-}"
+	if [ -n "$web_sys" ]; then
+		local web_conf="/etc/$web_sys/conf.d/$ip.conf"
 		rm -f "$web_conf"
 
-		if [ "$WEB_SYSTEM" = 'httpd' ] || [ "$WEB_SYSTEM" = 'apache2' ]; then
+		if [ "$web_sys" = 'httpd' ] || [ "$web_sys" = 'apache2' ]; then
 			if ! /usr/sbin/apachectl -v 2> /dev/null | grep -q "Apache/2.4"; then
 				echo "NameVirtualHost $ip:$WEB_PORT" > "$web_conf"
 			fi
@@ -188,7 +191,7 @@ rebuild_ip_web_config() {
 			sed -i "s/directIP/$ip/g" "$web_conf"
 			sed -i "s/directPORT/$WEB_PORT/g" "$web_conf"
 
-		elif [ "$WEB_SYSTEM" = 'nginx' ]; then
+		elif [ "$web_sys" = 'nginx' ]; then
 			cp -f "$HESTIA/share/nginx/unassigned.inc" "$web_conf"
 			sed -i "s/directIP/$ip/g" "$web_conf"
 			process_http2_directive "$web_conf"

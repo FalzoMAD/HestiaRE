@@ -60,8 +60,10 @@ if [ "$SSL" = 'yes' ] || [ -e "$HOMEDIR/$user/conf/mail/$domain/ssl/$domain.crt"
 	$BIN/h-delete-mail-domain-ssl "$user" "$domain"
 fi
 
-# Delete webmail configuration if it exists
-if [ -n "$WEB_SYSTEM" ] || [ -n "$PROXY_SYSTEM" ]; then
+# Delete webmail configuration if it exists (front-based, #193: a mailfront box
+# has an empty WEB_SYSTEM - skipping here left a dangling vhost symlink that
+# failed every later nginx configtest)
+if [ -n "$(webmail_front)" ] || [ -n "$PROXY_SYSTEM" ]; then
 	if [ -n "$IMAP_SYSTEM" ]; then
 		$BIN/h-delete-mail-domain-webmail "$user" "$domain" 'yes'
 	fi
