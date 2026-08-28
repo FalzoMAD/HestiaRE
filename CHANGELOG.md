@@ -60,6 +60,13 @@ opens above it.
   preselects only CrowdSec, Fail2ban and rspamd - the utilities screen stays closed unless opted
   in. The CrowdSec mode texts got shorter.
 
+### Fixed
+
+- **Queued restarts died on their own grammar** (#855). Every h-restart-* writes itself into
+  restart.pipe as "$SCRIPT now", but the inherited validator rejected exactly that value - and
+  the queue runner swallows all errors, so with SCHEDULED_RESTART enabled every queued restart
+  failed silently. 'now' is accepted now (run immediately, do not requeue).
+
 ## v0.17.0 (2026-08-27)
 
 Closes the backup and restore program (#240): restic as a per-customer mode, differential
