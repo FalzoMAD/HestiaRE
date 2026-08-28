@@ -69,6 +69,10 @@ fail2ban_gate_jails() {
 fail2ban_web_logdir() {
 	local ws
 	ws="$(sed -n "s/^WEB_SYSTEM='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)"
+	# mailfront (#193): the only public HTTP surface there is the webmail login on
+	# the front, and its vhosts log into the same domains dir - the web jails keep
+	# watching it. A decision, not a side effect of the emptiness check.
+	[ -n "$ws" ] || ws="$(sed -n "s/^WEBMAIL_FRONT='\([^']*\)'.*/\1/p" "$HESTIA/conf/hestia.conf" 2> /dev/null)"
 	[ -n "$ws" ] || return 1
 	echo "/var/log/$ws/domains"
 }

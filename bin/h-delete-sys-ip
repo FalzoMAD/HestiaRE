@@ -84,9 +84,11 @@ fi
 # Deleting Hestia IP
 rm -f $CONF_DIR/ips/$ip
 
-# Deleting web config
-if [ -n "$WEB_SYSTEM" ]; then
-	rm -f /etc/$WEB_SYSTEM/conf.d/$ip.conf
+# Deleting web config (front fallback #193: the mailfront ip.conf lives there too)
+ws="$WEB_SYSTEM"
+[ -z "$ws" ] && ws=$(webmail_front)
+if [ -n "$ws" ]; then
+	rm -f /etc/$ws/conf.d/$ip.conf
 fi
 
 # Deleting proxy config

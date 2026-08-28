@@ -956,7 +956,10 @@ add_webmail_config() {
 	chmod 640 $conf
 
 	if [[ "$2" =~ stpl$ ]]; then
-		if [ -n "$front" ]; then
+		# guard on $1 - the system whose conf.d receives the link - not on the front:
+		# today they coincide in every model that reaches this line, but that is a
+		# coincidence, not a meaning
+		if [ -n "$1" ]; then
 			forcessl="$HOMEDIR/$user/conf/mail/$domain/$front.forcessl.conf"
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
@@ -978,7 +981,7 @@ add_webmail_config() {
 		# Remove old configurations
 		find $HOMEDIR/$user/conf/mail/ -maxdepth 1 -type f \( -name "$domain.*" -o -name "ssl.$domain.*" -o -name "*nginx.$domain.*" \) -exec rm {} \;
 	else
-		if [ -n "$front" ]; then
+		if [ -n "$1" ]; then
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
 		fi

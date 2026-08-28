@@ -1133,12 +1133,23 @@ echo ""
 # deliver anywhere out.
 configure_exim_sendonly() {
 	local c=/etc/exim4/update-exim4.conf.conf
-	[ -f "$c" ] || return 0
+	if [ ! -f "$c" ]; then
+		echo "[ ! ] $c missing - exim not configured send-only (notification mail will not leave this box)"
+		return 0
+	fi
 	sed -i "s/^dc_eximconfig_configtype=.*/dc_eximconfig_configtype='internet'/" "$c"
 	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='127.0.0.1 ; ::1'/" "$c"
-	update-exim4.conf 2> /dev/null || true
-	systemctl restart exim4 2> /dev/null || true
-	echo "[ * ] Exim configured send-only (outbound delivery on, loopback listeners)"
+	# the success line is a witness in the install log: print it only when the keys
+	# really carry the values and the regeneration succeeded - a silent sed miss or
+	# a failed update-exim4.conf must not leave a false "configured" behind
+	if grep -q "^dc_eximconfig_configtype='internet'" "$c" \
+		&& grep -q "^dc_local_interfaces='127.0.0.1 ; ::1'" "$c" \
+		&& update-exim4.conf 2> /dev/null; then
+		systemctl restart exim4 2> /dev/null || true
+		echo "[ * ] Exim configured send-only (outbound delivery on, loopback listeners)"
+	else
+		echo "[ ! ] Exim send-only configuration FAILED - check $c and update-exim4.conf"
+	fi
 }
 
 init_hestia_structure
