@@ -14,6 +14,13 @@ opens above it.
 
 ### Changed
 
+- **Adminer 6.0.1 and Alpine.js 3.16.3 vendored** (#851). The Adminer pin had fallen two security
+  rounds behind (a 5.5.1 GHSA, the 6.0.x XSS/CSRF hardening incl. the trust-auth server lockout);
+  the login-servers SSRF dropdown works unchanged under 6. Alpine 3.16 is a bugfix minor.
+- **`update-web-vendor.sh --check` also watches the manifest pins** (#851). tachyon and wp-cli have
+  no upstream/* branch - the installer fetches them itself against the pin - so their drift was
+  invisible between release checklists. An empty pin fails instead of comparing nothing.
+
 - **The standard and compact presets diverge again** (#850). standard now preselects the four
   newest PHP versions, Redis alongside MariaDB, both webmailers, restic and sieve; compact keeps
   the three PHP versions below the newest, fixes MariaDB to the OS default without asking, and
