@@ -261,7 +261,7 @@ php${PHP_VER}-gd php${PHP_VER}-bz2 php${PHP_VER}-pgsql php${PHP_VER}-intl php${P
 		# the OS repos do not carry every Sury name (resolute has no -opcache package);
 		# tolerated names drop loudly, anything else failing means apt cannot answer
 		# shellcheck disable=SC2086
-		if ! panel_php_pkgs=$(filter_installable_php_pkgs "opcache exif" $panel_php_pkgs); then
+		if ! panel_php_pkgs=$(filter_installable_php_pkgs "opcache:8.5 exif" $panel_php_pkgs); then
 			exit 1
 		fi
 		case " $panel_php_pkgs " in *" php${PHP_VER}-cli "*) ;; *)
@@ -373,7 +373,7 @@ php${PHP_VER}-readline php${PHP_VER}-xml"
 	if [ "${COMPONENT_PHP_MODE:-sury_multi}" = "os_single" ]; then
 		# imap has no OS package from 8.4 on - drop what the OS never shipped, loudly
 		# shellcheck disable=SC2086
-		if ! web_php_pkgs=$(filter_installable_php_pkgs "imap opcache exif" $web_php_pkgs); then
+		if ! web_php_pkgs=$(filter_installable_php_pkgs "imap:8.4 opcache:8.5 exif" $web_php_pkgs); then
 			exit 1
 		fi
 	fi

@@ -115,14 +115,20 @@ apt_auto_units_restore() {
 # read madison and drop the sury lines. Empty output = caller must fail loudly,
 # never fall back to a hardcoded version that may not exist in the OS repo.
 os_default_php() {
-	local all osl
+	local all osl sury_host
 	all=$(apt-cache madison php 2> /dev/null)
 	osl=$(printf '%s' "$all" | grep -v 'packages\.sury\.org')
-	# positive control of the filter itself: where any sury line exists, the specific
-	# filter must have removed something - otherwise the URL spelling drifted, nothing
-	# was filtered, and the first line would be sury's newest instead of the OS default
-	if printf '%s' "$all" | grep -qi sury && [ "$all" = "$osl" ]; then
-		echo "ERROR: os_default_php: sury lines present but the filter removed none - filter is blind" >&2
+	# positive control of the filter, with the expectation read from the box's own
+	# repo definition (the file add_sury_repo writes) instead of any grep pattern:
+	# if madison carries the host named in php.list, the filter above must have
+	# removed those lines - otherwise its spelling drifted and the first madison
+	# line would be sury's newest, not the OS default. A php.list whose host is
+	# not in the lists yet (update not run) raises no expectation and no alarm.
+	sury_host=$(grep -oE 'https?://[^ ]+' /etc/apt/sources.list.d/php.list 2> /dev/null | head -n1)
+	sury_host="${sury_host#*//}"
+	sury_host="${sury_host%%/*}"
+	if [ -n "$sury_host" ] && printf '%s' "$all" | grep -qF "$sury_host" && [ "$all" = "$osl" ]; then
+		echo "ERROR: os_default_php: $sury_host is in the apt lists but the filter removed none of it - filter pattern drifted" >&2
 		return 1
 	fi
 	printf '%s\n' "$osl" | awk -F'|' '{print $2}' | grep -oE '[0-9]+\.[0-9]+' | head -n1
@@ -131,25 +137,38 @@ os_default_php() {
 # ── PHP package availability probe (#191) ───────────────────────────────────
 # A pure-OS box does not carry everything the Sury list has. apt -s sees real
 # and virtual packages alike. $1 names the extension suffixes that may drop
-# with a warning - the enumerable "the OS provably never shipped this" set
-# (imap from 8.4 on, resolute's built-in opcache, exif as a -common virtual).
-# Any OTHER failed probe is apt not answering, not a missing package: return 1
-# instead of installing through it and surfacing as a broken panel later.
+# with a warning, each carrying its own condition: "name" tolerates always,
+# "name:X.Y" only from PHP X.Y on - php8.2-imap DOES exist in the OS repos, so
+# a flat tolerance would swallow a real repo failure on 8.2/8.3. Any other
+# failed probe is apt not answering, not a missing package: return 1 instead
+# of installing through it and surfacing as a broken panel later.
 filter_installable_php_pkgs() {
-	local tolerated=" $1 " p keep="" suffix
+	local tolerated="$1" p keep="" suffix pv entry ename emin hit
 	shift
 	for p in "$@"; do
 		if apt-get -qq -s install "$p" > /dev/null 2>&1; then
 			keep="$keep $p"
+			continue
+		fi
+		suffix="${p#php*.*-}"
+		pv=$(printf '%s' "$p" | grep -oE '[0-9]+\.[0-9]+' | head -n1)
+		hit=""
+		for entry in $tolerated; do
+			ename="${entry%%:*}"
+			emin="${entry#*:}"
+			[ "$ename" = "$suffix" ] || continue
+			if [ "$emin" = "$entry" ]; then
+				hit=yes # unconditional entry
+			elif [ -n "$pv" ] && [ "$(printf '%s\n%s\n' "$emin" "$pv" | sort -V | head -n1)" = "$emin" ]; then
+				hit=yes # pv >= emin
+			fi
+			break
+		done
+		if [ -n "$hit" ]; then
+			echo "[ ! ] $p is not available from the configured repos - skipped" >&2
 		else
-			suffix="${p#php*.*-}"
-			case "$tolerated" in
-				*" $suffix "*) echo "[ ! ] $p is not available from the configured repos - skipped" >&2 ;;
-				*)
-					echo "ERROR: $p is not installable and not on the tolerated-drop list - repos unreachable or broken?" >&2
-					return 1
-					;;
-			esac
+			echo "ERROR: $p is not installable and its tolerated-drop entry does not cover this version - repos unreachable or broken?" >&2
+			return 1
 		fi
 	done
 	echo "${keep# }"

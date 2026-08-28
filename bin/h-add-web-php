@@ -103,7 +103,7 @@ fi
 # shellcheck source=/usr/local/hestia/include/helper.sh
 command -v filter_installable_php_pkgs > /dev/null 2>&1 || source "$HESTIA/include/helper.sh"
 # shellcheck disable=SC2086
-mph=$(filter_installable_php_pkgs "imap opcache exif" $mph) \
+mph=$(filter_installable_php_pkgs "imap:8.4 opcache:8.5 exif" $mph) \
 	|| check_result "$E_CONNECT" "package availability probe failed - repos unreachable or broken"
 case " $mph " in *" php$version-fpm "*) ;; *)
 	check_result "$E_NOTEXIST" "php$version-fpm is not installable from the configured repos"
