@@ -34,6 +34,7 @@
 				<input type="text" class="form-control" name="v_package_new" id="v_package_new" value="<?= tohtml(trim($v_package_new, "'")) ?>" required>
 				<input type="hidden" name="v_package" value="<?= tohtml(trim($v_package, "'")) ?>">
 			</div>
+			<?php if ($offer_quota) { ?>
 			<div class="u-mb10">
 				<label for="v_disk_quota" class="form-label">
 					<?= tohtml(_("Quota")) ?> <span class="optional">(<?= tohtml(_("in MB")) ?>)</span>
@@ -45,6 +46,7 @@
 					</button>
 				</div>
 			</div>
+			<?php } ?>
 			<div class="u-mb10">
 				<label for="v_bandwidth" class="form-label">
 					<?= tohtml(_("Bandwidth")) ?> <span class="optional">(<?= tohtml(_("in MB")) ?>)</span>

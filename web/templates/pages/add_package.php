@@ -32,6 +32,7 @@
 				<label for="v_package" class="form-label"><?= tohtml(_("Package Name")) ?></label>
 				<input type="text" class="form-control" name="v_package" id="v_package" value="<?= tohtml(trim($v_package, "'")) ?>" required>
 			</div>
+			<?php if ($offer_quota) { ?>
 			<div class="u-mb10">
 				<label for="v_disk_quota" class="form-label">
 					<?= tohtml(_("Quota")) ?> <span class="optional">(<?= tohtml(_("in MB")) ?>)</span>
@@ -43,6 +44,7 @@
 					</button>
 				</div>
 			</div>
+			<?php } ?>
 			<div class="u-mb10">
 				<label for="v_bandwidth" class="form-label">
 					<?= tohtml(_("Bandwidth")) ?> <span class="optional">(<?= tohtml(_("in MB")) ?>)</span>
