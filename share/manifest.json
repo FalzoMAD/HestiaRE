@@ -274,8 +274,7 @@
       "group": "panel",
       "type": "fixed",
       "always_installed": true,
-      "reference_version": "8.3",
-      "note": "Just a wrapper around a PHP instance for the panel itself. Uses os_single on mailonly, otherwise depends on PHP_MODE. reference_version = the reference version used by Panel-FPM and always fully installed (#272); single source of truth for the installer (PHP_VER) and the wizard checklist lock."
+      "note": "Just a wrapper around a PHP instance for the panel itself. Uses os_single on mailonly, otherwise depends on PHP_MODE. The reference version used by Panel-FPM (always fully installed, #272) is no longer pinned here: it is the OS default php meta version, derived at install by os_default_php in include/helper.sh (#191) and carried as PHP_REFERENCE_VERSION in install.conf; runtime source of truth stays /etc/php/hestia/php-version."
     },
 
     "PANEL_IPTABLES": {

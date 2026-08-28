@@ -108,6 +108,18 @@ apt_auto_units_restore() {
 	return 0
 }
 
+# ── OS default PHP (shared by wizard + installer, #191) ─────────────────────
+# The distro's own php meta package decides the panel/reference PHP version.
+# Sury-filtered on purpose: on a Sury-enabled box the sury php meta shadows the
+# OS one (apt-cache depends answered 8.4 on noble whose OS default is 8.3), so
+# read madison and drop the sury lines. Empty output = caller must fail loudly,
+# never fall back to a hardcoded version that may not exist in the OS repo.
+os_default_php() {
+	apt-cache madison php 2> /dev/null \
+		| grep -v 'packages\.sury\.org' \
+		| awk -F'|' '{print $2}' | grep -oE '[0-9]+\.[0-9]+' | head -n1
+}
+
 # ── Sury PHP repository (shared by wizard + installer) ──────────────────────
 # Idempotent, single canonical definition (keyring + signed-by + source file) -
 # two diverging ones trip apt's "Conflicting values set for option Signed-By".

@@ -686,6 +686,23 @@ check_v_symlinks_resolve() {
 # (that is how this was found). The expected value is READ FROM the deployed pool, not written here,
 # so changing the pin cannot leave the check testing yesterday's value.
 # NOT covered: locales a customer's own PHP or a cron job sets for itself.
+# The panel PHP version is a file, not a constant (#191): /etc/php/hestia/php-version
+# names whatever the wrappers and hestia-php.service run. An empty file or a version
+# whose binaries are gone means every panel request dies at exec - say which half broke.
+check_panel_php_version() {
+	local v
+	v=$(cat /etc/php/hestia/php-version 2> /dev/null)
+	if [ -z "$v" ]; then
+		no "panel PHP version file" "/etc/php/hestia/php-version is empty or missing - the hestia-php wrappers fall back blind"
+		return
+	fi
+	if [ ! -x "/usr/bin/php$v" ] || [ ! -x "/usr/sbin/php-fpm$v" ]; then
+		no "panel PHP $v binaries (cli+fpm)" "php-version names $v but /usr/bin/php$v or /usr/sbin/php-fpm$v is missing"
+		return
+	fi
+	ok "panel PHP $v (php-version file, cli and fpm binaries present)"
+}
+
 check_panel_locale() {
 	local pool=/etc/php/hestia/fpm/pool.d/panel.conf want
 	if [ ! -f "$pool" ]; then
@@ -1625,6 +1642,7 @@ echo "=== HestiaRE smoke test ==="
 echo "-- panel --"
 check_service caddy "panel webserver"
 check_service hestia-php "panel PHP-FPM"
+check_panel_php_version
 check_port "${BACKEND_PORT:-8083}" "panel"
 check_http "https://127.0.0.1:${BACKEND_PORT:-8083}/login/" "panel login page"
 # invalid sudoers → no privileged panel action works

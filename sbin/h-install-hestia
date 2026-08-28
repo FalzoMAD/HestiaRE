@@ -91,9 +91,16 @@ trap 'apt_auto_units_restore' EXIT
 load_os_profile "$INSTALL_OS"
 
 # ── Install-time variables ──────────────────────────────────────────────────
-# panel/reference PHP version from the manifest (sed, not jq — not guaranteed yet)
-PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$HESTIA/share/manifest.json" 2> /dev/null | head -n1)
-PHP_VER="${PHP_VER:-8.3}" # panel + default web PHP (Sury)
+# Panel/reference PHP = the OS default (#191), derived by the wizard and carried
+# in install.conf. A hand-written install.conf may omit it - derive again via the
+# shared helper. Empty = hard fail: a hardcoded fallback would pin the panel to a
+# version this OS never shipped (in os_single mode there is no Sury to save it).
+PHP_VER="${PHP_REFERENCE_VERSION:-}"
+[ -n "$PHP_VER" ] || PHP_VER=$(os_default_php)
+if [ -z "$PHP_VER" ]; then
+	echo "ERROR: no PHP reference version (install.conf PHP_REFERENCE_VERSION empty and apt-cache madison php came back empty)." >&2
+	exit 1
+fi
 
 # write a config value to hestia.conf
 # Write a config value idempotently: replace an existing key (collapsing any duplicates to one) or append.

@@ -272,7 +272,7 @@
       ]
     },
     "web_panel": {
-      "description": "Plain-PHP control panel UI. No framework. Action-based routing via directory structure. Served by Caddy + PHP 8.3 FPM (hestia-php.service) on port 8083.",
+      "description": "Plain-PHP control panel UI. No framework. Action-based routing via directory structure. Served by Caddy + the panel reference PHP FPM (hestia-php.service, version from /etc/php/hestia/php-version, #191) on port 8083.",
       "entry_points": [
         "web/index.php"
       ],
@@ -380,7 +380,7 @@
         "file_count": 9,
         "issues": [
           "PHP files reference /usr/local/hestia paths in includes — install root is unchanged so paths are correct, but hardcoded (not using a constant)",
-          "web/inc/mail-wrapper.php shebang: updated to #!/usr/bin/php8.3 in Issue #25",
+          "web/inc/mail-wrapper.php shebang: sbin/hestia-php wrapper since #191 (panel reference version, no hardcoded php binary)",
           "Panel branding still references HestiaCP in some locale strings"
         ]
       }
