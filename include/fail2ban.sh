@@ -90,9 +90,14 @@ fail2ban_gate_web_jail() {
 		for jail in $F2B_WEB_JAILS; do fail2ban_set_enabled "$jail" 'false'; done
 		return 0
 	fi
+	# Enable only when the glob can match: fail2ban refuses to START over a jail whose
+	# logpath matches nothing, so an empty domains dir must keep them off. The old
+	# comment claimed a prune that never existed - covered before only because every
+	# crowdsec preset took the marker branch above and never reached the enable.
+	local have_logs='false'
+	ls "$dir"/*.log > /dev/null 2>&1 && have_logs='true'
 	for jail in $F2B_WEB_JAILS; do
-		# A prior crowdsec state may have disabled them; prune turns off any whose glob is still empty.
-		fail2ban_set_enabled "$jail" 'true'
+		fail2ban_set_enabled "$jail" "$have_logs"
 		awk -v jail="[$jail]" -v path="$dir/*.log" '
 			$0 == jail { inj = 1; print; next }
 			/^\[/ { inj = 0 }
