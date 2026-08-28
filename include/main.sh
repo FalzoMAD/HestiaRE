@@ -2076,8 +2076,13 @@ format_aliases() {
 }
 
 is_restart_format_valid() {
+	# 'now' is the restart.pipe's own grammar: every h-restart-* queues itself as
+	# "$SCRIPT now" under SCHEDULED_RESTART, and the queue runs the pipe with all
+	# errors swallowed - the inherited list rejected the one value the family
+	# writes, so every queued restart died silently (#855). now = run immediately,
+	# do not requeue (it falls through the scheduling branch by design).
 	if [ -n "$1" ]; then
-		if [ "$1" != 'yes' ] && [ "$1" != 'no' ] && [ "$1" != 'ssl' ] && [ "$1" != 'reload' ] && [ "$1" != 'updatessl' ] && [ "$1" != "scheduled" ]; then
+		if [ "$1" != 'yes' ] && [ "$1" != 'no' ] && [ "$1" != 'ssl' ] && [ "$1" != 'reload' ] && [ "$1" != 'updatessl' ] && [ "$1" != "scheduled" ] && [ "$1" != 'now' ]; then
 			check_result "$E_INVALID" "invalid $2 format :: $1"
 		fi
 	fi
