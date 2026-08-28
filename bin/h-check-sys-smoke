@@ -712,6 +712,12 @@ check_panel_php_version() {
 				return
 				;;
 		esac
+		# same string carries the version: file says $v, master may still run the old one
+		# (a version switch without the restart is exactly this state)
+		if [ -n "$exe" ] && [ "${exe##*/}" != "php-fpm$v" ]; then
+			no "panel FPM master runs ${exe##*/} but php-version says $v" "restart hestia-php to load the recorded version"
+			return
+		fi
 	fi
 	ok "panel PHP $v (php-version file, binaries present, master image on disk)"
 }

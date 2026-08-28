@@ -259,9 +259,11 @@ php${PHP_VER}-zip php${PHP_VER}-gmp php${PHP_VER}-mbstring php${PHP_VER}-opcache
 php${PHP_VER}-gd php${PHP_VER}-bz2 php${PHP_VER}-pgsql php${PHP_VER}-intl php${PHP_VER}-exif php${PHP_VER}-sqlite3"
 	if [ "${COMPONENT_PHP_MODE:-sury_multi}" = "os_single" ]; then
 		# the OS repos do not carry every Sury name (resolute has no -opcache package);
-		# drop the missing ones loudly, but a panel without cli+fpm is no panel
+		# tolerated names drop loudly, anything else failing means apt cannot answer
 		# shellcheck disable=SC2086
-		panel_php_pkgs=$(filter_installable_php_pkgs $panel_php_pkgs)
+		if ! panel_php_pkgs=$(filter_installable_php_pkgs "opcache exif" $panel_php_pkgs); then
+			exit 1
+		fi
 		case " $panel_php_pkgs " in *" php${PHP_VER}-cli "*) ;; *)
 			echo "ERROR: php${PHP_VER}-cli is not installable from the OS repos" >&2
 			exit 1
@@ -371,7 +373,9 @@ php${PHP_VER}-readline php${PHP_VER}-xml"
 	if [ "${COMPONENT_PHP_MODE:-sury_multi}" = "os_single" ]; then
 		# imap has no OS package from 8.4 on - drop what the OS never shipped, loudly
 		# shellcheck disable=SC2086
-		web_php_pkgs=$(filter_installable_php_pkgs $web_php_pkgs)
+		if ! web_php_pkgs=$(filter_installable_php_pkgs "imap opcache exif" $web_php_pkgs); then
+			exit 1
+		fi
 	fi
 	# shellcheck disable=SC2086
 	hestia_apt -y install \

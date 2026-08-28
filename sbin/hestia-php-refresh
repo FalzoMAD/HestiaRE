@@ -12,6 +12,11 @@ pid=$(systemctl show -p MainPID --value hestia-php 2> /dev/null)
 [ -n "$pid" ] && [ "$pid" != 0 ] || exit 0
 exe=$(readlink "/proc/$pid/exe" 2> /dev/null)
 case "$exe" in
-	*' (deleted)') systemctl restart hestia-php 2> /dev/null || true ;;
+	*' (deleted)')
+		# the hook itself must stay rc=0 for apt, but a failed restart here means the
+		# panel is down after an unattended update - leave the one trace that dates it
+		systemctl restart hestia-php 2> /dev/null \
+			|| logger -t hestia-php-refresh "restart failed after a PHP update replaced the master binary - panel likely down"
+		;;
 esac
 exit 0

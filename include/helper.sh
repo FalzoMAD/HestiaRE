@@ -115,25 +115,41 @@ apt_auto_units_restore() {
 # read madison and drop the sury lines. Empty output = caller must fail loudly,
 # never fall back to a hardcoded version that may not exist in the OS repo.
 os_default_php() {
-	apt-cache madison php 2> /dev/null \
-		| grep -v 'packages\.sury\.org' \
-		| awk -F'|' '{print $2}' | grep -oE '[0-9]+\.[0-9]+' | head -n1
+	local all osl
+	all=$(apt-cache madison php 2> /dev/null)
+	osl=$(printf '%s' "$all" | grep -v 'packages\.sury\.org')
+	# positive control of the filter itself: where any sury line exists, the specific
+	# filter must have removed something - otherwise the URL spelling drifted, nothing
+	# was filtered, and the first line would be sury's newest instead of the OS default
+	if printf '%s' "$all" | grep -qi sury && [ "$all" = "$osl" ]; then
+		echo "ERROR: os_default_php: sury lines present but the filter removed none - filter is blind" >&2
+		return 1
+	fi
+	printf '%s\n' "$osl" | awk -F'|' '{print $2}' | grep -oE '[0-9]+\.[0-9]+' | head -n1
 }
 
 # ── PHP package availability probe (#191) ───────────────────────────────────
-# A pure-OS box does not carry everything the Sury list has: imap is gone from
-# 8.4+ entirely, resolute builds opcache into the core, exif is a virtual name
-# provided by -common. apt -s sees real and virtual packages alike. Echo the
-# installable subset and warn per drop - a silent shrink would hide a broken
-# repo, a hard fail would kill the install over an extension the OS never
-# shipped. The caller enforces its own essentials (cli/fpm) on the result.
+# A pure-OS box does not carry everything the Sury list has. apt -s sees real
+# and virtual packages alike. $1 names the extension suffixes that may drop
+# with a warning - the enumerable "the OS provably never shipped this" set
+# (imap from 8.4 on, resolute's built-in opcache, exif as a -common virtual).
+# Any OTHER failed probe is apt not answering, not a missing package: return 1
+# instead of installing through it and surfacing as a broken panel later.
 filter_installable_php_pkgs() {
-	local p keep=""
+	local tolerated=" $1 " p keep="" suffix
+	shift
 	for p in "$@"; do
 		if apt-get -qq -s install "$p" > /dev/null 2>&1; then
 			keep="$keep $p"
 		else
-			echo "[ ! ] $p is not available from the configured repos - skipped" >&2
+			suffix="${p#php*.*-}"
+			case "$tolerated" in
+				*" $suffix "*) echo "[ ! ] $p is not available from the configured repos - skipped" >&2 ;;
+				*)
+					echo "ERROR: $p is not installable and not on the tolerated-drop list - repos unreachable or broken?" >&2
+					return 1
+					;;
+			esac
 		fi
 	done
 	echo "${keep# }"
