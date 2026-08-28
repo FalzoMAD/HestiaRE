@@ -279,6 +279,10 @@ quota_project_assign() {
 	if [ "$cur" = "$uid" ] && [[ "$flags" == *P* ]]; then
 		return 0
 	fi
-	chattr -R -p "$uid" +P "$home" 2> /dev/null
+	# Two passes: +P is valid on DIRECTORIES only - on a regular file chattr fails
+	# with ENOTSUP and then does not apply the -p either, so the combined recursive
+	# form migrated directories and silently skipped every file (measured).
+	chattr -R -p "$uid" "$home" 2> /dev/null
+	find "$home" -xdev -type d -exec chattr -p "$uid" +P {} + 2> /dev/null
 	return 0
 }
