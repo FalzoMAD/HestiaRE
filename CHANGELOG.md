@@ -14,6 +14,19 @@ opens above it.
 
 ### Changed
 
+- **mailonly no longer offers customer web** (#193). The preset installs the new mailfront model:
+  WEB_SYSTEM stays empty - h-add-web-domain and every other web command refuse via their
+  inherited guard, the panel hides the web area - while nginx keeps fronting the webmail vhosts
+  and ACME under its own WEBMAIL_FRONT key. The webmail chain reads the front everywhere it used
+  WEB_SYSTEM; on every other model the two are identical.
+- **The fail2ban web jails key on existing logs** (#193). The gate enabled them unconditionally
+  and fail2ban refuses to start over a logpath glob that matches nothing - a fresh box without
+  CrowdSec died on the first fail2ban start (the prune the code commented was never written).
+  The first domain arms them, the last one disarms them, both from the domain lifecycle.
+- **nomail can actually send** (#192). Exim ran with Debian's default local-delivery-only config,
+  so panel mail to any remote admin address was silently undeliverable; the installer now sets
+  the internet type with loopback-only listeners - accept from localhost, deliver anywhere out.
+
 - **The panel PHP version is the OS default, not a Sury pin** (#191). deb12 runs the panel on 8.2,
   deb13 on 8.4, ub24 on 8.3, ub26 on 8.5 - derived from the OS php meta at install (Sury-filtered,
   since the sury meta shadows the OS one) and recorded in install.conf and

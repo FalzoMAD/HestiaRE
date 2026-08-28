@@ -321,6 +321,13 @@ is_system_enabled() {
 	fi
 }
 
+# Customer web and the webmail front are separate concepts (#193): on a mailfront
+# box WEB_SYSTEM is empty - customer web absent, every web command's
+# is_system_enabled guard keys on exactly that - while nginx still fronts the
+# webmail vhosts, carried by WEBMAIL_FRONT. Everywhere the webmail chain used
+# $WEB_SYSTEM it means this value; on every other model the two are identical.
+webmail_front() { echo "${WEBMAIL_FRONT:-$WEB_SYSTEM}"; }
+
 # User package check
 # package_key_value KEY - what this customer's package file says for KEY, or nothing. The same file
 # h-add-user seeds a new user.conf from, so it is not a second opinion. KEY reaches a sed pattern,

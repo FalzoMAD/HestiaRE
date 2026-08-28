@@ -124,9 +124,10 @@ php multi (Sury 5.6–8.4), mariadb (ext repo), phpmyadmin (OS), caddy (OS),
 iptables, fail2ban (OS), ipset, composer (system-wide), wp-cli (system-wide)
 
 **The web model decides the web-server packages, not just who serves.** apache-only means no
-nginx on the box; nginx-only and both install nginx. Mail-only needs an nginx for the customer
-webmail vhost and ACME termination, and gets one because the wizard fixes that preset to NGINX -
-an exception carried by the model, not by an install-everything rule.
+nginx on the box; nginx-only and both install nginx. Mail-only gets nginx through the mailfront
+model (#193): webmail vhosts and ACME termination, but an EMPTY WEB_SYSTEM - customer web is
+absent, every web command's is_system_enabled guard refuses, and WEBMAIL_FRONT carries the nginx
+for the webmail chain (webmail_front in include/main.sh).
 
 ### Standard profile adds
 apache2 (OS only — no Sury apache2 repo),

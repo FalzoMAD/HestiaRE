@@ -81,7 +81,10 @@ fi
 
 check_args '2' "$#" 'USER DOMAIN [WEBMAIL] [RESTART]'
 is_format_valid 'user' 'domain' 'restart'
-is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
+# the webmail vhost needs a front, not customer web: on a mailfront box
+# WEB_SYSTEM is empty by design (#193) and WEBMAIL_FRONT carries nginx
+front=$(webmail_front)
+is_system_enabled "$front" 'WEBMAIL front (WEB_SYSTEM/WEBMAIL_FRONT)'
 is_system_enabled "$IMAP_SYSTEM" 'IMAP_SYSTEM'
 # The client was normalized above; select_webmail_template (below) additionally degrades
 # an uninstalled client to the safe 'disabled' vhost at render time, so a rebuild after a
@@ -118,7 +121,7 @@ else
 	# Resolve template names (degrades to 'disabled' when the client isn't installed)
 	select_webmail_template "$webmail"
 
-	add_webmail_config "$WEB_SYSTEM" "${WEBMAIL_TEMPLATE}.tpl"
+	add_webmail_config "$front" "${WEBMAIL_TEMPLATE}.tpl"
 
 	if [ -n "$PROXY_SYSTEM" ]; then
 		add_webmail_config "$PROXY_SYSTEM" "${PROXY_TEMPLATE}.tpl"
@@ -126,13 +129,27 @@ else
 
 	# Enable SSL for webmail if available
 	if [ -f $HOMEDIR/$user/conf/mail/$domain/ssl/$domain.crt ] || [ "$SSL" = 'yes' ]; then
-		add_webmail_config "$WEB_SYSTEM" "${WEBMAIL_TEMPLATE}.stpl"
+		add_webmail_config "$front" "${WEBMAIL_TEMPLATE}.stpl"
 
 		if [ -n "$PROXY_SYSTEM" ]; then
 			add_webmail_config "$PROXY_SYSTEM" "${PROXY_TEMPLATE}.stpl"
 		fi
 	fi
 fi
+
+# Create the log files the vhost will write (mirrors the web-domain rebuild):
+# nginx only creates them on first traffic, but the fail2ban web jails hang on
+# EXISTING logs - without this the first webmail domain would not arm them
+if [ -n "$front" ]; then
+	mkdir -p "/var/log/$front/domains"
+	touch "/var/log/$front/domains/$WEBMAIL_ALIAS.$domain.log" \
+		"/var/log/$front/domains/$WEBMAIL_ALIAS.$domain.error.log"
+	chown root:$user "/var/log/$front/domains/$WEBMAIL_ALIAS.$domain."* 2> /dev/null
+fi
+# first log on the box arms the web jails (change-detected, no-op otherwise)
+# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+declare -F fail2ban_regate_web_apply > /dev/null 2>&1 || source "$HESTIA/include/fail2ban.sh"
+fail2ban_regate_web_apply
 
 WEBMAIL=$(get_object_value 'mail' 'DOMAIN' "$domain" '$WEBMAIL')
 if [ -z "$WEBMAIL" ]; then

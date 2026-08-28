@@ -876,16 +876,17 @@ del_mail_ssl_certificates() {
 # Degrades to the 'disabled' vhost when the client is empty or not installed, so a rebuild after a
 # webmailer is removed never leaves a dead proxy. Shared by the .tpl and .stpl callers.
 select_webmail_template() {
-	local client="$1"
+	local client="$1" front
+	front=$(webmail_front)
 	if [ -z "$client" ] \
 		|| { [ "$client" != "disabled" ] && ! grep -qw "$client" <<< "${WEBMAIL_SYSTEM//,/ }"; }; then
 		client="disabled"
 	fi
 	if [ "$client" = "roundcube" ]; then
 		WEBMAIL_TEMPLATE="default"
-		[ "$WEB_SYSTEM" = "nginx" ] && WEBMAIL_TEMPLATE="web_system"
+		[ "$front" = "nginx" ] && WEBMAIL_TEMPLATE="web_system"
 		PROXY_TEMPLATE="default"
-	elif [ -f "$HESTIA/share/$WEB_SYSTEM/webmail/$client.tpl" ]; then
+	elif [ -f "$HESTIA/share/$front/webmail/$client.tpl" ]; then
 		WEBMAIL_TEMPLATE="$client"
 		PROXY_TEMPLATE="default_$client"
 	else
@@ -895,6 +896,8 @@ select_webmail_template() {
 }
 
 add_webmail_config() {
+	local front
+	front=$(webmail_front)
 	mkdir -p "$HOMEDIR/$user/conf/mail/$domain"
 	conf="$HOMEDIR/$user/conf/mail/$domain/$1.conf"
 	if [[ "$2" =~ stpl$ ]]; then
@@ -926,7 +929,7 @@ add_webmail_config() {
 			-e "s|%alias_idn%|$override_alias_idn|g" \
 			-e "s|%alias_string%|$alias_string|g" \
 			-e "s|%email%|info@$domain|g" \
-			-e "s|%web_system%|$WEB_SYSTEM|g" \
+			-e "s|%web_system%|$front|g" \
 			-e "s|%web_port%|$WEB_PORT|g" \
 			-e "s|%web_ssl_port%|$WEB_SSL_PORT|g" \
 			-e "s|%backend_lsnr%|$backend_lsnr|g" \
@@ -953,29 +956,36 @@ add_webmail_config() {
 	chmod 640 $conf
 
 	if [[ "$2" =~ stpl$ ]]; then
-		if [ -n "$WEB_SYSTEM" ]; then
-			forcessl="$HOMEDIR/$user/conf/mail/$domain/$WEB_SYSTEM.forcessl.conf"
+		# guard on $1 - the system whose conf.d receives the link - not on the front:
+		# today they coincide in every model that reaches this line, but that is a
+		# coincidence, not a meaning
+		if [ -n "$1" ]; then
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 		fi
 		if [ -n "$PROXY_SYSTEM" ]; then
-			forcessl="$HOMEDIR/$user/conf/mail/$domain/$PROXY_SYSTEM.forcessl.conf"
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 		fi
 
-		# Add rewrite rules to force HTTPS/SSL connections
-		if [ -n "$PROXY_SYSTEM" ] || [ "$WEB_SYSTEM" = 'nginx' ]; then
-			echo 'return 301 https://$server_name$request_uri;' > $forcessl
-		else
-			echo 'RewriteEngine On' > $forcessl
-			echo 'RewriteRule ^(.*)$ https://%{HTTP_HOST}$1 [R=301,L]' >> $forcessl
+		# The forcessl file carries ITS OWN owner, independent of $1: the templates
+		# include it by the name %web_system% renders to - the proxy where one
+		# exists, the front otherwise. Empty owner = no file, not ".forcessl.conf".
+		local fs_owner="${PROXY_SYSTEM:-$front}"
+		if [ -n "$fs_owner" ]; then
+			forcessl="$HOMEDIR/$user/conf/mail/$domain/$fs_owner.forcessl.conf"
+			if [ -n "$PROXY_SYSTEM" ] || [ "$front" = 'nginx' ]; then
+				echo 'return 301 https://$server_name$request_uri;' > $forcessl
+			else
+				echo 'RewriteEngine On' > $forcessl
+				echo 'RewriteRule ^(.*)$ https://%{HTTP_HOST}$1 [R=301,L]' >> $forcessl
+			fi
 		fi
 
 		# Remove old configurations
 		find $HOMEDIR/$user/conf/mail/ -maxdepth 1 -type f \( -name "$domain.*" -o -name "ssl.$domain.*" -o -name "*nginx.$domain.*" \) -exec rm {} \;
 	else
-		if [ -n "$WEB_SYSTEM" ]; then
+		if [ -n "$1" ]; then
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
 		fi
@@ -989,9 +999,11 @@ add_webmail_config() {
 }
 
 del_webmail_config() {
-	if [ -n "$WEB_SYSTEM" ]; then
-		rm -f $HOMEDIR/$user/conf/mail/$domain/$WEB_SYSTEM.conf
-		rm -f /etc/$WEB_SYSTEM/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
+	local front
+	front=$(webmail_front)
+	if [ -n "$front" ]; then
+		rm -f $HOMEDIR/$user/conf/mail/$domain/$front.conf
+		rm -f /etc/$front/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
 	fi
 
 	if [ -n "$PROXY_SYSTEM" ]; then
@@ -1001,9 +1013,11 @@ del_webmail_config() {
 }
 
 del_webmail_ssl_config() {
-	if [ -n "$WEB_SYSTEM" ]; then
-		rm -f $HOMEDIR/$user/conf/mail/$domain/$WEB_SYSTEM.*ssl.conf
-		rm -f /etc/$WEB_SYSTEM/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
+	local front
+	front=$(webmail_front)
+	if [ -n "$front" ]; then
+		rm -f $HOMEDIR/$user/conf/mail/$domain/$front.*ssl.conf
+		rm -f /etc/$front/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 	fi
 
 	if [ -n "$PROXY_SYSTEM" ]; then
