@@ -292,7 +292,9 @@ quota_project_assign() {
 	# interrupted run must re-run, never report done forever. Both passes share
 	# the same -xdev boundary (a mount below the home is in or out for BOTH,
 	# never half; a same-fs bind mount is inside either way - -xdev cuts on
-	# st_dev). +P is valid on directories only - on a file chattr fails with
+	# st_dev). Named, not just consistent: the project id hangs on the INODE,
+	# not the path - a bind pointing OUT of the home would stamp the file at
+	# its real location with the customer's id. +P is valid on directories only - on a file chattr fails with
 	# ENOTSUP and then skips the -p too (measured), so files get the bare id.
 	# Symlinks and immutable conf files refuse the ioctl; their few blocks are
 	# not worth failing a rebuild over.

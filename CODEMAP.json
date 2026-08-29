@@ -746,7 +746,7 @@
       "entry_points": [
         "include/quota.sh",
         "sbin/hestia-quota-boot",
-        "bin/h-update-sys-quota"
+        "sbin/h-update-sys-quota"
       ],
       "related_files": [
         "share/quota/systemd/hestia-quota-on.service",
