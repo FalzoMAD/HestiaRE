@@ -800,12 +800,13 @@ check_project_quota() {
 	esac
 }
 
-# Customer PHP CPU cap (#212): the LIVE value, not the config file. The oneshot is
-# fail-open, so a box whose cap never got computed looks perfectly healthy otherwise.
-# Not covered here: whether the cap is the right size - a hand-set value is reported,
-# not judged.
+# Customer PHP CPU cap (#212): the ENFORCED value from the cgroup, never the systemd
+# property - the property reads the drop-in the moment it is written, so a fleet of masters
+# still running in system.slice reports itself capped. The oneshot is fail-open, so nothing
+# else would notice. Not covered: whether the cap is the right size - a hand-set value is
+# reported, not judged.
 check_customer_php_slice() {
-	local versions uncapped='' ver percent cores per_sec
+	local versions uncapped='' ver percent cores cpu_max quota period pct
 	versions=$(customer_php_versions)
 	if [ -z "$versions" ]; then
 		skip "customer PHP cap: no customer php-fpm on this box"
@@ -814,25 +815,29 @@ check_customer_php_slice() {
 
 	for ver in $versions; do
 		[ "$(systemctl is-active "php$ver-fpm" 2> /dev/null)" = 'active' ] || continue
-		[ "$(systemctl show -p Slice --value "php$ver-fpm" 2> /dev/null)" = "$CUSTOMER_PHP_SLICE" ] \
-			&& continue
-		uncapped="$uncapped php$ver-fpm"
+		customer_php_in_slice "$ver" || uncapped="$uncapped php$ver-fpm"
 	done
-	[ -z "$uncapped" ] \
-		&& ok "customer php-fpm masters run in $CUSTOMER_PHP_SLICE" \
-		|| no "customer php-fpm outside the cap:$uncapped" "customer load can starve panel, mail and ssh; run h-update-sys-limits"
+	if [ -z "$uncapped" ]; then
+		ok "customer php-fpm masters run in $CUSTOMER_PHP_SLICE"
+	else
+		no "customer php-fpm outside the cap:$uncapped" "customer load can starve panel, mail and ssh; run h-update-sys-limits"
+	fi
 
-	# systemd reports the cap per second of wall clock, so the core count belongs in the
-	# line: 1.5s/s on two cores is the 75% the config asked for.
-	per_sec=$(systemctl show "$CUSTOMER_PHP_SLICE" -p CPUQuotaPerSecUSec --value 2> /dev/null)
+	cpu_max=$(customer_php_cpu_max)
 	cores=$(nproc --all 2> /dev/null)
 	percent=$(sed -n 's/^[[:space:]]*CUSTOMER_PHP_CPU_PERCENT[[:space:]]*=[[:space:]]*\([0-9]\{1,4\}\)[[:space:]]*$/\1/p' \
 		/etc/hestia/limits.conf 2> /dev/null | tail -n1)
-	if [ -z "$per_sec" ] || [ "$per_sec" = 'infinity' ]; then
-		no "customer PHP cap not applied (CPUQuota=${per_sec:-unset})" \
+	quota=${cpu_max%% *}
+	period=${cpu_max##* }
+	if [ -z "$cpu_max" ]; then
+		no "customer PHP cap has no live cgroup" "no master is in $CUSTOMER_PHP_SLICE - nothing is capped"
+	elif [ "$quota" = 'max' ]; then
+		no "customer PHP cap not applied (cpu.max: $cpu_max)" \
 			"the boot oneshot is fail-open - check systemctl status $CUSTOMER_PHP_LIMIT_UNIT"
 	else
-		ok "customer PHP cap live: $per_sec per second on ${cores:-?} cores (configured ${percent:-default}%)"
+		# Back to a share of the machine, which is what the config file promises.
+		pct=$((quota * 100 / period / ${cores:-1}))
+		ok "customer PHP cap enforced: cpu.max $cpu_max = ${pct}% of ${cores:-?} cores (configured ${percent:-default}%)"
 	fi
 }
 

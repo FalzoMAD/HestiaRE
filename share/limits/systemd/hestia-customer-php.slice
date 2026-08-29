@@ -17,8 +17,8 @@
 # FPM serving on any box, and a large machine is then capped harder than
 # configured rather than left uncapped.
 #
-# The name nests this under hestia.slice, which systemd creates implicitly with
-# no limits of its own - the parent adds no second cap.
+# Every dash in the name is a cgroup level: hestia.slice/hestia-customer.slice/this one.
+# systemd creates both parents implicitly and neither carries a limit, so no second cap.
 
 [Unit]
 Description=HestiaRE customer PHP-FPM

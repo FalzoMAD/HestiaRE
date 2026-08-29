@@ -29,9 +29,10 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 customer_php_limit_apply
 
-# The live value, not the file: fail-open means the two can disagree.
+# The enforced value from the cgroup, not the systemd property: fail-open means the two
+# can disagree, and the property answers even while no master is in the slice.
 systemctl restart "$CUSTOMER_PHP_LIMIT_UNIT" > /dev/null 2>&1
-echo "customer PHP slice: CPUQuota per second = $(systemctl show "$CUSTOMER_PHP_SLICE" -p CPUQuotaPerSecUSec --value 2> /dev/null) on $(nproc --all) cores"
+echo "customer PHP slice: cpu.max = $(customer_php_cpu_max || echo 'no live cgroup - no master in the slice') on $(nproc --all) cores"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

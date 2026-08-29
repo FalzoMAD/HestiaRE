@@ -10,6 +10,10 @@
 # outside. The per-user filemanager pools (fm-<user>.conf) live in the customer master
 # and are inside the cap - they are that customer's own load.
 #
+# Every dash in the name is a level, so the cgroup is
+# hestia.slice/hestia-customer.slice/hestia-customer-php.slice; systemd creates both
+# parents implicitly and neither carries a limit of its own.
+#
 # The value is computed at boot, see sbin/hestia-customer-php-limit.
 
 CUSTOMER_PHP_SLICE='hestia-customer-php.slice'
@@ -46,6 +50,26 @@ customer_php_slice_dropin() {
 		Slice=$CUSTOMER_PHP_SLICE
 	DROPIN
 	chmod 644 "$dir/$CUSTOMER_PHP_DROPIN"
+}
+
+# The LIVE cgroup, never the Slice property: the property reads the new value the moment
+# the drop-in is written, while the running master stays in its old cgroup until it is
+# restarted. Comparing configuration against configuration is how a whole fleet reported
+# itself capped with every master still in system.slice.
+customer_php_in_slice() {
+	case "$(systemctl show -p ControlGroup --value "php$1-fpm" 2> /dev/null)" in
+		*/"$CUSTOMER_PHP_SLICE"/*) return 0 ;;
+	esac
+	return 1
+}
+
+# The enforced value, from the cgroup the kernel actually reads. Empty while no master is
+# in the slice - an inactive slice has no cgroup directory.
+customer_php_cpu_max() {
+	local cg
+	cg=$(systemctl show -p ControlGroup --value "$CUSTOMER_PHP_SLICE" 2> /dev/null)
+	[ -n "$cg" ] || return 1
+	cat "/sys/fs/cgroup$cg/cpu.max" 2> /dev/null
 }
 
 customer_php_slice_remove() {
@@ -85,7 +109,7 @@ customer_php_limit_apply() {
 	[ -n "$changed" ] || return 0
 	for ver in $(customer_php_versions); do
 		[ "$(systemctl is-active "php$ver-fpm" 2> /dev/null)" = 'active' ] || continue
-		[ "$(systemctl show -p Slice --value "php$ver-fpm" 2> /dev/null)" = "$CUSTOMER_PHP_SLICE" ] && continue
+		customer_php_in_slice "$ver" && continue
 		systemctl restart "php$ver-fpm" > /dev/null 2>&1
 	done
 	return 0
