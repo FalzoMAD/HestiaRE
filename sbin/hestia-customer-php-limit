@@ -1,20 +1,36 @@
 #!/bin/bash
-# info: apply the customer PHP CPU cap for this boot
+# info: wire the customer php-fpm masters into their slice and cap it for this boot
 #
-# Turns the configured share of the machine into a per-core CPUQuota, because that is
-# how systemd counts it: 75% on an eight-core box is CPUQuota=600%, and taking the
-# number literally would hand every customer together three quarters of ONE core.
+# The single writer for both halves, so there is no command to remember and no second copy
+# of the logic: it (re-)writes the per-version drop-ins and then computes the cap. Running it
+# again - systemctl restart hestia-customer-php-limit - is the repair path after an edit to
+# /etc/hestia/limits.conf or a version that ended up outside the slice.
 #
-# --runtime on purpose: the computed value lands in /run, so a box that gains cores
-# gets the larger cap on its next boot instead of keeping a number derived from the
-# old hardware - and nothing absolute is left behind for nobody to clean up.
+# The cap is per-core in systemd, so the configured share of the machine is multiplied by the
+# core count: 75% on an eight-core box is CPUQuota=600%, and taking the number literally would
+# hand every customer together three quarters of ONE core.
 #
-# Always exits 0. A failure here leaves the slice on its static default; the smoke
-# check reports the live value, since a fail-open guard is invisible otherwise.
+# --runtime on purpose: the computed value lands in /run, so a box that gains cores gets the
+# larger cap on its next boot instead of keeping a number derived from the old hardware.
+#
+# Always exits 0. A failure here leaves the slice on its static default; the smoke check reports
+# the live value, since a fail-open guard is invisible otherwise.
 
-SLICE='hestia-customer-php.slice'
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/limits.sh
+source "$HESTIA/include/limits.sh"
+
 CONF='/etc/hestia/limits.conf'
 DEFAULT_PERCENT=75
+
+# Wiring first. At boot no master is running yet, so a version added without its drop-in is
+# simply correct from here on - nothing to restart. Outside boot the loop below catches it.
+wired=''
+for ver in $(customer_php_versions); do
+	customer_php_slice_dropin "$ver" && wired="$wired $ver"
+done
+[ -z "$wired" ] || systemctl daemon-reload
 
 # Read, never source: an admin-edited file should not execute, and this is one scalar.
 percent=''
@@ -22,15 +38,15 @@ if [ -r "$CONF" ]; then
 	percent=$(sed -n 's/^[[:space:]]*CUSTOMER_PHP_CPU_PERCENT[[:space:]]*=[[:space:]]*\([0-9]\{1,4\}\)[[:space:]]*$/\1/p' "$CONF" | tail -n1)
 fi
 
-# Range-checked, not just parsed: one extra digit would otherwise read as "more machine
-# than exists" and quietly lift the cap.
+# Range-checked, not just parsed: one extra digit would otherwise read as "more machine than
+# exists" and quietly lift the cap.
 if ! [[ "$percent" =~ ^[0-9]+$ ]] || [ "$percent" -lt 10 ] || [ "$percent" -gt 100 ]; then
 	echo "WARNING: CUSTOMER_PHP_CPU_PERCENT is '${percent:-unset}' in $CONF - using ${DEFAULT_PERCENT}%" >&2
 	percent=$DEFAULT_PERCENT
 fi
 
-# --all, not bare nproc: bare nproc answers with the caller's affinity mask, which would
-# shrink the cap on a box where something pinned this service.
+# --all, not bare nproc: bare nproc answers with the caller's affinity mask, which would shrink
+# the cap on a box where something pinned this service.
 cores=$(nproc --all 2> /dev/null)
 if ! [[ "$cores" =~ ^[0-9]+$ ]] || [ "$cores" -lt 1 ]; then
 	echo "WARNING: cannot read the core count - assuming 1" >&2
@@ -38,10 +54,21 @@ if ! [[ "$cores" =~ ^[0-9]+$ ]] || [ "$cores" -lt 1 ]; then
 fi
 
 quota=$((percent * cores))
-if systemctl set-property --runtime "$SLICE" "CPUQuota=${quota}%" > /dev/null 2>&1; then
+if systemctl set-property --runtime "$CUSTOMER_PHP_SLICE" "CPUQuota=${quota}%" > /dev/null 2>&1; then
 	echo "customer PHP cap: CPUQuota=${quota}% (${percent}% of $cores cores)"
 else
-	echo "WARNING: could not cap $SLICE - it keeps the static default from its unit" >&2
+	echo "WARNING: could not cap $CUSTOMER_PHP_SLICE - it keeps the static default from its unit" >&2
 fi
+
+# A drop-in moves a master only at its next start. At boot this finds nothing running; run by
+# hand it is what makes the repair take effect. --no-block because those units are ordered
+# After= this one: waiting for their job while this job is still running would deadlock until
+# the timeout.
+for ver in $(customer_php_versions); do
+	[ "$(systemctl is-active "php$ver-fpm" 2> /dev/null)" = 'active' ] || continue
+	customer_php_in_slice "$ver" && continue
+	echo "moving php$ver-fpm into $CUSTOMER_PHP_SLICE (restart queued)"
+	systemctl --no-block restart "php$ver-fpm" > /dev/null 2>&1
+done
 
 exit 0

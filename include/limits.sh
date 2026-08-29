@@ -81,10 +81,14 @@ customer_php_slice_remove() {
 	return 0
 }
 
-# Idempotent and safe on a half-built box: the installer calls it while PHP versions
-# are still arriving, and h-add-web-php calls it again for each new one.
+# One writer for the wiring: the boot unit. This installs only what has to exist before it
+# can run - the unit files and the config file - and then lets it do the rest, so there is no
+# second copy of the drop-in logic to drift.
+#
+# Idempotent and safe on a half-built box: the installer calls it while PHP versions are
+# still arriving, and h-add-web-php calls it again for each new one.
 customer_php_limit_apply() {
-	local src="${HESTIA:-/usr/local/hestia}/share/limits" ver changed=''
+	local src="${HESTIA:-/usr/local/hestia}/share/limits"
 
 	[ -d "$src/systemd" ] || {
 		echo "Warning: $src/systemd missing - customer PHP cap not installed" >&2
@@ -93,25 +97,14 @@ customer_php_limit_apply() {
 	install -m 644 "$src/systemd/$CUSTOMER_PHP_SLICE" "/etc/systemd/system/$CUSTOMER_PHP_SLICE" || return 1
 	install -m 644 "$src/systemd/$CUSTOMER_PHP_LIMIT_UNIT" "/etc/systemd/system/$CUSTOMER_PHP_LIMIT_UNIT" || return 1
 
-	# Seeded once. The file is the admin's, and an update that rewrote it would silently
-	# undo a deliberate value.
+	# Seeded once. The file is the admin's, and an update that rewrote it would silently undo
+	# a deliberate value.
 	[ -f /etc/hestia/limits.conf ] || install -m 644 "$src/limits.conf" /etc/hestia/limits.conf
-
-	for ver in $(customer_php_versions); do
-		customer_php_slice_dropin "$ver" && changed='yes'
-	done
 
 	systemctl daemon-reload
 	systemctl enable "$CUSTOMER_PHP_LIMIT_UNIT" > /dev/null 2>&1
-	systemctl start "$CUSTOMER_PHP_LIMIT_UNIT" > /dev/null 2>&1
-
-	# A drop-in only moves a master at its next start, so masters already running keep
-	# serving outside the slice until restarted. Only those actually outside it.
-	[ -n "$changed" ] || return 0
-	for ver in $(customer_php_versions); do
-		[ "$(systemctl is-active "php$ver-fpm" 2> /dev/null)" = 'active' ] || continue
-		customer_php_in_slice "$ver" && continue
-		systemctl restart "php$ver-fpm" > /dev/null 2>&1
-	done
+	# restart, not start: it is RemainAfterExit, so a start on an already-finished unit does
+	# nothing at all - and doing the work again is the point of every caller.
+	systemctl restart "$CUSTOMER_PHP_LIMIT_UNIT" > /dev/null 2>&1
 	return 0
 }

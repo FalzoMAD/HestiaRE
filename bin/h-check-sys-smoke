@@ -820,7 +820,7 @@ check_customer_php_slice() {
 	if [ -z "$uncapped" ]; then
 		ok "customer php-fpm masters run in $CUSTOMER_PHP_SLICE"
 	else
-		no "customer php-fpm outside the cap:$uncapped" "customer load can starve panel, mail and ssh; run h-update-sys-limits"
+		no "customer php-fpm outside the cap:$uncapped" "customer load can starve panel, mail and ssh; systemctl restart $CUSTOMER_PHP_LIMIT_UNIT"
 	fi
 
 	cpu_max=$(customer_php_cpu_max)
@@ -834,7 +834,7 @@ check_customer_php_slice() {
 		# cpu.max is missing rather than "max" - and an inactive slice has no directory at all.
 		# Both mean the same thing here, and neither says anything about membership.
 		no "customer PHP slice carries no CPU limit (cpu.max absent)" \
-			"nothing is capped - run h-update-sys-limits, then check systemctl status $CUSTOMER_PHP_LIMIT_UNIT"
+			"nothing is capped - systemctl restart $CUSTOMER_PHP_LIMIT_UNIT, then read its status"
 	elif [ "$quota" = 'max' ]; then
 		no "customer PHP cap not applied (cpu.max: $cpu_max)" \
 			"the boot oneshot is fail-open - check systemctl status $CUSTOMER_PHP_LIMIT_UNIT"
