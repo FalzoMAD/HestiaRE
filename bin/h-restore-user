@@ -149,8 +149,16 @@ tmpdir=$(mktemp -p $BACKUP_TEMP -d) || {
 	check_result "$E_NOTEXIST" "Can't create tmp dir"
 }
 # On EVERY exit: ten of the aborts below have no rm of their own and left the unpacked members
-# behind, pam material included.
-trap 'rm -rf "$tmpdir"' EXIT
+# behind, pam material included. ONE trap owner for the whole run - later stages add work via
+# flags, never via a second `trap ... EXIT` (which replaces silently and only in its own branch).
+quota_cap_lifted=''
+restore_cleanup() {
+	rm -rf "$tmpdir"
+	# reapply the record on every exit while the cap is lifted - an aborted restore
+	# must not leave the customer unlimited while the box reads as correct
+	[ "$quota_cap_lifted" = 'yes' ] && "$BIN/h-update-user-quota" "$user" > /dev/null 2>&1
+}
+trap restore_cleanup EXIT
 
 # Parts that did not come back. Collected through the run and reported at the end, so one broken
 # object does not abandon the rest and does not pass as a success either.
@@ -404,11 +412,10 @@ fi
 
 if quota_is_active && quota_home_fs; then
 	# XFS enforces project quota against root (ext4 does not, both measured) - a
-	# restore into a full home would die mid-run. Lift the cap for the duration.
-	# Reapplied FROM THE TRAP, not sequentially: an aborted restore must not leave
-	# the customer unlimited while every later look at the box reads as correct.
+	# restore into a full home would die mid-run. Lift the cap for the duration;
+	# the flag routes the reapply through the one EXIT trap above.
 	setquota -P "$(id -u "$user" 2> /dev/null)" 0 0 0 0 "$QUOTA_MNT" 2> /dev/null
-	trap 'rm -rf "$tmpdir"; "$BIN/h-update-user-quota" "$user" > /dev/null 2>&1' EXIT
+	quota_cap_lifted='yes'
 else
 	# The package field travels in the backup, the capability does not: name the
 	# loss instead of letting enforcement vanish silently on a none-box (#211).

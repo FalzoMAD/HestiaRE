@@ -793,11 +793,11 @@ check_project_quota() {
 			if [ "$reason" = 'reboot' ]; then
 				skip "project quota: armed, waiting for the install reboot (pending is not verified)"
 			else
-				no "project quota stuck pending" "arming failed: ${reason} - see /run/hestia-quota-arm.status and the boot unit log"
+				no "project quota stuck pending" "arming failed: ${reason} - see /run/hestia-quota-arm.status; h-update-sys-quota re-arms once the cause is fixed"
 			fi
 			;;
 		*)
-			skip "project quota: not enforced on this box (${PROJECT_QUOTA:-key unset})"
+			skip "project quota: not enforced on this box (${PROJECT_QUOTA:-key unset}; h-update-sys-quota re-arms once the cause is fixed)"
 			;;
 	esac
 }

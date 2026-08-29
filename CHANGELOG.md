@@ -26,7 +26,8 @@ opens above it.
   without the capability the panel hides the field and every applier is inert; a restore onto
   such a box names the enforcement loss. The old admin toggle, h-add-sys-quota/h-delete-sys-quota
   and the never-verified reboot-script path are gone; the smoke test measures real enforcement
-  and flags a drifted or stuck arming by its stored reason.
+  and flags a drifted or stuck arming by its stored reason, and h-update-sys-quota re-arms a box
+  out of none:* once the named reason is fixed.
 
 ### Fixed
 

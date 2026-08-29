@@ -1,0 +1,52 @@
+#!/bin/bash
+# info: re-derive and arm project quota from the live filesystem
+# options: NONE
+#
+# example: h-update-sys-quota
+#
+# Re-runs the installer's arming: measures whether the /home filesystem enforces
+# project quota, arms it where it can, and writes PROJECT_QUOTA from the result.
+# This is the way back out of none:* once the named reason is fixed (an e2fsck
+# finding, a busy /home, a foreign filesystem replaced) - the boot unit only
+# re-checks pending, never none, and without this command a once-failed box
+# stayed unarmed forever (#211 review). Arming a separate /home umounts it and
+# refuses loudly while it is busy; run that case in a quiet window.
+
+#----------------------------------------------------------#
+#                Variables & Functions                     #
+#----------------------------------------------------------#
+
+# Includes
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/quota.sh
+source $HESTIA/include/quota.sh
+# load config file
+source_conf "$HESTIA/conf/hestia.conf"
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+quota_arm
+
+# Existing customers get their project ids and limits where the arming just
+# turned enforcement on - the same pair every rebuild applies.
+source_conf "$HESTIA/conf/hestia.conf"
+if [ "${PROJECT_QUOTA%%:*}" = 'active' ]; then
+	for user in $("$BIN/h-list-users" list); do
+		"$BIN/h-update-user-quota" "$user"
+	done
+fi
+
+#----------------------------------------------------------#
+#                       Hestia                             #
+#----------------------------------------------------------#
+
+# Logging
+"$BIN/h-log-action" "system" "Info" "System" "Project quota re-armed (state: $(grep -o "PROJECT_QUOTA='[^']*'" "$HESTIA/conf/hestia.conf"))."
+log_event "$OK" "$ARGUMENTS"
+
+exit

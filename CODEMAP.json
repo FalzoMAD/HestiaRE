@@ -745,7 +745,8 @@
       "description": "Project quota for /home (#211): base behaviour, no wizard item, no panel switch. The installer arms whenever the filesystem supports it; hestia.conf PROJECT_QUOTA (active|pending:<reason>|none:<reason>) is written from the enforcement probe, never from classification. ext4 needs quotaon -P at every boot (persistent unit) and offline superblock features (one-shot initramfs premount hook across the install reboot); xfs is mount-option-only (fstab or GRUB rootflags), remount is a silent no-op on both. Per-user application (project id = uid) lives in the stage-2 rework of h-update-user-quota.",
       "entry_points": [
         "include/quota.sh",
-        "sbin/hestia-quota-boot"
+        "sbin/hestia-quota-boot",
+        "bin/h-update-sys-quota"
       ],
       "related_files": [
         "share/quota/systemd/hestia-quota-on.service",

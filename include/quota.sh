@@ -16,8 +16,6 @@
 #   - root bypasses ext4 project quota (restore never dies on it); XFS enforces
 #     against root too - which is why the probe writes as uid 65534
 
-# Throwaway project id for the witness - outside any real customer UID band.
-QUOTA_PROBE_PRJID=999999
 QUOTA_ARM_STATUS=/run/hestia-quota-arm.status
 QUOTA_UNIT='hestia-quota-on.service'
 QUOTA_HOOK=/etc/initramfs-tools/hooks/hestia-quota
@@ -44,30 +42,35 @@ quota_enforce_probe() {
 		QUOTA_PROBE_REASON="mountpoint $mnt missing"
 		return 1
 	}
+	# Per-run throwaway project id (outside the UID band): two concurrent probes
+	# - smoke from cron plus one by hand - must not share an id, or one trap
+	# lifts the other's cap. conv=fsync turns "delayed allocation happens to
+	# report EDQUOT early" into an assurance on both writes.
+	local prjid=$((900000000 + $$))
 	out=$(
 		dir=$(mktemp -d "$mnt/.hestia-qprobe.XXXXXX") || {
 			echo "mktemp failed on $mnt"
 			exit 1
 		}
-		trap 'setquota -P '"$QUOTA_PROBE_PRJID"' 0 0 0 0 "$mnt" 2> /dev/null; rm -rf "$dir"' EXIT INT TERM
-		chattr -p "$QUOTA_PROBE_PRJID" +P "$dir" 2> /dev/null || {
+		trap 'setquota -P '"$prjid"' 0 0 0 0 "$mnt" 2> /dev/null; rm -rf "$dir"' EXIT INT TERM
+		chattr -p "$prjid" +P "$dir" 2> /dev/null || {
 			echo "no project id support (chattr -p refused)"
 			exit 1
 		}
 		chown 65534:65534 "$dir" && chmod 700 "$dir"
-		setquota -P "$QUOTA_PROBE_PRJID" 0 4 0 0 "$mnt" 2> /dev/null || {
+		setquota -P "$prjid" 0 4 0 0 "$mnt" 2> /dev/null || {
 			echo "setquota -P refused"
 			exit 1
 		}
 		if setpriv --reuid 65534 --regid 65534 --clear-groups \
-			dd if=/dev/zero of="$dir/probe" bs=64k count=4 > /dev/null 2>&1; then
+			dd if=/dev/zero of="$dir/probe" bs=64k count=4 conv=fsync > /dev/null 2>&1; then
 			echo "cap not enforced (write passed the 4KB hard limit)"
 			exit 1
 		fi
 		rm -f "$dir/probe"
-		setquota -P "$QUOTA_PROBE_PRJID" 0 0 0 0 "$mnt" 2> /dev/null
+		setquota -P "$prjid" 0 0 0 0 "$mnt" 2> /dev/null
 		if ! setpriv --reuid 65534 --regid 65534 --clear-groups \
-			dd if=/dev/zero of="$dir/probe" bs=64k count=4 > /dev/null 2>&1; then
+			dd if=/dev/zero of="$dir/probe" bs=64k count=4 conv=fsync > /dev/null 2>&1; then
 			echo "positive control failed (write blocked with cap lifted)"
 			exit 1
 		fi
@@ -78,8 +81,13 @@ quota_enforce_probe() {
 }
 
 quota_set_key() {
-	"$BIN/h-change-sys-config-value" 'PROJECT_QUOTA' "$1" > /dev/null 2>&1 \
-		|| sed -i "s|^PROJECT_QUOTA=.*|PROJECT_QUOTA='$1'|" "$HESTIA/conf/hestia.conf"
+	if ! "$BIN/h-change-sys-config-value" 'PROJECT_QUOTA' "$1" > /dev/null 2>&1; then
+		# fallback so the measured state is never lost, but LOUD: the primary path
+		# takes colon values (measured 2026-08-29) - if this line ever prints, that
+		# path broke and wants looking at, not papering over
+		echo "Warning: h-change-sys-config-value failed - writing PROJECT_QUOTA='$1' by hand" >&2
+		sed -i "s|^PROJECT_QUOTA=.*|PROJECT_QUOTA='$1'|" "$HESTIA/conf/hestia.conf"
+	fi
 }
 
 quota_install_unit() {
@@ -279,10 +287,17 @@ quota_project_assign() {
 	if [ "$cur" = "$uid" ] && [[ "$flags" == *P* ]]; then
 		return 0
 	fi
-	# Two passes: +P is valid on DIRECTORIES only - on a regular file chattr fails
-	# with ENOTSUP and then does not apply the -p either, so the combined recursive
-	# form migrated directories and silently skipped every file (measured).
-	chattr -R -p "$uid" "$home" 2> /dev/null
-	find "$home" -xdev -type d -exec chattr -p "$uid" +P {} + 2> /dev/null
+	# Subtree first, the home itself LAST: the home's id+P is the done-marker the
+	# gate above reads, so it must not appear before every child is stamped - an
+	# interrupted run must re-run, never report done forever. Both passes share
+	# the same -xdev boundary (a mount below the home is in or out for BOTH,
+	# never half; a same-fs bind mount is inside either way - -xdev cuts on
+	# st_dev). +P is valid on directories only - on a file chattr fails with
+	# ENOTSUP and then skips the -p too (measured), so files get the bare id.
+	# Symlinks and immutable conf files refuse the ioctl; their few blocks are
+	# not worth failing a rebuild over.
+	find "$home" -xdev -mindepth 1 -type d -exec chattr -p "$uid" +P {} + 2> /dev/null
+	find "$home" -xdev -mindepth 1 ! -type d -exec chattr -p "$uid" {} + 2> /dev/null
+	chattr -p "$uid" +P "$home" 2> /dev/null
 	return 0
 }
