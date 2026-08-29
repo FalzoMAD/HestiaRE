@@ -819,12 +819,16 @@ check_customer_php_slice() {
 		seen=$((seen + 1))
 		customer_php_in_slice "$ver" || uncapped="$uncapped php$ver-fpm"
 	done
-	# Counted, not inferred from an empty list: with no master running the loop would leave
-	# $uncapped empty and this branch would report every master capped having looked at none -
-	# and the cgroup line below would then contradict it for no visible reason.
+	# Counted, not inferred from an empty list: with no master running, $uncapped stays empty and
+	# the branch below would report every master capped having looked at none. Returning instead
+	# of falling through, because the slice then has no cgroup either and the cap branch would
+	# add "nothing is capped" - true, useless, and reading like a contradiction. That FPM is down
+	# is check_service's sentence to say, once.
 	if [ "$seen" -eq 0 ]; then
-		skip "customer PHP cap: no customer php-fpm master is running (nothing to place)"
-	elif [ -z "$uncapped" ]; then
+		skip "customer PHP cap: no customer php-fpm master is running (nothing to place, nothing to cap)"
+		return
+	fi
+	if [ -z "$uncapped" ]; then
 		ok "customer php-fpm masters run in $CUSTOMER_PHP_SLICE ($seen checked)"
 	else
 		no "customer php-fpm outside the cap:$uncapped" "customer load can starve panel, mail and ssh; systemctl restart $CUSTOMER_PHP_LIMIT_UNIT"
