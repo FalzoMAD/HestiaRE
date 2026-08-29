@@ -457,7 +457,7 @@ function syshealth_repair_system_config() {
 	fi
 
 	# Disk Quota
-	# none:unprobed, never a guessed capability: the repaired key must not claim what nobody measured (#211)
+	# never a guessed capability: the repaired key must not claim what nobody measured (#211)
 	repair_key 'PROJECT_QUOTA' 'none:unprobed'
 
 	# CRON daemon

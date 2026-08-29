@@ -4,13 +4,9 @@
 #
 # example: h-update-sys-quota
 #
-# Re-runs the installer's arming: measures whether the /home filesystem enforces
-# project quota, arms it where it can, and writes PROJECT_QUOTA from the result.
-# This is the way back out of none:* once the named reason is fixed (an e2fsck
-# finding, a busy /home, a foreign filesystem replaced) - the boot unit only
-# re-checks pending, never none, and without this command a once-failed box
-# stayed unarmed forever (#211 review). Arming a separate /home umounts it and
-# refuses loudly while it is busy; run that case in a quiet window.
+# Re-runs the installer's arming and writes PROJECT_QUOTA from the probe - the
+# way back out of none:* once its reason is fixed (the boot unit only re-checks
+# pending). Separate-/home arming umounts and refuses a busy mount loudly.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -32,8 +28,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 quota_arm
 
-# Existing customers get their project ids and limits where the arming just
-# turned enforcement on - the same pair every rebuild applies.
+# stamp existing customers where the arming just turned enforcement on
 source_conf "$HESTIA/conf/hestia.conf"
 if [ "${PROJECT_QUOTA%%:*}" = 'active' ]; then
 	for user in $("$BIN/h-list-users" list); do

@@ -1,20 +1,11 @@
 #!/bin/bash
-# Project quota for /home (#211): classification, arming, enforcement witness.
-#
-# Quota is base behaviour, not a module: the installer arms whenever the filesystem
-# under /home supports it, without asking. The capability lives in the hestia.conf
-# key PROJECT_QUOTA = active | pending:<reason> | none:<reason>. The key is written
-# from MEASUREMENT (quota_enforce_probe), never from classification alone - the
-# class only picks the arming path. Measured liars this design routes around:
-#   - remount with prjquota: rc=0, option visible in findmnt, quotaon -pP says "on",
-#     and nothing is enforced (ext4 AND xfs, both measured)
-#   - ext4 features quota,project: settable on an UNMOUNTED fs only, so an existing
-#     root fs is armed by a one-shot initramfs premount hook across the reboot the
-#     installer demands anyway
-#   - quotaon -P activates ext4 enforcement without any mount option, but it is
-#     RUNTIME state: the persistent boot unit re-applies it on every boot
-#   - root bypasses ext4 project quota (restore never dies on it); XFS enforces
-#     against root too - which is why the probe writes as uid 65534
+# Project quota for /home (#211): probe, arming, per-user application.
+# PROJECT_QUOTA (active|pending:<reason>|none:<reason>) is written from the
+# enforcement probe, never from classification: remount shows prjquota without
+# enforcing, quotaon -pP prints "on" either way - only a real write is an oracle.
+# ext4 enforcement is runtime state (quotaon -P each boot; superblock features are
+# offline-only, hence the initramfs one-shot for a root fs); xfs is a pure mount
+# option. Root bypasses ext4 project quota but not xfs.
 
 QUOTA_ARM_STATUS=/run/hestia-quota-arm.status
 QUOTA_UNIT='hestia-quota-on.service'
@@ -29,12 +20,10 @@ quota_home_fs() {
 	[ -n "$QUOTA_MNT" ]
 }
 
-# One oracle, two callers (installer/boot flip + smoke): does this filesystem
-# ENFORCE project quota right now? Writes as uid 65534 - root legitimately
-# bypasses ext4 project quota, a root writer would prove nothing. Positive
-# control in the same run: the same writer must pass once the cap is lifted.
-# On failure QUOTA_PROBE_REASON names why. Cleanup runs from a trap: an aborted
-# probe must not leave a capped project directory under /home.
+# One oracle, two callers (installer/boot flip + smoke). Writes as uid 65534 -
+# root bypasses ext4 project quota, a root writer proves nothing. Positive
+# control in the same run; QUOTA_PROBE_REASON names a failure; the trap keeps an
+# aborted probe from leaving a capped directory behind.
 quota_enforce_probe() {
 	local mnt="$1" out
 	QUOTA_PROBE_REASON=''
@@ -42,10 +31,8 @@ quota_enforce_probe() {
 		QUOTA_PROBE_REASON="mountpoint $mnt missing"
 		return 1
 	}
-	# Per-run throwaway project id (outside the UID band): two concurrent probes
-	# - smoke from cron plus one by hand - must not share an id, or one trap
-	# lifts the other's cap. conv=fsync turns "delayed allocation happens to
-	# report EDQUOT early" into an assurance on both writes.
+	# per-run id: concurrent probes must not share one, or one trap lifts the
+	# other's cap; conv=fsync makes EDQUOT an assurance, not a delayed-alloc accident
 	local prjid=$((900000000 + $$))
 	out=$(
 		dir=$(mktemp -d "$mnt/.hestia-qprobe.XXXXXX") || {
@@ -82,9 +69,7 @@ quota_enforce_probe() {
 
 quota_set_key() {
 	if ! "$BIN/h-change-sys-config-value" 'PROJECT_QUOTA' "$1" > /dev/null 2>&1; then
-		# fallback so the measured state is never lost, but LOUD: the primary path
-		# takes colon values (measured 2026-08-29) - if this line ever prints, that
-		# path broke and wants looking at, not papering over
+		# loud fallback: the primary path takes colon values - if this prints, it broke
 		echo "Warning: h-change-sys-config-value failed - writing PROJECT_QUOTA='$1' by hand" >&2
 		sed -i "s|^PROJECT_QUOTA=.*|PROJECT_QUOTA='$1'|" "$HESTIA/conf/hestia.conf"
 	fi
@@ -97,9 +82,8 @@ quota_install_unit() {
 }
 
 quota_install_initramfs_hook() {
-	# copy_exec pair: e2fsck ships in the initramfs, tune2fs does NOT (measured
-	# deb13+ub24) - without the hook the premount step dies on command-not-found
-	# and the box stays pending forever, silently.
+	# e2fsck ships in the initramfs, tune2fs does not - without copy_exec the
+	# premount dies and the box stays silently pending forever
 	install -m 755 "$HESTIA/share/quota/initramfs/hestia-quota.hook" "$QUOTA_HOOK" || return 1
 	install -m 755 "$HESTIA/share/quota/initramfs/hestia-quota.premount" "$QUOTA_PREMOUNT" || return 1
 	update-initramfs -u > /dev/null 2>&1
@@ -111,8 +95,8 @@ quota_remove_initramfs_hook() {
 	update-initramfs -u > /dev/null 2>&1
 }
 
-# Installer entry point. Must run before any customer user exists: the
-# separate-/home paths need the mount free for umount.
+# Installer entry point; must run before any customer exists (separate-/home
+# paths umount the mount).
 quota_arm() {
 	local reason
 	if ! quota_home_fs; then
@@ -121,7 +105,7 @@ quota_arm() {
 		return 0
 	fi
 
-	# Already enforcing (pre-armed image, re-run): measure first, classify never.
+	# already enforcing (pre-armed image, re-run): measure first, classify never
 	if quota_enforce_probe "$QUOTA_MNT"; then
 		[ "$QUOTA_FSTYPE" = 'ext4' ] && quota_install_unit
 		quota_set_key "active"
@@ -132,7 +116,7 @@ quota_arm() {
 	case "$QUOTA_FSTYPE" in
 		ext4)
 			if tune2fs -l "$QUOTA_DEV" 2> /dev/null | grep -q '^Filesystem features:.*project'; then
-				# features already on disk, enforcement just not activated
+				# features on disk, enforcement just not activated
 				quotaon -P "$QUOTA_MNT" > /dev/null 2>&1
 				quota_install_unit
 				if quota_enforce_probe "$QUOTA_MNT"; then
@@ -143,8 +127,8 @@ quota_arm() {
 					echo "[ ! ] project quota: features present but probe failed: $QUOTA_PROBE_REASON"
 				fi
 			elif [ "$QUOTA_MNT" = '/' ]; then
-				# root fs: features are settable unmounted only - one-shot premount
-				# hook across the reboot the installer demands anyway
+				# features are settable unmounted only: one-shot hook across the
+				# reboot the installer demands anyway
 				if quota_install_initramfs_hook && quota_install_unit; then
 					quota_set_key "pending:reboot"
 					echo "[ * ] project quota: armed via initramfs one-shot - active after the reboot"
@@ -153,7 +137,7 @@ quota_arm() {
 					echo "[ ! ] project quota: could not install the initramfs hook - not armed"
 				fi
 			else
-				# separate /home: arm online, the mount is free at this install stage
+				# separate /home is free at install time: arm online
 				if ! umount "$QUOTA_MNT" 2> /dev/null; then
 					quota_set_key "none:home-umount-failed"
 					echo "[ ! ] project quota: $QUOTA_MNT is busy - not armed"
@@ -182,8 +166,8 @@ quota_arm() {
 			;;
 		xfs)
 			if [ "$QUOTA_MNT" = '/' ]; then
-				# xfs quota is mount-option-only and remount is a silent no-op
-				# (measured) - the root fs needs rootflags at the original mount
+				# remount is a silent no-op: the root needs the option at the
+				# original mount, i.e. rootflags
 				if grep -rqs 'rootflags=' /etc/default/grub /etc/default/grub.d/ 2> /dev/null; then
 					quota_set_key "pending:manual-rootflags-conflict"
 					echo "[ ! ] project quota: rootflags already set in GRUB config - add prjquota by hand"
@@ -209,8 +193,7 @@ quota_arm() {
 					echo "[ ! ] project quota: $QUOTA_MNT is busy - not armed"
 					return 0
 				fi
-				# persist the option in fstab (4th field), then a FRESH mount - the
-				# only mount that enforces on xfs
+				# fstab option + FRESH mount - the only mount that enforces on xfs
 				awk -v mnt="$QUOTA_MNT" 'BEGIN { OFS="\t" }
 					$1 !~ /^#/ && $2 == mnt && $4 !~ /prjquota/ { $4 = $4",prjquota" } { print }' \
 					/etc/fstab > /etc/fstab.hestia-quota && mv /etc/fstab.hestia-quota /etc/fstab
@@ -232,13 +215,10 @@ quota_arm() {
 	return 0
 }
 
-# Boot unit body (sbin/hestia-quota-boot). Two jobs:
-#   1. ext4: quotaon -P on every boot - enforcement is runtime state, nothing
-#      else restores it after a reboot (measured; the second-reboot case).
-#   2. while the key says pending: run the probe once, flip to active on green
-#      (ext4: drop the one-shot initramfs hook; xfs: the unit removes itself -
-#      the mount option persists on its own. That self-teardown is the one path
-#      without self-healing; the smoke check owns catching a lost GRUB drop-in).
+# Boot unit body: quotaon -P on ext4 every boot (enforcement is runtime state),
+# plus the one-time pending->active flip. After the flip ext4 keeps the unit,
+# xfs removes it (mount option persists) - that self-teardown is the one path
+# without self-healing; the smoke check owns a lost GRUB drop-in.
 quota_boot_apply() {
 	local state="${PROJECT_QUOTA%%:*}" reason
 	quota_home_fs || return 0
@@ -255,8 +235,7 @@ quota_boot_apply() {
 		fi
 		"$BIN/h-log-action" "system" "Info" "System" "Project quota enforcement is active." > /dev/null 2>&1
 	else
-		# surface the premount hook's own reason if it left one - a forever-pending
-		# box without a stated why is the forbidden state
+		# surface the premount hook's reason - silently pending is the forbidden state
 		reason="$(cat "$QUOTA_ARM_STATUS" 2> /dev/null)"
 		reason="${reason:-$QUOTA_PROBE_REASON}"
 		quota_set_key "pending:${reason// /-}"
@@ -269,14 +248,10 @@ quota_boot_apply() {
 
 quota_is_active() { [ "${PROJECT_QUOTA%%:*}" = 'active' ]; }
 
-# Assigns the customer's project id (= uid, collision-free and derivable) to the
-# home with the inheritance flag. Recursion is gated on the home dir already
-# carrying id+P: a tree that predates the arming gets exactly ONE recursive pass
-# (minutes on a maildir-heavy home), every later call is a no-op - and a fresh
-# home recurses over a handful of skeleton dirs, so restore can rely on
-# "assigned before unpacking" without a special case. Errors are quiet on
-# purpose: symlinks and immutable conf files refuse the ioctl, and their few
-# blocks are not worth failing a rebuild over.
+# Project id (= uid) with inheritance flag on the home. Gated on the home already
+# carrying id+P: a pre-arming tree migrates exactly once, every later call is a
+# no-op; a fresh home is a handful of skeleton dirs, so restore can rely on
+# "assigned before unpacking".
 quota_project_assign() {
 	local user="$1" uid home cur flags
 	quota_is_active || return 0
@@ -287,17 +262,12 @@ quota_project_assign() {
 	if [ "$cur" = "$uid" ] && [[ "$flags" == *P* ]]; then
 		return 0
 	fi
-	# Subtree first, the home itself LAST: the home's id+P is the done-marker the
-	# gate above reads, so it must not appear before every child is stamped - an
-	# interrupted run must re-run, never report done forever. Both passes share
-	# the same -xdev boundary (a mount below the home is in or out for BOTH,
-	# never half; a same-fs bind mount is inside either way - -xdev cuts on
-	# st_dev). Named, not just consistent: the project id hangs on the INODE,
-	# not the path - a bind pointing OUT of the home would stamp the file at
-	# its real location with the customer's id. +P is valid on directories only - on a file chattr fails with
-	# ENOTSUP and then skips the -p too (measured), so files get the bare id.
-	# Symlinks and immutable conf files refuse the ioctl; their few blocks are
-	# not worth failing a rebuild over.
+	# Subtree first, home LAST: its id+P is the done-marker the gate reads, so an
+	# interrupted run re-runs instead of reporting done forever. Both passes share
+	# the -xdev boundary; the id hangs on the INODE, not the path - a bind out of
+	# the home would stamp the file at its real location. +P is directory-only
+	# (on files chattr fails AND skips the -p), so files get the bare id; symlink
+	# and immutable-file refusals are not worth failing a rebuild over.
 	find "$home" -xdev -mindepth 1 -type d -exec chattr -p "$uid" +P {} + 2> /dev/null
 	find "$home" -xdev -mindepth 1 ! -type d -exec chattr -p "$uid" {} + 2> /dev/null
 	chattr -p "$uid" +P "$home" 2> /dev/null

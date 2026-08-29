@@ -86,9 +86,8 @@ if getent passwd "${user}-docker" > /dev/null 2>&1; then
 	$BIN/h-delete-user-docker "$user" > /dev/null 2>&1
 fi
 
-# Project quota limit reset - the uid dies with the userdel below, so it is read
-# here. Not about disk space: repquota must not list limits of dead projects, a
-# report with corpses in it stops being read (#211).
+# read before the userdel kills the uid; the limit reset below keeps repquota
+# free of dead projects - a report with corpses stops being read (#211)
 _quota_uid=$(id -u "$user" 2> /dev/null)
 
 # Deleting system user

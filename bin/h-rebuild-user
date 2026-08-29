@@ -46,8 +46,8 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Project quota (self-gated on PROJECT_QUOTA, #211); rebuild_user_conf below
-# carries the one-time recursive project-id migration for pre-arming trees.
+# project quota (self-gated, #211); rebuild_user_conf below carries the
+# one-time project-id migration for pre-arming trees
 $BIN/h-update-user-quota "$user"
 
 # Update cgroup

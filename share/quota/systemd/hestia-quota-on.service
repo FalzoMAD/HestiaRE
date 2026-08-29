@@ -5,14 +5,10 @@
 # DO NOT MODIFY THE INSTALLED COPY - it is regenerated.                   #
 #=========================================================================#
 #
-# ext4 project quota enforcement is RUNTIME state: quotaon -P arms it, nothing
-# persists it across a reboot (measured - the second-reboot case). This unit is
-# therefore permanent on every armed ext4 box. It also carries the one-time
-# pending->active flip after the arming reboot; on xfs it removes itself after
-# the flip because the prjquota mount option persists on its own.
-#
-# Fail-open like the /proc hardening unit: a failure boots normally and shows in
-# systemctl --failed; h-check-sys-smoke measures real enforcement either way.
+# Permanent on armed ext4 boxes: quotaon -P is runtime state, nothing else
+# restores enforcement after a reboot. Also carries the one-time pending->active
+# flip; on xfs it removes itself after the flip (mount option persists).
+# Fail-open: a failure boots normally, the smoke check measures enforcement.
 
 [Unit]
 Description=HestiaRE project quota enforcement

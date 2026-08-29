@@ -131,9 +131,8 @@ rebuild_user_conf() {
 		$HOMEDIR/$user/.wp-cli
 	chown root:root $HOMEDIR/$user/conf
 
-	# Project id on the home BEFORE any restore unpacks into it: everything created
-	# below inherits, so the restore path needs no recursion. For a tree that
-	# predates the arming this is the one-time recursive migration (#211).
+	# project id BEFORE any restore unpacks: everything created below inherits;
+	# for a pre-arming tree this is the one-time migration (#211)
 	# shellcheck source=/usr/local/hestia/include/quota.sh
 	declare -F quota_project_assign > /dev/null 2>&1 || source "$HESTIA/include/quota.sh"
 	quota_project_assign "$user"

@@ -770,12 +770,9 @@ check_exim_sendonly() {
 	ok "exim send-only (dnslookup router generated, loopback listeners live)"
 }
 
-# Project quota (#211): the key against MEASURED enforcement, via the same
-# quota_enforce_probe the installer used to write it - one oracle, two callers.
-# Never quotaon -pP text or rc as the oracle: it prints "on" without enforcing,
-# exits 1 in the good case, and localizes its output (all three measured).
-# pending is a named notice, never a green - "not yet verified" must not read
-# as "verified"; none is a named skip carrying the stored reason.
+# Project quota (#211): the key against measured enforcement, same probe the
+# installer wrote it from. Never quotaon -pP as oracle (prints "on" without
+# enforcing, exits 1 when good, localizes).
 check_project_quota() {
 	local state="${PROJECT_QUOTA%%:*}" reason="${PROJECT_QUOTA#*:}"
 	case "$state" in
@@ -787,9 +784,8 @@ check_project_quota() {
 			fi
 			;;
 		pending)
-			# pending:reboot is the EXPECTED state between install and its demanded
-			# reboot (this very smoke runs before it) - a FAIL there trains people
-			# to ignore fails. Any other pending reason is a stuck arming.
+			# pending:reboot is the expected state before the demanded install
+			# reboot - a FAIL there trains people to ignore fails
 			if [ "$reason" = 'reboot' ]; then
 				skip "project quota: armed, waiting for the install reboot (pending is not verified)"
 			else

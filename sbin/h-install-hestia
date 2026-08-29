@@ -223,9 +223,8 @@ EOF
 		|| echo 'LS_COLORS="$LS_COLORS:di=00;33"' >> /etc/profile
 	proc_hardening_apply
 
-	# Quota is base, not a module (#211): arm whenever the /home filesystem supports
-	# it. Must run before any customer user exists (separate-/home paths umount) -
-	# admin is created later in configure_hestia. quota_arm never aborts an install.
+	# quota is base, not a module (#211): arm whenever /home supports it; must run
+	# before any customer exists (separate-/home paths umount), never aborts
 	echo "[ * ] Arming project quota (when the filesystem supports it)..."
 	quota_arm
 

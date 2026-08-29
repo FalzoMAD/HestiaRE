@@ -4,9 +4,8 @@
 #
 # example: h-update-user-quota alice
 #
-# Applies the package DISK_QUOTA as a project quota hard limit on the user's
-# home tree (project id = uid). Tree-based, not owner-based: files written by
-# php-fpm, the docker companion or subuids all count against the customer (#211).
+# Applies the package DISK_QUOTA as a project quota hard limit on the home tree
+# (project id = uid): every writer counts against the customer, subuids included.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -37,8 +36,7 @@ is_object_valid 'user' 'USER' "$user"
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Gated here, not only in the callers: a fifth caller must inherit the safety,
-# and the installer runs h-* against a half-built box (blast-radius rule).
+# gated here, not only in the callers: a fifth caller must inherit the safety
 quota_is_active || exit 0
 quota_home_fs || exit 0
 
@@ -48,10 +46,8 @@ uid=$(id -u "$user" 2> /dev/null)
 [ -n "$uid" ] || exit 0
 quota=$(get_user_value '$DISK_QUOTA')
 
-# unlimited -> 0: the record keeps the project-wide 'unlimited' sentinel, 0 is
-# setquota's own grammar for "no limit". Hard only, soft unused (decision in
-# #211): a soft window without a delivery channel for its warning is just a
-# delayed hard limit nobody hears about.
+# record sentinel stays 'unlimited', 0 is setquota's "no limit"; hard only -
+# a soft window without a warning channel is just a delayed hard limit
 if [ "$quota" = 'unlimited' ] || [ -z "$quota" ]; then
 	setquota -P "$uid" 0 0 0 0 "$QUOTA_MNT" 2> /dev/null
 else

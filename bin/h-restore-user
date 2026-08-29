@@ -149,13 +149,12 @@ tmpdir=$(mktemp -p $BACKUP_TEMP -d) || {
 	check_result "$E_NOTEXIST" "Can't create tmp dir"
 }
 # On EVERY exit: ten of the aborts below have no rm of their own and left the unpacked members
-# behind, pam material included. ONE trap owner for the whole run - later stages add work via
-# flags, never via a second `trap ... EXIT` (which replaces silently and only in its own branch).
+# behind, pam material included. ONE trap owner - later stages add work via flags, never via a
+# second `trap ... EXIT` (replaces silently, and only in its own branch).
 quota_cap_lifted=''
 restore_cleanup() {
 	rm -rf "$tmpdir"
-	# reapply the record on every exit while the cap is lifted - an aborted restore
-	# must not leave the customer unlimited while the box reads as correct
+	# an aborted restore must not leave the customer unlimited
 	[ "$quota_cap_lifted" = 'yes' ] && "$BIN/h-update-user-quota" "$user" > /dev/null 2>&1
 }
 trap restore_cleanup EXIT
@@ -405,20 +404,18 @@ if [ "$create_user" = 'yes' ]; then
 	fi
 
 	# Creates the account with a freshly allocated uid, before anything is unpacked, so
-	# tar can resolve the archived owner name onto it. It also puts the project id on
-	# the fresh home, so everything the sections below unpack inherits it (#211).
+	# tar can resolve the archived owner name onto it - and puts the project id on the
+	# fresh home, so everything unpacked below inherits it.
 	rebuild_user_conf
 fi
 
 if quota_is_active && quota_home_fs; then
-	# XFS enforces project quota against root (ext4 does not, both measured) - a
-	# restore into a full home would die mid-run. Lift the cap for the duration;
-	# the flag routes the reapply through the one EXIT trap above.
+	# XFS enforces against root: a restore into a full home would die mid-run.
+	# Lift the cap; the flag routes the reapply through the one EXIT trap.
 	setquota -P "$(id -u "$user" 2> /dev/null)" 0 0 0 0 "$QUOTA_MNT" 2> /dev/null
 	quota_cap_lifted='yes'
 else
-	# The package field travels in the backup, the capability does not: name the
-	# loss instead of letting enforcement vanish silently on a none-box (#211).
+	# the package field travels in the backup, the capability does not: name the loss
 	_dq=$(get_user_value '$DISK_QUOTA')
 	if [ -n "$_dq" ] && [ "$_dq" != 'unlimited' ]; then
 		echo "NOTE: the package carries DISK_QUOTA=${_dq}MB but this box does not enforce it (PROJECT_QUOTA=${PROJECT_QUOTA:-unset})" | tee -a $tmpdir/restore.log
