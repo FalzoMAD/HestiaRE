@@ -63,6 +63,32 @@ customer_php_in_slice() {
 	return 1
 }
 
+# ONE reader for the configured share, range check included: the boot script and the smoke check
+# both ask here, so a value the script refuses cannot be reported anywhere as configured.
+#
+# Sets variables instead of echoing: a $(...) caller would run it in a subshell, and the raw value
+# needed for the warning would never come back.
+#   CUSTOMER_PHP_PERCENT      the effective share, always usable
+#   CUSTOMER_PHP_PERCENT_RAW  what the file actually said, only when it was refused
+# Returns 1 when the file said something else, so the caller can say so out loud.
+CUSTOMER_PHP_PERCENT_DEFAULT=75
+customer_php_percent() {
+	local raw
+	# Read, never source: an admin-edited file should not execute, and this is one scalar.
+	raw=$(sed -n 's/^[[:space:]]*CUSTOMER_PHP_CPU_PERCENT[[:space:]]*=[[:space:]]*\([0-9]\{1,4\}\)[[:space:]]*$/\1/p' \
+		/etc/hestia/limits.conf 2> /dev/null | tail -n1)
+	CUSTOMER_PHP_PERCENT_RAW=''
+	# Range-checked, not just parsed: one extra digit would otherwise read as "more machine
+	# than exists" and quietly lift the cap.
+	if [[ "$raw" =~ ^[0-9]+$ ]] && [ "$raw" -ge 10 ] && [ "$raw" -le 100 ]; then
+		CUSTOMER_PHP_PERCENT="$raw"
+		return 0
+	fi
+	CUSTOMER_PHP_PERCENT="$CUSTOMER_PHP_PERCENT_DEFAULT"
+	CUSTOMER_PHP_PERCENT_RAW="${raw:-unset}"
+	return 1
+}
+
 # The enforced value, from the cgroup the kernel actually reads. Empty means uncapped, in
 # both of its shapes: an inactive slice has no directory, and a slice whose quota was removed
 # loses the cpu controller, so cpu.max is gone rather than reading "max".

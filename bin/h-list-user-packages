@@ -40,7 +40,6 @@ json_list() {
 		printf '        "CRON_JOBS": "%s",\n' "$CRON_JOBS"
 		printf '        "DISK_QUOTA": "%s",\n' "$DISK_QUOTA"
 		printf '        "DOCKER_LIMIT":"%s",\n' "$DOCKER_LIMIT"
-		printf '        "DOCKER_LIMIT":"%s",\n' "$DOCKER_LIMIT"
 		printf '        "BANDWIDTH": "%s",\n' "$BANDWIDTH"
 		printf '        "SHELL": "%s",\n' "$SHELL"
 		printf '        "BACKUPS": "%s",\n' "$BACKUPS"
@@ -60,7 +59,7 @@ json_list() {
 # SHELL list function
 shell_list() {
 	echo "PKG   TPL   WEB   MAIL   DB   SHELL   DISK   DOCKER_LIMIT   BW"
-	echo "---   ---   ---   ---   ----   --   -----   ----   ---------   ----------------   ------------   ----------   --"
+	echo "---   ---   ---   ----   --   -----   ----   ------------   --"
 	for package in $packages; do
 		source $CONF_DIR/packages/$package
 		PACKAGE=${package/.pkg/}

@@ -22,9 +22,13 @@ opens above it.
   is a separate master and stays outside; the per-user filemanager pools are inside. The value is
   computed at every boot - systemd counts CPUQuota per core, so the share is multiplied by
   `nproc --all` and applied with `set-property --runtime`: nothing absolute is stored, and a box
-  that gains cores grows its cap. The smoke test reports the LIVE value because the boot step is
-  deliberately fail-open. Under overload the box now stays responsive and customer sites answer
-  502 instead - the intended trade, and the reason it is written down in STRUCTURE.md.
+  that gains cores grows its cap. The boot step never blocks a boot, but that is not fail-open:
+  what survives a failure is the slice's fixed 200%, barely a limit on two cores and a hard sixth
+  of a sixteen-core box - which is why the smoke test reports the LIVE value. Under overload the
+  box now stays responsive and customer sites answer 502 instead - the intended trade, and the
+  reason it is written down in STRUCTURE.md. Note for the first update of an existing box: the
+  customer php-fpm masters are restarted once, because a reload cannot move a running master into
+  the new slice.
 - **Project quota is base behaviour** (#211). The installer arms /home whenever its filesystem
   supports it - no wizard item, no panel switch. A new PROJECT_QUOTA key carries the MEASURED
   state (active / pending:reason / none:reason), written from an enforcement probe with its own

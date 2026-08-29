@@ -9,8 +9,10 @@
 # every php<v>-fpm.service.d carries the Wants=/After= pair, so no master can
 # start into an uncapped slice.
 #
-# Fail-open by design: the script always exits 0 and the slice keeps its static
-# default. A system protection must not keep the box from booting.
+# The script always exits 0: a system protection must not keep the box from booting. What
+# survives is the slice's static value, which is NOT "no limit" - it is a fixed 200% whose
+# meaning flips with the machine (see the slice unit). So a failure here is not open, it is
+# arbitrary, and h-check-sys-smoke exists to make it visible.
 
 [Unit]
 Description=HestiaRE customer PHP CPU cap

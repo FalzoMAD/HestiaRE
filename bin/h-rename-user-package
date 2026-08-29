@@ -57,8 +57,10 @@ if [ -e "$CONF_DIR/packages/$old_name.pkg" ]; then
 		mv "$CONF_DIR/packages/$old_name.sh" "$CONF_DIR/packages/$new_name.sh"
 	fi
 
-	# Update package for existing users
-	for user in $($BIN/h-list-users plain); do
+	# 'list', not 'plain': plain is a tab-separated table, so word splitting walked every
+	# FIELD of every row - package names, counters, dates - and asked h-get-user-value about
+	# each. It only looked harmless because a lookup on a non-user answers with nothing.
+	for user in $($BIN/h-list-users list); do
 		OLD_PACKAGE=$(h-get-user-value "$user" 'PACKAGE')
 		if [ "$old_name" = "$OLD_PACKAGE" ]; then
 			if [ "$mode" == "yes" ]; then

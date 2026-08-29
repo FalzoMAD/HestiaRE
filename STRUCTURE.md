@@ -555,6 +555,11 @@ a value from an arbitrary path. `hestia-customer-php-limit.service` does the ari
 applies it with `set-property --runtime`, so nothing absolute is left on disk and a box that
 gains cores grows its cap on the next boot.
 
+**A failure of the boot step is not "fail-open".** The script never blocks a boot, but what
+survives is the slice unit's fixed `CPUQuota=200%` - barely a limit on two cores, a hard sixth of
+the machine on sixteen. Never uncapped, but arbitrary; `h-check-sys-smoke` therefore reports the
+value read from `cpu.max`, not the one intended in the config file.
+
 **The failure mode moves, and that is the trade.** Under overload the box stays responsive
 and the customer sites answer 502 instead - which on first sight looks like an FPM fault,
 not a limit doing its job. Throttled requests also take longer, so they hit

@@ -13,16 +13,15 @@
 # --runtime on purpose: the computed value lands in /run, so a box that gains cores gets the
 # larger cap on its next boot instead of keeping a number derived from the old hardware.
 #
-# Always exits 0. A failure here leaves the slice on its static default; the smoke check reports
-# the live value, since a fail-open guard is invisible otherwise.
+# Always exits 0, so a broken cap never keeps the box from booting. That is not "fail-open":
+# what remains is the slice's fixed 200%, which is no limit worth the name on two cores and a
+# hard sixth of the machine on sixteen. Nothing else would notice, which is why the smoke check
+# reports the LIVE value rather than this file's intent.
 
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/limits.sh
 source "$HESTIA/include/limits.sh"
-
-CONF='/etc/hestia/limits.conf'
-DEFAULT_PERCENT=75
 
 # Wiring first. At boot no master is running yet, so a version added without its drop-in is
 # simply correct from here on - nothing to restart. Outside boot the loop below catches it.
@@ -37,18 +36,12 @@ for ver in $(customer_php_versions); do
 done
 [ -z "$wired" ] || systemctl daemon-reload
 
-# Read, never source: an admin-edited file should not execute, and this is one scalar.
-percent=''
-if [ -r "$CONF" ]; then
-	percent=$(sed -n 's/^[[:space:]]*CUSTOMER_PHP_CPU_PERCENT[[:space:]]*=[[:space:]]*\([0-9]\{1,4\}\)[[:space:]]*$/\1/p' "$CONF" | tail -n1)
+# customer_php_percent carries the range check, and the smoke check reads the same function -
+# a second parser here would report a value this one refused.
+if ! customer_php_percent; then
+	echo "WARNING: CUSTOMER_PHP_CPU_PERCENT is '$CUSTOMER_PHP_PERCENT_RAW' in /etc/hestia/limits.conf - using ${CUSTOMER_PHP_PERCENT}%" >&2
 fi
-
-# Range-checked, not just parsed: one extra digit would otherwise read as "more machine than
-# exists" and quietly lift the cap.
-if ! [[ "$percent" =~ ^[0-9]+$ ]] || [ "$percent" -lt 10 ] || [ "$percent" -gt 100 ]; then
-	echo "WARNING: CUSTOMER_PHP_CPU_PERCENT is '${percent:-unset}' in $CONF - using ${DEFAULT_PERCENT}%" >&2
-	percent=$DEFAULT_PERCENT
-fi
+percent="$CUSTOMER_PHP_PERCENT"
 
 # --all, not bare nproc: bare nproc answers with the caller's affinity mask, which would shrink
 # the cap on a box where something pinned this service.
