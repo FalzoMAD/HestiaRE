@@ -26,6 +26,11 @@ DEFAULT_PERCENT=75
 
 # Wiring first. At boot no master is running yet, so a version added without its drop-in is
 # simply correct from here on - nothing to restart. Outside boot the loop below catches it.
+#
+# One case this cannot fix within the same boot: if the drop-in was missing when systemd built
+# the boot transaction, that master carries no ordering against this unit and starts outside the
+# slice AFTER the loop below has looked. The smoke check reports it, a restart of this unit fixes
+# it, and the next boot is correct by itself (measured).
 wired=''
 for ver in $(customer_php_versions); do
 	customer_php_slice_dropin "$ver" && wired="$wired $ver"
