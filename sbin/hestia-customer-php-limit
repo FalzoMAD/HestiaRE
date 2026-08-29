@@ -1,0 +1,47 @@
+#!/bin/bash
+# info: apply the customer PHP CPU cap for this boot
+#
+# Turns the configured share of the machine into a per-core CPUQuota, because that is
+# how systemd counts it: 75% on an eight-core box is CPUQuota=600%, and taking the
+# number literally would hand every customer together three quarters of ONE core.
+#
+# --runtime on purpose: the computed value lands in /run, so a box that gains cores
+# gets the larger cap on its next boot instead of keeping a number derived from the
+# old hardware - and nothing absolute is left behind for nobody to clean up.
+#
+# Always exits 0. A failure here leaves the slice on its static default; the smoke
+# check reports the live value, since a fail-open guard is invisible otherwise.
+
+SLICE='hestia-customer-php.slice'
+CONF='/etc/hestia/limits.conf'
+DEFAULT_PERCENT=75
+
+# Read, never source: an admin-edited file should not execute, and this is one scalar.
+percent=''
+if [ -r "$CONF" ]; then
+	percent=$(sed -n 's/^[[:space:]]*CUSTOMER_PHP_CPU_PERCENT[[:space:]]*=[[:space:]]*\([0-9]\{1,4\}\)[[:space:]]*$/\1/p' "$CONF" | tail -n1)
+fi
+
+# Range-checked, not just parsed: one extra digit would otherwise read as "more machine
+# than exists" and quietly lift the cap.
+if ! [[ "$percent" =~ ^[0-9]+$ ]] || [ "$percent" -lt 10 ] || [ "$percent" -gt 100 ]; then
+	echo "WARNING: CUSTOMER_PHP_CPU_PERCENT is '${percent:-unset}' in $CONF - using ${DEFAULT_PERCENT}%" >&2
+	percent=$DEFAULT_PERCENT
+fi
+
+# --all, not bare nproc: bare nproc answers with the caller's affinity mask, which would
+# shrink the cap on a box where something pinned this service.
+cores=$(nproc --all 2> /dev/null)
+if ! [[ "$cores" =~ ^[0-9]+$ ]] || [ "$cores" -lt 1 ]; then
+	echo "WARNING: cannot read the core count - assuming 1" >&2
+	cores=1
+fi
+
+quota=$((percent * cores))
+if systemctl set-property --runtime "$SLICE" "CPUQuota=${quota}%" > /dev/null 2>&1; then
+	echo "customer PHP cap: CPUQuota=${quota}% (${percent}% of $cores cores)"
+else
+	echo "WARNING: could not cap $SLICE - it keeps the static default from its unit" >&2
+fi
+
+exit 0

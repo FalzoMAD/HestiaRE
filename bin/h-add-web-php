@@ -18,6 +18,8 @@ version=$1
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/limits.sh
+source $HESTIA/include/limits.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 #----------------------------------------------------------#
@@ -175,6 +177,11 @@ sed -i "s/disable_functions =.*/disable_functions = pcntl_alarm,pcntl_fork,pcntl
 sed -i "s/;opcache.enable=1/opcache.enable=1/g" /etc/php/$version/fpm/php.ini
 sed -i "s/;opcache.memory_consumption=128/opcache.memory_consumption=512/g" /etc/php/$version/fpm/php.ini
 sed -i "s/;opcache.max_accelerated_files=10000/opcache.max_accelerated_files=100000/g" /etc/php/$version/fpm/php.ini
+
+# Into the customer PHP slice (#212). The whole apply, not just this version's drop-in:
+# the units may not exist yet on a box updated into this, and it restarts only the masters
+# actually outside the slice - here, the one apt just started.
+customer_php_limit_apply
 
 # No per-version pool profile anymore (#591/#620): the version is the PHP_VERSION field, the
 # profile set is default/small/high. Sweep a stale one so a reinstall heals the selector too.

@@ -14,6 +14,17 @@ opens above it.
 
 ### Added
 
+- **Customer PHP has a CPU cap against the rest of the box** (#212). Every customer php-fpm master
+  runs in `hestia-customer-php.slice`, limited to `CUSTOMER_PHP_CPU_PERCENT` of the whole machine
+  (`/etc/hestia/limits.conf`, default 75, seeded once and never rewritten by an update). It is a
+  system protection, not a per-customer limit: hammered sites and runaway PHP cannot take panel,
+  mail, database and ssh with them, but customers are not separated from each other. The panel PHP
+  is a separate master and stays outside; the per-user filemanager pools are inside. The value is
+  computed at every boot - systemd counts CPUQuota per core, so the share is multiplied by
+  `nproc --all` and applied with `set-property --runtime`: nothing absolute is stored, and a box
+  that gains cores grows its cap. The smoke test reports the LIVE value because the boot step is
+  deliberately fail-open. Under overload the box now stays responsive and customer sites answer
+  502 instead - the intended trade, and the reason it is written down in STRUCTURE.md.
 - **Project quota is base behaviour** (#211). The installer arms /home whenever its filesystem
   supports it - no wizard item, no panel switch. A new PROJECT_QUOTA key carries the MEASURED
   state (active / pending:reason / none:reason), written from an enforcement probe with its own
@@ -28,6 +39,17 @@ opens above it.
   and the never-verified reboot-script path are gone; the smoke test measures real enforcement
   and flags a drifted or stuck arming by its stored reason, and h-update-sys-quota re-arms a box
   out of none:* once the named reason is fixed.
+
+### Removed
+
+- **The per-user cgroup resource limits are gone** (#212). `RESOURCES_LIMIT`, the four package
+  fields CPU_QUOTA / CPU_QUOTA_PERIOD / MEMORY_LIMIT / SWAP_LIMIT, the three `*-cgroups` commands
+  and the "Limit System Resources" panel block never limited what a hosting box needs limited:
+  `systemctl set-property` on `user-<uid>.slice` reaches the logind session (ssh, cron), while
+  php-fpm workers live in the FPM service slice and escape it entirely (upstream #4659). Nothing
+  to migrate - the switch was off by default and no box carried a persistent drop-in. The docker
+  cap (DOCKER_LIMIT on the companion slice) is untouched and does work, as do the FPM pool
+  profiles and request_terminate_timeout.
 
 ### Fixed
 

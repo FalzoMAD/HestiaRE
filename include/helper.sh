@@ -399,6 +399,15 @@ reapply_outside_tree() {
 	# idempotent, so a box already converted just gets its gid re-asserted
 	proc_hardening_apply || true
 
+	# The customer PHP cap on an existing box: the units and the drop-ins are ours, so an
+	# update installs what a fresh install would have (#212).
+	if declare -F customer_php_limit_apply > /dev/null 2>&1; then
+		customer_php_limit_apply || true
+	elif [ -f "$hestia_root/include/limits.sh" ]; then
+		# shellcheck source=/usr/local/hestia/include/limits.sh
+		source "$hestia_root/include/limits.sh" && customer_php_limit_apply || true
+	fi
+
 	# The band guard travels with the allocator (#388); existing accounts are left alone.
 	login_defs_guard || true
 }

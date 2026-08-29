@@ -25,6 +25,8 @@ source $HESTIA/include/domain.sh
 source $HESTIA/include/syshealth.sh
 # shellcheck source=/usr/local/hestia/include/quota.sh
 source $HESTIA/include/quota.sh
+# shellcheck source=/usr/local/hestia/include/limits.sh
+source $HESTIA/include/limits.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_* flags), if present
@@ -796,6 +798,42 @@ check_project_quota() {
 			skip "project quota: not enforced on this box (${PROJECT_QUOTA:-key unset}; h-update-sys-quota re-arms once the cause is fixed)"
 			;;
 	esac
+}
+
+# Customer PHP CPU cap (#212): the LIVE value, not the config file. The oneshot is
+# fail-open, so a box whose cap never got computed looks perfectly healthy otherwise.
+# Not covered here: whether the cap is the right size - a hand-set value is reported,
+# not judged.
+check_customer_php_slice() {
+	local versions uncapped='' ver percent cores per_sec
+	versions=$(customer_php_versions)
+	if [ -z "$versions" ]; then
+		skip "customer PHP cap: no customer php-fpm on this box"
+		return
+	fi
+
+	for ver in $versions; do
+		[ "$(systemctl is-active "php$ver-fpm" 2> /dev/null)" = 'active' ] || continue
+		[ "$(systemctl show -p Slice --value "php$ver-fpm" 2> /dev/null)" = "$CUSTOMER_PHP_SLICE" ] \
+			&& continue
+		uncapped="$uncapped php$ver-fpm"
+	done
+	[ -z "$uncapped" ] \
+		&& ok "customer php-fpm masters run in $CUSTOMER_PHP_SLICE" \
+		|| no "customer php-fpm outside the cap:$uncapped" "customer load can starve panel, mail and ssh; run h-update-sys-limits"
+
+	# systemd reports the cap per second of wall clock, so the core count belongs in the
+	# line: 1.5s/s on two cores is the 75% the config asked for.
+	per_sec=$(systemctl show "$CUSTOMER_PHP_SLICE" -p CPUQuotaPerSecUSec --value 2> /dev/null)
+	cores=$(nproc --all 2> /dev/null)
+	percent=$(sed -n 's/^[[:space:]]*CUSTOMER_PHP_CPU_PERCENT[[:space:]]*=[[:space:]]*\([0-9]\{1,4\}\)[[:space:]]*$/\1/p' \
+		/etc/hestia/limits.conf 2> /dev/null | tail -n1)
+	if [ -z "$per_sec" ] || [ "$per_sec" = 'infinity' ]; then
+		no "customer PHP cap not applied (CPUQuota=${per_sec:-unset})" \
+			"the boot oneshot is fail-open - check systemctl status $CUSTOMER_PHP_LIMIT_UNIT"
+	else
+		ok "customer PHP cap live: $per_sec per second on ${cores:-?} cores (configured ${percent:-default}%)"
+	fi
 }
 
 # The curated CLI conf.d is a hand-kept list against moving code (#193 found gettext
@@ -1755,6 +1793,7 @@ check_http "https://127.0.0.1:${BACKEND_PORT:-8083}/login/" "panel login page"
 # invalid sudoers → no privileged panel action works
 check_sudoers /etc/sudoers.d/hestia "hestia grant"
 check_project_quota
+check_customer_php_slice
 
 # --- Configured subsystems (derived from *_SYSTEM) ---
 echo "-- services --"

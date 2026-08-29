@@ -756,6 +756,22 @@
         "sbin/h-install-hestia"
       ]
     },
+    "customer_php_limit": {
+      "description": "Customer PHP CPU cap (#212): all customer php-fpm masters run in hestia-customer-php.slice via a per-version drop-in (/etc/systemd/system/php<v>-fpm.service.d/hestia-slice.conf, Wants=+After= the oneshot so no master starts uncapped). System protection, not a per-customer limit - it caps the customers together against panel, mail, database and ssh. The panel PHP is its own master (hestia-php.service, /etc/php/hestia) and stays outside; the fm-<user> filemanager pools live in the customer master and are inside. /etc/hestia/limits.conf carries CUSTOMER_PHP_CPU_PERCENT (share of the WHOLE machine, 10-100, seeded once and never rewritten); hestia-customer-php-limit.service multiplies it by nproc --all at every boot because systemd counts CPUQuota per core, and applies it with set-property --runtime so nothing absolute is stored and a box that gains cores grows its cap. Fail-open: the slice unit carries a static 200% net and the boot script always exits 0, so h-check-sys-smoke check_customer_php_slice reports the LIVE value. Replaced the cgroup switch RESOURCES_LIMIT, which set properties on user-<uid>.slice that php-fpm workers never enter.",
+      "entry_points": [
+        "include/limits.sh",
+        "sbin/hestia-customer-php-limit",
+        "sbin/h-update-sys-limits"
+      ],
+      "related_files": [
+        "share/limits/systemd/hestia-customer-php.slice",
+        "share/limits/systemd/hestia-customer-php-limit.service",
+        "share/limits/limits.conf",
+        "bin/h-add-web-php",
+        "bin/h-delete-web-php",
+        "sbin/h-install-hestia"
+      ]
+    },
     "fail2ban": {
       "description": "Brute-force protection, wired as a CLIENT of the hestia firewall rather than as an independent writer: share/fail2ban/action.d/hestia.conf maps actionstart/stop/ban/unban onto h-add/delete-firewall-chain and h-add/delete-firewall-ban, so bans land in banlist.conf AND in the live fail2ban-<CHAIN> chain and therefore survive a full h-update-firewall rebuild. That client model is the reason to keep owning the ban action rather than adopting fail2ban's native nftables banaction, which would bypass the banlist, the panel and rebuild-survival alike.",
       "config_install": "fail2ban_apply in include/fail2ban.sh is the single implementation of \"a configured fail2ban\", shared by the installer and (later) the addon commands. It copies the WHOLE share/fail2ban tree through a staging dir: enumerating the files individually is what once left out action.d/hestia.conf and made every jail using action = hestia[...] unstartable with smoke still green (D1, fixed in #502). Our jails live in jail.d/hestia.local, never in jail.local, which is left to the admin - fail2ban reads jail.conf -> jail.d/*.conf -> jail.local -> jail.d/*.local, so ours is read last and wins. The distro [sshd] jail is disabled from our own config rather than by deleting jail.d/defaults-debian.conf: that is a dpkg conffile, so rm -f is undone by the next package update.",
