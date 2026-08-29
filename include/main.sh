@@ -1805,35 +1805,6 @@ is_cron_format_valid() {
 	fi
 }
 
-# Validate CPU Quota:
-is_valid_cpu_quota() {
-	local cpu_quota="$1"
-	if [[ ! "$cpu_quota" =~ ^[1-9][0-9]*%$ ]]; then
-		check_result "$E_INVALID" "Invalid CPU Quota format: $cpu_quota"
-	fi
-}
-
-# Validate CPU Quota Period:
-is_valid_cpu_quota_period() {
-	if [[ ! "$1" =~ ^[0-9]+(ms|s)$ ]]; then
-		check_result "$E_INVALID" "Invalid CPU Quota Period format :: $1"
-	fi
-}
-
-# Validate Memory Size:
-is_valid_memory_size() {
-	if [[ ! "$1" =~ ^[0-9]+[KMGTK]?$ ]]; then
-		check_result "$E_INVALID" "Invalid Memory Size format :: $1"
-	fi
-}
-
-# Validate Swap Size:
-is_valid_swap_size() {
-	if [[ ! "$1" =~ ^[0-9]+[KMGTK]?$ ]]; then
-		check_result "$E_INVALID" "Invalid Swap Size format :: $1"
-	fi
-}
-
 is_object_name_format_valid() {
 	if ! [[ "$1" =~ ^[-\ ._[:alnum:]]{0,50}$ ]]; then
 		check_result "$E_INVALID" "invalid $2 format :: $1"

@@ -310,7 +310,6 @@ seed_hestia_etc() {
 	_wcv "CRON_SYSTEM" "cron"
 	# capability state, not a switch (#211): quota_arm overwrites it from measurement
 	_wcv "PROJECT_QUOTA" "none:unprobed"
-	_wcv "RESOURCES_LIMIT" "no"
 	_wcv "BACKUP_SYSTEM" "local"
 	_wcv "BACKUP_GZIP" "3"
 	_wcv "BACKUP_MODE" "zstd"
