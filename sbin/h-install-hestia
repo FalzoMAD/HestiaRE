@@ -257,24 +257,24 @@ install_panel() {
 	panel_php_pkgs="php${PHP_VER}-cli php${PHP_VER}-fpm php${PHP_VER}-mysql php${PHP_VER}-curl \
 php${PHP_VER}-zip php${PHP_VER}-gmp php${PHP_VER}-mbstring php${PHP_VER}-opcache php${PHP_VER}-xml \
 php${PHP_VER}-gd php${PHP_VER}-bz2 php${PHP_VER}-pgsql php${PHP_VER}-intl php${PHP_VER}-exif php${PHP_VER}-sqlite3"
-	if [ "${COMPONENT_PHP_MODE:-sury_multi}" = "os_single" ]; then
-		# the OS repos do not carry every Sury name (resolute has no -opcache package);
-		# tolerated names drop loudly, anything else failing means apt cannot answer
-		# shellcheck disable=SC2086
-		if ! panel_php_pkgs=$(filter_installable_php_pkgs "opcache:8.5 exif" $panel_php_pkgs); then
-			exit 1
-		fi
-		case " $panel_php_pkgs " in *" php${PHP_VER}-cli "*) ;; *)
-			echo "ERROR: php${PHP_VER}-cli is not installable from the OS repos" >&2
-			exit 1
-			;;
-		esac
-		case " $panel_php_pkgs " in *" php${PHP_VER}-fpm "*) ;; *)
-			echo "ERROR: php${PHP_VER}-fpm is not installable from the OS repos" >&2
-			exit 1
-			;;
-		esac
+	# Unconditional, not os_single-only (#857): from 8.5 on NOBODY ships a separate
+	# -opcache (it moved into core), so the raw list killed every sury-mode install
+	# on a box whose OS default is 8.5. The filter keeps whatever the configured
+	# repos can answer, drops tolerated names loudly, and names any other absence.
+	# shellcheck disable=SC2086
+	if ! panel_php_pkgs=$(filter_installable_php_pkgs "opcache:8.5 exif" $panel_php_pkgs); then
+		exit 1
 	fi
+	case " $panel_php_pkgs " in *" php${PHP_VER}-cli "*) ;; *)
+		echo "ERROR: php${PHP_VER}-cli is not installable from the configured repos" >&2
+		exit 1
+		;;
+	esac
+	case " $panel_php_pkgs " in *" php${PHP_VER}-fpm "*) ;; *)
+		echo "ERROR: php${PHP_VER}-fpm is not installable from the configured repos" >&2
+		exit 1
+		;;
+	esac
 	# shellcheck disable=SC2086
 	hestia_apt -y install \
 		caddy \
@@ -371,12 +371,11 @@ install_web() {
 php${PHP_VER}-cli php${PHP_VER}-common php${PHP_VER}-gd php${PHP_VER}-imagick php${PHP_VER}-imap \
 php${PHP_VER}-intl php${PHP_VER}-ldap php${PHP_VER}-pgsql php${PHP_VER}-pspell \
 php${PHP_VER}-readline php${PHP_VER}-xml"
-	if [ "${COMPONENT_PHP_MODE:-sury_multi}" = "os_single" ]; then
-		# imap has no OS package from 8.4 on - drop what the OS never shipped, loudly
-		# shellcheck disable=SC2086
-		if ! web_php_pkgs=$(filter_installable_php_pkgs "imap:8.4 opcache:8.5 exif" $web_php_pkgs); then
-			exit 1
-		fi
+	# Unconditional for the same reason as the panel stage (#857): 8.4+ unbundled
+	# imap, 8.5 folded opcache into core - the raw list is only valid for older PHP.
+	# shellcheck disable=SC2086
+	if ! web_php_pkgs=$(filter_installable_php_pkgs "imap:8.4 opcache:8.5 exif" $web_php_pkgs); then
+		exit 1
 	fi
 	# shellcheck disable=SC2086
 	hestia_apt -y install \

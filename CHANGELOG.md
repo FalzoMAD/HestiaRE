@@ -12,6 +12,13 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **Every Sury-mode install died on a PHP-8.5 box** (#857). The PHP package filter ran only in
+  the os_single branch, so the raw list went to apt in sury mode - and php8.5-opcache exists in
+  no repo any more (opcache moved into core with 8.5). The filter now runs unconditionally in
+  both stages: it keeps whatever the configured repos answer and names every other absence.
+
 ### Changed
 
 - **mailonly no longer offers customer web** (#193). The preset installs the new mailfront model:
