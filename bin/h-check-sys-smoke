@@ -830,7 +830,11 @@ check_customer_php_slice() {
 	quota=${cpu_max%% *}
 	period=${cpu_max##* }
 	if [ -z "$cpu_max" ]; then
-		no "customer PHP cap has no live cgroup" "no master is in $CUSTOMER_PHP_SLICE - nothing is capped"
+		# Measured: with the quota gone systemd drops the cpu controller from the subtree, so
+		# cpu.max is missing rather than "max" - and an inactive slice has no directory at all.
+		# Both mean the same thing here, and neither says anything about membership.
+		no "customer PHP slice carries no CPU limit (cpu.max absent)" \
+			"nothing is capped - run h-update-sys-limits, then check systemctl status $CUSTOMER_PHP_LIMIT_UNIT"
 	elif [ "$quota" = 'max' ]; then
 		no "customer PHP cap not applied (cpu.max: $cpu_max)" \
 			"the boot oneshot is fail-open - check systemctl status $CUSTOMER_PHP_LIMIT_UNIT"

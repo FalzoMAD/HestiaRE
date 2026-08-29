@@ -63,8 +63,9 @@ customer_php_in_slice() {
 	return 1
 }
 
-# The enforced value, from the cgroup the kernel actually reads. Empty while no master is
-# in the slice - an inactive slice has no cgroup directory.
+# The enforced value, from the cgroup the kernel actually reads. Empty means uncapped, in
+# both of its shapes: an inactive slice has no directory, and a slice whose quota was removed
+# loses the cpu controller, so cpu.max is gone rather than reading "max".
 customer_php_cpu_max() {
 	local cg
 	cg=$(systemctl show -p ControlGroup --value "$CUSTOMER_PHP_SLICE" 2> /dev/null)
