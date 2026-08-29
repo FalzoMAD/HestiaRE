@@ -92,6 +92,9 @@ csv_list() {
 	echo -n "DISK_QUOTA,"
 	echo "DOCKER_LIMIT,BANDWIDTH,SHELL,BACKUPS,TIME,DATE"
 	for package in $packages; do
+		# Inherited: this loop never read the package, so every column but the name came out
+		# empty - and SHELL printed the caller's own environment variable as if it were data.
+		source $CONF_DIR/packages/$package
 		PACKAGE=${package/.pkg/}
 		echo -n "$PACKAGE,$WEB_TEMPLATE,$PROXY_TEMPLATE,"
 		echo -n "$WEB_DOMAINS,$WEB_ALIASES,"
