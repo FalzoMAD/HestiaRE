@@ -12,6 +12,23 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **Project quota is base behaviour** (#211). The installer arms /home whenever its filesystem
+  supports it - no wizard item, no panel switch. A new PROJECT_QUOTA key carries the MEASURED
+  state (active / pending:reason / none:reason), written from an enforcement probe with its own
+  positive control, never from classification. The package DISK_QUOTA value becomes a hard
+  project-quota limit on the customer's home tree (project id = uid), so files written by
+  php-fpm, the docker companion or subuids all count against the customer - the #389 companion
+  hole is closed by the mechanism, not worked around. ext4 gets a persistent quotaon boot unit
+  (enforcement is runtime state) and, on a root fs, a one-shot initramfs hook across the reboot
+  the installer demands anyway; xfs gets the mount option via fstab or GRUB rootflags. On a box
+  without the capability the panel hides the field and every applier is inert; a restore onto
+  such a box names the enforcement loss. The old admin toggle, h-add-sys-quota/h-delete-sys-quota
+  and the never-verified reboot-script path are gone; the smoke test measures real enforcement
+  and flags a drifted or stuck arming by its stored reason, and h-update-sys-quota re-arms a box
+  out of none:* once the named reason is fixed.
+
 ### Fixed
 
 - **Every Sury-mode install died on a PHP-8.5 box** (#857). The PHP package filter ran only in

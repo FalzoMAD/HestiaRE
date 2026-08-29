@@ -4,7 +4,8 @@
 #
 # example: h-update-user-quota alice
 #
-# The functions upates disk quota for specific user
+# Applies the package DISK_QUOTA as a project quota hard limit on the home tree
+# (project id = uid): every writer counts against the customer, subuids included.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -18,6 +19,8 @@ user=$1
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/quota.sh
+source $HESTIA/include/quota.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -33,20 +36,22 @@ is_object_valid 'user' 'USER' "$user"
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Update disk quota
-# Hard quota quals package value. Soft quota equals 90% of package value.
+# gated here, not only in the callers: a fifth caller must inherit the safety
+quota_is_active || exit 0
+quota_home_fs || exit 0
+
+quota_project_assign "$user"
+
+uid=$(id -u "$user" 2> /dev/null)
+[ -n "$uid" ] || exit 0
 quota=$(get_user_value '$DISK_QUOTA')
-soft=$(echo "$quota * 1024" | bc | cut -f 1 -d .)
-hard=$(echo "$quota * 1024" | bc | cut -f 1 -d .)
 
-# Searching home mount point
-mnt=$(df -P /home | awk '{print $6}' | tail -n1)
-
-# Checking unlimited quota
-if [ "$quota" = 'unlimited' ]; then
-	setquota $user 0 0 0 0 $mnt 2> /dev/null
+# record sentinel stays 'unlimited', 0 is setquota's "no limit"; hard only -
+# a soft window without a warning channel is just a delayed hard limit
+if [ "$quota" = 'unlimited' ] || [ -z "$quota" ]; then
+	setquota -P "$uid" 0 0 0 0 "$QUOTA_MNT" 2> /dev/null
 else
-	setquota $user $soft $hard 0 0 $mnt 2> /dev/null
+	setquota -P "$uid" 0 $((quota * 1024)) 0 0 "$QUOTA_MNT" 2> /dev/null
 fi
 
 #----------------------------------------------------------#

@@ -40,6 +40,8 @@ $offer_backend_template = !empty($_SESSION["WEB_BACKEND"]) && !empty($backend_te
 $offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
 $offer_resources = $_SESSION["RESOURCES_LIMIT"] == "yes";
 $offer_docker_limit = !empty($_SESSION["DOCKER_SYSTEM"]);
+// enforcement capability, not a switch (#211): pending/none boxes hide the control
+$offer_quota = ($_SESSION["PROJECT_QUOTA"] ?? "") == "active";
 
 // Check POST request
 if (!empty($_POST["ok"])) {
@@ -86,7 +88,7 @@ if (!empty($_POST["ok"])) {
 	if (!isset($_POST["v_backups_mode"])) {
 		$errors[] = _("Backup Mode");
 	}
-	if (!isset($_POST["v_disk_quota"])) {
+	if ($offer_quota && !isset($_POST["v_disk_quota"])) {
 		$errors[] = _("Quota");
 	}
 	if (!isset($_POST["v_bandwidth"])) {
@@ -138,7 +140,8 @@ if (!empty($_POST["ok"])) {
 		$v_cron_jobs = quoteshellarg($_POST["v_cron_jobs"]);
 		$v_backups = quoteshellarg($_POST["v_backups"]);
 		$v_backups_mode = quoteshellarg($_POST["v_backups_mode"]);
-		$v_disk_quota = quoteshellarg($_POST["v_disk_quota"]);
+		// Only rendered while the box enforces (#211); an unoffered field keeps the default
+		$v_disk_quota = quoteshellarg(post_or_keep("v_disk_quota", $offer_quota, "unlimited"));
 		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 		$v_ratelimit = quoteshellarg($_POST["v_ratelimit"]);
 

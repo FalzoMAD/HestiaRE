@@ -1,0 +1,11 @@
+#!/bin/bash
+# Boot-time project quota apply (#211): quotaon -P on ext4 plus the one-time
+# pending->active flip; design in include/quota.sh.
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/main.sh
+source "$HESTIA/include/main.sh"
+# shellcheck source=/usr/local/hestia/include/quota.sh
+source "$HESTIA/include/quota.sh"
+source_conf "$HESTIA/conf/hestia.conf"
+quota_boot_apply
+exit 0

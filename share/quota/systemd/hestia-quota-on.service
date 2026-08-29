@@ -1,0 +1,24 @@
+#=========================================================================#
+# HestiaRE - project quota enforcement at boot (#211)                     #
+#                                                                         #
+# Installed verbatim by quota_install_unit (include/quota.sh).            #
+# DO NOT MODIFY THE INSTALLED COPY - it is regenerated.                   #
+#=========================================================================#
+#
+# Permanent on armed ext4 boxes: quotaon -P is runtime state, nothing else
+# restores enforcement after a reboot. Also carries the one-time pending->active
+# flip; on xfs it removes itself after the flip (mount option persists).
+# Fail-open: a failure boots normally, the smoke check measures enforcement.
+
+[Unit]
+Description=HestiaRE project quota enforcement
+After=local-fs.target
+ConditionPathExists=/etc/hestia/hestia.env
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/hestia/sbin/hestia-quota-boot
+
+[Install]
+WantedBy=multi-user.target

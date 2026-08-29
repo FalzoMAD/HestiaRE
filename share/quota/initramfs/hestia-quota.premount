@@ -1,0 +1,50 @@
+#!/bin/sh
+# HestiaRE (#211) one-shot: set the ext4 quota/project features BEFORE the root
+# is mounted - the only possible moment. Never blocks the boot: every path exits
+# 0 and leaves its reason in /run/hestia-quota-arm.status for the boot unit.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+
+STATUS=/run/hestia-quota-arm.status
+say() { echo "$1" > "$STATUS" 2> /dev/null || true; }
+
+root=
+for x in $(cat /proc/cmdline); do
+	case "$x" in root=*) root="${x#root=}" ;; esac
+done
+case "$root" in
+	UUID=*) dev="/dev/disk/by-uuid/${root#UUID=}" ;;
+	LABEL=*) dev="/dev/disk/by-label/${root#LABEL=}" ;;
+	*) dev="$root" ;;
+esac
+dev="$(readlink -f "$dev" 2> /dev/null || echo "$dev")"
+if [ ! -b "$dev" ]; then
+	say "root-device-not-found:$root"
+	exit 0
+fi
+if ! command -v tune2fs > /dev/null 2>&1; then
+	say "tune2fs-missing-in-initramfs"
+	exit 0
+fi
+if tune2fs -l "$dev" 2> /dev/null | grep -q '^Filesystem features:.*project'; then
+	say "ok:already-armed"
+	exit 0
+fi
+# fsck gate: tune2fs on a dirty fs is the one way this hook could do damage
+e2fsck -p "$dev" > /dev/null 2>&1
+rc=$?
+if [ "$rc" -gt 1 ]; then
+	say "e2fsck-rc$rc"
+	exit 0
+fi
+if tune2fs -O quota,project "$dev" > /dev/null 2>&1; then
+	say "ok:armed"
+else
+	say "tune2fs-failed"
+fi
+exit 0

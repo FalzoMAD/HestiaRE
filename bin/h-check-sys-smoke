@@ -23,6 +23,8 @@ source $HESTIA/include/fail2ban.sh
 source $HESTIA/include/domain.sh
 # shellcheck source=/usr/local/hestia/include/syshealth.sh
 source $HESTIA/include/syshealth.sh
+# shellcheck source=/usr/local/hestia/include/quota.sh
+source $HESTIA/include/quota.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_* flags), if present
@@ -766,6 +768,34 @@ check_exim_sendonly() {
 		return
 	fi
 	ok "exim send-only (dnslookup router generated, loopback listeners live)"
+}
+
+# Project quota (#211): the key against measured enforcement, same probe the
+# installer wrote it from. Never quotaon -pP as oracle (prints "on" without
+# enforcing, exits 1 when good, localizes).
+check_project_quota() {
+	local state="${PROJECT_QUOTA%%:*}" reason="${PROJECT_QUOTA#*:}"
+	case "$state" in
+		active)
+			if quota_home_fs && quota_enforce_probe "$QUOTA_MNT"; then
+				ok "project quota enforcing on ${QUOTA_MNT:-/home} (probe with positive control)"
+			else
+				no "project quota" "key says active but the probe failed: ${QUOTA_PROBE_REASON:-mount unresolved} - enforcement drifted (fstab/GRUB edit, migration?)"
+			fi
+			;;
+		pending)
+			# pending:reboot is the expected state before the demanded install
+			# reboot - a FAIL there trains people to ignore fails
+			if [ "$reason" = 'reboot' ]; then
+				skip "project quota: armed, waiting for the install reboot (pending is not verified)"
+			else
+				no "project quota stuck pending" "arming failed: ${reason} - see /run/hestia-quota-arm.status; h-update-sys-quota re-arms once the cause is fixed"
+			fi
+			;;
+		*)
+			skip "project quota: not enforced on this box (${PROJECT_QUOTA:-key unset}; h-update-sys-quota re-arms once the cause is fixed)"
+			;;
+	esac
 }
 
 # The curated CLI conf.d is a hand-kept list against moving code (#193 found gettext
@@ -1724,6 +1754,7 @@ check_port "${BACKEND_PORT:-8083}" "panel"
 check_http "https://127.0.0.1:${BACKEND_PORT:-8083}/login/" "panel login page"
 # invalid sudoers → no privileged panel action works
 check_sudoers /etc/sudoers.d/hestia "hestia grant"
+check_project_quota
 
 # --- Configured subsystems (derived from *_SYSTEM) ---
 echo "-- services --"

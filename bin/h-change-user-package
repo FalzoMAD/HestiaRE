@@ -112,11 +112,9 @@ if [ -x "$CONF_DIR/packages/$package.sh" ]; then
 	$CONF_DIR/packages/$package.sh "$user" "$CONTACT" "$NAME"
 fi
 
-# Update disk quota
+# Project quota (self-gated on PROJECT_QUOTA, #211)
 source $HESTIA/conf/hestia.conf
-if [ "$DISK_QUOTA" = 'yes' ]; then
-	$BIN/h-update-user-quota "$user"
-fi
+$BIN/h-update-user-quota "$user"
 
 # Update cgroup
 if [ "$RESOURCES_LIMIT" = 'yes' ]; then

@@ -70,6 +70,8 @@ source /etc/hestia/hestia.env # sets HESTIA
 source "$HESTIA/include/main.sh" # source_conf hestia.conf, BIN, dirs, error codes, user
 # shellcheck source=/usr/local/hestia/include/helper.sh
 source "$HESTIA/include/helper.sh" # hestia_apt, load_os_profile, seed_hestia_etc
+# shellcheck source=/usr/local/hestia/include/quota.sh
+source "$HESTIA/include/quota.sh" # quota_arm (#211)
 # shellcheck source=/usr/local/hestia/include/fail2ban.sh
 source "$HESTIA/include/fail2ban.sh" # fail2ban_apply
 # shellcheck source=/usr/local/hestia/include/web-model.sh
@@ -220,6 +222,11 @@ EOF
 	grep -q 'LS_COLORS="$LS_COLORS:di=00;33"' /etc/profile \
 		|| echo 'LS_COLORS="$LS_COLORS:di=00;33"' >> /etc/profile
 	proc_hardening_apply
+
+	# quota is base, not a module (#211): arm whenever /home supports it; must run
+	# before any customer exists (separate-/home paths umount), never aborts
+	echo "[ * ] Arming project quota (when the filesystem supports it)..."
+	quota_arm
 
 	# DH params in the base stage: nginx and dovecot both fatal without /etc/ssl/dhparam.pem,
 	# so it must exist before any TLS service starts. Ship the curated file; regenerate only as a fallback.
