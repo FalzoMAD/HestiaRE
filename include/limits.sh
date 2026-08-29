@@ -41,7 +41,7 @@ customer_php_slice_dropin() {
 	[ -n "$version" ] || return 1
 	mkdir -p "$dir" || return 1
 	cat > "$dir/$CUSTOMER_PHP_DROPIN" <<- DROPIN
-		# Written by customer_php_limit_apply (include/limits.sh). Do not edit.
+		# Written by sbin/hestia-customer-php-limit on every run. Do not edit.
 		[Unit]
 		Wants=$CUSTOMER_PHP_LIMIT_UNIT
 		After=$CUSTOMER_PHP_LIMIT_UNIT
