@@ -960,9 +960,7 @@ configure_hestia() {
 	chmod 600 /var/spool/cron/crontabs/hestia
 	chown hestia:hestia /var/spool/cron/crontabs/hestia
 	# no auto-update cron: HestiaRE updates via the release tarball, not apt/git
-	# Not swallowed (#730): a panel port the operator chose and that silently does not take
-	# leaves the firewall open where nothing listens. The wizard already refused the known
-	# collisions, so a failure here is unexpected and has to be readable.
+	# Not swallowed (#730): a port that silently does not take leaves the firewall open.
 	if ! _port_out=$("$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" 2>&1); then
 		echo "[ ! ] Panel port ${HESTIA_PANEL_PORT:-8083} NOT applied: ${_port_out:-no output}"
 		echo "[ ! ] The panel stays on $(sed -n 's|^[[:space:]]*https\?://:\([0-9]*\).*|\1|p' /etc/caddy/hestia.conf 2> /dev/null | head -n1). Fix the cause, then: h-change-sys-port ${HESTIA_PANEL_PORT:-8083}"

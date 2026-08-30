@@ -841,9 +841,7 @@ check_project_quota() {
 # else would notice a cap that never got computed.
 #
 # Not covered: whether the cap is the right size - a hand-set value is reported, not judged.
-# Panel port (#730): the site the panel actually listens on against the value everything
-# else follows (firewall rule, phpMyAdmin proxy, password plugins). They drifted apart for
-# every port but 8083, because the mover still wrote the nginx.conf Caddy replaced.
+# Panel port (#730): the site it listens on against the value the firewall and proxies follow.
 check_panel_port() {
 	local want="${BACKEND_PORT:-8083}" live owner
 	local n
@@ -853,9 +851,7 @@ check_panel_port() {
 			"the derivation broke - every port would now pass validation unchecked"
 		return
 	fi
-	# The count, without a verdict. An empty scan refuses, but between that and empty sits every
-	# intermediate state: an exclusion that eats too much takes ports out of the set and nothing
-	# turns red. A number in the log makes a drop visible without anyone maintaining an expectation.
+	# The count, without a verdict: an exclusion that eats too much shrinks the set silently.
 	ok "reserved port set: $n ports derived from the shipped configs"
 	if owner=$(reserved_port_owner "$want"); then
 		no "panel port $want is reserved for $owner" "two services want the same port; h-change-sys-port <free port>"

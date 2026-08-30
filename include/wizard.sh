@@ -244,8 +244,7 @@ _wt_checklist() {
 # Pre-questions (before preset, always asked)
 # ════════════════════════════════════════════════════════════
 
-# The panel port is refused HERE, before the first write: a port that silently does not
-# take is worse than an abort, and by installer time the box is already half built (#730).
+# Refused HERE, before the first write: by installer time the box is already half built (#730).
 fn_check_panel_port() {
 	local port="$1" reason holder current=''
 	if ! declare -F panel_port_refusal > /dev/null; then
@@ -256,9 +255,7 @@ fn_check_panel_port() {
 		echo "ERROR: Panel port $port: $reason." >&2
 		exit 1
 	fi
-	# A standalone re-run on a live box must not refuse the panel its own port. hestia.conf
-	# lives one level down, under $CONF_DIR/conf - the flat path exists nowhere and read as
-	# "no panel installed", so the live check refused the box its own running listener.
+	# A re-run must not refuse the panel its own port; hestia.conf sits under $CONF_DIR/conf.
 	if [ -f "$CONF_DIR/conf/hestia.conf" ]; then
 		current=$(sed -n "s/^BACKEND_PORT='\\([0-9]*\\)'.*/\\1/p" "$CONF_DIR/conf/hestia.conf" | head -n1)
 	fi
