@@ -122,18 +122,25 @@ for db in "${databases[@]}"; do
 		# The name this loop is on, not the argument the command was called with: $database holds
 		# the whole DATABASE argument, which may be a comma list, while $db is the one being
 		# restored. They coincide for a single database, which is why it never showed.
+		import_rc=0
 		case $TYPE in
 			mysql)
 				delete_mysql_database "$db"
 				rebuild_mysql_database
-				import_mysql_database $database_dump
+				import_mysql_database $database_dump || import_rc=$?
 				;;
 			pgsql)
 				delete_pgsql_database "$db"
 				rebuild_pgsql_database
-				import_pgsql_database $database_dump
+				import_pgsql_database $database_dump || import_rc=$?
 				;;
 		esac
+		# The client writes its own output to /dev/null, so the exit code is the only signal there is.
+		# Ends the run instead of collecting failures the way h-restore-user does, deliberately: a
+		# missing dump for one name of a comma list already aborts here, and one command cannot hold
+		# two policies. The message says what the rest of the list did not get.
+		[ "$import_rc" -eq 0 ] || check_result "$E_DB" \
+			"the dump for $db was rejected (client exit $import_rc) - $db is empty, anything after it in the list was not restored"
 	fi
 done
 

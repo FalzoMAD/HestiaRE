@@ -56,6 +56,26 @@ opens above it.
 
 ### Fixed
 
+- **A rejected database import counted as a successful one everywhere** (#880). The import helpers
+  send their client's output to `/dev/null` and hand back its exit code, and no caller looked at it.
+  `h-change-database-owner` was the worst of the three: it deleted the dump and then the source
+  database without ever asking whether the import had worked, so a failure lost both copies and
+  still reported success. It now hands the source back, removes the half-built target and keeps the
+  dump only where the source could not be handed back, naming where it is. The command also gained
+  the cleanup trap its siblings already had: it was one of the two that removed their temporary dump
+  directory on the straight-line path only, so `/backup` could keep a `tmp.*` directory for good. `h-restore-user` reports the database in the summary of parts that did
+  not come back - the mechanism was there, the import was the one thing not wired into it, so a
+  customer got an empty schema and nobody was told. `h-restore-database-restic` fails with `E_DB`,
+  matching the rest of that file. The dump direction has checked itself all along (`mysql_dump`,
+  `psql_dump`); only the import side never did.
+
+- **An owner change could create a database record no command could remove** (#880). The new
+  database and dbuser names are derived from the new owner's name and were never revalidated, so a
+  longer owner pushed them past the length limit the validators enforce - `h-change-database-owner`
+  wrote the record, and `h-delete-database` then refused it for exactly the same reason. Measured
+  on a real move: the source database was deleted, the target never created, and the run reported
+  success. Both derived names are now validated before anything is touched.
+
 - **A failed database import no longer reports success** (#877). `h-import-database` never looked
   at the exit code of the client it invokes, and that client sends its own output to `/dev/null` -
   so a dump the server rejected ended in an `OK` log line over an empty database. An unrecognised

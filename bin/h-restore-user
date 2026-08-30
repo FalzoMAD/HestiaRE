@@ -1202,16 +1202,23 @@ if [ "$db" != 'no' ] && [ -n "$DB_SYSTEM" ]; then
 			echo "Warning!: $target_db was not restored - it is not a database of $user" | tee -a $tmpdir/restore.log
 			restore_failures="$restore_failures$(printf '\n  database %s (refused: not a database of %s)' "$target_db" "$user")"
 		else
+			import_rc=0
 			case $TYPE in
 				mysql)
 					rebuild_mysql_database
-					import_mysql_database $database_dump
+					import_mysql_database $database_dump || import_rc=$?
 					;;
 				pgsql)
 					rebuild_pgsql_database
-					import_pgsql_database $database_dump
+					import_pgsql_database $database_dump || import_rc=$?
 					;;
 			esac
+			# The client writes its own output to /dev/null, so the exit code is the only signal
+			# there is - unchecked, a rejected dump left an empty schema that counted as restored.
+			if [ "$import_rc" -ne 0 ]; then
+				echo "Warning!: $target_db - the dump was not imported" | tee -a $tmpdir/restore.log
+				restore_failures="$restore_failures$(printf '\n  database %s (the dump was rejected - the database is empty or incomplete)' "$target_db")"
+			fi
 			# Rows back, nothing able to connect: a degraded result, not a line to find in the log
 			# later. Only the fresh-host case reaches here - where a password was kept it stays a
 			# warning.
