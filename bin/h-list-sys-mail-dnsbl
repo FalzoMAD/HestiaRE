@@ -63,7 +63,7 @@ case $format in
 	json) json_list ;;
 	plain) plain_list ;;
 	shell) shell_list ;;
-	*) check_args '1' '0' '[FORMAT]' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#
