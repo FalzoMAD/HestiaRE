@@ -67,6 +67,12 @@ fi
 
 # Check if database name is uniqe
 new_db=$(echo "$database" | sed "s/^${owner}_/${usersmall}_/")
+new_dbuser=$(echo "$DBUSER" | sed "s/^${owner}_/${usersmall}_/")
+# A longer owner name makes both derived names longer, and nothing re-validated them: the move wrote
+# a record over the length limit that h-delete-database then refused for the same reason - an object
+# no command could remove. Measured, and it took the source database with it.
+is_database_format_valid "$new_db" 'database'
+is_dbuser_format_valid "$new_dbuser" 'dbuser'
 check_db=$(grep -F "DB='$new_db'" $CONF_DIR/users/$user/db.conf)
 if [ -n "$check_db" ]; then
 	echo "Error: $new_db database exists"
@@ -78,8 +84,10 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Creating temporary directory
+# Creating temporary directory. One owner for the cleanup, so no exit path can litter $BACKUP with a
+# dump directory - the refusals above, a failing dump, and the rollback below all leave through it.
 tmpdir=$(mktemp -p $BACKUP -d "tmp.$database.XXXXXXXXXX")
+trap 'rm -rf "$tmpdir"' EXIT
 
 # Suspend database
 $BIN/h-suspend-database $owner $database > /dev/null 2>&1
@@ -103,14 +111,38 @@ $BIN/h-unsuspend-database "$user" "$new_db" > /dev/null 2>&1
 # Rebuild databases
 $BIN/h-rebuild-databases "$user"
 
-# Import dump
+# Import dump. Unchecked, the two steps below deleted the dump and then the source database, so a
+# rejected import lost both copies and still reported success.
+import_rc=0
+import_why=''
 case $TYPE in
-	mysql) import_mysql_database "$dump" ;;
-	pgsql) import_pgsql_database "$dump" ;;
+	mysql) import_mysql_database "$dump" || import_rc=$? ;;
+	pgsql) import_pgsql_database "$dump" || import_rc=$? ;;
+	*)
+		import_rc=1
+		import_why="unknown database type '$TYPE', no client was run"
+		;;
 esac
-
-# Deleting tmpdir
-rm -rf $tmpdir
+if [ "$import_rc" -ne 0 ]; then
+	# Undo what this run created and hand the source back before anything is deleted.
+	$BIN/h-unsuspend-database "$owner" "$database" > /dev/null 2>&1
+	$BIN/h-delete-database "$user" "$new_db" > /dev/null 2>&1
+	echo "Error: import into $new_db failed (${import_why:-client exit $import_rc})"
+	# The dump is worth keeping only where the source did NOT come back - otherwise the customer's
+	# data sits untouched in its own database and a kept copy is just litter nobody clears.
+	src_line=$(grep -F "DB='$database'" "$CONF_DIR/users/$owner/db.conf" 2> /dev/null)
+	if [[ "$src_line" == *"SUSPENDED='no'"* ]]; then
+		echo "$database stays with $owner and is usable again"
+	else
+		trap - EXIT
+		echo "Warning: $database could not be handed back to $owner - its dump is kept in $tmpdir"
+	fi
+	if grep -qF "DB='$new_db'" "$CONF_DIR/users/$user/db.conf" 2> /dev/null; then
+		echo "Warning: the half-built $new_db could not be removed, delete it by hand"
+	fi
+	log_event "$E_DB" "$ARGUMENTS"
+	exit "$E_DB"
+fi
 
 # Remove old database
 $BIN/h-unsuspend-database "$owner" "$database" > /dev/null 2>&1
