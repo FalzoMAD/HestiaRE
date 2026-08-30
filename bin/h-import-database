@@ -31,7 +31,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '3' "$#" 'DATABASE USER'
+check_args '3' "$#" 'USER DATABASE DUMP'
 is_format_valid 'database' 'user'
 is_system_enabled "$DB_SYSTEM" 'DB_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
@@ -59,11 +59,16 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Import dump
+# The client swallows its own output, so the exit code is the only signal there is - unchecked, a
+# rejected dump ended in an OK log line over an empty database. An unknown TYPE fell through the
+# same way: no arm ran, and the empty database was reported as imported.
+rc=0
 case $TYPE in
-	mysql) import_mysql_database "$dump" ;;
-	pgsql) import_pgsql_database "$dump" ;;
+	mysql) import_mysql_database "$dump" || rc=$? ;;
+	pgsql) import_pgsql_database "$dump" || rc=$? ;;
+	*) check_result "$E_DB" "unknown database type '$TYPE' for $database" ;;
 esac
+[ "$rc" -eq 0 ] || check_result "$E_DB" "import of $dump into $database failed (client exit $rc)"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

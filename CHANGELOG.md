@@ -56,6 +56,14 @@ opens above it.
 
 ### Fixed
 
+- **A failed database import no longer reports success** (#877). `h-import-database` never looked
+  at the exit code of the client it invokes, and that client sends its own output to `/dev/null` -
+  so a dump the server rejected ended in an `OK` log line over an empty database. An unrecognised
+  `TYPE` fell through the same way: no branch ran and the untouched database was reported as
+  imported. Both now fail with `E_DB`. The command stays: it is the counterpart to
+  `h-dump-database` (which the panel's database download uses), and its value is that it resolves
+  the type, host and admin credentials from the records - including a remote database host.
+
 - **A nomail box had no MTA at all, and every notification was lost silently** (#872). `exim4` was
   installed only inside the mail stage, so without a mail block nothing installed one - the
   send-only step merely configured what it presumed to be there. It looked correct on Debian,
@@ -110,6 +118,17 @@ opens above it.
   drifted is corrected by `h-update-user-counters <user>` - nothing recounts on a schedule.
 
 ### Removed
+
+- **The cPanel and DirectAdmin importers are gone** (#877). Both were VestaCP-era third-party
+  scripts (`sk-import-cpanel-backup-to-vestacp`, `sk_da_importer`, the latter still labelled
+  "Version 0.1 - provided without any warranty") that we carried along verbatim through the
+  `v-*`->`h-*` rename and never touched otherwise. Nothing in the tree called them, and they parse
+  a foreign archive format we hold no licence for, own no fixture of, and cannot test on any of the
+  four targets - the cPanel one names its own broken parts in its header (certificate import,
+  DKIM). That they had never run is visible in the code: both carried the same inverted branch, so
+  a box with `BACKUP_TEMP` set - a supported knob - aborted every import with "File does not
+  exist", while a nonexistent archive argument was not caught at all. Migration from HestiaCP is
+  unaffected; that path is the backup format and is measured in both directions.
 
 - **Two record keys nothing reads** (#865). `PLUGIN_APP_INSTALLER` belonged to the Software
   Installer, which is permanently gone - yet the self-healing wrote it back into every
