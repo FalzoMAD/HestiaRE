@@ -56,6 +56,17 @@ opens above it.
 
 ### Fixed
 
+- **The wizard's pre-questions were described in the manifest and hard-coded in the code** (#886).
+  The values were always right; the description was inert. `share/manifest.json` carries
+  `pre_questions`, the manifest structure check even insists the array exists - and nothing ever
+  read its contents, while `fn_ask_pre_questions` wrote the four prompts, their order and their
+  defaults a second time. The two copies had already drifted: different ids (`HOSTNAME` against the
+  `HESTIA_HOSTNAME` that is actually written), a different question text, and `8083` in three
+  places. Editing the manifest changed nothing. The ids are now the `install.conf` keys, and the
+  asker and the writer walk the same list, so a question added to the manifest is asked and written.
+  Defaults that cannot be literals - the box's own FQDN, the address derived from the previous
+  answer, `--port` - stay in code; an empty list is now an error instead of a run that asks nothing.
+
 - **The wizard's bash fallback threw away a numeric answer on every checklist** (#333). Without
   whiptail (no TTY, empty or `dumb` `TERM`) the wizard asks in plain bash, and `_wt_checklist`
   echoed the typed line unchanged while its two siblings mapped a number back to its tag. The

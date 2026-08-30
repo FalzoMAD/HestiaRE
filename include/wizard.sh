@@ -318,27 +318,48 @@ fn_check_panel_port() {
 	fi
 }
 
+# Defaults that cannot be literals in the manifest: they depend on the box, on an earlier answer
+# or on a command-line flag. $2 is the manifest default, used where none of that applies.
+fn_pre_question_default() {
+	case "$1" in
+		HESTIA_HOSTNAME) hostname --fqdn 2> /dev/null || hostname 2> /dev/null || echo "server.example.com" ;;
+		HESTIA_PANEL_PORT) echo "${PANEL_PORT_ARG:-$2}" ;;
+		HESTIA_EMAIL) echo "admin@${HESTIA_HOSTNAME}" ;;
+		*) echo "$2" ;;
+	esac
+}
+
+# Driven by .pre_questions, where the id IS the install.conf key - fn_write_install_conf loops over
+# the same list, so a question added to the manifest is asked AND written. It used to be neither:
+# the array was validated for existence and then never read, while the four prompts, their order
+# and the port default stood a second time in this file (#886).
 fn_ask_pre_questions() {
-	local default_host
-	default_host=$(hostname --fqdn 2> /dev/null || hostname 2> /dev/null || echo "server.example.com")
+	local -a pq=()
+	readarray -t pq < <(mq '.pre_questions[] | select(.stage == "pre_preset") | .id')
+	# An empty list would ask nothing and write empty keys, which h-install-hestia only notices as a
+	# missing hostname much later. Refuse here instead.
+	[ ${#pq[@]} -gt 0 ] || {
+		echo "ERROR: no pre_preset entry in .pre_questions - the wizard would ask nothing." >&2
+		exit 1
+	}
+	local n=${#pq[@]} i=0 id q d val
+	for id in "${pq[@]}"; do
+		i=$((i + 1))
+		q=$(mq --arg id "$id" '.pre_questions[] | select(.id == $id) | .question')
+		d=$(mq --arg id "$id" '.pre_questions[] | select(.id == $id) | .default // "" | tostring')
+		d=$(fn_pre_question_default "$id" "$d")
+		if [ "$AUTO_MODE" = true ]; then
+			val="$d"
+		else
+			val=$(_wt_inputbox "HestiaRE Setup ($i/$n)" "$q" "$d")
+		fi
+		printf -v "$id" '%s' "$val"
+	done
 	if [ "$AUTO_MODE" = true ]; then
-		# unattended (-a): take the prompt defaults, no questions
-		HESTIA_HOSTNAME="$default_host"
-		HESTIA_PANEL_PORT="${PANEL_PORT_ARG:-8083}"
-		HESTIA_ADMIN="admin"
-		HESTIA_EMAIL="admin@${HESTIA_HOSTNAME}"
 		echo "[ * ] Unattended: hostname=$HESTIA_HOSTNAME port=$HESTIA_PANEL_PORT admin=$HESTIA_ADMIN email=$HESTIA_EMAIL"
 		echo "[ * ] That address is on this host, so system and panel mail stays in /var/mail/root"
-	else
-		HESTIA_HOSTNAME=$(_wt_inputbox "HestiaRE Setup (1/4)" "Hostname (FQDN):" "$default_host")
-		HESTIA_PANEL_PORT=$(_wt_inputbox "HestiaRE Setup (2/4)" "Panel port:" "${PANEL_PORT_ARG:-8083}")
-		HESTIA_ADMIN=$(_wt_inputbox "HestiaRE Setup (3/4)" "Admin username:" "admin")
-		# The consequence, not just the field: the default is at this host, so notification mail
-		# stays here (/var/mail/root). Only an outside address takes it off the box.
-		HESTIA_EMAIL=$(_wt_inputbox "HestiaRE Setup (4/4)" \
-			"Admin email (an address outside this host receives system and panel mail; the default keeps it in /var/mail/root):" \
-			"admin@${HESTIA_HOSTNAME}")
 	fi
+	# Not manifest data: these three are h-install-hestia's contract, it aborts without them.
 	[ -n "$HESTIA_HOSTNAME" ] || {
 		echo "ERROR: Hostname is required." >&2
 		exit 1
@@ -940,17 +961,16 @@ fn_ask_components() {
 fn_write_install_conf() {
 	mkdir -p "$(dirname "$INSTALL_CONF")"
 	chmod 700 "$(dirname "$INSTALL_CONF")"
-	local ids=()
+	local ids=() pq_ids=() _pq
 	readarray -t ids < <(mq '.components | keys_unsorted[]')
+	readarray -t pq_ids < <(mq '.pre_questions[] | select(.stage == "pre_preset") | .id')
 	{
 		echo "# HestiaRE install.conf"
 		echo "# Written by include/wizard.sh - do not edit manually."
 		echo "# Re-run the wizard to change parameters."
 		echo ""
-		echo "HESTIA_HOSTNAME=\"${HESTIA_HOSTNAME}\""
-		echo "HESTIA_PANEL_PORT=\"${HESTIA_PANEL_PORT}\""
-		echo "HESTIA_ADMIN=\"${HESTIA_ADMIN}\""
-		echo "HESTIA_EMAIL=\"${HESTIA_EMAIL}\""
+		# Same list the questions came from, so the two cannot drift apart.
+		for _pq in "${pq_ids[@]}"; do echo "${_pq}=\"${!_pq}\""; done
 		echo "INSTALL_OS=\"${OS}\""
 		echo "INSTALL_PROFILE=\"${INSTALL_PROFILE}\""
 		# panel/reference PHP, derived from the OS default (#191); the installer
