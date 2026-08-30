@@ -42,7 +42,7 @@
       "question": "Panel port:",
       "default": 8083,
       "stage": "pre_preset",
-      "note": "Asked in every preset, including standard."
+      "note": "Asked in every preset, including standard. Validated before the first write (#730): 1024-65535 and not one of the ports HestiaRE hands out itself - that set is derived from the shipped listener declarations in include/ports.sh, never listed here. Unattended: bash install.sh <preset> -a --port=<n>."
     },
     {
       "id": "ADMIN_USERNAME",

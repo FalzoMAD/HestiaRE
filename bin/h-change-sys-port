@@ -4,7 +4,9 @@
 #
 # example: h-change-sys-port 5678
 #
-# This function for changing the system backend port in NGINX configuration.
+# Moves the panel listener. The port lives in the Panel-Caddy site, not in a config value:
+# writing BACKEND_PORT alone moved the firewall rule and left Caddy on the old port, so the
+# panel was open where nothing listened and listening where the firewall was shut.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -12,32 +14,23 @@
 
 # Argument definition
 PORT=$1
-NGINX_CONFIG="$HESTIA/nginx/conf/nginx.conf"
+CADDY_SITE='/etc/caddy/hestia.conf'
+CADDY_MAIN='/etc/caddy/Caddyfile'
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source "$HESTIA/include/main.sh"
+# shellcheck source=/usr/local/hestia/include/ports.sh
+source "$HESTIA/include/ports.sh"
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
-# Functions
-is_port_valid() {
-	# Check if PORT is numeric
-	if [[ ! "$PORT" =~ ^[0-9]+$ ]]; then
-		echo "Port should contains a numeric value only!"
-		log_event "$E_INVALID" "$ARGUMENTS"
-		exit "$E_INVALID"
-	fi
-
-	# Check if PORT is already used
-	BUSY_PORT=$(lsof -i:"$PORT")
-	if [ -n "$BUSY_PORT" ] && [ "$PORT" != "$BACKEND_PORT" ]; then
-		echo "Port is already used by Hestia, please set anotherone!"
-		log_event "$E_INUSE" "$ARGUMENTS"
-		exit "$E_INUSE"
-	fi
+# The live listener is the truth, not BACKEND_PORT: if the two ever disagree, the one the
+# operator cannot reach is the one that has to move.
+current_panel_port() {
+	sed -n 's|^[[:space:]]*https\?://:\([0-9]\{2,5\}\).*|\1|p' "$CADDY_SITE" 2> /dev/null | head -n1
 }
 
 #----------------------------------------------------------#
@@ -45,57 +38,80 @@ is_port_valid() {
 #----------------------------------------------------------#
 
 check_args '1' "$#" 'PORT'
-is_port_valid
+
+ORIGINAL_PORT=$(current_panel_port)
+[ -n "$ORIGINAL_PORT" ] || ORIGINAL_PORT="${BACKEND_PORT:-8083}"
+
+# Same validator the wizard uses, so a port refused at install time cannot be set later.
+if ! reason=$(panel_port_refusal "$PORT" "$HESTIA"); then
+	echo "Panel port $PORT: $reason"
+	log_event "$E_INVALID" "$ARGUMENTS"
+	exit "$E_INVALID"
+fi
+
+# Names the holder instead of blaming Hestia; the panel's own current port is not a conflict.
+if [ "$PORT" != "$ORIGINAL_PORT" ] && holder=$(panel_port_live_holder "$PORT"); then
+	echo "Port $PORT is already in use by: $holder"
+	log_event "$E_INUSE" "$ARGUMENTS"
+	exit "$E_INUSE"
+fi
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Get original port
-LISTEN_ROWS=$(cat "$NGINX_CONFIG" | grep -c "listen")
-ORIGINAL_PORT=$(sed -ne "/listen/{s/.*listen[^0-9]*\([0-9][0-9]*\)[ \t]*ssl\;/\1/p;q}" "$NGINX_CONFIG")
-
-# Check if port is different to nginx.conf
-if [ "$ORIGINAL_PORT" = "$PORT" ]; then
-	# Nothing to do, exit
-	exit
-else
-	# Set new port in config via h-change-sys-config-value
-	"$BIN/h-change-sys-config-value" "BACKEND_PORT" "$PORT"
-	# Replace port in config files.
-	sed -i "s/\(listen[ \t]*.*[: \t]\)[0-9][0-9]*\([^0-9]*ssl\;$\)/\1$PORT\2/" "$NGINX_CONFIG"
-	if [ -d /etc/roundcube/ ]; then
-		sed -i "/password_hestia_port/c\$rcmail_config['password_hestia_port'] = '$PORT';" /etc/roundcube/plugins/password/config.inc.php
-	fi
-	if [ -d /etc/tachyon/ ]; then
-		# Replace the hestia_port line with the SAME key (a typo here used to
-		# write a second "hestia_host" line, clobbering the host on JSON parse
-		# and losing the port entirely, #234). No trailing comma: hestia_port is
-		# the LAST member of the plugin object (see share/tachyon/install.php).
-		sed -i "/\"hestia_port\":/c\\\"hestia_port\": $PORT" /etc/tachyon/data/_data_/_default_/configs/plugin-change-password.json
-	fi
-
-	if [ -f "$CONF_DIR/firewall/rules.conf" ]; then
-		sed -i "/COMMENT='HESTIA'/c\RULE='2' ACTION='ACCEPT' PROTOCOL='TCP' PORT='$PORT' IP='0.0.0.0/0' COMMENT='HESTIA' SUSPENDED='no' TIME='07:40:16' DATE='2014-05-25'" "$CONF_DIR/firewall/rules.conf"
-	fi
-
-	if [ -f "$CONF_DIR/firewall/chains.conf" ]; then
-		sed -i "/CHAIN='HESTIA'/c\CHAIN='HESTIA' PORT='$PORT' PROTOCOL='TCP'" "$CONF_DIR/firewall/chains.conf"
-	fi
-
-	# Restart services. The name has to BE $FIREWALL_SYSTEM: h-restart-service recognises the firewall by
-	# comparing against that key, so the literal stopped matching when the value became nftables and fell
-	# through to `systemctl restart iptables` - which fails, aborts this command, and leaves the new panel
-	# port written into rules.conf but never applied. That is a lockout, not a cosmetic error.
-	if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != no ]; then
-		"$BIN/h-restart-service" "$FIREWALL_SYSTEM"
-	fi
-
-	# Check if Hestia is running
-	if [[ $(ps -eaf | grep -i hestia | sed '/^$/d' | wc -l) -gt 1 ]]; then
-		"$BIN/h-restart-service" hestia
-	fi
+# Nothing to move: the listener and the value everything follows already say this port.
+if [ "$ORIGINAL_PORT" = "$PORT" ] && [ "${BACKEND_PORT:-}" = "$PORT" ]; then
+	exit 0
 fi
+
+# The listener itself, in both places that name it: the site address and the listener-wrapper
+# block, which is scoped to the panel port so it does not wrap the loopback webmail listeners.
+if [ -f "$CADDY_SITE" ]; then
+	sed -i "s|^\([[:space:]]*https\?://\):$ORIGINAL_PORT\b|\1:$PORT|" "$CADDY_SITE"
+fi
+if [ -f "$CADDY_MAIN" ]; then
+	sed -i "s|^\([[:space:]]*servers[[:space:]]*\):$ORIGINAL_PORT\b|\1:$PORT|" "$CADDY_MAIN"
+fi
+
+"$BIN/h-change-sys-config-value" "BACKEND_PORT" "$PORT"
+
+if [ -d /etc/roundcube/ ]; then
+	sed -i "/password_hestia_port/c\$rcmail_config['password_hestia_port'] = '$PORT';" /etc/roundcube/plugins/password/config.inc.php
+fi
+if [ -d /etc/tachyon/ ]; then
+	# Replace the hestia_port line with the SAME key (a typo here used to
+	# write a second "hestia_host" line, clobbering the host on JSON parse
+	# and losing the port entirely, #234). No trailing comma: hestia_port is
+	# the LAST member of the plugin object (see share/tachyon/install.php).
+	sed -i "/\"hestia_port\":/c\\\"hestia_port\": $PORT" /etc/tachyon/data/_data_/_default_/configs/plugin-change-password.json
+fi
+
+if [ -f "$CONF_DIR/firewall/rules.conf" ]; then
+	sed -i "/COMMENT='HESTIA'/c\RULE='2' ACTION='ACCEPT' PROTOCOL='TCP' PORT='$PORT' IP='0.0.0.0/0' COMMENT='HESTIA' SUSPENDED='no' TIME='07:40:16' DATE='2014-05-25'" "$CONF_DIR/firewall/rules.conf"
+fi
+
+if [ -f "$CONF_DIR/firewall/chains.conf" ]; then
+	sed -i "/CHAIN='HESTIA'/c\CHAIN='HESTIA' PORT='$PORT' PROTOCOL='TCP'" "$CONF_DIR/firewall/chains.conf"
+fi
+
+# phpMyAdmin on a customer domain is a transparent proxy INTO the panel, so it carries the
+# port too. Re-rendered by its own deployer rather than sed'ed here - one writer for that file.
+if [ -n "$DB_PMA_ALIAS" ]; then
+	"$BIN/h-change-sys-db-alias" 'pma' "$DB_PMA_ALIAS" > /dev/null 2>&1
+fi
+
+# Restart services. The name has to BE $FIREWALL_SYSTEM: h-restart-service recognises the firewall by
+# comparing against that key, so the literal stopped matching when the value became nftables and fell
+# through to `systemctl restart iptables` - which fails, aborts this command, and leaves the new panel
+# port written into rules.conf but never applied. That is a lockout, not a cosmetic error.
+if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != no ]; then
+	"$BIN/h-restart-service" "$FIREWALL_SYSTEM"
+fi
+
+# hestia = Caddy + hestia-php (see h-restart-service); Caddy needs a restart, a reload keeps
+# the old listener.
+"$BIN/h-restart-service" hestia
 
 #----------------------------------------------------------#
 #                       Hestia                             #
@@ -103,9 +119,6 @@ fi
 
 # Logging
 "$BIN/h-log-action" "system" "Warning" "System" "Hestia Control Panel backend port changed (New Value: $PORT, Old Value: $ORIGINAL_PORT)."
-if [ $LISTEN_ROWS -gt 1 ]; then
-	"$BIN/h-log-action" "system" "Warning" "System" "Hestia Control Panel backend port: Use first of $LISTEN_ROWS listened ports in $NGINX_CONFIG"
-fi
 log_event "$OK" "$ARGUMENTS"
 
 exit
