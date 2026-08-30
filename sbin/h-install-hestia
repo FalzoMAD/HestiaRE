@@ -960,7 +960,11 @@ configure_hestia() {
 	chmod 600 /var/spool/cron/crontabs/hestia
 	chown hestia:hestia /var/spool/cron/crontabs/hestia
 	# no auto-update cron: HestiaRE updates via the release tarball, not apt/git
-	"$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" > /dev/null 2>&1 || true
+	# Not swallowed (#730): a port that silently does not take leaves the firewall open.
+	if ! _port_out=$("$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" 2>&1); then
+		echo "[ ! ] Panel port ${HESTIA_PANEL_PORT:-8083} NOT applied: ${_port_out:-no output}"
+		echo "[ ! ] The panel stays on $(sed -n 's|^[[:space:]]*https\?://:\([0-9]*\).*|\1|p' /etc/caddy/hestia.conf 2> /dev/null | head -n1). Fix the cause, then: h-change-sys-port ${HESTIA_PANEL_PORT:-8083}"
+	fi
 	"$BIN/h-update-sys-defaults" > /dev/null 2>&1 || true
 	# Seed every config key from its single home. The installer writes only the keys it knows about,
 	# and the repair holds the default for all of them - measured on a running box, 25 keys were

@@ -10,6 +10,7 @@
 #
 #   bash /usr/local/hestia/include/wizard.sh                # full interactive
 #   bash /usr/local/hestia/include/wizard.sh --preset=standard   # fasttrack
+#   bash /usr/local/hestia/include/wizard.sh --preset=standard --auto --port=9443
 #   bash /usr/local/hestia/include/wizard.sh --os=debian-bookworm
 #
 # After it writes install.conf, run the installer:
@@ -33,11 +34,16 @@ LOG_DIR="/var/log/hestia"
 # shellcheck source=include/helper.sh
 [ -f "${INSTALL_DIR}/include/helper.sh" ] && . "${INSTALL_DIR}/include/helper.sh"
 
+# Reserved-port set for the panel-port question, derived from the shipped configs (#730).
+# shellcheck source=include/ports.sh
+[ -f "${INSTALL_DIR}/include/ports.sh" ] && . "${INSTALL_DIR}/include/ports.sh"
+
 # ── State ──────────────────────────────────────────────────
 HAS_WHIPTAIL=false
 OS=""
 INSTALL_PROFILE=""
 FASTTRACK_PRESET=""
+PANEL_PORT_ARG=""
 AUTO_MODE=false
 PHP_VERSIONS_AVAILABLE=""
 REFERENCE_PHP=""
@@ -50,6 +56,7 @@ for _arg in "$@"; do
 	case $_arg in
 		--os=*) OS="${_arg#*=}" ;;
 		--preset=*) FASTTRACK_PRESET="${_arg#*=}" ;;
+		--port=*) PANEL_PORT_ARG="${_arg#*=}" ;;
 		--auto) AUTO_MODE=true ;;
 		-*) ;;
 		*) [ -z "$FASTTRACK_PRESET" ] && FASTTRACK_PRESET="$_arg" ;;
@@ -237,19 +244,40 @@ _wt_checklist() {
 # Pre-questions (before preset, always asked)
 # ════════════════════════════════════════════════════════════
 
+# Refused HERE, before the first write: by installer time the box is already half built (#730).
+fn_check_panel_port() {
+	local port="$1" reason holder current=''
+	if ! declare -F panel_port_refusal > /dev/null; then
+		echo "ERROR: ${INSTALL_DIR}/include/ports.sh is missing - the panel port cannot be validated." >&2
+		exit 1
+	fi
+	if ! reason=$(panel_port_refusal "$port" "$INSTALL_DIR"); then
+		echo "ERROR: Panel port $port: $reason." >&2
+		exit 1
+	fi
+	# A re-run must not refuse the panel its own port; hestia.conf sits under $CONF_DIR/conf.
+	if [ -f "$CONF_DIR/conf/hestia.conf" ]; then
+		current=$(sed -n "s/^BACKEND_PORT='\\([0-9]*\\)'.*/\\1/p" "$CONF_DIR/conf/hestia.conf" | head -n1)
+	fi
+	if [ "$port" != "$current" ] && holder=$(panel_port_live_holder "$port"); then
+		echo "ERROR: Panel port $port is already in use by: $holder" >&2
+		exit 1
+	fi
+}
+
 fn_ask_pre_questions() {
 	local default_host
 	default_host=$(hostname --fqdn 2> /dev/null || hostname 2> /dev/null || echo "server.example.com")
 	if [ "$AUTO_MODE" = true ]; then
 		# unattended (-a): take the prompt defaults, no questions
 		HESTIA_HOSTNAME="$default_host"
-		HESTIA_PANEL_PORT="8083"
+		HESTIA_PANEL_PORT="${PANEL_PORT_ARG:-8083}"
 		HESTIA_ADMIN="admin"
 		HESTIA_EMAIL="admin@${HESTIA_HOSTNAME}"
 		echo "[ * ] Unattended: hostname=$HESTIA_HOSTNAME port=$HESTIA_PANEL_PORT admin=$HESTIA_ADMIN email=$HESTIA_EMAIL"
 	else
 		HESTIA_HOSTNAME=$(_wt_inputbox "HestiaRE Setup (1/4)" "Hostname (FQDN):" "$default_host")
-		HESTIA_PANEL_PORT=$(_wt_inputbox "HestiaRE Setup (2/4)" "Panel port:" "8083")
+		HESTIA_PANEL_PORT=$(_wt_inputbox "HestiaRE Setup (2/4)" "Panel port:" "${PANEL_PORT_ARG:-8083}")
 		HESTIA_ADMIN=$(_wt_inputbox "HestiaRE Setup (3/4)" "Admin username:" "admin")
 		HESTIA_EMAIL=$(_wt_inputbox "HestiaRE Setup (4/4)" "Admin email:" "admin@${HESTIA_HOSTNAME}")
 	fi
@@ -265,10 +293,7 @@ fn_ask_pre_questions() {
 		echo "ERROR: Admin email is required." >&2
 		exit 1
 	}
-	[[ "$HESTIA_PANEL_PORT" =~ ^[0-9]+$ ]] || {
-		echo "ERROR: Panel port must be a number." >&2
-		exit 1
-	}
+	fn_check_panel_port "$HESTIA_PANEL_PORT"
 }
 
 # ════════════════════════════════════════════════════════════

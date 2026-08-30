@@ -14,6 +14,11 @@ opens above it.
 
 ### Added
 
+- **`install.sh --port=<n>` for an unattended install on a non-default panel port** (#730).
+  `-a` used to force 8083, so an unattended install could not be given a port at all - and the
+  refusal path could not be verified the way it has to be: start the install, watch it stop
+  before the first write. Interactively the value prefills the prompt.
+
 - **The smoke test checks the record grammar** (#866). Every record line has to be `KEY='value'`,
   measured with the one validator that already defines it. A line that loses its quotes stays
   readable - `source_conf` takes `KEY=value` - while every writer looks for `KEY='...'` and
@@ -62,6 +67,39 @@ opens above it.
   written, and the smoke test asserts the binary PHP will actually call - the old send-only check
   returned silently when exim was absent, which on a nomail box is the defect rather than a reason
   to skip.
+
+- **The panel port never reached the panel** (#730). `h-change-sys-port` rewrote
+  `$HESTIA/nginx/conf/nginx.conf` - a file that has not existed since the panel moved to Caddy -
+  so any port but 8083 wrote `BACKEND_PORT`, the firewall rule and the password plugins while
+  Caddy went on listening on the old one: the firewall open where nothing answered, the panel
+  answering where the firewall was shut. It now moves the Caddy site and the listener-wrapper
+  block, reads the CURRENT port from that site rather than from the config value, and re-renders
+  the phpMyAdmin proxy include that every customer domain uses (the port is a `%panel_port%`
+  placeholder there now, so a redeploy cannot reset it). It also proves its own result: the
+  listener moves first and has to answer on the new port before `BACKEND_PORT`, the firewall and
+  the proxies follow - otherwise the caddy files are rolled back and nothing else was touched. The
+  installer no longer swallows a failed apply, and `h-check-sys-smoke` compares the live site
+  against `BACKEND_PORT`.
+
+- **The wizard accepted any number as the panel port** (#730). `0`, `80` and `70000` all passed,
+  and so did `8090` or `8091`, where the loopback webmail listeners sit - a collision that only
+  appears an hour later, when the installer brings those services up. The wizard now refuses
+  before the first write, with a message naming the conflict partner. The reserved set is DERIVED
+  from the shipped listener declarations under `share/` and `include/`, not written down: a
+  listener added later cannot fall out of it, and a scan that finds nothing refuses rather than
+  waving every port through. It is not a numeric band but about a dozen individual ports - the
+  80xx of panel and web stack, and equally `3306`, `5432` and `4190`, which our own configs
+  declare. Comment lines, application code and IP octets are excluded, each because a measurement
+  showed them producing a wrong reservation.
+
+- **The panel showed the version twice over** (#617). The server page printed a literal `v` in
+  front of a version string that already carries one (`vv0.17.1`); the footer and the update box
+  had it right. The version is now read with an anchored key, so a future `*_VERSION` key cannot
+  turn the value into two lines.
+
+- **Accounts without a contact name showed empty brackets** (#617). The user list printed `()`
+  after the login whenever `NAME` was empty, in the row, the icon title and the mobile label. The
+  parentheses now belong to the name, the way the top-bar menu already did it.
 
 - **The admin's IP counter grew with every deleted customer IP** (#866). For the root user
   `IP_AVAIL` is the number of IPs on the box whoever owns them, and `h-add-sys-ip` counted it up

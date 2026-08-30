@@ -20,7 +20,7 @@
     },
     "aggregate": {
       "upstream_mapped_files": 9,
-      "eigenbau_files": 10,
+      "eigenbau_files": 13,
       "weighted_pct": 41,
       "weighted_pct_note": "text files only - binary entries are byte-compared, not line-counted"
     },
@@ -261,6 +261,33 @@
       "last_reconciled": "2026-08-27",
       "divergence": null,
       "note": ""
+    },
+    {
+      "path": "quota.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-30",
+      "divergence": null,
+      "note": "Project quota: arming, enforcement probe and project-id assignment (#211)."
+    },
+    {
+      "path": "limits.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-30",
+      "divergence": null,
+      "note": "Customer PHP CPU cap: slice, drop-ins and the one percent parser (#212)."
+    },
+    {
+      "path": "ports.sh",
+      "source_type": "eigenbau",
+      "upstream_path": null,
+      "upstream_ref": null,
+      "last_reconciled": "2026-08-30",
+      "divergence": null,
+      "note": "Reserved-port set for the panel port, derived from the shipped listener declarations (#730)."
     }
   ]
 }

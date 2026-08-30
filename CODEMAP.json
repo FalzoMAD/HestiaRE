@@ -882,6 +882,23 @@
         "bin/h-check-sys-smoke",
         "share/manifest.json"
       ]
+    },
+    "panel_port": {
+      "description": "Panel port (#730). The port lives in the Panel-Caddy site (/etc/caddy/hestia.conf `https://:PORT` plus the listener-wrapper block in /etc/caddy/Caddyfile, scoped to the panel port so it does not wrap the loopback webmail listeners); BACKEND_PORT in hestia.conf is what everything else follows - the firewall HESTIA rule and chain, the Roundcube/Tachyon password plugins, and the phpMyAdmin proxy include on every customer domain (%panel_port% in share/{nginx/apps/phpmyadmin.inc,apache2/apps/phpmyadmin.conf}, rendered by h-change-sys-db-alias). h-change-sys-port moves all of them and reads the CURRENT port from the caddy site, not from BACKEND_PORT: it used to rewrite $HESTIA/nginx/conf/nginx.conf, a file that has not existed since the Caddy switch, so any port but 8083 wrote the config and the firewall while Caddy kept listening on the old one. The reserved set in include/ports.sh is DERIVED from the shipped listener declarations under share/ and include/, minus the port the panel's own site template declares - so a listener added later cannot fall out of the set. It is NOT a numeric band: it measures out at about a dozen individual ports, the 80xx of panel and web stack but also 3306 from share/mysql/my-*.cnf, 5432 from include/db.sh and 4190 from our managesieve config. A digit class limited to 8xxx let 3306 through as a panel port and MariaDB then could not bind an hour later. The scan is anchored on declaration forms (listen, a loopback target, a site address, port=/*_PORT=) and drops three measured classes of noise: comment lines (dovecot and rspamd ship 11333/9900/2000 commented out), application code (*.php), where a listener is not declared and vendored code carries other people's ports - adminer connects to localhost:1433; VENDORED.json cannot do that job because it is export-ignore and never reaches a box, and IP octets. An empty scan refuses instead of accepting everything. The move proves itself: the listener is written and restarted FIRST, and only when the new port actually answers do BACKEND_PORT, the firewall and the proxies follow - if it does not, the caddy files are rolled back and nothing else was touched. The wizard validates before the first write (range 1024-65535, reserved set, live holder named); the installer no longer swallows a failed apply; h-check-sys-smoke check_panel_port compares the caddy site against BACKEND_PORT.",
+      "entry_points": [
+        "include/ports.sh",
+        "bin/h-change-sys-port"
+      ],
+      "related_files": [
+        "include/wizard.sh",
+        "sbin/h-install-hestia",
+        "share/panel-caddy/hestia.conf",
+        "share/panel-caddy/Caddyfile",
+        "share/nginx/apps/phpmyadmin.inc",
+        "share/apache2/apps/phpmyadmin.conf",
+        "bin/h-change-sys-db-alias",
+        "bin/h-check-sys-smoke"
+      ]
     }
   },
   "service_matrix": {
