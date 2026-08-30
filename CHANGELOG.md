@@ -56,6 +56,26 @@ opens above it.
 
 ### Fixed
 
+- **The wizard's bash fallback threw away a numeric answer on every checklist** (#333). Without
+  whiptail (no TTY, empty or `dumb` `TERM`) the wizard asks in plain bash, and `_wt_checklist`
+  echoed the typed line unchanged while its two siblings mapped a number back to its tag. The
+  grouped screens match the answer by LABEL, so a numeric one matched nothing and the whole screen -
+  addons, databases - came out deselected without a warning or a log line; in the PHP list the
+  digits reached `install.conf` verbatim and the installer tried to install `php2`. Numbers and
+  names both work now, a token that is not on the screen is named instead of swallowed, and the
+  prompt says what it does: the answer replaces the selection, it does not toggle it.
+
+- **Wizard text no longer runs out of its box** (#333). The whiptail boxes were fixed at 72 columns,
+  so a longer `label - description` was simply cut - and what vanished was the half explaining the
+  option. The width follows the longest row now, between 60 and 100 columns and never wider than the
+  terminal.
+
+- **The always-installed tools were listed twice, and the manifest copy was the dead one** (#333).
+  `share/manifest.json` carries `tools.always_installed`, but the installer ran a second, identical
+  list hard-coded in `install_tools` - editing the manifest changed nothing. The installer reads the
+  manifest now, and an empty or unreadable list says so instead of quietly installing nothing. The
+  two lists were byte for byte the same, so nothing changes on an install.
+
 - **A rejected database import counted as a successful one everywhere** (#880). The import helpers
   send their client's output to `/dev/null` and hand back its exit code, and no caller looked at it.
   `h-change-database-owner` was the worst of the three: it deleted the dump and then the source

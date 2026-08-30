@@ -139,10 +139,36 @@ fn_manifest_load() {
 # TUI helpers - whiptail with bash fallback
 # ════════════════════════════════════════════════════════════
 
+# Box width follows the content: the fixed 72 columns simply cut off a longer "label - description",
+# and the text that vanished was the part explaining the option (#333).
+_wt_width() {
+	local stride="$1" text="$2"
+	shift 2
+	local -a it=("$@")
+	local max=0 line i=0 len
+	while IFS= read -r line; do
+		[ ${#line} -gt "$max" ] && max=${#line}
+	done <<< "$text"
+	while [ $i -lt ${#it[@]} ]; do
+		len=$((${#it[$i]} + 2 + ${#it[$((i + 1))]}))
+		[ "$len" -gt "$max" ] && max=$len
+		i=$((i + stride))
+	done
+	local cols="${COLUMNS:-}"
+	[[ "$cols" =~ ^[0-9]+$ ]] && [ "$cols" -gt 0 ] || cols=$(tput cols 2> /dev/null || echo 80)
+	local w=$((max + 14))
+	# 100 is a reading limit, not a terminal one - a very wide terminal should not stretch the text.
+	[ "$w" -gt 100 ] && w=100
+	[ "$w" -gt $((cols - 4)) ] && w=$((cols - 4))
+	[ "$w" -lt 60 ] && w=60
+	[ "$w" -gt $((cols - 4)) ] && w=$((cols - 4))
+	echo "$w"
+}
+
 _wt_inputbox() {
 	local title="$1" prompt="$2" default="$3"
 	if [ "$HAS_WHIPTAIL" = true ]; then
-		whiptail --title "$title" --inputbox "$prompt" 10 60 "$default" 3>&1 1>&2 2>&3 3>&-
+		whiptail --title "$title" --inputbox "$prompt" 10 "$(_wt_width 2 "$prompt")" "$default" 3>&1 1>&2 2>&3 3>&-
 	else
 		printf '%s [%s]: ' "$prompt" "$default" > /dev/tty
 		read -r _i < /dev/tty
@@ -155,7 +181,7 @@ _wt_menu() {
 	shift 2
 	local -a items=("$@")
 	if [ "$HAS_WHIPTAIL" = true ]; then
-		whiptail --title "$title" --menu "$text" 20 72 10 "${items[@]}" 3>&1 1>&2 2>&3 3>&-
+		whiptail --title "$title" --menu "$text" 20 "$(_wt_width 2 "$text" "${items[@]}")" 10 "${items[@]}" 3>&1 1>&2 2>&3 3>&-
 	else
 		echo "" > /dev/tty
 		echo "$text" > /dev/tty
@@ -183,7 +209,7 @@ _wt_radiolist() {
 	[ $list_h -lt 3 ] && list_h=3
 	local win_h=$((list_h + 8))
 	if [ "$HAS_WHIPTAIL" = true ]; then
-		whiptail --title "$title" --radiolist "$text" "$win_h" 72 "$list_h" "${items[@]}" 3>&1 1>&2 2>&3 3>&-
+		whiptail --title "$title" --radiolist "$text" "$win_h" "$(_wt_width 3 "$text" "${items[@]}")" "$list_h" "${items[@]}" 3>&1 1>&2 2>&3 3>&-
 	else
 		echo "" > /dev/tty
 		echo "$text" > /dev/tty
@@ -218,7 +244,7 @@ _wt_checklist() {
 	[ $list_h -lt 3 ] && list_h=3
 	local win_h=$((list_h + 8))
 	if [ "$HAS_WHIPTAIL" = true ]; then
-		whiptail --title "$title" --checklist "$text" "$win_h" 72 "$list_h" "${items[@]}" 3>&1 1>&2 2>&3 3>&- || true
+		whiptail --title "$title" --checklist "$text" "$win_h" "$(_wt_width 3 "$text" "${items[@]}")" "$list_h" "${items[@]}" 3>&1 1>&2 2>&3 3>&- || true
 	else
 		echo "" > /dev/tty
 		echo "$text" > /dev/tty
@@ -234,9 +260,36 @@ _wt_checklist() {
 			i=$((i + 3))
 		done
 		printf '  Pre-selected: %s\n' "${defaults[*]:-none}" > /dev/tty
-		printf '  Enter space-separated numbers or names to toggle (Enter = accept): ' > /dev/tty
+		printf '  Numbers or names, space separated - REPLACES the selection (Enter = keep it): ' > /dev/tty
 		read -r _i < /dev/tty
-		[ -z "$_i" ] && echo "${defaults[*]:-}" || echo "$_i"
+		if [ -z "$_i" ]; then
+			echo "${defaults[*]:-}"
+			return 0
+		fi
+		# Map numbers back to tags, as _wt_radiolist already did. The raw line used to be passed on,
+		# and the group screens match by LABEL - so a numeric answer deselected the whole screen in
+		# silence (measured: "2 3" in the PHP list reached install.conf as the literal "2 3").
+		local -a picked=() unknown=() toks=()
+		local tok t
+		read -ra toks <<< "$_i"
+		for tok in "${toks[@]}"; do
+			if [[ "$tok" =~ ^[0-9]+$ ]] && [ "$tok" -ge 1 ] && [ "$tok" -le "${#tags[@]}" ]; then
+				picked+=("${tags[$((tok - 1))]}")
+				continue
+			fi
+			for t in "${tags[@]}"; do
+				if [ "$t" = "$tok" ]; then
+					picked+=("$tok")
+					continue 2
+				fi
+			done
+			unknown+=("$tok")
+		done
+		# Named, never swallowed: an unknown token means the screen ends up with less than the person
+		# asked for, and that must not be something they find out when the addon is missing.
+		[ ${#unknown[@]} -eq 0 ] || printf '  NOT on this screen, ignored: %s\n' "${unknown[*]}" > /dev/tty
+		[ ${#picked[@]} -gt 0 ] || printf '  nothing matched - the screen stays empty\n' > /dev/tty
+		echo "${picked[*]:-}"
 	fi
 }
 
@@ -518,7 +571,7 @@ _ask_checkbox() {
 	[ "$default_val" = "true" ] && state="ON"
 	if [ "$HAS_WHIPTAIL" = true ]; then
 		local result
-		result=$(whiptail --title "HestiaRE - $id" --checklist "$question" 10 60 1 "$id" "" "$state" 3>&1 1>&2 2>&3 3>&- || true)
+		result=$(whiptail --title "HestiaRE - $id" --checklist "$question" 10 "$(_wt_width 3 "$question" "$id" "" "$state")" 1 "$id" "" "$state" 3>&1 1>&2 2>&3 3>&- || true)
 		echo "$result" | grep -q "$id" && COMP_VALUES["$id"]="true" || COMP_VALUES["$id"]="false"
 	else
 		local yn_default

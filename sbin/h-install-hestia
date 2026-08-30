@@ -1016,10 +1016,19 @@ install_composer_upstream() {
 
 install_tools() {
 	echo "[ * ] Installing always-installed utilities..."
-	apt_install_optional "admin tools" htop iftop sysstat iotop mc mtr-tiny screen || true
+	# From the manifest, not from a second copy here: the same list stood in both places and only
+	# this one ever ran, so editing the manifest changed nothing (#333). Empty is loud, not silent.
+	local always
+	always=$(jq -r '.tools.always_installed // [] | join(" ")' "$HESTIA/share/manifest.json" 2> /dev/null)
+	if [ -z "$always" ]; then
+		echo "[ ! ] tools.always_installed is empty or unreadable in $HESTIA/share/manifest.json - no admin tools installed"
+	else
+		echo "[ * ] Admin tools: $always"
+		# shellcheck disable=SC2086 # deliberate space-separated package list
+		apt_install_optional "admin tools" $always || true
+	fi
 	if is_on "${COMPONENT_ADDON_UTILITIES:-}" && [ -n "${TOOLS_SELECTION:-}" ]; then
 		echo "[ * ] Installing selected utilities: ${TOOLS_SELECTION}"
-		# shellcheck disable=SC2086
 		# shellcheck disable=SC2086 # TOOLS_SELECTION is a deliberate space-separated package list
 		apt_install_optional "selected tools" $TOOLS_SELECTION || true
 	fi
