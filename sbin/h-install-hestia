@@ -1183,6 +1183,34 @@ install_exim_sendonly() {
 	configure_exim_sendonly
 }
 
+# Cron and the panel address their mail to root@<hostname> and to the admin contact. Left alone,
+# /etc/aliases decides nothing useful: the base image ships its own root: line pointing at a user
+# that does not exist here, and the panel's default contact admin@<hostname> has no target at all -
+# both ended up in the queue (measured: 454 relay access denied against a foreign host).
+configure_system_aliases() {
+	local target='' al=/etc/aliases
+	# Only an address outside this host is worth forwarding to; the default contact is
+	# admin@<hostname> and would point back at the box.
+	case "${HESTIA_EMAIL:-}" in
+		'' | *@"${HESTIA_HOSTNAME}") : ;;
+		*) target="$HESTIA_EMAIL" ;;
+	esac
+	touch "$al"
+	# Both lines go: an inherited "<admin>: root" together with our "root: <admin>" is a loop, and
+	# exim resolves a loop by delivering as root - which never_users then refuses.
+	sed -i "/^[[:space:]]*root:/d;/^[[:space:]]*${HESTIA_ADMIN}:/d" "$al"
+	# root is always aliased away: exim's never_users refuses a delivery as uid 0, so mail addressed
+	# to root has to become some other account before it can land anywhere. Without an outside
+	# address that account is the panel admin, whose mbox a human on the box can read.
+	echo "root: ${target:-$HESTIA_ADMIN}" >> "$al"
+	command -v newaliases > /dev/null 2>&1 && newaliases > /dev/null 2>&1
+	if [ -n "$target" ]; then
+		echo "[ * ] System mail for root is forwarded to $target"
+	else
+		echo "[ * ] System mail for root lands in /var/mail/${HESTIA_ADMIN} on this box"
+	fi
+}
+
 # nomail (#192): exim stays as the outbound-only notification MTA, but Debian's
 # default config is local-delivery-only - panel mail to any remote admin address
 # was silently undeliverable ("Mailing to remote domains not supported"). internet
@@ -1196,6 +1224,9 @@ configure_exim_sendonly() {
 	fi
 	sed -i "s/^dc_eximconfig_configtype=.*/dc_eximconfig_configtype='internet'/" "$c"
 	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='127.0.0.1 ; ::1'/" "$c"
+	# Set, not inherited: this is what makes root@<hostname> local instead of a DNS lookup that
+	# hands the box's own cron mail to whatever host answers for the name.
+	sed -i "s/^dc_other_hostnames=.*/dc_other_hostnames='${HESTIA_HOSTNAME}'/" "$c"
 	# the success line is a witness in the install log: print it only when the keys
 	# really carry the values and the regeneration succeeded - a silent sed miss or
 	# a failed update-exim4.conf must not leave a false "configured" behind
@@ -1220,6 +1251,7 @@ else
 	echo "[ * ] Mail block not present — skipping mail stage"
 	install_exim_sendonly
 fi
+configure_system_aliases
 install_security
 install_addons
 configure_hestia
