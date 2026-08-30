@@ -327,6 +327,33 @@ dovecot_login:
 ######################################################################
 begin routers
 
+# The box addresses its own mail - cron, the panel's notifications - to root@<hostname> or to the
+# admin contact at <hostname>. That is not a HestiaRE mail domain, so it fell through to dnslookup
+# and was handed to whatever host answers for the hostname: measured "454 relay access denied" and
+# five messages stuck in the queue, three of them panel notifications. These two routers sit BEFORE
+# every outbound router, so the system mail stays on the box unless /etc/aliases sends it somewhere.
+# Deliberately NOT via +local_domains: that list also drives acceptance, relaying and the generic
+# .forward/procmail routers, and widening it would make every system user addressable from outside.
+system_aliases:
+  driver = redirect
+  domains = @ : localhost : localhost.localdomain
+  data = ${lookup{$local_part}lsearch{/etc/aliases}}
+  file_transport = address_file
+  pipe_transport = address_pipe
+  allow_defer
+  allow_fail
+
+# Whatever /etc/aliases did not send away lands in the local mbox. Reachable only from a local
+# submission: @ is deliberately NOT in +local_domains, so an inbound RCPT for this host is already
+# refused with "relay not permitted" before any router runs. root itself never arrives here - exim's
+# never_users forbids delivering as uid 0 - which is why the installer aliases root to the panel
+# admin, an ordinary system account.
+system_mailbox:
+  driver = accept
+  domains = @ : localhost : localhost.localdomain
+  check_local_user
+  transport = system_mbox
+
 # Per-domain relay exclude: recipient domains listed in the sender domain's
 # smtp_relay_exclude file are delivered directly via DNS/MX instead of the
 # configured SMTP relay (use case: relays like AWS SES rewrite the envelope
@@ -474,6 +501,18 @@ terminate_alias:
 #                      TRANSPORTS CONFIGURATION                      #
 ######################################################################
 begin transports
+
+# $local_part_data, not $local_part: check_local_user detaints it, and exim >= 4.94 refuses a
+# tainted value in a file name.
+system_mbox:
+  driver = appendfile
+  file = /var/mail/$local_part_data
+  delivery_date_add
+  envelope_to_add
+  return_path_add
+  group = mail
+  mode = 0660
+  mode_fail_narrower = false
 
 smtp_relay_smtp:
   driver = smtp

@@ -328,11 +328,16 @@ fn_ask_pre_questions() {
 		HESTIA_ADMIN="admin"
 		HESTIA_EMAIL="admin@${HESTIA_HOSTNAME}"
 		echo "[ * ] Unattended: hostname=$HESTIA_HOSTNAME port=$HESTIA_PANEL_PORT admin=$HESTIA_ADMIN email=$HESTIA_EMAIL"
+		echo "[ * ] That address is on this host, so system and panel mail stays in /var/mail/root"
 	else
 		HESTIA_HOSTNAME=$(_wt_inputbox "HestiaRE Setup (1/4)" "Hostname (FQDN):" "$default_host")
 		HESTIA_PANEL_PORT=$(_wt_inputbox "HestiaRE Setup (2/4)" "Panel port:" "${PANEL_PORT_ARG:-8083}")
 		HESTIA_ADMIN=$(_wt_inputbox "HestiaRE Setup (3/4)" "Admin username:" "admin")
-		HESTIA_EMAIL=$(_wt_inputbox "HestiaRE Setup (4/4)" "Admin email:" "admin@${HESTIA_HOSTNAME}")
+		# The consequence, not just the field: the default is at this host, so notification mail
+		# stays here (/var/mail/root). Only an outside address takes it off the box.
+		HESTIA_EMAIL=$(_wt_inputbox "HestiaRE Setup (4/4)" \
+			"Admin email (an address outside this host receives system and panel mail; the default keeps it in /var/mail/root):" \
+			"admin@${HESTIA_HOSTNAME}")
 	fi
 	[ -n "$HESTIA_HOSTNAME" ] || {
 		echo "ERROR: Hostname is required." >&2

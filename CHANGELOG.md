@@ -75,6 +75,20 @@ opens above it.
   list hard-coded in `install_tools` - editing the manifest changed nothing. The installer reads the
   manifest now, and an empty or unreadable list says so instead of quietly installing nothing. The
   two lists were byte for byte the same, so nothing changes on an install.
+- **The box handed its own system mail to a stranger** (#333). Cron reports and every panel
+  notification are addressed to `root@<hostname>` or to the admin contact at `<hostname>`, and that
+  is not a HestiaRE mail domain - so exim fell through to `dnslookup` and offered the mail to
+  whatever host answers for the hostname, which refused it (`454 relay access denied`). Measured on
+  a normally installed box: seven messages in the queue, among them three panel notifications and a
+  cron report about the certificate run, hours old and invisible to anyone. exim now routes
+  `root@`, `postmaster@` and the admin at this host locally, ahead of every outbound router, and the
+  installer manages `/etc/aliases`: an admin email outside this host receives them, otherwise they
+  land in the panel admin's mailbox on the box. `root` is always aliased away, because exim's
+  `never_users` refuses to deliver as uid 0 - what looked like a working setup before was one that
+  never delivered anything. The wizard's email prompt says which of the two happens. Deliberately
+  not done by widening `local_domains`: that list also drives acceptance and relaying, and the box
+  must not become addressable from outside - verified, an inbound `RCPT TO:<root@hostname>` is still
+  refused with `relay not permitted` while a real mail address on the same box is accepted.
 
 - **A rejected database import counted as a successful one everywhere** (#880). The import helpers
   send their client's output to `/dev/null` and hand back its exit code, and no caller looked at it.
