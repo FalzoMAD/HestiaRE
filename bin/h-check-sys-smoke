@@ -27,6 +27,9 @@ source $HESTIA/include/syshealth.sh
 source $HESTIA/include/quota.sh
 # shellcheck source=/usr/local/hestia/include/limits.sh
 source $HESTIA/include/limits.sh
+# record_line_valid, so the grammar has one definition and the guard does not carry a second
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_* flags), if present
@@ -1560,12 +1563,44 @@ check_web_templates_resolvable() {
 	fi
 }
 
+# check_record_grammar - every record line against record_line_valid, the one place that defines
+# the grammar (include/backup.sh). A line that loses its quotes stays READABLE - source_conf takes
+# KEY=value just fine - while every writer looks for KEY='...' and silently finds nothing. The
+# record then shows a value that no change can move, and the panel looks correct while saving
+# nothing. Cheap, and it catches hand edits, ours included.
+check_record_grammar() {
+	local f n=0 bad=0 first="" line
+	if ! declare -F record_line_valid > /dev/null 2>&1; then
+		no "record grammar not checkable" "record_line_valid missing - include/backup.sh not sourced"
+		return
+	fi
+	for f in "$CONF_DIR/users"/*/user.conf "$CONF_DIR/users"/*/*.conf "$CONF_DIR/users"/*/mail/*.conf \
+		"$CONF_DIR/ips"/* "$CONF_DIR/packages"/*.pkg "$HESTIA/conf/hestia.conf"; do
+		[ -f "$f" ] || continue
+		while IFS= read -r line; do
+			[ -n "$line" ] || continue
+			n=$((n + 1))
+			record_line_valid "$line" && continue
+			bad=$((bad + 1))
+			[ -z "$first" ] && first="$f: ${line:0:60}"
+		done < "$f"
+	done
+	# Nothing to look at is a finding: every box has records.
+	if [ "$n" -eq 0 ]; then
+		no "record grammar: no record lines found" "$CONF_DIR looks empty - the check saw nothing"
+	elif [ "$bad" -eq 0 ]; then
+		ok "record grammar holds on $n record lines"
+	else
+		no "$bad record line(s) are not KEY='value'" "$first - readable but unwritable: every writer looks for KEY='...'"
+	fi
+}
+
 # check_object_counters - the record-derived counters against a recount, using the same
 # derivation rules as h-update-user-counters. Not covered, deliberately: U_DISK*/U_BANDWIDTH
 # (measured, not derivable from records) and U_USERS (an admin-wide count, not one of this
 # user's records).
 check_object_counters() {
-	local u ud stored drift=0 first="" checked=0 ipf ip real
+	local u ud stored drift=0 first="" checked=0 ipf ip real _ip_owned _ip_avail
 	_ctr() {
 		stored=$(grep -o "${1}='[0-9]*'" "$ud/user.conf" 2> /dev/null | head -1 | tr -dc 0-9)
 		[ -n "$stored" ] || return 0
@@ -1574,6 +1609,25 @@ check_object_counters() {
 			drift=$((drift + 1))
 			[ -z "$first" ] && first="$u $1 stored=$stored counted=$2"
 		fi
+	}
+	# The ip counters, by the same rules the recount uses: the root user sees every ip file on
+	# the box whoever owns it, everyone else their own plus the shared ones the root user holds.
+	# Read from the ip file, so the NAT problem further down does not apply here.
+	_ip_count() {
+		local f owner status
+		_ip_owned=0
+		_ip_avail=0
+		for f in "$CONF_DIR/ips"/*; do
+			[ -f "$f" ] || continue
+			owner=$(sed -n "s/^OWNER='\([^']*\)'.*/\1/p" "$f" | head -1)
+			status=$(sed -n "s/^STATUS='\([^']*\)'.*/\1/p" "$f" | head -1)
+			[ "$owner" = "$1" ] && _ip_owned=$((_ip_owned + 1))
+			if [ "$1" = "$ROOT_USER" ]; then
+				_ip_avail=$((_ip_avail + 1))
+			elif [ "$owner" = "$1" ] || { [ "$owner" = "$ROOT_USER" ] && [ "$status" = 'shared' ]; }; then
+				_ip_avail=$((_ip_avail + 1))
+			fi
+		done
 	}
 	# grep -c prints its count even at rc 1 (zero matches) - a fallback echo would
 	# double the output
@@ -1602,6 +1656,12 @@ check_object_counters() {
 		_ctr SUSPENDED_MAIL "$(_cnt "SUSPENDED='yes'" "$ud/mail.conf")"
 		_ctr SUSPENDED_DB "$(_cnt "SUSPENDED='yes'" "$ud/db.conf")"
 		_ctr SUSPENDED_CRON "$(_cnt "SUSPENDED='yes'" "$ud/cron.conf")"
+		# IP_AVAIL/IP_OWNED were outside this guard, which is how a delete path that never
+		# counted the root user down stayed invisible (#866). Ownership is read from the ip
+		# file itself, so the NAT problem below does not apply here.
+		_ip_count "$u"
+		_ctr IP_OWNED "$_ip_owned"
+		_ctr IP_AVAIL "$_ip_avail"
 	done
 	# Records store the ADDRESS THE DOMAIN ANSWERS ON, which behind NAT is the public
 	# one, while the ip file is named after the local address - so both count here, or
@@ -1997,6 +2057,7 @@ check_record_name_patterns
 check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
+check_record_grammar
 check_key_registries
 check_identity_band
 # a cap written for a companion that is gone would be inherited by whoever gets the uid next.

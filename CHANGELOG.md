@@ -14,6 +14,11 @@ opens above it.
 
 ### Added
 
+- **The smoke test checks the record grammar** (#866). Every record line has to be `KEY='value'`,
+  measured with the one validator that already defines it. A line that loses its quotes stays
+  readable - `source_conf` takes `KEY=value` - while every writer looks for `KEY='...'` and
+  silently finds nothing: the value shows up correctly and no change to it ever sticks.
+
 - **Customer PHP has a CPU cap against the rest of the box** (#212). Every customer php-fpm master
   runs in `hestia-customer-php.slice`, limited to `CUSTOMER_PHP_CPU_PERCENT` of the whole machine
   (`/etc/hestia/limits.conf`, default 75, seeded once and never rewritten by an update). It is a
@@ -44,7 +49,23 @@ opens above it.
   and flags a drifted or stuck arming by its stored reason, and h-update-sys-quota re-arms a box
   out of none:* once the named reason is fixed.
 
+### Fixed
+
+- **The admin's IP counter grew with every deleted customer IP** (#866). For the root user
+  `IP_AVAIL` is the number of IPs on the box whoever owns them, and `h-add-sys-ip` counted it up
+  for a customer-owned address - but `h-delete-sys-ip` never counted it down again, so the number
+  drifted upward for the life of the box. Found by measuring the bookkeeping against the recount
+  instead of reading it. `h-check-sys-smoke` now watches `IP_AVAIL`/`IP_OWNED` too; they were the
+  two counters its drift guard never covered, which is why nothing noticed. A box that already
+  drifted is corrected by `h-update-user-counters <user>` - nothing recounts on a schedule.
+
 ### Removed
+
+- **Two record keys nothing reads** (#865). `PLUGIN_APP_INSTALLER` belonged to the Software
+  Installer, which is permanently gone - yet the self-healing wrote it back into every
+  `hestia.conf`. `U_MAIL_SSL` was a per-user counter that no code read, no lister printed and the
+  counter recount could not even verify. Registry, repair and emitters go together, as with
+  `RESOURCES_LIMIT`. Existing records keep both keys; that is deliberate (#862), and inert.
 
 - **The `csv` output format is gone from every command** (#861). It had no consumer anywhere - not
   in the tree, not on the docs branch, not in the scripts installed outside it - while every field

@@ -140,6 +140,10 @@ if [ "$OWNER" = "$ROOT_USER" ]; then
 	fi
 else
 	decrease_user_value "$OWNER" '$IP_AVAIL'
+	# The mirror of h-add-sys-ip: for the root user IP_AVAIL is the number of ip files on the
+	# box, whoever owns them, so a customer-owned ip must count down here too. Without this the
+	# admin counter grew by one with every deleted customer ip, for the life of the box (#866).
+	decrease_user_value "$ROOT_USER" '$IP_AVAIL'
 fi
 
 # Restarting web server

@@ -70,9 +70,9 @@ is_package_available() {
 
 change_user_package() {
 	# In place, key by key: rewriting the whole record from a fixed list silently dropped every
-	# key the list did not know - DOCKER_IP, DOCKER_BACKUP, FILE_MANAGER and U_MAIL_SSL were all
-	# lost on a package change, and a docker customer lost the address their isolation rule is
-	# rendered from. Only the fields a package actually defines are touched now.
+	# key the list did not know - DOCKER_IP, DOCKER_BACKUP and FILE_MANAGER were all lost on a
+	# package change, and a docker customer lost the address their isolation rule is rendered
+	# from. Only the fields a package actually defines are touched now.
 	local key
 	source_conf "$CONF_DIR/packages/$package.pkg"
 	update_user_value "$user" '$PACKAGE' "$package"
