@@ -51,6 +51,18 @@ opens above it.
 
 ### Fixed
 
+- **A nomail box had no MTA at all, and every notification was lost silently** (#872). `exim4` was
+  installed only inside the mail stage, so without a mail block nothing installed one - the
+  send-only step merely configured what it presumed to be there. It looked correct on Debian,
+  whose base image ships `exim4-daemon-light`, and never worked on Ubuntu, which ships no MTA:
+  password resets, backup reports and every other panel or CLI mail died in PHP's `mail()` with
+  `sh: /usr/sbin/sendmail: not found` while the sender returned success. The installer now installs
+  `exim4-daemon-light` for the send-only case (heavy stays with the full stack and replaces light
+  if a box later gains a mail block), `COMPONENT_PANEL_EXIM` is finally read instead of only
+  written, and the smoke test asserts the binary PHP will actually call - the old send-only check
+  returned silently when exim was absent, which on a nomail box is the defect rather than a reason
+  to skip.
+
 - **The admin's IP counter grew with every deleted customer IP** (#866). For the root user
   `IP_AVAIL` is the number of IPs on the box whoever owns them, and `h-add-sys-ip` counted it up
   for a customer-owned address - but `h-delete-sys-ip` never counted it down again, so the number

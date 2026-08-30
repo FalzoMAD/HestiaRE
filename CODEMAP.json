@@ -869,6 +869,19 @@
       "plan": "backup-restore-plan.md on the docs branch; umbrella issue #240, stages #703-#713 + #342",
       "probe": "#707: the archive is read ONCE before anything is written. backup_probe (include/backup.sh) describes what is IN the file - container, codec, object names per subsystem, dns zones, packages - and extracts the record members so nothing has to unpack it a second time; backup_report compares that against THIS host and says what will be lost or rewritten. Two functions because the first is about the file alone and the second only means anything against a particular box. Everything is derived, including the set of record keys this host itself can write, which is the registry plus the live records plus what any add_object_key call in bin/ could add - each of those three alone shrinks in a way that would make the report lie. An empty report is PRINTED, never left as silence.",
       "probe_consumers": "bin/h-list-backup-contents (reads the FILE, so an archive with no backup.conf record - a HestiaCP one placed by hand - is inspectable at all), and the preflight in h-restore-user. The panel dialog is the third, still to come. One wording, one function, so the three cannot drift."
+    },
+    "notification_mta": {
+      "description": "The MTA that carries panel and CLI notification mail (#872, #192). Everything goes through web/inc/mail-wrapper.php - that is $SENDMAIL in include/main.sh - which calls send_email() and, unless USE_SERVER_SMTP points at a relay, PHPMailer's mail(), i.e. PHP's sendmail_path. So a box without /usr/sbin/sendmail loses every notification while the wrapper still exits 0. With a mail block the MTA comes from install_mail (exim4-daemon-heavy plus the HestiaRE exim template); without one, install_exim_sendonly installs exim4-daemon-light and configure_exim_sendonly puts Debian's own update-exim4.conf machinery into send-only shape (dc_eximconfig_configtype=internet, dc_local_interfaces loopback) - the HestiaRE template is deliberately NOT used there. light rather than heavy because send-only needs no lookups or authenticators; a box that later gains a mail block gets heavy, which replaces light. Gated by COMPONENT_PANEL_EXIM, which until #872 was written by the wizard and read by nobody; when it is off the installer LOOKS at USE_SERVER_SMTP/SERVER_SMTP_HOST rather than claiming a relay, and warns when there is none: the send-only branch only configured and presumed the package, so a nomail box had an MTA solely when the base image happened to ship one - Debian does, Ubuntu does not. h-check-sys-smoke check_notification_mta asserts the binary PHP will actually call, and check_exim_sendonly now says out loud when it cannot verify the routing instead of returning silently.",
+      "entry_points": [
+        "sbin/h-install-hestia",
+        "web/inc/mail-wrapper.php"
+      ],
+      "related_files": [
+        "web/inc/main.php",
+        "include/main.sh",
+        "bin/h-check-sys-smoke",
+        "share/manifest.json"
+      ]
     }
   },
   "service_matrix": {

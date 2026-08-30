@@ -1139,6 +1139,37 @@ echo " Profile: ${INSTALL_PROFILE}"
 echo "========================================================================"
 echo ""
 
+# nomail: install the MTA, then configure it send-only (#872). Without a mail block nothing
+# used to install exim at all - it only LOOKED right on Debian, whose base image ships
+# exim4-daemon-light, while Ubuntu ships no MTA and every notification died in PHP's mail()
+# with "sh: /usr/sbin/sendmail: not found" and a return code of 0.
+#
+# light, not heavy: send-only needs no lookups or authenticators. A box that later gains a
+# mail block gets heavy from install_mail, which replaces light - the two conflict, and that
+# swap is the accepted cost of the leaner default.
+#
+# No stage marker on purpose: a re-run must repair a missing MTA, and apt is a no-op when the
+# package is already there.
+install_exim_sendonly() {
+	# Looked at, not asserted: saying "mail goes through a relay" without checking leaves the
+	# box in the state the smoke test flags as a FAIL one minute later.
+	if ! is_on "${COMPONENT_PANEL_EXIM:-true}"; then
+		if [ "${USE_SERVER_SMTP:-}" = 'true' ] && [ -n "${SERVER_SMTP_HOST:-}" ]; then
+			echo "[ * ] Local MTA disabled (COMPONENT_PANEL_EXIM) - notification mail goes through ${SERVER_SMTP_HOST}"
+		else
+			echo "[ ! ] Local MTA disabled (COMPONENT_PANEL_EXIM) and no SMTP relay configured -"
+			echo "[ ! ] notification mail is lost until USE_SERVER_SMTP and SERVER_SMTP_HOST are set"
+		fi
+		return 0
+	fi
+	echo "[ * ] Installing send-only MTA (exim4-daemon-light)..."
+	if ! hestia_apt -y install exim4 exim4-daemon-light; then
+		echo "[ ! ] exim4-daemon-light install FAILED - notification mail will not leave this box"
+		return 0
+	fi
+	configure_exim_sendonly
+}
+
 # nomail (#192): exim stays as the outbound-only notification MTA, but Debian's
 # default config is local-delivery-only - panel mail to any remote admin address
 # was silently undeliverable ("Mailing to remote domains not supported"). internet
@@ -1174,7 +1205,7 @@ if is_on "${COMPONENT_MAIL_BLOCK_PRESENT:-}"; then
 	install_mail
 else
 	echo "[ * ] Mail block not present — skipping mail stage"
-	configure_exim_sendonly
+	install_exim_sendonly
 fi
 install_security
 install_addons
