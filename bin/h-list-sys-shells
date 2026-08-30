@@ -54,14 +54,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	echo "SHELL"
-	for shell in $shells; do
-		echo "$shell"
-	done
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -73,8 +65,8 @@ shells=$(list_allowed_shells)
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

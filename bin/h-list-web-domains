@@ -105,27 +105,6 @@ plain_list() {
 	done < <(cat $USER_DATA/web.conf)
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo -n "DOMAIN,IP,IP6,DOCROOT,U_DISK,U_BANDWIDTH,TPL,ALIAS,STATS,STATS_USER,"
-	echo -n "SSL,SSL_HOME,LETSENCRYPT,FTP_USER,FTP_PATH,AUTH_USER,BACKEND,PROXY,"
-	echo "PROXY_EXT,SUSPENDED,TIME,DATE"
-	while read str; do
-		parse_object_kv_list "$str"
-		# Set correct document root path
-		if [ ! -z "$CUSTOM_DOCROOT" ]; then
-			DOCROOT="$CUSTOM_DOCROOT"
-		else
-			DOCROOT="$HOMEDIR/$user/web/$DOMAIN/public_html/"
-		fi
-		echo -n "$DOMAIN,$IP,$IP6,$DOCROOT,$U_DISK,$U_BANDWIDTH,$TPL,"
-		echo -n "\"$ALIAS\",$STATS,\"$STATS_USER\",$SSL,$SSL_HOME,$LETSENCRYPT,"
-		echo -n "\"$FTP_USER\",\"$FTP_PATH\",\"$AUTH_USER\",$BACKEND,$PROXY,"
-		echo "\"$PROXY_EXT\",$SUSPENDED,$TIME,$DATE"
-	done < <(cat $USER_DATA/web.conf)
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -142,8 +121,8 @@ is_object_valid 'user' 'USER' "$user"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 unset docroot

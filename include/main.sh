@@ -1925,7 +1925,7 @@ is_format_valid() {
 				email_forward) is_email_format_valid "$arg" ;;
 				exp) is_date_format_valid "$arg" ;;
 				extentions) is_common_format_valid "$arg" 'extentions' ;;
-				format) is_type_valid 'plain json shell csv' "$arg" ;;
+				format) is_type_valid 'plain json shell' "$arg" ;;
 				ftp_password) is_password_format_valid "$arg" ;;
 				ftp_user) is_user_format_valid "$arg" "$arg_name" ;;
 				hash) is_hash_format_valid "$arg" "$arg_name" ;;

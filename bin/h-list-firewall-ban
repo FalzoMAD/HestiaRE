@@ -66,16 +66,6 @@ plain_list() {
 	done < <(cat $CONF_DIR/firewall/banlist.conf)
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo "IP,CHAIN,TIME,DATE"
-	while read str; do
-		parse_object_kv_list "$str"
-		echo "$IP,$CHAIN,$TIME,$DATE"
-	done < <(cat $CONF_DIR/firewall/banlist.conf)
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -84,8 +74,8 @@ csv_list() {
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

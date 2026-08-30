@@ -55,11 +55,6 @@ plain_list() {
 	dnsbl_hosts
 }
 
-csv_list() {
-	echo "HOST"
-	dnsbl_hosts
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -67,7 +62,6 @@ csv_list() {
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
 	*) check_args '1' '0' '[FORMAT]' ;;
 esac

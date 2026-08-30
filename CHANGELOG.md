@@ -46,6 +46,13 @@ opens above it.
 
 ### Removed
 
+- **The `csv` output format is gone from every command** (#861). It had no consumer anywhere - not
+  in the tree, not on the docs branch, not in the scripts installed outside it - while every field
+  change had to carry it through four listers in four formats. That nobody noticed
+  `h-list-user-packages csv` emitting empty columns and the caller's own `$SHELL` as data is the
+  evidence. `json` (for programs), `plain` (the CLI's own machine format, 43 call sites) and
+  `shell` (for people) stay. An unknown format is now a named error instead of silence.
+
 - **The per-user cgroup resource limits are gone** (#212). `RESOURCES_LIMIT`, the four package
   fields CPU_QUOTA / CPU_QUOTA_PERIOD / MEMORY_LIMIT / SWAP_LIMIT, the three `*-cgroups` commands
   and the "Limit System Resources" panel block never limited what a hosting box needs limited:

@@ -93,27 +93,6 @@ plain_list() {
 	done < <(cat $USER_DATA/stats.log)
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo -n "DATE,TIME,PACKAGE,IP_OWNED,DISK_QUOTA,U_DISK,"
-	echo -n "U_DISK_DIRS,U_DISK_WEB,U_DISK_MAIL,U_DISK_DB,"
-	echo -n "BANDWIDTH,U_BANDWIDTH,U_WEB_DOMAINS,U_WEB_SSL,"
-	echo -n "U_WEB_ALIASES,"
-	echo -n "U_MAIL_DOMAINS,U_MAIL_DKIM,U_MAIL_ACCOUNTS,"
-	echo "U_DATABASES,U_CRON_JOBS,U_BACKUPS"
-
-	while read str; do
-		parse_object_kv_list "$str"
-		echo -n "$DATE,$TIME,$PACKAGE,$IP_OWNED,$DISK_QUOTA,$U_DISK,"
-		echo -n "$U_DISK_DIRS,$U_DISK_WEB,$U_DISK_MAIL,$U_DISK_DB,"
-		echo -n "$BANDWIDTH,$U_BANDWIDTH,$U_WEB_DOMAINS,$U_WEB_SSL,"
-		echo -n "$U_WEB_ALIASES,"
-		echo -n "$U_MAIL_DOMAINS,$U_MAIL_DKIM,$U_MAIL_ACCOUNTS,"
-		echo "$U_DATABASES,$U_CRON_JOBS,$U_BACKUPS"
-	done < <(cat $USER_DATA/stats.log)
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -139,8 +118,8 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

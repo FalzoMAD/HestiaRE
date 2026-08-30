@@ -82,21 +82,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo "ID,MESSAGE,TIME,DATE"
-	for str in $logs; do
-		ID=$(echo "$str" | cut -f 2 -d \')
-		DATE=$(echo "$str" | cut -f 4 -d \')
-		TIME=$(echo "$str" | cut -f 6 -d \')
-		LEVEL=$(echo "$str" | cut -f 8 -d \')
-		CATEGORY=$(echo "$str" | cut -f 10 -d \')
-		MESSAGE=$(echo "$str" | cut -f 12 -d \')
-		echo "$ID,\"$DATE\",\"$TIME",\"$LEVEL\",\"$CATEGORY\",\"$MESSAGE""
-	done
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -122,8 +107,8 @@ logs=$(tail -n 300 $log_file 2> /dev/null)
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t -s '~' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

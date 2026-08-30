@@ -49,11 +49,6 @@ plain_list() {
 	grep -v '^\s*$' "$excludes" 2> /dev/null
 }
 
-csv_list() {
-	echo "IP"
-	grep -v '^\s*$' "$excludes" 2> /dev/null
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -61,8 +56,8 @@ csv_list() {
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

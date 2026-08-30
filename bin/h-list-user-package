@@ -78,18 +78,6 @@ plain_list() {
 	echo -e "$DISK_QUOTA\t$BANDWIDTH\t$SHELL\t$BACKUPS\t$TIME\t$DATE"
 }
 
-# CSV list function
-csv_list() {
-	echo -n "PACKAGE,WEB_TEMPLATE,BACKEND_TEMPLATE,PROXY_TEMPLATE,"
-	echo -n "WEB_DOMAINS,WEB_ALIASES,"
-	echo -n "MAIL_DOMAINS,MAIL_ACCOUNTS,RATE_LIMIT,DATABASES,CRON_JOBS,"
-	echo "DISK_QUOTA,DOCKER_LIMIT,BANDWIDTH,SHELL,BACKUPS,TIME,DATE"
-	echo -n "$PACKAGE,$WEB_TEMPLATE,$BACKEND_TEMPLATE,$PROXY_TEMPLATE,"
-	echo -n "$WEB_DOMAINS,$WEB_ALIASES,"
-	echo -n "$MAIL_DOMAINS,$MAIL_ACCOUNTS,$RATE_LIMIT,$DATABASES,$CRON_JOBS,"
-	echo "$DISK_QUOTA,$DOCKER_LIMIT,$BANDWIDTH,$SHELL,$BACKUPS,$TIME,$DATE"
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -110,8 +98,8 @@ source_conf "$CONF_DIR/packages/$PACKAGE.pkg"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

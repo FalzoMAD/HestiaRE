@@ -69,16 +69,6 @@ plain_list() {
 	done < <(echo -e "$data" | grep NAME)
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo "NAME,SYSTEM,STATE,CPU,MEM,RTIME"
-	while read str; do
-		parse_object_kv_list "$str"
-		echo "$NAME,\"$SYSTEM\",$STATE,$CPU,$MEM,$RTIME"
-	done < <(echo -e "$data" | grep NAME)
-}
-
 # Get service state function
 get_srv_state() {
 	srv=$1
@@ -338,8 +328,8 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 if [ -f "$tmp_file" ]; then

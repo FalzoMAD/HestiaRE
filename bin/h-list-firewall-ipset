@@ -80,26 +80,14 @@ plain_list() {
 	done < <(cat $CONF_DIR/firewall/ipset.conf)
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo "LISTNAME,IP_VERSION,AUTOUPDATE,SUSPENDED,SOURCE,SUSPENDED,TIME,DATE"
-	while read str; do
-		[[ -z "$str" ]] && continue
-		parse_object_kv_list "$str"
-		echo -n "$LISTNAME,$IP_VERSION,$AUTOUPDATE,$SUSPENDED,\"$SOURCE\","
-		echo "$TIME,$DATE"
-	done < <(cat $CONF_DIR/firewall/ipset.conf)
-}
-
 [ ! -f "$CONF_DIR/firewall/ipset.conf" ] && touch "$CONF_DIR/firewall/ipset.conf"
 
 # Listing data
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t -s '^' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

@@ -96,21 +96,11 @@ plain_list() {
 	done < "$MESH_PEERS_CONF"
 }
 
-csv_list() {
-	IFS=$'\n'
-	echo "PEER,HOST,PORT,IP,BANS,SUSPENDED,TIME,DATE"
-	while read -r str; do
-		[ -z "$str" ] && continue
-		parse_object_kv_list "$str"
-		echo "$PEER,$HOST,$PORT,$IP,${MESH_SEEN[$PEER]:-0},$SUSPENDED,$TIME,$DATE"
-	done < "$MESH_PEERS_CONF"
-}
-
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t -s '^' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

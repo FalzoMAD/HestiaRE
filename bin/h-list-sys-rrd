@@ -111,16 +111,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	for type in $rrd_types; do
-		echo "RRD"
-		for rrd in $(ls $RRD/$type | grep rrd$ | sed "s/\.rrd$//g"); do
-			echo "$RRD/$type/$rrd.rrd"
-		done
-	done
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -155,8 +145,8 @@ rrd_types="$rrd_types ssh"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

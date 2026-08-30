@@ -54,14 +54,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	echo "VERSION"
-	for version in "${versions[@]}"; do
-		echo "$version"
-	done
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -76,8 +68,8 @@ versions+=("$(multiphp_default_version)")
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

@@ -55,14 +55,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	echo "TEMPLATE"
-	for template in $templates; do
-		echo "$template"
-	done
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -83,10 +75,9 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
 	*)
-		echo "Error: unknown format $format (json, plain, csv, shell)" >&2
+		echo "Error: unknown format $format (json, plain, shell)" >&2
 		exit "$E_INVALID"
 		;;
 esac

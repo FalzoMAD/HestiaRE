@@ -62,12 +62,6 @@ plain_list() {
 	echo -e "$MIN\t$HOUR\t$DAY\t$MONTH\t$WDAY\t$CMD\t$SUSPENDED\t$TIME\t$DATE"
 }
 
-# CSV list function
-csv_list() {
-	echo "MIN,HOUR,DAY,MONTH,WDAY,CMD,SUSPENDED,TIME,DATE"
-	echo "$MIN,$HOUR,$DAY,$MONTH,$WDAY,\"$CMD\",$SUSPENDED,$TIME,$DATE'"
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -95,7 +89,7 @@ parse_object_kv_list "$cron_line"
 
 # %quote% is the storage encoding for ' (the record delimiter); every format needs it decoded.
 CMD_RAW="${CMD//%quote%/\'}"
-# The " escaping belongs to JSON alone. It stays here for shell/plain/csv, which have always
+# The " escaping belongs to JSON alone. It stays here for shell and plain, which have always
 # printed the value this way, while json_list takes CMD_RAW and lets json_escape do the whole
 # encoding - in front of json_escape this line doubled every escape it had already made.
 CMD=$(echo "$CMD_RAW" | sed -e 's/"/\\"/g')
@@ -104,8 +98,8 @@ CMD=$(echo "$CMD_RAW" | sed -e 's/"/\\"/g')
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#
