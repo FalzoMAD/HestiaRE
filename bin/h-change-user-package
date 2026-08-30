@@ -78,7 +78,7 @@ change_user_package() {
 	update_user_value "$user" '$PACKAGE' "$package"
 	for key in WEB_TEMPLATE BACKEND_TEMPLATE PROXY_TEMPLATE WEB_DOMAINS WEB_ALIASES \
 		MAIL_DOMAINS MAIL_ACCOUNTS RATE_LIMIT DATABASES CRON_JOBS DISK_QUOTA \
-		CPU_QUOTA CPU_QUOTA_PERIOD MEMORY_LIMIT SWAP_LIMIT DOCKER_LIMIT BANDWIDTH \
+		DOCKER_LIMIT BANDWIDTH \
 		SHELL BACKUPS BACKUPS_MODE; do
 		update_user_value "$user" "\$$key" "${!key}"
 	done
@@ -116,13 +116,7 @@ fi
 source $HESTIA/conf/hestia.conf
 $BIN/h-update-user-quota "$user"
 
-# Update cgroup
-if [ "$RESOURCES_LIMIT" = 'yes' ]; then
-	$BIN/h-update-user-cgroup "$user"
-fi
-
-# The docker cap is applied whatever RESOURCES_LIMIT says: it exists only for docker customers,
-# and the toggle is off by default - a preset that silently does nothing is worse than none.
+# The docker cap is per docker customer: the companion slice is the only place it can land.
 source $HESTIA/include/docker.sh
 docker_slice_apply "$user" "$(get_user_value '$DOCKER_LIMIT')"
 #----------------------------------------------------------#

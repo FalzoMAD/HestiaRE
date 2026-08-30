@@ -25,6 +25,8 @@ source $HESTIA/include/domain.sh
 source $HESTIA/include/syshealth.sh
 # shellcheck source=/usr/local/hestia/include/quota.sh
 source $HESTIA/include/quota.sh
+# shellcheck source=/usr/local/hestia/include/limits.sh
+source $HESTIA/include/limits.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_* flags), if present
@@ -796,6 +798,67 @@ check_project_quota() {
 			skip "project quota: not enforced on this box (${PROJECT_QUOTA:-key unset}; h-update-sys-quota re-arms once the cause is fixed)"
 			;;
 	esac
+}
+
+# Customer PHP CPU cap (#212): the ENFORCED value from the cgroup, never the systemd property -
+# the property reads the drop-in the moment it is written, so a fleet of masters still running in
+# system.slice reports itself capped. The boot step deliberately does not abort a boot, so nothing
+# else would notice a cap that never got computed.
+#
+# Not covered: whether the cap is the right size - a hand-set value is reported, not judged.
+check_customer_php_slice() {
+	local versions uncapped='' seen=0 ver cores cpu_max quota period pct conf
+	versions=$(customer_php_versions)
+	if [ -z "$versions" ]; then
+		skip "customer PHP cap: no customer php-fpm on this box"
+		return
+	fi
+
+	for ver in $versions; do
+		[ "$(systemctl is-active "php$ver-fpm" 2> /dev/null)" = 'active' ] || continue
+		seen=$((seen + 1))
+		customer_php_in_slice "$ver" || uncapped="$uncapped php$ver-fpm"
+	done
+	# Counted, not inferred from an empty list: with no master running, $uncapped stays empty and
+	# the branch below would report every master capped having looked at none. Returning instead
+	# of falling through, because the slice then has no cgroup either and the cap branch would
+	# add "nothing is capped" - true, useless, and reading like a contradiction. That FPM is down
+	# is check_service's sentence to say, once.
+	if [ "$seen" -eq 0 ]; then
+		skip "customer PHP cap: no customer php-fpm master is running (nothing to place, nothing to cap)"
+		return
+	fi
+	if [ -z "$uncapped" ]; then
+		ok "customer php-fpm masters run in $CUSTOMER_PHP_SLICE ($seen checked)"
+	else
+		no "customer php-fpm outside the cap:$uncapped" "customer load can starve panel, mail and ssh; systemctl restart $CUSTOMER_PHP_LIMIT_UNIT"
+	fi
+
+	cpu_max=$(customer_php_cpu_max)
+	cores=$(nproc --all 2> /dev/null)
+	# Same reader as the boot script, range check included: a value the script refuses must not
+	# be reported here as the configured one.
+	if customer_php_percent; then
+		conf="${CUSTOMER_PHP_PERCENT}%"
+	else
+		conf="${CUSTOMER_PHP_PERCENT}% - the file says '$CUSTOMER_PHP_PERCENT_RAW', which is refused"
+	fi
+	quota=${cpu_max%% *}
+	period=${cpu_max##* }
+	if [ -z "$cpu_max" ]; then
+		# Measured: with the quota gone systemd drops the cpu controller from the subtree, so
+		# cpu.max is missing rather than "max" - and an inactive slice has no directory at all.
+		# Both mean the same thing here, and neither says anything about membership.
+		no "customer PHP slice carries no CPU limit (cpu.max absent)" \
+			"nothing is capped - systemctl restart $CUSTOMER_PHP_LIMIT_UNIT, then read its status"
+	elif [ "$quota" = 'max' ]; then
+		no "customer PHP cap not applied (cpu.max: $cpu_max)" \
+			"nothing is capped - systemctl restart $CUSTOMER_PHP_LIMIT_UNIT, then read its status"
+	else
+		# Back to a share of the machine, which is what the config file promises.
+		pct=$((quota * 100 / period / ${cores:-1}))
+		ok "customer PHP cap enforced: cpu.max $cpu_max = ${pct}% of ${cores:-?} cores (configured $conf)"
+	fi
 }
 
 # The curated CLI conf.d is a hand-kept list against moving code (#193 found gettext
@@ -1755,6 +1818,7 @@ check_http "https://127.0.0.1:${BACKEND_PORT:-8083}/login/" "panel login page"
 # invalid sudoers → no privileged panel action works
 check_sudoers /etc/sudoers.d/hestia "hestia grant"
 check_project_quota
+check_customer_php_slice
 
 # --- Configured subsystems (derived from *_SYSTEM) ---
 echo "-- services --"

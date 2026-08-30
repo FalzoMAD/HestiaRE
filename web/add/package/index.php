@@ -38,7 +38,6 @@ $web_templates = cli_json("h-list-web-templates json");
 $offer_web_template = !empty($web_templates);
 $offer_backend_template = !empty($_SESSION["WEB_BACKEND"]) && !empty($backend_templates);
 $offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
-$offer_resources = $_SESSION["RESOURCES_LIMIT"] == "yes";
 $offer_docker_limit = !empty($_SESSION["DOCKER_SYSTEM"]);
 // enforcement capability, not a switch (#211): pending/none boxes hide the control
 $offer_quota = ($_SESSION["PROJECT_QUOTA"] ?? "") == "active";
@@ -98,21 +97,6 @@ if (!empty($_POST["ok"])) {
 		$errors[] = _("Rate Limit");
 	}
 
-	if ($offer_resources) {
-		if (!isset($_POST["v_cpu_quota"])) {
-			$errors[] = _("CPU quota");
-		}
-		if (!isset($_POST["v_cpu_quota_period"])) {
-			$errors[] = _("CPU quota period");
-		}
-		if (!isset($_POST["v_memory_limit"])) {
-			$errors[] = _("Memory Limit");
-		}
-		if (!isset($_POST["v_swap_limit"])) {
-			$errors[] = _("Swap Limit");
-		}
-	}
-
 	if (!empty($errors[0])) {
 		foreach ($errors as $i => $error) {
 			if ($i == 0) {
@@ -145,12 +129,6 @@ if (!empty($_POST["ok"])) {
 		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 		$v_ratelimit = quoteshellarg($_POST["v_ratelimit"]);
 
-		// No control rendered while RESOURCES_LIMIT is off - a new package takes the shipped
-		// default rather than an empty value.
-		$v_cpu_quota = quoteshellarg(post_or_keep("v_cpu_quota", $offer_resources, "unlimited"));
-		$v_cpu_quota_period = quoteshellarg(post_or_keep("v_cpu_quota_period", $offer_resources, "unlimited"));
-		$v_memory_limit = quoteshellarg(post_or_keep("v_memory_limit", $offer_resources, "unlimited"));
-		$v_swap_limit = quoteshellarg(post_or_keep("v_swap_limit", $offer_resources, "unlimited"));
 		// a preset name, not a size - the command rejects anything else
 		$v_docker_limit = quoteshellarg(post_or_keep("v_docker_limit", $offer_docker_limit, "unlimited"));
 
@@ -173,10 +151,6 @@ if (!empty($_POST["ok"])) {
 			$pkg .= "DATABASES=" . $v_databases . "\n";
 			$pkg .= "CRON_JOBS=" . $v_cron_jobs . "\n";
 			$pkg .= "DISK_QUOTA=" . $v_disk_quota . "\n";
-			$pkg .= "CPU_QUOTA=" . $v_cpu_quota . "\n";
-			$pkg .= "CPU_QUOTA_PERIOD=" . $v_cpu_quota_period . "\n";
-			$pkg .= "MEMORY_LIMIT=" . $v_memory_limit . "\n";
-			$pkg .= "SWAP_LIMIT=" . $v_swap_limit . "\n";
 			$pkg .= "DOCKER_LIMIT=" . $v_docker_limit . "\n";
 			$pkg .= "BANDWIDTH=" . $v_bandwidth . "\n";
 			$pkg .= "RATE_LIMIT=" . $v_ratelimit . "\n";
@@ -265,18 +239,8 @@ if (empty($v_ratelimit)) {
 	$v_ratelimit = "'200'";
 }
 
-if (empty($v_cpu_quota)) {
-	$v_cpu_quota = "'unlimited'";
+if (empty($v_docker_limit)) {
 	$v_docker_limit = "'unlimited'";
-}
-if (empty($v_cpu_quota_period)) {
-	$v_cpu_quota_period = "'unlimited'";
-}
-if (empty($v_memory_limit)) {
-	$v_memory_limit = "'unlimited'";
-}
-if (empty($v_swap_limit)) {
-	$v_swap_limit = "'unlimited'";
 }
 
 // Render page

@@ -72,6 +72,8 @@ source "$HESTIA/include/main.sh" # source_conf hestia.conf, BIN, dirs, error cod
 source "$HESTIA/include/helper.sh" # hestia_apt, load_os_profile, seed_hestia_etc
 # shellcheck source=/usr/local/hestia/include/quota.sh
 source "$HESTIA/include/quota.sh" # quota_arm (#211)
+# shellcheck source=/usr/local/hestia/include/limits.sh
+source "$HESTIA/include/limits.sh" # customer_php_limit_apply (#212)
 # shellcheck source=/usr/local/hestia/include/fail2ban.sh
 source "$HESTIA/include/fail2ban.sh" # fail2ban_apply
 # shellcheck source=/usr/local/hestia/include/web-model.sh
@@ -491,6 +493,11 @@ php${PHP_VER}-readline php${PHP_VER}-xml"
 	update-rc.d php${PHP_VER}-fpm defaults > /dev/null 2>&1
 	systemctl start php${PHP_VER}-fpm
 	update-alternatives --set php /usr/bin/php${PHP_VER} > /dev/null 2>&1 || true
+
+	# After every version exists: the cap covers the masters together, so a version
+	# added later than this loop would otherwise serve outside the slice (#212).
+	echo "[ * ] Capping customer PHP CPU..."
+	customer_php_limit_apply
 
 	echo "[ * ] Configuring PHP settings (timezone, short_open_tag)..."
 	local ZONE pconf

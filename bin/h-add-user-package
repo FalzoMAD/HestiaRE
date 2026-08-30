@@ -49,24 +49,12 @@ is_package_consistent() {
 	if [ "$DISK_QUOTA" != 'unlimited' ]; then
 		is_int_format_valid "$DISK_QUOTA" 'DISK_QUOTA'
 	fi
-	if [ "$CPU_QUOTA" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
-		is_valid_cpu_quota "$CPU_QUOTA" 'CPU_QUOTA'
-	fi
-	if [ "$CPU_QUOTA_PERIOD" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
-		is_valid_cpu_quota_period "$CPU_QUOTA_PERIOD" 'CPU_QUOTA_PERIOD'
-	fi
 	# The docker cap is a preset, not a size: the mapping to systemd properties lives in
 	# docker_slice_properties, so a package can only carry a name it knows.
 	case "${DOCKER_LIMIT:-unlimited}" in
 		unlimited | low | medium | high) ;;
 		*) check_result "$E_INVALID" "DOCKER_LIMIT must be unlimited, low, medium or high" ;;
 	esac
-	if [ "$MEMORY_LIMIT" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
-		is_valid_memory_size "$MEMORY_LIMIT" 'MEMORY_LIMIT'
-	fi
-	if [ "$SWAP_LIMIT" != 'unlimited' ] && [ "$RESOURCES_LIMIT" = 'yes' ]; then
-		is_valid_swap_size "$SWAP_LIMIT" 'SWAP_LIMIT'
-	fi
 	if [ "$BANDWIDTH" != 'unlimited' ]; then
 		is_int_format_valid "$BANDWIDTH" 'BANDWIDTH'
 	fi
@@ -141,10 +129,6 @@ RATE_LIMIT='$RATE_LIMIT'
 DATABASES='$DATABASES'
 CRON_JOBS='$CRON_JOBS'
 DISK_QUOTA='$DISK_QUOTA'
-CPU_QUOTA='$CPU_QUOTA'
-CPU_QUOTA_PERIOD='$CPU_QUOTA_PERIOD'
-MEMORY_LIMIT='$MEMORY_LIMIT'
-SWAP_LIMIT='$SWAP_LIMIT'
 DOCKER_LIMIT='$DOCKER_LIMIT'
 BANDWIDTH='$BANDWIDTH'
 SHELL='$SHELL'
