@@ -22,8 +22,10 @@ source $HESTIA/include/main.sh
 source_conf "$HESTIA/conf/hestia.conf"
 
 # Retrieve Hestia Control Panel version number
-HESTIA_VERSION=$(grep VERSION $HESTIA/conf/hestia.conf | cut -d '=' -f2 | sed "s|'||g")
-HESTIA_RELEASE=$(grep RELEASE_BRANCH $HESTIA/conf/hestia.conf | cut -d '=' -f2 | sed "s|'||g")
+# Anchored: unanchored, VERSION also matches any future *_VERSION key and the value comes
+# back as two lines.
+HESTIA_VERSION=$(grep '^VERSION=' $HESTIA/conf/hestia.conf | cut -d '=' -f2 | sed "s|'||g")
+HESTIA_RELEASE=$(grep '^RELEASE_BRANCH=' $HESTIA/conf/hestia.conf | cut -d '=' -f2 | sed "s|'||g")
 
 # JSON list function
 json_list() {
