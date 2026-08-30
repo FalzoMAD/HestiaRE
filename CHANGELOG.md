@@ -75,8 +75,11 @@ opens above it.
   answering where the firewall was shut. It now moves the Caddy site and the listener-wrapper
   block, reads the CURRENT port from that site rather than from the config value, and re-renders
   the phpMyAdmin proxy include that every customer domain uses (the port is a `%panel_port%`
-  placeholder there now, so a redeploy cannot reset it). The installer no longer swallows a failed
-  apply, and `h-check-sys-smoke` compares the live site against `BACKEND_PORT`.
+  placeholder there now, so a redeploy cannot reset it). It also proves its own result: the
+  listener moves first and has to answer on the new port before `BACKEND_PORT`, the firewall and
+  the proxies follow - otherwise the caddy files are rolled back and nothing else was touched. The
+  installer no longer swallows a failed apply, and `h-check-sys-smoke` compares the live site
+  against `BACKEND_PORT`.
 
 - **The wizard accepted any number as the panel port** (#730). `0`, `80` and `70000` all passed,
   and so did `8090` or `8091`, where the loopback webmail listeners sit - a collision that only
@@ -84,7 +87,10 @@ opens above it.
   before the first write, with a message naming the conflict partner. The reserved set is DERIVED
   from the shipped listener declarations under `share/` and `include/`, not written down: a
   listener added later cannot fall out of it, and a scan that finds nothing refuses rather than
-  waving every port through.
+  waving every port through. It is not a numeric band but about a dozen individual ports - the
+  80xx of panel and web stack, and equally `3306`, `5432` and `4190`, which our own configs
+  declare. Comment lines, application code and IP octets are excluded, each because a measurement
+  showed them producing a wrong reservation.
 
 - **The panel showed the version twice over** (#617). The server page printed a literal `v` in
   front of a version string that already carries one (`vv0.17.1`); the footer and the update box

@@ -33,14 +33,47 @@ current_panel_port() {
 	sed -n 's|^[[:space:]]*https\?://:\([0-9]\{2,5\}\).*|\1|p' "$CADDY_SITE" 2> /dev/null | head -n1
 }
 
+# Measured, not assumed: caddy takes a moment to bind, and everything after this point
+# writes the new port into the firewall and the proxies. If the listener is not up, moving
+# them is what produces the lockout this command exists to prevent.
+port_is_listening() {
+	local port="$1" i
+	for i in 1 2 3 4 5 6 7 8 9 10; do
+		ss -H -tln 2> /dev/null | awk '{print $4}' | grep -qE "[:.]$port\$" && return 0
+		sleep 1
+	done
+	return 1
+}
+
+# Both files name the port: the site address and the listener-wrapper block, which is scoped
+# to the panel port so it does not wrap the loopback webmail listeners.
+write_panel_port() {
+	local from="$1" to="$2"
+	sed -i "s|^\([[:space:]]*https\?://\):$from\b|\1:$to|" "$CADDY_SITE"
+	[ -f "$CADDY_MAIN" ] && sed -i "s|^\([[:space:]]*servers[[:space:]]*\):$from\b|\1:$to|" "$CADDY_MAIN"
+	return 0
+}
+
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
 check_args '1' "$#" 'PORT'
 
+# The site file IS the panel port. Falling back to BACKEND_PORT here would write the new
+# value into the firewall and the proxies while no listener moved - the small version of
+# exactly the split this command was rewritten to end.
+if [ ! -f "$CADDY_SITE" ]; then
+	echo "Panel site $CADDY_SITE is missing - there is no panel listener to move"
+	log_event "$E_NOTEXIST" "$ARGUMENTS"
+	exit "$E_NOTEXIST"
+fi
 ORIGINAL_PORT=$(current_panel_port)
-[ -n "$ORIGINAL_PORT" ] || ORIGINAL_PORT="${BACKEND_PORT:-8083}"
+if [ -z "$ORIGINAL_PORT" ]; then
+	echo "Panel site $CADDY_SITE declares no port - refusing to guess which listener to move"
+	log_event "$E_NOTEXIST" "$ARGUMENTS"
+	exit "$E_NOTEXIST"
+fi
 
 # Same validator the wizard uses, so a port refused at install time cannot be set later.
 if ! reason=$(panel_port_refusal "$PORT" "$HESTIA"); then
@@ -65,13 +98,22 @@ if [ "$ORIGINAL_PORT" = "$PORT" ] && [ "${BACKEND_PORT:-}" = "$PORT" ]; then
 	exit 0
 fi
 
-# The listener itself, in both places that name it: the site address and the listener-wrapper
-# block, which is scoped to the panel port so it does not wrap the loopback webmail listeners.
-if [ -f "$CADDY_SITE" ]; then
-	sed -i "s|^\([[:space:]]*https\?://\):$ORIGINAL_PORT\b|\1:$PORT|" "$CADDY_SITE"
-fi
-if [ -f "$CADDY_MAIN" ]; then
-	sed -i "s|^\([[:space:]]*servers[[:space:]]*\):$ORIGINAL_PORT\b|\1:$PORT|" "$CADDY_MAIN"
+# The listener FIRST, and proven before anything follows it. Everything below this block
+# points at the panel; writing them against a listener that never came up is the lockout.
+write_panel_port "$ORIGINAL_PORT" "$PORT"
+"$BIN/h-restart-service" hestia
+
+if ! port_is_listening "$PORT"; then
+	echo "Panel did not come up on $PORT - rolling back to $ORIGINAL_PORT"
+	write_panel_port "$PORT" "$ORIGINAL_PORT"
+	"$BIN/h-restart-service" hestia
+	if port_is_listening "$ORIGINAL_PORT"; then
+		echo "Rolled back: the panel is on $ORIGINAL_PORT again, nothing else was changed"
+	else
+		echo "ROLLBACK FAILED: no panel listener on $ORIGINAL_PORT either - check: systemctl status caddy"
+	fi
+	log_event "$E_INUSE" "$ARGUMENTS"
+	exit "$E_INUSE"
 fi
 
 "$BIN/h-change-sys-config-value" "BACKEND_PORT" "$PORT"
@@ -97,8 +139,13 @@ fi
 
 # phpMyAdmin on a customer domain is a transparent proxy INTO the panel, so it carries the
 # port too. Re-rendered by its own deployer rather than sed'ed here - one writer for that file.
+# Its output is NOT swallowed: it refuses loudly on an empty BACKEND_PORT, and a refusal
+# nobody sees leaves every customer domain proxying at the old port.
 if [ -n "$DB_PMA_ALIAS" ]; then
-	"$BIN/h-change-sys-db-alias" 'pma' "$DB_PMA_ALIAS" > /dev/null 2>&1
+	if ! _pma_out=$("$BIN/h-change-sys-db-alias" 'pma' "$DB_PMA_ALIAS" 2>&1); then
+		echo "Warning: phpMyAdmin proxy not re-rendered (${_pma_out:-no output})"
+		echo "         customer domains still proxy to the old port - fix, then: h-change-sys-db-alias pma $DB_PMA_ALIAS"
+	fi
 fi
 
 # Restart services. The name has to BE $FIREWALL_SYSTEM: h-restart-service recognises the firewall by
@@ -108,10 +155,6 @@ fi
 if [ -n "$FIREWALL_SYSTEM" ] && [ "$FIREWALL_SYSTEM" != no ]; then
 	"$BIN/h-restart-service" "$FIREWALL_SYSTEM"
 fi
-
-# hestia = Caddy + hestia-php (see h-restart-service); Caddy needs a restart, a reload keeps
-# the old listener.
-"$BIN/h-restart-service" hestia
 
 #----------------------------------------------------------#
 #                       Hestia                             #

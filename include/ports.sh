@@ -3,16 +3,32 @@
 #
 # Derived from the shipped configs, never a maintained list: a listener added later would
 # otherwise fall out of the set because nobody remembered to add it here, and a guard that
-# looks at less is worse than none. The regex anchors on the forms that DECLARE a listener,
-# which is why a buffer size of 8192 in a vendored file is not read as a port.
+# looks at less is worse than none.
 #
-# A live check cannot replace this at wizard time: most of these services are not installed
-# yet when the operator picks the panel port, so nothing is bound and nothing collides -
-# until the installer brings them up an hour later.
+# This is NOT a reserved numeric band. It is the set of ports our own files DECLARE, which
+# measures out at about a dozen individual numbers - the panel and web-stack 80xx, but also
+# 3306 from share/mysql/my-*.cnf, 5432 from include/db.sh and 4190 from our managesieve
+# config. A digit class that only looked at 8xxx let 3306 through as a panel port, and an
+# hour later MariaDB could not bind: exactly the failure this guard exists for.
+#
+# Three things the scan must exclude, each measured rather than assumed:
+#   - comment lines: dovecot and rspamd ship their defaults commented out (11333, 9900,
+#     2000), and a comment naming a port does not claim it
+#   - application code (*.php): a listener is declared in configuration, not in a program,
+#     and vendored code carries other people's ports - adminer connects to "localhost:1433".
+#     NOT covered as a consequence: a listener that only ever appears in a .php.
+#     (VENDORED.json cannot do this job: it is export-ignore, so it never reaches a box and
+#     the exclusion would look right in the repo and be inert where it matters.)
+#   - IP octets and clock fields: hence the anchors below and the "not followed by a dot"
+#
+# A live check cannot replace any of this at wizard time: most of these services are not
+# installed yet when the operator picks the panel port, so nothing is bound and nothing
+# collides - until the installer brings them up an hour later.
 
-# Anchored on declaration forms: nginx/apache `listen`, a loopback target, a Caddy site
-# address, a `port =` assignment. Ports outside 8000-8999 are not ours to hand out.
-PORT_DECL_RE='(listen[[:space:]=]+[^;]*[^0-9]|127\.0\.0\.1:|localhost:|https?://:|port[[:space:]]*=[[:space:]]*)(8[0-9]{3})'
+# Anchored on declaration forms only: nginx/apache `listen`, a loopback target, a Caddy site
+# address, a `port =` or `*_PORT=` assignment. The leading (?!...) drops comment lines, \K
+# keeps only the number, and (?![\d.]) stops an IP octet from reading as a port.
+PORT_DECL_RE='^(?!\s*(?:#|;|//|--)).*?(?:listen[\s=]+(?:[0-9a-fA-F.:\[\]*]+:)?|127\.0\.0\.1:|localhost:|https?://:|[a-z_]*port\s*=\s*['"'"'"]?)\K\d{2,5}(?![\d.])'
 
 # The port the panel's own site template declares. It is not a conflict for the panel to
 # take it, so it is subtracted from the reserved set - read from the template rather than
@@ -23,12 +39,14 @@ panel_port_shipped() {
 }
 
 # PORT<TAB>SOURCE per line. Returns 1 on an empty result: "nothing reserved" is a broken
-# tree, not a free choice, and the callers must refuse rather than wave everything through.
+# tree (or a grep without -P), not a free choice, and the callers must refuse rather than
+# wave everything through.
 reserved_ports() {
 	local root="${1:-${HESTIA:-/usr/local/hestia}}" own out
 	own=$(panel_port_shipped "$root")
-	out=$(grep -rsoiE "$PORT_DECL_RE" "$root/share" "$root/include" 2> /dev/null \
-		| sed -E 's|^([^:]*):.*[^0-9]([0-9]{4})$|\2\t\1|' \
+	out=$(grep -rPnoi --exclude='*.php' "$PORT_DECL_RE" "$root/share" "$root/include" 2> /dev/null \
+		| sed "s|^$root/||" \
+		| awk -F: '{print $NF"\t"$1}' \
 		| awk -v own="$own" '$1 != own' | sort -u)
 	[ -n "$out" ] || return 1
 	printf '%s\n' "$out"
@@ -41,7 +59,7 @@ reserved_ports() {
 reserved_port_owner() {
 	local port="$1" root="${2:-${HESTIA:-/usr/local/hestia}}" src
 	src=$(reserved_ports "$root" \
-		| awk -v p="$port" '$1 == p {rank = 4; if ($2 ~ /panel-caddy\/webmail-/) rank = 1; else if ($2 ~ /panel-caddy/) rank = 2; else if ($2 ~ /\/share\//) rank = 3; print rank "\t" $2}' \
+		| awk -v p="$port" '$1 == p {rank = 4; if ($2 ~ /panel-caddy\/webmail-/) rank = 1; else if ($2 ~ /panel-caddy/) rank = 2; else if ($2 ~ /firewall\/rules.conf/) rank = 5; else if ($2 ~ /^share\//) rank = 3; print rank "\t" $2}' \
 		| sort -k1,1n | head -n1 | cut -f2) || return 1
 	[ -n "$src" ] || return 1
 	case "$src" in
@@ -51,6 +69,10 @@ reserved_port_owner() {
 		*/nginx/*) echo "nginx ($(basename "$src"))" ;;
 		*/apache2/*) echo "apache2 ($(basename "$src"))" ;;
 		*/crowdsec*) echo "the CrowdSec local API" ;;
+		*/mysql/*) echo "the database server" ;;
+		*/dovecot/*) echo "dovecot ($(basename "$src"))" ;;
+		*/firewall/rules.conf) echo "the firewall rule set" ;;
+		*/db.sh) echo "the database stack" ;;
 		*/web-model.sh) echo "the web stack backend (WEB_PORT/WEB_SSL_PORT)" ;;
 		*) echo "$src" ;;
 	esac
