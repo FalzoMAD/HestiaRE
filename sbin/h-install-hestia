@@ -70,6 +70,10 @@ source /etc/hestia/hestia.env # sets HESTIA
 source "$HESTIA/include/main.sh" # source_conf hestia.conf, BIN, dirs, error codes, user
 # shellcheck source=/usr/local/hestia/include/helper.sh
 source "$HESTIA/include/helper.sh" # hestia_apt, load_os_profile, seed_hestia_etc
+# shellcheck source=/usr/local/hestia/include/quota.sh
+source "$HESTIA/include/quota.sh" # quota_arm (#211)
+# shellcheck source=/usr/local/hestia/include/limits.sh
+source "$HESTIA/include/limits.sh" # customer_php_limit_apply (#212)
 # shellcheck source=/usr/local/hestia/include/fail2ban.sh
 source "$HESTIA/include/fail2ban.sh" # fail2ban_apply
 # shellcheck source=/usr/local/hestia/include/web-model.sh
@@ -91,9 +95,16 @@ trap 'apt_auto_units_restore' EXIT
 load_os_profile "$INSTALL_OS"
 
 # ── Install-time variables ──────────────────────────────────────────────────
-# panel/reference PHP version from the manifest (sed, not jq — not guaranteed yet)
-PHP_VER=$(sed -n 's/.*"reference_version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$HESTIA/share/manifest.json" 2> /dev/null | head -n1)
-PHP_VER="${PHP_VER:-8.3}" # panel + default web PHP (Sury)
+# Panel/reference PHP = the OS default (#191), derived by the wizard and carried
+# in install.conf. A hand-written install.conf may omit it - derive again via the
+# shared helper. Empty = hard fail: a hardcoded fallback would pin the panel to a
+# version this OS never shipped (in os_single mode there is no Sury to save it).
+PHP_VER="${PHP_REFERENCE_VERSION:-}"
+[ -n "$PHP_VER" ] || PHP_VER=$(os_default_php)
+if [ -z "$PHP_VER" ]; then
+	echo "ERROR: no PHP reference version (install.conf PHP_REFERENCE_VERSION empty and apt-cache madison php came back empty)." >&2
+	exit 1
+fi
 
 # write a config value to hestia.conf
 # Write a config value idempotently: replace an existing key (collapsing any duplicates to one) or append.
@@ -146,9 +157,14 @@ install_base() {
 	echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/90nolang
 	mkdir -p /root/.gnupg && chmod 700 /root/.gnupg
 
-	# shared helper so the wizard and this stage emit an identical Sury repo definition
-	echo "[ * ] Adding Sury PHP repo..."
-	add_sury_repo "$CODENAME" || exit 1
+	if [ "${COMPONENT_PHP_MODE:-sury_multi}" = "os_single" ]; then
+		# os_single means OS PHP only (#191) - no external PHP repo on the box at all
+		echo "[ * ] Skipping Sury PHP repo (os_single)"
+	else
+		# shared helper so the wizard and this stage emit an identical Sury repo definition
+		echo "[ * ] Adding Sury PHP repo..."
+		add_sury_repo "$CODENAME" || exit 1
+	fi
 
 	# MariaDB repo/keyring lives in h-add-sys-mariadb (owns the full DB lifecycle)
 
@@ -209,6 +225,11 @@ EOF
 		|| echo 'LS_COLORS="$LS_COLORS:di=00;33"' >> /etc/profile
 	proc_hardening_apply
 
+	# quota is base, not a module (#211): arm whenever /home supports it; must run
+	# before any customer exists (separate-/home paths umount), never aborts
+	echo "[ * ] Arming project quota (when the filesystem supports it)..."
+	quota_arm
+
 	# DH params in the base stage: nginx and dovecot both fatal without /etc/ssl/dhparam.pem,
 	# so it must exist before any TLS service starts. Ship the curated file; regenerate only as a fallback.
 	if [ -s "$HESTIA/share/hestia/dhparam.pem" ]; then
@@ -241,14 +262,33 @@ install_panel() {
 	# sqlite3 must be IN this list: confd builds the conf.d right below, and the same package
 	# arriving later via h-add-web-php never re-runs confd - the no-MariaDB webmail backend
 	# then has no driver and the roundcube seed dies (#684).
+	local panel_php_pkgs
+	panel_php_pkgs="php${PHP_VER}-cli php${PHP_VER}-fpm php${PHP_VER}-mysql php${PHP_VER}-curl \
+php${PHP_VER}-zip php${PHP_VER}-gmp php${PHP_VER}-mbstring php${PHP_VER}-opcache php${PHP_VER}-xml \
+php${PHP_VER}-gd php${PHP_VER}-bz2 php${PHP_VER}-pgsql php${PHP_VER}-intl php${PHP_VER}-exif php${PHP_VER}-sqlite3"
+	# Unconditional, not os_single-only (#857): from 8.5 on NOBODY ships a separate
+	# -opcache (it moved into core), so the raw list killed every sury-mode install
+	# on a box whose OS default is 8.5. The filter keeps whatever the configured
+	# repos can answer, drops tolerated names loudly, and names any other absence.
+	# shellcheck disable=SC2086
+	if ! panel_php_pkgs=$(filter_installable_php_pkgs "opcache:8.5 exif" $panel_php_pkgs); then
+		exit 1
+	fi
+	case " $panel_php_pkgs " in *" php${PHP_VER}-cli "*) ;; *)
+		echo "ERROR: php${PHP_VER}-cli is not installable from the configured repos" >&2
+		exit 1
+		;;
+	esac
+	case " $panel_php_pkgs " in *" php${PHP_VER}-fpm "*) ;; *)
+		echo "ERROR: php${PHP_VER}-fpm is not installable from the configured repos" >&2
+		exit 1
+		;;
+	esac
+	# shellcheck disable=SC2086
 	hestia_apt -y install \
 		caddy \
 		libphp-phpmailer \
-		php${PHP_VER}-cli php${PHP_VER}-fpm php${PHP_VER}-mysql php${PHP_VER}-curl \
-		php${PHP_VER}-zip php${PHP_VER}-gmp php${PHP_VER}-mbstring \
-		php${PHP_VER}-opcache php${PHP_VER}-xml \
-		php${PHP_VER}-gd php${PHP_VER}-bz2 php${PHP_VER}-pgsql \
-		php${PHP_VER}-intl php${PHP_VER}-exif php${PHP_VER}-sqlite3
+		$panel_php_pkgs
 	echo "[ * ] Configuring panel PHP-FPM..."
 	mkdir -p /etc/php/hestia/fpm/pool.d /etc/php/hestia/cli
 	cp -f "$HESTIA/share/panel-php/php-fpm.conf" /etc/php/hestia/fpm/
@@ -259,6 +299,8 @@ install_panel() {
 	echo "$PHP_VER" > /etc/php/hestia/php-version
 	# build the isolated conf.d before starting (curated extension set)
 	"$SBIN/hestia-php-confd" "$PHP_VER"
+	# apt hook: restart the panel master when a PHP update replaced its binary (#191)
+	cp -f "$HESTIA/share/panel-php/apt-refresh.conf" /etc/apt/apt.conf.d/95hestia-php-refresh
 	cp -f "$HESTIA/share/panel-php/hestia-php.service" /etc/systemd/system/
 	systemctl daemon-reload
 	systemctl enable hestia-php
@@ -320,25 +362,34 @@ install_web() {
 	}
 
 	# The model decides the install scope, not just who serves: apache-only means no nginx on the
-	# box at all. Mail-only needs one and gets it through the model - the wizard fixes that preset
-	# to NGINX for the webmail vhost and ACME termination (share/manifest.json).
+	# box at all. Mail-only gets nginx through the mailfront model (#193): webmail vhosts and
+	# ACME termination, but an EMPTY WEB_SYSTEM - so no customer web command passes its guard.
 	local web_model
 	case "${COMPONENT_WEB_SERVER:-NGINX}" in
 		APACHE) web_model="apache" ;;
 		BOTH) web_model="both" ;;
+		MAILFRONT) web_model="mailfront" ;;
 		*) web_model="nginx" ;;
 	esac
 
 	local web_pkgs=()
 	if web_model_uses_nginx "$web_model"; then web_pkgs+=(nginx); fi
 	echo "[ * ] Installing web packages ($(web_model_label "$web_model"), PHP $PHP_VER extensions)..."
+	local web_php_pkgs
+	web_php_pkgs="php${PHP_VER} php${PHP_VER}-apcu php${PHP_VER}-bz2 php${PHP_VER}-cgi \
+php${PHP_VER}-cli php${PHP_VER}-common php${PHP_VER}-gd php${PHP_VER}-imagick php${PHP_VER}-imap \
+php${PHP_VER}-intl php${PHP_VER}-ldap php${PHP_VER}-pgsql php${PHP_VER}-pspell \
+php${PHP_VER}-readline php${PHP_VER}-xml"
+	# Unconditional for the same reason as the panel stage (#857): 8.4+ unbundled
+	# imap, 8.5 folded opcache into core - the raw list is only valid for older PHP.
+	# shellcheck disable=SC2086
+	if ! web_php_pkgs=$(filter_installable_php_pkgs "imap:8.4 opcache:8.5 exif" $web_php_pkgs); then
+		exit 1
+	fi
+	# shellcheck disable=SC2086
 	hestia_apt -y install \
 		"${web_pkgs[@]}" \
-		php${PHP_VER} php${PHP_VER}-apcu php${PHP_VER}-bz2 php${PHP_VER}-cgi \
-		php${PHP_VER}-cli php${PHP_VER}-common php${PHP_VER}-gd \
-		php${PHP_VER}-imagick php${PHP_VER}-imap php${PHP_VER}-intl \
-		php${PHP_VER}-ldap php${PHP_VER}-pgsql php${PHP_VER}-pspell \
-		php${PHP_VER}-readline php${PHP_VER}-xml
+		$web_php_pkgs
 
 	if web_model_uses_nginx "$web_model"; then
 		echo "[ * ] Configuring nginx..."
@@ -442,6 +493,11 @@ install_web() {
 	update-rc.d php${PHP_VER}-fpm defaults > /dev/null 2>&1
 	systemctl start php${PHP_VER}-fpm
 	update-alternatives --set php /usr/bin/php${PHP_VER} > /dev/null 2>&1 || true
+
+	# After every version exists: the cap covers the masters together, so a version
+	# added later than this loop would otherwise serve outside the slice (#212).
+	echo "[ * ] Capping customer PHP CPU..."
+	customer_php_limit_apply
 
 	echo "[ * ] Configuring PHP settings (timezone, short_open_tag)..."
 	local ZONE pconf
@@ -1083,6 +1139,32 @@ echo " Profile: ${INSTALL_PROFILE}"
 echo "========================================================================"
 echo ""
 
+# nomail (#192): exim stays as the outbound-only notification MTA, but Debian's
+# default config is local-delivery-only - panel mail to any remote admin address
+# was silently undeliverable ("Mailing to remote domains not supported"). internet
+# type with loopback-only listeners is exactly send-only: accept from localhost,
+# deliver anywhere out.
+configure_exim_sendonly() {
+	local c=/etc/exim4/update-exim4.conf.conf
+	if [ ! -f "$c" ]; then
+		echo "[ ! ] $c missing - exim not configured send-only (notification mail will not leave this box)"
+		return 0
+	fi
+	sed -i "s/^dc_eximconfig_configtype=.*/dc_eximconfig_configtype='internet'/" "$c"
+	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='127.0.0.1 ; ::1'/" "$c"
+	# the success line is a witness in the install log: print it only when the keys
+	# really carry the values and the regeneration succeeded - a silent sed miss or
+	# a failed update-exim4.conf must not leave a false "configured" behind
+	if grep -q "^dc_eximconfig_configtype='internet'" "$c" \
+		&& grep -q "^dc_local_interfaces='127.0.0.1 ; ::1'" "$c" \
+		&& update-exim4.conf 2> /dev/null; then
+		systemctl restart exim4 2> /dev/null || true
+		echo "[ * ] Exim configured send-only (outbound delivery on, loopback listeners)"
+	else
+		echo "[ ! ] Exim send-only configuration FAILED - check $c and update-exim4.conf"
+	fi
+}
+
 init_hestia_structure
 install_base
 install_panel
@@ -1092,6 +1174,7 @@ if is_on "${COMPONENT_MAIL_BLOCK_PRESENT:-}"; then
 	install_mail
 else
 	echo "[ * ] Mail block not present — skipping mail stage"
+	configure_exim_sendonly
 fi
 install_security
 install_addons

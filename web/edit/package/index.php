@@ -49,11 +49,7 @@ $v_cron_jobs = $data[$v_package]["CRON_JOBS"];
 $v_disk_quota = $data[$v_package]["DISK_QUOTA"];
 $v_bandwidth = $data[$v_package]["BANDWIDTH"];
 $v_shell = $data[$v_package]["SHELL"];
-$v_cpu_quota = $data[$v_package]["CPU_QUOTA"];
 $v_docker_limit = $data[$v_package]["DOCKER_LIMIT"] ?? "unlimited";
-$v_cpu_quota_period = $data[$v_package]["CPU_QUOTA_PERIOD"];
-$v_memory_limit = $data[$v_package]["MEMORY_LIMIT"];
-$v_swap_limit = $data[$v_package]["SWAP_LIMIT"];
 $v_backups = $data[$v_package]["BACKUPS"];
 $v_backups_mode = ($data[$v_package]["BACKUPS_MODE"] ?? "") ?: "full";
 $v_date = $data[$v_package]["DATE"];
@@ -86,7 +82,8 @@ $shells = cli_json("h-list-sys-shells json");
 $offer_web_template = !empty($web_templates);
 $offer_backend_template = !empty($backend_templates);
 $offer_proxy_template = !empty($_SESSION["PROXY_SYSTEM"]);
-$offer_resources = $_SESSION["RESOURCES_LIMIT"] == "yes";
+// enforcement capability, not a switch (#211): pending/none boxes hide the control
+$offer_quota = ($_SESSION["PROJECT_QUOTA"] ?? "") == "active";
 $offer_docker_limit = !empty($_SESSION["DOCKER_SYSTEM"]);
 
 // Check POST request
@@ -143,26 +140,11 @@ if (!empty($_POST["save"])) {
 	if (!isset($_POST["v_backups_mode"])) {
 		$errors[] = _("Backup Mode");
 	}
-	if (!isset($_POST["v_disk_quota"])) {
+	if ($offer_quota && !isset($_POST["v_disk_quota"])) {
 		$errors[] = _("Quota");
 	}
 	if (!isset($_POST["v_bandwidth"])) {
 		$errors[] = _("Bandwidth");
-	}
-
-	if ($offer_resources) {
-		if (!isset($_POST["v_cpu_quota"])) {
-			$errors[] = _("CPU quota");
-		}
-		if (!isset($_POST["v_cpu_quota_period"])) {
-			$errors[] = _("CPU quota period");
-		}
-		if (!isset($_POST["v_memory_limit"])) {
-			$errors[] = _("Memory Limit");
-		}
-		if (!isset($_POST["v_swap_limit"])) {
-			$errors[] = _("Swap Limit");
-		}
 	}
 
 	if (!empty($errors[0])) {
@@ -198,14 +180,10 @@ if (!empty($_POST["save"])) {
 		$v_cron_jobs = quoteshellarg($_POST["v_cron_jobs"]);
 		$v_backups = quoteshellarg($_POST["v_backups"]);
 		$v_backups_mode = quoteshellarg($_POST["v_backups_mode"]);
-		$v_disk_quota = quoteshellarg($_POST["v_disk_quota"]);
+		// Only rendered while the box enforces (#211); an unoffered field keeps the record
+		$v_disk_quota = quoteshellarg(post_or_keep("v_disk_quota", $offer_quota, $v_disk_quota));
 		$v_bandwidth = quoteshellarg($_POST["v_bandwidth"]);
 
-		// Only rendered while RESOURCES_LIMIT is on; writing "" dropped 'unlimited' from the record
-		$v_cpu_quota = quoteshellarg(post_or_keep("v_cpu_quota", $offer_resources, $v_cpu_quota));
-		$v_cpu_quota_period = quoteshellarg(post_or_keep("v_cpu_quota_period", $offer_resources, $v_cpu_quota_period));
-		$v_memory_limit = quoteshellarg(post_or_keep("v_memory_limit", $offer_resources, $v_memory_limit));
-		$v_swap_limit = quoteshellarg(post_or_keep("v_swap_limit", $offer_resources, $v_swap_limit));
 		// a preset name, not a size - the command rejects anything else
 		$v_docker_limit = quoteshellarg(post_or_keep("v_docker_limit", $offer_docker_limit, $v_docker_limit));
 
@@ -224,10 +202,6 @@ if (!empty($_POST["save"])) {
 		$pkg .= "DATABASES=" . $v_databases . "\n";
 		$pkg .= "CRON_JOBS=" . $v_cron_jobs . "\n";
 		$pkg .= "DISK_QUOTA=" . $v_disk_quota . "\n";
-		$pkg .= "CPU_QUOTA=" . $v_cpu_quota . "\n";
-		$pkg .= "CPU_QUOTA_PERIOD=" . $v_cpu_quota_period . "\n";
-		$pkg .= "MEMORY_LIMIT=" . $v_memory_limit . "\n";
-		$pkg .= "SWAP_LIMIT=" . $v_swap_limit . "\n";
 		$pkg .= "DOCKER_LIMIT=" . $v_docker_limit . "\n";
 		$pkg .= "BANDWIDTH=" . $v_bandwidth . "\n";
 		$pkg .= "SHELL=" . $v_shell . "\n";

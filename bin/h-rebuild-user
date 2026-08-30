@@ -46,17 +46,11 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Update disk quota
-if [ "$DISK_QUOTA" = 'yes' ]; then
-	$BIN/h-update-user-quota "$user"
-fi
+# project quota (self-gated, #211); rebuild_user_conf below carries the
+# one-time project-id migration for pre-arming trees
+$BIN/h-update-user-quota "$user"
 
-# Update cgroup
-if [ "$RESOURCES_LIMIT" = 'yes' ]; then
-	$BIN/h-update-user-cgroup "$user"
-fi
-
-# not gated on RESOURCES_LIMIT - see h-change-user-package
+# The docker cap is per docker customer, applied whatever else is capped on the box.
 source $HESTIA/include/docker.sh
 docker_slice_apply "$user" "$(get_user_value '$DOCKER_LIMIT')"
 

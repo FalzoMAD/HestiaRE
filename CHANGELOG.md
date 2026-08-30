@@ -12,7 +12,138 @@ opens above it.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- **The smoke test checks the record grammar** (#866). Every record line has to be `KEY='value'`,
+  measured with the one validator that already defines it. A line that loses its quotes stays
+  readable - `source_conf` takes `KEY=value` - while every writer looks for `KEY='...'` and
+  silently finds nothing: the value shows up correctly and no change to it ever sticks.
+
+- **Customer PHP has a CPU cap against the rest of the box** (#212). Every customer php-fpm master
+  runs in `hestia-customer-php.slice`, limited to `CUSTOMER_PHP_CPU_PERCENT` of the whole machine
+  (`/etc/hestia/limits.conf`, default 75, seeded once and never rewritten by an update). It is a
+  system protection, not a per-customer limit: hammered sites and runaway PHP cannot take panel,
+  mail, database and ssh with them, but customers are not separated from each other. The panel PHP
+  is a separate master and stays outside; the per-user filemanager pools are inside. The value is
+  computed at every boot - systemd counts CPUQuota per core, so the share is multiplied by
+  `nproc --all` and applied with `set-property --runtime`: nothing absolute is stored, and a box
+  that gains cores grows its cap. The boot step never blocks a boot, but that is not fail-open:
+  what survives a failure is the slice's fixed 200%, barely a limit on two cores and a hard sixth
+  of a sixteen-core box - which is why the smoke test reports the LIVE value. Under overload the
+  box now stays responsive and customer sites answer 502 instead - the intended trade, and the
+  reason it is written down in STRUCTURE.md. Note for the first update of an existing box: the
+  customer php-fpm masters are restarted once, because a reload cannot move a running master into
+  the new slice.
+- **Project quota is base behaviour** (#211). The installer arms /home whenever its filesystem
+  supports it - no wizard item, no panel switch. A new PROJECT_QUOTA key carries the MEASURED
+  state (active / pending:reason / none:reason), written from an enforcement probe with its own
+  positive control, never from classification. The package DISK_QUOTA value becomes a hard
+  project-quota limit on the customer's home tree (project id = uid), so files written by
+  php-fpm, the docker companion or subuids all count against the customer - the #389 companion
+  hole is closed by the mechanism, not worked around. ext4 gets a persistent quotaon boot unit
+  (enforcement is runtime state) and, on a root fs, a one-shot initramfs hook across the reboot
+  the installer demands anyway; xfs gets the mount option via fstab or GRUB rootflags. On a box
+  without the capability the panel hides the field and every applier is inert; a restore onto
+  such a box names the enforcement loss. The old admin toggle, h-add-sys-quota/h-delete-sys-quota
+  and the never-verified reboot-script path are gone; the smoke test measures real enforcement
+  and flags a drifted or stuck arming by its stored reason, and h-update-sys-quota re-arms a box
+  out of none:* once the named reason is fixed.
+
+### Fixed
+
+- **The admin's IP counter grew with every deleted customer IP** (#866). For the root user
+  `IP_AVAIL` is the number of IPs on the box whoever owns them, and `h-add-sys-ip` counted it up
+  for a customer-owned address - but `h-delete-sys-ip` never counted it down again, so the number
+  drifted upward for the life of the box. Found by measuring the bookkeeping against the recount
+  instead of reading it. `h-check-sys-smoke` now watches `IP_AVAIL`/`IP_OWNED` too; they were the
+  two counters its drift guard never covered, which is why nothing noticed. A box that already
+  drifted is corrected by `h-update-user-counters <user>` - nothing recounts on a schedule.
+
+### Removed
+
+- **Two record keys nothing reads** (#865). `PLUGIN_APP_INSTALLER` belonged to the Software
+  Installer, which is permanently gone - yet the self-healing wrote it back into every
+  `hestia.conf`. `U_MAIL_SSL` was a per-user counter that no code read, no lister printed and the
+  counter recount could not even verify. Registry, repair and emitters go together, as with
+  `RESOURCES_LIMIT`. Existing records keep both keys; that is deliberate (#862), and inert.
+
+- **The `csv` output format is gone from every command** (#861). It had no consumer anywhere - not
+  in the tree, not on the docs branch, not in the scripts installed outside it - while every field
+  change had to carry it through four listers in four formats. That nobody noticed
+  `h-list-user-packages csv` emitting empty columns and the caller's own `$SHELL` as data is the
+  evidence. `json` (for programs), `plain` (the CLI's own machine format, 43 call sites) and
+  `shell` (for people) stay. An unknown format is now a named error instead of silence.
+
+- **The per-user cgroup resource limits are gone** (#212). `RESOURCES_LIMIT`, the four package
+  fields CPU_QUOTA / CPU_QUOTA_PERIOD / MEMORY_LIMIT / SWAP_LIMIT, the three `*-cgroups` commands
+  and the "Limit System Resources" panel block never limited what a hosting box needs limited:
+  `systemctl set-property` on `user-<uid>.slice` reaches the logind session (ssh, cron), while
+  php-fpm workers live in the FPM service slice and escape it entirely (upstream #4659). Nothing
+  to migrate - the switch was off by default and no box carried a persistent drop-in. The docker
+  cap (DOCKER_LIMIT on the companion slice) is untouched and does work, as do the FPM pool
+  profiles and request_terminate_timeout.
+
+### Fixed
+
+- **Every Sury-mode install died on a PHP-8.5 box** (#857). The PHP package filter ran only in
+  the os_single branch, so the raw list went to apt in sury mode - and php8.5-opcache exists in
+  no repo any more (opcache moved into core with 8.5). The filter now runs unconditionally in
+  both stages: it keeps whatever the configured repos answer and names every other absence.
+
+### Changed
+
+- **mailonly no longer offers customer web** (#193). The preset installs the new mailfront model:
+  WEB_SYSTEM stays empty - h-add-web-domain and every other web command refuse via their
+  inherited guard, the panel hides the web area - while nginx keeps fronting the webmail vhosts
+  and ACME under its own WEBMAIL_FRONT key. The webmail chain reads the front everywhere it used
+  WEB_SYSTEM; on every other model the two are identical.
+- **The fail2ban web jails key on existing logs** (#193). The gate enabled them unconditionally
+  and fail2ban refuses to start over a logpath glob that matches nothing - a fresh box without
+  CrowdSec died on the first fail2ban start (the prune the code commented was never written).
+  The first domain arms them, the last one disarms them, both from the domain lifecycle.
+- **nomail can actually send** (#192). Exim ran with Debian's default local-delivery-only config,
+  so panel mail to any remote admin address was silently undeliverable; the installer now sets
+  the internet type with loopback-only listeners - accept from localhost, deliver anywhere out.
+
+- **The panel PHP version is the OS default, not a Sury pin** (#191). deb12 runs the panel on 8.2,
+  deb13 on 8.4, ub24 on 8.3, ub26 on 8.5 - derived from the OS php meta at install (Sury-filtered,
+  since the sury meta shadows the OS one) and recorded in install.conf and
+  /etc/php/hestia/php-version. The OS-packaged panel apps (Roundcube, phpMyAdmin) now run on the
+  PHP their distro actually tests them against. In sury_multi mode the packages still come from
+  Sury; an OS default missing from php_supported fails loudly at the wizard.
+- **singlephp keeps its promise: no Sury on the box** (#191). In os_single mode the installer skips
+  the Sury repo entirely; panel and customer PHP come from the OS. Extension names the OS never
+  shipped (imap from 8.4 on, resolute's built-in opcache) are dropped loudly instead of killing the
+  install, cli+fpm stay mandatory. Asking h-add-web-php for a version the configured repos cannot
+  install arms Sury on demand - the retrofit stays a single command.
+- **Roundcube survives PHP 8.5** (#191). resolute's Roundcube 1.6.11 still declares array_first()
+  unguarded and dies on a redeclare fatal against 8.5's new core function; the pool now disables
+  the two natives (PHP 8.0+ semantics allow the userland redefinition), which is inert everywhere
+  else and stays correct once the upstream polyfill fix reaches the package.
+- **A PHP security update no longer leaves the panel on a deleted binary** (#191). The distro
+  postinst only restarts its own unit; an apt Post-Invoke hook now restarts hestia-php exactly when
+  its master image is gone from disk - which happens unattended once the panel runs OS PHP. The
+  smoke test flags a stale master.
+
+- **Adminer 6.0.1 and Alpine.js 3.16.3 vendored** (#851). The Adminer pin had fallen two security
+  rounds behind (a 5.5.1 GHSA, the 6.0.x XSS/CSRF hardening incl. the trust-auth server lockout);
+  the login-servers SSRF dropdown works unchanged under 6. Alpine 3.16 is a bugfix minor.
+- **`update-web-vendor.sh --check` also watches the manifest pins** (#851). tachyon and wp-cli have
+  no upstream/* branch - the installer fetches them itself against the pin - so their drift was
+  invisible between release checklists. An empty pin fails instead of comparing nothing.
+
+- **The standard and compact presets diverge again** (#850). standard now preselects the four
+  newest PHP versions, Redis alongside MariaDB, both webmailers, restic and sieve; compact keeps
+  the three PHP versions below the newest, fixes MariaDB to the OS default without asking, and
+  preselects only CrowdSec, Fail2ban and rspamd - the utilities screen stays closed unless opted
+  in. The CrowdSec mode texts got shorter.
+
+### Fixed
+
+- **Queued restarts died on their own grammar** (#855). Every h-restart-* writes itself into
+  restart.pipe as "$SCRIPT now", but the inherited validator rejected exactly that value - and
+  the queue runner swallows all errors, so with SCHEDULED_RESTART enabled every queued restart
+  failed silently. 'now' is accepted now (run immediately, do not requeue).
 
 ## v0.17.0 (2026-08-27)
 

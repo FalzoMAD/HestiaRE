@@ -75,17 +75,6 @@ plain_list() {
 	done < <(ls $CONF_DIR/ips/)
 }
 
-# CSV list function
-csv_list() {
-	echo -n "IP,OWNER,STATUS,NAME,U_SYS_USERS,U_WEB_DOMAINS,INTERFACE"
-	echo "NETMASK,NAT,TIME,DATE"
-	while read IP; do
-		source_conf "$CONF_DIR/ips/$IP"
-		echo -n "$IP,$OWNER,$STATUS,$NAME,\"$U_SYS_USERS\",$U_WEB_DOMAINS,"
-		echo "$INTERFACE, $NETMASK,$NAT,$TIME,$DATE"
-	done < <(ls $CONF_DIR/ips/)
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -94,8 +83,8 @@ csv_list() {
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

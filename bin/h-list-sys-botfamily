@@ -85,18 +85,11 @@ plain_list() {
 	done
 }
 
-csv_list() {
-	echo "FAMILY,ENABLED,LENIENT,STRICT,MATCH,BURST,NODELAY"
-	for f in $families; do
-		echo "$f,$(fam_field "$f" ENABLED),$(fam_field "$f" LENIENT),$(fam_field "$f" STRICT),\"$(fam_field "$f" MATCH)\",$(fam_field "$f" BURST),$(fam_field "$f" NODELAY)"
-	done
-}
-
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

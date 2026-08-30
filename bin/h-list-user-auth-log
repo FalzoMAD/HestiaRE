@@ -89,24 +89,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo "DATE,TIME,IP,ACTION,STATUS,USER_AGENT,SESSION,ACTIVE"
-	for str in $logs; do
-		DATE=$(echo "$str" | cut -f 2 -d \')
-		TIME=$(echo "$str" | cut -f 4 -d \')
-		IP=$(echo "$str" | cut -f 6 -d \')
-		ACTION=$(echo "$str" | cut -f 8 -d \')
-		STATUS=$(echo "$str" | cut -f 10 -d \')
-		USER_AGENT=$(echo "$str" | cut -f 12 -d \')
-		SESSION=$(echo "$str" | cut -f 14 -d \')
-		ACTIVE=$(echo "$str" | cut -f 16 -d \')
-		echo "$DATE,$TIME,$IP,$ACTION,$STATUS,$USER_AGENT,$SESSION,$ACTIVE"
-
-	done
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -125,8 +107,8 @@ logs=$(tail -n 10 $USER_DATA/auth.log 2> /dev/null)
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t -s '~' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

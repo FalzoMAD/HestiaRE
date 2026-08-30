@@ -92,14 +92,6 @@ plain_list() {
 	done < <(jail_names)
 }
 
-csv_list() {
-	echo "JAIL,STATE,FAILED,FAILED_TOTAL,BANNED,BANNED_TOTAL,LOGPATH"
-	while read -r jail; do
-		jail_row "$jail"
-		echo "$JAIL,$STATE,$FAILED,$FAILED_TOTAL,$BANNED,$BANNED_TOTAL,\"$LOGPATH\""
-	done < <(jail_names)
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -114,8 +106,8 @@ is_system_enabled "$FIREWALL_EXTENSION" 'FIREWALL_EXTENSION'
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

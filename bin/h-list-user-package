@@ -23,7 +23,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 # JSON list function
 json_list() {
 	echo '{'
-	json_escape PACKAGE WEB_TEMPLATE BACKEND_TEMPLATE PROXY_TEMPLATE WEB_DOMAINS WEB_ALIASES MAIL_DOMAINS MAIL_ACCOUNTS RATE_LIMIT DATABASES CRON_JOBS DISK_QUOTA CPU_QUOTA CPU_QUOTA_PERIOD MEMORY_LIMIT SWAP_LIMIT DOCKER_LIMIT BANDWIDTH SHELL BACKUPS BACKUPS_MODE TIME DATE
+	json_escape PACKAGE WEB_TEMPLATE BACKEND_TEMPLATE PROXY_TEMPLATE WEB_DOMAINS WEB_ALIASES MAIL_DOMAINS MAIL_ACCOUNTS RATE_LIMIT DATABASES CRON_JOBS DISK_QUOTA DOCKER_LIMIT BANDWIDTH SHELL BACKUPS BACKUPS_MODE TIME DATE
 	printf '    "%s": {\n' "$PACKAGE"
 	printf '        "WEB_TEMPLATE": "%s",\n' "$WEB_TEMPLATE"
 	printf '        "BACKEND_TEMPLATE": "%s",\n' "$BACKEND_TEMPLATE"
@@ -36,10 +36,6 @@ json_list() {
 	printf '        "DATABASES": "%s",\n' "$DATABASES"
 	printf '        "CRON_JOBS": "%s",\n' "$CRON_JOBS"
 	printf '        "DISK_QUOTA": "%s",\n' "$DISK_QUOTA"
-	printf '        "CPU_QUOTA":"%s",\n' "$CPU_QUOTA"
-	printf '        "CPU_QUOTA_PERIOD":"%s",\n' "$CPU_QUOTA_PERIOD"
-	printf '        "MEMORY_LIMIT":"%s",\n' "$MEMORY_LIMIT"
-	printf '        "SWAP_LIMIT":"%s",\n' "$SWAP_LIMIT"
 	printf '        "DOCKER_LIMIT":"%s",\n' "$DOCKER_LIMIT"
 	printf '        "BANDWIDTH": "%s",\n' "$BANDWIDTH"
 	printf '        "SHELL": "%s",\n' "$SHELL"
@@ -65,10 +61,6 @@ shell_list() {
 	echo "DATABASES:        $DATABASES"
 	echo "CRON JOBS:        $CRON_JOBS"
 	echo "DISK QUOTA:       $DISK_QUOTA"
-	echo "CPU_QUOTA: 				$CPU_QUOTA"
-	echo "CPU_QUOTA_PERIOD:	$CPU_QUOTA_PERIOD"
-	echo "MEMORY_LIMIT:			$MEMORY_LIMIT"
-	echo "SWAP_LIMIT: 			$SWAP_LIMIT"
 	echo "DOCKER LIMIT:     $DOCKER_LIMIT"
 	echo "BANDWIDTH:        $BANDWIDTH"
 	echo "SHELL:            $SHELL"
@@ -82,20 +74,8 @@ plain_list() {
 	echo -ne "$PACKAGE\t$WEB_TEMPLATE\t$BACKEND_TEMPLATE\t$PROXY_TEMPLATE\t"
 	echo -ne "$WEB_DOMAINS\t$WEB_ALIASES\t"
 	echo -ne "$MAIL_DOMAINS\t$MAIL_ACCOUNTS\t$RATE_LIMIT\t$DATABASES\t$CRON_JOBS\t"
-	echo -ne "$CPU_QUOTA\t$CPU_QUOTA_PERIOD\t$MEMORY_LIMIT\t$SWAP_LIMIT\t$DOCKER_LIMIT\t"
+	echo -ne "$DOCKER_LIMIT\t"
 	echo -e "$DISK_QUOTA\t$BANDWIDTH\t$SHELL\t$BACKUPS\t$TIME\t$DATE"
-}
-
-# CSV list function
-csv_list() {
-	echo -n "PACKAGE,WEB_TEMPLATE,BACKEND_TEMPLATE,PROXY_TEMPLATE,"
-	echo -n "WEB_DOMAINS,WEB_ALIASES,"
-	echo -n "MAIL_DOMAINS,MAIL_ACCOUNTS,RATE_LIMIT,DATABASES,CRON_JOBS,"
-	echo "DISK_QUOTA,CPU_QUOTA,CPU_QUOTA_PERIOD,MEMORY_LIMIT,SWAP_LIMIT,DOCKER_LIMIT,BANDWIDTH,SHELL,BACKUPS,TIME,DATE"
-	echo -n "$PACKAGE,$WEB_TEMPLATE,$BACKEND_TEMPLATE,$PROXY_TEMPLATE,"
-	echo -n "$WEB_DOMAINS,$WEB_ALIASES,"
-	echo -n "$MAIL_DOMAINS,$MAIL_ACCOUNTS,$RATE_LIMIT,$DATABASES,$CRON_JOBS,"
-	echo "$DISK_QUOTA,$CPU_QUOTA,$CPU_QUOTA_PERIOD,$MEMORY_LIMIT,$SWAP_LIMIT,$DOCKER_LIMIT,$BANDWIDTH,$SHELL,$BACKUPS,$TIME,$DATE"
 }
 
 #----------------------------------------------------------#
@@ -118,8 +98,8 @@ source_conf "$CONF_DIR/packages/$PACKAGE.pkg"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

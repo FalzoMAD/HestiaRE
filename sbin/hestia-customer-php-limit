@@ -1,0 +1,72 @@
+#!/bin/bash
+# info: wire the customer php-fpm masters into their slice and cap it for this boot
+#
+# The single writer for both halves, so there is no command to remember and no second copy
+# of the logic: it (re-)writes the per-version drop-ins and then computes the cap. Running it
+# again - systemctl restart hestia-customer-php-limit - is the repair path after an edit to
+# /etc/hestia/limits.conf or a version that ended up outside the slice.
+#
+# The cap is per-core in systemd, so the configured share of the machine is multiplied by the
+# core count: 75% on an eight-core box is CPUQuota=600%, and taking the number literally would
+# hand every customer together three quarters of ONE core.
+#
+# --runtime on purpose: the computed value lands in /run, so a box that gains cores gets the
+# larger cap on its next boot instead of keeping a number derived from the old hardware.
+#
+# Always exits 0, so a broken cap never keeps the box from booting. That is not "fail-open":
+# what remains is the slice's fixed 200%, which is no limit worth the name on two cores and a
+# hard sixth of the machine on sixteen. Nothing else would notice, which is why the smoke check
+# reports the LIVE value rather than this file's intent.
+
+# shellcheck source=/etc/hestia/hestia.env
+source /etc/hestia/hestia.env
+# shellcheck source=/usr/local/hestia/include/limits.sh
+source "$HESTIA/include/limits.sh"
+
+# Wiring first. At boot no master is running yet, so a version added without its drop-in is
+# simply correct from here on - nothing to restart. Outside boot the loop below catches it.
+#
+# One case this cannot fix within the same boot: if the drop-in was missing when systemd built
+# the boot transaction, that master carries no ordering against this unit and starts outside the
+# slice AFTER the loop below has looked. The smoke check reports it, a restart of this unit fixes
+# it, and the next boot is correct by itself (measured).
+wired=''
+for ver in $(customer_php_versions); do
+	customer_php_slice_dropin "$ver" && wired="$wired $ver"
+done
+[ -z "$wired" ] || systemctl daemon-reload
+
+# customer_php_percent carries the range check, and the smoke check reads the same function -
+# a second parser here would report a value this one refused.
+if ! customer_php_percent; then
+	echo "WARNING: CUSTOMER_PHP_CPU_PERCENT is '$CUSTOMER_PHP_PERCENT_RAW' in /etc/hestia/limits.conf - using ${CUSTOMER_PHP_PERCENT}%" >&2
+fi
+percent="$CUSTOMER_PHP_PERCENT"
+
+# --all, not bare nproc: bare nproc answers with the caller's affinity mask, which would shrink
+# the cap on a box where something pinned this service.
+cores=$(nproc --all 2> /dev/null)
+if ! [[ "$cores" =~ ^[0-9]+$ ]] || [ "$cores" -lt 1 ]; then
+	echo "WARNING: cannot read the core count - assuming 1" >&2
+	cores=1
+fi
+
+quota=$((percent * cores))
+if systemctl set-property --runtime "$CUSTOMER_PHP_SLICE" "CPUQuota=${quota}%" > /dev/null 2>&1; then
+	echo "customer PHP cap: CPUQuota=${quota}% (${percent}% of $cores cores)"
+else
+	echo "WARNING: could not cap $CUSTOMER_PHP_SLICE - it keeps the static default from its unit" >&2
+fi
+
+# A drop-in moves a master only at its next start. At boot this finds nothing running; run by
+# hand it is what makes the repair take effect. --no-block because those units are ordered
+# After= this one: waiting for their job while this job is still running would deadlock until
+# the timeout.
+for ver in $(customer_php_versions); do
+	[ "$(systemctl is-active "php$ver-fpm" 2> /dev/null)" = 'active' ] || continue
+	customer_php_in_slice "$ver" && continue
+	echo "moving php$ver-fpm into $CUSTOMER_PHP_SLICE (restart queued)"
+	systemctl --no-block restart "php$ver-fpm" > /dev/null 2>&1
+done
+
+exit 0

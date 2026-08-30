@@ -18,6 +18,12 @@
 #   prismjs          upstream/prismjs          share/filemanager/fm/assets/{js/prism.js,css/prism-*.css} + LICENSE
 #   tinyfilemanager  upstream/tinyfilemanager  share/filemanager/fm/index.php (PRISTINE baseline; dev is a fork) + LICENSE
 #
+# --check additionally covers the share/manifest.json pins (no upstream/* branch,
+# no --fetch - the installer fetches these itself against the pin):
+#
+#   tachyon          software_versions.tachyon           (plugins pin to the same tag)
+#   wp-cli           software_versions.wp_cli.version
+#
 # --check is strictly read-only (network: npm registry / GitHub API only).
 # --fetch works per asset: downloads exactly one project at the given (or
 # latest) version, verifies publisher hashes where available (npm integrity,
@@ -51,6 +57,15 @@ pinned_version() {
 		"$REPO_ROOT/VENDORED.json"
 }
 
+# components pinned in share/manifest.json instead of VENDORED.json (no upstream/*
+# branch, no --fetch here - the installer downloads them itself against these pins)
+manifest_pin() {
+	case "$1" in
+		tachyon) jq -r '.software_versions.tachyon' "$REPO_ROOT/share/manifest.json" ;;
+		wp-cli) jq -r '.software_versions.wp_cli.version' "$REPO_ROOT/share/manifest.json" ;;
+	esac
+}
+
 latest_version() {
 	case "$1" in
 		alpinejs) api "https://registry.npmjs.org/alpinejs/latest" | jq -r '.version' ;;
@@ -62,7 +77,9 @@ latest_version() {
 		bootstrap-css) api "https://registry.npmjs.org/bootstrap/latest" | jq -r '.version' ;;
 		prismjs) api "https://registry.npmjs.org/prismjs/latest" | jq -r '.version' ;;
 		tinyfilemanager) api "https://api.github.com/repos/prasathmani/tinyfilemanager/releases/latest" | jq -r '.tag_name | ltrimstr("v")' ;;
-		*) fail "unknown asset: $1 (known: alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager)" ;;
+		tachyon) api "https://api.github.com/repos/kimusan/Tachyon/releases/latest" | jq -r '.tag_name | ltrimstr("v")' ;;
+		wp-cli) api "https://api.github.com/repos/wp-cli/wp-cli/releases/latest" | jq -r '.tag_name | ltrimstr("v")' ;;
+		*) fail "unknown asset: $1 (known: alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager tachyon wp-cli)" ;;
 	esac
 }
 
@@ -432,9 +449,10 @@ check_fm_external_refs() {
 
 do_check() {
 	local assets=$1 a pinned latest mark
-	[ "$assets" = "all" ] && assets="alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager"
+	[ "$assets" = "all" ] && assets="alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager tachyon wp-cli"
 	printf '%-16s %-10s %-10s %s\n' "ASSET" "PINNED" "LATEST" "STATUS"
 	for a in $assets; do
+		manifest=""
 		case "$a" in
 			alpinejs) pinned=$(pinned_version alpinejs) ;;
 			fontawesome) pinned=$(pinned_version fontawesome-free) ;;
@@ -443,11 +461,22 @@ do_check() {
 			bootstrap-css) pinned=$(pinned_version bootstrap-css) ;;
 			prismjs) pinned=$(pinned_version prismjs) ;;
 			tinyfilemanager) pinned=$(pinned_version tinyfilemanager) ;;
-			*) fail "unknown asset: $a (known: alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager)" ;;
+			tachyon | wp-cli)
+				pinned=$(manifest_pin "$a")
+				manifest=yes
+				;;
+			*) fail "unknown asset: $a (known: alpinejs fontawesome normalize-css adminer bootstrap-css prismjs tinyfilemanager tachyon wp-cli)" ;;
 		esac
+		[ -n "$pinned" ] || fail "no pin found for $a - the pin moved or the jq path is stale"
 		latest=$(latest_version "$a")
 		mark="up to date"
-		[ "$pinned" != "$latest" ] && mark="UPDATE AVAILABLE (--fetch $a@$latest)"
+		if [ "$pinned" != "$latest" ]; then
+			if [ -n "$manifest" ]; then
+				mark="UPDATE AVAILABLE (manifest pin - bump version+sha in share/manifest.json, see release checklist)"
+			else
+				mark="UPDATE AVAILABLE (--fetch $a@$latest)"
+			fi
+		fi
 		printf '%-16s %-10s %-10s %s\n' "$a" "${pinned:-?}" "${latest:-?}" "$mark"
 	done
 	# Run the FM external-ref gate alongside the tinyfilemanager asset check.

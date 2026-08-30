@@ -492,51 +492,6 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Set disk_quota support
-	if (empty($_SESSION["error_msg"])) {
-		if (!empty($_POST["v_quota"]) && $_SESSION["DISK_QUOTA"] != $_POST["v_quota"]) {
-			if ($_POST["v_quota"] == "yes") {
-				exec(HESTIA_CMD . "h-add-sys-quota", $output, $return_var);
-				check_return_code($return_var, $output);
-				unset($output);
-				if (empty($_SESSION["error_msg"])) {
-					$_SESSION["DISK_QUOTA"] = "yes";
-				}
-			} else {
-				exec(HESTIA_CMD . "h-delete-sys-quota", $output, $return_var);
-				check_return_code($return_var, $output);
-				unset($output);
-				if (empty($_SESSION["error_msg"])) {
-					$_SESSION["DISK_QUOTA"] = "no";
-				}
-			}
-		}
-	}
-
-	// Set systen resources limit support
-	if (empty($_SESSION["error_msg"])) {
-		if (
-			!empty($_POST["v_resources_limit"]) &&
-			$_SESSION["RESOURCES_LIMIT"] != $_POST["v_resources_limit"]
-		) {
-			if ($_POST["v_resources_limit"] == "yes") {
-				exec(HESTIA_CMD . "h-add-sys-cgroups", $output, $return_var);
-				check_return_code($return_var, $output);
-				unset($output);
-				if (empty($_SESSION["error_msg"])) {
-					$_SESSION["RESOURCES_LIMIT"] = "yes";
-				}
-			} else {
-				exec(HESTIA_CMD . "h-delete-sys-cgroups", $output, $return_var);
-				check_return_code($return_var, $output);
-				unset($output);
-				if (empty($_SESSION["error_msg"])) {
-					$_SESSION["RESOURCES_LIMIT"] = "no";
-				}
-			}
-		}
-	}
-
 	// Set firewall support
 	if (empty($_SESSION["error_msg"])) {
 		if ($_SESSION["FIREWALL_SYSTEM"] == "nftables") {

@@ -96,18 +96,6 @@ plain_list() {
 	done < <(cat $USER_DATA/backup.conf)
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo "BACKUP,TYPE,SIZE,WEB,MAIL,CRON,UDIR,MAP,MODE,BASE,LOCAL,RUNTIME,TIME,DATE"
-	while read -r str; do
-		parse_object_kv_list "$str"
-		local_of "$BACKUP"
-		echo -n "$BACKUP,$TYPE,$SIZE,\"$WEB\",\"$MAIL\",\"$CRON\","
-		echo "\"$UDIR\",$MAP,${MODE:-full},$BASE,$LOCAL,$RUNTIME,$TIME,$DATE"
-	done < <(cat $USER_DATA/backup.conf)
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -130,8 +118,8 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

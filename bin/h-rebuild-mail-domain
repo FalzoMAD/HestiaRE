@@ -67,7 +67,8 @@ rebuild_mail_domain_conf
 # Rebuild webmail configuration. 'mail', not 'web': the WEBMAIL key lives on the mail record -
 # reading the web object always returned '' and made this whole block dead code. Skipped while
 # suspended (add would refuse with E_SUSPENDED); unsuspend re-renders from the record instead.
-if [ -n "$WEB_SYSTEM" ] || [ -n "$PROXY_SYSTEM" ]; then
+# front-based (#193): a mailfront box has an empty WEB_SYSTEM but still renders webmail
+if [ -n "$(webmail_front)" ] || [ -n "$PROXY_SYSTEM" ]; then
 	if [ -n "$IMAP_SYSTEM" ] && [ "$(get_object_value 'mail' 'DOMAIN' "$domain" '$SUSPENDED')" != 'yes' ]; then
 		WEBMAIL=$(get_object_value 'mail' 'DOMAIN' "$domain" '$WEBMAIL')
 		if [ -n "$WEBMAIL" ]; then

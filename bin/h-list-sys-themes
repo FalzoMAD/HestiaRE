@@ -83,14 +83,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	echo "THEME"
-	for theme in "${available_themes[@]}"; do
-		echo "$theme"
-	done
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -101,8 +93,8 @@ get_themes
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

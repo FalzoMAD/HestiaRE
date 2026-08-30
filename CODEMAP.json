@@ -272,7 +272,7 @@
       ]
     },
     "web_panel": {
-      "description": "Plain-PHP control panel UI. No framework. Action-based routing via directory structure. Served by Caddy + PHP 8.3 FPM (hestia-php.service) on port 8083.",
+      "description": "Plain-PHP control panel UI. No framework. Action-based routing via directory structure. Served by Caddy + the panel reference PHP FPM (hestia-php.service, version from /etc/php/hestia/php-version, #191) on port 8083.",
       "entry_points": [
         "web/index.php"
       ],
@@ -380,7 +380,7 @@
         "file_count": 9,
         "issues": [
           "PHP files reference /usr/local/hestia paths in includes — install root is unchanged so paths are correct, but hardcoded (not using a constant)",
-          "web/inc/mail-wrapper.php shebang: updated to #!/usr/bin/php8.3 in Issue #25",
+          "web/inc/mail-wrapper.php shebang: sbin/hestia-php wrapper since #191 (panel reference version, no hardcoded php binary)",
           "Panel branding still references HestiaCP in some locale strings"
         ]
       }
@@ -539,7 +539,7 @@
       }
     },
     "panel_php_service": {
-      "description": "Dedicated PHP-FPM service for the HestiaRE panel. Runs as hestia-php.service using Sury php8.3-fpm binary with an isolated pool. Replaces compiled hestia-php package.",
+      "description": "Dedicated PHP-FPM service for the HestiaRE panel. Runs as hestia-php.service on the OS-default reference version (/etc/php/hestia/php-version, #191) with an isolated conf.d and pool",
       "entry_points": [
         "share/panel-php/hestia-php.service"
       ],
@@ -557,6 +557,8 @@
         "sbin/hestia-php-fpm",
         "sbin/hestia-php",
         "sbin/hestia-php-confd",
+        "sbin/hestia-php-refresh",
+        "share/panel-php/apt-refresh.conf",
         "bin/h-change-sys-panel-php",
         "bin/h-delete-web-php"
       ],
@@ -569,19 +571,27 @@
         "pid": "/run/hestia-php.pid",
         "log": "/var/log/hestia/php-fpm.log"
       },
-      "confd_isolation": "The panel FPM runs with PHP_INI_SCAN_DIR=/etc/php/hestia/fpm/conf.d (set in hestia-php-fpm) so it loads a curated extension set independent of the customer version's conf.d (#272). hestia-php-confd rebuilds it from the pinned version's mods-available; called by install_panel, h-change-sys-panel-php, and reapply_outside_tree. Wrapper falls back to the default scan dir if unbuilt. APP→EXTENSION COUPLING (the reason the set is what it is): EVERY app on this single FPM master shares this one fpm conf.d — (1) panel UI web/, (2) phpMyAdmin+Adminer, (3) webmail Roundcube+Tachyon (#205). hestia-php-confd curates them as fpm_* / fpm_apps_* / fpm_webmail_* respectively. AUDIT RULE: before dropping any extension grep all three app groups, not just the panel/DB tools — a 2026-07 audit dropped `dom` after checking only panel+phpMyAdmin+Adminer and 500'd every Roundcube page (Roundcube's html.php renders via DOMDocument). Non-obvious members: intl (webmail IDN), phar (Tachyon plugins), dom (Roundcube). Excluded on purpose: imagick/imap/ldap/soap/bcmath/apcu (customer-app extensions). sodium is compiled-in on Sury (no mods-available .ini).",
+      "confd_isolation": "The panel FPM runs with PHP_INI_SCAN_DIR=/etc/php/hestia/fpm/conf.d (set in hestia-php-fpm) so it loads a curated extension set independent of the customer version's conf.d (#272). hestia-php-confd rebuilds it from the reference version's mods-available; called by install_panel, h-change-sys-panel-php, and reapply_outside_tree. Wrapper falls back to the default scan dir if unbuilt. APP→EXTENSION COUPLING (the reason the set is what it is): EVERY app on this single FPM master shares this one fpm conf.d — (1) panel UI web/, (2) phpMyAdmin+Adminer, (3) webmail Roundcube+Tachyon (#205). hestia-php-confd curates them as fpm_* / fpm_apps_* / fpm_webmail_* respectively. AUDIT RULE: before dropping any extension grep all three app groups, not just the panel/DB tools — a 2026-07 audit dropped `dom` after checking only panel+phpMyAdmin+Adminer and 500'd every Roundcube page (Roundcube's html.php renders via DOMDocument). Non-obvious members: intl (webmail IDN), phar (Tachyon plugins), dom (Roundcube). Excluded on purpose: imagick/imap/ldap/soap/bcmath/apcu (customer-app extensions). sodium is compiled-in on Sury (no mods-available .ini).",
       "version_indirection": "The panel PHP version is the single source of truth in /etc/php/hestia/php-version (written by h-install-hestia, read by the hestia-php / hestia-php-fpm wrappers). h-change-sys-panel-php (#272) rewrites it + restarts hestia-php; h-delete-web-php refuses to remove the pinned version. Distinct from h-change-sys-php (default web PHP).",
       "required_packages": [
-        "php8.3-fpm",
-        "php8.3-mysql",
-        "php8.3-curl",
-        "php8.3-zip",
-        "php8.3-gmp",
-        "php8.3-mbstring",
-        "php8.3-opcache"
+        "php<ref>-cli",
+        "php<ref>-fpm",
+        "php<ref>-mysql",
+        "php<ref>-curl",
+        "php<ref>-zip",
+        "php<ref>-gmp",
+        "php<ref>-mbstring",
+        "php<ref>-opcache",
+        "php<ref>-xml",
+        "php<ref>-gd",
+        "php<ref>-bz2",
+        "php<ref>-pgsql",
+        "php<ref>-intl",
+        "php<ref>-exif",
+        "php<ref>-sqlite3"
       ],
-      "note": "gettext included in php8.3-common (auto dep of php8.3-fpm). Installer integration completed in Issue #26a.",
-      "upstream_ref": "hestiare-native — replaces the compiled hestia-php package with an isolated Sury FPM pool; no upstream equivalent (#25/#272).",
+      "note": "<ref> = the OS default reference version (#191), derived at install; gettext arrives via php<ref>-common (auto dep of -fpm). In os_single mode names the OS never shipped drop via the tolerated list in filter_installable_php_pkgs.",
+      "upstream_ref": "hestiare-native — replaces the compiled hestia-php package with an isolated FPM pool on the reference version (Sury in sury_multi, OS repo in os_single); no upstream equivalent (#25/#272/#191).",
       "dependencies": [],
       "upstream_debt": {
         "file_count": 0,
@@ -731,6 +741,36 @@
       "roadmap": "Umbrella #481 (also Stage 0: the reference captures under firewall-captures/ on the docs branch are the equivalence reference for the renderer swap). #495 nftables renderer + native sets, #496 fail2ban, #497 fail2ban as an addon, #498 model matrix. Plans: firewall-roadmap.md + firewall-subsystem-analysis.md + nftables-migration-plan.md on the docs branch. Known defects D1-D8 are catalogued in the analysis doc.",
       "upstream_ref": "hestiacp (h-update-firewall* + share/firewall/rules.conf derive from v-update-firewall*)"
     },
+    "project_quota": {
+      "description": "Project quota for /home (#211): base behaviour, no wizard item, no panel switch. The installer arms whenever the filesystem supports it; hestia.conf PROJECT_QUOTA (active|pending:<reason>|none:<reason>) is written from the enforcement probe, never from classification. ext4 needs quotaon -P at every boot (persistent unit) and offline superblock features (one-shot initramfs premount hook across the install reboot); xfs is mount-option-only (fstab or GRUB rootflags), remount is a silent no-op on both. Per-user application (project id = uid) lives in the stage-2 rework of h-update-user-quota.",
+      "entry_points": [
+        "include/quota.sh",
+        "sbin/hestia-quota-boot",
+        "sbin/h-update-sys-quota"
+      ],
+      "related_files": [
+        "share/quota/systemd/hestia-quota-on.service",
+        "share/quota/initramfs/hestia-quota.hook",
+        "share/quota/initramfs/hestia-quota.premount",
+        "bin/h-update-user-quota",
+        "sbin/h-install-hestia"
+      ]
+    },
+    "customer_php_limit": {
+      "description": "Customer PHP CPU cap (#212): all customer php-fpm masters run in hestia-customer-php.slice via a per-version drop-in (/etc/systemd/system/php<v>-fpm.service.d/hestia-slice.conf, Wants=+After= the oneshot so no master starts uncapped). System protection, not a per-customer limit - it caps the customers together against panel, mail, database and ssh. The panel PHP is its own master (hestia-php.service, /etc/php/hestia) and stays outside; the fm-<user> filemanager pools live in the customer master and are inside. /etc/hestia/limits.conf carries CUSTOMER_PHP_CPU_PERCENT (share of the WHOLE machine, 10-100, seeded once and never rewritten); sbin/hestia-customer-php-limit is the single writer for both halves - it (re-)writes the drop-ins AND multiplies the share by nproc --all at every boot, because systemd counts CPUQuota per core, applying it with set-property --runtime so nothing absolute is stored and a box that gains cores grows its cap. There is deliberately no h-* command: customer_php_limit_apply (include/limits.sh) installs the units and seeds the conf, then triggers the unit, and 'systemctl restart hestia-customer-php-limit' is the repair path. The boot script always exits 0 so a broken cap cannot block a boot, but that is not fail-open: what survives is the slice unit's FIXED 200%, barely a limit on two cores and a hard sixth of a sixteen-core box - arbitrary rather than safe, which is why h-check-sys-smoke check_customer_php_slice reports the LIVE cgroup value and reads the percentage through the same range-checked customer_php_percent the boot script uses. Replaced the cgroup switch RESOURCES_LIMIT, which set properties on user-<uid>.slice that php-fpm workers never enter.",
+      "entry_points": [
+        "include/limits.sh",
+        "sbin/hestia-customer-php-limit"
+      ],
+      "related_files": [
+        "share/limits/systemd/hestia-customer-php.slice",
+        "share/limits/systemd/hestia-customer-php-limit.service",
+        "share/limits/limits.conf",
+        "bin/h-add-web-php",
+        "bin/h-delete-web-php",
+        "sbin/h-install-hestia"
+      ]
+    },
     "fail2ban": {
       "description": "Brute-force protection, wired as a CLIENT of the hestia firewall rather than as an independent writer: share/fail2ban/action.d/hestia.conf maps actionstart/stop/ban/unban onto h-add/delete-firewall-chain and h-add/delete-firewall-ban, so bans land in banlist.conf AND in the live fail2ban-<CHAIN> chain and therefore survive a full h-update-firewall rebuild. That client model is the reason to keep owning the ban action rather than adopting fail2ban's native nftables banaction, which would bypass the banlist, the panel and rebuild-survival alike.",
       "config_install": "fail2ban_apply in include/fail2ban.sh is the single implementation of \"a configured fail2ban\", shared by the installer and (later) the addon commands. It copies the WHOLE share/fail2ban tree through a staging dir: enumerating the files individually is what once left out action.d/hestia.conf and made every jail using action = hestia[...] unstartable with smoke still green (D1, fixed in #502). Our jails live in jail.d/hestia.local, never in jail.local, which is left to the admin - fail2ban reads jail.conf -> jail.d/*.conf -> jail.local -> jail.d/*.local, so ours is read last and wins. The distro [sshd] jail is disabled from our own config rather than by deleting jail.d/defaults-debian.conf: that is a dpkg conffile, so rm -f is undone by the next package update.",
@@ -779,7 +819,7 @@
       "guards": "h-check-sys-smoke: check_web_cache_zones (flag without zone), check_vhost_nonempty (0-byte vhost)",
       "panel": "web/edit/web/ - offline checkbox in the main form, proxy-cache block next to the FastCGI one (PROXY_SYSTEM=nginx only), HTTP/3 checkbox in the SSL section gated on session WEB_HTTP3 (computed by h-list-sys-config from nginx -V, folded into the session by inc/main.php) + an nginx front",
       "legacy_mapping": "include/domain.sh accept_web_template + map_legacy_template - every write (CLI, restore, package) passes through; known legacy values are mapped with their side effect (caching -> cache switch, wordpress*-http3 -> base template + http3 switch), unknown ones error on the CLI and fall back on restore. Guard: check_web_templates_resolvable.",
-      "docker_limits": "#618/#619 - DOCKER_SYSTEM (hestia.conf, written by h-add-sys-docker) gates the admin switch in edit-user; docker requires an unjailed login shell, enforced in h-add-user-docker as well as the view. Package field DOCKER_LIMIT (unlimited|low|medium|high) maps to systemd properties in include/docker.sh docker_slice_properties and lands on user-<companion_uid>.slice - where the daemon AND all containers of that customer live, verified via a container cgroup path. Applied from h-add-user-docker, h-change-user-package and h-rebuild-user, deliberately NOT gated on RESOURCES_LIMIT (off by default). companion_stop() in include/docker.sh is shared with h-delete-user-docker and the in-place restore (#615).",
+      "docker_limits": "#618/#619 - DOCKER_SYSTEM (hestia.conf, written by h-add-sys-docker) gates the admin switch in edit-user; docker requires an unjailed login shell, enforced in h-add-user-docker as well as the view. Package field DOCKER_LIMIT (unlimited|low|medium|high) maps to systemd properties in include/docker.sh docker_slice_properties and lands on user-<companion_uid>.slice - where the daemon AND all containers of that customer live, verified via a container cgroup path. Applied from h-add-user-docker, h-change-user-package and h-rebuild-user. companion_stop() in include/docker.sh is shared with h-delete-user-docker and the in-place restore (#615).",
       "docker_publishing": "#566/#592 - a per-customer loopback /24 (user.conf DOCKER_IP = its .1, allocated in h-add-user-docker, daemon.json default bind with both keys) and three domain fields DOCKER (docker template name, empty = off) / DOCKER_PORT / DOCKER_OCTET. add_web_config renders the FRONT from templates/docker/<system>/ and skips the both-model apache backend; h-add-web-domain-backend removes the pool (central like PHP_VERSION=none); %docker_ip% is read via get_user_value (rebuild-safe) with the octet applied; %front_port%/%front_ssl_port% resolve the public listener so one template serves nginx-only and both. Separation: fw_restrict_docker_nets renders one output rule per customer /24 (webserver allowlisted) from the user records. Panel: edit_web checkbox + <net>._ octet + port, selectors hidden while active, plus the docker template select from h-list-web-templates-docker (front system = PROXY_SYSTEM or WEB_SYSTEM; shown only on more than one template, and docker templates never appear in the general list). Every POST family whose control the docker branch hides gates on empty($DOCKER) - reading an absent key was a fatal for the pool template and dropped PROXY on every save. Backup skips the legacy vhost lookup for a docker domain: on the both model that config cannot exist and aborted the whole user backup. Traps: wildcard listeners block the customer bind (live ss check in the add command); apache LE needs DocumentRoot + acme ProxyPass exemption BEFORE the catch-all; websocket map is global (share/nginx/websocket-upgrade.conf), per-vhost would collide.",
       "ssl_switches": "SSL_FORCE / SSL_HSTS render as per-domain fragments the vhost includes. The fragment carries the directive of the FRONT that reads it - apache 'Header always set', nginx 'add_header' - and the apache templates include it inside the SSL vhost (#638; before that it was nginx syntax on every front and no apache include, so the switch was a silent no-op). Guard: check_web_hsts_effective flags SSL_HSTS='yes' whose fragment is missing or written for the other server."
     },
@@ -880,14 +920,14 @@
     },
     "panel_php": {
       "service": "hestia-php.service",
-      "binary": "/usr/sbin/php-fpm8.3",
-      "source": "sury",
+      "binary": "/usr/sbin/php-fpm<ref> (<ref> from /etc/php/hestia/php-version)",
+      "source": "sury in sury_multi mode, OS repo in os_single (#191)",
       "pool": "isolated",
       "replaces": "hestia-php",
       "config_dir": "/etc/php/hestia/fpm/",
       "pool_config": "share/panel-php/pool.d/panel.conf",
       "socket": "/run/hestia-php.sock",
-      "reference_version_source": "share/manifest.json -> components.PANEL_PHP.reference_version (#272): single source for installer PHP_VER + wizard checklist lock; always routed through h-add-web-php for the full extension set"
+      "reference_version_source": "OS default php meta, derived at install by os_default_php in include/helper.sh (#191), carried as PHP_REFERENCE_VERSION in install.conf; runtime source of truth is /etc/php/hestia/php-version. Always routed through h-add-web-php for the full extension set (#272)."
     }
   },
   "upstream_debt_summary": {

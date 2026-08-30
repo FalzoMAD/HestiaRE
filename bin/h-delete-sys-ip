@@ -84,9 +84,11 @@ fi
 # Deleting Hestia IP
 rm -f $CONF_DIR/ips/$ip
 
-# Deleting web config
-if [ -n "$WEB_SYSTEM" ]; then
-	rm -f /etc/$WEB_SYSTEM/conf.d/$ip.conf
+# Deleting web config (front fallback #193: the mailfront ip.conf lives there too)
+ws="$WEB_SYSTEM"
+[ -z "$ws" ] && ws=$(webmail_front)
+if [ -n "$ws" ]; then
+	rm -f /etc/$ws/conf.d/$ip.conf
 fi
 
 # Deleting proxy config
@@ -138,6 +140,10 @@ if [ "$OWNER" = "$ROOT_USER" ]; then
 	fi
 else
 	decrease_user_value "$OWNER" '$IP_AVAIL'
+	# The mirror of h-add-sys-ip: for the root user IP_AVAIL is the number of ip files on the
+	# box, whoever owns them, so a customer-owned ip must count down here too. Without this the
+	# admin counter grew by one with every deleted customer ip, for the life of the box (#866).
+	decrease_user_value "$ROOT_USER" '$IP_AVAIL'
 fi
 
 # Restarting web server

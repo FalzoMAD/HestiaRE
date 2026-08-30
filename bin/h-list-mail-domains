@@ -79,19 +79,6 @@ plain_list() {
 	done < <(cat $USER_DATA/mail.conf)
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo -n "DOMAIN,ANTIVIRUS,ANTISPAM,DKIM,SSL,CATCHALL,ACCOUNTS,U_DISK,"
-	echo "SUSPENDED,TIME,DATE,WEBMAIL_ALIAS,WEBMAIL"
-	while read str; do
-		parse_object_kv_list "$str"
-		echo -n "$DOMAIN,$ANTIVIRUS,$ANTISPAM,$DKIM,$SSL,$CATCHALL,$ACCOUNTS,"
-		echo "'$U_DISK,$SUSPENDED,$TIME,$DATE,$WEBMAIL_ALIAS,$WEBMAIL"
-		echo
-	done < <(cat $USER_DATA/mail.conf)
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -108,8 +95,8 @@ is_object_valid 'user' 'USER' "$user"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

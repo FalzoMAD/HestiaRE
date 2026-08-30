@@ -163,6 +163,11 @@ $BIN/h-restart-web-backend "$restart" "$version"
 check_result $? "PHP restart failed" > /dev/null
 
 # Logging
+
+# first/last log on the box arms/disarms the fail2ban web jails (change-detected)
+# shellcheck source=/usr/local/hestia/include/fail2ban.sh
+declare -F fail2ban_regate_web_apply > /dev/null 2>&1 || source "$HESTIA/include/fail2ban.sh"
+fail2ban_regate_web_apply
 $BIN/h-log-action "$user" "Info" "Web" "Deleted web domain (Name: $domain)."
 log_event "$OK" "$ARGUMENTS"
 

@@ -65,15 +65,6 @@ plain_list() {
 	echo -e "$config_path8\t"
 }
 
-# CSV list function
-csv_list() {
-	echo -n "config_path,config_path1,config_path2,config_path3,"
-	echo "config_path4,config_path5,config_path6,config_path7,config_path8"
-	echo -n "$config_path,$config_path1,$config_path2,$config_path3,"
-	echo -n "$config_path4,$config_path5,$config_path6,$config_path7,"
-	echo "$config_path8"
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -97,8 +88,8 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

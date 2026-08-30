@@ -85,22 +85,12 @@ shell_list() {
 
 # PLAIN list function
 plain_list() {
+	# One record, one line: the two middle echoes lacked -n, so a reader got four lines - two
+	# header-shaped, two data-shaped - and counted the fields of the wrong one (#861).
 	echo -ne "$DOMAIN\t$ANTIVIRUS\t$ANTISPAM\t$DKIM\t$CATCHALL\t"
-	echo -e "$ACCOUNTS\t$U_DISK\t$SSL\t$LETSENCRYPT\t$SUSPENDED\t$TIME\t$DATE\t$WEBMAIL_ALIAS.$domain\t$WEBMAIL\t"
+	echo -ne "$ACCOUNTS\t$U_DISK\t$SSL\t$LETSENCRYPT\t$SUSPENDED\t$TIME\t$DATE\t$WEBMAIL_ALIAS.$domain\t$WEBMAIL\t"
 	echo -ne "$U_SMTP_RELAY\t$U_SMTP_RELAY_HOST\t$U_SMTP_RELAY_PORT\t$U_SMTP_RELAY_USERNAME\t"
 	echo -e "$U_SPAM_SCORE\t$U_SPAM_REJECT_SCORE\t$U_SPAM_SUBJECT_TAG"
-}
-
-# CSV list function
-csv_list() {
-	echo -n "DOMAIN,ANTIVIRUS,ANTISPAM,DKIM,CATCHALL,ACCOUNTS,U_DISK,"
-	echo "SSL,LETSENCRYPT,SUSPENDED,TIME,DATE,WEBMAIL_ALIAS,WEBMAIL,"
-	echo -n "U_SMTP_RELAY,U_SMTP_RELAY_HOST,U_SMTP_RELAY_PORT,U_SMTP_RELAY_USERNAME,"
-	echo "U_SPAM_SCORE,U_SPAM_REJECT_SCORE,U_SPAM_SUBJECT_TAG"
-	echo -n "$DOMAIN,$ANTIVIRUS,$ANTISPAM,$DKIM,$CATCHALL,$ACCOUNTS,$U_DISK,"
-	echo "$SSL,$LETSENCRYPT,$SUSPENDED,$TIME,$DATE,$WEBMAIL_ALIAS.$domain,$WEBMAIL,"
-	echo -n "$U_SMTP_RELAY,$U_SMTP_RELAY_HOST,$U_SMTP_RELAY_PORT,$U_SMTP_RELAY_USERNAME,"
-	echo "$U_SPAM_SCORE,$U_SPAM_REJECT_SCORE,$U_SPAM_SUBJECT_TAG"
 }
 
 #----------------------------------------------------------#
@@ -123,8 +113,8 @@ parse_object_kv_list "$(grep -F "DOMAIN='$domain'" $USER_DATA/mail.conf)"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

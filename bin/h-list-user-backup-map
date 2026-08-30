@@ -47,8 +47,8 @@ emit() {
 				printf '        }'
 				;;
 			plain) printf '%s\t%s\t%s\t%s\t%s\n' "$(esc "$_p")" "$_h" "$_m" "$_o" "$(esc "$_t")" ;;
-			csv) printf '"%s","%s","%s","%s","%s"\n' "$(esc "$_p")" "$_h" "$_m" "$_o" "$(esc "$_t")" ;;
-			*) printf 'PATH=%s HASH=%s MODE=%s OWNER=%s LINK=%s\n' "$(esc "$_p")" "$_h" "$_m" "$_o" "$(esc "$_t")" ;;
+			shell) printf 'PATH=%s HASH=%s MODE=%s OWNER=%s LINK=%s\n' "$(esc "$_p")" "$_h" "$_m" "$_o" "$(esc "$_t")" ;;
+			*) check_result "$E_INVALID" "invalid format: $format" ;;
 		esac
 	done
 	[ "$format" = 'json' ] && [ "$_n" -gt 0 ] && echo ''
@@ -77,9 +77,9 @@ archive_path="$BACKUP_ARCHIVE"
 if ! tar -tf "$archive_path" 2> /dev/null | grep -qxF "./$BACKUP_CONTAINER/backup.map"; then
 	case $format in
 		json) echo '{}' ;;
-		csv) echo "PATH,HASH,MODE,OWNER,LINK" ;;
 		plain) : ;;
-		*) echo "This archive carries no content map." ;;
+		shell) echo "This archive carries no content map." ;;
+		*) check_result "$E_INVALID" "invalid format: $format" ;;
 	esac
 	exit
 fi
@@ -90,11 +90,9 @@ case $format in
 		tar -xOf "$archive_path" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit
 		echo '}'
 		;;
-	csv)
-		echo "PATH,HASH,MODE,OWNER,LINK"
-		tar -xOf "$archive_path" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit
-		;;
-	*) tar -xOf "$archive_path" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit ;;
+	# plain and shell shared the old catch-all here; the per-entry format is chosen inside emit.
+	plain | shell) tar -xOf "$archive_path" "./$BACKUP_CONTAINER/backup.map" 2> /dev/null | emit ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

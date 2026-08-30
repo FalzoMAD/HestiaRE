@@ -51,12 +51,6 @@ plain_list() {
 	echo -e "$user\t$EMAIL\t$EXPONENT\t$MODULUS\t$THUMB\t$KID"
 }
 
-# CSV list function
-csv_list() {
-	echo "USER,EMAIL,EXPONENT,MODULUS,THUMB,KID"
-	echo "$user,$EMAIL,$EXPONENT,$MODULUS,$THUMB,$KID"
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -79,8 +73,8 @@ source_conf "$USER_DATA/ssl/le.conf"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

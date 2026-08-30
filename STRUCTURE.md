@@ -371,6 +371,7 @@ updates. `CONF_DIR="${CONF_DIR:-/etc/hestia}"` (`include/main.sh:48`), exported 
 |---|---|
 | `/etc/hestia/hestia.env` | bootstrap file (renamed from `hestia.conf`, #81) |
 | `/etc/hestia/local.conf` | operator overrides, survive upgrades |
+| `/etc/hestia/limits.conf` | `CUSTOMER_PHP_CPU_PERCENT`, seeded once and never rewritten (#212) |
 | `/etc/hestia/source.conf` | update-channel config (repo/token/channel) |
 | `/etc/hestia/install.conf` | wizard recipe **and** live `COMPONENT_*` state (#103) |
 | `/etc/hestia/conf/` | panel config; `$HESTIA/conf` is now a **symlink** here (#129) |
@@ -527,6 +528,42 @@ spot restores, and our archives restore there (#789).
 **Why.** Path privacy and one rights picture per customer. One resolver in
 `include/backup.sh` (`backup_archive_path`) carries the two-place rule and the symlink
 containment for every reader, CLI and panel.
+
+---
+
+## 13. Resource limits: per-user cgroup switch -> one slice for customer PHP (#212)
+
+**Upstream.** `RESOURCES_LIMIT` turns on per-package `CPU_QUOTA`, `CPU_QUOTA_PERIOD`,
+`MEMORY_LIMIT` and `SWAP_LIMIT`, applied with `systemctl set-property` on
+`user-<uid>.slice`. That slice holds the logind session - ssh and cron. php-fpm workers
+belong to the FPM service slice and never enter it (upstream #4659), so on a hosting box
+the switch limits everything except the load it exists for.
+
+**HestiaRE.** The switch, the four package fields and the three `*-cgroups` commands are
+gone. In their place one system protection: every customer php-fpm master runs in
+`hestia-customer-php.slice`, capped at `CUSTOMER_PHP_CPU_PERCENT` of the whole machine
+(`/etc/hestia/limits.conf`, default 75). It caps the customers TOGETHER against the rest of
+the box - panel, mail, database and ssh keep their share; it does not separate customers
+from each other. The panel PHP is a separate master and stays outside; the per-user
+filemanager pools live in the customer master and are inside. The docker cap
+(`DOCKER_LIMIT` on the companion slice) is unaffected and does work, because rootless
+docker really does live in that user's manager.
+
+**Why the value is computed at boot.** systemd counts `CPUQuota` per core, so a share of
+the machine has to be multiplied by `nproc --all`; a unit file can neither compute nor read
+a value from an arbitrary path. `hestia-customer-php-limit.service` does the arithmetic and
+applies it with `set-property --runtime`, so nothing absolute is left on disk and a box that
+gains cores grows its cap on the next boot.
+
+**A failure of the boot step is not "fail-open".** The script never blocks a boot, but what
+survives is the slice unit's fixed `CPUQuota=200%` - barely a limit on two cores, a hard sixth of
+the machine on sixteen. Never uncapped, but arbitrary; `h-check-sys-smoke` therefore reports the
+value read from `cpu.max`, not the one intended in the config file.
+
+**The failure mode moves, and that is the trade.** Under overload the box stays responsive
+and the customer sites answer 502 instead - which on first sight looks like an FPM fault,
+not a limit doing its job. Throttled requests also take longer, so they hit
+`request_terminate_timeout` sooner than before.
 
 ---
 

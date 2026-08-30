@@ -1,8 +1,12 @@
 #!/bin/bash
-# info: Enable cgroup support for user
+# info: re-derive and arm project quota from the live filesystem
 # options: NONE
 #
-# example: h-add-sys-cgroups
+# example: h-update-sys-quota
+#
+# Re-runs the installer's arming and writes PROJECT_QUOTA from the probe - the
+# way back out of none:* once its reason is fixed (the boot unit only re-checks
+# pending). Separate-/home arming umounts and refuses a busy mount loudly.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -13,34 +17,31 @@
 source /etc/hestia/hestia.env
 # shellcheck source=/usr/local/hestia/include/main.sh
 source $HESTIA/include/main.sh
+# shellcheck source=/usr/local/hestia/include/quota.sh
+source $HESTIA/include/quota.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
-
-#----------------------------------------------------------#
-#                    Verifications                         #
-#----------------------------------------------------------#
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Updating hestia.conf value
-$BIN/h-change-sys-config-value "RESOURCES_LIMIT" "yes"
+quota_arm
 
-# enable cgroup for all users
-for user in $("$BIN/h-list-users" list); do
-	$BIN/h-update-user-cgroup "$user"
-done
-
-# Reload daemon
-systemctl daemon-reload
+# stamp existing customers where the arming just turned enforcement on
+source_conf "$HESTIA/conf/hestia.conf"
+if [ "${PROJECT_QUOTA%%:*}" = 'active' ]; then
+	for user in $("$BIN/h-list-users" list); do
+		"$BIN/h-update-user-quota" "$user"
+	done
+fi
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
 # Logging
-$BIN/h-log-action "system" "Info" "Plugins" "System cgroup Enforcement Enabled."
+"$BIN/h-log-action" "system" "Info" "System" "Project quota re-armed (state: $(grep -o "PROJECT_QUOTA='[^']*'" "$HESTIA/conf/hestia.conf"))."
 log_event "$OK" "$ARGUMENTS"
 
 exit

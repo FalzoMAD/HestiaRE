@@ -1,0 +1,22 @@
+#!/bin/sh
+# info: restart hestia-php when its master runs a deleted PHP binary image
+#
+# The distro postinst restarts only its own phpX.Y-fpm unit; the panel's own
+# master (hestia-php.service) keeps serving the replaced, deleted binary after
+# a PHP package update. Under a Sury pin that was a rare deliberate event -
+# with the OS-coupled reference (#191) the binary moves with every unattended
+# security update. Called from the apt Post-Invoke hook; restarts ONLY when
+# /proc says the running image is gone from disk, so every other apt run is a
+# no-op.
+pid=$(systemctl show -p MainPID --value hestia-php 2> /dev/null)
+[ -n "$pid" ] && [ "$pid" != 0 ] || exit 0
+exe=$(readlink "/proc/$pid/exe" 2> /dev/null)
+case "$exe" in
+	*' (deleted)')
+		# the hook itself must stay rc=0 for apt, but a failed restart here means the
+		# panel is down after an unattended update - leave the one trace that dates it
+		systemctl restart hestia-php 2> /dev/null \
+			|| logger -t hestia-php-refresh "restart failed after a PHP update replaced the master binary - panel likely down"
+		;;
+esac
+exit 0

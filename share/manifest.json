@@ -88,12 +88,12 @@
         "latest":    "BOTH",
         "singlephp": "NGINX",
         "nomail":    "BOTH",
-        "mailonly":  "NGINX"
+        "mailonly":  "MAILFRONT"
       },
       "fixed_no_prompt": {
-        "mailonly": "NGINX"
+        "mailonly": "MAILFRONT"
       },
-      "note": "Fixed to NGINX on mailonly, not asked (Roundcube reverse proxy + ACME termination). Repo source (OS vs. Sury Apache / nginx.org) follows repo_strategy, see WEB_REPO_SOURCE."
+      "note": "Fixed to MAILFRONT on mailonly, not asked (#193): nginx serves webmail vhosts + ACME termination, but WEB_SYSTEM stays EMPTY - no customer web, every web command refuses, WEBMAIL_FRONT carries the nginx. Repo source (OS vs. Sury Apache / nginx.org) follows repo_strategy, see WEB_REPO_SOURCE."
     },
 
     "WEB_REPO_SOURCE": {
@@ -146,8 +146,8 @@
       "options": "__dynamic__",
       "dynamic_source": "sury_repo_metadata",
       "default_rule": {
-        "standard":  "skip_newest:1,take:3",
-        "compact":   "skip_newest:1,take:2",
+        "standard":  "take_newest:4",
+        "compact":   "skip_newest:1,take:3",
         "latest":    "take_newest:2",
         "nomail":    "skip_newest:1,take:3"
       },
@@ -189,7 +189,8 @@
       "label": "Redis",
       "description": "In-memory cache / key-value store (not a DB server)",
       "question": "Install Redis?",
-      "default": false
+      "default": { "standard": true, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false },
+      "note": "Preselected on standard as the general-purpose instance; rspamd's capped Bayes Redis exists either way (see ADDON_RSPAMD promote/demote)."
     },
 
     "DB_MARIADB_VERSION": {
@@ -197,7 +198,7 @@
       "type": "version_select",
       "question": "Which MariaDB version to install?",
       "visible_if": "DB_MARIADB == true",
-      "fixed_no_prompt": { "mailonly": "__os__" },
+      "fixed_no_prompt": { "compact": "__os__", "mailonly": "__os__" },
       "options": [
         { "value": "12.3",   "source": "mariadb_repo", "description": "MariaDB.org repo" },
         { "value": "11.8",   "source": "mariadb_repo", "description": "MariaDB.org repo" },
@@ -206,13 +207,13 @@
       ],
       "default": {
         "standard":  "11.8",
-        "compact":   "11.8",
+        "compact":   "__os__",
         "latest":    "12.3",
         "singlephp": "__os__",
         "nomail":    "11.8",
         "mailonly":  "__os__"
       },
-      "note": "Only asked when MariaDB was chosen. Default 11.8; 11.4 stays selectable for Magento 2.4.9. 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime, and fixed on mailonly."
+      "note": "Only asked when MariaDB was chosen. Default 11.8; 11.4 stays selectable for Magento 2.4.9. 10.6 and older excluded (EOL 2026-07-06). __os__ is resolved at runtime, and fixed on compact and mailonly."
     },
 
     "DB_PHPMYADMIN": {
@@ -254,7 +255,7 @@
       ],
       "value_join": ",",
       "default": {
-        "standard":  "ROUNDCUBE",
+        "standard":  "ROUNDCUBE TACHYON",
         "compact":   "ROUNDCUBE",
         "latest":    "ROUNDCUBE",
         "singlephp": "ROUNDCUBE",
@@ -273,8 +274,7 @@
       "group": "panel",
       "type": "fixed",
       "always_installed": true,
-      "reference_version": "8.3",
-      "note": "Just a wrapper around a PHP instance for the panel itself. Uses os_single on mailonly, otherwise depends on PHP_MODE. reference_version = the reference version used by Panel-FPM and always fully installed (#272); single source of truth for the installer (PHP_VER) and the wizard checklist lock."
+      "note": "Just a wrapper around a PHP instance for the panel itself. Uses os_single on mailonly, otherwise depends on PHP_MODE. The reference version used by Panel-FPM (always fully installed, #272) is no longer pinned here: it is the OS default php meta version, derived at install by os_default_php in include/helper.sh (#191) and carried as PHP_REFERENCE_VERSION in install.conf; runtime source of truth stays /etc/php/hestia/php-version."
     },
 
     "PANEL_IPTABLES": {
@@ -306,7 +306,7 @@
       "label": "Composer",
       "description": "PHP dependency manager (system-wide)",
       "fixed_no_prompt": { "mailonly": false },
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false },
+      "default": { "standard": true, "compact": false, "latest": true, "singlephp": true, "nomail": true, "mailonly": false },
       "source_default": {
         "standard": "os_package", "compact": "os_package", "latest": "upstream_installer",
         "singlephp": "os_package", "nomail": "os_package"
@@ -331,9 +331,9 @@
       "question": "CrowdSec model (where ban decisions come from)?",
       "visible_if": "ADDON_CROWDSEC == true",
       "options": [
-        { "value": "capi", "label": "Community blocklist (CAPI, recommended)", "description": "Central CrowdSec blocklist + telemetry, this server alone" },
-        { "value": "local", "label": "Local only", "description": "Self-hosted, no telemetry, this server alone" },
-        { "value": "mesh", "label": "Fleet mesh", "description": "Local engine, own bans shared across your servers" }
+        { "value": "capi", "label": "Community blocklist (recommended)", "description": "Shared blocklist + telemetry" },
+        { "value": "local", "label": "Local only", "description": "No telemetry, this server alone" },
+        { "value": "mesh", "label": "Fleet mesh", "description": "Share bans across your servers" }
       ],
       "default": { "standard": "capi", "compact": "capi", "latest": "capi", "singlephp": "capi", "nomail": "capi", "mailonly": "capi" },
       "note": "One radio, not a CAPI question plus a separate mesh toggle: CAPI and mesh are technically orthogonal (different mechanisms, they do combine), but only these three models are supported. 'mesh' implies local - it disables the CAPI online_client - and only arms the mechanism; peers are paired afterwards in the panel (Firewall > Fleet Mesh) or with h-generate-sys-crowdsec-pairing / h-add-sys-crowdsec-peer, and the mesh stays togglable via h-add/delete-sys-crowdsec-mesh. A radio also because a checkbox in the combined addons screen can never see its own visible_if (see fn_ask_group_checklist)."
@@ -352,9 +352,18 @@
       "type": "checkbox",
       "label": "ProFTPD",
       "description": "FTP server",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": false },
+      "default": { "standard": true, "compact": false, "latest": true, "singlephp": true, "nomail": true, "mailonly": false },
       "fixed_no_prompt": { "mailonly": false },
       "note": "Off and unasked on mailonly: without a customer web server there is nothing to upload to, and the firewall rule is dropped with it."
+    },
+
+    "ADDON_RESTIC": {
+      "group": "addons",
+      "type": "checkbox",
+      "label": "restic",
+      "description": "Incremental backup mode (per-customer repository). Without it a customer package cannot select BACKUPS_MODE='restic'.",
+      "default": { "standard": true, "compact": false, "latest": false, "singlephp": false, "nomail": false, "mailonly": false },
+      "note": "OS package, no pin: the repo format is compatible across 0.14 to 0.18 (measured), and capabilities are asked from the binary. Was in the base package block and in tools.selection until #217 - the checkbox there was inert because the base block installed it regardless."
     },
 
     "ADDON_RSPAMD": {
@@ -373,7 +382,7 @@
       "label": "Sieve",
       "description": "Server-side mail filters (mail block only)",
       "visible_if": "MAIL_BLOCK_PRESENT == true",
-      "default": { "standard": false, "compact": false, "latest": false, "singlephp": false, "mailonly": true },
+      "default": { "standard": true, "compact": false, "latest": false, "singlephp": false, "mailonly": true },
       "note": "Hidden on nomail (no mail block). Preselected on mailonly: a box that exists for mail should filter mail."
     },
 
@@ -407,21 +416,13 @@
       "note": "Preset nowhere. Not on mailonly: it points at /home/$user, i.e. the raw maildirs - a second way into the mailbox with no IMAP semantics. Exporting them is a real use case, so it stays installable by hand. TODO: PHP version/mode dependencies before production use."
     },
 
-    "ADDON_RESTIC": {
-      "group": "addons",
-      "type": "checkbox",
-      "label": "restic",
-      "description": "Incremental backup mode (per-customer repository). Without it a customer package cannot select BACKUPS_MODE='restic'.",
-      "default": false,
-      "note": "OS package, no pin: the repo format is compatible across 0.14 to 0.18 (measured), and capabilities are asked from the binary. Was in the base package block and in tools.selection until #217 - the checkbox there was inert because the base block installed it regardless."
-    },
 
     "ADDON_UTILITIES": {
       "group": "addons",
       "type": "checkbox",
       "label": "Utilities",
       "description": "System utilities (opens tool selection)",
-      "default": { "standard": true, "compact": true, "latest": true, "singlephp": true, "nomail": true, "mailonly": true },
+      "default": { "standard": true, "compact": false, "latest": true, "singlephp": true, "nomail": true, "mailonly": true },
       "opens_followup": "TOOLS_SELECTION",
       "note": "When enabled, the tools follow-up page opens (see the tools section below)."
     }
@@ -441,7 +442,7 @@
       },
       "default": {
         "standard":  ["rsync", "net-tools", "vnstat", "parted", "telnet"],
-        "compact":   ["rsync", "net-tools", "vnstat", "parted", "telnet"],
+        "compact":   [],
         "latest":    ["rsync", "net-tools", "vnstat", "parted", "telnet"],
         "singlephp": ["rsync", "net-tools", "vnstat", "parted", "telnet"],
         "nomail":    ["rsync", "net-tools", "vnstat", "parted", "telnet"],
@@ -465,6 +466,6 @@
   "_open_questions": [
     "DKIM mechanism: confirmed - the existing HestiaCP Exim+OpenSSL path stays, no rspamd dkim_signing",
     "nginx-lite for mailonly: check later whether a leaner nginx build without PHP-hosting modules suffices",
-    "Filesystem quota and resource limitation: deliberately not included in the manifest (maturity/bug history in the original upstream), backlog item: re-evaluate later and decide whether the associated h-* commands are removed or kept"
+    "Filesystem quota: decided in #211 - project quota is base behaviour, the installer arms it whenever the /home filesystem supports it (PROJECT_QUOTA key carries the measured state); deliberately NOT a manifest component. Resource limitation (cgroups) still awaits its own decision in #212"
   ]
 }

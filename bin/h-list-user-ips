@@ -70,15 +70,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	echo "IP,OWNER,STATUS,NAME,NAT"
-	for IP in $ips; do
-		source_conf "$CONF_DIR/ips/$IP"
-		echo "$IP,$OWNER,$STATUS,$NAME,$NAT"
-	done
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -107,8 +98,8 @@ fields='$IP $OWNER $STATUS $NAME $NAT'
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

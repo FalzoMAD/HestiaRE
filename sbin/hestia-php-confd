@@ -43,8 +43,10 @@ fpm_apps_optional="gd bz2 pgsql pdo_pgsql"
 # backend, h-check-sys-smoke pins the driver as a hard failure instead.
 fpm_webmail_critical="intl phar dom"
 fpm_webmail_optional="exif sqlite3 pdo_sqlite"
-# CLI (sbin/hestia-php): composer + the notification HTML sanitizer (dom). No DB chain, no gettext
-cli_critical="mbstring ctype iconv phar dom"
+# CLI (sbin/hestia-php): composer + the notification HTML sanitizer (dom) + gettext -
+# mail-wrapper runs under this wrapper since #191 and includes web/inc/i18n.php
+# (bindtextdomain), so notification mail dies without it. No DB chain.
+cli_critical="mbstring ctype iconv phar dom gettext"
 cli_optional="curl zip"
 
 missing_critical=""

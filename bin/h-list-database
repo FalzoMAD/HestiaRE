@@ -60,12 +60,6 @@ plain_list() {
 	echo -e "$SUSPENDED\t$TIME\t$DATE"
 }
 
-# CSV list function
-csv_list() {
-	echo "DATABASE,DBUSER,HOST,TYPE,CHARSET,U_DISK,SUSPENDED,TIME,DATE"
-	echo "$DB,$DBUSER,$HOST,$TYPE,$CHARSET,$U_DISK,$SUSPENDED,$TIME,$DATE"
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -86,8 +80,8 @@ parse_object_kv_list "$(grep -F "DB='$database'" $USER_DATA/db.conf)"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

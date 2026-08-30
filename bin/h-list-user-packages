@@ -28,7 +28,7 @@ json_list() {
 	for package in $packages; do
 		PACKAGE=${package/.pkg/}
 		source_conf "$CONF_DIR/packages/$PACKAGE.pkg"
-		json_escape PACKAGE WEB_TEMPLATE PROXY_TEMPLATE WEB_DOMAINS WEB_ALIASES MAIL_DOMAINS MAIL_ACCOUNTS DATABASES CRON_JOBS DISK_QUOTA CPU_QUOTA DOCKER_LIMIT CPU_QUOTA_PERIOD MEMORY_LIMIT SWAP_LIMIT BANDWIDTH SHELL BACKUPS TIME DATE
+		json_escape PACKAGE WEB_TEMPLATE PROXY_TEMPLATE WEB_DOMAINS WEB_ALIASES MAIL_DOMAINS MAIL_ACCOUNTS DATABASES CRON_JOBS DISK_QUOTA DOCKER_LIMIT BANDWIDTH SHELL BACKUPS TIME DATE
 		printf '    "%s": {\n' "$PACKAGE"
 		printf '        "WEB_TEMPLATE": "%s",\n' "$WEB_TEMPLATE"
 		printf '        "PROXY_TEMPLATE": "%s",\n' "$PROXY_TEMPLATE"
@@ -39,11 +39,6 @@ json_list() {
 		printf '        "DATABASES": "%s",\n' "$DATABASES"
 		printf '        "CRON_JOBS": "%s",\n' "$CRON_JOBS"
 		printf '        "DISK_QUOTA": "%s",\n' "$DISK_QUOTA"
-		printf '        "CPU_QUOTA":"%s",\n' "$CPU_QUOTA"
-		printf '        "DOCKER_LIMIT":"%s",\n' "$DOCKER_LIMIT"
-		printf '        "CPU_QUOTA_PERIOD":"%s",\n' "$CPU_QUOTA_PERIOD"
-		printf '        "MEMORY_LIMIT":"%s",\n' "$MEMORY_LIMIT"
-		printf '        "SWAP_LIMIT":"%s",\n' "$SWAP_LIMIT"
 		printf '        "DOCKER_LIMIT":"%s",\n' "$DOCKER_LIMIT"
 		printf '        "BANDWIDTH": "%s",\n' "$BANDWIDTH"
 		printf '        "SHELL": "%s",\n' "$SHELL"
@@ -63,8 +58,8 @@ json_list() {
 
 # SHELL list function
 shell_list() {
-	echo "PKG   TPL   WEB   MAIL   DB   SHELL   DISK   CPU_QUOTA   CPU_QUOTA_PERIOD   MEMORY_LIMIT   SWAP_LIMIT   DOCKER_LIMIT   BW"
-	echo "---   ---   ---   ---   ----   --   -----   ----   ---------   ----------------   ------------   ----------   --"
+	echo "PKG   TPL   WEB   MAIL   DB   SHELL   DISK   DOCKER_LIMIT   BW"
+	echo "---   ---   ---   ----   --   -----   ----   ------------   --"
 	for package in $packages; do
 		source $CONF_DIR/packages/$package
 		PACKAGE=${package/.pkg/}
@@ -72,7 +67,7 @@ shell_list() {
 		package_data=$(echo "$package_data" | sed -e 's/unlimited/unlim/g')
 		parse_object_kv_list "$package_data"
 		echo -n "$PACKAGE $WEB_TEMPLATE $WEB_DOMAINS "
-		echo "$MAIL_DOMAINS $DATABASES $SHELL $DISK_QUOTA $CPU_QUOTA $CPU_QUOTA_PERIOD $MEMORY_LIMIT $SWAP_LIMIT $DOCKER_LIMIT $BANDWIDTH"
+		echo "$MAIL_DOMAINS $DATABASES $SHELL $DISK_QUOTA $DOCKER_LIMIT $BANDWIDTH"
 	done
 }
 
@@ -84,25 +79,8 @@ plain_list() {
 		echo -ne "$PACKAGE\t$WEB_TEMPLATE\t$PROXY_TEMPLATE\t"
 		echo -ne "$WEB_DOMAINS\t$WEB_ALIASES\t"
 		echo -ne "$MAIL_DOMAINS\t$MAIL_ACCOUNTS\t$DATABASES\t$CRON_JOBS\t"
-		echo -ne "$DISK_QUOTA\t$CPU_QUOTA\t$CPU_QUOTA_PERIOD\t$MEMORY_LIMIT\t$SWAP_LIMIT\t$DOCKER_LIMIT\t"
+		echo -ne "$DISK_QUOTA\t$DOCKER_LIMIT\t"
 		echo -e "$BANDWIDTH\t$SHELL\t$BACKUPS\t$TIME\t$DATE"
-	done
-}
-
-# CSV list function
-csv_list() {
-	echo -n "PACKAGE,WEB_TEMPLATE,PROXY_TEMPLATE,"
-	echo -n "WEB_DOMAINS,WEB_ALIASES,"
-	echo -n "MAIL_DOMAINS,MAIL_ACCOUNTS,DATABASES,CRON_JOBS,"
-	echo -n "DISK_QUOTA,CPU_QUOTA,CPU_QUOTA_PERIOD,MEMORY_LIMIT,"
-	echo "SWAP_LIMIT,DOCKER_LIMIT,BANDWIDTH,SHELL,BACKUPS,TIME,DATE"
-	for package in $packages; do
-		PACKAGE=${package/.pkg/}
-		echo -n "$PACKAGE,$WEB_TEMPLATE,$PROXY_TEMPLATE,"
-		echo -n "$WEB_DOMAINS,$WEB_ALIASES,"
-		echo -n "$MAIL_DOMAINS,$MAIL_ACCOUNTS,$DATABASES,$CRON_JOBS,"
-		echo -n "$DISK_QUOTA,$CPU_QUOTA,$CPU_QUOTA_PERIOD,$MEMORY_LIMIT,"
-		echo "$SWAP_LIMIT,$DOCKER_LIMIT,$BANDWIDTH,$SHELL,$BACKUPS,$TIME,$DATE"
 	done
 }
 
@@ -117,8 +95,8 @@ packages=$(ls --sort=time $CONF_DIR/packages | grep .pkg)
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

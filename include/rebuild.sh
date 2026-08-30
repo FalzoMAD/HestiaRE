@@ -131,6 +131,12 @@ rebuild_user_conf() {
 		$HOMEDIR/$user/.wp-cli
 	chown root:root $HOMEDIR/$user/conf
 
+	# project id BEFORE any restore unpacks: everything created below inherits;
+	# for a pre-arming tree this is the one-time migration (#211)
+	# shellcheck source=/usr/local/hestia/include/quota.sh
+	declare -F quota_project_assign > /dev/null 2>&1 || source "$HESTIA/include/quota.sh"
+	quota_project_assign "$user"
+
 	$BIN/h-add-user-sftp-jail "$user"
 
 	# Rebuild the file manager pool + vhost if the user had it enabled (#419). Restore

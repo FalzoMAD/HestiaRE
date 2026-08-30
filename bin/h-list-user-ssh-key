@@ -64,17 +64,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo "ID,KEY"
-	for str in $keys; do
-		KEY=$(echo $str | awk '{print $(NF-2)}')
-		ID=$(echo $str | awk '{print $(NF-1)}')
-		echo "\"$ID\",\"$KEY\""
-	done
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -109,8 +98,8 @@ done < "$AUTHKEY_FILE"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

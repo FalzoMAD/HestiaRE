@@ -238,7 +238,7 @@ case $format in
 		fields='$USER~$TYPE~$KEY~$RESULT~$ALIAS'
 		shell_list_search | column -t -s '~'
 		;;
-	*) check_args '2' '0' 'USER OBJECT [FORMAT]' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 rm $conf

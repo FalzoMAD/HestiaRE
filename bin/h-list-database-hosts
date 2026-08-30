@@ -101,24 +101,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo -n "HOST,PORT,TYPE,CHARSETS,MAX_DB,U_SYS_USERS,"
-	echo "U_DB_BASES,TPL,SUSPENDED,TIME,DATE"
-	for type in $(echo $DB_SYSTEM | sed -e 's/,/\n/'); do
-		if [ -e "$HESTIA/conf/$type.conf" ]; then
-			# Set default port values if they don't exist in database configuration file.
-			database_set_default_ports
-			for str in $(cat $HESTIA/conf/$type.conf); do
-				parse_object_kv_list "$str"
-				echo -n "$HOST,$PORT,$type,\"$CHARSETS\",$MAX_DB,\"$U_SYS_USERS\","
-				echo "$U_DB_BASES,$TPL,$SUSPENDED,$TIME,$DATE"
-			done
-		fi
-	done
-}
-
 # Type format validator
 is_type_format_valid() {
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|@|<|>|?|/|\|\"|'|;|%|\`| ]|\."
@@ -135,8 +117,8 @@ is_type_format_valid() {
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

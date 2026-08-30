@@ -189,7 +189,7 @@ case $format in
 		shell_list_ssl
 		;;
 	shell) shell_list_ssl ;;
-	*) check_args '1' '0' '[FORMAT]' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 # Don't allow non root users view folder

@@ -72,13 +72,6 @@ plain_list() {
 	echo -e "$UDIR\t$MAP\t${MODE:-full}\t$BASE\t$RUNTIME\t$TIME\t$DATE"
 }
 
-# CSV list function
-csv_list() {
-	echo "BACKUP,TYPE,SIZE,WEB,MAIL,DB,CRON,UDIR,MAP,MODE,BASE,RUNTIME,TIME,DATE"
-	echo -n "$BACKUP,$TYPE,$SIZE,\"$WEB\",\"$MAIL\",\"$DB\","
-	echo "\"$CRON\",\"$UDIR\",$MAP,${MODE:-full},$BASE,$RUNTIME,$TIME,$DATE"
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -99,8 +92,8 @@ parse_object_kv_list "$(grep -F "BACKUP='$backup'" $USER_DATA/backup.conf)"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

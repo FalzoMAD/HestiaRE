@@ -1,0 +1,29 @@
+#=========================================================================#
+# HestiaRE - customer PHP-FPM slice                                       #
+#                                                                         #
+# Installed verbatim by customer_php_limit_apply (include/limits.sh).     #
+# DO NOT MODIFY THE INSTALLED COPY - it is regenerated.                   #
+#=========================================================================#
+#
+# Every customer php-fpm master runs here so panel, mail, database and ssh keep
+# their share while customer web is under load. It caps all customers TOGETHER
+# against the rest of the box; it does not separate them from each other.
+#
+# The effective value is computed per boot by hestia-customer-php-limit.service:
+# systemd counts CPUQuota per core, so a share of the machine has to be
+# multiplied by the core count before it means what it says.
+#
+# The value below is only the net for a failed oneshot, and it is a fixed one: two cores'
+# worth is barely a limit on a two-core box and a hard sixth of a sixteen-core box. That is
+# the deliberate trade - never uncapped - but it means a failure leaves an arbitrary cap, not
+# a safe one, so the smoke check reports what is live.
+#
+# Every dash in the name is a cgroup level: hestia.slice/hestia-customer.slice/this one.
+# systemd creates both parents implicitly and neither carries a limit, so no second cap.
+
+[Unit]
+Description=HestiaRE customer PHP-FPM
+Before=slices.target
+
+[Slice]
+CPUQuota=200%

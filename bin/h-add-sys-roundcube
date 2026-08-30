@@ -232,6 +232,9 @@ cp -f "$HESTIA/share/roundcube/plugins/config_zipdownload.inc.php" \
 mkdir -p /etc/systemd/system/roundcube-gc.service.d /etc/systemd/system/roundcube-cleandb.service.d
 cp -f "$HESTIA/share/roundcube/systemd-caddy.conf" /etc/systemd/system/roundcube-gc.service.d/hestia.conf
 cp -f "$HESTIA/share/roundcube/systemd-caddy.conf" /etc/systemd/system/roundcube-cleandb.service.d/hestia.conf
+# the drop-in appends this scan dir for the two units (PHP 8.5 compat, see the ini)
+mkdir -p /etc/php/hestia/roundcube-cli
+cp -f "$HESTIA/share/roundcube/cli-php85-compat.ini" /etc/php/hestia/roundcube-cli/95-hestia-roundcube.ini
 systemctl daemon-reload
 
 # Ensure log directory exists with correct ownership

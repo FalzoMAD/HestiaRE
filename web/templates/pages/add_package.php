@@ -32,6 +32,7 @@
 				<label for="v_package" class="form-label"><?= tohtml(_("Package Name")) ?></label>
 				<input type="text" class="form-control" name="v_package" id="v_package" value="<?= tohtml(trim($v_package, "'")) ?>" required>
 			</div>
+			<?php if ($offer_quota) { ?>
 			<div class="u-mb10">
 				<label for="v_disk_quota" class="form-label">
 					<?= tohtml(_("Quota")) ?> <span class="optional">(<?= tohtml(_("in MB")) ?>)</span>
@@ -43,6 +44,7 @@
 					</button>
 				</div>
 			</div>
+			<?php } ?>
 			<div class="u-mb10">
 				<label for="v_bandwidth" class="form-label">
 					<?= tohtml(_("Bandwidth")) ?> <span class="optional">(<?= tohtml(_("in MB")) ?>)</span>
@@ -238,69 +240,7 @@
 				</div>
 			</details>
 
-			<?php if ($offer_resources) { ?>
-				<details class="collapse" id="system-resources-options">
-				<summary class="collapse-header">
-					<?= tohtml(_("System Resources")) ?>
-				</summary>
-				<div class="collapse-content">
-					<div class="u-mb10">
-						<label for="cfs_quota" class="form-label">
-							<?= tohtml(_("CPU Quota (in %)")) ?>
-						</label>
-						<div class="u-pos-relative">
-							<input type="text" class="form-control" name="v_cpu_quota" id="v_cpu_quota" value="<?= tohtml(trim($v_cpu_quota, "'")) ?>">
-							<button type="button" class="unlimited-toggle js-unlimited-toggle" title="<?= tohtml(_("Unlimited")) ?>">
-								<i class="fas fa-infinity"></i>
-							</button>
-						</div>
-						<small class="form-text text-muted"><?= tohtml(_("CPUQuota=20% ensures that the executed processes will never get more than 20% CPU time on one CPU.")) ?></small>
-					</div>
-
-					<div class="u-mb10">
-						<label for="cfs_period" class="form-label">
-							<?= tohtml(_("CPU Quota Period (in ms for milliseconds or s for seconds.)")) ?>
-						</label>
-						<div class="u-pos-relative">
-							<input type="text" class="form-control" name="v_cpu_quota_period" id="v_cpu_quota_period" value="<?= tohtml(trim($v_cpu_quota_period, "'")) ?>">
-							<button type="button" class="unlimited-toggle js-unlimited-toggle" title="<?= tohtml(_("Unlimited")) ?>">
-								<i class="fas fa-infinity"></i>
-							</button>
-						</div>
-						<small class="form-text text-muted"><?= tohtml(_("CPUQuotaPeriodSec=10ms to request that the CPU quota is measured in periods of 10ms.")) ?></small>
-					</div>
-
-					<div class="u-mb10">
-						<label for="memory_limit" class="form-label">
-							<?= tohtml(_("Memory Limit (in bytes or with units like '2G')")) ?>
-						</label>
-						<div class="u-pos-relative">
-							<input type="text" class="form-control" name="v_memory_limit" id="v_memory_limit" value="<?= tohtml(trim($v_memory_limit, "'")) ?>">
-							<button type="button" class="unlimited-toggle js-unlimited-toggle" title="<?= tohtml(_("Unlimited")) ?>">
-								<i class="fas fa-infinity"></i>
-							</button>
-						</div>
-						<small class="form-text text-muted"><?= tohtml(_("Takes a memory size in bytes. If the value is suffixed with K, M, G or T, the specified memory size is parsed as Kilobytes, Megabytes, Gigabytes, or Terabytes (with the base 1024), respectively")) ?></small>
-					</div>
-
-					<div class="u-mb10">
-						<label for="swap_limit" class="form-label">
-							<?= tohtml(_("Swap Limit (in bytes or with units like '2G')")) ?>
-						</label>
-						<div class="u-pos-relative">
-							<input type="text" class="form-control" name="v_swap_limit" id="v_swap_limit" value="<?= tohtml(trim($v_swap_limit, "'")) ?>">
-							<button type="button" class="unlimited-toggle js-unlimited-toggle" title="<?= tohtml(_("Unlimited")) ?>">
-								<i class="fas fa-infinity"></i>
-							</button>
-						</div>
-						<small class="form-text text-muted"><?= tohtml(_("Takes a swap size in bytes. If the value is suffixed with K, M, G or T, the specified swap size is parsed as Kilobytes, Megabytes, Gigabytes, or Terabytes (with the base 1024), respectively")) ?></small>
-					</div>
-				</div>
-
-			</details>
-			<?php } ?>
-			<?php # the addon, not RESOURCES_LIMIT, decides this one: the companion cap is per docker
-				# customer and the box-wide toggle is off by default
+			<?php # a per-docker-customer cap, so the addon decides whether it is offered
 				if ($offer_docker_limit) { ?>
 				<details class="collapse" id="docker-options">
 					<summary class="collapse-header">

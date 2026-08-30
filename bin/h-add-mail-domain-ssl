@@ -85,14 +85,13 @@ add_mail_ssl_config
 # Resolve template names (degrades to 'disabled' when the client isn't installed)
 select_webmail_template "$WEBMAIL"
 
-add_webmail_config "$WEB_SYSTEM" "${WEBMAIL_TEMPLATE}.stpl"
+add_webmail_config "$(webmail_front)" "${WEBMAIL_TEMPLATE}.stpl"
 
 if [ -n "$PROXY_SYSTEM" ]; then
 	add_webmail_config "$PROXY_SYSTEM" "${PROXY_TEMPLATE}.stpl"
 fi
 
 # Increase value for domain
-increase_user_value "$user" '$U_MAIL_SSL'
 
 # Set SSL as enabled in configuration
 update_object_value 'mail' 'DOMAIN' "$domain" '$SSL' "yes"
