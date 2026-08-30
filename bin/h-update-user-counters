@@ -20,12 +20,30 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 # Argument definition
 user=$1
+mode=${2-apply}
+
+# The counters this command derives, in one list: the write loop and the 'check' output both read
+# it, so a counter added here is written AND verified, and one that is never added is visible as
+# missing rather than living outside both (U_MAIL_SSL did that for years). h-check-sys-smoke asks
+# this command instead of keeping counting rules of its own.
+# An array, not a string: the loop below runs with IFS=$'\n', which would leave the whole list
+# as one "word" - and the write path would silently stop writing.
+COUNTER_KEYS=(
+	SUSPENDED_USERS SUSPENDED_WEB SUSPENDED_MAIL SUSPENDED_DB SUSPENDED_CRON
+	IP_AVAIL IP_OWNED U_USERS U_DISK U_DISK_DIRS U_DISK_WEB U_DISK_MAIL U_DISK_DB U_BANDWIDTH
+	U_WEB_DOMAINS U_WEB_SSL U_WEB_ALIASES U_MAIL_DOMAINS U_MAIL_DKIM U_MAIL_ACCOUNTS
+	U_DATABASES U_CRON_JOBS U_BACKUPS
+)
 
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '0' "$#" '[USER]'
+check_args '0' "$#" '[USER] [MODE]'
+case "$mode" in
+	apply | check) ;;
+	*) check_result "$E_INVALID" "invalid mode: $mode, expected: apply | check" ;;
+esac
 if [ -n "$user" ]; then
 	is_format_valid 'user'
 	is_object_valid 'user' 'USER' "$user"
@@ -177,36 +195,22 @@ for user in $user_list; do
 	# Update values
 	U_DISK=$DISK
 	U_BANDWIDTH=$BANDWIDTH
-	update_user_value "$user" '$SUSPENDED_USERS' "$SUSPENDED_USERS"
-	update_user_value "$user" '$SUSPENDED_WEB' "$SUSPENDED_WEB"
-	update_user_value "$user" '$SUSPENDED_MAIL' "$SUSPENDED_MAIL"
-	update_user_value "$user" '$SUSPENDED_DB' "$SUSPENDED_DB"
-	update_user_value "$user" '$SUSPENDED_CRON' "$SUSPENDED_CRON"
-	update_user_value "$user" '$IP_AVAIL' "$IP_AVAIL"
-	update_user_value "$user" '$IP_OWNED' "$IP_OWNED"
-	update_user_value "$user" '$U_USERS' "$U_USERS"
-	update_user_value "$user" '$U_DISK' "$U_DISK"
-	update_user_value "$user" '$U_DISK_DIRS' "$U_DISK_DIRS"
-	update_user_value "$user" '$U_DISK_WEB' "$U_DISK_WEB"
-	update_user_value "$user" '$U_DISK_MAIL' "$U_DISK_MAIL"
-	update_user_value "$user" '$U_DISK_DB' "$U_DISK_DB"
-	update_user_value "$user" '$U_BANDWIDTH' "$U_BANDWIDTH"
-	update_user_value "$user" '$U_WEB_DOMAINS' "$U_WEB_DOMAINS"
-	update_user_value "$user" '$U_WEB_SSL' "$U_WEB_SSL"
-	update_user_value "$user" '$U_WEB_ALIASES' "$U_WEB_ALIASES"
-	update_user_value "$user" '$U_MAIL_DOMAINS' "$U_MAIL_DOMAINS"
-	update_user_value "$user" '$U_MAIL_DKIM' "$U_MAIL_DKIM"
-	update_user_value "$user" '$U_MAIL_ACCOUNTS' "$U_MAIL_ACCOUNTS"
-	update_user_value "$user" '$U_DATABASES' "$U_DATABASES"
-	update_user_value "$user" '$U_CRON_JOBS' "$U_CRON_JOBS"
-	update_user_value "$user" '$U_BACKUPS' "$U_BACKUPS"
+	if [ "$mode" = 'check' ]; then
+		# What the counters WOULD become, without touching the record: the smoke guard reads
+		# this, so the counting rules live here only.
+		for _k in "${COUNTER_KEYS[@]}"; do printf "%s='%s'\n" "$_k" "${!_k}"; done
+		continue
+	fi
+	for _k in "${COUNTER_KEYS[@]}"; do
+		update_user_value "$user" "\$$_k" "${!_k}"
+	done
 done
 
 #----------------------------------------------------------#
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Logging
-log_event "$OK" "$ARGUMENTS"
+# Logging - a check run reads only, so it is not an event
+[ "$mode" = 'check' ] || log_event "$OK" "$ARGUMENTS"
 
 exit

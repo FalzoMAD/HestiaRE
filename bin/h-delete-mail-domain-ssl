@@ -56,7 +56,6 @@ del_webmail_ssl_config
 # Updating config
 update_object_value 'mail' 'DOMAIN' "$domain" '$SSL' 'no'
 update_object_value 'mail' 'DOMAIN' "$domain" '$LETSENCRYPT' 'no'
-decrease_user_value "$user" '$U_MAIL_SSL'
 
 # Restarting mail server
 $BIN/h-restart-mail "$restart"

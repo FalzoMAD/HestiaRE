@@ -27,6 +27,9 @@ source $HESTIA/include/syshealth.sh
 source $HESTIA/include/quota.sh
 # shellcheck source=/usr/local/hestia/include/limits.sh
 source $HESTIA/include/limits.sh
+# record_line_valid, so the grammar has one definition and the guard does not carry a second
+# shellcheck source=/usr/local/hestia/include/backup.sh
+source $HESTIA/include/backup.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 # live component state (COMPONENT_* flags), if present
@@ -1560,71 +1563,110 @@ check_web_templates_resolvable() {
 	fi
 }
 
-# check_object_counters - the record-derived counters against a recount, using the same
-# derivation rules as h-update-user-counters. Not covered, deliberately: U_DISK*/U_BANDWIDTH
-# (measured, not derivable from records) and U_USERS (an admin-wide count, not one of this
-# user's records).
-check_object_counters() {
-	local u ud stored drift=0 first="" checked=0 ipf ip real
-	_ctr() {
-		stored=$(grep -o "${1}='[0-9]*'" "$ud/user.conf" 2> /dev/null | head -1 | tr -dc 0-9)
-		[ -n "$stored" ] || return 0
-		checked=$((checked + 1))
-		if [ "$stored" != "$2" ]; then
-			drift=$((drift + 1))
-			[ -z "$first" ] && first="$u $1 stored=$stored counted=$2"
-		fi
-	}
-	# grep -c prints its count even at rc 1 (zero matches) - a fallback echo would
-	# double the output
-	_cnt() {
-		[ -f "$2" ] || {
-			echo 0
-			return
-		}
-		grep -c "$1" "$2" || true
-	}
-	for u in $("$BIN/h-list-users" list 2> /dev/null); do
-		ud="$CONF_DIR/users/$u"
-		_ctr U_WEB_DOMAINS "$(_cnt . "$ud/web.conf")"
-		_ctr U_WEB_SSL "$(_cnt "SSL='yes'" "$ud/web.conf")"
-		_ctr U_WEB_ALIASES "$(grep -o "ALIAS='[^']*'" "$ud/web.conf" 2> /dev/null \
-			| awk -F"'" '{ if ($2 != "") s += split($2, a, ",") } END { print s + 0 }')"
-		_ctr U_MAIL_DOMAINS "$(_cnt . "$ud/mail.conf")"
-		_ctr U_MAIL_DKIM "$(_cnt "DKIM='yes'" "$ud/mail.conf")"
-		_ctr U_MAIL_ACCOUNTS "$(cat "$ud"/mail/*.conf 2> /dev/null | grep -c "ACCOUNT='" || true)"
-		_ctr U_DATABASES "$(_cnt . "$ud/db.conf")"
-		_ctr U_CRON_JOBS "$(_cnt . "$ud/cron.conf")"
-		_ctr U_BACKUPS "$(_cnt . "$ud/backup.conf")"
-		# The suspended mirrors, by the same rule the recount uses. Nothing else watches them: no
-		# recount runs on a schedule, only h-rebuild-user and h-update-user-counters, on demand.
-		_ctr SUSPENDED_WEB "$(_cnt "SUSPENDED='yes'" "$ud/web.conf")"
-		_ctr SUSPENDED_MAIL "$(_cnt "SUSPENDED='yes'" "$ud/mail.conf")"
-		_ctr SUSPENDED_DB "$(_cnt "SUSPENDED='yes'" "$ud/db.conf")"
-		_ctr SUSPENDED_CRON "$(_cnt "SUSPENDED='yes'" "$ud/cron.conf")"
+# check_record_grammar - every record line against record_line_valid, the one place that defines
+# the grammar (include/backup.sh). A line that loses its quotes stays READABLE - source_conf takes
+# KEY=value just fine - while every writer looks for KEY='...' and silently finds nothing. The
+# record then shows a value that no change can move, and the panel looks correct while saving
+# nothing. Cheap, and it catches hand edits, ours included.
+check_record_grammar() {
+	local f n=0 bad=0 first="" line
+	if ! declare -F record_line_valid > /dev/null 2>&1; then
+		no "record grammar not checkable" "record_line_valid missing - include/backup.sh not sourced"
+		return
+	fi
+	for f in "$CONF_DIR/users"/*/user.conf "$CONF_DIR/users"/*/*.conf "$CONF_DIR/users"/*/mail/*.conf \
+		"$CONF_DIR/ips"/* "$CONF_DIR/packages"/*.pkg "$HESTIA/conf/hestia.conf"; do
+		[ -f "$f" ] || continue
+		while IFS= read -r line; do
+			[ -n "$line" ] || continue
+			n=$((n + 1))
+			record_line_valid "$line" && continue
+			bad=$((bad + 1))
+			[ -z "$first" ] && first="$f: ${line:0:60}"
+		done < "$f"
 	done
-	# Records store the ADDRESS THE DOMAIN ANSWERS ON, which behind NAT is the public
-	# one, while the ip file is named after the local address - so both count here, or
-	# the recount is 0 on every NAT'd box and the guard "corrects" healthy counters
-	local nat
-	for ipf in "$CONF_DIR/ips"/*; do
-		[ -f "$ipf" ] || continue
-		ip=$(basename "$ipf")
-		nat=$(grep -o "NAT='[^']*'" "$ipf" 2> /dev/null | head -1 | cut -d"'" -f2)
-		stored=$(grep -o "U_WEB_DOMAINS='[0-9]*'" "$ipf" 2> /dev/null | head -1 | tr -dc 0-9)
-		[ -n "$stored" ] || continue
-		real=$(grep -hoF -e "IP='$ip'" ${nat:+-e "IP='$nat'"} \
-			"$CONF_DIR/users"/*/web.conf 2> /dev/null | grep -c .)
-		checked=$((checked + 1))
-		if [ "$stored" != "$real" ]; then
-			drift=$((drift + 1))
-			[ -z "$first" ] && first="ip $ip U_WEB_DOMAINS stored=$stored counted=$real"
-		fi
-	done
-	if [ "$drift" -eq 0 ]; then
-		ok "object counters match the counted objects ($checked checked)"
+	# Nothing to look at is a finding: every box has records.
+	if [ "$n" -eq 0 ]; then
+		no "record grammar: no record lines found" "$CONF_DIR looks empty - the check saw nothing"
+	elif [ "$bad" -eq 0 ]; then
+		ok "record grammar holds on $n record lines"
 	else
-		no "$drift counter(s) drifted from their objects" "$first"
+		no "$bad record line(s) are not KEY='value'" "$first - readable but unwritable: every writer looks for KEY='...'"
+	fi
+}
+
+# check_object_counters - the stored counters against what h-update-user-counters WOULD write.
+# The counting rules are not repeated here: this guard had its own set, and the two that were
+# missing from it (IP_AVAIL, IP_OWNED) drifted for exactly that reason (#866). The authority is
+# asked in its read-only 'check' mode, so a counter added there is verified from that day on.
+#
+# It also asks the other way round: a counter-shaped key in the registry that the authority does
+# not compute lives outside both, which is how U_MAIL_SSL survived for years.
+check_object_counters() {
+	local u line k stored want drift=0 checked=0 first="" computed missing="" reg
+	computed=$("$BIN/h-update-user-counters" "$ROOT_USER" check 2> /dev/null | cut -d= -f1)
+	if [ -z "$computed" ]; then
+		no "counter authority answered nothing" "h-update-user-counters <user> check is the guard's oracle"
+		return
+	fi
+	for reg in $(syshealth_known_keys user | tr ' ' '\n' | grep -E '^(U_|IP_|SUSPENDED_)'); do
+		grep -qx "$reg" <<< "$computed" || missing="$missing $reg"
+	done
+
+	for u in $("$BIN/h-list-users" list 2> /dev/null); do
+		while IFS= read -r line; do
+			k="${line%%=*}"
+			want=$(sed "s/^$k='\\(.*\\)'$/\\1/" <<< "$line")
+			stored=$(sed -n "s/^$k='\\(.*\\)'$/\\1/p" "$CONF_DIR/users/$u/user.conf" | head -1)
+			[ -n "$stored" ] || continue
+			checked=$((checked + 1))
+			[ "$stored" = "$want" ] && continue
+			drift=$((drift + 1))
+			[ -z "$first" ] && first="$u $k stored=$stored counted=$want"
+		done < <("$BIN/h-update-user-counters" "$u" check 2> /dev/null)
+	done
+
+	# Nothing compared is a finding: every box has at least the admin record.
+	if [ "$checked" -eq 0 ]; then
+		no "no counters compared" "the authority returned nothing for any user"
+	elif [ "$drift" -gt 0 ]; then
+		no "$drift counter(s) drifted from their objects" "$first - repair: h-update-user-counters <user>"
+	else
+		ok "object counters match what the recount would write ($checked compared)"
+	fi
+	[ -z "$missing" ] \
+		|| no "registry counter(s) nothing computes:$missing" "outside both the recount and this guard - remove them or compute them"
+}
+
+# check_record_grammar - every record line against record_line_valid, the one place that defines
+# the grammar (include/backup.sh). A line that loses its quotes stays READABLE - source_conf takes
+# KEY=value just fine - while every writer looks for KEY='...' and silently finds nothing. The
+# record then shows a value that no change can move, and the panel looks correct while saving
+# nothing. Cheap, and it catches hand edits, ours included.
+check_record_grammar() {
+	local f n=0 bad=0 first="" line
+	if ! declare -F record_line_valid > /dev/null 2>&1; then
+		no "record grammar not checkable" "record_line_valid missing - include/backup.sh not sourced"
+		return
+	fi
+	for f in "$CONF_DIR/users"/*/user.conf "$CONF_DIR/users"/*/*.conf "$CONF_DIR/users"/*/mail/*.conf \
+		"$CONF_DIR/ips"/* "$CONF_DIR/packages"/*.pkg "$HESTIA/conf/hestia.conf"; do
+		[ -f "$f" ] || continue
+		while IFS= read -r line; do
+			[ -n "$line" ] || continue
+			n=$((n + 1))
+			record_line_valid "$line" && continue
+			bad=$((bad + 1))
+			[ -z "$first" ] && first="$f: ${line:0:60}"
+		done < "$f"
+	done
+	# Nothing to look at is a finding: every box has records.
+	if [ "$n" -eq 0 ]; then
+		no "record grammar: no record lines found" "$CONF_DIR looks empty - the check saw nothing"
+	elif [ "$bad" -eq 0 ]; then
+		ok "record grammar holds on $n record lines"
+	else
+		no "$bad record line(s) are not KEY='value'" "$first - readable but unwritable: every writer looks for KEY='...'"
 	fi
 }
 
@@ -1997,6 +2039,7 @@ check_record_name_patterns
 check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
+check_record_grammar
 check_key_registries
 check_identity_band
 # a cap written for a companion that is gone would be inherited by whoever gets the uid next.

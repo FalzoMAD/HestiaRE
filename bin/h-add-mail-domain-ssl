@@ -92,7 +92,6 @@ if [ -n "$PROXY_SYSTEM" ]; then
 fi
 
 # Increase value for domain
-increase_user_value "$user" '$U_MAIL_SSL'
 
 # Set SSL as enabled in configuration
 update_object_value 'mail' 'DOMAIN' "$domain" '$SSL' "yes"
