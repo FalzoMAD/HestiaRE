@@ -76,10 +76,7 @@ case $format in
 	json) json_list ;;
 	plain) plain_list ;;
 	shell) shell_list ;;
-	*)
-		echo "Error: unknown format $format (json, plain, shell)" >&2
-		exit "$E_INVALID"
-		;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

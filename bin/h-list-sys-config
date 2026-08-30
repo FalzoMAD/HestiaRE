@@ -223,9 +223,11 @@ shell_list() {
 #----------------------------------------------------------#
 
 # Listing data
+# No plain here: this command never had one. The branch dispatched shell_list, which is prose
+# for people, and the plain_list beside it was unreachable - so plain promised a machine format
+# and delivered the other thing. Nothing asks for it; an asker is now told (#861).
 case $format in
 	json) json_list ;;
-	plain) shell_list ;;
 	shell) shell_list ;;
 	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
