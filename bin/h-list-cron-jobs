@@ -79,18 +79,6 @@ plain_list() {
 	done < <(cat $USER_DATA/cron.conf)
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo "MIN,HOUR,DAY,WDAY,CMD,SUSPENDED,TIME,DATE"
-	while read str; do
-		parse_object_kv_list "$str"
-		CMD=$(echo "$CMD" | sed -e 's/"/\\"/g' -e "s/%quote%/'/g")
-		echo -n "$JOB,$MIN,$HOUR,$DAY,$MONTH,$WDAY,\"$CMD\","
-		echo "$SUSPENDED,$TIME,$DATE"
-	done < <(cat $USER_DATA/cron.conf)
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -107,8 +95,8 @@ is_object_valid 'user' 'USER' "$user"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t -s '^' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

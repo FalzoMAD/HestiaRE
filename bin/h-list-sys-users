@@ -55,14 +55,6 @@ plain_list() {
 	done < <("$BIN/h-list-users" 'list')
 }
 
-# CSV list function
-csv_list() {
-	echo "USER"
-	while read user; do
-		echo "$user"
-	done < <("$BIN/h-list-users" 'list')
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -71,8 +63,8 @@ csv_list() {
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

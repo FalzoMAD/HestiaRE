@@ -45,12 +45,6 @@ plain_list() {
 	echo -e "mail._domainkey\t3600\tIN\tTXT\t\"v=DKIM1; k=rsa; p=$pub\""
 }
 
-# CSV list function
-csv_list() {
-	echo "RECORD,TTL,IN,TYPE,VALUE"
-	echo "mail._domainkey,3600,IN,TXT,\"\"v=DKIM1; k=rsa; p=$pub\"\""
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -76,8 +70,8 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t -s '^' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

@@ -56,12 +56,6 @@ plain_list() {
 	echo -e "$SUSPENDED\t$TIME\t$DATE"
 }
 
-# CSV list function
-csv_list() {
-	echo "RULE,ACTION,PROTOCOL,PORT,IP,COMMENT,SUSPENDED,TIME,DATE"
-	echo "$RULE,$ACTION,$PROTOCOL,$PORT,$IP,$COMMENT,$SUSPENDED,$TIME,$DATE"
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -81,8 +75,8 @@ parse_object_kv_list "$(grep "RULE='$rule'" $CONF_DIR/firewall/rules.conf)"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

@@ -58,15 +58,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	echo "LANGUAGE"
-	echo "en"
-	for lang in $languages; do
-		echo "$lang"
-	done
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -78,8 +69,8 @@ languages=$(ls -d $HESTIA/web/locale/*/ | awk -F'/' '{print $(NF-1)}')
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

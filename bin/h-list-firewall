@@ -74,18 +74,6 @@ plain_list() {
 	done < <(cat $CONF_DIR/firewall/rules.conf)
 }
 
-# CSV list function
-csv_list() {
-	IFS=$'\n'
-	echo "RULE,ACTION,PROTOCOL,PORT,IP,COMMENT,SUSPENDED,TIME,DATE"
-	while read str; do
-		[[ -z "$str" ]] && continue
-		parse_object_kv_list "$str"
-		echo -n "$RULE,$ACTION,$PROTOCOL,$PORT,$IP,\"$COMMENT\","
-		echo "$SUSPENDED,$TIME,$DATE"
-	done < <(cat $CONF_DIR/firewall/rules.conf)
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -94,8 +82,8 @@ csv_list() {
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t -s '^' ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

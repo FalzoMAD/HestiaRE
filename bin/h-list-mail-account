@@ -66,14 +66,6 @@ plain_list() {
 	echo -e "$U_DISK\t$SUSPENDED\t$TIME\t$DATE\t$WEBMAIL_ALIAS.$domain"
 }
 
-# CSV list function
-csv_list() {
-	echo -n "ACCOUNT,ALIAS,FWD,FWD_ONLY,AUTOREPLY,QUOTA,U_DISK"
-	echo "SUSPENDED,TIME,DATE"
-	echo -n "$ACCOUNT,\"$ALIAS\",\"$FWD\",$FWD_ONLY,$AUTOREPLY,$QUOTA,"
-	echo "$U_DISK,$SUSPENDED,$TIME,$DATE\t$WEBMAIL_ALIAS.$domain"
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -95,8 +87,8 @@ parse_object_kv_list "$(grep -F "ACCOUNT='$account'" $USER_DATA/mail/$domain.con
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

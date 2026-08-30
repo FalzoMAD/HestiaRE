@@ -49,14 +49,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	echo "PORT"
-	for port in $ports; do
-		echo "$port"
-	done
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -73,8 +65,8 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

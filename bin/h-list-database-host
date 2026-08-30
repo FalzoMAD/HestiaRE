@@ -66,14 +66,6 @@ plain_list() {
 	echo -e "$U_DB_BASES\t$TPL\t$SUSPENDED\t$TIME\t$DATE"
 }
 
-# CSV list function
-csv_list() {
-	echo -n "HOST,PORT,TYPE,CHARSETS,MAX_DB,U_SYS_USERS,"
-	echo "U_DB_BASES,TPL,SUSPENDED,TIME,DATE'"
-	echo -n "$HOST,$PORT,$type,\"$CHARSETS\",$MAX_DB,\"$U_SYS_USERS\","
-	echo "$U_DB_BASES,$TPL,$SUSPENDED,$TIME,$DATE"
-}
-
 # Type format validator
 is_type_format_valid() {
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|@|<|>|?|/|\|\"|'|;|%|\`| ]|\."
@@ -105,8 +97,8 @@ parse_object_kv_list "$(grep "HOST='$host'" $HESTIA/conf/$type.conf)"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

@@ -51,13 +51,6 @@ plain_list() {
 	echo "config_path $config_path"
 }
 
-# CSV list function
-csv_list() {
-	echo "$keys" | sed "s/|/,/g"
-	echo "$config" | egrep "$keys" | tr '=' ' ' | awk '{print $2}' | tr '\n' ','
-	echo
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -76,8 +69,8 @@ config=$(cat $config_path | grep -v "^;")
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

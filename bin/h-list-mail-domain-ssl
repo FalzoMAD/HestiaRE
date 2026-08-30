@@ -98,14 +98,6 @@ plain_list() {
 
 }
 
-# CSV list function
-csv_list() {
-	echo -n "CRT,KEY,CA,SUBJECT,ALIASES,NOT_BEFORE,NOT_AFTER,SIGNATURE,"
-	echo "PUB_KEY,ISSUER"
-	echo -n "\"$crt\",\"$key\",\"$ca\",\"$subj\",\"${alt_dns//,/ }\","
-	echo "\"$before\",\"$after\",\"$signature\",\"$pub_key\",\"$issuer\""
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -151,8 +143,8 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

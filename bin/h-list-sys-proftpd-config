@@ -41,12 +41,6 @@ plain_list() {
 	echo "$config_path"
 }
 
-# CSV list function
-csv_list() {
-	echo "config_path"
-	echo "$config_path"
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -58,8 +52,8 @@ config_path=$(find /etc/proftpd* -name proftpd.conf 2> /dev/null)
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

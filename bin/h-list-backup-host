@@ -68,16 +68,6 @@ plain_list() {
 	esac
 }
 
-# CSV list function
-csv_list() {
-	case $type in
-		'sftp' | 'ftp' | 'rclone')
-			echo "HOST,USERNAME,PORT,TYPE,PATH,TIME,DATE"
-			echo "$HOST,$USERNAME,$PORT,$type,$BPATH,$TIME,$DATE"
-			;;
-	esac
-}
-
 # Type format validator
 is_type_format_valid() {
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|@|<|>|?|/|\|\"|'|;|%|\`| ]|\."
@@ -109,8 +99,8 @@ source_conf "$HESTIA/conf/$type.backup.conf"
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

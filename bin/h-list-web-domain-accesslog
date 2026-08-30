@@ -53,12 +53,6 @@ plain_list() {
 	echo "$lines"
 }
 
-# CSV list function
-csv_list() {
-	echo "LOG"
-	echo "$lines"
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -86,8 +80,8 @@ IFS=$'\n'
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

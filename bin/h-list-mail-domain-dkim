@@ -47,12 +47,6 @@ plain_list() {
 	echo "$pem\t$pub"
 }
 
-# CSV list function
-csv_list() {
-	echo "PEM,PUB"
-	echo "\"$pem\",\"$pub\""
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -81,8 +75,8 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

@@ -55,14 +55,6 @@ plain_list() {
 	done
 }
 
-# CSV list function
-csv_list() {
-	echo "INTERFACE"
-	for interface in $physical_nics; do
-		echo "$interface"
-	done
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -75,8 +67,8 @@ physical_nics="$(ip -d -j link show | jq -r '.[] | if .link_type == "loopback" t
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

@@ -53,12 +53,6 @@ plain_list() {
 	echo -e "$method\t$salt"
 }
 
-# CSV list function
-csv_list() {
-	echo "METHOD,SALT"
-	echo "$method, $salt"
-}
-
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
@@ -114,8 +108,8 @@ fi
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#

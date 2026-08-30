@@ -64,15 +64,6 @@ plain_list() {
 	cs_rows
 }
 
-csv_list() {
-	local ip scen id until
-	echo "IP,SCENARIO,ID,UNTIL"
-	while IFS=$'\t' read -r ip scen id until; do
-		[ -n "$ip" ] || continue
-		echo "$ip,$scen,$id,$until"
-	done < <(cs_rows)
-}
-
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
@@ -80,8 +71,8 @@ csv_list() {
 case $format in
 	json) json_list ;;
 	plain) plain_list ;;
-	csv) csv_list ;;
 	shell) shell_list | column -t ;;
+	*) check_result "$E_INVALID" "invalid format: $format" ;;
 esac
 
 #----------------------------------------------------------#
