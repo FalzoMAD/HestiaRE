@@ -98,8 +98,37 @@ if [ "$ORIGINAL_PORT" = "$PORT" ] && [ "${BACKEND_PORT:-}" = "$PORT" ]; then
 	exit 0
 fi
 
-# The listener FIRST, and proven before anything follows it. Everything below this block
-# points at the panel; writing them against a listener that never came up is the lockout.
+# The rollback spans the WHOLE sequence, not just the first step. Between the listener moving
+# and the firewall following there is a window in which the panel answers where the firewall is
+# shut - dying there leaves a box nobody can reach from outside. The handler flips its mind
+# exactly when the firewall moves: after that, putting the listener back would CREATE the split
+# it exists to prevent.
+_phase=none
+# Idempotent, and it ENDS the command. A signal trap that only handles and returns lets bash
+# resume at the next line: the rollback then ran and the rest of the sequence wrote the new
+# port anyway, leaving the listener on the old port and the firewall on the new - the very
+# split this guard exists to prevent, produced by the guard.
+_on_interrupt() {
+	local was="$_phase"
+	_phase=complete
+	case "$was" in
+		moving | listener)
+			echo "Interrupted while only the listener had moved - putting it back on $ORIGINAL_PORT" >&2
+			write_panel_port "$PORT" "$ORIGINAL_PORT"
+			"$BIN/h-restart-service" hestia > /dev/null 2>&1
+			;;
+		followers)
+			echo "Interrupted after the firewall moved - the panel is reachable on $PORT," >&2
+			echo "but the phpMyAdmin proxy may still point at $ORIGINAL_PORT: h-change-sys-port $PORT" >&2
+			;;
+	esac
+}
+trap _on_interrupt EXIT
+trap '_on_interrupt; exit 143' INT TERM HUP
+
+# The listener FIRST, and proven before anything follows it. Everything below points at the
+# panel; writing it against a listener that never came up is the lockout.
+_phase=moving
 write_panel_port "$ORIGINAL_PORT" "$PORT"
 "$BIN/h-restart-service" hestia
 
@@ -112,9 +141,11 @@ if ! port_is_listening "$PORT"; then
 	else
 		echo "ROLLBACK FAILED: no panel listener on $ORIGINAL_PORT either - check: systemctl status caddy"
 	fi
+	_phase=complete # this branch rolled back already; the trap must not do it twice
 	log_event "$E_INUSE" "$ARGUMENTS"
 	exit "$E_INUSE"
 fi
+_phase=listener
 
 "$BIN/h-change-sys-config-value" "BACKEND_PORT" "$PORT"
 
@@ -136,6 +167,8 @@ fi
 if [ -f "$CONF_DIR/firewall/chains.conf" ]; then
 	sed -i "/CHAIN='HESTIA'/c\CHAIN='HESTIA' PORT='$PORT' PROTOCOL='TCP'" "$CONF_DIR/firewall/chains.conf"
 fi
+# Listener and firewall now agree; from here a listener rollback would be the damage.
+_phase=followers
 
 # phpMyAdmin on a customer domain is a transparent proxy INTO the panel, so it carries the
 # port too. Re-rendered by its own deployer rather than sed'ed here - one writer for that file.
@@ -164,4 +197,5 @@ fi
 "$BIN/h-log-action" "system" "Warning" "System" "Hestia Control Panel backend port changed (New Value: $PORT, Old Value: $ORIGINAL_PORT)."
 log_event "$OK" "$ARGUMENTS"
 
-exit
+_phase=complete
+exit 0
