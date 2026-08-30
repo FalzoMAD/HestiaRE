@@ -287,7 +287,7 @@
       "group": "panel",
       "type": "fixed",
       "always_installed": true,
-      "note": "Always installed. The operating mode (full MTA with Dovecot integration vs. send-only) derives implicitly from MAIL_BLOCK_PRESENT, no separate question. DKIM signing is done granularly per domain via OpenSSL (existing HestiaCP mechanism), independent of rspamd."
+      "note": "Always installed, and read since #872 - before that the key was written here and consulted by nothing, so the send-only branch only CONFIGURED exim and presumed the package: a nomail box had an MTA only where the base image shipped one (Debian does, Ubuntu does not). The operating mode derives from MAIL_BLOCK_PRESENT, no separate question: with a mail block exim4-daemon-heavy plus the HestiaRE template, without one exim4-daemon-light plus Debian's own update-exim4.conf in send-only shape. Set to false only when notification mail goes through an external SMTP relay (USE_SERVER_SMTP). DKIM signing is done granularly per domain via OpenSSL (existing HestiaCP mechanism), independent of rspamd."
     },
 
     "ADDON_ADMINER": {
