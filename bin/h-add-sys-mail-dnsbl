@@ -2,7 +2,7 @@
 # info: add a dnsbl host for exim to check
 # options: HOST [RESTART]
 #
-# example: h-add-sys-mail-dnsbl zen.spamhaus.org
+# example: h-add-sys-mail-dnsbl bl.spamcop.net
 #
 # This function adds a DNSBL server exim checks incoming mail against.
 
@@ -32,7 +32,7 @@ DNSBL_CONF="/etc/exim4/dnsbl.conf"
 #----------------------------------------------------------#
 
 check_args '1' "$#" 'HOST [RESTART]'
-# A host, optionally with exim's "!=" result filter (zen.spamhaus.org!=127.0.0.10). The value goes into
+# A host, optionally with exim's "!=" result filter (some.dnsbl.tld!=127.0.0.10). The value goes into
 # a colon-joined exim dnslists expression, so anything else here becomes a broken ACL rather than a
 # rejected argument.
 if [[ ! "$host" =~ ^[a-zA-Z0-9.-]+(!=[0-9.,]+)?$ ]]; then
