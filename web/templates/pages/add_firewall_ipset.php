@@ -49,14 +49,13 @@
 						$iplist[] = [
 							"name" => "[$type] " . _("Country") . " - $name",
 							"source" => "https://raw.githubusercontent.com/ipverse/rir-ip/master/country/$iso/$lowercaseType-aggregated.txt",
+							"family" => $lowercaseType === "ipv6" ? "v6" : "v4",
 						];
 					}
 					return $iplist;
 				}
 
-				$country_iplists = generate_iplist($country, "IPv4");
-				// Uncomment below for IPv6
-				// $country_ipv6lists = generate_iplist($country, 'IPv6');
+				$country_iplists = array_merge(generate_iplist($country, "IPv4"), generate_iplist($country, "IPv6"));
 
 				// Read from share/firewall/blocklists.conf rather than hard-coded here: the previous entry pointed at
 				// a script under install/, which no longer exists, so the shipped preset could only ever fail.
@@ -71,6 +70,7 @@
 							// generate_iplist's names are. Escaping the name too rendered "Blocklist&period;de".
 							"name" => "[" . strtoupper($m[3]) . "] " . $m[1] . " (" . _("level") . " " . $m[2] . ")",
 							"source" => $m[4],
+							"family" => strtolower($m[3]),
 						];
 					}
 				}
@@ -91,7 +91,7 @@
 					<select
 						class="form-select js-datasource-select"
 						tabindex="-1"
-						onchange="this.nextElementSibling.value=this.value"
+						onchange="this.nextElementSibling.value=this.value; var f=this.selectedOptions[0] && this.selectedOptions[0].dataset.family; if (f) document.getElementById('v_ipver').value=f;"
 						data-country-iplists="<?= tohtml(json_encode($country_iplists)) ?>"
 						data-blacklist-iplists="<?= tohtml(json_encode($blacklist_iplists)) ?>"
 					>

@@ -146,6 +146,15 @@ function hst_add_history_log($message, $category = "System", $level = "Info", $u
 	return $return_var;
 }
 
+// Host part of HTTP_HOST with any :port stripped. A bracketed IPv6 literal keeps its
+// brackets so the value stays valid inside a URL ([::1]:8083 -> [::1]); a naive
+// explode(":") would return "[" for it. Same pattern as prevent_csrf.php.
+function get_http_host_name()
+{
+	$host = $_SERVER["HTTP_HOST"] ?? "";
+	return preg_replace("/(\[?[^]]*\]?):([0-9]{1,5})$/", "$1", $host);
+}
+
 function get_hostname()
 {
 	$badValues = [

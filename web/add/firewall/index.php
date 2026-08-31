@@ -26,9 +26,6 @@ foreach ($data as $key => $value) {
 	if (isset($value["SUSPENDED"]) && $value["SUSPENDED"] === "yes") {
 		continue;
 	}
-	if (isset($value["IP_VERSION"]) && $value["IP_VERSION"] !== "v4") {
-		continue;
-	}
 	array_push($ipset_lists, ["name" => $key]);
 }
 $ipset_lists_json = json_encode($ipset_lists);

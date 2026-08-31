@@ -23,7 +23,10 @@ function addIPListsToSelect(dataSourceSelect, label, ipLists) {
 
 	// Add IP lists to the select element
 	ipLists.forEach((ipList) => {
-		addOption(dataSourceSelect, ipList.name, ipList.source, false);
+		const option = addOption(dataSourceSelect, ipList.name, ipList.source, false);
+		if (ipList.family) {
+			option.dataset.family = ipList.family;
+		}
 	});
 }
 
@@ -35,4 +38,5 @@ function addOption(element, text, value, disabled) {
 		option.disabled = true;
 	}
 	element.append(option);
+	return option;
 }

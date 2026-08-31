@@ -688,7 +688,7 @@ install_mail() {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
-# Stage: security — fail2ban (optional), iptables, ipset, crowdsec (optional)
+# Stage: security - nftables, fail2ban (optional), crowdsec (optional)
 # ════════════════════════════════════════════════════════════════════════════
 install_security() {
 	stage_done security && {

@@ -637,7 +637,7 @@
         "install_web": "nginx + apache2 per WEB_SERVER with port model #247 (BOTH: nginx proxy 80/443 -> apache2 8080/8443; APACHE/NGINX alone: 80/443; Listen per IP via h-add-sys-ip, ports.conf emptied, mod_remoteip for client IP behind proxy), multi-PHP via COMPONENT_PHP_MULTIPHP_VERSIONS when sury_multi, web pool",
         "install_db": "MariaDB (version from COMPONENT_DB_MARIADB_VERSION); phpMyAdmin/PostgreSQL/Redis per components",
         "install_mail": "exim4, dovecot (version-aware), rspamd (optional), webmailers from the COMPONENT_MAIL_WEBMAILER token set (wizard checklist; roundcube fatal, tachyon degrades loudly, empty = none) — only if COMPONENT_MAIL_BLOCK_PRESENT",
-        "install_security": "iptables, ipset; fail2ban (optional); crowdsec (optional, minimal — #123)",
+        "install_security": "nftables only (iptables and ipset are gone with the old renderer, #548); fail2ban (optional); crowdsec (optional, minimal - #123)",
         "install_addons": "proftpd (→ h-add-sys-proftpd) / docker / filemanager per components (#123)",
         "configure_hestia": "sudoers, v-* dangling-symlink prune, SSL cert, admin user, firewall, default domain, crontab; writes .done.configure",
         "install_tools": "always-installed utilities + selected TOOLS_SELECTION + composer (source per COMPONENT_ADDON_COMPOSER_SOURCE: os_package default, upstream_installer on latest; h-update-sys-composer switches live, #208/#237) + wp-cli (manifest-pinned phar via fetch_wp_cli_phar)",
@@ -724,7 +724,7 @@
     "firewall": {
       "description": "Host firewall, rebuilt on nftables in #495. include/firewall.sh is the sole owner of backend syntax and bin/h-update-firewall the sole full-ruleset writer: it renders one inet hestia table and applies it as a single atomic nft -f document, validated with nft -c -f first. Base chains carry hook + priority so foreign tables (fail2ban's own, a future bouncer's) coexist instead of fighting over INPUT. Sets render from their source files rather than from the live set, so a wholesale table replace cannot lose contents. iptables is xtables-nft-multi on all four targets, which means a leftover iptables ruleset is STILL EVALUATED by the same kernel backend - legacy teardown is mandatory, not housekeeping. inet covers v4 and v6 and loads on a host with no IPv6 configured, which is what lays the v6 groundwork without presupposing it.",
       "object_model": "/etc/hestia/firewall/{rules.conf,chains.conf,banlist.conf,ipset.conf,excludes.conf,crowdsec.conf,custom.sh} - abstract and renderer-independent, which is why the nftables migration keeps it and replaces only the marshalling. custom.sh is an operator escape hatch bashed after every apply. excludes.conf is the whitelist and is currently READ at exactly one place (h-add-firewall-ban, where it suppresses new bans) and WRITTEN BY NOTHING - no command, no panel page, no shipped default.",
-      "persistence": "iptables-save (with a sed that strips individual fail2ban ban lines, since bans are replayed from banlist.conf instead) to /etc/iptables.rules, plus an inline-generated hestia-iptables.service whose ExecStartPre=- provisions the ipsets. iptables-restore is atomic PER TABLE, so one rule matching a set that failed to load rejects the whole filter table and the box boots with policy ACCEPT - and the dash prefix means the provisioning failure is ignored. h-check-sys-smoke guards both halves of that (check_firewall_closed, check_firewall_sets_bootable).",
+      "persistence": "The applied document IS the persisted one: fw_batch_apply writes /etc/hestia/firewall/ruleset.nft and hestia-nftables.service (rendered whole by fw_boot_unit_write, never appended; deliberately not the dpkg conffile /etc/nftables.conf) reloads exactly that file at boot in one transaction - no save step, no dump post-processing, sets load with their rules atomically. h-check-sys-smoke guards it via check_firewall_closed and check_firewall_ruleset_loadable (plus backend/chains_tracked/rules_rendered/ipsets_populated/icmpv6).",
       "blocklists": "Lists referenced from a normal rule as IP='ipset:<name>'; the operator picks the ACTION, so a list is advisory rather than implicitly a DROP. Sources come from share/firewall/blocklists.conf (FireHOL L1/L2, Spamhaus DROP, Blocklist.de), read by the panel picker, so adding one is a data change (#481) - it replaced a shipped preset pointing at install/common/firewall/ipset/blacklist.sh, a path dissolved with the install/ tree in #119, which failed on the minimum-size check with a misleading error. Refresh runs off hestia-blocklist.timer (Persistent=true, RandomizedDelaySec=30min) rather than queue/daily.pipe, with the interval set by h-change-sys-blocklist-interval. nft interval sets carry auto-merge, so overlapping CIDRs collapse on load (1665 Spamhaus CIDRs -> 1509 elements) and the live element count will not match the source count. #510 tracks a dynamic picker with per-list size and age.",
       "core": "include/firewall.sh is the renderer library (#495); every backend call in bin/ and include/ goes through it - a repo-wide sweep for direct iptables invocation outside that file returns nothing.",
       "commands_native": [
@@ -908,9 +908,8 @@
       "mariadb",
       "phpmyadmin",
       "caddy",
-      "iptables",
+      "nftables",
       "fail2ban",
-      "ipset",
       "composer",
       "wp-cli"
     ],

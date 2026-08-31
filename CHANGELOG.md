@@ -12,6 +12,21 @@ opens above it.
 
 ## Unreleased
 
+### Fixed
+
+- **A v6 panel login is now logged and bannable** (#888, part of the IPv6 groundwork #602).
+  `h-log-user-login` validated its address as IPv4-only, so a login from an IPv6 client
+  reached neither the panel's auth log nor `$HESTIA/log/auth.log` - the hestia-panel
+  fail2ban jail never saw a v6 brute-forcer. The sibling commands already validated
+  dual-family; only the logger was missed. Along with it: six naive `HTTP_HOST` splits
+  (a bracketed v6 host became `[2001`, silently disabling the phpMyAdmin-over-IP guard
+  and mangling panel-built URLs) now go through one bracket-aware helper; the firewall
+  rule form no longer hides v6 ipsets (the renderer has dispatched per set family since
+  #495) and the country blocklist picker offers IPv6 lists, keeping `v_ipver` in sync;
+  `h-delete-user-ips` no longer truncates a colon-bearing IP filename; the suggested SPF
+  record uses `ip6:` for a v6 address; dead v4-only `is_ip_rdns_valid` removed and the
+  firewall CODEMAP entries caught up with #495/#548 (nftables-only, no iptables/ipset).
+
 ### Added
 
 - **`install.sh --port=<n>` for an unattended install on a non-default panel port** (#730).

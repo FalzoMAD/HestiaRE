@@ -112,8 +112,12 @@ if (!empty($_SESSION["WEBMAIL_ALIAS"])) {
 			</div>
 			<div class="units-table-cell u-text-center-desktop">
 				<label class="u-hide-desktop u-text-bold"><?= tohtml(_("IP or Value")) ?>:</label>
-				<?php $ip = empty($ips[array_key_first($ips)]["NAT"]) ? array_key_first($ips) : $ips[array_key_first($ips)]["NAT"]; ?>
-				<input type="text" class="form-control" value="<?= tohtml("v=spf1 a mx ip4:" . $ip . " -all") ?>">
+				<?php
+				$ip = empty($ips[array_key_first($ips)]["NAT"]) ? array_key_first($ips) : $ips[array_key_first($ips)]["NAT"];
+// SPF wants the bare address behind a family-matched mechanism; a v6 behind ip4: is an invalid record
+$spf_mech = str_contains($ip, ":") ? "ip6" : "ip4";
+?>
+				<input type="text" class="form-control" value="<?= tohtml("v=spf1 a mx " . $spf_mech . ":" . $ip . " -all") ?>">
 			</div>
 		</div>
 		<div class="units-table-row js-unit">

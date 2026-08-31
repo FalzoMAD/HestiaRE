@@ -38,26 +38,6 @@ is_ip_key_empty() {
 	fi
 }
 
-is_ip_rdns_valid() {
-	local ip="$1"
-	local network_ip=$(echo $ip | cut -d"." -f1-3)
-	local awk_ip=$(echo $network_ip | sed 's|\.|/\&\&/|g')
-	local rev_awk_ip=$(echo $awk_ip | rev)
-
-	if [ -z "$rdns" ]; then
-		local rdns=$(dig +short -x "$ip" | head -n 1 | sed 's/.$//') || unset rdns
-	fi
-
-	# $rdns is a PTR record, i.e. remote-controlled: unquoted it would word-split and glob. The
-	# unquoted test also degenerated to `[ ! ]` (which is true) whenever awk printed nothing.
-	if [ -n "$rdns" ] && [ -z "$(echo "$rdns" | awk "/$awk_ip/ || /$rev_awk_ip/")" ]; then
-		echo "$rdns"
-		return 0 # True
-	fi
-
-	return 1 # False
-}
-
 # Update ip address value
 update_ip_value() {
 	key="$1"
