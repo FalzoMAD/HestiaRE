@@ -207,11 +207,9 @@ rebuild_ip_web_config() {
 	fi
 
 	if [ -n "$PROXY_SYSTEM" ]; then
-		sed -e "s/%ip%/$ip/g" \
-			-e "s/%web_port%/$WEB_PORT/g" \
-			-e "s/%proxy_port%/$PROXY_PORT/g" \
-			-e "s/%proxy_ssl_port%/$PROXY_SSL_PORT/g" \
-			"$SHARETPL/$PROXY_SYSTEM/proxy_ip.tpl" > "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
+		local _r_ip="$ip" _r_domain='' _r_domain_idn='' _r_root_domain='' \
+			_r_alias='' _r_alias_idn='' _r_web_system=''
+		web_render_template < "$SHARETPL/$PROXY_SYSTEM/proxy_ip.tpl" > "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 
 		process_http2_directive "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 	fi

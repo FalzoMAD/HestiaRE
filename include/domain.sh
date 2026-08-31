@@ -326,6 +326,47 @@ prepare_web_domain_values() {
 	fi
 }
 
+# The ONE web-template substitution engine (#890): stdin template in, rendered text out.
+# Four independently maintained copies of this chain drifted for years (the pre_questions
+# disease, #886); every caller routes here now. Divergent values arrive in _r_* variables
+# (webmail renders %domain% as the webmail alias and %web_system% as the front), everything
+# else reads the caller's scope. Removing or renaming a token here breaks every custom
+# template that uses it.
+web_render_template() {
+	sed -e "s|%ip%|$_r_ip|g" \
+		-e "s|%domain%|$_r_domain|g" \
+		-e "s|%domain_idn%|$_r_domain_idn|g" \
+		-e "s|%root_domain%|$_r_root_domain|g" \
+		-e "s|%alias%|$_r_alias|g" \
+		-e "s|%alias_idn%|$_r_alias_idn|g" \
+		-e "s|%alias_string%|$alias_string|g" \
+		-e "s|%email%|info@$_r_root_domain|g" \
+		-e "s|%web_system%|$_r_web_system|g" \
+		-e "s|%web_port%|$WEB_PORT|g" \
+		-e "s|%web_ssl_port%|$WEB_SSL_PORT|g" \
+		-e "s|%backend_lsnr%|$backend_lsnr|g" \
+		-e "s|%rgroups%|$WEB_RGROUPS|g" \
+		-e "s|%proxy_system%|$PROXY_SYSTEM|g" \
+		-e "s|%proxy_port%|$PROXY_PORT|g" \
+		-e "s|%proxy_ssl_port%|$PROXY_SSL_PORT|g" \
+		-e "s|%front_port%|${PROXY_PORT:-$WEB_PORT}|g" \
+		-e "s|%front_ssl_port%|${PROXY_SSL_PORT:-$WEB_SSL_PORT}|g" \
+		-e "s|%docker_port%|$DOCKER_PORT|g" \
+		-e "s|%docker_ip%|$web_docker_ip|g" \
+		-e "s/%proxy_extentions%/${PROXY_EXT//,/|}/g" \
+		-e "s/%proxy_extensions%/${PROXY_EXT//,/|}/g" \
+		-e "s|%user%|$user|g" \
+		-e "s|%group%|$user|g" \
+		-e "s|%home%|$HOMEDIR|g" \
+		-e "s|%docroot%|$docroot|g" \
+		-e "s|%sdocroot%|$sdocroot|g" \
+		-e "s|%ssl_crt%|$ssl_crt|g" \
+		-e "s|%ssl_key%|$ssl_key|g" \
+		-e "s|%ssl_pem%|$ssl_pem|g" \
+		-e "s|%ssl_ca_str%|$ssl_ca_str|g" \
+		-e "s|%ssl_ca%|$ssl_ca|g"
+}
+
 add_web_config() {
 	if [ ! -d "$HOMEDIR/$user/conf/web/$domain" ]; then
 		mkdir -p "$HOMEDIR/$user/conf/web/$domain/"
@@ -398,8 +439,10 @@ add_web_config() {
 		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
 	fi
 
-	# Removing or renaming a variable here breaks every custom template that uses it.
-
+	# Divergent values for the engine; everything else reads this scope
+	local _r_ip="$local_ip" _r_domain="$domain" _r_domain_idn="$domain_idn" \
+		_r_root_domain="$domain" _r_alias="${aliases//,/ }" _r_alias_idn="${aliases_idn//,/ }" \
+		_r_web_system="$WEB_SYSTEM"
 	{
 		if [ "$web_tpl_merged" = 1 ]; then
 			if [ "$SSL" = 'yes' ]; then
@@ -410,39 +453,7 @@ add_web_config() {
 		else
 			cat "${WEBTPL_LOCATION}/$2"
 		fi
-	} \
-		| sed -e "s|%ip%|$local_ip|g" \
-			-e "s|%domain%|$domain|g" \
-			-e "s|%domain_idn%|$domain_idn|g" \
-			-e "s|%alias%|${aliases//,/ }|g" \
-			-e "s|%alias_idn%|${aliases_idn//,/ }|g" \
-			-e "s|%alias_string%|$alias_string|g" \
-			-e "s|%email%|info@$domain|g" \
-			-e "s|%web_system%|$WEB_SYSTEM|g" \
-			-e "s|%web_port%|$WEB_PORT|g" \
-			-e "s|%web_ssl_port%|$WEB_SSL_PORT|g" \
-			-e "s|%backend_lsnr%|$backend_lsnr|g" \
-			-e "s|%rgroups%|$WEB_RGROUPS|g" \
-			-e "s|%proxy_system%|$PROXY_SYSTEM|g" \
-			-e "s|%proxy_port%|$PROXY_PORT|g" \
-			-e "s|%proxy_ssl_port%|$PROXY_SSL_PORT|g" \
-			-e "s|%front_port%|${PROXY_PORT:-$WEB_PORT}|g" \
-			-e "s|%front_ssl_port%|${PROXY_SSL_PORT:-$WEB_SSL_PORT}|g" \
-			-e "s|%docker_port%|$DOCKER_PORT|g" \
-			-e "s|%docker_ip%|$web_docker_ip|g" \
-			-e "s/%proxy_extentions%/${PROXY_EXT//,/|}/g" \
-			-e "s/%proxy_extensions%/${PROXY_EXT//,/|}/g" \
-			-e "s|%user%|$user|g" \
-			-e "s|%group%|$user|g" \
-			-e "s|%home%|$HOMEDIR|g" \
-			-e "s|%docroot%|$docroot|g" \
-			-e "s|%sdocroot%|$sdocroot|g" \
-			-e "s|%ssl_crt%|$ssl_crt|g" \
-			-e "s|%ssl_key%|$ssl_key|g" \
-			-e "s|%ssl_pem%|$ssl_pem|g" \
-			-e "s|%ssl_ca_str%|$ssl_ca_str|g" \
-			-e "s|%ssl_ca%|$ssl_ca|g" \
-			> $conf
+	} | web_render_template > $conf
 
 	process_http2_directive "$conf"
 
@@ -918,37 +929,11 @@ add_webmail_config() {
 		override_alias_idn="mail.$domain_idn"
 	fi
 
-	# Removing or renaming a variable here breaks every custom template that uses it.
-
-	cat "$HESTIA/share/$1/webmail/$2" \
-		| sed -e "s|%ip%|$local_ip|g" \
-			-e "s|%domain%|$WEBMAIL_ALIAS.$domain|g" \
-			-e "s|%domain_idn%|$WEBMAIL_ALIAS.$domain_idn|g" \
-			-e "s|%root_domain%|$domain|g" \
-			-e "s|%alias%|$override_alias|g" \
-			-e "s|%alias_idn%|$override_alias_idn|g" \
-			-e "s|%alias_string%|$alias_string|g" \
-			-e "s|%email%|info@$domain|g" \
-			-e "s|%web_system%|$front|g" \
-			-e "s|%web_port%|$WEB_PORT|g" \
-			-e "s|%web_ssl_port%|$WEB_SSL_PORT|g" \
-			-e "s|%backend_lsnr%|$backend_lsnr|g" \
-			-e "s|%rgroups%|$WEB_RGROUPS|g" \
-			-e "s|%proxy_system%|$PROXY_SYSTEM|g" \
-			-e "s|%proxy_port%|$PROXY_PORT|g" \
-			-e "s|%proxy_ssl_port%|$PROXY_SSL_PORT|g" \
-			-e "s/%proxy_extensions%/${PROXY_EXT//,/|}/g" \
-			-e "s|%user%|$user|g" \
-			-e "s|%group%|$user|g" \
-			-e "s|%home%|$HOMEDIR|g" \
-			-e "s|%docroot%|$docroot|g" \
-			-e "s|%sdocroot%|$sdocroot|g" \
-			-e "s|%ssl_crt%|$ssl_crt|g" \
-			-e "s|%ssl_key%|$ssl_key|g" \
-			-e "s|%ssl_pem%|$ssl_pem|g" \
-			-e "s|%ssl_ca_str%|$ssl_ca_str|g" \
-			-e "s|%ssl_ca%|$ssl_ca|g" \
-			> $conf
+	# Divergent values: %domain% is the webmail alias, %web_system% the front
+	local _r_ip="$local_ip" _r_domain="$WEBMAIL_ALIAS.$domain" _r_domain_idn="$WEBMAIL_ALIAS.$domain_idn" \
+		_r_root_domain="$domain" _r_alias="$override_alias" _r_alias_idn="$override_alias_idn" \
+		_r_web_system="$front"
+	web_render_template < "$HESTIA/share/$1/webmail/$2" > $conf
 
 	process_http2_directive "$conf"
 

@@ -393,16 +393,11 @@ rebuild_web_domain_conf() {
 	if [ -n "$STATS" ]; then
 		domain_idn=$domain
 		format_domain_idn
-		cat $SHARETPL/$STATS/$STATS.tpl \
-			| sed -e "s|%ip%|$local_ip|g" \
-				-e "s|%web_system%|$WEB_SYSTEM|g" \
-				-e "s|%domain_idn%|$domain_idn|g" \
-				-e "s|%domain%|$domain|g" \
-				-e "s|%user%|$user|g" \
-				-e "s|%home%|$HOMEDIR|g" \
-				-e "s|%alias%|${aliases//,/ }|g" \
-				-e "s|%alias_idn%|${aliases_idn//,/ }|g" \
-				> $HOMEDIR/$user/conf/web/$domain/$STATS.conf
+		local _r_ip="$local_ip" _r_domain="$domain" _r_domain_idn="$domain_idn" \
+			_r_root_domain="$domain" _r_alias="${aliases//,/ }" _r_alias_idn="${aliases_idn//,/ }" \
+			_r_web_system="$WEB_SYSTEM"
+		web_render_template < $SHARETPL/$STATS/$STATS.tpl \
+			> $HOMEDIR/$user/conf/web/$domain/$STATS.conf
 		if [ "$STATS" == 'awstats' ]; then
 			if [ -e "/etc/awstats/$STATS.$domain_idn.conf" ]; then
 				rm -f "/etc/awstats/$STATS.$domain_idn.conf"
