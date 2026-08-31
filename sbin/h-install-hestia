@@ -935,7 +935,8 @@ configure_hestia() {
 	# prefer the IP object h-update-sys-ip registered over our NIC detection, v4 first: on a
 	# dual-stack box the v4 is the address the default domain and the NAT probe still expect
 	if [ -z "$IP" ] || [ ! -e "$CONF_DIR/ips/$IP" ]; then
-		_reg_ip="$(ls -t "$CONF_DIR/ips/" 2> /dev/null | grep -v ':' | head -n1)"
+		_reg_ip="$(find "$CONF_DIR/ips" -maxdepth 1 -type f ! -name '*:*' -printf '%T@ %f\n' 2> /dev/null \
+			| sort -rn | head -n1 | cut -d' ' -f2-)"
 		[ -z "$_reg_ip" ] && _reg_ip="$(ls -t "$CONF_DIR/ips/" 2> /dev/null | head -n1)"
 		[ -n "$_reg_ip" ] && IP="$_reg_ip"
 	fi

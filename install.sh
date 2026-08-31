@@ -191,13 +191,14 @@ _fetch_release() {
 
 	if [ "${HESTIARE_SOURCE:-github}" = "gitea" ]; then
 		latest=$(curl -fsSL "${curl_auth[@]}" "${HESTIARE_REPO_URL}/releases/latest" \
-			| jq -r '.tag_name')
+			| jq -r '.tag_name') || latest=''
 	elif [ "${HESTIARE_CHANNEL}" = "prerelease" ]; then
-		latest=$(_release_get api "/releases" | jq -r '.[0].tag_name')
+		latest=$(_release_get api "/releases" | jq -r '.[0].tag_name') || latest=''
 	else
-		latest=$(_release_get api "/releases/latest" | jq -r '.tag_name')
+		latest=$(_release_get api "/releases/latest" | jq -r '.tag_name') || latest=''
 	fi
 
+	# the assignments above absorb their own failure, or set -e would abort before this message
 	{ [ -n "$latest" ] && [ "$latest" != "null" ]; } || {
 		echo "ERROR: Could not determine latest release." >&2
 		exit 1
