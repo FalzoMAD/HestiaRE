@@ -9,6 +9,26 @@
 # Global definitions
 REGEX_IPV4="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4}$"
 
+# Address family by CONTENT, never by path or field (a rename must not change the answer).
+# Echoes 4, 6, or nothing for neither - callers treat empty as "skip", like fw_addr_family.
+ip_family() {
+	case "$1" in
+		*:*) echo 6 ;;
+		*) [[ "$1" =~ $REGEX_IPV4 ]] && echo 4 ;;
+	esac
+	return 0
+}
+
+# RFC-5952 canonical spelling (what `ip -j` prints). Runs at the ENTRY of every writing
+# command: without it 2001:0db8::1 and 2001:db8::1 become two objects for one address and
+# counters, firewall and deletion drift apart. Non-v6 input passes through untouched -
+# rejection stays with the format validators.
+ip6_canonical() {
+	local out
+	out=$($HESTIA_PHP -r '$b = @inet_pton($argv[1]); echo $b === false || strlen($b) !== 16 ? $argv[1] : inet_ntop($b);' "$1" 2> /dev/null)
+	echo "${out:-$1}"
+}
+
 # Check ip ownership
 is_ip_owner() {
 	owner=$(grep 'OWNER=' $CONF_DIR/ips/$ip | cut -f 2 -d \')
@@ -210,21 +230,32 @@ get_broadcast() {
 	echo "$((${I[0]} | (255 ^ ${N[0]}))).$((${I[1]} | (255 ^ ${N[1]}))).$((${I[2]} | (255 ^ ${N[2]}))).$((${I[3]} | (255 ^ ${N[3]})))"
 }
 
-# Get user ips
+# Get user ips (dedicated + shared), optionally filtered to one family ($1 = 4|6, empty = both).
+# Cut at the literal ':KEY='/'-KEY=' boundary, never at the first colon: a v6 filename carries
+# colons, and the old cut/REGEX_IPV4 pair made every v6 IP object invisible to every consumer.
 get_user_ips() {
-	dedicated=$(grep -H "OWNER='$user'" $CONF_DIR/ips/*)
-	dedicated=$(echo "$dedicated" | cut -f 1 -d : | sed 's=.*/==' | grep -E ${REGEX_IPV4})
-	shared=$(grep -H -A1 "OWNER='$ROOT_USER'" $CONF_DIR/ips/* | grep shared)
-	shared=$(echo "$shared" | cut -f 1 -d : | sed 's=.*/==' | cut -f 1 -d \- | grep -E ${REGEX_IPV4})
+	local family="$1" dedicated shared dedicated_ip list _i
+	dedicated=$(grep -H "OWNER='$user'" $CONF_DIR/ips/* 2> /dev/null | sed "s|:OWNER=.*||; s|^$CONF_DIR/ips/||")
+	shared=$(grep -H -A1 "OWNER='$ROOT_USER'" $CONF_DIR/ips/* 2> /dev/null | grep shared | sed "s|-STATUS=.*||; s|^$CONF_DIR/ips/||")
 	for dedicated_ip in $dedicated; do
-		shared=$(echo "$shared" | grep -v $dedicated_ip)
+		# -vx: unanchored, 10.0.0.1 also swallowed 10.0.0.10 from the shared list
+		shared=$(echo "$shared" | grep -vx "$dedicated_ip")
 	done
-	echo -e "$dedicated\n$shared" | sed "/^$/d"
+	list=$(echo -e "$dedicated\n$shared" | sed "/^$/d")
+	if [ -n "$family" ]; then
+		while read -r _i; do
+			[ "$(ip_family "$_i")" = "$family" ] && echo "$_i"
+		done <<< "$list"
+		return 0
+	fi
+	echo "$list"
 }
 
-# Get user ip
+# Get user ip - v4 preferred so a v4-only or dual-stack box behaves exactly as before;
+# only a box without any v4 falls through to a v6 (NAT lookup is then empty by nature).
 get_user_ip() {
-	ip=$(get_user_ips | head -n1)
+	ip=$(get_user_ips 4 | head -n1)
+	[ -z "$ip" ] && ip=$(get_user_ips 6 | head -n1)
 	if [ -z "$ip" ]; then
 		check_result $E_NOTEXIST "no IP is available"
 	fi
@@ -233,6 +264,13 @@ get_user_ip() {
 	if [ -n "$nat" ]; then
 		ip=$nat
 	fi
+}
+
+# First v6 available to the user. Sets $ip6; rc 1 with $ip6 empty on a box without v6 -
+# callers decide what that means, nothing aborts here.
+get_user_ip6() {
+	ip6=$(get_user_ips 6 | head -n1)
+	[ -n "$ip6" ]
 }
 
 # Validate ip address
