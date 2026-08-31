@@ -151,12 +151,18 @@ decrease_ip_value() {
 	fi
 
 	new_web=$((current_web - 1))
-	# Exact field matches, both spellings, both families - the unanchored substring grep
-	# was the get_user_ips disease (2001:db8::1 sits inside 2001:db8::10), and on a NAT
-	# box it counted 0 against the local spelling, evicting users still on the address.
-	local nat_addr
-	nat_addr=$(grep "^NAT=" $CONF_DIR/ips/$sip 2> /dev/null | cut -f 2 -d \')
-	check_ip=$(grep -c -e "IP='$sip'" -e "IP6='$sip'" ${nat_addr:+-e "IP='$nat_addr'"} $USER_DATA/web.conf 2> /dev/null)
+	# ONE counting rule, not two homes: whether the user still references this address is
+	# the authority's question (h-update-sys-ip-counters check), asked here instead of
+	# re-implemented - a second local rule showed up as inexplicable guard drift later.
+	# Fail-safe: an oracle that answers NOTHING must not evict anyone (the #866 shape),
+	# so a missing U_SYS_USERS line keeps the list untouched.
+	local recount_out recount
+	recount_out=$("$BIN/h-update-sys-ip-counters" "$sip" check 2> /dev/null)
+	recount=$(sed -n "s/^U_SYS_USERS='\(.*\)'\$/\1/p" <<< "$recount_out")
+	check_ip=1
+	if grep -q "^U_SYS_USERS=" <<< "$recount_out"; then
+		if grep -qx "$user" <<< "${recount//,/$'\n'}"; then check_ip=1; else check_ip=0; fi
+	fi
 	if [[ $check_ip = 0 ]]; then
 		new_usr=$(echo "$current_usr" \
 			| sed "s/,/\n/g" \
@@ -243,23 +249,29 @@ get_broadcast() {
 # Cut at the literal ':KEY='/'-KEY=' boundary, never at the first colon: a v6 filename carries
 # colons, and the old cut/REGEX_IPV4 pair made every v6 IP object invisible to every consumer.
 get_user_ips() {
-	# Per-file, per-key reads - never grep -A1: that hung the shared detection on the KEY
-	# ORDER inside the record while every other reader of the same format goes by content,
-	# and the fragile one decided which addresses a customer sees at all.
-	local family="$1" f addr f_owner f_status
-	for f in "$CONF_DIR"/ips/*; do
-		[ -f "$f" ] || continue
-		addr=${f##*/}
-		if [ -n "$family" ] && [ "$(ip_family "$addr")" != "$family" ]; then
-			continue
-		fi
-		f_owner=$(grep -m1 "^OWNER=" "$f" | cut -f 2 -d \')
-		if [ "$f_owner" = "$user" ]; then
-			echo "$addr"
-		elif [ "$f_owner" = "$ROOT_USER" ]; then
-			f_status=$(grep -m1 "^STATUS=" "$f" | cut -f 2 -d \')
-			[ "$f_status" = 'shared' ] && echo "$addr"
-		fi
+	# Per-file, per-key reads - never grep -A1 (key order is not a contract). TWO passes,
+	# dedicated first: get_user_ip takes head -n1, and the round-6 single loop emitted in
+	# glob order, landing new domains on a SHARED address although the customer owned a
+	# dedicated one that sorted later (round-7 review find).
+	local family="$1" pass f addr f_owner f_status
+	for pass in own shared; do
+		for f in "$CONF_DIR"/ips/*; do
+			[ -f "$f" ] || continue
+			addr=${f##*/}
+			if [ -n "$family" ] && [ "$(ip_family "$addr")" != "$family" ]; then
+				continue
+			fi
+			f_owner=$(grep -m1 "^OWNER=" "$f" | cut -f 2 -d \')
+			if [ "$pass" = 'own' ]; then
+				[ "$f_owner" = "$user" ] && echo "$addr"
+			else
+				[ "$user" = "$ROOT_USER" ] && continue
+				if [ "$f_owner" = "$ROOT_USER" ]; then
+					f_status=$(grep -m1 "^STATUS=" "$f" | cut -f 2 -d \')
+					[ "$f_status" = 'shared' ] && echo "$addr"
+				fi
+			fi
+		done
 	done
 	return 0
 }

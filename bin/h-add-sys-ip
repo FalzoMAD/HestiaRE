@@ -214,7 +214,10 @@ if [ -n "$PROXY_SYSTEM" ] && [ -n "$WEB_SYSTEM" ]; then
 		awk -v ip="$ip" '!done && /MEFaccept / && !/^#/ {
 			$0 = $0 " " ip
 			done = 1
-		} { print }' "$fw_conf" > "$fw_conf.tmp" && mv -f "$fw_conf.tmp" "$fw_conf"
+		} { print }' "$fw_conf" > "$fw_conf.tmp" \
+			&& chmod --reference="$fw_conf" "$fw_conf.tmp" \
+			&& chown --reference="$fw_conf" "$fw_conf.tmp" \
+			&& mv -f "$fw_conf.tmp" "$fw_conf"
 	fi
 
 	# mod_rpaf

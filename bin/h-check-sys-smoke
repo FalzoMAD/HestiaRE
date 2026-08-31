@@ -1817,10 +1817,21 @@ check_record_grammar() {
 # domain delete, so a backlog from that era is expected, not hypothetical. The object
 # list derives from the files; the authority's check mode is the only rule source.
 check_ip_object_counters() {
-	local f addr line k want stored drift=0 checked=0 first=''
+	local f addr line k want stored drift=0 checked=0 first='' obj_out obj_lines
 	for f in "$CONF_DIR"/ips/*; do
 		[ -f "$f" ] || continue
 		addr=${f##*/}
+		# only the two counter lines count as an answer: check_result errors land on
+		# stdout too, and parsing one as a key once produced garbled drift text
+		obj_out=$("$BIN/h-update-sys-ip-counters" "$addr" check 2> /dev/null | grep -E "^U_(WEB_DOMAINS|SYS_USERS)='")
+		obj_lines=$(grep -c . <<< "$obj_out")
+		# empty is no pass PER OBJECT: one object whose authority call fails (a stray
+		# file with a non-address name, say) must not ride on the others' green
+		if [ "$obj_lines" -eq 0 ]; then
+			drift=$((drift + 1))
+			[ -z "$first" ] && first="$addr: authority answered nothing (broken object or stray file)"
+			continue
+		fi
 		while IFS= read -r line; do
 			k="${line%%=*}"
 			want=$(sed "s/^$k='\(.*\)'$/\1/" <<< "$line")
@@ -1829,9 +1840,9 @@ check_ip_object_counters() {
 			[ "$stored" = "$want" ] && continue
 			drift=$((drift + 1))
 			[ -z "$first" ] && first="$addr $k stored='$stored' counted='$want'"
-		done < <("$BIN/h-update-sys-ip-counters" "$addr" check 2> /dev/null)
+		done <<< "$obj_out"
 	done
-	if [ "$checked" -eq 0 ]; then
+	if [ "$checked" -eq 0 ] && [ "$drift" -eq 0 ]; then
 		no "no IP object counters compared" "every box registers at least one IP - the authority or the file set broke"
 	elif [ "$drift" -gt 0 ]; then
 		no "$drift IP object counter(s) drifted" "$first - repair: h-update-sys-ip-counters"
