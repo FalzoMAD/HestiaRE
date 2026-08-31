@@ -14,6 +14,28 @@ opens above it.
 
 ### Added
 
+- **Mail speaks both families - and the v6-less kernel is a measured lage, not a hope**
+  (#891, part of #602). The stage OPENED with the measurement the plan demanded: a box
+  booted with ipv6.disable=1, exim observed in both states. Result: the full hestia
+  template survives `disable_ipv6 = false` (exim skips the missing family itself), so
+  the flip is safe and inbound/outbound v6 now work - but the Debian STOCK template
+  dies outright with a listed ::1 ("IPv6 socket creation failed"), which means every
+  send-only box with v6 off had a dead exim since the loopback list gained ::1 (#875,
+  pre-existing). Both loopback lists now DERIVE from the kernel: exim's send-only
+  dc_local_interfaces and dovecot's listen line (dovecot carried the same fatal
+  pattern, `listen = *, ::`, found by the same measurement - the fleet never runs this
+  lage, so it was green by omission). Outgoing v6 pins through a SECOND file
+  (`conf/mail/<domain>/ipv6`, macro OUTGOING6_IP - exim forbids macro names containing
+  an earlier name, so not OUTGOING_IPV6), keeping every reader of `/ip` untouched;
+  relay_from_hosts gained ::1; the mail DNS page suggests one SPF with both families.
+  Measured end to end on the dual-stack box: inbound v6 delivered to the Maildir,
+  outbound to an AAAA-only target from exactly the pinned v6 source, relay refused from
+  outside v6 and accepted via ::1, bare-v6 HELO rejected at the protocol. Two side
+  finds: exim iplsearch keys must QUOTE a v6 address (an unquoted whitelist entry
+  silently never matches - documented at the hostlists), and Spamhaus refuses queries
+  via public resolvers, rejecting mail of BOTH families on such boxes (pre-existing,
+  resolver-lage, not v6).
+
 - **The web renderer speaks both families** (#890, part of #602). Four independently
   maintained sed substitution chains became ONE engine (`web_render_template`), proven
   byte-identical on a populated box before any semantic change. The engine's family
