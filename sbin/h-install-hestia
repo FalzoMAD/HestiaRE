@@ -613,6 +613,11 @@ install_mail() {
 		DCDIR="$HESTIA/share/dovecot/2.3"
 	fi
 	cp -f "$DCDIR/dovecot.conf" /etc/dovecot/
+	# Derived like exim's send-only list: "listen = *, ::" is fatal on an ipv6.disable=1
+	# kernel (Failed to start listeners), so the v6 half is dropped where no v6 exists.
+	if [ ! -e /proc/net/if_inet6 ]; then
+		sed -i 's/^listen = \*, ::$/listen = */' /etc/dovecot/dovecot.conf
+	fi
 	cp -f "$DCDIR/conf.d/"* /etc/dovecot/conf.d/
 	if [ "$DCDIR" = "$HESTIA/share/dovecot/2.3" ]; then
 		# our dovecot.conf defines the inbox namespace; the stock file's duplicate
@@ -688,7 +693,7 @@ install_mail() {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
-# Stage: security — fail2ban (optional), iptables, ipset, crowdsec (optional)
+# Stage: security - nftables, fail2ban (optional), crowdsec (optional)
 # ════════════════════════════════════════════════════════════════════════════
 install_security() {
 	stage_done security && {
@@ -1223,7 +1228,11 @@ configure_exim_sendonly() {
 		return 0
 	fi
 	sed -i "s/^dc_eximconfig_configtype=.*/dc_eximconfig_configtype='internet'/" "$c"
-	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='127.0.0.1 ; ::1'/" "$c"
+	# Loopback list DERIVED from the kernel: a listed ::1 on an ipv6.disable=1 kernel kills
+	# the stock-template exim at start (the full hestia template survives either way).
+	local lo_ifaces='127.0.0.1'
+	[ -e /proc/net/if_inet6 ] && lo_ifaces='127.0.0.1 ; ::1'
+	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='$lo_ifaces'/" "$c"
 	# Set, not inherited: this is what makes root@<hostname> local instead of a DNS lookup that
 	# hands the box's own cron mail to whatever host answers for the name.
 	sed -i "s/^dc_other_hostnames=.*/dc_other_hostnames='${HESTIA_HOSTNAME}'/" "$c"
@@ -1231,7 +1240,7 @@ configure_exim_sendonly() {
 	# really carry the values and the regeneration succeeded - a silent sed miss or
 	# a failed update-exim4.conf must not leave a false "configured" behind
 	if grep -q "^dc_eximconfig_configtype='internet'" "$c" \
-		&& grep -q "^dc_local_interfaces='127.0.0.1 ; ::1'" "$c" \
+		&& grep -q "^dc_local_interfaces='$lo_ifaces'" "$c" \
 		&& update-exim4.conf 2> /dev/null; then
 		systemctl restart exim4 2> /dev/null || true
 		echo "[ * ] Exim configured send-only (outbound delivery on, loopback listeners)"

@@ -14,6 +14,82 @@ opens above it.
 
 ### Added
 
+- **Mail speaks both families - and the v6-less kernel is a measured lage, not a hope**
+  (#891, part of #602). The stage OPENED with the measurement the plan demanded: a box
+  booted with ipv6.disable=1, exim observed in both states. Result: the full hestia
+  template survives `disable_ipv6 = false` (exim skips the missing family itself), so
+  the flip is safe and inbound/outbound v6 now work - but the Debian STOCK template
+  dies outright with a listed ::1 ("IPv6 socket creation failed"), which means every
+  send-only box with v6 off had a dead exim since the loopback list gained ::1 (#875,
+  pre-existing). Both loopback lists now DERIVE from the kernel: exim's send-only
+  dc_local_interfaces and dovecot's listen line (dovecot carried the same fatal
+  pattern, `listen = *, ::`, found by the same measurement - the fleet never runs this
+  lage, so it was green by omission). Outgoing v6 pins through a SECOND file
+  (`conf/mail/<domain>/ipv6`, macro OUTGOING6_IP - exim forbids macro names containing
+  an earlier name, so not OUTGOING_IPV6), keeping every reader of `/ip` untouched;
+  relay_from_hosts gained ::1; the mail DNS page suggests one SPF with both families.
+  Measured end to end on the dual-stack box: inbound v6 delivered to the Maildir,
+  outbound to an AAAA-only target from exactly the pinned v6 source, relay refused from
+  outside v6 and accepted via ::1, bare-v6 HELO rejected at the protocol. Two side
+  finds: exim iplsearch keys must QUOTE a v6 address (an unquoted whitelist entry
+  silently never matches - documented at the hostlists), and Spamhaus refuses queries
+  via public resolvers, rejecting mail of BOTH families on such boxes (pre-existing,
+  resolver-lage, not v6) - consequence: zen.spamhaus.org left the shipped DNSBL seed
+  (bl.spamcop.net stays, bl.mailspike.net joins; the list is operator-managed via h-add/delete-sys-mail-dnsbl).
+
+- **The web renderer speaks both families** (#890, part of #602). Four independently
+  maintained sed substitution chains became ONE engine (`web_render_template`), proven
+  byte-identical on a populated box before any semantic change. The engine's family
+  rules: `%ip6%` substitutes raw with brackets as template text (`listen [%ip6%]:443`),
+  a repeatable line whose family placeholder has no value is deleted before substitution,
+  and structural lines resolve instead - apache's `<VirtualHost>` renders `%vhost%` with
+  every configured family in one tag, the nginx-to-backend hop targets `%backend_addr%`.
+  Domains carry the v6 in `IP6`: new domains auto-assign the default v6, existing ones
+  adopt it on their next rebuild (deliberately no migration run - the mixed state is a
+  named decision), `h-change-web-domain-ip6` switches between v6 addresses (no per-domain
+  opt-out: rebuild would re-adopt into an emptied field; "no v6" is a box-level call).
+  Restore remaps a foreign `IP6` like it remaps `IP`; HTTP/3 emits one quic listen per
+  family; the panel splits its selects per family; the Let's Encrypt preflight accepts
+  AAAA-only names and lost its bare-1.1.1.1 fallback; the mail DNS page suggests A, AAAA
+  and a family-matched SPF. The apache catch-all needed its own name token - a bracketed
+  literal is an invalid ServerName - and `local_ip6` derives inside the renderer because
+  fifteen re-render commands never resolve addresses themselves (found live: the LE path
+  silently dropped the v6 listens on its next render).
+
+- **The IP object layer speaks IPv6** (#889, part of #602). `h-add-sys-ip` takes a v6
+  address with a prefix length, canonicalises it to the RFC-5952 spelling at entry (so
+  `2001:0db8::1` and `2001:db8::1` can never become two objects), refuses a NAT
+  association by name (NAT is a v4 concept, the resolvers pass v6 through untouched),
+  and writes the interface config per family. `get_user_ips` was rewritten colon-safe
+  and family-aware - the old first-colon cut plus v4 regex made every v6 object
+  invisible to every consumer - with `get_user_ip` still preferring v4 so existing
+  boxes behave unchanged, and `get_user_ip6` new. `h-update-sys-ip` discovers global
+  v6 addresses (real prefix length from `ip -j`, privacy/deprecated addresses skipped)
+  and no longer aborts the NIC scan at the first bridge or v4-less interface. Deleting
+  a v6 guards against lockout, not position: refused only when it is the last global
+  v6 and no v4 default ROUTE exists (a routeless CGN address does not count - measured
+  on a real v6-only box). v6 objects get NO web config yet; the renderer learns
+  bracketed listen lines in stage 2 (#890).
+
+### Fixed
+
+- **A v6 panel login is now logged - and every failure class is bannable** (#888, part of
+  the IPv6 groundwork #602). `h-log-user-login` validated its address as IPv4-only, so no
+  v6 login (successful or failed) ever reached the panel's per-user auth log, and the
+  failure classes this command feeds to fail2ban (2FA, disabled login, IP allowlist) were
+  invisible for v6 clients. Plain wrong-password failures were already bannable through
+  `h-check-user-password`, which validated dual-family - only the logger was missed.
+  Verified on the dual-stack box: a v6 brute-force now ends in the nft `f2b6_HESTIA` set. Along with it: six naive `HTTP_HOST` splits
+  (a bracketed v6 host became `[2001`, silently disabling the phpMyAdmin-over-IP guard
+  and mangling panel-built URLs) now go through one bracket-aware helper; the firewall
+  rule form no longer hides v6 ipsets (the renderer has dispatched per set family since
+  #495) and the country blocklist picker offers IPv6 lists, keeping `v_ipver` in sync;
+  `h-delete-user-ips` no longer truncates a colon-bearing IP filename; the suggested SPF
+  record uses `ip6:` for a v6 address; dead v4-only `is_ip_rdns_valid` removed and the
+  firewall CODEMAP entries caught up with #495/#548 (nftables-only, no iptables/ipset).
+
+### Added
+
 - **`install.sh --port=<n>` for an unattended install on a non-default panel port** (#730).
   `-a` used to force 8083, so an unattended install could not be given a port at all - and the
   refusal path could not be verified the way it has to be: start the install, watch it stop

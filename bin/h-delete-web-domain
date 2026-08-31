@@ -128,6 +128,9 @@ rm -rf $HOMEDIR/$user/conf/web/$domain
 
 # Decreasing user counters
 decrease_ip_value "$local_ip"
+if [ -n "$IP6" ] && [ -e "$CONF_DIR/ips/$IP6" ]; then
+	decrease_ip_value "$IP6"
+fi
 decrease_user_value "$user" '$U_WEB_DOMAINS'
 if [ "$SSL" = 'yes' ]; then
 	decrease_user_value "$user" '$U_WEB_SSL'

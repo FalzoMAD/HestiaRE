@@ -63,7 +63,7 @@ is_domain_new 'mail' "$domain_utf"
 is_domain_new 'mail' "$domain_idn"
 # by exit code, not by output: the validator only prints on failure, so reading its output
 # inverts the check the moment it writes to stderr instead
-if (is_ip_format_valid "$domain") > /dev/null 2>&1; then
+if (is_ip46_format_valid "$domain") > /dev/null 2>&1; then
 	echo "Error: Invalid domain format. IP address detected as input."
 	exit 1
 fi
@@ -133,6 +133,15 @@ if [[ "$MAIL_SYSTEM" =~ exim ]]; then
 	# Seeting outgoing ip address
 	if [ -n "$local_ip" ]; then
 		echo "$local_ip" > $HOMEDIR/$user/conf/mail/$domain/ip
+	fi
+	# v6 twin, derived like the webmail vhost. Unconditional on purpose: domain relay
+	# cannot exist yet at add time (its command removes both pins when it arrives).
+	local_ip6=$(get_object_value 'web' 'DOMAIN' "$domain" '$IP6' 2> /dev/null)
+	if [ -z "$local_ip6" ] && get_user_ip6; then
+		local_ip6="$ip6"
+	fi
+	if [ -n "$local_ip6" ] && [ -e "$CONF_DIR/ips/$local_ip6" ]; then
+		echo "$local_ip6" > $HOMEDIR/$user/conf/mail/$domain/ipv6
 	fi
 
 	if [ -n "$ANTISPAM_SYSTEM" ]; then

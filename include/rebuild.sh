@@ -237,6 +237,19 @@ rebuild_web_domain_conf() {
 	syshealth_repair_web_config
 	get_domain_values 'web'
 	is_ip_valid $IP
+	# v6 is SOFT here: empty IP6 adopts the default (auto-assign reaches existing domains
+	# through rebuild), a vanished object renders without v6 plus a warning - no abort.
+	local_ip6="$IP6"
+	if [ -z "$local_ip6" ]; then
+		if get_user_ip6; then
+			local_ip6="$ip6"
+			update_object_value 'web' 'DOMAIN' "$domain" '$IP6' "$ip6"
+			increase_ip_value "$ip6"
+		fi
+	elif [ ! -e "$CONF_DIR/ips/$local_ip6" ]; then
+		echo "Warning: $domain records IP6='$local_ip6' but no such IP object exists - rendering without v6" >&2
+		local_ip6=''
+	fi
 	prepare_web_domain_values
 
 	# Remove old web configuration files
@@ -393,16 +406,11 @@ rebuild_web_domain_conf() {
 	if [ -n "$STATS" ]; then
 		domain_idn=$domain
 		format_domain_idn
-		cat $SHARETPL/$STATS/$STATS.tpl \
-			| sed -e "s|%ip%|$local_ip|g" \
-				-e "s|%web_system%|$WEB_SYSTEM|g" \
-				-e "s|%domain_idn%|$domain_idn|g" \
-				-e "s|%domain%|$domain|g" \
-				-e "s|%user%|$user|g" \
-				-e "s|%home%|$HOMEDIR|g" \
-				-e "s|%alias%|${aliases//,/ }|g" \
-				-e "s|%alias_idn%|${aliases_idn//,/ }|g" \
-				> $HOMEDIR/$user/conf/web/$domain/$STATS.conf
+		local _r_ip="$local_ip" _r_ip6='' _r_domain="$domain" _r_domain_idn="$domain_idn" \
+			_r_root_domain="$domain" _r_alias="${aliases//,/ }" _r_alias_idn="${aliases_idn//,/ }" \
+			_r_web_system="$WEB_SYSTEM" _r_vhost='' _r_vhost_ssl='' _r_backend_addr=
+		web_render_template < $SHARETPL/$STATS/$STATS.tpl \
+			> $HOMEDIR/$user/conf/web/$domain/$STATS.conf
 		if [ "$STATS" == 'awstats' ]; then
 			if [ -e "/etc/awstats/$STATS.$domain_idn.conf" ]; then
 				rm -f "/etc/awstats/$STATS.$domain_idn.conf"
@@ -576,13 +584,21 @@ rebuild_mail_domain_conf() {
 	fi
 
 	# Inherit web domain local ip address
-	unset -v nat ip local_ip domain_ip
+	unset -v nat ip local_ip local_ip6 domain_ip
 	local domain_ip=$(get_object_value 'web' 'DOMAIN' "$domain" '$IP')
 	if [ -n "$domain_ip" ]; then
 		local local_ip=$(get_real_ip "$domain_ip")
 		is_ip_valid "$local_ip" "$user"
 	else
 		get_user_ip
+	fi
+	# v6 mirror: web domain's IP6, else default v6, else none
+	local local_ip6=$(get_object_value 'web' 'DOMAIN' "$domain" '$IP6')
+	if [ -z "$local_ip6" ] && get_user_ip6; then
+		local_ip6="$ip6"
+	fi
+	if [ -n "$local_ip6" ] && [ ! -e "$CONF_DIR/ips/$local_ip6" ]; then
+		local_ip6=''
 	fi
 
 	if [ "$SUSPENDED" = 'yes' ]; then
@@ -609,6 +625,7 @@ rebuild_mail_domain_conf() {
 		rm -f $HOMEDIR/$user/conf/mail/$domain/passwd
 		rm -f $HOMEDIR/$user/conf/mail/$domain/fwd_only
 		rm -f $HOMEDIR/$user/conf/mail/$domain/ip
+		rm -f $HOMEDIR/$user/conf/mail/$domain/ipv6
 		rm -fr $HOMEDIR/$user/conf/mail/$domain/limits
 		touch $HOMEDIR/$user/conf/mail/$domain/accounts
 		touch $HOMEDIR/$user/conf/mail/$domain/aliases
@@ -619,6 +636,9 @@ rebuild_mail_domain_conf() {
 		# Setting outgoing ip address
 		if [ -n "$local_ip" ] && [ "$U_SMTP_RELAY" != 'true' ]; then
 			echo "$local_ip" > $HOMEDIR/$user/conf/mail/$domain/ip
+		fi
+		if [ -n "$local_ip6" ] && [ "$U_SMTP_RELAY" != 'true' ]; then
+			echo "$local_ip6" > $HOMEDIR/$user/conf/mail/$domain/ipv6
 		fi
 
 		# Adding antispam protection

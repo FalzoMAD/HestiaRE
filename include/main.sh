@@ -1363,6 +1363,17 @@ is_alias_format_valid() {
 }
 
 # IP format validator
+# Address family by CONTENT, never by path or field (a rename must not change the answer).
+# Echoes 4, 6, or nothing for neither - callers treat empty as "skip", like fw_addr_family.
+# Lives here, not in ip.sh: the web-model consumers need it without sourcing ip.sh.
+ip_family() {
+	case "$1" in
+		*:*) echo 6 ;;
+		*) [[ "$1" =~ ^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4}$ ]] && echo 4 ;;
+	esac
+	return 0
+}
+
 is_ip_format_valid() {
 	object_name=${2-ip}
 	valid=$($HESTIA_PHP -r '$ip=$argv[1]; echo (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? 0 : 1);' "$1")
@@ -1891,6 +1902,9 @@ is_hash_format_valid() {
 # instead of failing. It has cost us twice. An UNSET variable is therefore a hard error now: it can only be
 # a programming mistake, since a caller with a genuinely optional argument still has the variable declared
 # and empty, which stays a legitimate skip.
+# The dispatch key IS the caller's variable name: is_format_valid reads ${!name} and picks the
+# validator from the name, so renaming a variable (ip -> ip46) changes which check runs AND what
+# every sourced helper reading that global sees. The name is part of the interface.
 is_format_valid() {
 	for arg_name in $*; do
 		if ! declare -p "$arg_name" > /dev/null 2>&1; then

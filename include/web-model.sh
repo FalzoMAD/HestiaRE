@@ -174,7 +174,15 @@ apache_remoteip_disable() {
 # remoteip via apache_remoteip_enable. Needs process_http2_directive (include/domain.sh)
 # and WEBTPL (include/main.sh) in the caller's scope.
 rebuild_ip_web_config() {
-	local ip="$1" web_sys="$WEB_SYSTEM"
+	local ip="$1" web_sys="$WEB_SYSTEM" family addr
+	# One conf per ADDRESS, both families through the same body: addr is the listen-ready
+	# spelling (v6 bracketed), and the per-family tokens feed the engine's deletion rule.
+	family=$(ip_family "$ip")
+	if [ "$family" = 6 ]; then
+		addr="[$ip]"
+	else
+		addr="$ip"
+	fi
 	# mailfront (#193): no customer web, but the front must own the default
 	# listeners on 80/443 - the webmail vhosts and ACME hang off exactly these
 	[ -z "$web_sys" ] && web_sys="${WEBMAIL_FRONT:-}"
@@ -184,34 +192,47 @@ rebuild_ip_web_config() {
 
 		if [ "$web_sys" = 'httpd' ] || [ "$web_sys" = 'apache2' ]; then
 			if ! /usr/sbin/apachectl -v 2> /dev/null | grep -q "Apache/2.4"; then
-				echo "NameVirtualHost $ip:$WEB_PORT" > "$web_conf"
+				echo "NameVirtualHost $addr:$WEB_PORT" > "$web_conf"
 			fi
-			echo "Listen $ip:$WEB_PORT" >> "$web_conf"
+			echo "Listen $addr:$WEB_PORT" >> "$web_conf"
 			cat "$HESTIA/share/apache2/unassigned.conf" >> "$web_conf"
-			sed -i "s/directIP/$ip/g" "$web_conf"
+			# ServerName takes no bracketed literal ("Invalid ServerName [v6]"), so the
+			# catch-all's name token renders as a label, not an address, for v6
+			if [ "$family" = 6 ]; then
+				sed -i "s/directNAME/${ip//:/-}.invalid/g" "$web_conf"
+			else
+				sed -i "s/directNAME/$ip/g" "$web_conf"
+			fi
+			sed -i "s/directIP/$addr/g" "$web_conf"
 			sed -i "s/directPORT/$WEB_PORT/g" "$web_conf"
 
 		elif [ "$web_sys" = 'nginx' ]; then
 			cp -f "$HESTIA/share/nginx/unassigned.inc" "$web_conf"
-			sed -i "s/directIP/$ip/g" "$web_conf"
+			sed -i "s/directIP/$addr/g" "$web_conf"
 			process_http2_directive "$web_conf"
 		fi
 
 		if [ "$WEB_SSL" = 'mod_ssl' ]; then
 			if ! /usr/sbin/apachectl -v 2> /dev/null | grep -q "Apache/2.4"; then
-				sed -i "1s/^/NameVirtualHost $ip:$WEB_SSL_PORT\n/" "$web_conf"
+				sed -i "1s/^/NameVirtualHost $addr:$WEB_SSL_PORT\n/" "$web_conf"
 			fi
-			sed -i "1s/^/Listen $ip:$WEB_SSL_PORT\n/" "$web_conf"
+			sed -i "1s/^/Listen $addr:$WEB_SSL_PORT\n/" "$web_conf"
 			sed -i "s/directSSLPORT/$WEB_SSL_PORT/g" "$web_conf"
 		fi
 	fi
 
 	if [ -n "$PROXY_SYSTEM" ]; then
-		sed -e "s/%ip%/$ip/g" \
-			-e "s/%web_port%/$WEB_PORT/g" \
-			-e "s/%proxy_port%/$PROXY_PORT/g" \
-			-e "s/%proxy_ssl_port%/$PROXY_SSL_PORT/g" \
-			"$SHARETPL/$PROXY_SYSTEM/proxy_ip.tpl" > "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
+		# Family-split values: the engine's deletion rule keeps exactly this address's
+		# listen line, and the backend hop targets the same address on the web port
+		local _r_ip='' _r_ip6='' _r_domain='' _r_domain_idn='' _r_root_domain='' \
+			_r_alias='' _r_alias_idn='' _r_web_system='' _r_vhost='' _r_vhost_ssl='' \
+			_r_backend_addr="$addr"
+		if [ "$family" = 6 ]; then
+			_r_ip6="$ip"
+		else
+			_r_ip="$ip"
+		fi
+		web_render_template < "$SHARETPL/$PROXY_SYSTEM/proxy_ip.tpl" > "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 
 		process_http2_directive "/etc/$PROXY_SYSTEM/conf.d/$ip.conf"
 	fi

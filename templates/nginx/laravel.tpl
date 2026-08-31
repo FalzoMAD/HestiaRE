@@ -6,6 +6,7 @@
 
 server {
 	listen      %ip%:%web_port%;
+	listen      [%ip6%]:%web_port%;
 	server_name %domain_idn% %alias_idn%;
 	include %home%/%user%/conf/web/%domain%/nginx.crowdsec.conf*;
 	include %home%/%user%/conf/web/%domain%/nginx.botlimit.conf*;
@@ -91,6 +92,7 @@ server {
 
 server {
 	listen      %ip%:%web_ssl_port% ssl;
+	listen      [%ip6%]:%web_ssl_port% ssl;
 	server_name %domain_idn% %alias_idn%;
 	include %home%/%user%/conf/web/%domain%/nginx.crowdsec.conf*;
 	include %home%/%user%/conf/web/%domain%/nginx.botlimit.conf*;

@@ -104,7 +104,7 @@ if (!empty($_POST["ok"])) {
 
 	// Get database manager url
 	if (empty($_SESSION["error_msg"])) {
-		[$http_host, $port] = explode(":", $_SERVER["HTTP_HOST"] . ":");
+		$http_host = get_http_host_name();
 		if ($_POST["v_host"] != "localhost") {
 			$http_host = $_POST["v_host"];
 		}

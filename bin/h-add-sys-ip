@@ -16,18 +16,25 @@
 #----------------------------------------------------------#
 
 # Argument definition
-ip="${1// /}"
+# ip46 selects the validator (dispatch is by variable name); $ip aliased for the ip.sh helpers
+ip46="${1// /}"
+ip="$ip46"
 netmask="$2"
 
 # Get interface name
 # First try to detect which interface the IP address resides on
-iface="$(ip -d -j addr show | jq --arg IP "$ip" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
-# If that fails, detect the default interface as a fallback
+iface="$(ip -d -j addr show | jq --arg IP "$ip46" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
+# Fallback via default route, BOTH families: a fresh address is the normal case, and on a
+# v6-only box the v4 route table is empty (h-delete-sys-ip carries the same twin).
 if [ -z "$iface" ]; then
 	iface="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
 fi
+if [ -z "$iface" ]; then
+	iface="$(ip -6 -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
+fi
 
-iface="${3-$iface}"
+# :- not -: an EMPTY third argument (h-update-sys-ip passes jq output) must fall back
+iface="${3:-$iface}"
 user="$4"
 ip_status="${5-shared}"
 ip_name="$6"
@@ -56,7 +63,18 @@ fi
 #----------------------------------------------------------#
 
 check_args '2' "$#" 'IP NETMASK [INTERFACE] [USER] [STATUS] [NAME] [NATED_IP]'
-is_format_valid 'ip' 'netmask' 'iface' 'user' 'ip_status'
+is_format_valid 'ip46' 'iface' 'user' 'ip_status'
+family=$(ip_family "$ip46")
+if [ "$family" = 6 ]; then
+	ip46=$(ip6_canonical "$ip46") || check_result "$E_INVALID" "cannot canonicalise the v6 address - the panel php backend did not answer"
+	ip="$ip46"
+	# NETMASK carries the prefix length for v6; a dotted netmask has no v6 meaning
+	if ! [[ "$netmask" =~ ^[0-9]{1,3}$ ]] || [ "$netmask" -gt 128 ]; then
+		check_result "$E_INVALID" "a v6 address takes a prefix length (0-128), not a netmask"
+	fi
+else
+	is_format_valid 'netmask'
+fi
 is_ip_free
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
@@ -64,6 +82,7 @@ if [ -n "$ip_name" ]; then
 	is_format_valid 'ip_name'
 fi
 if [ -n "$nat_ip" ]; then
+	[ "$family" = 6 ] && check_result "$E_INVALID" "NAT is an IPv4 concept - a v6 IP cannot carry a NAT address"
 	is_format_valid 'nat_ip'
 fi
 if [ "$user" != "$ROOT_USER" ]; then
@@ -74,13 +93,39 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-cidr="$(convert_netmask "$netmask")"
-broadcast="$(get_broadcast "$ip" "$netmask")"
+if [ "$family" = 6 ]; then
+	cidr="$netmask"
+else
+	cidr="$(convert_netmask "$netmask")"
+	broadcast="$(get_broadcast "$ip" "$netmask")"
+fi
 
-sys_ip_check="$(ip addr | grep -w "$ip")"
+# jq exact-match, not grep -w: colons are word boundaries, so a LONGER prefix-sharing v6
+# false-matched and skipped kernel add + persistence while the record was still written.
+sys_ip_check="$(ip -j addr show | jq --arg IP "$ip" -r '.[].addr_info[] | select(.local == $IP) | .local' 2> /dev/null | head -1)"
 if [ -z "$sys_ip_check" ]; then
-	# Adding system IP
-	ip addr add "$ip/$cidr" dev "$iface" broadcast "$broadcast" label "$iface"
+	# v6 knows neither broadcast nor labels. A HARD add failure must stop everything -
+	# running on would write record/render/restart for an address that never arrived.
+	if [ "$family" = 6 ]; then
+		ip -6 addr add "$ip/$cidr" dev "$iface" \
+			|| check_result "$E_INVALID" "cannot add $ip/$cidr on $iface - nothing was written"
+		# DAD: a bind() while the address is tentative fails; the web restart below raced
+		# exactly that. Bounded wait.
+		for _i in $(seq 1 10); do
+			ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"tentative"' || break
+			sleep 0.5
+		done
+		# dadfailed is PERMANENT (another host answers, the listener never binds),
+		# tentative-after-5s merely slow - both continue, but the difference gets said.
+		if ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"dadfailed"'; then
+			echo "Warning: duplicate address detection FAILED for $ip - another host answers for it; web listeners will not bind until that is resolved" >&2
+		elif ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"tentative"'; then
+			echo "Warning: $ip still tentative after 5s - the web restart below may race the bind" >&2
+		fi
+	else
+		ip addr add "$ip/$cidr" dev "$iface" broadcast "$broadcast" label "$iface" \
+			|| check_result "$E_INVALID" "cannot add $ip/$cidr on $iface - nothing was written"
+	fi
 
 	# Check if netplan is in use and generate configuration file
 	if [ -n "$(netplan generate --mapping "$iface" 2> /dev/null | grep networkd)" ]; then
@@ -110,16 +155,19 @@ if [ -z "$sys_ip_check" ]; then
 			sys_ip="$sys_ip\n      addresses:"
 			sys_ip="$sys_ip\n        - $ip/$cidr"
 		fi
-		IFS='%'
 		echo -e "$sys_ip" >> "$netplan_file"
-		unset IFS
 	else
 		sys_ip="\n# Added by Hestia Control Panel"
 		sys_ip="$sys_ip\nauto $iface"
-		sys_ip="$sys_ip\niface $iface inet static"
-		sys_ip="$sys_ip\naddress $ip"
-		sys_ip="$sys_ip\nnetmask $netmask"
-		echo -e $sys_ip >> /etc/network/interfaces
+		if [ "$family" = 6 ]; then
+			sys_ip="$sys_ip\niface $iface inet6 static"
+			sys_ip="$sys_ip\naddress $ip/$cidr"
+		else
+			sys_ip="$sys_ip\niface $iface inet static"
+			sys_ip="$sys_ip\naddress $ip"
+			sys_ip="$sys_ip\nnetmask $netmask"
+		fi
+		echo -e "$sys_ip" >> /etc/network/interfaces
 	fi
 fi
 
@@ -139,17 +187,25 @@ TIME='$time'
 DATE='$date'" > $CONF_DIR/ips/$ip
 chmod 660 $CONF_DIR/ips/$ip
 
-# WEB support
+# WEB support (both families - the renderer brackets v6 itself)
 rebuild_ip_web_config "$ip"
 
 # Proxy real-IP module registration (dormant unless the conf exists). The per-IP
 # web/proxy config generation moved into rebuild_ip_web_config (include/web-model.sh, #120).
-if [ -n "$PROXY_SYSTEM" ]; then
+# Real-IP module registration needs a backend web system; on mailfront (#193) WEB_SYSTEM
+# is empty by design and there is nothing to register.
+if [ -n "$PROXY_SYSTEM" ] && [ -n "$WEB_SYSTEM" ]; then
 	# mod_extract_forwarded
 	fw_conf="/etc/$WEB_SYSTEM/conf.d/mod_extract_forwarded.conf"
 	if [ -e "$fw_conf" ]; then
-		ips=$(grep 'MEFaccept ' "$fw_conf" | grep -v '#' | head -n1)
-		sed -i "s/$ips/$ips $ip/g" "$fw_conf"
+		# awk append - sed with the whole line as unescaped pattern was a blind IP-sed
+		awk -v ip="$ip" '!done && /MEFaccept / && !/^#/ {
+			$0 = $0 " " ip
+			done = 1
+		} { print }' "$fw_conf" > "$fw_conf.tmp" \
+			&& chmod --reference="$fw_conf" "$fw_conf.tmp" \
+			&& chown --reference="$fw_conf" "$fw_conf.tmp" \
+			&& mv -f "$fw_conf.tmp" "$fw_conf"
 	fi
 
 	# mod_rpaf
@@ -164,7 +220,9 @@ if [ -n "$PROXY_SYSTEM" ]; then
 	# mod_remoteip
 	remoteip_conf="/etc/$WEB_SYSTEM/mods-enabled/remoteip.conf"
 	if [ -e "$remoteip_conf" ]; then
-		if [ "$(grep -ic "$ip" "$remoteip_conf")" -eq "0" ]; then
+		# exact line, not substring: ::1 counted as present while only ::10 was
+		ip_re=$(printf '%s' "$ip" | sed 's/[].[\*^$]/\\&/g')
+		if ! grep -qE "^[[:space:]]*RemoteIPInternalProxy[[:space:]]+${ip_re}[[:space:]]*\$" "$remoteip_conf"; then
 			sed -i "s/<\/IfModule>/RemoteIPInternalProxy $ip\n<\/IfModule>/g" "$remoteip_conf"
 		fi
 	fi

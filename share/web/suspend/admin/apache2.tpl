@@ -1,6 +1,6 @@
 # Rendered for suspended domains in every web model - not user-selectable
 
-<VirtualHost %ip%:%web_port%>
+<VirtualHost %vhost%>
 
     ServerName %domain_idn%
     IncludeOptional %home%/%user%/conf/web/%domain%/botlimit.apache2.conf*

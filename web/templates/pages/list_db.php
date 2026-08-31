@@ -1,5 +1,5 @@
 <?php
-[$http_host, $port] = explode(":", $_SERVER["HTTP_HOST"] . ":");
+$http_host = get_http_host_name();
 $db_myadmin_link = "//" . $http_host . "/phpmyadmin/";
 
 if (!empty($_SESSION["DB_PMA_ALIAS"])) {
@@ -126,7 +126,7 @@ $db_adminer_link = "/" . (!empty($_SESSION["DB_ADMINER_ALIAS"]) ? $_SESSION["DB_
 
 		<!-- Begin database list item loop -->
 		<?php
-			list($http_host, $port) = explode(':', $_SERVER["HTTP_HOST"].":");
+			$http_host = get_http_host_name();
 foreach ($data as $key => $value) {
 	++$i;
 	if ($data[$key]['SUSPENDED'] == 'yes') {

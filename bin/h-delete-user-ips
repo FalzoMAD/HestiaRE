@@ -39,7 +39,7 @@ fi
 #----------------------------------------------------------#
 
 # Parsing user ips
-ip_list=$(grep -H "OWNER='$user'" $CONF_DIR/ips/* | cut -f 1 -d:)
+ip_list=$(grep -l "OWNER='$user'" $CONF_DIR/ips/*)
 
 for ip in $ip_list; do
 	ip=$(basename "$ip")

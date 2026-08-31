@@ -9,6 +9,23 @@
 # Global definitions
 REGEX_IPV4="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4}$"
 
+# RFC-5952 form at the ENTRY of every writer: two spellings of one address must not become
+# two objects. Non-v6 passes through; a php backend that does not answer returns rc 1 with
+# no output - a silent raw-spelling fallback would recreate the very double object.
+ip6_canonical() {
+	local out
+	case "$1" in
+		*:*) ;;
+		*)
+			echo "$1"
+			return 0
+			;;
+	esac
+	out=$($HESTIA_PHP -r '$b = @inet_pton($argv[1]); echo $b === false || strlen($b) !== 16 ? $argv[1] : inet_ntop($b);' "$1" 2> /dev/null)
+	[ -n "$out" ] || return 1
+	echo "$out"
+}
+
 # Check ip ownership
 is_ip_owner() {
 	owner=$(grep 'OWNER=' $CONF_DIR/ips/$ip | cut -f 2 -d \')
@@ -38,30 +55,12 @@ is_ip_key_empty() {
 	fi
 }
 
-is_ip_rdns_valid() {
-	local ip="$1"
-	local network_ip=$(echo $ip | cut -d"." -f1-3)
-	local awk_ip=$(echo $network_ip | sed 's|\.|/\&\&/|g')
-	local rev_awk_ip=$(echo $awk_ip | rev)
-
-	if [ -z "$rdns" ]; then
-		local rdns=$(dig +short -x "$ip" | head -n 1 | sed 's/.$//') || unset rdns
-	fi
-
-	# $rdns is a PTR record, i.e. remote-controlled: unquoted it would word-split and glob. The
-	# unquoted test also degenerated to `[ ! ]` (which is true) whenever awk printed nothing.
-	if [ -n "$rdns" ] && [ -z "$(echo "$rdns" | awk "/$awk_ip/ || /$rev_awk_ip/")" ]; then
-		echo "$rdns"
-		return 0 # True
-	fi
-
-	return 1 # False
-}
-
 # Update ip address value
 update_ip_value() {
 	key="$1"
 	value="$2"
+	# local empty = all lines; a foreign global would silently narrow the sed to one line
+	local str_number=""
 	conf="$CONF_DIR/ips/$ip"
 	# See is_ip_key_empty: source_conf instead of eval-ing the file content as bash.
 	[ -e "$conf" ] && source_conf "$conf"
@@ -97,7 +96,7 @@ get_ip_alias() {
 
 # Increase ip value
 increase_ip_value() {
-	sip=${1-ip}
+	sip=${1-$ip}
 	USER=${2-$user}
 	web_key='U_WEB_DOMAINS'
 	usr_key='U_SYS_USERS'
@@ -134,7 +133,7 @@ increase_ip_value() {
 
 # Decrease ip value
 decrease_ip_value() {
-	sip=${1-ip}
+	sip=${1-$ip}
 	local user=${2-$user}
 	web_key='U_WEB_DOMAINS'
 	usr_key='U_SYS_USERS'
@@ -147,7 +146,15 @@ decrease_ip_value() {
 	fi
 
 	new_web=$((current_web - 1))
-	check_ip=$(grep $sip $USER_DATA/web.conf | wc -l)
+	# One counting rule: the authority's check mode answers whether the user still holds
+	# this address. Fail-safe: an oracle that answers nothing must not evict anyone.
+	local recount_out recount
+	recount_out=$("$BIN/h-update-sys-ip-counters" "$sip" check 2> /dev/null)
+	recount=$(sed -n "s/^U_SYS_USERS='\(.*\)'\$/\1/p" <<< "$recount_out")
+	check_ip=1
+	if grep -q "^U_SYS_USERS=" <<< "$recount_out"; then
+		if grep -qx "$user" <<< "${recount//,/$'\n'}"; then check_ip=1; else check_ip=0; fi
+	fi
 	if [[ $check_ip = 0 ]]; then
 		new_usr=$(echo "$current_usr" \
 			| sed "s/,/\n/g" \
@@ -230,21 +237,40 @@ get_broadcast() {
 	echo "$((${I[0]} | (255 ^ ${N[0]}))).$((${I[1]} | (255 ^ ${N[1]}))).$((${I[2]} | (255 ^ ${N[2]}))).$((${I[3]} | (255 ^ ${N[3]})))"
 }
 
-# Get user ips
+# Get user ips (dedicated + shared), optionally filtered to one family ($1 = 4|6, empty = both).
+# Cut at the literal ':KEY='/'-KEY=' boundary, never at the first colon: a v6 filename carries
+# colons, and the old cut/REGEX_IPV4 pair made every v6 IP object invisible to every consumer.
 get_user_ips() {
-	dedicated=$(grep -H "OWNER='$user'" $CONF_DIR/ips/*)
-	dedicated=$(echo "$dedicated" | cut -f 1 -d : | sed 's=.*/==' | grep -E ${REGEX_IPV4})
-	shared=$(grep -H -A1 "OWNER='$ROOT_USER'" $CONF_DIR/ips/* | grep shared)
-	shared=$(echo "$shared" | cut -f 1 -d : | sed 's=.*/==' | cut -f 1 -d \- | grep -E ${REGEX_IPV4})
-	for dedicated_ip in $dedicated; do
-		shared=$(echo "$shared" | grep -v $dedicated_ip)
+	# Per-file, per-key reads (key order is not a contract). Two passes, dedicated first:
+	# get_user_ip takes head -n1, and glob order would hand a shared address to a customer
+	# who owns a dedicated one.
+	local family="$1" pass f addr f_owner f_status
+	for pass in own shared; do
+		for f in "$CONF_DIR"/ips/*; do
+			[ -f "$f" ] || continue
+			addr=${f##*/}
+			if [ -n "$family" ] && [ "$(ip_family "$addr")" != "$family" ]; then
+				continue
+			fi
+			f_owner=$(grep -m1 "^OWNER=" "$f" | cut -f 2 -d \')
+			if [ "$pass" = 'own' ]; then
+				[ "$f_owner" = "$user" ] && echo "$addr"
+			else
+				[ "$user" = "$ROOT_USER" ] && continue
+				if [ "$f_owner" = "$ROOT_USER" ]; then
+					f_status=$(grep -m1 "^STATUS=" "$f" | cut -f 2 -d \')
+					[ "$f_status" = 'shared' ] && echo "$addr"
+				fi
+			fi
+		done
 	done
-	echo -e "$dedicated\n$shared" | sed "/^$/d"
+	return 0
 }
 
-# Get user ip
+# v4 preferred (existing boxes behave unchanged); only a v4-less box falls through to v6.
 get_user_ip() {
-	ip=$(get_user_ips | head -n1)
+	ip=$(get_user_ips 4 | head -n1)
+	[ -z "$ip" ] && ip=$(get_user_ips 6 | head -n1)
 	if [ -z "$ip" ]; then
 		check_result $E_NOTEXIST "no IP is available"
 	fi
@@ -253,6 +279,12 @@ get_user_ip() {
 	if [ -n "$nat" ]; then
 		ip=$nat
 	fi
+}
+
+# First v6 of the user into $ip6; rc 1 when none - callers decide, nothing aborts.
+get_user_ip6() {
+	ip6=$(get_user_ips 6 | head -n1)
+	[ -n "$ip6" ]
 }
 
 # Validate ip address
