@@ -96,7 +96,10 @@ else
 	broadcast="$(get_broadcast "$ip" "$netmask")"
 fi
 
-sys_ip_check="$(ip addr | grep -wF "$ip")"
+# Exact-match via jq, not grep -w: colons are word boundaries, so an existing LONGER v6
+# sharing the prefix (...::1:2 while adding ...::1) false-matched, skipped the kernel add
+# and the boot persistence, and left a record whose address the box never carries.
+sys_ip_check="$(ip -j addr show | jq --arg IP "$ip" -r '.[].addr_info[] | select(.local == $IP) | .local' 2> /dev/null | head -1)"
 if [ -z "$sys_ip_check" ]; then
 	# Adding system IP (v6 knows neither broadcast nor alias labels)
 	if [ "$family" = 6 ]; then
