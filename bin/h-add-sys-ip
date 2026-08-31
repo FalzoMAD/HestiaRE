@@ -25,12 +25,20 @@ netmask="$2"
 # Get interface name
 # First try to detect which interface the IP address resides on
 iface="$(ip -d -j addr show | jq --arg IP "$ip46" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
-# If that fails, detect the default interface as a fallback
+# If that fails, detect the default interface as a fallback - BOTH families: a fresh
+# address is the normal case here (it does not exist yet), and on a v6-only box the v4
+# route table is empty, which made manual h-add-sys-ip impossible on exactly the box
+# stage 4 is built for. h-delete-sys-ip carries the same twin.
 if [ -z "$iface" ]; then
 	iface="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
 fi
+if [ -z "$iface" ]; then
+	iface="$(ip -6 -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
+fi
 
-iface="${3-$iface}"
+# :- not -: an EMPTY third argument must fall back to detection, not erase it -
+# h-update-sys-ip passes its own jq result through here, and that can come back empty
+iface="${3:-$iface}"
 user="$4"
 ip_status="${5-shared}"
 ip_name="$6"
@@ -101,9 +109,13 @@ fi
 # and the boot persistence, and left a record whose address the box never carries.
 sys_ip_check="$(ip -j addr show | jq --arg IP "$ip" -r '.[].addr_info[] | select(.local == $IP) | .local' 2> /dev/null | head -1)"
 if [ -z "$sys_ip_check" ]; then
-	# Adding system IP (v6 knows neither broadcast nor alias labels)
+	# Adding system IP (v6 knows neither broadcast nor alias labels). A HARD failure here
+	# (missing iface, bad prefix) must stop everything: the soft case has the DAD guard,
+	# but running on writes a record, renders and restarts for an address that never
+	# arrived - the same nginx emerg, just without an explanation.
 	if [ "$family" = 6 ]; then
-		ip -6 addr add "$ip/$cidr" dev "$iface"
+		ip -6 addr add "$ip/$cidr" dev "$iface" \
+			|| check_result "$E_INVALID" "cannot add $ip/$cidr on $iface - nothing was written"
 		# DAD: the fresh address is tentative for a moment, and a bind() during that window
 		# fails with EADDRNOTAVAIL - the web restart below raced exactly that (nginx emerg
 		# on the very first v6 per-IP config, measured). Wait it out, bounded.
@@ -121,7 +133,8 @@ if [ -z "$sys_ip_check" ]; then
 			echo "Warning: $ip still tentative after 5s - the web restart below may race the bind" >&2
 		fi
 	else
-		ip addr add "$ip/$cidr" dev "$iface" broadcast "$broadcast" label "$iface"
+		ip addr add "$ip/$cidr" dev "$iface" broadcast "$broadcast" label "$iface" \
+			|| check_result "$E_INVALID" "cannot add $ip/$cidr on $iface - nothing was written"
 	fi
 
 	# Check if netplan is in use and generate configuration file
@@ -152,9 +165,7 @@ if [ -z "$sys_ip_check" ]; then
 			sys_ip="$sys_ip\n      addresses:"
 			sys_ip="$sys_ip\n        - $ip/$cidr"
 		fi
-		IFS='%'
 		echo -e "$sys_ip" >> "$netplan_file"
-		unset IFS
 	else
 		sys_ip="\n# Added by Hestia Control Panel"
 		sys_ip="$sys_ip\nauto $iface"
@@ -166,7 +177,7 @@ if [ -z "$sys_ip_check" ]; then
 			sys_ip="$sys_ip\naddress $ip"
 			sys_ip="$sys_ip\nnetmask $netmask"
 		fi
-		echo -e $sys_ip >> /etc/network/interfaces
+		echo -e "$sys_ip" >> /etc/network/interfaces
 	fi
 fi
 
@@ -191,12 +202,19 @@ rebuild_ip_web_config "$ip"
 
 # Proxy real-IP module registration (dormant unless the conf exists). The per-IP
 # web/proxy config generation moved into rebuild_ip_web_config (include/web-model.sh, #120).
-if [ -n "$PROXY_SYSTEM" ]; then
+# Apache real-IP module registration needs a backend web system: on mailfront (#193)
+# WEB_SYSTEM is empty by design, the paths would degenerate to /etc//... and the block
+# has nothing to register - said here instead of failing -e checks silently.
+if [ -n "$PROXY_SYSTEM" ] && [ -n "$WEB_SYSTEM" ]; then
 	# mod_extract_forwarded
 	fw_conf="/etc/$WEB_SYSTEM/conf.d/mod_extract_forwarded.conf"
 	if [ -e "$fw_conf" ]; then
-		ips=$(grep 'MEFaccept ' "$fw_conf" | grep -v '#' | head -n1)
-		sed -i "s/$ips/$ips $ip/g" "$fw_conf"
+		# append via awk, not sed with the whole line as an unescaped pattern - that was
+		# one of the blind IP-seds already on the plan's risk list
+		awk -v ip="$ip" '!done && /MEFaccept / && !/^#/ {
+			$0 = $0 " " ip
+			done = 1
+		} { print }' "$fw_conf" > "$fw_conf.tmp" && mv -f "$fw_conf.tmp" "$fw_conf"
 	fi
 
 	# mod_rpaf
@@ -211,7 +229,10 @@ if [ -n "$PROXY_SYSTEM" ]; then
 	# mod_remoteip
 	remoteip_conf="/etc/$WEB_SYSTEM/mods-enabled/remoteip.conf"
 	if [ -e "$remoteip_conf" ]; then
-		if [ "$(grep -ic "$ip" "$remoteip_conf")" -eq "0" ]; then
+		# exact line, not a substring: 2001:db8::1 counted as present while only
+		# 2001:db8::10 was - short v6 addresses are prefixes of longer ones all the time
+		ip_re=$(printf '%s' "$ip" | sed 's/[].[\*^$]/\\&/g')
+		if ! grep -qE "^[[:space:]]*RemoteIPInternalProxy[[:space:]]+${ip_re}[[:space:]]*\$" "$remoteip_conf"; then
 			sed -i "s/<\/IfModule>/RemoteIPInternalProxy $ip\n<\/IfModule>/g" "$remoteip_conf"
 		fi
 	fi
