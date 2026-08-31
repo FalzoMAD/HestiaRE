@@ -1891,6 +1891,9 @@ is_hash_format_valid() {
 # instead of failing. It has cost us twice. An UNSET variable is therefore a hard error now: it can only be
 # a programming mistake, since a caller with a genuinely optional argument still has the variable declared
 # and empty, which stays a legitimate skip.
+# The dispatch key IS the caller's variable name: is_format_valid reads ${!name} and picks the
+# validator from the name, so renaming a variable (ip -> ip46) changes which check runs AND what
+# every sourced helper reading that global sees. The name is part of the interface.
 is_format_valid() {
 	for arg_name in $*; do
 		if ! declare -p "$arg_name" > /dev/null 2>&1; then
