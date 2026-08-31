@@ -4,7 +4,7 @@
 # https://hestiacp.com/docs/server-administration/web-templates.html      #
 #=========================================================================#
 
-<VirtualHost %ip%:%web_port%>
+<VirtualHost %vhost%>
 
     ServerName %domain_idn%
     IncludeOptional %home%/%user%/conf/web/%domain%/botlimit.apache2.conf*
@@ -47,7 +47,7 @@
 # https://hestiacp.com/docs/server-administration/web-templates.html      #
 #=========================================================================#
 
-<VirtualHost %ip%:%web_ssl_port%>
+<VirtualHost %vhost_ssl%>
 
     ServerName %domain_idn%
     IncludeOptional %home%/%user%/conf/web/%domain%/botlimit.apache2.conf*

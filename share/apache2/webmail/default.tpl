@@ -1,4 +1,4 @@
-<VirtualHost %ip%:%web_port%>
+<VirtualHost %vhost%>
     ServerName %domain_idn%
     ServerAlias %alias_idn%
 

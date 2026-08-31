@@ -1,5 +1,6 @@
 server {
 	listen      %ip%:%web_port%;
+	listen      [%ip6%]:%web_port%;
 	server_name %domain_idn% %alias_idn%;
 	access_log  /var/log/nginx/domains/%domain%.log combined;
 	error_log   /var/log/nginx/domains/%domain%.error.log error;

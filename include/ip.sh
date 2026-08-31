@@ -9,16 +9,6 @@
 # Global definitions
 REGEX_IPV4="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4}$"
 
-# Address family by CONTENT, never by path or field (a rename must not change the answer).
-# Echoes 4, 6, or nothing for neither - callers treat empty as "skip", like fw_addr_family.
-ip_family() {
-	case "$1" in
-		*:*) echo 6 ;;
-		*) [[ "$1" =~ $REGEX_IPV4 ]] && echo 4 ;;
-	esac
-	return 0
-}
-
 # RFC-5952 canonical spelling (what `ip -j` prints). Runs at the ENTRY of every writing
 # command: without it 2001:0db8::1 and 2001:db8::1 become two objects for one address and
 # counters, firewall and deletion drift apart. Non-v6 input passes through untouched -

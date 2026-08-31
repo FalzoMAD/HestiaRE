@@ -1,10 +1,14 @@
 #!/bin/bash
-# info: change web domain ip
-# options: USER DOMAIN DOMAIN [RESTART]
+# info: change web domain IPv6 address
+# options: USER DOMAIN IPV6 [RESTART]
 #
-# example: h-change-web-domain-ip admin example.com 167.86.105.230 yes
+# example: h-change-web-domain-ip6 admin example.com 2001:db8::2 yes
 #
-# This function is used for changing domain ip
+# Switches the domain to another v6 address. There is deliberately no per-domain
+# opt-out: rebuild re-adopts the box default v6 into an empty IP6, so a cleared field
+# would silently refill - "no v6" is a box-level decision (delete the v6 IP object).
+# Rebuild instead of in-place sed: adding a family creates listen lines that a
+# substring replace could never produce.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #
@@ -14,7 +18,7 @@
 user=$1
 domain=$2
 domain_idn=$2
-ip=$3
+ip46=$3
 restart=$4
 
 # Includes
@@ -33,44 +37,40 @@ web_lock_acquire || exit 1
 # Additional argument formatting
 format_domain
 format_domain_idn
-# TODO: $domain_idn not used in this script - maybe $domain should be converted to $doman_idn ?
 
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '3' "$#" 'USER DOMAIN IP [RESTART]'
-is_format_valid 'user' 'domain' 'ip' 'restart'
+check_args '3' "$#" 'USER DOMAIN IPV6 [RESTART]'
+is_format_valid 'user' 'domain' 'ip46' 'restart'
+[ "$(ip_family "$ip46")" = 6 ] || check_result "$E_INVALID" "a v6 address is expected here - the v4 address changes via h-change-web-domain-ip"
+ip46=$(ip6_canonical "$ip46") || check_result "$E_INVALID" "cannot canonicalise the v6 address - the panel php backend did not answer"
+is_ip_valid "$ip46" "$user"
 is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 is_object_valid 'web' 'DOMAIN' "$domain"
 is_object_unsuspended 'web' 'DOMAIN' "$domain"
-is_ip_valid "$ip" "$user"
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
-# Preparing variables for vhost replace
 get_domain_values 'web'
-old=$(get_real_ip "$IP")
-new=$(get_real_ip "$ip")
+old_ip6="$IP6"
 
-# Replacing vhost
-# One .conf holds both server blocks now (#593), so the IP is replaced in both at once
-replace_web_config "$WEB_SYSTEM" "$TPL.tpl"
+# Update config
+update_object_value 'web' 'DOMAIN' "$domain" '$IP6' "$ip46"
 
-# Replacing proxy vhost
-if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
-	replace_web_config "$PROXY_SYSTEM" "$PROXY.tpl"
+# Update counters (guarded: a stale record must not crash the change that fixes it)
+increase_ip_value "$ip46"
+if [ -n "$old_ip6" ] && [ -e "$CONF_DIR/ips/$old_ip6" ]; then
+	decrease_ip_value "$old_ip6"
 fi
 
-# The HTTP/3 quic listen carries the IP, and its fragment is not a .conf so replace_web_config
-# skips it (#613) - re-emit it under the new address, through the same capability gate
-if [ "$HTTP3" = 'yes' ] && nginx_has_http3; then
-	add_web_http3_config "$new" "$IP6"
-fi
+# Re-render the vhosts under the new address set
+$BIN/h-rebuild-web-domain "$user" "$domain" no
 
 # Check for webmail (only when a mail domain of this name exists)
 if [ -n "$IMAP_SYSTEM" ] && grep -qF "DOMAIN='$domain'" "$USER_DATA/mail.conf" 2> /dev/null; then
@@ -81,13 +81,6 @@ fi
 #                       Hestia                             #
 #----------------------------------------------------------#
 
-# Update config
-update_object_value 'web' 'DOMAIN' "$domain" '$IP' "$3"
-
-# Update counters
-increase_ip_value "$new"
-decrease_ip_value "$old"
-
 # Restart web server
 $BIN/h-restart-web "$restart"
 check_result $? "WEB restart failed" > /dev/null
@@ -96,7 +89,7 @@ $BIN/h-restart-proxy "$restart"
 check_result $? "Proxy restart failed" > /dev/null
 
 # Logging
-$BIN/h-log-action "$user" "Info" "Web" "Web domain IP address changed (IP: $3, Domain: $domain)."
+$BIN/h-log-action "$user" "Info" "Web" "Web domain IPv6 address changed (IP6: $ip46, Domain: $domain)."
 log_event "$OK" "$ARGUMENTS"
 
 exit
