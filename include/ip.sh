@@ -63,6 +63,9 @@ is_ip_key_empty() {
 update_ip_value() {
 	key="$1"
 	value="$2"
+	# empty = every line, which is what this function means; without the local an unrelated
+	# caller's global $str_number would silently narrow the sed to one line
+	local str_number=""
 	conf="$CONF_DIR/ips/$ip"
 	# See is_ip_key_empty: source_conf instead of eval-ing the file content as bash.
 	[ -e "$conf" ] && source_conf "$conf"
@@ -98,7 +101,7 @@ get_ip_alias() {
 
 # Increase ip value
 increase_ip_value() {
-	sip=${1-ip}
+	sip=${1-$ip}
 	USER=${2-$user}
 	web_key='U_WEB_DOMAINS'
 	usr_key='U_SYS_USERS'
@@ -135,7 +138,7 @@ increase_ip_value() {
 
 # Decrease ip value
 decrease_ip_value() {
-	sip=${1-ip}
+	sip=${1-$ip}
 	local user=${2-$user}
 	web_key='U_WEB_DOMAINS'
 	usr_key='U_SYS_USERS'
@@ -148,7 +151,12 @@ decrease_ip_value() {
 	fi
 
 	new_web=$((current_web - 1))
-	check_ip=$(grep $sip $USER_DATA/web.conf | wc -l)
+	# Exact field matches, both spellings, both families - the unanchored substring grep
+	# was the get_user_ips disease (2001:db8::1 sits inside 2001:db8::10), and on a NAT
+	# box it counted 0 against the local spelling, evicting users still on the address.
+	local nat_addr
+	nat_addr=$(grep "^NAT=" $CONF_DIR/ips/$sip 2> /dev/null | cut -f 2 -d \')
+	check_ip=$(grep -c -e "IP='$sip'" -e "IP6='$sip'" ${nat_addr:+-e "IP='$nat_addr'"} $USER_DATA/web.conf 2> /dev/null)
 	if [[ $check_ip = 0 ]]; then
 		new_usr=$(echo "$current_usr" \
 			| sed "s/,/\n/g" \
@@ -235,21 +243,25 @@ get_broadcast() {
 # Cut at the literal ':KEY='/'-KEY=' boundary, never at the first colon: a v6 filename carries
 # colons, and the old cut/REGEX_IPV4 pair made every v6 IP object invisible to every consumer.
 get_user_ips() {
-	local family="$1" dedicated shared dedicated_ip list _i
-	dedicated=$(grep -H "OWNER='$user'" $CONF_DIR/ips/* 2> /dev/null | sed "s|:OWNER=.*||; s|^$CONF_DIR/ips/||")
-	shared=$(grep -H -A1 "OWNER='$ROOT_USER'" $CONF_DIR/ips/* 2> /dev/null | grep shared | sed "s|-STATUS=.*||; s|^$CONF_DIR/ips/||")
-	for dedicated_ip in $dedicated; do
-		# -vx: unanchored, 10.0.0.1 also swallowed 10.0.0.10 from the shared list
-		shared=$(echo "$shared" | grep -vx "$dedicated_ip")
+	# Per-file, per-key reads - never grep -A1: that hung the shared detection on the KEY
+	# ORDER inside the record while every other reader of the same format goes by content,
+	# and the fragile one decided which addresses a customer sees at all.
+	local family="$1" f addr f_owner f_status
+	for f in "$CONF_DIR"/ips/*; do
+		[ -f "$f" ] || continue
+		addr=${f##*/}
+		if [ -n "$family" ] && [ "$(ip_family "$addr")" != "$family" ]; then
+			continue
+		fi
+		f_owner=$(grep -m1 "^OWNER=" "$f" | cut -f 2 -d \')
+		if [ "$f_owner" = "$user" ]; then
+			echo "$addr"
+		elif [ "$f_owner" = "$ROOT_USER" ]; then
+			f_status=$(grep -m1 "^STATUS=" "$f" | cut -f 2 -d \')
+			[ "$f_status" = 'shared' ] && echo "$addr"
+		fi
 	done
-	list=$(echo -e "$dedicated\n$shared" | sed "/^$/d")
-	if [ -n "$family" ]; then
-		while read -r _i; do
-			[ "$(ip_family "$_i")" = "$family" ] && echo "$_i"
-		done <<< "$list"
-		return 0
-	fi
-	echo "$list"
+	return 0
 }
 
 # Get user ip - v4 preferred so a v4-only or dual-stack box behaves exactly as before;

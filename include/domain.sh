@@ -480,7 +480,12 @@ add_web_config() {
 	# the ssl/alias/tpl/suspend commands re-render without thinking about families, and one
 	# of them silently dropped the v6 listens on its next render. A caller that SET the
 	# variable - even to empty (vanished object, rebuild's soft path) - wins over the record.
+	# local_ip6 lives PROCESS-WIDE (no local, deliberately - the caller contract needs it),
+	# so a DERIVED value is unset again at the end: without that, the first domain's v6
+	# would stick to every later render in the same process.
+	local _derived_ip6=0
 	if [ -z "${local_ip6+x}" ]; then
+		_derived_ip6=1
 		local_ip6=''
 		if [ -n "$IP6" ] && [ -e "$CONF_DIR/ips/$IP6" ]; then
 			local_ip6="$IP6"
@@ -570,6 +575,8 @@ add_web_config() {
 			$user $domain $local_ip $HOMEDIR \
 			$HOMEDIR/$user/web/$domain/public_html
 	fi
+	[ "$_derived_ip6" = 1 ] && unset -v local_ip6
+	return 0
 }
 
 get_web_config_lines() {
@@ -760,9 +767,8 @@ is_web_domain_cert_valid() {
 		check_result "$E_FORBIDEN" "SSL Key is protected (remove pass_phrase)"
 	fi
 
-	if pgrep -x "openssl" > /dev/null; then
-		pkill openssl
-	fi
+	# No pkill openssl: that reaped EVERY openssl on the box (a running backup, a cron
+	# job); the only process this line ever meant is our own $pid, killed just below.
 
 	openssl s_server -quiet -cert $ssl_dir/$domain.crt \
 		-key $ssl_dir/$domain.key >> /dev/null 2>&1 &
@@ -991,7 +997,10 @@ add_webmail_config() {
 
 	# Same derivation guard as add_web_config: webmail re-renderers (mail-ssl and friends)
 	# never resolve a v6; take the web domain's IP6, else the default v6, else none.
+	# Derived values are unset at the end (process-wide variable, see add_web_config).
+	local _derived_ip6=0
 	if [ -z "${local_ip6+x}" ]; then
+		_derived_ip6=1
 		local_ip6=$(get_object_value 'web' 'DOMAIN' "$domain" '$IP6')
 		if [ -z "$local_ip6" ] && get_user_ip6; then
 			local_ip6="$ip6"
@@ -1023,10 +1032,9 @@ add_webmail_config() {
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 		fi
-		if [ -n "$PROXY_SYSTEM" ]; then
-			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
-			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
-		fi
+		# No second proxy link block: it re-linked the SAME path under /etc/$1/ (its
+		# condition read $PROXY_SYSTEM, its body did not) - the proxy side gets its own
+		# add_webmail_config call with $1=$PROXY_SYSTEM at every call site.
 
 		# The forcessl file carries ITS OWN owner, independent of $1: the templates
 		# include it by the name %web_system% renders to - the proxy where one
@@ -1049,13 +1057,12 @@ add_webmail_config() {
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
 		fi
-		if [ -n "$PROXY_SYSTEM" ]; then
-			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
-			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
-		fi
+		# See the ssl branch: the former proxy block linked the same path twice.
 		# Clear old configurations
 		find $HOMEDIR/$user/conf/mail/ -maxdepth 1 -type f \( -name "$domain.*" \) -exec rm {} \;
 	fi
+	[ "$_derived_ip6" = 1 ] && unset -v local_ip6
+	return 0
 }
 
 del_webmail_config() {
