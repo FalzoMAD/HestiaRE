@@ -12,6 +12,23 @@ opens above it.
 
 ## Unreleased
 
+### Added
+
+- **The IP object layer speaks IPv6** (#889, part of #602). `h-add-sys-ip` takes a v6
+  address with a prefix length, canonicalises it to the RFC-5952 spelling at entry (so
+  `2001:0db8::1` and `2001:db8::1` can never become two objects), refuses a NAT
+  association by name (NAT is a v4 concept, the resolvers pass v6 through untouched),
+  and writes the interface config per family. `get_user_ips` was rewritten colon-safe
+  and family-aware - the old first-colon cut plus v4 regex made every v6 object
+  invisible to every consumer - with `get_user_ip` still preferring v4 so existing
+  boxes behave unchanged, and `get_user_ip6` new. `h-update-sys-ip` discovers global
+  v6 addresses (real prefix length from `ip -j`, privacy/deprecated addresses skipped)
+  and no longer aborts the NIC scan at the first bridge or v4-less interface. Deleting
+  a v6 guards against lockout, not position: refused only when it is the last global
+  v6 and no v4 default ROUTE exists (a routeless CGN address does not count - measured
+  on a real v6-only box). v6 objects get NO web config yet; the renderer learns
+  bracketed listen lines in stage 2 (#890).
+
 ### Fixed
 
 - **A v6 panel login is now logged - and every failure class is bannable** (#888, part of
