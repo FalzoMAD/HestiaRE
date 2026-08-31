@@ -11,7 +11,9 @@
 #----------------------------------------------------------#
 
 # Argument definition
-ip="$1"
+# ip46 for the format dispatch; global $ip aliased for the sourced ip.sh helpers
+ip46="$1"
+ip="$ip46"
 user="$2"
 
 # shellcheck source=/etc/hestia/hestia.env
@@ -28,7 +30,11 @@ source_conf "$HESTIA/conf/hestia.conf"
 #----------------------------------------------------------#
 
 check_args '2' "$#" 'IP USER'
-is_format_valid 'ip' 'user'
+is_format_valid 'ip46' 'user'
+if [ "$(ip_family "$ip46")" = 6 ]; then
+	ip46=$(ip6_canonical "$ip46")
+	ip="$ip46"
+fi
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 is_ip_valid "$ip"

@@ -72,12 +72,14 @@
 				</label>
 				<input type="text" class="form-control" name="v_name" id="v_name" value="<?= tohtml(trim($v_name, "'")) ?>">
 			</div>
+			<?php if (!str_contains(trim($v_ip, "'"), ":")) { /* NAT is a v4 concept; the CLI refuses it for v6 */ ?>
 			<div class="u-mb10">
 				<label for="v_nat" class="form-label">
 					<?= tohtml(_("NAT IP Association")) ?> <span class="optional">(<?= tohtml(_("Optional")) ?>)</span>
 				</label>
 				<input type="text" class="form-control" name="v_nat" id="v_nat" value="<?= tohtml(trim($v_nat, "'")) ?>">
 			</div>
+			<?php } ?>
 		</div>
 
 	</form>

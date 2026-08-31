@@ -11,7 +11,9 @@
 #----------------------------------------------------------#
 
 # Argument definition
-ip="$1"
+# ip46 for the format dispatch; global $ip aliased for the sourced ip.sh helpers
+ip46="$1"
+ip="$ip46"
 format="${2-shell}"
 
 # Includes
@@ -69,7 +71,11 @@ plain_list() {
 #----------------------------------------------------------#
 
 check_args '1' "$#" 'IP [FORMAT]'
-is_format_valid 'ip'
+is_format_valid 'ip46'
+if [ "$(ip_family "$ip46")" = 6 ]; then
+	ip46=$(ip6_canonical "$ip46")
+	ip="$ip46"
+fi
 if [ ! -e "$CONF_DIR/ips/$ip" ]; then
 	check_result $E_NOTEXIST "IP $ip doesn't exist"
 fi

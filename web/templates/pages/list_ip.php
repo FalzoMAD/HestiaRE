@@ -80,7 +80,7 @@
 				++$i;
 				?>
 			<div class="units-table-row js-unit"
-				data-sort-ip="<?= tohtml(str_replace(".", "", $key)) ?>"
+				data-sort-ip="<?= tohtml(str_replace([".", ":"], "", $key)) ?>"
 				data-sort-date="<?= tohtml(strtotime($data[$key]["DATE"] . " " . $data[$key]["TIME"])) ?>"
 				data-sort-netmask="<?= tohtml(str_replace(".", "", $data[$key]["NETMASK"])) ?>"
 				data-sort-interface="<?= tohtml($data[$key]["INTERFACE"]) ?>"

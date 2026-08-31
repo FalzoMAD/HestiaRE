@@ -30,6 +30,11 @@ source_conf "$HESTIA/conf/hestia.conf"
 #----------------------------------------------------------#
 
 check_args '2' "$#" 'IP NAT_IP [RESTART]'
+# NAT stays a v4 concept: a v6 object never carries one, and the v6 path in
+# get_real_ip/get_user_ip is a passthrough precisely because of that
+if [ "$(ip_family "$ip")" = 6 ]; then
+	check_result "$E_INVALID" "NAT is an IPv4 concept - a v6 IP object cannot carry a NAT address"
+fi
 is_format_valid 'ip'
 is_format_valid 'nat_ip'
 is_ip_valid "$ip"

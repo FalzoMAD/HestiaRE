@@ -84,7 +84,7 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Change NAT address
-	if ($v_nat != $_POST["v_nat"] && empty($_SESSION["error_msg"])) {
+	if (isset($_POST["v_nat"]) && $v_nat != $_POST["v_nat"] && empty($_SESSION["error_msg"])) {
 		$v_nat = quoteshellarg($_POST["v_nat"]);
 		exec(HESTIA_CMD . "h-change-sys-ip-nat " . $v_ip . " " . $v_nat, $output, $return_var);
 		check_return_code($return_var, $output);

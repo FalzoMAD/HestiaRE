@@ -63,7 +63,7 @@ is_domain_new 'mail' "$domain_utf"
 is_domain_new 'mail' "$domain_idn"
 # by exit code, not by output: the validator only prints on failure, so reading its output
 # inverts the check the moment it writes to stderr instead
-if (is_ip_format_valid "$domain") > /dev/null 2>&1; then
+if (is_ip46_format_valid "$domain") > /dev/null 2>&1; then
 	echo "Error: Invalid domain format. IP address detected as input."
 	exit 1
 fi
