@@ -62,7 +62,7 @@ check_args '2' "$#" 'IP NETMASK [INTERFACE] [USER] [STATUS] [NAME] [NATED_IP]'
 is_format_valid 'ip46' 'iface' 'user' 'ip_status'
 family=$(ip_family "$ip46")
 if [ "$family" = 6 ]; then
-	ip46=$(ip6_canonical "$ip46")
+	ip46=$(ip6_canonical "$ip46") || check_result "$E_INVALID" "cannot canonicalise the v6 address - the panel php backend did not answer"
 	ip="$ip46"
 	# NETMASK carries the prefix length for v6; a dotted netmask has no v6 meaning
 	if ! [[ "$netmask" =~ ^[0-9]{1,3}$ ]] || [ "$netmask" -gt 128 ]; then

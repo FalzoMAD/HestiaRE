@@ -33,7 +33,7 @@ source_conf "$HESTIA/conf/hestia.conf"
 check_args '2' "$#" 'IP IP_STATUS'
 is_format_valid 'ip46' 'ip_status'
 if [ "$(ip_family "$ip46")" = 6 ]; then
-	ip46=$(ip6_canonical "$ip46")
+	ip46=$(ip6_canonical "$ip46") || check_result "$E_INVALID" "cannot canonicalise the v6 address - the panel php backend did not answer"
 	ip="$ip46"
 fi
 is_ip_valid "$ip"

@@ -82,7 +82,7 @@
 			<div class="units-table-row js-unit"
 				data-sort-ip="<?= tohtml(str_replace([".", ":"], "", $key)) ?>"
 				data-sort-date="<?= tohtml(strtotime($data[$key]["DATE"] . " " . $data[$key]["TIME"])) ?>"
-				data-sort-netmask="<?= tohtml(str_replace(".", "", $data[$key]["NETMASK"])) ?>"
+				data-sort-netmask="<?= tohtml(str_contains($data[$key]["NETMASK"], ".") ? array_sum(array_map(fn($o) => substr_count(decbin((int) $o), "1"), explode(".", $data[$key]["NETMASK"]))) : (int) $data[$key]["NETMASK"]) ?>"
 				data-sort-interface="<?= tohtml($data[$key]["INTERFACE"]) ?>"
 				data-sort-domains="<?= tohtml($data[$key]["U_WEB_DOMAINS"]) ?>"
 				data-sort-owner="<?= tohtml($data[$key]["OWNER"]) ?>">

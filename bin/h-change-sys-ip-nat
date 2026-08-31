@@ -11,7 +11,9 @@
 #----------------------------------------------------------#
 
 # Argument definition
-ip="$1"
+# ip46 for the format dispatch; global $ip aliased for the sourced ip.sh helpers
+ip46="$1"
+ip="$ip46"
 nat_ip="$2"
 restart="$3"
 
@@ -30,12 +32,14 @@ source_conf "$HESTIA/conf/hestia.conf"
 #----------------------------------------------------------#
 
 check_args '2' "$#" 'IP NAT_IP [RESTART]'
+# Validate BEFORE classifying: ip_family on raw input calls anything with a colon a 6,
+# so foo:bar would earn the NAT message instead of "invalid" (review round, stage 1).
+is_format_valid 'ip46'
 # NAT stays a v4 concept: a v6 object never carries one, and the v6 path in
 # get_real_ip/get_user_ip is a passthrough precisely because of that
-if [ "$(ip_family "$ip")" = 6 ]; then
+if [ "$(ip_family "$ip46")" = 6 ]; then
 	check_result "$E_INVALID" "NAT is an IPv4 concept - a v6 IP object cannot carry a NAT address"
 fi
-is_format_valid 'ip'
 is_format_valid 'nat_ip'
 is_ip_valid "$ip"
 is_restart_format_valid "$restart"

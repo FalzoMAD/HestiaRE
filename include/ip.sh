@@ -22,11 +22,22 @@ ip_family() {
 # RFC-5952 canonical spelling (what `ip -j` prints). Runs at the ENTRY of every writing
 # command: without it 2001:0db8::1 and 2001:db8::1 become two objects for one address and
 # counters, firewall and deletion drift apart. Non-v6 input passes through untouched -
-# rejection stays with the format validators.
+# rejection stays with the format validators. A v6 input where the php backend does not
+# answer returns rc 1 with NO output: a silent fallback to the raw spelling would store
+# exactly the double object this function exists to prevent, and the installer runs the
+# callers on a half-built box - the failure must be loud there, not invisible.
 ip6_canonical() {
 	local out
+	case "$1" in
+		*:*) ;;
+		*)
+			echo "$1"
+			return 0
+			;;
+	esac
 	out=$($HESTIA_PHP -r '$b = @inet_pton($argv[1]); echo $b === false || strlen($b) !== 16 ? $argv[1] : inet_ntop($b);' "$1" 2> /dev/null)
-	echo "${out:-$1}"
+	[ -n "$out" ] || return 1
+	echo "$out"
 }
 
 # Check ip ownership
