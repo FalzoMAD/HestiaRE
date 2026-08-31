@@ -134,7 +134,10 @@ if [[ "$MAIL_SYSTEM" =~ exim ]]; then
 	if [ -n "$local_ip" ]; then
 		echo "$local_ip" > $HOMEDIR/$user/conf/mail/$domain/ip
 	fi
-	# The v6 twin, same derivation as the webmail vhost: web domain's IP6, else default v6
+	# The v6 twin, same derivation as the webmail vhost: web domain's IP6, else default v6.
+	# Unconditional like the v4 line above ON PURPOSE: domain-level relay cannot exist yet
+	# at add time (it arrives via h-add-mail-domain-smtp-relay, which removes BOTH pins);
+	# the rebuild's U_SMTP_RELAY guard covers the configured state.
 	local_ip6=$(get_object_value 'web' 'DOMAIN' "$domain" '$IP6' 2> /dev/null)
 	if [ -z "$local_ip6" ] && get_user_ip6; then
 		local_ip6="$ip6"

@@ -768,25 +768,34 @@ check_mail_family_lage() {
 # fails at definition. Caught live once (OUTGOING_IPV6 over OUTGOING_IP); this closes the
 # class for the installed template instead of waiting for the next collision.
 check_exim_macro_names() {
-	local tpl=/etc/exim4/exim4.conf.template names n1 n2 count=0
+	local tpl=/etc/exim4/exim4.conf.template names n1 n2 count found=''
 	if [ ! -f "$tpl" ] || ! grep -q "HestiaRE\|OUTGOING_IP" "$tpl" 2> /dev/null; then
 		skip "exim macro names: no hestia template on this box"
 		return
 	fi
 	names=$(grep -oE '^[A-Z][A-Z0-9_]+ *=' "$tpl" | sed 's/ *=$//')
-	count=$(echo "$names" | grep -c "")
+	# grep -c . not -c "": an empty list must count 0, not claim one checked name
+	count=$(echo "$names" | grep -c .)
+	if [ "$count" = 0 ]; then
+		no "exim macro names: derivation found no macros" \
+			"the check would measure nothing - template layout changed under it"
+		return
+	fi
+	# ALL collisions in one pass: reporting only the first hides the second until the
+	# first is fixed, and the fix for one is how the next one gets typed
 	while read -r n1; do
 		while read -r n2; do
 			[ "$n1" = "$n2" ] && continue
 			case "$n2" in
-				*"$n1"*)
-					no "exim macro name $n2 contains earlier macro $n1" \
-						"exim refuses the definition - rename one of them"
-					return
-					;;
+				*"$n1"*) found="${found:+$found, }$n2>$n1" ;;
 			esac
 		done <<< "$(echo "$names" | grep -A999 -Fx "$n1" | tail -n +2)"
 	done <<< "$names"
+	if [ -n "$found" ]; then
+		no "exim macro name(s) contain an earlier macro: $found" \
+			"exim refuses such definitions - rename them"
+		return
+	fi
 	ok "exim macro names: no name contains an earlier one ($count checked)"
 }
 
@@ -804,7 +813,17 @@ check_exim_interface_expansion() {
 		skip "exim interface expansion: no hestia template on this box"
 		return
 	fi
-	expr=$(grep -m1 '^  interface = ' "$tpl" | sed 's/^  interface = //')
+	# The expression lives TWICE (remote_smtp and remote_forwarded_smtp) - the classic
+	# two-homes lage. Expanding one is only valid while both are identical, so that
+	# identity is part of the check, not an assumption.
+	local iface_lines
+	iface_lines=$(grep '^  interface = ' "$tpl")
+	if [ "$(echo "$iface_lines" | grep -c .)" != 2 ] || [ "$(echo "$iface_lines" | sort -u | grep -c .)" != 1 ]; then
+		no "exim interface lines diverged or changed count ($(echo "$iface_lines" | grep -c .) found)" \
+			"remote_smtp and remote_forwarded_smtp must carry the SAME line - one drifted"
+		return
+	fi
+	expr=$(echo "$iface_lines" | head -1 | sed 's/^  interface = //')
 	m4=$(sed -n 's/^OUTGOING_IP = //p' "$tpl" | head -1)
 	m6=$(sed -n 's/^OUTGOING6_IP = //p' "$tpl" | head -1)
 	if [ -z "$expr" ] || [ -z "$m4" ] || [ -z "$m6" ]; then
