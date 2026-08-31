@@ -119,6 +119,18 @@ fi
 # Deleting Hestia IP
 rm -f $CONF_DIR/ips/$ip
 
+# Removing mail source pins that name this address (both families). The pin counts in no
+# counter - is_ip_key_empty guards web domains only - and exim reads the file LIVE at send
+# time: left behind, the transport binds an address the box no longer has, silently, until
+# the next rebuild that nobody runs. An absent file simply means "no pin", so rm is the
+# whole soft path here.
+for _pin in "$HOMEDIR"/*/conf/mail/*/ip "$HOMEDIR"/*/conf/mail/*/ipv6; do
+	[ -f "$_pin" ] || continue
+	if [ "$(cat "$_pin" 2> /dev/null)" = "$ip" ]; then
+		rm -f "$_pin"
+	fi
+done
+
 # Deleting web config (front fallback #193: the mailfront ip.conf lives there too)
 ws="$WEB_SYSTEM"
 [ -z "$ws" ] && ws=$(webmail_front)

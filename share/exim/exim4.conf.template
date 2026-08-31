@@ -529,6 +529,9 @@ smtp_relay_smtp:
   hosts_require_auth = $host_address
   hosts_require_tls = $host_address
 
+# interface builds one of four shapes and NEVER an empty list element: "" as an element
+# is a hard transport error ("not a valid IP address", measured - every mail whose sender
+# domain has no pin files deferred), an entirely empty result just unsets the option.
 remote_smtp:
   driver = smtp
   helo_data = ${lookup dnsdb{>: defer_never,ptr=$sending_ip_address}{${listextract{1}{$value}}}{$primary_hostname}}
@@ -538,7 +541,7 @@ remote_smtp:
   dkim_canon = relaxed
   dkim_strict = 0
   hosts_try_fastopen = !*.l.google.com
-  interface = <; ${if exists{OUTGOING_IP}{${readfile{OUTGOING_IP}{}}}} ; ${if exists{OUTGOING6_IP}{${readfile{OUTGOING6_IP}{}}}}
+  interface = ${if exists{OUTGOING_IP}{${if exists{OUTGOING6_IP}{<; ${readfile{OUTGOING_IP}{}} ; ${readfile{OUTGOING6_IP}{}}}{<; ${readfile{OUTGOING_IP}{}}}}}{${if exists{OUTGOING6_IP}{<; ${readfile{OUTGOING6_IP}{}}}{}}}}
 
 remote_forwarded_smtp:
   driver = smtp
@@ -549,7 +552,7 @@ remote_forwarded_smtp:
   dkim_canon = relaxed
   dkim_strict = 0
   hosts_try_fastopen = !*.l.google.com
-  interface = <; ${if exists{OUTGOING_IP}{${readfile{OUTGOING_IP}{}}}} ; ${if exists{OUTGOING6_IP}{${readfile{OUTGOING6_IP}{}}}}
+  interface = ${if exists{OUTGOING_IP}{${if exists{OUTGOING6_IP}{<; ${readfile{OUTGOING_IP}{}} ; ${readfile{OUTGOING6_IP}{}}}{<; ${readfile{OUTGOING_IP}{}}}}}{${if exists{OUTGOING6_IP}{<; ${readfile{OUTGOING6_IP}{}}}{}}}}
   # modify the envelope from, for mails that we forward
   max_rcpt = 1
   return_path = ${srs_encode {SRS_SECRET} {$return_path} {$original_domain}}

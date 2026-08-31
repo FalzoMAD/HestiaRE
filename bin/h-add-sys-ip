@@ -101,6 +101,13 @@ if [ -z "$sys_ip_check" ]; then
 	# Adding system IP (v6 knows neither broadcast nor alias labels)
 	if [ "$family" = 6 ]; then
 		ip -6 addr add "$ip/$cidr" dev "$iface"
+		# DAD: the fresh address is tentative for a moment, and a bind() during that window
+		# fails with EADDRNOTAVAIL - the web restart below raced exactly that (nginx emerg
+		# on the very first v6 per-IP config, measured). Wait it out, bounded.
+		for _i in $(seq 1 10); do
+			ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"tentative"' || break
+			sleep 0.5
+		done
 	else
 		ip addr add "$ip/$cidr" dev "$iface" broadcast "$broadcast" label "$iface"
 	fi
