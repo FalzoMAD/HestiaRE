@@ -1223,7 +1223,14 @@ configure_exim_sendonly() {
 		return 0
 	fi
 	sed -i "s/^dc_eximconfig_configtype=.*/dc_eximconfig_configtype='internet'/" "$c"
-	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='127.0.0.1 ; ::1'/" "$c"
+	# Loopback list DERIVED from the kernel, not hardcoded: with the stock template a listed
+	# ::1 on an ipv6.disable=1 kernel kills the daemon outright ("IPv6 socket creation
+	# failed", measured on deb13) - every send-only box with v6 off had a dead exim since
+	# the list gained ::1. The full hestia template survives either way; this is the
+	# send-only path's own trap.
+	local lo_ifaces='127.0.0.1'
+	[ -e /proc/net/if_inet6 ] && lo_ifaces='127.0.0.1 ; ::1'
+	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='$lo_ifaces'/" "$c"
 	# Set, not inherited: this is what makes root@<hostname> local instead of a DNS lookup that
 	# hands the box's own cron mail to whatever host answers for the name.
 	sed -i "s/^dc_other_hostnames=.*/dc_other_hostnames='${HESTIA_HOSTNAME}'/" "$c"
@@ -1231,7 +1238,7 @@ configure_exim_sendonly() {
 	# really carry the values and the regeneration succeeded - a silent sed miss or
 	# a failed update-exim4.conf must not leave a false "configured" behind
 	if grep -q "^dc_eximconfig_configtype='internet'" "$c" \
-		&& grep -q "^dc_local_interfaces='127.0.0.1 ; ::1'" "$c" \
+		&& grep -q "^dc_local_interfaces='$lo_ifaces'" "$c" \
 		&& update-exim4.conf 2> /dev/null; then
 		systemctl restart exim4 2> /dev/null || true
 		echo "[ * ] Exim configured send-only (outbound delivery on, loopback listeners)"
