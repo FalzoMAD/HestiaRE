@@ -14,6 +14,25 @@ opens above it.
 
 ### Added
 
+- **The web renderer speaks both families** (#890, part of #602). Four independently
+  maintained sed substitution chains became ONE engine (`web_render_template`), proven
+  byte-identical on a populated box before any semantic change. The engine's family
+  rules: `%ip6%` substitutes raw with brackets as template text (`listen [%ip6%]:443`),
+  a repeatable line whose family placeholder has no value is deleted before substitution,
+  and structural lines resolve instead - apache's `<VirtualHost>` renders `%vhost%` with
+  every configured family in one tag, the nginx-to-backend hop targets `%backend_addr%`.
+  Domains carry the v6 in `IP6`: new domains auto-assign the default v6, existing ones
+  adopt it on their next rebuild (deliberately no migration run - the mixed state is a
+  named decision), `h-change-web-domain-ip6` switches between v6 addresses (no per-domain
+  opt-out: rebuild would re-adopt into an emptied field; "no v6" is a box-level call).
+  Restore remaps a foreign `IP6` like it remaps `IP`; HTTP/3 emits one quic listen per
+  family; the panel splits its selects per family; the Let's Encrypt preflight accepts
+  AAAA-only names and lost its bare-1.1.1.1 fallback; the mail DNS page suggests A, AAAA
+  and a family-matched SPF. The apache catch-all needed its own name token - a bracketed
+  literal is an invalid ServerName - and `local_ip6` derives inside the renderer because
+  fifteen re-render commands never resolve addresses themselves (found live: the LE path
+  silently dropped the v6 listens on its next render).
+
 - **The IP object layer speaks IPv6** (#889, part of #602). `h-add-sys-ip` takes a v6
   address with a prefix length, canonicalises it to the RFC-5952 spelling at entry (so
   `2001:0db8::1` and `2001:db8::1` can never become two objects), refuses a NAT
