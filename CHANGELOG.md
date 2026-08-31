@@ -37,7 +37,9 @@ opens above it.
   read the ips DIRECTORY when the slot was empty), and the panel, where the v4 select renders per
   family and an unoffered control keeps its stored value instead of reading as cleared.
   `h-add-web-domain` accepts a v6 in the ip argument and sorts it into `IP6`, which is how the
-  installer's own default domain works on a box whose only address is a v6.
+  installer's own default domain works on a box whose only address is a v6. Both bootstrap paths
+  also compare the extracted tree's VERSION against the tag they asked for: a mirror can cache or
+  answer with the wrong asset, and on a v6-only box there is no second opinion to catch it.
   Measured on a real v6-only box (no v4 route, github unreachable, `curl` exit 7 as the control):
   bootstrap over the mirror end to end, then a full `nomail` install; on the dual-stack box the
   v6-only domain shape end to end - record `IP='' IP6='...'`, only the bracketed listen line,
@@ -102,6 +104,16 @@ opens above it.
   bracketed listen lines in stage 2 (#890).
 
 ### Fixed
+
+- **An installer re-run no longer empties `hestia.conf`** (found while installing a v6-only box,
+  not v6-specific). `seed_hestia_etc` truncated the file on every start of `install.sh`, while a
+  completed stage skips - so the second run left the box with only the keys of the stages that had
+  NOT finished yet: no `WEB_SYSTEM` on a box with a web server, every web command answering "not
+  enabled", and the panel's Let's Encrypt request refused for the same reason. The installer's own
+  error path invites exactly that re-run ("install the package and re-run the installer"). The seed
+  now adds missing keys only, and just the VERSION follows the tree. Second find from the same run:
+  `ip route get 8.8.8.8` exits 2 where there is no v4 route, and under `set -eo pipefail` that
+  aborted the installer one line before its summary - every probe absorbs its own failure now.
 
 - **A v6 panel login is now logged - and every failure class is bannable** (#888, part of
   the IPv6 groundwork #602). `h-log-user-login` validated its address as IPv4-only, so no
