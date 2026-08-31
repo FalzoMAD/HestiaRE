@@ -95,6 +95,14 @@ else
 fi
 tar -xzf /tmp/hestiare-update.tar.gz -C /tmp
 rm -f /tmp/hestiare-update.tar.gz
+# Same bar as install.sh: a mirror can cache or hand back the wrong asset, and the tree that
+# is about to overwrite a running panel has to carry the version that was asked for.
+GOT=$(cat "/tmp/hestiare-$LATEST/VERSION" 2> /dev/null || echo "")
+if [ "${GOT#v}" != "${LATEST#v}" ]; then
+	echo "ERROR: fetched release is not $LATEST (tree says '${GOT:-nothing}'). Nothing was changed." >&2
+	rm -rf "/tmp/hestiare-$LATEST"
+	exit 1
+fi
 # Stop the panel around the copy so in-use files are not clobbered.
 systemctl stop caddy hestia-php 2> /dev/null || true
 cp -r "/tmp/hestiare-$LATEST/." "$HESTIA/"

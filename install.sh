@@ -214,6 +214,14 @@ _fetch_release() {
 	fi
 	tar -xzf /tmp/hestiare.tar.gz -C /tmp
 	rm /tmp/hestiare.tar.gz
+	# A mirror can cache or hand back the wrong asset, and on a v6-only box there is no second
+	# opinion: the extracted tree has to carry the version that was asked for.
+	_got=$(cat "/tmp/hestiare-${latest}/VERSION" 2> /dev/null || echo "")
+	if [ "${_got#v}" != "${latest#v}" ]; then
+		echo "ERROR: fetched release is not ${latest} (tree says '${_got:-nothing}')." >&2
+		rm -rf "/tmp/hestiare-${latest}"
+		exit 1
+	fi
 	mkdir -p "${INSTALL_DIR}"
 	cp -r /tmp/hestiare-${latest}/. "${INSTALL_DIR}/"
 	rm -rf /tmp/hestiare-${latest}
