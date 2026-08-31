@@ -84,7 +84,7 @@
 				<label for="v_ip" class="form-label"><?= tohtml(_("IP Address")) ?></label>
 				<select class="form-select" name="v_ip" id="v_ip">
 					<?php
-									foreach ($ips as $ip => $value) {
+									foreach ($ips_v4 as $ip => $value) {
 										$display_ip = htmlentities(empty($value['NAT']) ? $ip : "{$value['NAT']}");
 										$ip_selected = ((!empty($v_ip) && $ip == $v_ip) || $v_ip == "'{$ip}'") ? 'selected' : '';
 										echo "\n\t\t\t\t\t\t\t\t\t\t\t\t<option value=\"{$ip}\" {$ip_selected}>{$display_ip}</option>\n";
@@ -92,6 +92,19 @@
 				?>
 				</select>
 			</div>
+			<?php if (!empty($ips_v6)) { ?>
+			<div class="u-mb20">
+				<label for="v_ip6" class="form-label"><?= tohtml(_("IPv6 Address")) ?></label>
+				<select class="form-select" name="v_ip6" id="v_ip6">
+					<?php
+					foreach ($ips_v6 as $ip => $value) {
+						$ip_selected = !empty($v_ip6) && ($ip == $v_ip6 || $v_ip6 == "'{$ip}'") ? "selected" : "";
+						echo "\n\t\t\t\t\t<option value=\"" . htmlentities($ip) . "\" {$ip_selected}>" . htmlentities($ip) . "</option>\n";
+					}
+					?>
+				</select>
+			</div>
+			<?php } ?>
 			<div class="form-check u-mb10">
 				<input class="form-check-input" type="checkbox" name="v_offline_check" id="v_offline_check" <?php if ($v_offline == "yes") {
 					echo "checked";

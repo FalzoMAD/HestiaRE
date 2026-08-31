@@ -167,18 +167,12 @@ TIME='$time'
 DATE='$date'" > $CONF_DIR/ips/$ip
 chmod 660 $CONF_DIR/ips/$ip
 
-# WEB support. v6 gets NO per-IP web config yet: the renderer learns bracketed v6 listen
-# lines in stage 2 (#890) - writing one now hands nginx/apache an unbracketed listen and
-# fails the very next reload. The IP object exists; the web wiring follows.
-if [ "$family" = 6 ]; then
-	PROXY_SYSTEM_SKIP_V6="yes"
-else
-	rebuild_ip_web_config "$ip"
-fi
+# WEB support (both families since #890: the renderer brackets v6 itself)
+rebuild_ip_web_config "$ip"
 
 # Proxy real-IP module registration (dormant unless the conf exists). The per-IP
 # web/proxy config generation moved into rebuild_ip_web_config (include/web-model.sh, #120).
-if [ -n "$PROXY_SYSTEM" ] && [ -z "$PROXY_SYSTEM_SKIP_V6" ]; then
+if [ -n "$PROXY_SYSTEM" ]; then
 	# mod_extract_forwarded
 	fw_conf="/etc/$WEB_SYSTEM/conf.d/mod_extract_forwarded.conf"
 	if [ -e "$fw_conf" ]; then
@@ -223,15 +217,14 @@ else
 	increase_user_value $ROOT_USER '$IP_AVAIL'
 fi
 
-# Restarting web server (nothing was rendered for a v6 in stage 1, so nothing to restart)
-if [ "$family" != 6 ]; then
-	$BIN/h-restart-web
-	check_result $? "Web restart failed" > /dev/null
+# Restarting web server
+$BIN/h-restart-web
+check_result $? "Web restart failed" > /dev/null
 
-	if [ -n "$PROXY_SYSTEM" ]; then
-		$BIN/h-restart-proxy
-		check_result $? "Proxy restart failed" > /dev/null
-	fi
+# Restarting proxy server
+if [ -n "$PROXY_SYSTEM" ]; then
+	$BIN/h-restart-proxy
+	check_result $? "Proxy restart failed" > /dev/null
 fi
 
 # Restarting firewall

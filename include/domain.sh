@@ -475,8 +475,10 @@ add_web_config() {
 	# Divergent values for the engine; everything else reads this scope
 	local _r_ip="$local_ip" _r_ip6="$local_ip6" _r_domain="$domain" _r_domain_idn="$domain_idn" \
 		_r_root_domain="$domain" _r_alias="${aliases//,/ }" _r_alias_idn="${aliases_idn//,/ }" \
-		_r_web_system="$WEB_SYSTEM" _r_vhost="$(web_vhost_addrs "$WEB_PORT")" \
-		_r_vhost_ssl="$(web_vhost_addrs "$WEB_SSL_PORT")" _r_backend_addr="$(web_backend_addr)"
+		_r_web_system="$WEB_SYSTEM" _r_vhost _r_vhost_ssl _r_backend_addr
+	_r_vhost="$(web_vhost_addrs "$WEB_PORT")"
+	_r_vhost_ssl="$(web_vhost_addrs "$WEB_SSL_PORT")"
+	_r_backend_addr="$(web_backend_addr)"
 	{
 		if [ "$web_tpl_merged" = 1 ]; then
 			if [ "$SSL" = 'yes' ]; then
@@ -969,8 +971,10 @@ add_webmail_config() {
 	# Divergent values: %domain% is the webmail alias, %web_system% the front
 	local _r_ip="$local_ip" _r_ip6="$local_ip6" _r_domain="$WEBMAIL_ALIAS.$domain" _r_domain_idn="$WEBMAIL_ALIAS.$domain_idn" \
 		_r_root_domain="$domain" _r_alias="$override_alias" _r_alias_idn="$override_alias_idn" \
-		_r_web_system="$front" _r_vhost="$(web_vhost_addrs "$WEB_PORT")" \
-		_r_vhost_ssl="$(web_vhost_addrs "$WEB_SSL_PORT")" _r_backend_addr="$(web_backend_addr)"
+		_r_web_system="$front" _r_vhost _r_vhost_ssl _r_backend_addr
+	_r_vhost="$(web_vhost_addrs "$WEB_PORT")"
+	_r_vhost_ssl="$(web_vhost_addrs "$WEB_SSL_PORT")"
+	_r_backend_addr="$(web_backend_addr)"
 	web_render_template < "$HESTIA/share/$1/webmail/$2" > $conf
 
 	process_http2_directive "$conf"

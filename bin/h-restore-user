@@ -544,6 +544,15 @@ if [ "$web" != 'no' ] && [ -n "$WEB_SYSTEM" ]; then
 				old_ip=$IP
 				IP=$ip
 			fi
+			# The v6 twin: a foreign box's v6 must not survive verbatim (it would render a
+			# listen on an address this box does not have). Remap to our default v6, else drop.
+			if [ -n "$IP6" ] && [ ! -e "$CONF_DIR/ips/$IP6" ]; then
+				if get_user_ip6; then
+					IP6="$ip6"
+				else
+					IP6=''
+				fi
+			fi
 
 			# Templates through the legacy mapping: an archive can carry values this model
 			# has no file for (foreign install, other web model, removed template)

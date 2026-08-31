@@ -28,6 +28,20 @@ if (!empty($_SESSION["WEBMAIL_ALIAS"])) {
 			<div class="units-table-cell"><?= tohtml(_("IP or Value")) ?></div>
 		</div>
 
+		<?php
+		// Family-resolved picks: with v6 IP objects in the pool, array_key_first could hand a
+		// v6 to the A row (lexicographic order). A prefers v4; AAAA renders when a v6 exists.
+		$first_v4 = "";
+		$first_v6 = "";
+		foreach ($ips as $k => $v) {
+			if (str_contains($k, ":")) {
+				$first_v6 = $first_v6 ?: $k;
+			} else {
+				$first_v4 = $first_v4 ?: (empty($v["NAT"]) ? $k : $v["NAT"]);
+			}
+		}
+		$dns_a_value = $first_v4 ?: $first_v6;
+		?>
 		<div class="units-table-row js-unit">
 			<div class="units-table-cell">
 				<label class="u-hide-desktop u-text-bold"><?= tohtml(_("Record")) ?>:</label>
@@ -46,9 +60,32 @@ if (!empty($_SESSION["WEBMAIL_ALIAS"])) {
 			</div>
 			<div class="units-table-cell u-text-center-desktop">
 				<label class="u-hide-desktop u-text-bold"><?= tohtml(_("IP or Value")) ?>:</label>
-				<input type="text" class="form-control" value="<?= tohtml(empty($ips[array_key_first($ips)]["NAT"]) ? array_key_first($ips) : $ips[array_key_first($ips)]["NAT"]) ?>">
+				<input type="text" class="form-control" value="<?= tohtml($dns_a_value) ?>">
 			</div>
 		</div>
+		<?php if ($first_v6 !== "") { ?>
+		<div class="units-table-row js-unit">
+			<div class="units-table-cell">
+				<label class="u-hide-desktop u-text-bold"><?= tohtml(_("Record")) ?>:</label>
+				<input type="text" class="form-control" value="mail.<?= tohtml($_GET["domain"]) ?>">
+			</div>
+			<div class="units-table-cell u-text-bold u-text-center-desktop">
+				<span class="u-hide-desktop"><?= tohtml(_("Type")) ?>:</span>
+				AAAA
+			</div>
+			<div class="units-table-cell u-text-bold u-text-center-desktop">
+				<span class="u-hide-desktop"><?= tohtml(_("Priority")) ?>:</span>
+			</div>
+			<div class="units-table-cell u-text-bold u-text-center-desktop">
+				<span class="u-hide-desktop"><?= tohtml(_("TTL")) ?>:</span>
+				14400
+			</div>
+			<div class="units-table-cell u-text-center-desktop">
+				<label class="u-hide-desktop u-text-bold"><?= tohtml(_("IP or Value")) ?>:</label>
+				<input type="text" class="form-control" value="<?= tohtml($first_v6) ?>">
+			</div>
+		</div>
+		<?php } ?>
 		<?php if ($_SESSION["WEBMAIL_SYSTEM"]) { ?>
 			<div class="units-table-row js-unit">
 				<div class="units-table-cell">
@@ -68,7 +105,7 @@ if (!empty($_SESSION["WEBMAIL_ALIAS"])) {
 				</div>
 				<div class="units-table-cell u-text-center-desktop">
 					<label class="u-hide-desktop u-text-bold"><?= tohtml(_("IP or Value")) ?>:</label>
-					<input type="text" class="form-control" value="<?= tohtml(empty($ips[array_key_first($ips)]["NAT"]) ? array_key_first($ips) : $ips[array_key_first($ips)]["NAT"]) ?>">
+					<input type="text" class="form-control" value="<?= tohtml($dns_a_value) ?>">
 				</div>
 			</div>
 		<?php } ?>
@@ -113,8 +150,9 @@ if (!empty($_SESSION["WEBMAIL_ALIAS"])) {
 			<div class="units-table-cell u-text-center-desktop">
 				<label class="u-hide-desktop u-text-bold"><?= tohtml(_("IP or Value")) ?>:</label>
 				<?php
-				$ip = empty($ips[array_key_first($ips)]["NAT"]) ? array_key_first($ips) : $ips[array_key_first($ips)]["NAT"];
-// SPF wants the bare address behind a family-matched mechanism; a v6 behind ip4: is an invalid record
+				$ip = $dns_a_value;
+// SPF wants the bare address behind a family-matched mechanism; a v6 behind ip4: is an
+// invalid record. v4 preferred until #891 feeds this from OUTGOING_IP, both families in one line.
 $spf_mech = str_contains($ip, ":") ? "ip6" : "ip4";
 ?>
 				<input type="text" class="form-control" value="<?= tohtml("v=spf1 a mx " . $spf_mech . ":" . $ip . " -all") ?>">

@@ -205,9 +205,16 @@ if [ "$proto" = "http-01" ]; then
 		if [[ "$identifier" = *[![:ascii:]]* ]]; then
 			identifier=$(idn2 --quiet $identifier)
 		fi
-		if ! nslookup "${identifier}" > /dev/null 2>&1; then
-			# Attempt against Cloudflare DNS
-			if ! nslookup "${identifier}" 1.1.1.1 > /dev/null 2>&1; then
+		# Explicitly A OR AAAA: an AAAA-only name must pass (the challenge is served over
+		# whatever family resolves), and the resolver fallback carries both families -
+		# a bare 1.1.1.1 is unreachable from a v6-only box.
+		if ! nslookup -query=A "${identifier}" > /dev/null 2>&1 \
+			&& ! nslookup -query=AAAA "${identifier}" > /dev/null 2>&1; then
+			# Attempt against Cloudflare DNS (v4 and v6 anycast of the same service)
+			if ! nslookup -query=A "${identifier}" 1.1.1.1 > /dev/null 2>&1 \
+				&& ! nslookup -query=AAAA "${identifier}" 1.1.1.1 > /dev/null 2>&1 \
+				&& ! nslookup -query=A "${identifier}" 2606:4700:4700::1111 > /dev/null 2>&1 \
+				&& ! nslookup -query=AAAA "${identifier}" 2606:4700:4700::1111 > /dev/null 2>&1; then
 				check_result "$E_NOTEXIST" "DNS record for $identifier doesn't exist"
 			fi
 		fi

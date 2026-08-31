@@ -136,8 +136,10 @@ if (!empty($_SESSION["PROXY_SYSTEM"])) {
 		: $user_config[$user_plain]["PROXY_TEMPLATE"];
 }
 
-// List IP addresses
+// List IP addresses - v4 only for the select: the v6 side auto-assigns in
+// h-add-web-domain (#602), and h-add-web-domain's ip argument is v4-validated
 $ips = cli_json("h-list-user-ips " . $user . " json");
+$ips = array_filter($ips, fn($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
 
 // Get all user domains
 $user_domains = array_keys(cli_json("h-list-web-domains " . $user . " json"));
