@@ -58,14 +58,13 @@ fi
 default_nic="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
 [ -z "$default_nic" ] && default_nic="$(ip -6 -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
 
-# Checking primary IP on the interface. v6 has no positional "primary" (the kernel lists
-# newest first and shifts route src freely) - the lockout case is deleting the LAST global
-# v6 while no global v4 exists. v4 keeps the classic first-address guard.
+# v6 has no positional "primary" (kernel lists newest first): the lockout case is the
+# LAST global v6 while no v4 ROUTE exists. v4 keeps the classic first-address guard.
 interface="$(ip -d -j addr show | jq --arg IP "$ip" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
 if [ "$family" = 6 ]; then
 	other_v6="$(ip -6 -d -j addr show "$default_nic" | jq --arg IP "$ip" -r '.[].addr_info[] | if .scope == "global" and .local != $IP then .local else empty end' | head -n1)"
-	# A v4 default ROUTE, not a v4 address: a Hetzner v6-only box carries a routeless CGN
-	# address, and "an address exists" would silence the guard exactly where it must fire
+	# v4 ROUTE, not address: a v6-only box may carry a routeless CGN v4 that would
+	# silence the guard exactly where it must fire
 	any_v4_route="$(ip -4 -d -j route show default 2> /dev/null | jq -r '.[0].dev // empty')"
 	if [ -n "$interface" ] && [ -z "$other_v6" ] && [ -z "$any_v4_route" ]; then
 		echo "Error: can't delete the last global v6 - the box has no v4 and would be cut off"
@@ -91,8 +90,7 @@ if [ -n "$interface" ]; then
 	fi
 fi
 
-# Deleting startup conf on Debian/Ubuntu. The address is escaped before it becomes a
-# pattern: dots were wildcards here, and 10.0.0.1 also matched 10a0b0c1-shaped lines.
+# Escaped before it becomes a pattern: dots were wildcards here.
 ip_esc=$(printf '%s' "$ip" | sed 's/[].[\*^$]/\\&/g')
 if [ -f "/etc/netplan/60-hestia.yaml" ]; then
 	sed -i "/- $ip_esc\//d" /etc/netplan/60-hestia.yaml
@@ -100,8 +98,7 @@ if [ -f "/etc/netplan/60-hestia.yaml" ]; then
 		rm /etc/netplan/60-hestia.yaml
 	fi
 elif [ -e "/etc/network/interfaces" ]; then
-	# The v4 stanza ends "address IP" + "netmask X" (window -3..+1); the v6 stanza ends
-	# "address IP/prefix" (window -3..+0)
+	# v4 stanza ends "address IP"+"netmask X" (-3..+1); v6 ends "address IP/prefix" (-3..+0)
 	if [ "$family" = 6 ]; then
 		ip_str="$(grep -n "^address $ip_esc/$cidr$" /etc/network/interfaces | head -n1 | cut -f1 -d:)"
 		window_end=0
@@ -119,11 +116,8 @@ fi
 # Deleting Hestia IP
 rm -f $CONF_DIR/ips/$ip
 
-# Removing mail source pins that name this address (both families). The pin counts in no
-# counter - is_ip_key_empty guards web domains only - and exim reads the file LIVE at send
-# time: left behind, the transport binds an address the box no longer has, silently, until
-# the next rebuild that nobody runs. An absent file simply means "no pin", so rm is the
-# whole soft path here.
+# Mail source pins naming this address (both families) go with it: no counter guards
+# them, and exim reads the file live - left behind, the transport binds a dead address.
 for _pin in "$HOMEDIR"/*/conf/mail/*/ip "$HOMEDIR"/*/conf/mail/*/ipv6; do
 	[ -f "$_pin" ] || continue
 	if [ "$(cat "$_pin" 2> /dev/null)" = "$ip" ]; then

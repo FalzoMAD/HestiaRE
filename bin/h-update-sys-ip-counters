@@ -35,8 +35,7 @@ case "$mode" in
 	apply | check) ;;
 	*) check_result "$E_INVALID" "invalid mode '$mode' (apply|check)" ;;
 esac
-# check prints what apply WOULD write, per object, and is the smoke guard's only oracle -
-# one derivation, two consumers, so the guard cannot drift from the authority (#867 shape)
+# check prints what apply WOULD write - one derivation, two consumers (#867 shape)
 if [ "$mode" = 'check' ] && [ -z "$ip" ]; then
 	check_result "$E_INVALID" "check mode wants one IP - the caller owns the object list"
 fi
@@ -63,11 +62,10 @@ fi
 # Updating user stats
 for ip in $ip_list; do
 
-	# Count both forms of the address: behind NAT a record holds the PUBLIC one while the ip
-	# file is named after the local one, so matching only the local name recounts to 0 there -
-	# and writing that back is how a healthy counter gets "corrected" to nothing.
+	# Both spellings: behind NAT the record holds the PUBLIC address - local-only matching
+	# recounts to 0 and "corrects" a healthy counter to nothing.
 	if [ "$(ip_family "$ip")" = 6 ]; then
-		# a v6 record is referenced through the IP6 field, and NAT does not exist for it
+		# v6 lives in the IP6 field; NAT does not exist for it
 		ip_usage="$(grep -H -e "IP6='$ip'" $CONF_DIR/users/*/web.conf)"
 	else
 		nat=$(grep -o "NAT='[^']*'" "$CONF_DIR/ips/$ip" 2> /dev/null | head -1 | cut -f 2 -d \')

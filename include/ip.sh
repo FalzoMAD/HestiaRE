@@ -9,13 +9,9 @@
 # Global definitions
 REGEX_IPV4="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4}$"
 
-# RFC-5952 canonical spelling (what `ip -j` prints). Runs at the ENTRY of every writing
-# command: without it 2001:0db8::1 and 2001:db8::1 become two objects for one address and
-# counters, firewall and deletion drift apart. Non-v6 input passes through untouched -
-# rejection stays with the format validators. A v6 input where the php backend does not
-# answer returns rc 1 with NO output: a silent fallback to the raw spelling would store
-# exactly the double object this function exists to prevent, and the installer runs the
-# callers on a half-built box - the failure must be loud there, not invisible.
+# RFC-5952 form at the ENTRY of every writer: two spellings of one address must not become
+# two objects. Non-v6 passes through; a php backend that does not answer returns rc 1 with
+# no output - a silent raw-spelling fallback would recreate the very double object.
 ip6_canonical() {
 	local out
 	case "$1" in
@@ -63,8 +59,7 @@ is_ip_key_empty() {
 update_ip_value() {
 	key="$1"
 	value="$2"
-	# empty = every line, which is what this function means; without the local an unrelated
-	# caller's global $str_number would silently narrow the sed to one line
+	# local empty = all lines; a foreign global would silently narrow the sed to one line
 	local str_number=""
 	conf="$CONF_DIR/ips/$ip"
 	# See is_ip_key_empty: source_conf instead of eval-ing the file content as bash.
@@ -151,11 +146,8 @@ decrease_ip_value() {
 	fi
 
 	new_web=$((current_web - 1))
-	# ONE counting rule, not two homes: whether the user still references this address is
-	# the authority's question (h-update-sys-ip-counters check), asked here instead of
-	# re-implemented - a second local rule showed up as inexplicable guard drift later.
-	# Fail-safe: an oracle that answers NOTHING must not evict anyone (the #866 shape),
-	# so a missing U_SYS_USERS line keeps the list untouched.
+	# One counting rule: the authority's check mode answers whether the user still holds
+	# this address. Fail-safe: an oracle that answers nothing must not evict anyone.
 	local recount_out recount
 	recount_out=$("$BIN/h-update-sys-ip-counters" "$sip" check 2> /dev/null)
 	recount=$(sed -n "s/^U_SYS_USERS='\(.*\)'\$/\1/p" <<< "$recount_out")
@@ -249,10 +241,9 @@ get_broadcast() {
 # Cut at the literal ':KEY='/'-KEY=' boundary, never at the first colon: a v6 filename carries
 # colons, and the old cut/REGEX_IPV4 pair made every v6 IP object invisible to every consumer.
 get_user_ips() {
-	# Per-file, per-key reads - never grep -A1 (key order is not a contract). TWO passes,
-	# dedicated first: get_user_ip takes head -n1, and the round-6 single loop emitted in
-	# glob order, landing new domains on a SHARED address although the customer owned a
-	# dedicated one that sorted later (round-7 review find).
+	# Per-file, per-key reads (key order is not a contract). Two passes, dedicated first:
+	# get_user_ip takes head -n1, and glob order would hand a shared address to a customer
+	# who owns a dedicated one.
 	local family="$1" pass f addr f_owner f_status
 	for pass in own shared; do
 		for f in "$CONF_DIR"/ips/*; do
@@ -276,8 +267,7 @@ get_user_ips() {
 	return 0
 }
 
-# Get user ip - v4 preferred so a v4-only or dual-stack box behaves exactly as before;
-# only a box without any v4 falls through to a v6 (NAT lookup is then empty by nature).
+# v4 preferred (existing boxes behave unchanged); only a v4-less box falls through to v6.
 get_user_ip() {
 	ip=$(get_user_ips 4 | head -n1)
 	[ -z "$ip" ] && ip=$(get_user_ips 6 | head -n1)
@@ -291,8 +281,7 @@ get_user_ip() {
 	fi
 }
 
-# First v6 available to the user. Sets $ip6; rc 1 with $ip6 empty on a box without v6 -
-# callers decide what that means, nothing aborts here.
+# First v6 of the user into $ip6; rc 1 when none - callers decide, nothing aborts.
 get_user_ip6() {
 	ip6=$(get_user_ips 6 | head -n1)
 	[ -n "$ip6" ]

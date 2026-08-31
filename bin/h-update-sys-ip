@@ -38,21 +38,19 @@ nics="$(ip -d -j link show | jq -r '.[] | if .link_type == "loopback" then empty
 
 for nic in $nics; do
 	nic_type="$(ip -d -j link show "$nic" | jq -r '.[].linkinfo.info_kind')"
-	# continue, not break: one bridge or one v4-less NIC used to abort the whole scan and
-	# every NIC after it went unregistered
+	# continue, not break: one bridge or v4-less NIC must not abort the whole scan
 	if [ "$nic_type" = "bridge" ]; then
 		continue
 	fi
 	nic_ipv4s="$(ip -4 -d -j addr show "$nic" | jq -r '.[] | select(length > 0) | .addr_info[] | if .scope == "global" then .local else empty end')"
 	[ -n "$nic_ipv4s" ] && ips="${ips:+$ips }$nic_ipv4s"
-	# v6: global scope only, and neither privacy (temporary) nor deprecated addresses -
-	# those rotate and would register a new object on every rotation
+	# v6: global scope, no temporary/deprecated - those rotate and would register endlessly
 	nic_ipv6s="$(ip -6 -d -j addr show "$nic" | jq -r '.[] | select(length > 0) | .addr_info[] | if .scope == "global" and .temporary != true and .deprecated != true then .local else empty end')"
 	[ -n "$nic_ipv6s" ] && ip6s="${ip6s:+$ip6s }$nic_ipv6s"
 done
 
-# The rename detection pairs THE single system v4 with THE single v4 record; v6 records
-# must not inflate the count or a NAT'd VPS with a v6 loses its primary-change repair
+# Rename detection pairs THE single v4 with THE single v4 record - v6 records must not
+# inflate the count
 v_ips="$(find "$CONF_DIR/ips/" -maxdepth 1 -type f ! -name '*:*' -printf '%f\n')"
 ip_num="$(echo "$ips" | wc -w)"
 v_ip_num="$(echo "$v_ips" | wc -w)"
@@ -152,7 +150,7 @@ for ip in $ips; do
 	fi
 done
 
-# Adding system v6 (the real prefix length from ip -j, never a guessed default)
+# Adding system v6 (real prefix length from ip -j, never a guessed default)
 for ip6 in $ip6s; do
 	if [ ! -e "$CONF_DIR/ips/$ip6" ]; then
 		interface="$(ip -6 -d -j addr show | jq --arg IP "$ip6" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
@@ -161,9 +159,8 @@ for ip6 in $ip6s; do
 	fi
 done
 
-# Updating NAT. v4 only, and only when the probe answered: NAT does not exist for v6 (a
-# global v6 IS the public address), and an empty answer must not feed the checks below -
-# they would pass by accident ([ ! -e ] on the bare directory) and misfile the NAT.
+# NAT: v4 only (a global v6 IS public), and only on a non-empty probe answer - an empty
+# one slid past [ ! -e ] on the bare directory and misfiled the NAT.
 pub_ipv4="$(curl -fsLm5 --retry 2 --ipv4 https://ip.hestiacp.com/)"
 if [ -n "$pub_ipv4" ] && [ ! -e "$CONF_DIR/ips/$pub_ipv4" ]; then
 	if [ -z "$(grep -R "$pub_ipv4" $CONF_DIR/ips/)" ]; then

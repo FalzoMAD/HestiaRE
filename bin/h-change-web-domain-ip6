@@ -4,11 +4,9 @@
 #
 # example: h-change-web-domain-ip6 admin example.com 2001:db8::2 yes
 #
-# Switches the domain to another v6 address. There is deliberately no per-domain
-# opt-out: rebuild re-adopts the box default v6 into an empty IP6, so a cleared field
-# would silently refill - "no v6" is a box-level decision (delete the v6 IP object).
-# Rebuild instead of in-place sed: adding a family creates listen lines that a
-# substring replace could never produce.
+# Switches the domain to another v6. Deliberately no per-domain opt-out: rebuild
+# re-adopts the default v6 into an empty field - "no v6" is a box-level decision.
+# Rebuild, not sed: adding a family creates lines a substring replace cannot.
 
 #----------------------------------------------------------#
 #                Variables & Functions                     #

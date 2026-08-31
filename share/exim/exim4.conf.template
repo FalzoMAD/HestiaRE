@@ -14,9 +14,8 @@ smtp_banner = $smtp_active_hostname ESMTP
 smtp_active_hostname = ${lookup dnsdb{>: defer_never,ptr=$interface_address}{${listextract{1}{$value}}}{$primary_hostname}}
 add_environment = <; PATH=/bin:/usr/bin
 keep_environment =
-# false is safe on a v6-less kernel for THIS template - measured with ipv6.disable=1:
-# exim skips the missing family itself (the stock send-only template does NOT, see
-# configure_exim_sendonly). true would silently ignore every v6 listener and source.
+# false is safe for THIS template on a v6-less kernel (exim skips the missing family;
+# the stock send-only template does NOT - see configure_exim_sendonly).
 disable_ipv6 = false
 smtp_accept_max = 100
 smtp_accept_max_per_host = 20
@@ -27,9 +26,7 @@ smtputf8_advertise_hosts =
 domainlist local_domains = dsearch;/etc/exim4/domains/
 domainlist relay_to_domains = dsearch;/etc/exim4/domains/
 hostlist relay_from_hosts = <; 127.0.0.1 ; ::1
-# iplsearch keys: a v6 address MUST be quoted ("2001:db8::1"), bare it never matches -
-# measured: an unquoted v6 whitelist entry left the sender in the RBL deny while the
-# v4 twin on the next line matched fine.
+# iplsearch keys: a v6 address MUST be quoted ("2001:db8::1") - bare it never matches.
 hostlist whitelist = net-iplsearch;/etc/exim4/white-blocks.conf
 hostlist spammers = net-iplsearch;/etc/exim4/spam-blocks.conf
 no_local_from_check
@@ -89,9 +86,7 @@ DKIM_FILE = /etc/exim4/domains/${lookup{${lc:${domain:$h_from:}}}dsearch{/etc/ex
 DKIM_PRIVATE_KEY = ${if exists{DKIM_FILE}{DKIM_FILE}{0}}
 
 OUTGOING_IP = /etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains}}/ip
-# A second FILE, not a list in the first: every existing reader of /ip stays untouched,
-# and a missing file simply means "no v6 source pin" (the kernel picks) - upstream PR 5490
-# reached the same two-file cut independently.
+# A second FILE so every /ip reader stays untouched; missing = no v6 pin, kernel picks.
 OUTGOING6_IP = /etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains}}/ipv6
 
 # Per-domain spam subject tag (h-change-mail-domain-spam-subject-tag): if the
@@ -529,9 +524,8 @@ smtp_relay_smtp:
   hosts_require_auth = $host_address
   hosts_require_tls = $host_address
 
-# interface builds one of four shapes and NEVER an empty list element: "" as an element
-# is a hard transport error ("not a valid IP address", measured - every mail whose sender
-# domain has no pin files deferred), an entirely empty result just unsets the option.
+# interface builds four shapes and NEVER an empty list element ("" is a hard transport
+# error deferring the mail); an entirely empty result just unsets the option.
 remote_smtp:
   driver = smtp
   helo_data = ${lookup dnsdb{>: defer_never,ptr=$sending_ip_address}{${listextract{1}{$value}}}{$primary_hostname}}

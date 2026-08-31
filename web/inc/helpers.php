@@ -146,11 +146,8 @@ function hst_add_history_log($message, $category = "System", $level = "Info", $u
 	return $return_var;
 }
 
-// Host part of HTTP_HOST with any :port stripped. A bracketed IPv6 literal keeps its
-// brackets so the value stays valid inside a URL ([::1]:8083 -> [::1]); a naive
-// explode(":") would return "[" for it. The bracket is the anchor: without one, a port
-// is only split off when exactly one colon is present, so a bare (non-RFC, but
-// client-supplied) v6 literal passes through instead of losing its last group.
+// HTTP_HOST minus :port. Bracketed v6 keeps its brackets (URL-valid); without brackets a
+// port is only split off at exactly one colon, so a bare v6 literal survives intact.
 function get_http_host_name()
 {
 	$host = $_SERVER["HTTP_HOST"] ?? "";

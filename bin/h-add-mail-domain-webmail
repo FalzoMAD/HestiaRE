@@ -112,7 +112,7 @@ if [ -n "$domain_ip" ]; then
 else
 	get_user_ip
 fi
-# Mirror for v6: the web domain's IP6 when one exists, else the default v6, else none
+# v6 mirror: web domain's IP6, else default v6, else none
 local_ip6=$(get_object_value 'web' 'DOMAIN' "$domain" '$IP6')
 if [ -z "$local_ip6" ] && get_user_ip6; then
 	local_ip6="$ip6"

@@ -613,9 +613,8 @@ install_mail() {
 		DCDIR="$HESTIA/share/dovecot/2.3"
 	fi
 	cp -f "$DCDIR/dovecot.conf" /etc/dovecot/
-	# Derived from the kernel like exim's send-only list: with ipv6.disable=1 the shipped
-	# "listen = *, ::" is fatal (listen(::, 993): Address family not supported -> Fatal:
-	# Failed to start listeners, measured), so the v6 half is dropped where no v6 exists.
+	# Derived like exim's send-only list: "listen = *, ::" is fatal on an ipv6.disable=1
+	# kernel (Failed to start listeners), so the v6 half is dropped where no v6 exists.
 	if [ ! -e /proc/net/if_inet6 ]; then
 		sed -i 's/^listen = \*, ::$/listen = */' /etc/dovecot/dovecot.conf
 	fi
@@ -1229,11 +1228,8 @@ configure_exim_sendonly() {
 		return 0
 	fi
 	sed -i "s/^dc_eximconfig_configtype=.*/dc_eximconfig_configtype='internet'/" "$c"
-	# Loopback list DERIVED from the kernel, not hardcoded: with the stock template a listed
-	# ::1 on an ipv6.disable=1 kernel kills the daemon outright ("IPv6 socket creation
-	# failed", measured on deb13) - every send-only box with v6 off had a dead exim since
-	# the list gained ::1. The full hestia template survives either way; this is the
-	# send-only path's own trap.
+	# Loopback list DERIVED from the kernel: a listed ::1 on an ipv6.disable=1 kernel kills
+	# the stock-template exim at start (the full hestia template survives either way).
 	local lo_ifaces='127.0.0.1'
 	[ -e /proc/net/if_inet6 ] && lo_ifaces='127.0.0.1 ; ::1'
 	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='$lo_ifaces'/" "$c"

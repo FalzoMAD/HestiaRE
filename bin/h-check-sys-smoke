@@ -739,11 +739,10 @@ check_panel_php_version() {
 # that binary loses every notification - password reset, backup report - while the wrapper still
 # exits 0. Nothing installed one without a mail block; on Debian the base image happened to ship
 # exim4-daemon-light and it looked fine, on Ubuntu it never did.
-# The install-time derivation (exim send-only list, dovecot listen) is a one-shot string
-# edit: change the shipped line or flip the kernel lage later and the fatal bind returns
-# with nothing re-deriving. This check holds the CONFIGURED families against the KERNEL's,
-# live, on every run. Covers dovecot's listen and exim's dc_local_interfaces - not the
-# hestia exim template (measured immune: it skips a missing family itself).
+# The install-time derivation is a one-shot edit; flip the kernel lage later and the
+# fatal bind returns with nothing re-deriving. Holds CONFIGURED families against the
+# KERNEL's. Covers dovecot listen + exim dc_local_interfaces, not the hestia template
+# (immune: exim skips a missing family itself).
 check_mail_family_lage() {
 	local kernel6='' hits=0
 	[ -e /proc/net/if_inet6 ] && kernel6=yes
@@ -764,9 +763,8 @@ check_mail_family_lage() {
 	[ "$hits" = 0 ] && ok "mail family lage: v6-less kernel and no v6 loopback listed (dovecot, exim send-only)"
 }
 
-# Exim forbids a macro whose name contains an EARLIER macro as substring - the parser
-# fails at definition. Caught live once (OUTGOING_IPV6 over OUTGOING_IP); this closes the
-# class for the installed template instead of waiting for the next collision.
+# Exim refuses a macro whose name contains an EARLIER macro as substring; this closes
+# the class instead of waiting for the next collision.
 check_exim_macro_names() {
 	local tpl=/etc/exim4/exim4.conf.template names n1 n2 count found=''
 	if [ ! -f "$tpl" ] || ! grep -q "HestiaRE\|OUTGOING_IP" "$tpl" 2> /dev/null; then
@@ -799,23 +797,19 @@ check_exim_macro_names() {
 	ok "exim macro names: no name contains an earlier one ($count checked)"
 }
 
-# The fleet break behind #891: an interface expansion producing an empty list element
-# defers EVERY remote delivery ("" is not a valid IP address) - one layer past what
-# check_notification_mta can see (an MTA existed and accepted; delivery died later).
-# exim -be expands the REAL template line offline, no DNS, no network: the no-pin case
-# falls out naturally ($sender_address_domain is empty in -be, the dsearch fails), the
-# with-pin cases run against a temp dir substituted into the same expression - so the
-# four conditional shapes stay proven instead of once-measured. Macro substitution is
-# textual (longer name first) because -be resolves expansions, not macro names.
+# An interface expansion with an empty list element defers EVERY remote delivery, one
+# layer past check_notification_mta. exim -be expands the REAL line offline: the no-pin
+# case falls out naturally (empty $sender_address_domain), the pin cases run over a temp
+# dir in the same expression. Macro substitution is textual - -be resolves expansions,
+# not macro names.
 check_exim_interface_expansion() {
 	local tpl=/etc/exim4/exim4.conf.template expr m4 m6 out probe rc=0
 	if [ ! -f "$tpl" ] || ! grep -q '^OUTGOING_IP = ' "$tpl"; then
 		skip "exim interface expansion: no hestia template on this box"
 		return
 	fi
-	# The expression lives TWICE (remote_smtp and remote_forwarded_smtp) - the classic
-	# two-homes lage. Expanding one is only valid while both are identical, so that
-	# identity is part of the check, not an assumption.
+	# The expression lives TWICE (both smtp transports): expanding one is only valid
+	# while both are identical, so the identity is part of the check.
 	local iface_lines
 	iface_lines=$(grep '^  interface = ' "$tpl")
 	if [ "$(echo "$iface_lines" | grep -c .)" != 2 ] || [ "$(echo "$iface_lines" | sort -u | grep -c .)" != 1 ]; then
@@ -833,9 +827,8 @@ check_exim_interface_expansion() {
 	fi
 	expr=${expr//OUTGOING6_IP/$m6}
 	expr=${expr//OUTGOING_IP/$m4}
-	# stdin, not an argument: -be args run into exim's 256-byte limit, and a swallowed
-	# error there once turned this very check into a false green. "Failed" and empty-on-
-	# error are treated as NOT VERIFIABLE, never as pass.
+	# stdin, not an argument (-be args hit a 256-byte limit); "Failed"/empty-on-error is
+	# NOT VERIFIABLE, never a pass.
 	_be_expand() {
 		printf '%s\n' "$1" | exim4 -be 2>&1 | head -1 | sed 's/^> //'
 	}
@@ -851,8 +844,7 @@ check_exim_interface_expansion() {
 		done <<< "$(echo "${v#<;}" | tr ';' '\n')"
 		return 0
 	}
-	# no-pin case: the natural -be lage ($sender_address_domain empty, dsearch fails) -
-	# exactly the break that deferred every fleet mail without pin files
+	# no-pin case - exactly the break that deferred every mail without pin files
 	out=$(_be_expand "$expr")
 	_iface_shape_ok "$out"
 	case $? in
@@ -867,8 +859,7 @@ check_exim_interface_expansion() {
 			return
 			;;
 	esac
-	# with-pin cases as positive control over a temp dir substituted into the SAME
-	# expression: proves the instrument expands for real and covers the other shapes
+	# pin cases as positive control: proves the instrument expands for real
 	probe=$(mktemp -d)
 	local lookup_part='/etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains}}'
 	local expr_probe=${expr//"$lookup_part"/$probe}
@@ -1811,22 +1802,18 @@ check_record_grammar() {
 #
 # It also asks the other way round: a counter-shaped key in the registry that the authority does
 # not compute lives outside both, which is how U_MAIL_SSL survived for years.
-# check_ip_object_counters - U_SYS_USERS/U_WEB_DOMAINS live in $CONF_DIR/ips/*, had an
-# authority (h-update-sys-ip-counters) but no guard - the IP_AVAIL lage before #867. The
-# NAT-blind decrease counted 0 on every NAT box and evicted customers on their FIRST
-# domain delete, so a backlog from that era is expected, not hypothetical. The object
-# list derives from the files; the authority's check mode is the only rule source.
+# check_ip_object_counters - the ip-record counters had an authority but no guard (the
+# IP_AVAIL lage before #867), and the NAT-blind decrease left real backlog. Object list
+# derives from the files; the authority's check mode is the only rule source.
 check_ip_object_counters() {
 	local f addr line k want stored drift=0 checked=0 first='' obj_out obj_lines
 	for f in "$CONF_DIR"/ips/*; do
 		[ -f "$f" ] || continue
 		addr=${f##*/}
-		# only the two counter lines count as an answer: check_result errors land on
-		# stdout too, and parsing one as a key once produced garbled drift text
+		# only the two counter lines count as an answer (check_result errors land on stdout)
 		obj_out=$("$BIN/h-update-sys-ip-counters" "$addr" check 2> /dev/null | grep -E "^U_(WEB_DOMAINS|SYS_USERS)='")
 		obj_lines=$(grep -c . <<< "$obj_out")
-		# empty is no pass PER OBJECT: one object whose authority call fails (a stray
-		# file with a non-address name, say) must not ride on the others' green
+		# empty is no pass PER OBJECT: a broken object must not ride on the others' green
 		if [ "$obj_lines" -eq 0 ]; then
 			drift=$((drift + 1))
 			[ -z "$first" ] && first="$addr: authority answered nothing (broken object or stray file)"

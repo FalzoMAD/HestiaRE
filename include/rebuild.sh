@@ -237,9 +237,8 @@ rebuild_web_domain_conf() {
 	syshealth_repair_web_config
 	get_domain_values 'web'
 	is_ip_valid $IP
-	# The v6 side is SOFT and never aborts a rebuild loop. An empty IP6 adopts the default
-	# v6 here (the decided auto-assign reaches existing domains exactly through rebuild);
-	# a recorded v6 whose object vanished renders without v6 plus a warning, no abort.
+	# v6 is SOFT here: empty IP6 adopts the default (auto-assign reaches existing domains
+	# through rebuild), a vanished object renders without v6 plus a warning - no abort.
 	local_ip6="$IP6"
 	if [ -z "$local_ip6" ]; then
 		if get_user_ip6; then
@@ -593,7 +592,7 @@ rebuild_mail_domain_conf() {
 	else
 		get_user_ip
 	fi
-	# Mirror for v6: the web domain's IP6 when one exists, else the default v6, else none
+	# v6 mirror: web domain's IP6, else default v6, else none
 	local local_ip6=$(get_object_value 'web' 'DOMAIN' "$domain" '$IP6')
 	if [ -z "$local_ip6" ] && get_user_ip6; then
 		local_ip6="$ip6"

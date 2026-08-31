@@ -326,9 +326,8 @@ prepare_web_domain_values() {
 	fi
 }
 
-# All configured families for one apache VirtualHost tag, brackets and port included -
-# the tag is STRUCTURAL and may never be line-deleted (an orphaned </VirtualHost> is an
-# invalid config), so it resolves instead: apache takes several addresses in one tag.
+# All families for one apache VirtualHost tag: the tag is structural, deletion would
+# orphan </VirtualHost>, so it resolves - apache takes several addresses in one tag.
 web_vhost_addrs() {
 	local out=''
 	[ -n "$local_ip" ] && out="$local_ip:$1"
@@ -336,9 +335,8 @@ web_vhost_addrs() {
 	echo "$out"
 }
 
-# The nginx->backend hop: v4 when present, else the bracketed v6. The backend listens on
-# every configured family, so the front may pick either; a bare family token here would
-# fall to the line-deletion rule on a single-family box.
+# nginx->backend hop: v4 when present, else bracketed v6 - a bare family token here
+# would fall to the deletion rule on a single-family box.
 web_backend_addr() {
 	if [ -n "$local_ip" ]; then
 		echo "$local_ip"
@@ -347,20 +345,15 @@ web_backend_addr() {
 	fi
 }
 
-# The ONE web-template substitution engine (#890): stdin template in, rendered text out.
-# Four independently maintained copies of this chain drifted for years (the pre_questions
-# disease, #886); every caller routes here now. Divergent values arrive in _r_* variables
-# (webmail renders %domain% as the webmail alias and %web_system% as the front), everything
-# else reads the caller's scope. Removing or renaming a token here breaks every custom
-# template that uses it.
-# Line-deletion rule: a REPEATABLE line (listen ...) whose family placeholder has no
-# value is dropped before substitution - v4-only loses the [%ip6%] listens, v6-only the
-# %ip% ones. Structural lines carry resolved tokens (%vhost%, %backend_addr%) and are
-# never deleted. %ip6% substitutes RAW; brackets are template text at the use site.
-# Custom-template contract: %ip% and %ip6% must never share one line (the rule would
-# delete it whenever EITHER family is absent), and a template that only ever names %ip%
-# renders v4-only - on a v6-only box its server block would end up with no listen at
-# all, which nginx answers by binding the wildcard, silently.
+# The ONE substitution engine (#890): stdin template in, rendered text out. Divergent
+# values arrive in _r_* (webmail renders %domain% as the alias, %web_system% as the
+# front). Removing or renaming a token breaks every custom template that uses it.
+# A repeatable line whose family placeholder has no value is deleted before substitution;
+# structural lines carry resolved tokens (%vhost%, %backend_addr%) and are never deleted.
+# %ip6% substitutes RAW - brackets are template text at the use site.
+# Custom-template contract: %ip% and %ip6% never on one line (deleted once EITHER family
+# is absent); an %ip%-only template on a v6-only box renders a listen-less server block,
+# which nginx answers by silently binding the wildcard.
 web_render_template() {
 	local _del=''
 	[ -z "$_r_ip" ] && _del="/%ip%/d; "
@@ -476,13 +469,9 @@ add_web_config() {
 		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
 	fi
 
-	# Family twin of local_ip, derived from the record when the caller never resolved it -
-	# the ssl/alias/tpl/suspend commands re-render without thinking about families, and one
-	# of them silently dropped the v6 listens on its next render. A caller that SET the
-	# variable - even to empty (vanished object, rebuild's soft path) - wins over the record.
-	# local_ip6 lives PROCESS-WIDE (no local, deliberately - the caller contract needs it),
-	# so a DERIVED value is unset again at the end: without that, the first domain's v6
-	# would stick to every later render in the same process.
+	# Family twin of local_ip, derived from the record because ~15 re-render commands never
+	# resolve addresses. A caller that SET it - even empty - wins. The variable is
+	# process-wide by contract, so a DERIVED value is unset again at the end.
 	local _derived_ip6=0
 	if [ -z "${local_ip6+x}" ]; then
 		_derived_ip6=1
@@ -696,16 +685,14 @@ add_web_http3_config() {
 	# plain quic, no reuseport: nginx accepts many quic listens on one ip:port, while reuseport
 	# would need one-per-ip bookkeeping that a decoupled fragment must not own
 	local ip="$1" ip6="$2" port frag
-	# Same soft rule as the renderer: a recorded v6 whose object vanished must not become
-	# a listen on a dead address here - the fragment would undo what add_web_config just
-	# caught, and the next reload dies. One guard in the writer covers all three callers.
+	# Soft rule as in the renderer: a vanished v6 object must not become a quic listen on
+	# a dead address; one guard in the writer covers all three callers.
 	if [ -n "$ip6" ] && [ ! -e "$CONF_DIR/ips/$ip6" ]; then
 		ip6=''
 	fi
 	port=$(web_http3_front_ssl_port)
 	frag="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_http3"
-	# single quotes keep $server_port literal for nginx; the listen lines carry the only
-	# %-formats. One quic listen per configured family - the printf wrote exactly one before
+	# single quotes keep $server_port literal for nginx; one quic listen per configured family
 	: > "$frag"
 	[ -n "$ip" ] && printf 'listen      %s:%s quic;\n' "$ip" "$port" >> "$frag"
 	[ -n "$ip6" ] && printf 'listen      [%s]:%s quic;\n' "$ip6" "$port" >> "$frag"
@@ -767,8 +754,7 @@ is_web_domain_cert_valid() {
 		check_result "$E_FORBIDEN" "SSL Key is protected (remove pass_phrase)"
 	fi
 
-	# No pkill openssl: that reaped EVERY openssl on the box (a running backup, a cron
-	# job); the only process this line ever meant is our own $pid, killed just below.
+	# no pkill openssl: it reaped every openssl on the box; our own $pid dies just below
 
 	openssl s_server -quiet -cert $ssl_dir/$domain.crt \
 		-key $ssl_dir/$domain.key >> /dev/null 2>&1 &
@@ -995,9 +981,8 @@ add_webmail_config() {
 		override_alias_idn="mail.$domain_idn"
 	fi
 
-	# Same derivation guard as add_web_config: webmail re-renderers (mail-ssl and friends)
-	# never resolve a v6; take the web domain's IP6, else the default v6, else none.
-	# Derived values are unset at the end (process-wide variable, see add_web_config).
+	# Derivation guard as in add_web_config: web domain's IP6, else default v6, else none;
+	# derived values are unset at the end (process-wide variable).
 	local _derived_ip6=0
 	if [ -z "${local_ip6+x}" ]; then
 		_derived_ip6=1
@@ -1032,9 +1017,8 @@ add_webmail_config() {
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 		fi
-		# No second proxy link block: it re-linked the SAME path under /etc/$1/ (its
-		# condition read $PROXY_SYSTEM, its body did not) - the proxy side gets its own
-		# add_webmail_config call with $1=$PROXY_SYSTEM at every call site.
+		# no proxy link block here: it re-linked the same path, and the proxy side gets
+		# its own add_webmail_config call with $1=$PROXY_SYSTEM at every call site
 
 		# The forcessl file carries ITS OWN owner, independent of $1: the templates
 		# include it by the name %web_system% renders to - the proxy where one

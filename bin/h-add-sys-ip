@@ -16,8 +16,7 @@
 #----------------------------------------------------------#
 
 # Argument definition
-# Named ip46 for the format dispatch (the variable name selects the validator); the global
-# $ip stays aliased because the sourced ip.sh helpers (is_ip_free, ...) read it.
+# ip46 selects the validator (dispatch is by variable name); $ip aliased for the ip.sh helpers
 ip46="${1// /}"
 ip="$ip46"
 netmask="$2"
@@ -25,10 +24,8 @@ netmask="$2"
 # Get interface name
 # First try to detect which interface the IP address resides on
 iface="$(ip -d -j addr show | jq --arg IP "$ip46" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
-# If that fails, detect the default interface as a fallback - BOTH families: a fresh
-# address is the normal case here (it does not exist yet), and on a v6-only box the v4
-# route table is empty, which made manual h-add-sys-ip impossible on exactly the box
-# stage 4 is built for. h-delete-sys-ip carries the same twin.
+# Fallback via default route, BOTH families: a fresh address is the normal case, and on a
+# v6-only box the v4 route table is empty (h-delete-sys-ip carries the same twin).
 if [ -z "$iface" ]; then
 	iface="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
 fi
@@ -36,8 +33,7 @@ if [ -z "$iface" ]; then
 	iface="$(ip -6 -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
 fi
 
-# :- not -: an EMPTY third argument must fall back to detection, not erase it -
-# h-update-sys-ip passes its own jq result through here, and that can come back empty
+# :- not -: an EMPTY third argument (h-update-sys-ip passes jq output) must fall back
 iface="${3:-$iface}"
 user="$4"
 ip_status="${5-shared}"
@@ -104,29 +100,23 @@ else
 	broadcast="$(get_broadcast "$ip" "$netmask")"
 fi
 
-# Exact-match via jq, not grep -w: colons are word boundaries, so an existing LONGER v6
-# sharing the prefix (...::1:2 while adding ...::1) false-matched, skipped the kernel add
-# and the boot persistence, and left a record whose address the box never carries.
+# jq exact-match, not grep -w: colons are word boundaries, so a LONGER prefix-sharing v6
+# false-matched and skipped kernel add + persistence while the record was still written.
 sys_ip_check="$(ip -j addr show | jq --arg IP "$ip" -r '.[].addr_info[] | select(.local == $IP) | .local' 2> /dev/null | head -1)"
 if [ -z "$sys_ip_check" ]; then
-	# Adding system IP (v6 knows neither broadcast nor alias labels). A HARD failure here
-	# (missing iface, bad prefix) must stop everything: the soft case has the DAD guard,
-	# but running on writes a record, renders and restarts for an address that never
-	# arrived - the same nginx emerg, just without an explanation.
+	# v6 knows neither broadcast nor labels. A HARD add failure must stop everything -
+	# running on would write record/render/restart for an address that never arrived.
 	if [ "$family" = 6 ]; then
 		ip -6 addr add "$ip/$cidr" dev "$iface" \
 			|| check_result "$E_INVALID" "cannot add $ip/$cidr on $iface - nothing was written"
-		# DAD: the fresh address is tentative for a moment, and a bind() during that window
-		# fails with EADDRNOTAVAIL - the web restart below raced exactly that (nginx emerg
-		# on the very first v6 per-IP config, measured). Wait it out, bounded.
+		# DAD: a bind() while the address is tentative fails; the web restart below raced
+		# exactly that. Bounded wait.
 		for _i in $(seq 1 10); do
 			ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"tentative"' || break
 			sleep 0.5
 		done
-		# Two different endings hide behind a timeout: dadfailed is PERMANENT (another host
-		# answers for this address - the listener will never bind), tentative-after-5s is
-		# merely slow. Both continue - the object and config are written either way - but
-		# the difference gets said instead of resurfacing later as an unexplained emerg.
+		# dadfailed is PERMANENT (another host answers, the listener never binds),
+		# tentative-after-5s merely slow - both continue, but the difference gets said.
 		if ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"dadfailed"'; then
 			echo "Warning: duplicate address detection FAILED for $ip - another host answers for it; web listeners will not bind until that is resolved" >&2
 		elif ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"tentative"'; then
@@ -197,20 +187,18 @@ TIME='$time'
 DATE='$date'" > $CONF_DIR/ips/$ip
 chmod 660 $CONF_DIR/ips/$ip
 
-# WEB support (both families since #890: the renderer brackets v6 itself)
+# WEB support (both families - the renderer brackets v6 itself)
 rebuild_ip_web_config "$ip"
 
 # Proxy real-IP module registration (dormant unless the conf exists). The per-IP
 # web/proxy config generation moved into rebuild_ip_web_config (include/web-model.sh, #120).
-# Apache real-IP module registration needs a backend web system: on mailfront (#193)
-# WEB_SYSTEM is empty by design, the paths would degenerate to /etc//... and the block
-# has nothing to register - said here instead of failing -e checks silently.
+# Real-IP module registration needs a backend web system; on mailfront (#193) WEB_SYSTEM
+# is empty by design and there is nothing to register.
 if [ -n "$PROXY_SYSTEM" ] && [ -n "$WEB_SYSTEM" ]; then
 	# mod_extract_forwarded
 	fw_conf="/etc/$WEB_SYSTEM/conf.d/mod_extract_forwarded.conf"
 	if [ -e "$fw_conf" ]; then
-		# append via awk, not sed with the whole line as an unescaped pattern - that was
-		# one of the blind IP-seds already on the plan's risk list
+		# awk append - sed with the whole line as unescaped pattern was a blind IP-sed
 		awk -v ip="$ip" '!done && /MEFaccept / && !/^#/ {
 			$0 = $0 " " ip
 			done = 1
@@ -232,8 +220,7 @@ if [ -n "$PROXY_SYSTEM" ] && [ -n "$WEB_SYSTEM" ]; then
 	# mod_remoteip
 	remoteip_conf="/etc/$WEB_SYSTEM/mods-enabled/remoteip.conf"
 	if [ -e "$remoteip_conf" ]; then
-		# exact line, not a substring: 2001:db8::1 counted as present while only
-		# 2001:db8::10 was - short v6 addresses are prefixes of longer ones all the time
+		# exact line, not substring: ::1 counted as present while only ::10 was
 		ip_re=$(printf '%s' "$ip" | sed 's/[].[\*^$]/\\&/g')
 		if ! grep -qE "^[[:space:]]*RemoteIPInternalProxy[[:space:]]+${ip_re}[[:space:]]*\$" "$remoteip_conf"; then
 			sed -i "s/<\/IfModule>/RemoteIPInternalProxy $ip\n<\/IfModule>/g" "$remoteip_conf"
