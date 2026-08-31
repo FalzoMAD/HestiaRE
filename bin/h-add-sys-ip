@@ -108,6 +108,15 @@ if [ -z "$sys_ip_check" ]; then
 			ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"tentative"' || break
 			sleep 0.5
 		done
+		# Two different endings hide behind a timeout: dadfailed is PERMANENT (another host
+		# answers for this address - the listener will never bind), tentative-after-5s is
+		# merely slow. Both continue - the object and config are written either way - but
+		# the difference gets said instead of resurfacing later as an unexplained emerg.
+		if ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"dadfailed"'; then
+			echo "Warning: duplicate address detection FAILED for $ip - another host answers for it; web listeners will not bind until that is resolved" >&2
+		elif ip -6 -j addr show dev "$iface" 2> /dev/null | grep -q '"tentative"'; then
+			echo "Warning: $ip still tentative after 5s - the web restart below may race the bind" >&2
+		fi
 	else
 		ip addr add "$ip/$cidr" dev "$iface" broadcast "$broadcast" label "$iface"
 	fi

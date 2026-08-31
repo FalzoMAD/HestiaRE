@@ -790,6 +790,87 @@ check_exim_macro_names() {
 	ok "exim macro names: no name contains an earlier one ($count checked)"
 }
 
+# The fleet break behind #891: an interface expansion producing an empty list element
+# defers EVERY remote delivery ("" is not a valid IP address) - one layer past what
+# check_notification_mta can see (an MTA existed and accepted; delivery died later).
+# exim -be expands the REAL template line offline, no DNS, no network: the no-pin case
+# falls out naturally ($sender_address_domain is empty in -be, the dsearch fails), the
+# with-pin cases run against a temp dir substituted into the same expression - so the
+# four conditional shapes stay proven instead of once-measured. Macro substitution is
+# textual (longer name first) because -be resolves expansions, not macro names.
+check_exim_interface_expansion() {
+	local tpl=/etc/exim4/exim4.conf.template expr m4 m6 out probe rc=0
+	if [ ! -f "$tpl" ] || ! grep -q '^OUTGOING_IP = ' "$tpl"; then
+		skip "exim interface expansion: no hestia template on this box"
+		return
+	fi
+	expr=$(grep -m1 '^  interface = ' "$tpl" | sed 's/^  interface = //')
+	m4=$(sed -n 's/^OUTGOING_IP = //p' "$tpl" | head -1)
+	m6=$(sed -n 's/^OUTGOING6_IP = //p' "$tpl" | head -1)
+	if [ -z "$expr" ] || [ -z "$m4" ] || [ -z "$m6" ]; then
+		no "exim interface expansion: derivation broke (line or macros not found)" \
+			"the check would measure nothing - template layout changed under it"
+		return
+	fi
+	expr=${expr//OUTGOING6_IP/$m6}
+	expr=${expr//OUTGOING_IP/$m4}
+	# stdin, not an argument: -be args run into exim's 256-byte limit, and a swallowed
+	# error there once turned this very check into a false green. "Failed" and empty-on-
+	# error are treated as NOT VERIFIABLE, never as pass.
+	_be_expand() {
+		printf '%s\n' "$1" | exim4 -be 2>&1 | head -1 | sed 's/^> //'
+	}
+	_iface_shape_ok() { # rejects any empty list element; empty whole = option unset = fine
+		local v="$1" item
+		case "$v" in *Failed* | *failed*) return 2 ;; esac
+		[ -z "$v" ] && return 0
+		case "$v" in "<;"*) ;; *) return 1 ;; esac
+		while IFS= read -r item; do
+			item="${item#"${item%%[![:space:]]*}"}"
+			item="${item%"${item##*[![:space:]]}"}"
+			[ -n "$item" ] || return 1
+		done <<< "$(echo "${v#<;}" | tr ';' '\n')"
+		return 0
+	}
+	# no-pin case: the natural -be lage ($sender_address_domain empty, dsearch fails) -
+	# exactly the break that deferred every fleet mail without pin files
+	out=$(_be_expand "$expr")
+	_iface_shape_ok "$out"
+	case $? in
+		1)
+			no "exim interface expands to a broken list without pin files: '$out'" \
+				"every remote delivery of a domain without conf/mail pins would defer"
+			return
+			;;
+		2)
+			no "exim interface expansion not verifiable: '$out'" \
+				"the expansion itself errored - fix the check's input, do not trust a green"
+			return
+			;;
+	esac
+	# with-pin cases as positive control over a temp dir substituted into the SAME
+	# expression: proves the instrument expands for real and covers the other shapes
+	probe=$(mktemp -d)
+	local lookup_part='/etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains}}'
+	local expr_probe=${expr//"$lookup_part"/$probe}
+	echo "192.0.2.9" > "$probe/ip"
+	out=$(_be_expand "$expr_probe")
+	[ "$out" = "<; 192.0.2.9" ] || rc=1
+	echo "2001:db8::9" > "$probe/ipv6"
+	out=$(_be_expand "$expr_probe")
+	[ "$out" = "<; 192.0.2.9 ; 2001:db8::9" ] || rc=2
+	rm -f "$probe/ip"
+	out=$(_be_expand "$expr_probe")
+	[ "$out" = "<; 2001:db8::9" ] || rc=3
+	rm -rf "$probe"
+	if [ "$rc" != 0 ]; then
+		no "exim interface expansion: with-pin shape $rc broke (got '$out')" \
+			"the pinned source address would not reach the transport as built"
+		return
+	fi
+	ok "exim interface expansion: all four shapes clean, no empty list element (offline via -be)"
+}
+
 check_notification_mta() {
 	local relay='' path bin
 	if [ "${USE_SERVER_SMTP:-}" = 'true' ] && [ -n "${SERVER_SMTP_HOST:-}" ]; then
@@ -1983,6 +2064,7 @@ check_notification_mta
 check_exim_sendonly
 check_mail_family_lage
 [ -n "$MAIL_SYSTEM" ] && check_exim_macro_names
+[ -n "$MAIL_SYSTEM" ] && check_exim_interface_expansion
 [ -n "$IMAP_SYSTEM" ] && [ "$IMAP_SYSTEM" != 'remote' ] && check_service "$IMAP_SYSTEM" "imap"
 [ -n "$ANTISPAM_SYSTEM" ] && [ "$ANTISPAM_SYSTEM" != 'remote' ] && check_service "$ANTISPAM_SYSTEM" "antispam"
 [ -n "$FTP_SYSTEM" ] && [ "$FTP_SYSTEM" != 'remote' ] && check_service "$FTP_SYSTEM" "ftp"
