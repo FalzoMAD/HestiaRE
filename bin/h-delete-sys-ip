@@ -55,21 +55,30 @@ else
 	cidr="$(convert_netmask "$NETMASK")"
 fi
 
-# Get primary IP of the record's family - deleting it cuts the box off the same way in both
 default_nic="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
 [ -z "$default_nic" ] && default_nic="$(ip -6 -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
+
+# Checking primary IP on the interface. v6 has no positional "primary" (the kernel lists
+# newest first and shifts route src freely) - the lockout case is deleting the LAST global
+# v6 while no global v4 exists. v4 keeps the classic first-address guard.
+interface="$(ip -d -j addr show | jq --arg IP "$ip" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
 if [ "$family" = 6 ]; then
-	primary_addr="$(ip -6 -d -j addr show "$default_nic" | jq -r '.[].addr_info[] | if .scope == "global" then .local else empty end' | head -n1)"
+	other_v6="$(ip -6 -d -j addr show "$default_nic" | jq --arg IP "$ip" -r '.[].addr_info[] | if .scope == "global" and .local != $IP then .local else empty end' | head -n1)"
+	# A v4 default ROUTE, not a v4 address: a Hetzner v6-only box carries a routeless CGN
+	# address, and "an address exists" would silence the guard exactly where it must fire
+	any_v4_route="$(ip -4 -d -j route show default 2> /dev/null | jq -r '.[0].dev // empty')"
+	if [ -n "$interface" ] && [ -z "$other_v6" ] && [ -z "$any_v4_route" ]; then
+		echo "Error: can't delete the last global v6 - the box has no v4 and would be cut off"
+		log_event "$E_FORBIDEN" "$ARGUMENTS"
+		exit "$E_FORBIDEN"
+	fi
 else
 	primary_addr="$(ip -4 -d -j addr show "$default_nic" | jq -r '.[].addr_info[] | if .scope == "global" then .local else empty end' | head -n1)"
-fi
-
-# Checking primary IP on the interface
-interface="$(ip -d -j addr show | jq --arg IP "$ip" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
-if [ -n "$interface" ] && [ "$ip" = "$primary_addr" ]; then
-	echo "Error: can't delete primary IP address"
-	log_event "$E_FORBIDEN" "$ARGUMENTS"
-	exit "$E_FORBIDEN"
+	if [ -n "$interface" ] && [ "$ip" = "$primary_addr" ]; then
+		echo "Error: can't delete primary IP address"
+		log_event "$E_FORBIDEN" "$ARGUMENTS"
+		exit "$E_FORBIDEN"
+	fi
 fi
 
 # Deleting system IP
