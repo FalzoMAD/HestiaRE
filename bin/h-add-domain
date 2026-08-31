@@ -42,12 +42,9 @@ is_object_unsuspended 'user' 'USER' "$user"
 #----------------------------------------------------------#
 
 # Get ip if it wasn't defined
-if [ -z "$ip" ]; then
-	get_user_ip
-	if [ -z "$ip" ]; then
-		check_result "$E_NOTEXIST" "no available IP address"
-	fi
-fi
+# get_user_ip owns the no-address-at-all refusal; an empty v4 slot is the v6-only box, and
+# the sub-commands resolve their own v6.
+[ -z "$ip" ] && get_user_ip
 
 # Working on web domain
 if [ -n "$WEB_SYSTEM" ]; then

@@ -267,18 +267,20 @@ get_user_ips() {
 	return 0
 }
 
-# v4 preferred (existing boxes behave unchanged); only a v4-less box falls through to v6.
+# The v4 slot: every caller writes this into an IP field or a %ip% listen line, both v4-shaped.
+# A box without any v4 leaves it EMPTY instead of handing back a v6 - the v6 twin is
+# get_user_ip6, and only a box without any address at all is an error.
 get_user_ip() {
 	ip=$(get_user_ips 4 | head -n1)
-	[ -z "$ip" ] && ip=$(get_user_ips 6 | head -n1)
+	local_ip="$ip"
+	nat=''
 	if [ -z "$ip" ]; then
-		check_result $E_NOTEXIST "no IP is available"
+		[ -n "$(get_user_ips 6 | head -n1)" ] || check_result "$E_NOTEXIST" "no IP is available"
+		return 0
 	fi
-	local_ip=$ip
 	nat=$(grep "^NAT" $CONF_DIR/ips/$ip | cut -f 2 -d \')
-	if [ -n "$nat" ]; then
-		ip=$nat
-	fi
+	[ -n "$nat" ] && ip="$nat"
+	return 0
 }
 
 # First v6 of the user into $ip6; rc 1 when none - callers decide, nothing aborts.

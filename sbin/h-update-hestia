@@ -33,17 +33,38 @@ HESTIARE_CHANNEL="${HESTIARE_CHANNEL:-stable}"
 GITHUB_REPO="HestiaRE/Hestia"
 GITHUB_API="https://api.github.com/repos/$GITHUB_REPO"
 GITHUB_RAW="https://github.com/$GITHUB_REPO/releases/download"
+# github.com has no AAAA: on a v6-only box the primary is unreachable, so the mirror serves the
+# same repo's release API (/api) and assets (/raw) unchanged. Twin literal in install.sh, which
+# runs before this tree exists. Empty HESTIARE_MIRROR in source.conf switches it off, and a
+# private Gitea release never falls back to the public mirror.
+RELEASE_MIRROR="${HESTIARE_MIRROR-https://dl.hestiare.com}"
+[ "$HESTIARE_SOURCE" = "gitea" ] && RELEASE_MIRROR=""
 
 AUTH=()
 [ -n "$HESTIARE_TOKEN" ] && AUTH=(-H "Authorization: token $HESTIARE_TOKEN")
+
+# $1 = api|raw, $2 = path below that root, rest = curl args. Bounded so an unroutable host
+# surfaces in seconds; the mirror never sees the Gitea token.
+release_get() {
+	local kind="$1" path="$2" primary mirror
+	shift 2
+	case "$kind" in
+		api) primary="$GITHUB_API" mirror="$RELEASE_MIRROR/api" ;;
+		raw) primary="$GITHUB_RAW" mirror="$RELEASE_MIRROR/raw" ;;
+	esac
+	curl -fsSL --connect-timeout 15 --max-time 600 "$@" "$primary$path" && return 0
+	[ -n "$RELEASE_MIRROR" ] || return 1
+	echo "Release source unreachable, retrying via $RELEASE_MIRROR" >&2
+	curl -fsSL --connect-timeout 15 --max-time 600 "$@" "$mirror$path"
+}
 
 resolve_latest() {
 	if [ "$HESTIARE_SOURCE" = "gitea" ]; then
 		curl -fsSL "${AUTH[@]}" "$HESTIARE_REPO_URL/releases/latest" | jq -r '.tag_name'
 	elif [ "$HESTIARE_CHANNEL" = "prerelease" ]; then
-		curl -fsSL "$GITHUB_API/releases" | jq -r '.[0].tag_name'
+		release_get api "/releases" | jq -r '.[0].tag_name'
 	else
-		curl -fsSL "$GITHUB_API/releases/latest" | jq -r '.tag_name'
+		release_get api "/releases/latest" | jq -r '.tag_name'
 	fi
 }
 
@@ -65,14 +86,13 @@ if [ "$CHECK_ONLY" = true ]; then
 	exit 0
 fi
 
-if [ "$HESTIARE_SOURCE" = "gitea" ]; then
-	URL="$HESTIARE_REPO_URL/releases/download/$LATEST/hestiare-$LATEST.tar.gz"
-else
-	URL="$GITHUB_RAW/$LATEST/hestiare-$LATEST.tar.gz"
-fi
-
 echo "Updating to $LATEST..."
-curl -fsSL "${AUTH[@]}" "$URL" -o /tmp/hestiare-update.tar.gz
+if [ "$HESTIARE_SOURCE" = "gitea" ]; then
+	curl -fsSL "${AUTH[@]}" "$HESTIARE_REPO_URL/releases/download/$LATEST/hestiare-$LATEST.tar.gz" \
+		-o /tmp/hestiare-update.tar.gz
+else
+	release_get raw "/$LATEST/hestiare-$LATEST.tar.gz" -o /tmp/hestiare-update.tar.gz
+fi
 tar -xzf /tmp/hestiare-update.tar.gz -C /tmp
 rm -f /tmp/hestiare-update.tar.gz
 # Stop the panel around the copy so in-use files are not clobbered.

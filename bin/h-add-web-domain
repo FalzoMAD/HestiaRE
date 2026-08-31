@@ -19,7 +19,8 @@
 user=$1
 domain=$2
 domain_idn=$2
-ip=$3
+ip46=$3
+ip="$ip46" # the dispatch is by variable name; $ip is what every consumer below reads
 restart=$4 # will be moved to the end soon
 aliases=$5
 proxy_ext=$6
@@ -51,7 +52,7 @@ domain_utf=$(idn2 --quiet -d "$domain_idn")
 
 is_system_enabled "$WEB_SYSTEM" 'WEB_SYSTEM'
 check_args '2' "$#" 'USER DOMAIN [IP] [RESTART] [ALIASES] [PROXY_EXTENSIONS]'
-is_format_valid 'user' 'domain' 'aliases' 'ip' 'proxy_ext' 'restart'
+is_format_valid 'user' 'domain' 'aliases' 'ip46' 'proxy_ext' 'restart'
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 is_package_full 'WEB_DOMAINS'
@@ -79,6 +80,9 @@ is_dir_symlink "$HOMEDIR/$user/web/$domain"
 is_base_domain_owner "$domain,$aliases"
 
 if [ -n "$ip" ]; then
+	if [ "$(ip_family "$ip")" = 6 ]; then
+		ip=$(ip6_canonical "$ip") || check_result "$E_INVALID" "cannot canonicalise the v6 address - the panel php backend did not answer"
+	fi
 	is_ip_valid "$ip" "$user"
 else
 	get_user_ip
@@ -86,7 +90,13 @@ fi
 # Auto-assign the default v6 alongside (#602, decided): a box carrying a v6 IP object
 # serves new domains on both families; the AAAA record stays the operator's move.
 local_ip6=''
-if get_user_ip6; then
+if [ "$(ip_family "$ip")" = 6 ]; then
+	# a v6 handed in here belongs in IP6: the IP field and every %ip% listen line are
+	# v4-shaped, and the renderer brackets the v6 slot only
+	local_ip6="$ip"
+	ip=''
+	local_ip=''
+elif get_user_ip6; then
 	local_ip6="$ip6"
 fi
 
@@ -247,7 +257,7 @@ syshealth_repair_web_config
 
 # Counters after the record, not before: an abort between the two used to leave the box counting
 # a domain that does not exist (#601).
-increase_ip_value "$local_ip"
+[ -n "$local_ip" ] && increase_ip_value "$local_ip"
 [ -n "$local_ip6" ] && increase_ip_value "$local_ip6"
 increase_user_value "$user" '$U_WEB_DOMAINS'
 increase_user_value "$user" '$U_WEB_ALIASES' "$alias_number"
