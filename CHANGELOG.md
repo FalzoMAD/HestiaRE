@@ -14,11 +14,13 @@ opens above it.
 
 ### Fixed
 
-- **A v6 panel login is now logged and bannable** (#888, part of the IPv6 groundwork #602).
-  `h-log-user-login` validated its address as IPv4-only, so a login from an IPv6 client
-  reached neither the panel's auth log nor `$HESTIA/log/auth.log` - the hestia-panel
-  fail2ban jail never saw a v6 brute-forcer. The sibling commands already validated
-  dual-family; only the logger was missed. Along with it: six naive `HTTP_HOST` splits
+- **A v6 panel login is now logged - and every failure class is bannable** (#888, part of
+  the IPv6 groundwork #602). `h-log-user-login` validated its address as IPv4-only, so no
+  v6 login (successful or failed) ever reached the panel's per-user auth log, and the
+  failure classes this command feeds to fail2ban (2FA, disabled login, IP allowlist) were
+  invisible for v6 clients. Plain wrong-password failures were already bannable through
+  `h-check-user-password`, which validated dual-family - only the logger was missed.
+  Verified on the dual-stack box: a v6 brute-force now ends in the nft `f2b6_HESTIA` set. Along with it: six naive `HTTP_HOST` splits
   (a bracketed v6 host became `[2001`, silently disabling the phpMyAdmin-over-IP guard
   and mangling panel-built URLs) now go through one bracket-aware helper; the firewall
   rule form no longer hides v6 ipsets (the renderer has dispatched per set family since

@@ -8,7 +8,7 @@
 
 # Argument definition
 user=$1
-ip=$2
+ip46=$2
 status=$3
 session_id=$4
 user_agent=$5
@@ -54,10 +54,10 @@ fi
 #                       Action                             #
 #----------------------------------------------------------#
 
-echo "DATE='$date' TIME='$time' IP='$ip' ACTION='login' STATUS='$status' USER_AGENT='$user_agent' SESSION='$session_id' ACTIVE='$active'" >> "$USER_DATA/auth.log"
+echo "DATE='$date' TIME='$time' IP='$ip46' ACTION='login' STATUS='$status' USER_AGENT='$user_agent' SESSION='$session_id' ACTIVE='$active'" >> "$USER_DATA/auth.log"
 
 if [ "$authlog" = "yes" ]; then
-	echo "$date $time $user $ip failed to login ($reason)" >> "$HESTIA/log/auth.log"
+	echo "$date $time $user $ip46 failed to login ($reason)" >> "$HESTIA/log/auth.log"
 fi
 
 #----------------------------------------------------------#
