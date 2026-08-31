@@ -137,7 +137,9 @@ if (!empty($_SESSION["PROXY_SYSTEM"])) {
 }
 
 // List IP addresses - v4 only for the select: the v6 side auto-assigns in
-// h-add-web-domain (#602), and h-add-web-domain's ip argument is v4-validated
+// h-add-web-domain (#602), and h-add-web-domain's ip argument is v4-validated.
+// On a v6-only box this select renders EMPTY while the CLI falls back to the v6
+// correctly - the form's v6-only face is stage-4 territory (#892).
 $ips = cli_json("h-list-user-ips " . $user . " json");
 $ips = array_filter($ips, fn($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
 

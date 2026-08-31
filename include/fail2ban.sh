@@ -85,6 +85,9 @@ fail2ban_web_logdir() {
 # existing logs now, so the FIRST domain must arm them and the LAST one must
 # disarm them - silently-off protection and a fail2ban that cannot start are the
 # two failure modes this transition owns. No-op when nothing changed.
+# Rebuild commands stay outside this circle because they create no LOG-SET transition
+# (no domain appears or disappears) - NOT because they change nothing: since #890 a
+# rebuild may write the record (v6 adoption). The gate hangs on the log-set edge.
 fail2ban_regate_web_apply() {
 	[ -f "$F2B_OURS" ] || return 0
 	local before after

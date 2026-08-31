@@ -357,6 +357,10 @@ web_backend_addr() {
 # value is dropped before substitution - v4-only loses the [%ip6%] listens, v6-only the
 # %ip% ones. Structural lines carry resolved tokens (%vhost%, %backend_addr%) and are
 # never deleted. %ip6% substitutes RAW; brackets are template text at the use site.
+# Custom-template contract: %ip% and %ip6% must never share one line (the rule would
+# delete it whenever EITHER family is absent), and a template that only ever names %ip%
+# renders v4-only - on a v6-only box its server block would end up with no listen at
+# all, which nginx answers by binding the wildcard, silently.
 web_render_template() {
 	local _del=''
 	[ -z "$_r_ip" ] && _del="/%ip%/d; "
@@ -685,6 +689,12 @@ add_web_http3_config() {
 	# plain quic, no reuseport: nginx accepts many quic listens on one ip:port, while reuseport
 	# would need one-per-ip bookkeeping that a decoupled fragment must not own
 	local ip="$1" ip6="$2" port frag
+	# Same soft rule as the renderer: a recorded v6 whose object vanished must not become
+	# a listen on a dead address here - the fragment would undo what add_web_config just
+	# caught, and the next reload dies. One guard in the writer covers all three callers.
+	if [ -n "$ip6" ] && [ ! -e "$CONF_DIR/ips/$ip6" ]; then
+		ip6=''
+	fi
 	port=$(web_http3_front_ssl_port)
 	frag="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_http3"
 	# single quotes keep $server_port literal for nginx; the listen lines carry the only
