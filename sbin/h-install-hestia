@@ -613,6 +613,12 @@ install_mail() {
 		DCDIR="$HESTIA/share/dovecot/2.3"
 	fi
 	cp -f "$DCDIR/dovecot.conf" /etc/dovecot/
+	# Derived from the kernel like exim's send-only list: with ipv6.disable=1 the shipped
+	# "listen = *, ::" is fatal (listen(::, 993): Address family not supported -> Fatal:
+	# Failed to start listeners, measured), so the v6 half is dropped where no v6 exists.
+	if [ ! -e /proc/net/if_inet6 ]; then
+		sed -i 's/^listen = \*, ::$/listen = */' /etc/dovecot/dovecot.conf
+	fi
 	cp -f "$DCDIR/conf.d/"* /etc/dovecot/conf.d/
 	if [ "$DCDIR" = "$HESTIA/share/dovecot/2.3" ]; then
 		# our dovecot.conf defines the inbox namespace; the stock file's duplicate

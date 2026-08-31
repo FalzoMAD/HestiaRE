@@ -626,6 +626,7 @@ rebuild_mail_domain_conf() {
 		rm -f $HOMEDIR/$user/conf/mail/$domain/passwd
 		rm -f $HOMEDIR/$user/conf/mail/$domain/fwd_only
 		rm -f $HOMEDIR/$user/conf/mail/$domain/ip
+		rm -f $HOMEDIR/$user/conf/mail/$domain/ipv6
 		rm -fr $HOMEDIR/$user/conf/mail/$domain/limits
 		touch $HOMEDIR/$user/conf/mail/$domain/accounts
 		touch $HOMEDIR/$user/conf/mail/$domain/aliases
@@ -636,6 +637,9 @@ rebuild_mail_domain_conf() {
 		# Setting outgoing ip address
 		if [ -n "$local_ip" ] && [ "$U_SMTP_RELAY" != 'true' ]; then
 			echo "$local_ip" > $HOMEDIR/$user/conf/mail/$domain/ip
+		fi
+		if [ -n "$local_ip6" ] && [ "$U_SMTP_RELAY" != 'true' ]; then
+			echo "$local_ip6" > $HOMEDIR/$user/conf/mail/$domain/ipv6
 		fi
 
 		# Adding antispam protection

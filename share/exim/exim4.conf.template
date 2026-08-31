@@ -14,7 +14,10 @@ smtp_banner = $smtp_active_hostname ESMTP
 smtp_active_hostname = ${lookup dnsdb{>: defer_never,ptr=$interface_address}{${listextract{1}{$value}}}{$primary_hostname}}
 add_environment = <; PATH=/bin:/usr/bin
 keep_environment =
-disable_ipv6 = true
+# false is safe on a v6-less kernel for THIS template - measured with ipv6.disable=1:
+# exim skips the missing family itself (the stock send-only template does NOT, see
+# configure_exim_sendonly). true would silently ignore every v6 listener and source.
+disable_ipv6 = false
 smtp_accept_max = 100
 smtp_accept_max_per_host = 20
 
@@ -23,7 +26,10 @@ SRS_SECRET = ${readfile{/etc/exim4/srs.conf}}
 smtputf8_advertise_hosts =
 domainlist local_domains = dsearch;/etc/exim4/domains/
 domainlist relay_to_domains = dsearch;/etc/exim4/domains/
-hostlist relay_from_hosts = 127.0.0.1
+hostlist relay_from_hosts = <; 127.0.0.1 ; ::1
+# iplsearch keys: a v6 address MUST be quoted ("2001:db8::1"), bare it never matches -
+# measured: an unquoted v6 whitelist entry left the sender in the RBL deny while the
+# v4 twin on the next line matched fine.
 hostlist whitelist = net-iplsearch;/etc/exim4/white-blocks.conf
 hostlist spammers = net-iplsearch;/etc/exim4/spam-blocks.conf
 no_local_from_check
@@ -83,6 +89,10 @@ DKIM_FILE = /etc/exim4/domains/${lookup{${lc:${domain:$h_from:}}}dsearch{/etc/ex
 DKIM_PRIVATE_KEY = ${if exists{DKIM_FILE}{DKIM_FILE}{0}}
 
 OUTGOING_IP = /etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains}}/ip
+# A second FILE, not a list in the first: every existing reader of /ip stays untouched,
+# and a missing file simply means "no v6 source pin" (the kernel picks) - upstream PR 5490
+# reached the same two-file cut independently.
+OUTGOING6_IP = /etc/exim4/domains/${lookup{$sender_address_domain}dsearch{/etc/exim4/domains}}/ipv6
 
 # Per-domain spam subject tag (h-change-mail-domain-spam-subject-tag): if the
 # recipient domain has this file, its content replaces the global
@@ -528,7 +538,7 @@ remote_smtp:
   dkim_canon = relaxed
   dkim_strict = 0
   hosts_try_fastopen = !*.l.google.com
-  interface = ${if exists{OUTGOING_IP}{${readfile{OUTGOING_IP}}}}
+  interface = <; ${if exists{OUTGOING_IP}{${readfile{OUTGOING_IP}{}}}} ; ${if exists{OUTGOING6_IP}{${readfile{OUTGOING6_IP}{}}}}
 
 remote_forwarded_smtp:
   driver = smtp
@@ -539,7 +549,7 @@ remote_forwarded_smtp:
   dkim_canon = relaxed
   dkim_strict = 0
   hosts_try_fastopen = !*.l.google.com
-  interface = ${if exists{OUTGOING_IP}{${readfile{OUTGOING_IP}}}}
+  interface = <; ${if exists{OUTGOING_IP}{${readfile{OUTGOING_IP}{}}}} ; ${if exists{OUTGOING6_IP}{${readfile{OUTGOING6_IP}{}}}}
   # modify the envelope from, for mails that we forward
   max_rcpt = 1
   return_path = ${srs_encode {SRS_SECRET} {$return_path} {$original_domain}}
