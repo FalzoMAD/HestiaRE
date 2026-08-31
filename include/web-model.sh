@@ -196,6 +196,13 @@ rebuild_ip_web_config() {
 			fi
 			echo "Listen $addr:$WEB_PORT" >> "$web_conf"
 			cat "$HESTIA/share/apache2/unassigned.conf" >> "$web_conf"
+			# ServerName takes no bracketed literal ("Invalid ServerName [v6]"), so the
+			# catch-all's name token renders as a label, not an address, for v6
+			if [ "$family" = 6 ]; then
+				sed -i "s/directNAME/${ip//:/-}.invalid/g" "$web_conf"
+			else
+				sed -i "s/directNAME/$ip/g" "$web_conf"
+			fi
 			sed -i "s/directIP/$addr/g" "$web_conf"
 			sed -i "s/directPORT/$WEB_PORT/g" "$web_conf"
 

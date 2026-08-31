@@ -472,6 +472,17 @@ add_web_config() {
 		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
 	fi
 
+	# Family twin of local_ip, derived from the record when the caller never resolved it -
+	# the ssl/alias/tpl/suspend commands re-render without thinking about families, and one
+	# of them silently dropped the v6 listens on its next render. A caller that SET the
+	# variable - even to empty (vanished object, rebuild's soft path) - wins over the record.
+	if [ -z "${local_ip6+x}" ]; then
+		local_ip6=''
+		if [ -n "$IP6" ] && [ -e "$CONF_DIR/ips/$IP6" ]; then
+			local_ip6="$IP6"
+		fi
+	fi
+
 	# Divergent values for the engine; everything else reads this scope
 	local _r_ip="$local_ip" _r_ip6="$local_ip6" _r_domain="$domain" _r_domain_idn="$domain_idn" \
 		_r_root_domain="$domain" _r_alias="${aliases//,/ }" _r_alias_idn="${aliases_idn//,/ }" \
@@ -966,6 +977,18 @@ add_webmail_config() {
 	if [ "$WEBMAIL_ALIAS" != "mail" ]; then
 		override_alias="mail.$domain"
 		override_alias_idn="mail.$domain_idn"
+	fi
+
+	# Same derivation guard as add_web_config: webmail re-renderers (mail-ssl and friends)
+	# never resolve a v6; take the web domain's IP6, else the default v6, else none.
+	if [ -z "${local_ip6+x}" ]; then
+		local_ip6=$(get_object_value 'web' 'DOMAIN' "$domain" '$IP6')
+		if [ -z "$local_ip6" ] && get_user_ip6; then
+			local_ip6="$ip6"
+		fi
+		if [ -n "$local_ip6" ] && [ ! -e "$CONF_DIR/ips/$local_ip6" ]; then
+			local_ip6=''
+		fi
 	fi
 
 	# Divergent values: %domain% is the webmail alias, %web_system% the front
