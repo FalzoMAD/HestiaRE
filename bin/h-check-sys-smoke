@@ -1805,6 +1805,22 @@ check_record_grammar() {
 # check_ip_object_counters - the ip-record counters had an authority but no guard (the
 # IP_AVAIL lage before #867), and the NAT-blind decrease left real backlog. Object list
 # derives from the files; the authority's check mode is the only rule source.
+# The bootstrap carries the mirror URL twice - install.sh runs before this tree exists and can
+# read it from nowhere. Two literals drift, so this is what measures them. The DEFAULT only: an
+# operator's own HESTIARE_MIRROR in source.conf is not our business.
+check_release_mirror() {
+	local a b
+	a=$(sed -n 's|^RELEASE_MIRROR="\(https://[^"$]*\)"$|\1|p' "$HESTIA/install.sh" 2> /dev/null | head -n1)
+	b=$(sed -n 's|^RELEASE_MIRROR="${HESTIARE_MIRROR-\(https://[^"}]*\)}"$|\1|p' "$HESTIA/sbin/h-update-hestia" 2> /dev/null | head -n1)
+	if [ -z "$a" ] || [ -z "$b" ]; then
+		no "release mirror default unreadable" "install.sh='${a:-none}' h-update-hestia='${b:-none}' - the line moved and this guard now measures nothing"
+	elif [ "$a" != "$b" ]; then
+		no "release mirror default drifted" "install.sh=$a vs h-update-hestia=$b - the two bootstrap paths would fetch from different hosts"
+	else
+		ok "release mirror default identical in both bootstrap paths ($a)"
+	fi
+}
+
 check_ip_object_counters() {
 	local f addr line k want stored drift=0 checked=0 first='' obj_out obj_lines
 	for f in "$CONF_DIR"/ips/*; do
@@ -2281,6 +2297,7 @@ check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_ip_object_counters
+check_release_mirror
 check_record_grammar
 check_key_registries
 check_identity_band
