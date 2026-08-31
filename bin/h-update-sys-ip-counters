@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: update IP usage counters
-# options: IP
+# options: [IP] [MODE]
 #
 # example: h-update-sys-ip-counters
 #
@@ -14,6 +14,7 @@
 # ip46 for the format dispatch; global $ip aliased for the sourced ip.sh helpers
 ip46="$1"
 ip="$ip46"
+mode="${2-apply}"
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -29,7 +30,16 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '0' "$#" 'IP'
+check_args '0' "$#" '[IP] [MODE]'
+case "$mode" in
+	apply | check) ;;
+	*) check_result "$E_INVALID" "invalid mode '$mode' (apply|check)" ;;
+esac
+# check prints what apply WOULD write, per object, and is the smoke guard's only oracle -
+# one derivation, two consumers, so the guard cannot drift from the authority (#867 shape)
+if [ "$mode" = 'check' ] && [ -z "$ip" ]; then
+	check_result "$E_INVALID" "check mode wants one IP - the caller owns the object list"
+fi
 if [ -n "$ip" ]; then
 	is_format_valid 'ip46'
 	if [ "$(ip_family "$ip46")" = 6 ]; then
@@ -65,6 +75,12 @@ for ip in $ip_list; do
 	fi
 	web_domains="$(echo "$ip_usage" | sed '/^$/d' | wc -l)"
 	sys_users="$(echo "$ip_usage" | sed "s|^$CONF_DIR/users/||; s|/web.conf.*||" | sort -u | tr '\n' ',' | sed "s/,$//g")"
+
+	if [ "$mode" = 'check' ]; then
+		printf "U_WEB_DOMAINS='%s'\n" "$web_domains"
+		printf "U_SYS_USERS='%s'\n" "$sys_users"
+		continue
+	fi
 
 	# Update counters
 	update_ip_value '$U_WEB_DOMAINS' "$web_domains"

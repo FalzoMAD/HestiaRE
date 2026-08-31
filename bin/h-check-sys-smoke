@@ -1811,6 +1811,35 @@ check_record_grammar() {
 #
 # It also asks the other way round: a counter-shaped key in the registry that the authority does
 # not compute lives outside both, which is how U_MAIL_SSL survived for years.
+# check_ip_object_counters - U_SYS_USERS/U_WEB_DOMAINS live in $CONF_DIR/ips/*, had an
+# authority (h-update-sys-ip-counters) but no guard - the IP_AVAIL lage before #867. The
+# NAT-blind decrease counted 0 on every NAT box and evicted customers on their FIRST
+# domain delete, so a backlog from that era is expected, not hypothetical. The object
+# list derives from the files; the authority's check mode is the only rule source.
+check_ip_object_counters() {
+	local f addr line k want stored drift=0 checked=0 first=''
+	for f in "$CONF_DIR"/ips/*; do
+		[ -f "$f" ] || continue
+		addr=${f##*/}
+		while IFS= read -r line; do
+			k="${line%%=*}"
+			want=$(sed "s/^$k='\(.*\)'$/\1/" <<< "$line")
+			stored=$(sed -n "s/^$k='\(.*\)'$/\1/p" "$f" | head -1)
+			checked=$((checked + 1))
+			[ "$stored" = "$want" ] && continue
+			drift=$((drift + 1))
+			[ -z "$first" ] && first="$addr $k stored='$stored' counted='$want'"
+		done < <("$BIN/h-update-sys-ip-counters" "$addr" check 2> /dev/null)
+	done
+	if [ "$checked" -eq 0 ]; then
+		no "no IP object counters compared" "every box registers at least one IP - the authority or the file set broke"
+	elif [ "$drift" -gt 0 ]; then
+		no "$drift IP object counter(s) drifted" "$first - repair: h-update-sys-ip-counters"
+	else
+		ok "IP object counters match their recount ($checked compared)"
+	fi
+}
+
 check_object_counters() {
 	local u line k stored want drift=0 checked=0 first="" computed missing="" reg
 	computed=$("$BIN/h-update-user-counters" "$ROOT_USER" check 2> /dev/null | cut -d= -f1)
@@ -2253,6 +2282,7 @@ check_record_name_patterns
 check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
+check_ip_object_counters
 check_record_grammar
 check_key_registries
 check_identity_band
