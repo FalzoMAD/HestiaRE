@@ -14,6 +14,36 @@ opens above it.
 
 ### Added
 
+- **A v6-only box installs itself** (#892, part of #602). github.com has no AAAA, so the
+  bootstrap had no way in at all: `install.sh` and `h-update-hestia` now retry the release API
+  and the release asset through the mirror (`dl.hestiare.com/api` and `/raw`, the same repo,
+  byte-identical payload - verified by sha256 against the GitHub original) whenever the primary
+  does not answer. It is a retry of ONE source, not a second one; a private Gitea release never
+  falls back, and the mirror never sees a token. Both bootstrap paths carry the URL as their own
+  literal (install.sh runs before the tree exists and can read it from nowhere), so a smoke check
+  now measures the two against each other - a drifted or vanished line fails, it does not pass
+  quietly. Discovery learned the `-6` twin (default route, NIC address, the closing Backup URL,
+  which brackets a literal), the nginx resolver harvest keeps v6 nameservers bracketed instead of
+  discarding them (link-local skipped: not addressable from a config) while nginx.conf carries v6
+  fallback resolvers and the installer puts `ipv6=off` back only where the kernel has no v6, and
+  `h-change-sys-hostname` maintains the `::1` record beside `127.0.0.1` - again only with a v6
+  kernel, since a loopback literal the box cannot use makes every lookup of its own name fail first.
+  The deeper change is the v4 SLOT: `get_user_ip` used to hand back a v6 when the box had no v4,
+  and all nine callers write that into an `IP` field or a `%ip%` listen line, both v4-shaped - the
+  result would have been an unbracketed `listen 2a01:db8::1:80`. It now yields the v4 or nothing,
+  the v6 travels in `IP6`, and the callers that could not take an empty v4 followed: add and delete
+  (counters), change-ip (an address the vhost does not contain yet has to be RENDERED, not
+  substituted), change-owner (which never moved the v6 counters at all), the IP name alias (which
+  read the ips DIRECTORY when the slot was empty), and the panel, where the v4 select renders per
+  family and an unoffered control keeps its stored value instead of reading as cleared.
+  `h-add-web-domain` accepts a v6 in the ip argument and sorts it into `IP6`, which is how the
+  installer's own default domain works on a box whose only address is a v6.
+  Measured on a real v6-only box (no v4 route, github unreachable, `curl` exit 7 as the control):
+  bootstrap over the mirror end to end, then a full `nomail` install; on the dual-stack box the
+  v6-only domain shape end to end - record `IP='' IP6='...'`, only the bracketed listen line,
+  `nginx -t` clean, the v4 handed in afterwards, both counters back to their baseline and the
+  recount authority agreeing.
+
 - **Mail speaks both families - and the v6-less kernel is a measured lage, not a hope**
   (#891, part of #602). The stage OPENED with the measurement the plan demanded: a box
   booted with ipv6.disable=1, exim observed in both states. Result: the full hestia
