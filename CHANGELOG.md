@@ -35,7 +35,7 @@ opens above it.
   silently never matches - documented at the hostlists), and Spamhaus refuses queries
   via public resolvers, rejecting mail of BOTH families on such boxes (pre-existing,
   resolver-lage, not v6) - consequence: zen.spamhaus.org left the shipped DNSBL seed
-  (bl.spamcop.net stays; the list is operator-managed via h-add/delete-sys-mail-dnsbl).
+  (bl.spamcop.net stays, bl.mailspike.net joins; the list is operator-managed via h-add/delete-sys-mail-dnsbl).
 
 - **The web renderer speaks both families** (#890, part of #602). Four independently
   maintained sed substitution chains became ONE engine (`web_render_template`), proven
