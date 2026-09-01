@@ -1,5 +1,6 @@
 server {
 	listen      %ip%:%web_port%;
+	listen      [%ip6%]:%web_port%;
 	server_name %domain_idn% %alias_idn%;
 	root        /var/www/html;
 	index       index.php index.html index.htm;

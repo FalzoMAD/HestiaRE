@@ -326,6 +326,77 @@ prepare_web_domain_values() {
 	fi
 }
 
+# All families for one apache VirtualHost tag: the tag is structural, deletion would
+# orphan </VirtualHost>, so it resolves - apache takes several addresses in one tag.
+web_vhost_addrs() {
+	local out=''
+	[ -n "$local_ip" ] && out="$local_ip:$1"
+	[ -n "$local_ip6" ] && out="${out:+$out }[$local_ip6]:$1"
+	echo "$out"
+}
+
+# nginx->backend hop: v4 when present, else bracketed v6 - a bare family token here
+# would fall to the deletion rule on a single-family box.
+web_backend_addr() {
+	if [ -n "$local_ip" ]; then
+		echo "$local_ip"
+	else
+		echo "[$local_ip6]"
+	fi
+}
+
+# The ONE substitution engine (#890): stdin template in, rendered text out. Divergent
+# values arrive in _r_* (webmail renders %domain% as the alias, %web_system% as the
+# front). Removing or renaming a token breaks every custom template that uses it.
+# A repeatable line whose family placeholder has no value is deleted before substitution;
+# structural lines carry resolved tokens (%vhost%, %backend_addr%) and are never deleted.
+# %ip6% substitutes RAW - brackets are template text at the use site.
+# Custom-template contract: %ip% and %ip6% never on one line (deleted once EITHER family
+# is absent); an %ip%-only template on a v6-only box renders a listen-less server block,
+# which nginx answers by silently binding the wildcard.
+web_render_template() {
+	local _del=''
+	[ -z "$_r_ip" ] && _del="/%ip%/d; "
+	[ -z "$_r_ip6" ] && _del="${_del}/%ip6%/d; "
+	sed -e "$_del" \
+		-e "s|%ip%|$_r_ip|g" \
+		-e "s|%ip6%|$_r_ip6|g" \
+		-e "s|%vhost%|$_r_vhost|g" \
+		-e "s|%vhost_ssl%|$_r_vhost_ssl|g" \
+		-e "s|%backend_addr%|$_r_backend_addr|g" \
+		-e "s|%domain%|$_r_domain|g" \
+		-e "s|%domain_idn%|$_r_domain_idn|g" \
+		-e "s|%root_domain%|$_r_root_domain|g" \
+		-e "s|%alias%|$_r_alias|g" \
+		-e "s|%alias_idn%|$_r_alias_idn|g" \
+		-e "s|%alias_string%|$alias_string|g" \
+		-e "s|%email%|info@$_r_root_domain|g" \
+		-e "s|%web_system%|$_r_web_system|g" \
+		-e "s|%web_port%|$WEB_PORT|g" \
+		-e "s|%web_ssl_port%|$WEB_SSL_PORT|g" \
+		-e "s|%backend_lsnr%|$backend_lsnr|g" \
+		-e "s|%rgroups%|$WEB_RGROUPS|g" \
+		-e "s|%proxy_system%|$PROXY_SYSTEM|g" \
+		-e "s|%proxy_port%|$PROXY_PORT|g" \
+		-e "s|%proxy_ssl_port%|$PROXY_SSL_PORT|g" \
+		-e "s|%front_port%|${PROXY_PORT:-$WEB_PORT}|g" \
+		-e "s|%front_ssl_port%|${PROXY_SSL_PORT:-$WEB_SSL_PORT}|g" \
+		-e "s|%docker_port%|$DOCKER_PORT|g" \
+		-e "s|%docker_ip%|$web_docker_ip|g" \
+		-e "s/%proxy_extentions%/${PROXY_EXT//,/|}/g" \
+		-e "s/%proxy_extensions%/${PROXY_EXT//,/|}/g" \
+		-e "s|%user%|$user|g" \
+		-e "s|%group%|$user|g" \
+		-e "s|%home%|$HOMEDIR|g" \
+		-e "s|%docroot%|$docroot|g" \
+		-e "s|%sdocroot%|$sdocroot|g" \
+		-e "s|%ssl_crt%|$ssl_crt|g" \
+		-e "s|%ssl_key%|$ssl_key|g" \
+		-e "s|%ssl_pem%|$ssl_pem|g" \
+		-e "s|%ssl_ca_str%|$ssl_ca_str|g" \
+		-e "s|%ssl_ca%|$ssl_ca|g"
+}
+
 add_web_config() {
 	if [ ! -d "$HOMEDIR/$user/conf/web/$domain" ]; then
 		mkdir -p "$HOMEDIR/$user/conf/web/$domain/"
@@ -398,8 +469,25 @@ add_web_config() {
 		conf="$HOMEDIR/$user/conf/web/$domain/$1.ssl.conf"
 	fi
 
-	# Removing or renaming a variable here breaks every custom template that uses it.
+	# Family twin of local_ip, derived from the record because ~15 re-render commands never
+	# resolve addresses. A caller that SET it - even empty - wins. The variable is
+	# process-wide by contract, so a DERIVED value is unset again at the end.
+	local _derived_ip6=0
+	if [ -z "${local_ip6+x}" ]; then
+		_derived_ip6=1
+		local_ip6=''
+		if [ -n "$IP6" ] && [ -e "$CONF_DIR/ips/$IP6" ]; then
+			local_ip6="$IP6"
+		fi
+	fi
 
+	# Divergent values for the engine; everything else reads this scope
+	local _r_ip="$local_ip" _r_ip6="$local_ip6" _r_domain="$domain" _r_domain_idn="$domain_idn" \
+		_r_root_domain="$domain" _r_alias="${aliases//,/ }" _r_alias_idn="${aliases_idn//,/ }" \
+		_r_web_system="$WEB_SYSTEM" _r_vhost _r_vhost_ssl _r_backend_addr
+	_r_vhost="$(web_vhost_addrs "$WEB_PORT")"
+	_r_vhost_ssl="$(web_vhost_addrs "$WEB_SSL_PORT")"
+	_r_backend_addr="$(web_backend_addr)"
 	{
 		if [ "$web_tpl_merged" = 1 ]; then
 			if [ "$SSL" = 'yes' ]; then
@@ -410,39 +498,7 @@ add_web_config() {
 		else
 			cat "${WEBTPL_LOCATION}/$2"
 		fi
-	} \
-		| sed -e "s|%ip%|$local_ip|g" \
-			-e "s|%domain%|$domain|g" \
-			-e "s|%domain_idn%|$domain_idn|g" \
-			-e "s|%alias%|${aliases//,/ }|g" \
-			-e "s|%alias_idn%|${aliases_idn//,/ }|g" \
-			-e "s|%alias_string%|$alias_string|g" \
-			-e "s|%email%|info@$domain|g" \
-			-e "s|%web_system%|$WEB_SYSTEM|g" \
-			-e "s|%web_port%|$WEB_PORT|g" \
-			-e "s|%web_ssl_port%|$WEB_SSL_PORT|g" \
-			-e "s|%backend_lsnr%|$backend_lsnr|g" \
-			-e "s|%rgroups%|$WEB_RGROUPS|g" \
-			-e "s|%proxy_system%|$PROXY_SYSTEM|g" \
-			-e "s|%proxy_port%|$PROXY_PORT|g" \
-			-e "s|%proxy_ssl_port%|$PROXY_SSL_PORT|g" \
-			-e "s|%front_port%|${PROXY_PORT:-$WEB_PORT}|g" \
-			-e "s|%front_ssl_port%|${PROXY_SSL_PORT:-$WEB_SSL_PORT}|g" \
-			-e "s|%docker_port%|$DOCKER_PORT|g" \
-			-e "s|%docker_ip%|$web_docker_ip|g" \
-			-e "s/%proxy_extentions%/${PROXY_EXT//,/|}/g" \
-			-e "s/%proxy_extensions%/${PROXY_EXT//,/|}/g" \
-			-e "s|%user%|$user|g" \
-			-e "s|%group%|$user|g" \
-			-e "s|%home%|$HOMEDIR|g" \
-			-e "s|%docroot%|$docroot|g" \
-			-e "s|%sdocroot%|$sdocroot|g" \
-			-e "s|%ssl_crt%|$ssl_crt|g" \
-			-e "s|%ssl_key%|$ssl_key|g" \
-			-e "s|%ssl_pem%|$ssl_pem|g" \
-			-e "s|%ssl_ca_str%|$ssl_ca_str|g" \
-			-e "s|%ssl_ca%|$ssl_ca|g" \
-			> $conf
+	} | web_render_template > $conf
 
 	process_http2_directive "$conf"
 
@@ -508,6 +564,8 @@ add_web_config() {
 			$user $domain $local_ip $HOMEDIR \
 			$HOMEDIR/$user/web/$domain/public_html
 	fi
+	[ "$_derived_ip6" = 1 ] && unset -v local_ip6
+	return 0
 }
 
 get_web_config_lines() {
@@ -626,11 +684,18 @@ default_proxy_ext() {
 add_web_http3_config() {
 	# plain quic, no reuseport: nginx accepts many quic listens on one ip:port, while reuseport
 	# would need one-per-ip bookkeeping that a decoupled fragment must not own
-	local ip="$1" port frag
+	local ip="$1" ip6="$2" port frag
+	# Soft rule as in the renderer: a vanished v6 object must not become a quic listen on
+	# a dead address; one guard in the writer covers all three callers.
+	if [ -n "$ip6" ] && [ ! -e "$CONF_DIR/ips/$ip6" ]; then
+		ip6=''
+	fi
 	port=$(web_http3_front_ssl_port)
 	frag="$HOMEDIR/$user/conf/web/$domain/nginx.ssl.conf_http3"
-	# single quotes keep $server_port literal for nginx; the listen line carries the only %-formats
-	printf 'listen      %s:%s quic;\n' "$ip" "$port" > "$frag"
+	# single quotes keep $server_port literal for nginx; one quic listen per configured family
+	: > "$frag"
+	[ -n "$ip" ] && printf 'listen      %s:%s quic;\n' "$ip" "$port" >> "$frag"
+	[ -n "$ip6" ] && printf 'listen      [%s]:%s quic;\n' "$ip6" "$port" >> "$frag"
 	printf 'add_header Alt-Svc '\''h3=":$server_port"; ma=86400'\'';\n' >> "$frag"
 	chown root:"$user" "$frag"
 	chmod 640 "$frag"
@@ -647,7 +712,7 @@ apply_web_http3_config() {
 	if [ "$HTTP3" = 'yes' ] \
 		&& { [ "$PROXY_SYSTEM" = 'nginx' ] || [ "$WEB_SYSTEM" = 'nginx' ]; } \
 		&& nginx_has_http3; then
-		add_web_http3_config "$(get_real_ip "$IP")"
+		add_web_http3_config "$(get_real_ip "$IP")" "$IP6"
 	else
 		del_web_http3_config
 	fi
@@ -689,9 +754,7 @@ is_web_domain_cert_valid() {
 		check_result "$E_FORBIDEN" "SSL Key is protected (remove pass_phrase)"
 	fi
 
-	if pgrep -x "openssl" > /dev/null; then
-		pkill openssl
-	fi
+	# no pkill openssl: it reaped every openssl on the box; our own $pid dies just below
 
 	openssl s_server -quiet -cert $ssl_dir/$domain.crt \
 		-key $ssl_dir/$domain.key >> /dev/null 2>&1 &
@@ -918,37 +981,28 @@ add_webmail_config() {
 		override_alias_idn="mail.$domain_idn"
 	fi
 
-	# Removing or renaming a variable here breaks every custom template that uses it.
+	# Derivation guard as in add_web_config: web domain's IP6, else default v6, else none;
+	# derived values are unset at the end (process-wide variable).
+	local _derived_ip6=0
+	if [ -z "${local_ip6+x}" ]; then
+		_derived_ip6=1
+		local_ip6=$(get_object_value 'web' 'DOMAIN' "$domain" '$IP6')
+		if [ -z "$local_ip6" ] && get_user_ip6; then
+			local_ip6="$ip6"
+		fi
+		if [ -n "$local_ip6" ] && [ ! -e "$CONF_DIR/ips/$local_ip6" ]; then
+			local_ip6=''
+		fi
+	fi
 
-	cat "$HESTIA/share/$1/webmail/$2" \
-		| sed -e "s|%ip%|$local_ip|g" \
-			-e "s|%domain%|$WEBMAIL_ALIAS.$domain|g" \
-			-e "s|%domain_idn%|$WEBMAIL_ALIAS.$domain_idn|g" \
-			-e "s|%root_domain%|$domain|g" \
-			-e "s|%alias%|$override_alias|g" \
-			-e "s|%alias_idn%|$override_alias_idn|g" \
-			-e "s|%alias_string%|$alias_string|g" \
-			-e "s|%email%|info@$domain|g" \
-			-e "s|%web_system%|$front|g" \
-			-e "s|%web_port%|$WEB_PORT|g" \
-			-e "s|%web_ssl_port%|$WEB_SSL_PORT|g" \
-			-e "s|%backend_lsnr%|$backend_lsnr|g" \
-			-e "s|%rgroups%|$WEB_RGROUPS|g" \
-			-e "s|%proxy_system%|$PROXY_SYSTEM|g" \
-			-e "s|%proxy_port%|$PROXY_PORT|g" \
-			-e "s|%proxy_ssl_port%|$PROXY_SSL_PORT|g" \
-			-e "s/%proxy_extensions%/${PROXY_EXT//,/|}/g" \
-			-e "s|%user%|$user|g" \
-			-e "s|%group%|$user|g" \
-			-e "s|%home%|$HOMEDIR|g" \
-			-e "s|%docroot%|$docroot|g" \
-			-e "s|%sdocroot%|$sdocroot|g" \
-			-e "s|%ssl_crt%|$ssl_crt|g" \
-			-e "s|%ssl_key%|$ssl_key|g" \
-			-e "s|%ssl_pem%|$ssl_pem|g" \
-			-e "s|%ssl_ca_str%|$ssl_ca_str|g" \
-			-e "s|%ssl_ca%|$ssl_ca|g" \
-			> $conf
+	# Divergent values: %domain% is the webmail alias, %web_system% the front
+	local _r_ip="$local_ip" _r_ip6="$local_ip6" _r_domain="$WEBMAIL_ALIAS.$domain" _r_domain_idn="$WEBMAIL_ALIAS.$domain_idn" \
+		_r_root_domain="$domain" _r_alias="$override_alias" _r_alias_idn="$override_alias_idn" \
+		_r_web_system="$front" _r_vhost _r_vhost_ssl _r_backend_addr
+	_r_vhost="$(web_vhost_addrs "$WEB_PORT")"
+	_r_vhost_ssl="$(web_vhost_addrs "$WEB_SSL_PORT")"
+	_r_backend_addr="$(web_backend_addr)"
+	web_render_template < "$HESTIA/share/$1/webmail/$2" > $conf
 
 	process_http2_directive "$conf"
 
@@ -963,10 +1017,8 @@ add_webmail_config() {
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
 		fi
-		if [ -n "$PROXY_SYSTEM" ]; then
-			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
-			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.ssl.conf
-		fi
+		# no proxy link block here: it re-linked the same path, and the proxy side gets
+		# its own add_webmail_config call with $1=$PROXY_SYSTEM at every call site
 
 		# The forcessl file carries ITS OWN owner, independent of $1: the templates
 		# include it by the name %web_system% renders to - the proxy where one
@@ -989,13 +1041,12 @@ add_webmail_config() {
 			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
 			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
 		fi
-		if [ -n "$PROXY_SYSTEM" ]; then
-			rm -f /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
-			ln -s $conf /etc/$1/conf.d/domains/$WEBMAIL_ALIAS.$domain.conf
-		fi
+		# See the ssl branch: the former proxy block linked the same path twice.
 		# Clear old configurations
 		find $HOMEDIR/$user/conf/mail/ -maxdepth 1 -type f \( -name "$domain.*" \) -exec rm {} \;
 	fi
+	[ "$_derived_ip6" = 1 ] && unset -v local_ip6
+	return 0
 }
 
 del_webmail_config() {

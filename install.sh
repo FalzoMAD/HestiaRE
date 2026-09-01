@@ -19,6 +19,7 @@
 #   bash install.sh <preset>         # fasttrack: skip component questions
 #   bash install.sh <preset> -a      # fully unattended: also take the default
 #                                    #   hostname/port/admin/email, no prompts
+#   bash install.sh <preset> -a --port=9443   # unattended on a non-default panel port
 #   bash install.sh --dev            # configure private source first
 #   bash install.sh --profile=<p>    # same as positional preset arg
 #
@@ -45,6 +46,7 @@ GITHUB_RAW="https://github.com/${GITHUB_REPO}/releases/download"
 # ── State ──────────────────────────────────────────────────
 OS=""
 FASTTRACK_PRESET=""
+PANEL_PORT=""
 DEV_MODE=false
 AUTO_MODE=false
 
@@ -68,6 +70,7 @@ for _arg in "$@"; do
 	case $_arg in
 		--dev) DEV_MODE=true ;;
 		--profile=*) FASTTRACK_PRESET="${_arg#*=}" ;;
+		--port=*) PANEL_PORT="${_arg#*=}" ;;
 		-a | --auto) AUTO_MODE=true ;;
 		-*) ;;
 		*) [ -z "$FASTTRACK_PRESET" ] && FASTTRACK_PRESET="$_arg" ;;
@@ -209,6 +212,7 @@ main() {
 	# Wizard: manifest-driven Q&A -> /etc/hestia/install.conf (separate process)
 	bash "${INSTALL_DIR}/include/wizard.sh" --os="${OS}" \
 		${FASTTRACK_PRESET:+--preset="${FASTTRACK_PRESET}"} \
+		${PANEL_PORT:+--port="${PANEL_PORT}"} \
 		$([ "$AUTO_MODE" = true ] && echo --auto)
 
 	# Seed /etc/hestia (env + hestia.conf) before any h-* command runs, so the

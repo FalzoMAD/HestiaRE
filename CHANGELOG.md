@@ -14,6 +14,87 @@ opens above it.
 
 ### Added
 
+- **Mail speaks both families - and the v6-less kernel is a measured lage, not a hope**
+  (#891, part of #602). The stage OPENED with the measurement the plan demanded: a box
+  booted with ipv6.disable=1, exim observed in both states. Result: the full hestia
+  template survives `disable_ipv6 = false` (exim skips the missing family itself), so
+  the flip is safe and inbound/outbound v6 now work - but the Debian STOCK template
+  dies outright with a listed ::1 ("IPv6 socket creation failed"), which means every
+  send-only box with v6 off had a dead exim since the loopback list gained ::1 (#875,
+  pre-existing). Both loopback lists now DERIVE from the kernel: exim's send-only
+  dc_local_interfaces and dovecot's listen line (dovecot carried the same fatal
+  pattern, `listen = *, ::`, found by the same measurement - the fleet never runs this
+  lage, so it was green by omission). Outgoing v6 pins through a SECOND file
+  (`conf/mail/<domain>/ipv6`, macro OUTGOING6_IP - exim forbids macro names containing
+  an earlier name, so not OUTGOING_IPV6), keeping every reader of `/ip` untouched;
+  relay_from_hosts gained ::1; the mail DNS page suggests one SPF with both families.
+  Measured end to end on the dual-stack box: inbound v6 delivered to the Maildir,
+  outbound to an AAAA-only target from exactly the pinned v6 source, relay refused from
+  outside v6 and accepted via ::1, bare-v6 HELO rejected at the protocol. Two side
+  finds: exim iplsearch keys must QUOTE a v6 address (an unquoted whitelist entry
+  silently never matches - documented at the hostlists), and Spamhaus refuses queries
+  via public resolvers, rejecting mail of BOTH families on such boxes (pre-existing,
+  resolver-lage, not v6) - consequence: zen.spamhaus.org left the shipped DNSBL seed
+  (bl.spamcop.net stays, bl.mailspike.net joins; the list is operator-managed via h-add/delete-sys-mail-dnsbl).
+
+- **The web renderer speaks both families** (#890, part of #602). Four independently
+  maintained sed substitution chains became ONE engine (`web_render_template`), proven
+  byte-identical on a populated box before any semantic change. The engine's family
+  rules: `%ip6%` substitutes raw with brackets as template text (`listen [%ip6%]:443`),
+  a repeatable line whose family placeholder has no value is deleted before substitution,
+  and structural lines resolve instead - apache's `<VirtualHost>` renders `%vhost%` with
+  every configured family in one tag, the nginx-to-backend hop targets `%backend_addr%`.
+  Domains carry the v6 in `IP6`: new domains auto-assign the default v6, existing ones
+  adopt it on their next rebuild (deliberately no migration run - the mixed state is a
+  named decision), `h-change-web-domain-ip6` switches between v6 addresses (no per-domain
+  opt-out: rebuild would re-adopt into an emptied field; "no v6" is a box-level call).
+  Restore remaps a foreign `IP6` like it remaps `IP`; HTTP/3 emits one quic listen per
+  family; the panel splits its selects per family; the Let's Encrypt preflight accepts
+  AAAA-only names and lost its bare-1.1.1.1 fallback; the mail DNS page suggests A, AAAA
+  and a family-matched SPF. The apache catch-all needed its own name token - a bracketed
+  literal is an invalid ServerName - and `local_ip6` derives inside the renderer because
+  fifteen re-render commands never resolve addresses themselves (found live: the LE path
+  silently dropped the v6 listens on its next render).
+
+- **The IP object layer speaks IPv6** (#889, part of #602). `h-add-sys-ip` takes a v6
+  address with a prefix length, canonicalises it to the RFC-5952 spelling at entry (so
+  `2001:0db8::1` and `2001:db8::1` can never become two objects), refuses a NAT
+  association by name (NAT is a v4 concept, the resolvers pass v6 through untouched),
+  and writes the interface config per family. `get_user_ips` was rewritten colon-safe
+  and family-aware - the old first-colon cut plus v4 regex made every v6 object
+  invisible to every consumer - with `get_user_ip` still preferring v4 so existing
+  boxes behave unchanged, and `get_user_ip6` new. `h-update-sys-ip` discovers global
+  v6 addresses (real prefix length from `ip -j`, privacy/deprecated addresses skipped)
+  and no longer aborts the NIC scan at the first bridge or v4-less interface. Deleting
+  a v6 guards against lockout, not position: refused only when it is the last global
+  v6 and no v4 default ROUTE exists (a routeless CGN address does not count - measured
+  on a real v6-only box). v6 objects get NO web config yet; the renderer learns
+  bracketed listen lines in stage 2 (#890).
+
+### Fixed
+
+- **A v6 panel login is now logged - and every failure class is bannable** (#888, part of
+  the IPv6 groundwork #602). `h-log-user-login` validated its address as IPv4-only, so no
+  v6 login (successful or failed) ever reached the panel's per-user auth log, and the
+  failure classes this command feeds to fail2ban (2FA, disabled login, IP allowlist) were
+  invisible for v6 clients. Plain wrong-password failures were already bannable through
+  `h-check-user-password`, which validated dual-family - only the logger was missed.
+  Verified on the dual-stack box: a v6 brute-force now ends in the nft `f2b6_HESTIA` set. Along with it: six naive `HTTP_HOST` splits
+  (a bracketed v6 host became `[2001`, silently disabling the phpMyAdmin-over-IP guard
+  and mangling panel-built URLs) now go through one bracket-aware helper; the firewall
+  rule form no longer hides v6 ipsets (the renderer has dispatched per set family since
+  #495) and the country blocklist picker offers IPv6 lists, keeping `v_ipver` in sync;
+  `h-delete-user-ips` no longer truncates a colon-bearing IP filename; the suggested SPF
+  record uses `ip6:` for a v6 address; dead v4-only `is_ip_rdns_valid` removed and the
+  firewall CODEMAP entries caught up with #495/#548 (nftables-only, no iptables/ipset).
+
+### Added
+
+- **`install.sh --port=<n>` for an unattended install on a non-default panel port** (#730).
+  `-a` used to force 8083, so an unattended install could not be given a port at all - and the
+  refusal path could not be verified the way it has to be: start the install, watch it stop
+  before the first write. Interactively the value prefills the prompt.
+
 - **The smoke test checks the record grammar** (#866). Every record line has to be `KEY='value'`,
   measured with the one validator that already defines it. A line that loses its quotes stays
   readable - `source_conf` takes `KEY=value` - while every writer looks for `KEY='...'` and
@@ -51,6 +132,124 @@ opens above it.
 
 ### Fixed
 
+- **The wizard's pre-questions were described in the manifest and hard-coded in the code** (#886).
+  The values were always right; the description was inert. `share/manifest.json` carries
+  `pre_questions`, the manifest structure check even insists the array exists - and nothing ever
+  read its contents, while `fn_ask_pre_questions` wrote the four prompts, their order and their
+  defaults a second time. The two copies had already drifted: different ids (`HOSTNAME` against the
+  `HESTIA_HOSTNAME` that is actually written), a different question text, and `8083` in three
+  places. Editing the manifest changed nothing. The ids are now the `install.conf` keys, and the
+  asker and the writer walk the same list, so a question added to the manifest is asked and written.
+  Defaults that cannot be literals - the box's own FQDN, the address derived from the previous
+  answer, `--port` - stay in code; an empty list is now an error instead of a run that asks nothing.
+
+- **The wizard's bash fallback threw away a numeric answer on every checklist** (#333). Without
+  whiptail (no TTY, empty or `dumb` `TERM`) the wizard asks in plain bash, and `_wt_checklist`
+  echoed the typed line unchanged while its two siblings mapped a number back to its tag. The
+  grouped screens match the answer by LABEL, so a numeric one matched nothing and the whole screen -
+  addons, databases - came out deselected without a warning or a log line; in the PHP list the
+  digits reached `install.conf` verbatim and the installer tried to install `php2`. Numbers and
+  names both work now, a token that is not on the screen is named instead of swallowed, and the
+  prompt says what it does: the answer replaces the selection, it does not toggle it.
+
+- **Wizard text no longer runs out of its box** (#333). The whiptail boxes were fixed at 72 columns,
+  so a longer `label - description` was simply cut - and what vanished was the half explaining the
+  option. The width follows the longest row now, between 60 and 100 columns and never wider than the
+  terminal.
+
+- **The always-installed tools were listed twice, and the manifest copy was the dead one** (#333).
+  `share/manifest.json` carries `tools.always_installed`, but the installer ran a second, identical
+  list hard-coded in `install_tools` - editing the manifest changed nothing. The installer reads the
+  manifest now, and an empty or unreadable list says so instead of quietly installing nothing. The
+  two lists were byte for byte the same, so nothing changes on an install.
+- **The box handed its own system mail to a stranger** (#333). Cron reports and every panel
+  notification are addressed to `root@<hostname>` or to the admin contact at `<hostname>`, and that
+  is not a HestiaRE mail domain - so exim fell through to `dnslookup` and offered the mail to
+  whatever host answers for the hostname, which refused it (`454 relay access denied`). Measured on
+  a normally installed box: seven messages in the queue, among them three panel notifications and a
+  cron report about the certificate run, hours old and invisible to anyone. exim now routes
+  `root@`, `postmaster@` and the admin at this host locally, ahead of every outbound router, and the
+  installer manages `/etc/aliases`: an admin email outside this host receives them, otherwise they
+  land in the panel admin's mailbox on the box. `root` is always aliased away, because exim's
+  `never_users` refuses to deliver as uid 0 - what looked like a working setup before was one that
+  never delivered anything. The wizard's email prompt says which of the two happens. Deliberately
+  not done by widening `local_domains`: that list also drives acceptance and relaying, and the box
+  must not become addressable from outside - verified, an inbound `RCPT TO:<root@hostname>` is still
+  refused with `relay not permitted` while a real mail address on the same box is accepted.
+
+- **A rejected database import counted as a successful one everywhere** (#880). The import helpers
+  send their client's output to `/dev/null` and hand back its exit code, and no caller looked at it.
+  `h-change-database-owner` was the worst of the three: it deleted the dump and then the source
+  database without ever asking whether the import had worked, so a failure lost both copies and
+  still reported success. It now hands the source back, removes the half-built target and keeps the
+  dump only where the source could not be handed back, naming where it is. The command also gained
+  the cleanup trap its siblings already had: it was one of the two that removed their temporary dump
+  directory on the straight-line path only, so `/backup` could keep a `tmp.*` directory for good. `h-restore-user` reports the database in the summary of parts that did
+  not come back - the mechanism was there, the import was the one thing not wired into it, so a
+  customer got an empty schema and nobody was told. `h-restore-database-restic` fails with `E_DB`,
+  matching the rest of that file. The dump direction has checked itself all along (`mysql_dump`,
+  `psql_dump`); only the import side never did.
+
+- **An owner change could create a database record no command could remove** (#880). The new
+  database and dbuser names are derived from the new owner's name and were never revalidated, so a
+  longer owner pushed them past the length limit the validators enforce - `h-change-database-owner`
+  wrote the record, and `h-delete-database` then refused it for exactly the same reason. Measured
+  on a real move: the source database was deleted, the target never created, and the run reported
+  success. Both derived names are now validated before anything is touched.
+
+- **A failed database import no longer reports success** (#877). `h-import-database` never looked
+  at the exit code of the client it invokes, and that client sends its own output to `/dev/null` -
+  so a dump the server rejected ended in an `OK` log line over an empty database. An unrecognised
+  `TYPE` fell through the same way: no branch ran and the untouched database was reported as
+  imported. Both now fail with `E_DB`. The command stays: it is the counterpart to
+  `h-dump-database` (which the panel's database download uses), and its value is that it resolves
+  the type, host and admin credentials from the records - including a remote database host.
+
+- **A nomail box had no MTA at all, and every notification was lost silently** (#872). `exim4` was
+  installed only inside the mail stage, so without a mail block nothing installed one - the
+  send-only step merely configured what it presumed to be there. It looked correct on Debian,
+  whose base image ships `exim4-daemon-light`, and never worked on Ubuntu, which ships no MTA:
+  password resets, backup reports and every other panel or CLI mail died in PHP's `mail()` with
+  `sh: /usr/sbin/sendmail: not found` while the sender returned success. The installer now installs
+  `exim4-daemon-light` for the send-only case (heavy stays with the full stack and replaces light
+  if a box later gains a mail block), `COMPONENT_PANEL_EXIM` is finally read instead of only
+  written, and the smoke test asserts the binary PHP will actually call - the old send-only check
+  returned silently when exim was absent, which on a nomail box is the defect rather than a reason
+  to skip.
+
+- **The panel port never reached the panel** (#730). `h-change-sys-port` rewrote
+  `$HESTIA/nginx/conf/nginx.conf` - a file that has not existed since the panel moved to Caddy -
+  so any port but 8083 wrote `BACKEND_PORT`, the firewall rule and the password plugins while
+  Caddy went on listening on the old one: the firewall open where nothing answered, the panel
+  answering where the firewall was shut. It now moves the Caddy site and the listener-wrapper
+  block, reads the CURRENT port from that site rather than from the config value, and re-renders
+  the phpMyAdmin proxy include that every customer domain uses (the port is a `%panel_port%`
+  placeholder there now, so a redeploy cannot reset it). It also proves its own result: the
+  listener moves first and has to answer on the new port before `BACKEND_PORT`, the firewall and
+  the proxies follow - otherwise the caddy files are rolled back and nothing else was touched. The
+  installer no longer swallows a failed apply, and `h-check-sys-smoke` compares the live site
+  against `BACKEND_PORT`.
+
+- **The wizard accepted any number as the panel port** (#730). `0`, `80` and `70000` all passed,
+  and so did `8090` or `8091`, where the loopback webmail listeners sit - a collision that only
+  appears an hour later, when the installer brings those services up. The wizard now refuses
+  before the first write, with a message naming the conflict partner. The reserved set is DERIVED
+  from the shipped listener declarations under `share/` and `include/`, not written down: a
+  listener added later cannot fall out of it, and a scan that finds nothing refuses rather than
+  waving every port through. It is not a numeric band but about a dozen individual ports - the
+  80xx of panel and web stack, and equally `3306`, `5432` and `4190`, which our own configs
+  declare. Comment lines, application code and IP octets are excluded, each because a measurement
+  showed them producing a wrong reservation.
+
+- **The panel showed the version twice over** (#617). The server page printed a literal `v` in
+  front of a version string that already carries one (`vv0.17.1`); the footer and the update box
+  had it right. The version is now read with an anchored key, so a future `*_VERSION` key cannot
+  turn the value into two lines.
+
+- **Accounts without a contact name showed empty brackets** (#617). The user list printed `()`
+  after the login whenever `NAME` was empty, in the row, the icon title and the mobile label. The
+  parentheses now belong to the name, the way the top-bar menu already did it.
+
 - **The admin's IP counter grew with every deleted customer IP** (#866). For the root user
   `IP_AVAIL` is the number of IPs on the box whoever owns them, and `h-add-sys-ip` counted it up
   for a customer-owned address - but `h-delete-sys-ip` never counted it down again, so the number
@@ -60,6 +259,17 @@ opens above it.
   drifted is corrected by `h-update-user-counters <user>` - nothing recounts on a schedule.
 
 ### Removed
+
+- **The cPanel and DirectAdmin importers are gone** (#877). Both were VestaCP-era third-party
+  scripts (`sk-import-cpanel-backup-to-vestacp`, `sk_da_importer`, the latter still labelled
+  "Version 0.1 - provided without any warranty") that we carried along verbatim through the
+  `v-*`->`h-*` rename and never touched otherwise. Nothing in the tree called them, and they parse
+  a foreign archive format we hold no licence for, own no fixture of, and cannot test on any of the
+  four targets - the cPanel one names its own broken parts in its header (certificate import,
+  DKIM). That they had never run is visible in the code: both carried the same inverted branch, so
+  a box with `BACKUP_TEMP` set - a supported knob - aborted every import with "File does not
+  exist", while a nonexistent archive argument was not caught at all. Migration from HestiaCP is
+  unaffected; that path is the backup format and is measured in both directions.
 
 - **Two record keys nothing reads** (#865). `PLUGIN_APP_INSTALLER` belonged to the Software
   Installer, which is permanently gone - yet the self-healing wrote it back into every

@@ -120,6 +120,10 @@
 		<?php
 			foreach ($data as $key => $value) {
 				++$i;
+				// An account without a contact name printed an empty "()" next to every
+				// login; the parentheses belong to the name, not to the row (#617).
+				$display_name = trim($data[$key]['NAME'] ?? '');
+				$named_suffix = $display_name === '' ? '' : ' (' . $display_name . ')';
 				if ($data[$key]['SUSPENDED'] == 'yes') {
 					$status = 'suspended';
 					$spnd_action = 'unsuspend';
@@ -159,14 +163,14 @@
 							<span class="u-text-bold">
 								<?= tohtml($key) ?>
 							</span>
-							(<?= tohtml($data[$key]["NAME"]) ?>)
+							<?= tohtml($named_suffix) ?>
 						</a>
 					<?php } else { ?>
 						<a href="/login/?<?= tohtml(http_build_query(["loginas" => $key, "token" => $_SESSION["token"]])) ?>" title="<?= tohtml(_("Log in as")) ?> <?= tohtml($key) ?>">
 							<span class="u-text-bold">
 								<?= tohtml($key) ?>
 							</span>
-							(<?= tohtml($data[$key]["NAME"]) ?>)
+							<?= tohtml($named_suffix) ?>
 						</a>
 					<?php } ?>
 					<p class="u-max-width200 u-text-truncate">
@@ -178,8 +182,8 @@
 					<ul class="units-table-row-actions">
 						<?php if ($key == $user_plain) { ?>
 							<li class="units-table-row-action">
-								<i class="fas fa-user-check" title="<?= tohtml($key) ?> (<?= tohtml($data[$key]["NAME"]) ?>)"></i>
-								<span class="u-hide-desktop"><?= tohtml($key) ?> (<?= tohtml($data[$key]["NAME"]) ?>)</span>
+								<i class="fas fa-user-check" title="<?= tohtml($key . $named_suffix) ?>"></i>
+								<span class="u-hide-desktop"><?= tohtml($key . $named_suffix) ?></span>
 							</li>
 						<?php } else { ?>
 							<li class="units-table-row-action">

@@ -235,8 +235,13 @@ if ($v_suspended == "yes") {
 $v_time = $data[$v_domain]["TIME"];
 $v_date = $data[$v_domain]["DATE"];
 
-// List ip addresses
+// List ip addresses, split by family: the v4 select feeds h-change-web-domain-ip and
+// the v6 select h-change-web-domain-ip6 - a mixed list would hand one family's command
+// the other family's address
 $ips = cli_json("h-list-user-ips " . $user . " json");
+$ips_v4 = array_filter($ips, fn($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
+$ips_v6 = array_filter($ips, fn($k) => str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
+$v_ip6 = $data[$v_domain]["IP6"] ?? "";
 
 // A record written by the CLI holds the public address (get_user_ip substitutes NAT), the IP list
 // is keyed by the local one. Unmatched, the select preselects nothing and the save rewrites the IP.
@@ -375,6 +380,31 @@ if (!empty($_POST["save"])) {
 				quoteshellarg($v_domain) .
 				" " .
 				quoteshellarg($_POST["v_ip"]) .
+				" 'no'",
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		$restart_web = "yes";
+		$restart_proxy = "yes";
+		unset($output);
+	}
+
+	// Change web domain IPv6 (control renders only when the user has v6 IPs - read guarded)
+	if (
+		isset($_POST["v_ip6"]) &&
+		$_POST["v_ip6"] !== "" &&
+		$v_ip6 != $_POST["v_ip6"] &&
+		empty($_SESSION["error_msg"])
+	) {
+		exec(
+			HESTIA_CMD .
+				"h-change-web-domain-ip6 " .
+				$user .
+				" " .
+				quoteshellarg($v_domain) .
+				" " .
+				quoteshellarg($_POST["v_ip6"]) .
 				" 'no'",
 			$output,
 			$return_var,

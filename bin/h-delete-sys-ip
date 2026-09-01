@@ -12,7 +12,9 @@
 #----------------------------------------------------------#
 
 # Argument definition
-ip="$1"
+# ip46 for the format dispatch; global $ip aliased for the sourced ip.sh helpers.
+ip46="$1"
+ip="$ip46"
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -31,7 +33,12 @@ source_conf "$HESTIA/conf/hestia.conf"
 #----------------------------------------------------------#
 
 check_args '1' "$#" 'IP'
-is_format_valid 'ip'
+is_format_valid 'ip46'
+family=$(ip_family "$ip46")
+if [ "$family" = 6 ]; then
+	ip46=$(ip6_canonical "$ip46") || check_result "$E_INVALID" "cannot canonicalise the v6 address - the panel php backend did not answer"
+	ip="$ip46"
+fi
 is_ip_valid "$ip"
 is_ip_key_empty '$U_WEB_DOMAINS'
 is_ip_key_empty '$U_SYS_USERS'
@@ -42,18 +49,35 @@ is_ip_key_empty '$U_SYS_USERS'
 
 # Import IP variables
 source "$CONF_DIR/ips/$ip"
-cidr="$(convert_netmask "$NETMASK")"
+if [ "$family" = 6 ]; then
+	cidr="$NETMASK" # prefix length by convention for v6 records
+else
+	cidr="$(convert_netmask "$NETMASK")"
+fi
 
-# Get primary IP
 default_nic="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
-primary_ipv4="$(ip -4 -d -j addr show "$default_nic" | jq -r '.[].addr_info[] | if .scope == "global" then .local else empty end' | head -n1)"
+[ -z "$default_nic" ] && default_nic="$(ip -6 -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end')"
 
-# Checking primary IP on the interface
+# v6 has no positional "primary" (kernel lists newest first): the lockout case is the
+# LAST global v6 while no v4 ROUTE exists. v4 keeps the classic first-address guard.
 interface="$(ip -d -j addr show | jq --arg IP "$ip" -r '.[] | if .addr_info[].local == $IP then .ifname else empty end')"
-if [ -n "$interface" ] && [ "$ip" = "$primary_ipv4" ]; then
-	echo "Error: can't delete primary IP address"
-	log_event "$E_FORBIDEN" "$ARGUMENTS"
-	exit "$E_FORBIDEN"
+if [ "$family" = 6 ]; then
+	other_v6="$(ip -6 -d -j addr show "$default_nic" | jq --arg IP "$ip" -r '.[].addr_info[] | if .scope == "global" and .local != $IP then .local else empty end' | head -n1)"
+	# v4 ROUTE, not address: a v6-only box may carry a routeless CGN v4 that would
+	# silence the guard exactly where it must fire
+	any_v4_route="$(ip -4 -d -j route show default 2> /dev/null | jq -r '.[0].dev // empty')"
+	if [ -n "$interface" ] && [ -z "$other_v6" ] && [ -z "$any_v4_route" ]; then
+		echo "Error: can't delete the last global v6 - the box has no v4 and would be cut off"
+		log_event "$E_FORBIDEN" "$ARGUMENTS"
+		exit "$E_FORBIDEN"
+	fi
+else
+	primary_addr="$(ip -4 -d -j addr show "$default_nic" | jq -r '.[].addr_info[] | if .scope == "global" then .local else empty end' | head -n1)"
+	if [ -n "$interface" ] && [ "$ip" = "$primary_addr" ]; then
+		echo "Error: can't delete primary IP address"
+		log_event "$E_FORBIDEN" "$ARGUMENTS"
+		exit "$E_FORBIDEN"
+	fi
 fi
 
 # Deleting system IP
@@ -66,23 +90,40 @@ if [ -n "$interface" ]; then
 	fi
 fi
 
-# Deleting startup conf on Debian/Ubuntu
+# Escaped before it becomes a pattern: dots were wildcards here.
+ip_esc=$(printf '%s' "$ip" | sed 's/[].[\*^$]/\\&/g')
 if [ -f "/etc/netplan/60-hestia.yaml" ]; then
-	sed -i "/$ip\//d" /etc/netplan/60-hestia.yaml
+	sed -i "/- $ip_esc\//d" /etc/netplan/60-hestia.yaml
 	if ! grep -q '-' /etc/netplan/60-hestia.yaml; then
 		rm /etc/netplan/60-hestia.yaml
 	fi
 elif [ -e "/etc/network/interfaces" ]; then
-	ip_str="$(grep -n "$ip$" /etc/network/interfaces | cut -f1 -d:)"
+	# v4 stanza ends "address IP"+"netmask X" (-3..+1); v6 ends "address IP/prefix" (-3..+0)
+	if [ "$family" = 6 ]; then
+		ip_str="$(grep -n "^address $ip_esc/$cidr$" /etc/network/interfaces | head -n1 | cut -f1 -d:)"
+		window_end=0
+	else
+		ip_str="$(grep -n "^address $ip_esc$" /etc/network/interfaces | head -n1 | cut -f1 -d:)"
+		window_end=1
+	fi
 	if [ -n "$ip_str" ]; then
 		first_str="$((ip_str - 3))"
-		last_str="$((ip_str + 1))"
+		last_str="$((ip_str + window_end))"
 		sed -i "$first_str,$last_str d" /etc/network/interfaces
 	fi
 fi
 
 # Deleting Hestia IP
 rm -f $CONF_DIR/ips/$ip
+
+# Mail source pins naming this address (both families) go with it: no counter guards
+# them, and exim reads the file live - left behind, the transport binds a dead address.
+for _pin in "$HOMEDIR"/*/conf/mail/*/ip "$HOMEDIR"/*/conf/mail/*/ipv6; do
+	[ -f "$_pin" ] || continue
+	if [ "$(cat "$_pin" 2> /dev/null)" = "$ip" ]; then
+		rm -f "$_pin"
+	fi
+done
 
 # Deleting web config (front fallback #193: the mailfront ip.conf lives there too)
 ws="$WEB_SYSTEM"

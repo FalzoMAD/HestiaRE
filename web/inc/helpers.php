@@ -146,6 +146,18 @@ function hst_add_history_log($message, $category = "System", $level = "Info", $u
 	return $return_var;
 }
 
+// HTTP_HOST minus :port. Bracketed v6 keeps its brackets (URL-valid); without brackets a
+// port is only split off at exactly one colon, so a bare v6 literal survives intact.
+function get_http_host_name()
+{
+	$host = $_SERVER["HTTP_HOST"] ?? "";
+	if (str_starts_with($host, "[")) {
+		$end = strpos($host, "]");
+		return $end === false ? $host : substr($host, 0, $end + 1);
+	}
+	return substr_count($host, ":") === 1 ? strstr($host, ":", true) : $host;
+}
+
 function get_hostname()
 {
 	$badValues = [

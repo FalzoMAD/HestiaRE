@@ -57,15 +57,22 @@ if [ "$type" = "pma" ] || [ "$type" = "PMA" ] || [ "$type" = "phpmyadmin" ]; the
 	sed -i "s|%alias%|$alias|g" /etc/caddy/apps/phpmyadmin.conf
 	$BIN/h-restart-service caddy
 
-	# 2. Customer-domain alias -> transparent proxy into the Panel-Caddy
+	# 2. Customer-domain alias -> transparent proxy into the Panel-Caddy. The port is a
+	# placeholder, not a literal: a moved panel port has to reach these two files or
+	# phpMyAdmin on every customer domain proxies into nothing.
+	if [ -z "$BACKEND_PORT" ]; then
+		echo "Error: BACKEND_PORT is empty - the phpMyAdmin proxy would have no target"
+		log_event "$E_NOTEXIST" "$ARGUMENTS"
+		exit "$E_NOTEXIST"
+	fi
 	if [ -d /etc/nginx/conf.d ]; then
 		cp -f "$HESTIA/share/nginx/apps/phpmyadmin.inc" /etc/nginx/conf.d/phpmyadmin.inc
-		sed -i "s|%pma_alias%|$alias|g" /etc/nginx/conf.d/phpmyadmin.inc
+		sed -i -e "s|%pma_alias%|$alias|g" -e "s|%panel_port%|$BACKEND_PORT|g" /etc/nginx/conf.d/phpmyadmin.inc
 		$BIN/h-restart-service nginx
 	fi
 	if [ -d /etc/apache2/conf.d ]; then
 		cp -f "$HESTIA/share/apache2/apps/phpmyadmin.conf" /etc/apache2/conf.d/phpmyadmin.inc
-		sed -i "s|%pma_alias%|$alias|g" /etc/apache2/conf.d/phpmyadmin.inc
+		sed -i -e "s|%pma_alias%|$alias|g" -e "s|%panel_port%|$BACKEND_PORT|g" /etc/apache2/conf.d/phpmyadmin.inc
 		$BIN/h-restart-service apache2
 	fi
 fi

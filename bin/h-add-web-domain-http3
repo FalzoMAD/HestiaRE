@@ -78,7 +78,7 @@ fi
 # standard firewall seed, not here - a seed rule is rebuilt from state on every firewall rebuild,
 # where an imperative open would be silently dropped and h3 would fall back to h2 unnoticed (#613).
 local_ip=$(get_real_ip "$IP")
-add_web_http3_config "$local_ip"
+add_web_http3_config "$local_ip" "$IP6"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

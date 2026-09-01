@@ -158,7 +158,7 @@ if (!defined("NO_AUTH_REQUIRED")) {
 
 function ipUsed()
 {
-	[$http_host, $port] = explode(":", $_SERVER["HTTP_HOST"] . ":");
+	$http_host = trim(get_http_host_name(), "[]");
 	if (filter_var($http_host, FILTER_VALIDATE_IP)) {
 		return true;
 	} else {

@@ -5,7 +5,7 @@
     "upstream_branch": "upstream/hestiacp",
     "upstream_ref": "640220c",
     "upstream_ref_date": "2026-08-25",
-    "last_updated": "2026-08-27",
+    "last_updated": "2026-08-30",
     "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100, from `git diff --numstat` between the two blobs. RAW: includes the mechanical v-*->h-* rename + path churn (install/->share/, CONF_DIR), so it OVERSTATES semantic divergence. Triage, not truth. BINARY files are measured by byte identity instead (pct 0 or 100, method \"bytes\"): a line diff on a binary reports nothing at all - git numstat prints \"-\" - which silently read as 0% churn and typed a differing font or image as verbatim.",
     "source_type_values": {
       "verbatim": "Upstream file we track closely (churn <=3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
@@ -14,9 +14,9 @@
     },
     "symlink_policy": "v-* aliases are committed symlinks (HestiaCP CLI compatibility); they are NOT listed here - only real files carry provenance.",
     "aggregate": {
-      "upstream_mapped_files": 434,
+      "upstream_mapped_files": 432,
       "eigenbau_files": 105,
-      "weighted_pct": 21,
+      "weighted_pct": 22,
       "weighted_pct_note": "text files only - binary entries are byte-compared, not line-counted"
     },
     "recompute_rule": "Reseed before every minor release: recompute against the current upstream/hestiacp snapshot and let source_type follow the fresh pct. verbatim/derived is a bucketing of the measured number, so it goes stale exactly when the number does - it drifted 80 entries out of step once (#551). eigenbau is the one curated value and a recompute never touches it. Byte-compared entries carry no pct at all - there is no percentage to have: the reseed reads their `identical` flag, text entries their pct."
@@ -4323,22 +4323,6 @@
       "note": ""
     },
     {
-      "path": "h-import-cpanel",
-      "source_type": "derived",
-      "upstream_path": "bin/v-import-cpanel",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-18",
-      "divergence": {
-        "upstream_lines": 473,
-        "our_lines": 452,
-        "added": 23,
-        "removed": 44,
-        "pct": 7,
-        "measured_at": "2026-08-27"
-      },
-      "note": ""
-    },
-    {
       "path": "h-import-database",
       "source_type": "derived",
       "upstream_path": "bin/v-import-database",
@@ -4350,22 +4334,6 @@
         "added": 10,
         "removed": 13,
         "pct": 15,
-        "measured_at": "2026-08-27"
-      },
-      "note": ""
-    },
-    {
-      "path": "h-import-directadmin",
-      "source_type": "verbatim",
-      "upstream_path": "bin/v-import-directadmin",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-18",
-      "divergence": {
-        "upstream_lines": 461,
-        "our_lines": 461,
-        "added": 17,
-        "removed": 17,
-        "pct": 3,
         "measured_at": "2026-08-27"
       },
       "note": ""

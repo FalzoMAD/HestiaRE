@@ -1,6 +1,6 @@
 #!/bin/bash
 # info: update IP usage counters
-# options: IP
+# options: [IP] [MODE]
 #
 # example: h-update-sys-ip-counters
 #
@@ -11,7 +11,10 @@
 #----------------------------------------------------------#
 
 # Argument definition
-ip="$1"
+# ip46 for the format dispatch; global $ip aliased for the sourced ip.sh helpers
+ip46="$1"
+ip="$ip46"
+mode="${2-apply}"
 
 # Includes
 # shellcheck source=/etc/hestia/hestia.env
@@ -27,9 +30,21 @@ source_conf "$HESTIA/conf/hestia.conf"
 #                    Verifications                         #
 #----------------------------------------------------------#
 
-check_args '0' "$#" 'IP'
+check_args '0' "$#" '[IP] [MODE]'
+case "$mode" in
+	apply | check) ;;
+	*) check_result "$E_INVALID" "invalid mode '$mode' (apply|check)" ;;
+esac
+# check prints what apply WOULD write - one derivation, two consumers (#867 shape)
+if [ "$mode" = 'check' ] && [ -z "$ip" ]; then
+	check_result "$E_INVALID" "check mode wants one IP - the caller owns the object list"
+fi
 if [ -n "$ip" ]; then
-	is_format_valid 'ip'
+	is_format_valid 'ip46'
+	if [ "$(ip_family "$ip46")" = 6 ]; then
+		ip46=$(ip6_canonical "$ip46") || check_result "$E_INVALID" "cannot canonicalise the v6 address - the panel php backend did not answer"
+		ip="$ip46"
+	fi
 	is_ip_valid
 fi
 
@@ -47,13 +62,23 @@ fi
 # Updating user stats
 for ip in $ip_list; do
 
-	# Count both forms of the address: behind NAT a record holds the PUBLIC one while the ip
-	# file is named after the local one, so matching only the local name recounts to 0 there -
-	# and writing that back is how a healthy counter gets "corrected" to nothing.
-	nat=$(grep -o "NAT='[^']*'" "$CONF_DIR/ips/$ip" 2> /dev/null | head -1 | cut -f 2 -d \')
-	ip_usage="$(grep -H -e "IP='$ip'" ${nat:+-e "IP='$nat'"} $CONF_DIR/users/*/web.conf)"
+	# Both spellings: behind NAT the record holds the PUBLIC address - local-only matching
+	# recounts to 0 and "corrects" a healthy counter to nothing.
+	if [ "$(ip_family "$ip")" = 6 ]; then
+		# v6 lives in the IP6 field; NAT does not exist for it
+		ip_usage="$(grep -H -e "IP6='$ip'" $CONF_DIR/users/*/web.conf)"
+	else
+		nat=$(grep -o "NAT='[^']*'" "$CONF_DIR/ips/$ip" 2> /dev/null | head -1 | cut -f 2 -d \')
+		ip_usage="$(grep -H -e "IP='$ip'" ${nat:+-e "IP='$nat'"} $CONF_DIR/users/*/web.conf)"
+	fi
 	web_domains="$(echo "$ip_usage" | sed '/^$/d' | wc -l)"
 	sys_users="$(echo "$ip_usage" | sed "s|^$CONF_DIR/users/||; s|/web.conf.*||" | sort -u | tr '\n' ',' | sed "s/,$//g")"
+
+	if [ "$mode" = 'check' ]; then
+		printf "U_WEB_DOMAINS='%s'\n" "$web_domains"
+		printf "U_SYS_USERS='%s'\n" "$sys_users"
+		continue
+	fi
 
 	# Update counters
 	update_ip_value '$U_WEB_DOMAINS' "$web_domains"

@@ -10,6 +10,7 @@
 #
 #   bash /usr/local/hestia/include/wizard.sh                # full interactive
 #   bash /usr/local/hestia/include/wizard.sh --preset=standard   # fasttrack
+#   bash /usr/local/hestia/include/wizard.sh --preset=standard --auto --port=9443
 #   bash /usr/local/hestia/include/wizard.sh --os=debian-bookworm
 #
 # After it writes install.conf, run the installer:
@@ -33,11 +34,16 @@ LOG_DIR="/var/log/hestia"
 # shellcheck source=include/helper.sh
 [ -f "${INSTALL_DIR}/include/helper.sh" ] && . "${INSTALL_DIR}/include/helper.sh"
 
+# Reserved-port set for the panel-port question, derived from the shipped configs (#730).
+# shellcheck source=include/ports.sh
+[ -f "${INSTALL_DIR}/include/ports.sh" ] && . "${INSTALL_DIR}/include/ports.sh"
+
 # ── State ──────────────────────────────────────────────────
 HAS_WHIPTAIL=false
 OS=""
 INSTALL_PROFILE=""
 FASTTRACK_PRESET=""
+PANEL_PORT_ARG=""
 AUTO_MODE=false
 PHP_VERSIONS_AVAILABLE=""
 REFERENCE_PHP=""
@@ -50,6 +56,7 @@ for _arg in "$@"; do
 	case $_arg in
 		--os=*) OS="${_arg#*=}" ;;
 		--preset=*) FASTTRACK_PRESET="${_arg#*=}" ;;
+		--port=*) PANEL_PORT_ARG="${_arg#*=}" ;;
 		--auto) AUTO_MODE=true ;;
 		-*) ;;
 		*) [ -z "$FASTTRACK_PRESET" ] && FASTTRACK_PRESET="$_arg" ;;
@@ -132,10 +139,36 @@ fn_manifest_load() {
 # TUI helpers - whiptail with bash fallback
 # ════════════════════════════════════════════════════════════
 
+# Box width follows the content: the fixed 72 columns simply cut off a longer "label - description",
+# and the text that vanished was the part explaining the option (#333).
+_wt_width() {
+	local stride="$1" text="$2"
+	shift 2
+	local -a it=("$@")
+	local max=0 line i=0 len
+	while IFS= read -r line; do
+		[ ${#line} -gt "$max" ] && max=${#line}
+	done <<< "$text"
+	while [ $i -lt ${#it[@]} ]; do
+		len=$((${#it[$i]} + 2 + ${#it[$((i + 1))]}))
+		[ "$len" -gt "$max" ] && max=$len
+		i=$((i + stride))
+	done
+	local cols="${COLUMNS:-}"
+	[[ "$cols" =~ ^[0-9]+$ ]] && [ "$cols" -gt 0 ] || cols=$(tput cols 2> /dev/null || echo 80)
+	local w=$((max + 14))
+	# 100 is a reading limit, not a terminal one - a very wide terminal should not stretch the text.
+	[ "$w" -gt 100 ] && w=100
+	[ "$w" -gt $((cols - 4)) ] && w=$((cols - 4))
+	[ "$w" -lt 60 ] && w=60
+	[ "$w" -gt $((cols - 4)) ] && w=$((cols - 4))
+	echo "$w"
+}
+
 _wt_inputbox() {
 	local title="$1" prompt="$2" default="$3"
 	if [ "$HAS_WHIPTAIL" = true ]; then
-		whiptail --title "$title" --inputbox "$prompt" 10 60 "$default" 3>&1 1>&2 2>&3 3>&-
+		whiptail --title "$title" --inputbox "$prompt" 10 "$(_wt_width 2 "$prompt")" "$default" 3>&1 1>&2 2>&3 3>&-
 	else
 		printf '%s [%s]: ' "$prompt" "$default" > /dev/tty
 		read -r _i < /dev/tty
@@ -148,7 +181,7 @@ _wt_menu() {
 	shift 2
 	local -a items=("$@")
 	if [ "$HAS_WHIPTAIL" = true ]; then
-		whiptail --title "$title" --menu "$text" 20 72 10 "${items[@]}" 3>&1 1>&2 2>&3 3>&-
+		whiptail --title "$title" --menu "$text" 20 "$(_wt_width 2 "$text" "${items[@]}")" 10 "${items[@]}" 3>&1 1>&2 2>&3 3>&-
 	else
 		echo "" > /dev/tty
 		echo "$text" > /dev/tty
@@ -176,7 +209,7 @@ _wt_radiolist() {
 	[ $list_h -lt 3 ] && list_h=3
 	local win_h=$((list_h + 8))
 	if [ "$HAS_WHIPTAIL" = true ]; then
-		whiptail --title "$title" --radiolist "$text" "$win_h" 72 "$list_h" "${items[@]}" 3>&1 1>&2 2>&3 3>&-
+		whiptail --title "$title" --radiolist "$text" "$win_h" "$(_wt_width 3 "$text" "${items[@]}")" "$list_h" "${items[@]}" 3>&1 1>&2 2>&3 3>&-
 	else
 		echo "" > /dev/tty
 		echo "$text" > /dev/tty
@@ -211,7 +244,7 @@ _wt_checklist() {
 	[ $list_h -lt 3 ] && list_h=3
 	local win_h=$((list_h + 8))
 	if [ "$HAS_WHIPTAIL" = true ]; then
-		whiptail --title "$title" --checklist "$text" "$win_h" 72 "$list_h" "${items[@]}" 3>&1 1>&2 2>&3 3>&- || true
+		whiptail --title "$title" --checklist "$text" "$win_h" "$(_wt_width 3 "$text" "${items[@]}")" "$list_h" "${items[@]}" 3>&1 1>&2 2>&3 3>&- || true
 	else
 		echo "" > /dev/tty
 		echo "$text" > /dev/tty
@@ -227,9 +260,36 @@ _wt_checklist() {
 			i=$((i + 3))
 		done
 		printf '  Pre-selected: %s\n' "${defaults[*]:-none}" > /dev/tty
-		printf '  Enter space-separated numbers or names to toggle (Enter = accept): ' > /dev/tty
+		printf '  Numbers or names, space separated - REPLACES the selection (Enter = keep it): ' > /dev/tty
 		read -r _i < /dev/tty
-		[ -z "$_i" ] && echo "${defaults[*]:-}" || echo "$_i"
+		if [ -z "$_i" ]; then
+			echo "${defaults[*]:-}"
+			return 0
+		fi
+		# Map numbers back to tags, as _wt_radiolist already did. The raw line used to be passed on,
+		# and the group screens match by LABEL - so a numeric answer deselected the whole screen in
+		# silence (measured: "2 3" in the PHP list reached install.conf as the literal "2 3").
+		local -a picked=() unknown=() toks=()
+		local tok t
+		read -ra toks <<< "$_i"
+		for tok in "${toks[@]}"; do
+			if [[ "$tok" =~ ^[0-9]+$ ]] && [ "$tok" -ge 1 ] && [ "$tok" -le "${#tags[@]}" ]; then
+				picked+=("${tags[$((tok - 1))]}")
+				continue
+			fi
+			for t in "${tags[@]}"; do
+				if [ "$t" = "$tok" ]; then
+					picked+=("$tok")
+					continue 2
+				fi
+			done
+			unknown+=("$tok")
+		done
+		# Named, never swallowed: an unknown token means the screen ends up with less than the person
+		# asked for, and that must not be something they find out when the addon is missing.
+		[ ${#unknown[@]} -eq 0 ] || printf '  NOT on this screen, ignored: %s\n' "${unknown[*]}" > /dev/tty
+		[ ${#picked[@]} -gt 0 ] || printf '  nothing matched - the screen stays empty\n' > /dev/tty
+		echo "${picked[*]:-}"
 	fi
 }
 
@@ -237,22 +297,69 @@ _wt_checklist() {
 # Pre-questions (before preset, always asked)
 # ════════════════════════════════════════════════════════════
 
-fn_ask_pre_questions() {
-	local default_host
-	default_host=$(hostname --fqdn 2> /dev/null || hostname 2> /dev/null || echo "server.example.com")
-	if [ "$AUTO_MODE" = true ]; then
-		# unattended (-a): take the prompt defaults, no questions
-		HESTIA_HOSTNAME="$default_host"
-		HESTIA_PANEL_PORT="8083"
-		HESTIA_ADMIN="admin"
-		HESTIA_EMAIL="admin@${HESTIA_HOSTNAME}"
-		echo "[ * ] Unattended: hostname=$HESTIA_HOSTNAME port=$HESTIA_PANEL_PORT admin=$HESTIA_ADMIN email=$HESTIA_EMAIL"
-	else
-		HESTIA_HOSTNAME=$(_wt_inputbox "HestiaRE Setup (1/4)" "Hostname (FQDN):" "$default_host")
-		HESTIA_PANEL_PORT=$(_wt_inputbox "HestiaRE Setup (2/4)" "Panel port:" "8083")
-		HESTIA_ADMIN=$(_wt_inputbox "HestiaRE Setup (3/4)" "Admin username:" "admin")
-		HESTIA_EMAIL=$(_wt_inputbox "HestiaRE Setup (4/4)" "Admin email:" "admin@${HESTIA_HOSTNAME}")
+# Refused HERE, before the first write: by installer time the box is already half built (#730).
+fn_check_panel_port() {
+	local port="$1" reason holder current=''
+	if ! declare -F panel_port_refusal > /dev/null; then
+		echo "ERROR: ${INSTALL_DIR}/include/ports.sh is missing - the panel port cannot be validated." >&2
+		exit 1
 	fi
+	if ! reason=$(panel_port_refusal "$port" "$INSTALL_DIR"); then
+		echo "ERROR: Panel port $port: $reason." >&2
+		exit 1
+	fi
+	# A re-run must not refuse the panel its own port; hestia.conf sits under $CONF_DIR/conf.
+	if [ -f "$CONF_DIR/conf/hestia.conf" ]; then
+		current=$(sed -n "s/^BACKEND_PORT='\\([0-9]*\\)'.*/\\1/p" "$CONF_DIR/conf/hestia.conf" | head -n1)
+	fi
+	if [ "$port" != "$current" ] && holder=$(panel_port_live_holder "$port"); then
+		echo "ERROR: Panel port $port is already in use by: $holder" >&2
+		exit 1
+	fi
+}
+
+# Defaults that cannot be literals in the manifest: they depend on the box, on an earlier answer
+# or on a command-line flag. $2 is the manifest default, used where none of that applies.
+fn_pre_question_default() {
+	case "$1" in
+		HESTIA_HOSTNAME) hostname --fqdn 2> /dev/null || hostname 2> /dev/null || echo "server.example.com" ;;
+		HESTIA_PANEL_PORT) echo "${PANEL_PORT_ARG:-$2}" ;;
+		HESTIA_EMAIL) echo "admin@${HESTIA_HOSTNAME}" ;;
+		*) echo "$2" ;;
+	esac
+}
+
+# Driven by .pre_questions, where the id IS the install.conf key - fn_write_install_conf loops over
+# the same list, so a question added to the manifest is asked AND written. It used to be neither:
+# the array was validated for existence and then never read, while the four prompts, their order
+# and the port default stood a second time in this file (#886).
+fn_ask_pre_questions() {
+	local -a pq=()
+	readarray -t pq < <(mq '.pre_questions[] | select(.stage == "pre_preset") | .id')
+	# An empty list would ask nothing and write empty keys, which h-install-hestia only notices as a
+	# missing hostname much later. Refuse here instead.
+	[ ${#pq[@]} -gt 0 ] || {
+		echo "ERROR: no pre_preset entry in .pre_questions - the wizard would ask nothing." >&2
+		exit 1
+	}
+	local n=${#pq[@]} i=0 id q d val
+	for id in "${pq[@]}"; do
+		i=$((i + 1))
+		q=$(mq --arg id "$id" '.pre_questions[] | select(.id == $id) | .question')
+		d=$(mq --arg id "$id" '.pre_questions[] | select(.id == $id) | .default // "" | tostring')
+		d=$(fn_pre_question_default "$id" "$d")
+		if [ "$AUTO_MODE" = true ]; then
+			val="$d"
+		else
+			val=$(_wt_inputbox "HestiaRE Setup ($i/$n)" "$q" "$d")
+		fi
+		printf -v "$id" '%s' "$val"
+	done
+	if [ "$AUTO_MODE" = true ]; then
+		echo "[ * ] Unattended: hostname=$HESTIA_HOSTNAME port=$HESTIA_PANEL_PORT admin=$HESTIA_ADMIN email=$HESTIA_EMAIL"
+		echo "[ * ] That address is on this host, so system and panel mail stays in /var/mail/root"
+	fi
+	# Not manifest data: these three are h-install-hestia's contract, it aborts without them.
 	[ -n "$HESTIA_HOSTNAME" ] || {
 		echo "ERROR: Hostname is required." >&2
 		exit 1
@@ -265,10 +372,7 @@ fn_ask_pre_questions() {
 		echo "ERROR: Admin email is required." >&2
 		exit 1
 	}
-	[[ "$HESTIA_PANEL_PORT" =~ ^[0-9]+$ ]] || {
-		echo "ERROR: Panel port must be a number." >&2
-		exit 1
-	}
+	fn_check_panel_port "$HESTIA_PANEL_PORT"
 }
 
 # ════════════════════════════════════════════════════════════
@@ -493,7 +597,7 @@ _ask_checkbox() {
 	[ "$default_val" = "true" ] && state="ON"
 	if [ "$HAS_WHIPTAIL" = true ]; then
 		local result
-		result=$(whiptail --title "HestiaRE - $id" --checklist "$question" 10 60 1 "$id" "" "$state" 3>&1 1>&2 2>&3 3>&- || true)
+		result=$(whiptail --title "HestiaRE - $id" --checklist "$question" 10 "$(_wt_width 3 "$question" "$id" "" "$state")" 1 "$id" "" "$state" 3>&1 1>&2 2>&3 3>&- || true)
 		echo "$result" | grep -q "$id" && COMP_VALUES["$id"]="true" || COMP_VALUES["$id"]="false"
 	else
 		local yn_default
@@ -857,17 +961,16 @@ fn_ask_components() {
 fn_write_install_conf() {
 	mkdir -p "$(dirname "$INSTALL_CONF")"
 	chmod 700 "$(dirname "$INSTALL_CONF")"
-	local ids=()
+	local ids=() pq_ids=() _pq
 	readarray -t ids < <(mq '.components | keys_unsorted[]')
+	readarray -t pq_ids < <(mq '.pre_questions[] | select(.stage == "pre_preset") | .id')
 	{
 		echo "# HestiaRE install.conf"
 		echo "# Written by include/wizard.sh - do not edit manually."
 		echo "# Re-run the wizard to change parameters."
 		echo ""
-		echo "HESTIA_HOSTNAME=\"${HESTIA_HOSTNAME}\""
-		echo "HESTIA_PANEL_PORT=\"${HESTIA_PANEL_PORT}\""
-		echo "HESTIA_ADMIN=\"${HESTIA_ADMIN}\""
-		echo "HESTIA_EMAIL=\"${HESTIA_EMAIL}\""
+		# Same list the questions came from, so the two cannot drift apart.
+		for _pq in "${pq_ids[@]}"; do echo "${_pq}=\"${!_pq}\""; done
 		echo "INSTALL_OS=\"${OS}\""
 		echo "INSTALL_PROFILE=\"${INSTALL_PROFILE}\""
 		# panel/reference PHP, derived from the OS default (#191); the installer

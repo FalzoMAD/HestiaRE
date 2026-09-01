@@ -31,30 +31,32 @@
 
   "pre_questions": [
     {
-      "id": "HOSTNAME",
+      "id": "HESTIA_HOSTNAME",
       "type": "text",
-      "question": "Hostname:",
+      "question": "Hostname (FQDN):",
       "stage": "pre_preset"
     },
     {
-      "id": "PANEL_PORT",
+      "id": "HESTIA_PANEL_PORT",
       "type": "number",
       "question": "Panel port:",
       "default": 8083,
       "stage": "pre_preset",
-      "note": "Asked in every preset, including standard."
+      "note": "Asked in every preset, including standard. Validated before the first write (#730): 1024-65535 and not one of the ports HestiaRE hands out itself - that set is derived from the shipped listener declarations in include/ports.sh, never listed here. Unattended: bash install.sh <preset> -a --port=<n>."
     },
     {
-      "id": "ADMIN_USERNAME",
+      "id": "HESTIA_ADMIN",
       "type": "text",
       "question": "Admin username:",
+      "default": "admin",
       "stage": "pre_preset"
     },
     {
-      "id": "ADMIN_EMAIL",
+      "id": "HESTIA_EMAIL",
       "type": "text",
-      "question": "Admin email:",
-      "stage": "pre_preset"
+      "question": "Admin email (an address outside this host receives system and panel mail; the default keeps it in /var/mail/root):",
+      "stage": "pre_preset",
+      "note": "No static default: it is derived from the answer to HESTIA_HOSTNAME."
     },
     {
       "id": "ADMIN_PASSWORD",
@@ -287,7 +289,7 @@
       "group": "panel",
       "type": "fixed",
       "always_installed": true,
-      "note": "Always installed. The operating mode (full MTA with Dovecot integration vs. send-only) derives implicitly from MAIL_BLOCK_PRESENT, no separate question. DKIM signing is done granularly per domain via OpenSSL (existing HestiaCP mechanism), independent of rspamd."
+      "note": "Always installed, and read since #872 - before that the key was written here and consulted by nothing, so the send-only branch only CONFIGURED exim and presumed the package: a nomail box had an MTA only where the base image shipped one (Debian does, Ubuntu does not). The operating mode derives from MAIL_BLOCK_PRESENT, no separate question: with a mail block exim4-daemon-heavy plus the HestiaRE template, without one exim4-daemon-light plus Debian's own update-exim4.conf in send-only shape. Set to false only when notification mail goes through an external SMTP relay (USE_SERVER_SMTP). DKIM signing is done granularly per domain via OpenSSL (existing HestiaCP mechanism), independent of rspamd."
     },
 
     "ADDON_ADMINER": {

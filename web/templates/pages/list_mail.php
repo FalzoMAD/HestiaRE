@@ -101,7 +101,7 @@ $search_query = (string) $search_query;
 
 		<!-- Begin mail domain list item loop -->
 		<?php
-			list($http_host, $port) = explode(':', $_SERVER["HTTP_HOST"].":");
+			$http_host = get_http_host_name();
 $webmail = "webmail";
 if (!empty($_SESSION['WEBMAIL_ALIAS'])) {
 	$webmail = $_SESSION['WEBMAIL_ALIAS'];

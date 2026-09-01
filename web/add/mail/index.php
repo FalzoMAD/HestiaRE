@@ -405,7 +405,7 @@ if (!empty($_POST["ok_acc"])) {
 
 	// Get webmail url
 	if (empty($_SESSION["error_msg"])) {
-		[$hostname, $port] = explode(":", $_SERVER["HTTP_HOST"] . ":");
+		$hostname = get_http_host_name();
 		$webmail = "http://" . $hostname . "/" . $v_webmail_alias . "/";
 		if (!empty($_SESSION["WEBMAIL_ALIAS"])) {
 			$webmail = $_SESSION["WEBMAIL_ALIAS"];

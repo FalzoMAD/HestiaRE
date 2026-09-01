@@ -613,6 +613,11 @@ install_mail() {
 		DCDIR="$HESTIA/share/dovecot/2.3"
 	fi
 	cp -f "$DCDIR/dovecot.conf" /etc/dovecot/
+	# Derived like exim's send-only list: "listen = *, ::" is fatal on an ipv6.disable=1
+	# kernel (Failed to start listeners), so the v6 half is dropped where no v6 exists.
+	if [ ! -e /proc/net/if_inet6 ]; then
+		sed -i 's/^listen = \*, ::$/listen = */' /etc/dovecot/dovecot.conf
+	fi
 	cp -f "$DCDIR/conf.d/"* /etc/dovecot/conf.d/
 	if [ "$DCDIR" = "$HESTIA/share/dovecot/2.3" ]; then
 		# our dovecot.conf defines the inbox namespace; the stock file's duplicate
@@ -688,7 +693,7 @@ install_mail() {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
-# Stage: security — fail2ban (optional), iptables, ipset, crowdsec (optional)
+# Stage: security - nftables, fail2ban (optional), crowdsec (optional)
 # ════════════════════════════════════════════════════════════════════════════
 install_security() {
 	stage_done security && {
@@ -960,7 +965,11 @@ configure_hestia() {
 	chmod 600 /var/spool/cron/crontabs/hestia
 	chown hestia:hestia /var/spool/cron/crontabs/hestia
 	# no auto-update cron: HestiaRE updates via the release tarball, not apt/git
-	"$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" > /dev/null 2>&1 || true
+	# Not swallowed (#730): a port that silently does not take leaves the firewall open.
+	if ! _port_out=$("$BIN/h-change-sys-port" "${HESTIA_PANEL_PORT:-8083}" 2>&1); then
+		echo "[ ! ] Panel port ${HESTIA_PANEL_PORT:-8083} NOT applied: ${_port_out:-no output}"
+		echo "[ ! ] The panel stays on $(sed -n 's|^[[:space:]]*https\?://:\([0-9]*\).*|\1|p' /etc/caddy/hestia.conf 2> /dev/null | head -n1). Fix the cause, then: h-change-sys-port ${HESTIA_PANEL_PORT:-8083}"
+	fi
 	"$BIN/h-update-sys-defaults" > /dev/null 2>&1 || true
 	# Seed every config key from its single home. The installer writes only the keys it knows about,
 	# and the repair holds the default for all of them - measured on a running box, 25 keys were
@@ -1012,10 +1021,19 @@ install_composer_upstream() {
 
 install_tools() {
 	echo "[ * ] Installing always-installed utilities..."
-	apt_install_optional "admin tools" htop iftop sysstat iotop mc mtr-tiny screen || true
+	# From the manifest, not from a second copy here: the same list stood in both places and only
+	# this one ever ran, so editing the manifest changed nothing (#333). Empty is loud, not silent.
+	local always
+	always=$(jq -r '.tools.always_installed // [] | join(" ")' "$HESTIA/share/manifest.json" 2> /dev/null)
+	if [ -z "$always" ]; then
+		echo "[ ! ] tools.always_installed is empty or unreadable in $HESTIA/share/manifest.json - no admin tools installed"
+	else
+		echo "[ * ] Admin tools: $always"
+		# shellcheck disable=SC2086 # deliberate space-separated package list
+		apt_install_optional "admin tools" $always || true
+	fi
 	if is_on "${COMPONENT_ADDON_UTILITIES:-}" && [ -n "${TOOLS_SELECTION:-}" ]; then
 		echo "[ * ] Installing selected utilities: ${TOOLS_SELECTION}"
-		# shellcheck disable=SC2086
 		# shellcheck disable=SC2086 # TOOLS_SELECTION is a deliberate space-separated package list
 		apt_install_optional "selected tools" $TOOLS_SELECTION || true
 	fi
@@ -1139,6 +1157,65 @@ echo " Profile: ${INSTALL_PROFILE}"
 echo "========================================================================"
 echo ""
 
+# nomail: install the MTA, then configure it send-only (#872). Without a mail block nothing
+# used to install exim at all - it only LOOKED right on Debian, whose base image ships
+# exim4-daemon-light, while Ubuntu ships no MTA and every notification died in PHP's mail()
+# with "sh: /usr/sbin/sendmail: not found" and a return code of 0.
+#
+# light, not heavy: send-only needs no lookups or authenticators. A box that later gains a
+# mail block gets heavy from install_mail, which replaces light - the two conflict, and that
+# swap is the accepted cost of the leaner default.
+#
+# No stage marker on purpose: a re-run must repair a missing MTA, and apt is a no-op when the
+# package is already there.
+install_exim_sendonly() {
+	# Looked at, not asserted: saying "mail goes through a relay" without checking leaves the
+	# box in the state the smoke test flags as a FAIL one minute later.
+	if ! is_on "${COMPONENT_PANEL_EXIM:-true}"; then
+		if [ "${USE_SERVER_SMTP:-}" = 'true' ] && [ -n "${SERVER_SMTP_HOST:-}" ]; then
+			echo "[ * ] Local MTA disabled (COMPONENT_PANEL_EXIM) - notification mail goes through ${SERVER_SMTP_HOST}"
+		else
+			echo "[ ! ] Local MTA disabled (COMPONENT_PANEL_EXIM) and no SMTP relay configured -"
+			echo "[ ! ] notification mail is lost until USE_SERVER_SMTP and SERVER_SMTP_HOST are set"
+		fi
+		return 0
+	fi
+	echo "[ * ] Installing send-only MTA (exim4-daemon-light)..."
+	if ! hestia_apt -y install exim4 exim4-daemon-light; then
+		echo "[ ! ] exim4-daemon-light install FAILED - notification mail will not leave this box"
+		return 0
+	fi
+	configure_exim_sendonly
+}
+
+# Cron and the panel address their mail to root@<hostname> and to the admin contact. Left alone,
+# /etc/aliases decides nothing useful: the base image ships its own root: line pointing at a user
+# that does not exist here, and the panel's default contact admin@<hostname> has no target at all -
+# both ended up in the queue (measured: 454 relay access denied against a foreign host).
+configure_system_aliases() {
+	local target='' al=/etc/aliases
+	# Only an address outside this host is worth forwarding to; the default contact is
+	# admin@<hostname> and would point back at the box.
+	case "${HESTIA_EMAIL:-}" in
+		'' | *@"${HESTIA_HOSTNAME}") : ;;
+		*) target="$HESTIA_EMAIL" ;;
+	esac
+	touch "$al"
+	# Both lines go: an inherited "<admin>: root" together with our "root: <admin>" is a loop, and
+	# exim resolves a loop by delivering as root - which never_users then refuses.
+	sed -i "/^[[:space:]]*root:/d;/^[[:space:]]*${HESTIA_ADMIN}:/d" "$al"
+	# root is always aliased away: exim's never_users refuses a delivery as uid 0, so mail addressed
+	# to root has to become some other account before it can land anywhere. Without an outside
+	# address that account is the panel admin, whose mbox a human on the box can read.
+	echo "root: ${target:-$HESTIA_ADMIN}" >> "$al"
+	command -v newaliases > /dev/null 2>&1 && newaliases > /dev/null 2>&1
+	if [ -n "$target" ]; then
+		echo "[ * ] System mail for root is forwarded to $target"
+	else
+		echo "[ * ] System mail for root lands in /var/mail/${HESTIA_ADMIN} on this box"
+	fi
+}
+
 # nomail (#192): exim stays as the outbound-only notification MTA, but Debian's
 # default config is local-delivery-only - panel mail to any remote admin address
 # was silently undeliverable ("Mailing to remote domains not supported"). internet
@@ -1151,12 +1228,19 @@ configure_exim_sendonly() {
 		return 0
 	fi
 	sed -i "s/^dc_eximconfig_configtype=.*/dc_eximconfig_configtype='internet'/" "$c"
-	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='127.0.0.1 ; ::1'/" "$c"
+	# Loopback list DERIVED from the kernel: a listed ::1 on an ipv6.disable=1 kernel kills
+	# the stock-template exim at start (the full hestia template survives either way).
+	local lo_ifaces='127.0.0.1'
+	[ -e /proc/net/if_inet6 ] && lo_ifaces='127.0.0.1 ; ::1'
+	sed -i "s/^dc_local_interfaces=.*/dc_local_interfaces='$lo_ifaces'/" "$c"
+	# Set, not inherited: this is what makes root@<hostname> local instead of a DNS lookup that
+	# hands the box's own cron mail to whatever host answers for the name.
+	sed -i "s/^dc_other_hostnames=.*/dc_other_hostnames='${HESTIA_HOSTNAME}'/" "$c"
 	# the success line is a witness in the install log: print it only when the keys
 	# really carry the values and the regeneration succeeded - a silent sed miss or
 	# a failed update-exim4.conf must not leave a false "configured" behind
 	if grep -q "^dc_eximconfig_configtype='internet'" "$c" \
-		&& grep -q "^dc_local_interfaces='127.0.0.1 ; ::1'" "$c" \
+		&& grep -q "^dc_local_interfaces='$lo_ifaces'" "$c" \
 		&& update-exim4.conf 2> /dev/null; then
 		systemctl restart exim4 2> /dev/null || true
 		echo "[ * ] Exim configured send-only (outbound delivery on, loopback listeners)"
@@ -1174,8 +1258,9 @@ if is_on "${COMPONENT_MAIL_BLOCK_PRESENT:-}"; then
 	install_mail
 else
 	echo "[ * ] Mail block not present — skipping mail stage"
-	configure_exim_sendonly
+	install_exim_sendonly
 fi
+configure_system_aliases
 install_security
 install_addons
 configure_hestia

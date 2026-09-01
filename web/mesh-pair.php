@@ -33,7 +33,9 @@ if (!is_readable($marker) || (int) trim((string) file_get_contents($marker)) < t
 
 $ip = $_SERVER["REMOTE_ADDR"] ?? "";
 if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-	// The rules pairing installs are IPv4-only (h-add-firewall-rule).
+	// The mesh peering flow is IPv4-only for now: peer resolution, host regex and the
+	// LAPI transport all reject v6 literals (#893). Not h-add-firewall-rule - that has
+	// been dual-family since the nftables migration.
 	http_response_code(400);
 	exit();
 }

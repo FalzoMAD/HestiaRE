@@ -2,6 +2,7 @@
 
 server {
 	listen      %ip%:%proxy_port%;
+	listen      [%ip6%]:%proxy_port%;
 	server_name %domain_idn% %alias_idn%;
 	include %home%/%user%/conf/web/%domain%/nginx.crowdsec.conf*;
 	include %home%/%user%/conf/web/%domain%/nginx.botlimit.conf*;

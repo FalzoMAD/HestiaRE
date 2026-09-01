@@ -74,7 +74,7 @@ if [ "$type" != 'local' ]; then
 		check_result $? "expect command not found" "$E_NOTEXIST"
 	fi
 	if [ "$type" != 'rclone' ]; then
-		if ! (is_ip_format_valid "$host" > /dev/null); then
+		if ! (is_ip46_format_valid "$host" > /dev/null); then
 			host "$host" > /dev/null 2>&1
 			check_result $? "host connection failed" "$E_CONNECT"
 		fi

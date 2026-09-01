@@ -9,7 +9,7 @@
 # the filesystem ROOT and no certificate is ever issued.                  #
 #=========================================================================#
 
-<VirtualHost %ip%:%front_port%>
+<VirtualHost %vhost%>
 
     ServerName %domain_idn%
     IncludeOptional %home%/%user%/conf/web/%domain%/botlimit.apache2.conf*
@@ -43,7 +43,7 @@
 # DO NOT MODIFY THIS FILE! CHANGES WILL BE LOST WHEN REBUILDING DOMAINS   #
 #=========================================================================#
 
-<VirtualHost %ip%:%front_ssl_port%>
+<VirtualHost %vhost_ssl%>
 
     ServerName %domain_idn%
     IncludeOptional %home%/%user%/conf/web/%domain%/botlimit.apache2.conf*

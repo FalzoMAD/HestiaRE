@@ -6,6 +6,7 @@
 
 server {
 	listen      %ip%:%proxy_port%;
+	listen      [%ip6%]:%proxy_port%;
 	server_name %domain_idn% %alias_idn%;
 	include %home%/%user%/conf/web/%domain%/nginx.crowdsec.conf*;
 	include %home%/%user%/conf/web/%domain%/nginx.botlimit.conf*;
@@ -19,7 +20,7 @@ server {
 	}
 
 	location / {
-		proxy_pass http://%ip%:%web_port%;
+		proxy_pass http://%backend_addr%:%web_port%;
 
 		# per-domain fragments (a location / block cannot be replaced by a later include)
 		include %home%/%user%/conf/web/%domain%/nginx.location.d/*.conf;
@@ -36,7 +37,7 @@ server {
 	}
 
 	location @fallback {
-		proxy_pass http://%ip%:%web_port%;
+		proxy_pass http://%backend_addr%:%web_port%;
 	}
 
 	location /error/ {
@@ -54,6 +55,7 @@ server {
 
 server {
 	listen      %ip%:%proxy_ssl_port% ssl;
+	listen      [%ip6%]:%proxy_ssl_port% ssl;
 	server_name %domain_idn% %alias_idn%;
 	include %home%/%user%/conf/web/%domain%/nginx.crowdsec.conf*;
 	include %home%/%user%/conf/web/%domain%/nginx.botlimit.conf*;
@@ -79,7 +81,7 @@ server {
 	location / {
 		proxy_ssl_server_name on;
 		proxy_ssl_name $host;
-		proxy_pass https://%ip%:%web_ssl_port%;
+		proxy_pass https://%backend_addr%:%web_ssl_port%;
 
 		# same fragment dir as the plain vhost: one file drives http and https
 		include %home%/%user%/conf/web/%domain%/nginx.location.d/*.conf;
@@ -98,7 +100,7 @@ server {
 	location @fallback {
 		proxy_ssl_server_name on;
 		proxy_ssl_name $host;
-		proxy_pass https://%ip%:%web_ssl_port%;
+		proxy_pass https://%backend_addr%:%web_ssl_port%;
 	}
 
 	location /error/ {
