@@ -1496,15 +1496,8 @@ is_refresh_ipset_format_valid() {
 	fi
 }
 
-# Common format validator
-# A comma-separated allow list of addresses and networks, both families (#894). The common deny
-# list cannot serve here: it rejects the colon and the slash outright, so no v6 address and no
-# network could ever be stored. The panel validates the same shape first for a readable message -
-# this side is the authority.
-# An EMPTY list is legal here on purpose: switching the feature off writes an empty value through
-# this same path. The panel is stricter (it refuses a list that would match nobody), so the
-# authority is the more permissive of the two - fail-closed either way, since an enabled switch
-# with no entry locks the user out rather than letting anyone in.
+# Addresses and networks, both families (#894): the common deny list rejects colon and slash, so
+# nothing v6 could ever be stored. An empty list is legal - switching the feature off writes one.
 is_ip_list_format_valid() {
 	local list="$1" name="${2-ip list}" entry
 	local -a entries
@@ -1512,8 +1505,8 @@ is_ip_list_format_valid() {
 	[ ${#list} -lt 400 ] || check_result "$E_INVALID" "invalid $name format :: $list"
 	IFS=',' read -ra entries <<< "$list"
 	for entry in "${entries[@]}"; do
-		# OUTER whitespace only, exactly like the panel's trim(): stripping inner spaces too would
-		# accept "192.168.1. 0/24" here and store it, and the matcher could never hit it again.
+		# OUTER whitespace only, like the panel: stripping inner spaces would accept
+		# "192.168.1. 0/24", store it, and the matcher could never hit it
 		entry="${entry#"${entry%%[![:space:]]*}"}"
 		entry="${entry%"${entry##*[![:space:]]}"}"
 		[ -z "$entry" ] && continue
@@ -1521,6 +1514,7 @@ is_ip_list_format_valid() {
 	done
 }
 
+# Common format validator
 is_common_format_valid() {
 	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|<|>|?|/|\|\"|'|;|%|\`| ]"
@@ -1883,8 +1877,7 @@ is_object_format_valid() {
 	fi
 }
 
-# A remote host: a name OR a bare address. The name form has no colon, so without this a v6
-# literal can never be a backup host or a mesh peer (#893).
+# A remote host: a name OR a bare address - the name form has no colon (#893).
 is_host46_format_valid() {
 	case "$1" in
 		*:*) is_ipv6_format_valid "$1" "${2-host}" ;;
@@ -1892,8 +1885,8 @@ is_host46_format_valid() {
 	esac
 }
 
-# A host as it belongs in a URL or an ssh-style host:path - a v6 literal only works bracketed,
-# because the colon is otherwise the port or path separator.
+# A host for a URL or an ssh-style host:path: a v6 literal needs brackets, or its colons read as
+# the port separator. NOT for expect (Tcl) or the ftp client - see include/backup.sh.
 url_host() {
 	case "$1" in
 		*:*) echo "[$1]" ;;

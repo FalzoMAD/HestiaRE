@@ -970,10 +970,8 @@ backup_download_norm() {
 
 # FTP Functions
 # /usr/bin/ftp exits 0 even when it cannot connect, so failure is read from the output.
-# Host and port are separate arguments here, so a v6 literal goes in BARE - measured: brackets
-# make the client look up "[:" and fail. The opposite of sftpc, which parses host:path. restic is
-# NOT a third case: its repository string is configured whole (h-add-backup-host-restic REPO), so
-# $HOST never reaches it and we compose no address for it.
+# Host and port are separate arguments, so a v6 goes in BARE - with brackets the client looks up
+# "[:" (measured). restic composes nothing from $HOST: its repository string is configured whole.
 ftpc() {
 	/usr/bin/ftp -np $HOST $PORT << EOF
     quote USER $USERNAME
@@ -1336,9 +1334,8 @@ restic_dump_dir() { echo "$HOMEDIR/$1/.dumps"; }
 # SFTP Functions
 # The rc fallback belongs at the END: eof also arrives after the regular exit.
 sftpc() {
-	# sftp reads host:path, so a v6 literal only works bracketed - and the brackets are escaped
-	# because the script below is Tcl, where a bare [ starts a command substitution ("invalid
-	# command name 2a01:..."). Not url_host for that reason: this quoting is expect's, not a URL's.
+	# sftp reads host:path, so a v6 needs brackets - ESCAPED, because the script below is Tcl and a
+	# bare [ starts a command substitution. Not url_host: this quoting is expect's, not a URL's.
 	local sftp_host="$HOST"
 	case "$HOST" in
 		*:*) sftp_host="\\[$HOST\\]" ;;

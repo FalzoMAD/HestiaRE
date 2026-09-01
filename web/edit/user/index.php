@@ -282,15 +282,13 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Login IP allow list. TWO independent values: the switch and the list. They used to share one
-	// branch, so editing only the addresses while the switch stayed on saved nothing at all (#894).
-	// Both controls are always in the DOM (Alpine only hides them), so both are always submitted.
+	// TWO independent values, switch and list: they shared one branch, so editing only the
+	// addresses saved nothing (#894). Both controls are always in the DOM, Alpine only hides them.
 	if (empty($_SESSION["error_msg"])) {
 		$post_use_iplist = post_checkbox("v_login_use_iplist", true, $v_login_use_iplist, "yes", "no");
 		$post_allowed_ips = trim((string) post_or_keep("v_login_allowed_ips", true, $v_login_allowed_ips), " '");
 		$stored_allowed_ips = trim((string) $v_login_allowed_ips, " '");
-		// Refused here rather than at the next login: a list that matches nobody locks the user out,
-		// and the typo would surface far away from where it was made.
+		// refused here, not at the next login: a list matching nobody locks the user out
 		$bad_ip_entries = $post_use_iplist === "yes" ? ip_list_invalid($post_allowed_ips) : [];
 		if (!empty($bad_ip_entries)) {
 			$_SESSION["error_msg"] = sprintf(

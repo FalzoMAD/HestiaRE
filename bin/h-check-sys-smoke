@@ -743,8 +743,8 @@ check_panel_php_version() {
 # fatal bind returns with nothing re-deriving. Holds CONFIGURED families against the
 # KERNEL's. Covers dovecot listen + exim dc_local_interfaces, not the hestia template
 # (immune: exim skips a missing family itself).
-# Configured for a family the kernel refuses. Covers the three places WE derive from the kernel
-# lage; the distro's own "::1 localhost" is deliberately not one of them.
+# Configured for a family the kernel refuses - the three places WE derive; the distro's own
+# "::1 localhost" is deliberately not one of them.
 check_family_lage() {
 	local kernel6='' hits=0 fqdn
 	[ -e /proc/net/if_inet6 ] && kernel6=yes
@@ -762,7 +762,7 @@ check_family_lage() {
 			"the stock template dies at start on it - rerun the derivation or re-enable kernel v6"
 		hits=1
 	fi
-	# The hosts line is derived ONCE, at hostname time; a box that lost v6 since keeps it.
+	# derived once, at hostname time: a box that lost v6 since keeps the line
 	fqdn=$(hostname -f 2> /dev/null || hostname 2> /dev/null)
 	if [ -n "$fqdn" ] && grep -qE "^::1[[:space:]]+${fqdn//./\\.}$" /etc/hosts 2> /dev/null; then
 		no "/etc/hosts names ::1 for $fqdn on a v6-less kernel" \
@@ -1326,15 +1326,11 @@ check_vhost_nonempty() {
 }
 # check_vhost_upstream_host - "http://:3000" (docker domain, owner without DOCKER_IP) makes nginx
 # and apache reject the whole configuration. Read the rendered files: a custom template does it too.
-# Two ways a rendered vhost can be wrong about families, both silent:
-#   - a v6 address that is NOT bracketed: nginx reads "2a01:db8::1:80" as an address of its own and
-#     apache refuses to parse it, so the vhost either binds something else or never starts;
-#   - an nginx server block with NO listen at all: that is not an error, it is a WILDCARD bind on
-#     port 80 - which is exactly what a custom template with only %ip% renders to on a v6-only box.
-# Apache has no equivalent of the second case (a VirtualHost without an address is a syntax error).
-# Scope: the rendered vhosts AND the per-domain http3 fragments, which carry listen lines of their
-# own. NOT covered: includes an operator adds by hand, and a brace inside a quoted string would
-# miscount a block - the count of blocks actually entered is therefore part of the verdict.
+# Two silent ways a vhost can be wrong: an UNBRACKETED v6 (nginx reads it as its own address,
+# apache refuses to parse it), and an nginx server block with NO listen - not an error but a
+# WILDCARD bind, which is what a %ip%-only custom template renders to on a v6-only box.
+# Covers the vhosts plus the per-domain http3 fragments; a brace inside a string would miscount,
+# so the number of blocks entered is part of the verdict.
 check_vhost_listen_form() {
 	local f n=0 blocks=0 bare=0 nolisten=0 first="" second="" c out
 	for f in "/etc/$WEB_SYSTEM/conf.d/domains"/*.conf "/etc/${PROXY_SYSTEM:-none}/conf.d/domains"/*.conf \
@@ -1360,7 +1356,7 @@ check_vhost_listen_form() {
 		fi
 		case "$f" in
 			/etc/nginx/*)
-				# "server" and its brace may sit on separate lines; a trailing comment cannot open one
+				# brace may sit on the next line; a comment cannot open a block
 				out=$(awk '
 					{
 						line = $0
@@ -1883,10 +1879,9 @@ check_record_grammar() {
 # check_ip_object_counters - the ip-record counters had an authority but no guard (the
 # IP_AVAIL lage before #867), and the NAT-blind decrease left real backlog. Object list
 # derives from the files; the authority's check mode is the only rule source.
-# The mirror URL is a literal in THREE places - install.sh and h-update-hestia run before or
-# without this tree, main.sh serves the runtime fetches - so this is what measures them against
-# each other. The DEFAULT only: an operator's own HESTIARE_MIRROR in source.conf is not our
-# business. It does not check that the host answers; that is the fetch's own job.
+# The mirror URL is a literal in THREE places (install.sh and h-update-hestia run before or
+# without this tree), so this measures them against each other. The DEFAULT only, and it never
+# asks whether the host answers - that is the fetch's job.
 check_release_mirror() {
 	local a b c
 	a=$(sed -n 's|^RELEASE_MIRROR="\(https://[^"$]*\)"$|\1|p' "$HESTIA/install.sh" 2> /dev/null | head -n1)
@@ -1901,9 +1896,8 @@ check_release_mirror() {
 	fi
 }
 
-# The shape of an IP object follows its family: v6 keeps a PREFIX LENGTH in NETMASK and never a
-# NAT address (NAT is a v4 concept, and h-change-sys-ip-nat refuses a v6 object). Nothing to
-# compare against but the file itself, so an empty set of objects is a finding, not a pass.
+# v6 keeps a PREFIX LENGTH in NETMASK and never a NAT address (NAT is v4-only). Nothing to compare
+# against but the file itself, so an empty set of objects is a finding, not a pass.
 check_ip_object_shape() {
 	local f ip fam nm nat n=0 bad=0 first=""
 	for f in "$CONF_DIR/ips"/*; do

@@ -103,8 +103,8 @@ fi
 pairing_close
 
 [[ "$token" =~ ^[a-f0-9]{32,128}$ ]] || fail "peer sent no usable token" "$E_PARSING"
-# The panel checked the shape, but this side is the authority: the host lands in the record and from
-# there in the pull config, where a newline would read as a second curl directive.
+# This side is the authority: the host lands in the pull config, where a newline would be a second
+# curl directive.
 if [[ "$peer_host" == *:* ]]; then
 	(is_ipv6_format_valid "$peer_host" 'peer host') > /dev/null 2>&1 \
 		|| fail "peer sent no usable host" "$E_PARSING"

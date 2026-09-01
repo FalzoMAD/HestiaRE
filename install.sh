@@ -42,10 +42,9 @@ LOG_DIR="/var/log/hestia"
 GITHUB_REPO="HestiaRE/Hestia"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}"
 GITHUB_RAW="https://github.com/${GITHUB_REPO}/releases/download"
-# github.com has no AAAA, so on a v6-only box the primary is unreachable. This mirror serves the
-# same repo's release API (/api) and assets (/raw) unchanged - a retry, not a second source. An
-# empty HESTIARE_MIRROR in source.conf switches it off; the twin literal in sbin/h-update-hestia
-# is deliberate, install.sh runs before the tree exists.
+# github.com has no AAAA: on a v6-only box the primary is unreachable, so this mirror serves the
+# same repo unchanged - a retry, not a second source. Twin literal in sbin/h-update-hestia, which
+# runs without this tree; empty HESTIARE_MIRROR switches it off.
 RELEASE_MIRROR="https://dl.hestiare.com"
 
 # ── State ──────────────────────────────────────────────────
@@ -160,9 +159,8 @@ _dev_setup() {
 	echo ""
 }
 
-# Fetch one release path with the mirror as the second try. $1 = api|raw, $2 = path below that
-# root, rest = curl args. Bounded: an unroutable host must surface in seconds, not after curl's
-# default patience. Never carries the Gitea token, the mirror only knows the public repo.
+# $1 = api|raw, $2 = path below that root, rest = curl args. Bounded, or an unroutable host costs
+# curl's default patience. Never carries the Gitea token.
 _release_get() {
 	local kind="$1" path="$2" primary mirror
 	shift 2
