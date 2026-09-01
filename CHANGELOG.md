@@ -14,6 +14,20 @@ opens above it.
 
 ### Added
 
+- **Three guards for the family lage, and the structure written down** (#602, stage 6). An IP
+  object's fields have to match its family: a v6 keeps a PREFIX LENGTH in `NETMASK` and never a
+  `NAT` address - the guard reads the objects themselves and an empty set fails rather than passes.
+  A rendered vhost gets two questions: is every v6 address bracketed (nginx reads an unbracketed
+  one as an address of its own, apache refuses to parse it), and does every nginx `server` block
+  carry a `listen` at all - because a block without one is not an error but a WILDCARD bind, which
+  is exactly what a custom template carrying only `%ip%` renders to on a v6-only box. The panel
+  probe gets its v6 twin over `::1`: a listener that binds only v4 looks identical from
+  127.0.0.1. All four negative controls fired on a live box and the state was restored (120/0).
+  `STRUCTURE.md` now carries the whole v6 divergence as section 14 - one field per family, the
+  renderer that deletes a line rather than post-processing it, no `IPV6_SUPPORT` switch because
+  the lage is measured, no migration run, and the one place a second host appears (the bootstrap
+  mirror). CODEMAP follows with the new command and the family helpers.
+
 - **The addons follow the second family** (#893, part of #602). A host that is a bare v6 address
   needs brackets wherever a colon already means something, and each place means something else:
   `openssl s_client -connect` and the mesh pull URL take `[addr]:port` (one helper, `url_host`),
