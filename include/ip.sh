@@ -46,7 +46,7 @@ is_ip_key_empty() {
 	key="$1"
 	# source_conf, not `eval $(cat ...)`: the old form executed the whole IP conf as bash, so any content
 	# in it ran (the GHSA-xffx class). Callers pass a single '$VARNAME', so strip the $ and deref safely.
-	[ -e "$CONF_DIR/ips/$ip" ] && source_conf "$CONF_DIR/ips/$ip"
+	[ -f "$CONF_DIR/ips/$ip" ] && source_conf "$CONF_DIR/ips/$ip"
 	local varname="${key#\$}"
 	value="${!varname}"
 	if [ -n "$value" ] && [ "$value" != '0' ]; then
@@ -87,11 +87,14 @@ update_ip_value_new() {
 }
 
 # Get ip name
+# The IP object's NAME as a domain alias. A v6-only domain has no v4 object to read it from,
+# so the v6 one answers - otherwise such a box would silently never get the alias.
 get_ip_alias() {
-	ip_name=$(grep "NAME=" $CONF_DIR/ips/$local_ip | cut -f 2 -d \')
-	if [ -n "$ip_name" ]; then
-		echo "${1//./-}.$ip_name"
-	fi
+	local obj="${local_ip:-${local_ip6:-}}" ip_name
+	[ -n "$obj" ] && [ -e "$CONF_DIR/ips/$obj" ] || return 0
+	ip_name=$(grep "NAME=" "$CONF_DIR/ips/$obj" | cut -f 2 -d \')
+	[ -n "$ip_name" ] && echo "${1//./-}.$ip_name"
+	return 0
 }
 
 # Increase ip value
@@ -176,7 +179,7 @@ decrease_ip_value() {
 get_ip_value() {
 	key="$1"
 	# See is_ip_key_empty: source_conf instead of eval-ing the file content as bash.
-	[ -e "$CONF_DIR/ips/$ip" ] && source_conf "$CONF_DIR/ips/$ip"
+	[ -f "$CONF_DIR/ips/$ip" ] && source_conf "$CONF_DIR/ips/$ip"
 	local varname="${key#\$}"
 	value="${!varname}"
 	echo "$value"
@@ -267,18 +270,20 @@ get_user_ips() {
 	return 0
 }
 
-# v4 preferred (existing boxes behave unchanged); only a v4-less box falls through to v6.
+# The v4 slot: every caller writes this into an IP field or a %ip% listen line, both v4-shaped.
+# A box without any v4 leaves it EMPTY instead of handing back a v6 - the v6 twin is
+# get_user_ip6, and only a box without any address at all is an error.
 get_user_ip() {
 	ip=$(get_user_ips 4 | head -n1)
-	[ -z "$ip" ] && ip=$(get_user_ips 6 | head -n1)
+	local_ip="$ip"
+	nat=''
 	if [ -z "$ip" ]; then
-		check_result $E_NOTEXIST "no IP is available"
+		[ -n "$(get_user_ips 6 | head -n1)" ] || check_result "$E_NOTEXIST" "no IP is available"
+		return 0
 	fi
-	local_ip=$ip
 	nat=$(grep "^NAT" $CONF_DIR/ips/$ip | cut -f 2 -d \')
-	if [ -n "$nat" ]; then
-		ip=$nat
-	fi
+	[ -n "$nat" ] && ip="$nat"
+	return 0
 }
 
 # First v6 of the user into $ip6; rc 1 when none - callers decide, nothing aborts.

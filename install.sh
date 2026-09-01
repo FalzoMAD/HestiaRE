@@ -37,11 +37,16 @@ INSTALL_DIR="/usr/local/hestia"
 MANIFEST="${INSTALL_DIR}/share/manifest.json"
 LOG_DIR="/var/log/hestia"
 
-# GitHub defaults — can be overridden by /etc/hestia/source.conf
+# GitHub defaults - can be overridden by /etc/hestia/source.conf
 # (set HESTIARE_SOURCE=gitea + HESTIARE_REPO_URL for private Gitea releases)
 GITHUB_REPO="HestiaRE/Hestia"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}"
 GITHUB_RAW="https://github.com/${GITHUB_REPO}/releases/download"
+# github.com has no AAAA, so on a v6-only box the primary is unreachable. This mirror serves the
+# same repo's release API (/api) and assets (/raw) unchanged - a retry, not a second source. An
+# empty HESTIARE_MIRROR in source.conf switches it off; the twin literal in sbin/h-update-hestia
+# is deliberate, install.sh runs before the tree exists.
+RELEASE_MIRROR="https://dl.hestiare.com"
 
 # ── State ──────────────────────────────────────────────────
 OS=""
@@ -155,39 +160,68 @@ _dev_setup() {
 	echo ""
 }
 
+# Fetch one release path with the mirror as the second try. $1 = api|raw, $2 = path below that
+# root, rest = curl args. Bounded: an unroutable host must surface in seconds, not after curl's
+# default patience. Never carries the Gitea token, the mirror only knows the public repo.
+_release_get() {
+	local kind="$1" path="$2" primary mirror
+	shift 2
+	case "$kind" in
+		api) primary="${GITHUB_API}" mirror="${RELEASE_MIRROR}/api" ;;
+		raw) primary="${GITHUB_RAW}" mirror="${RELEASE_MIRROR}/raw" ;;
+	esac
+	curl -fsSL --connect-timeout 15 --max-time 600 "$@" "${primary}${path}" && return 0
+	[ -n "$RELEASE_MIRROR" ] || return 1
+	echo "[ * ] Release source unreachable, retrying via ${RELEASE_MIRROR}" >&2
+	curl -fsSL --connect-timeout 15 --max-time 600 "$@" "${mirror}${path}"
+}
+
 _fetch_release() {
 	HESTIARE_REPO_URL="${HESTIARE_REPO_URL:-}"
 	HESTIARE_TOKEN="${HESTIARE_TOKEN:-}"
 	HESTIARE_CHANNEL="${HESTIARE_CHANNEL:-stable}"
+	RELEASE_MIRROR="${HESTIARE_MIRROR-$RELEASE_MIRROR}"
+	# A private Gitea release is a different build - it never falls back to the public mirror.
+	[ "${HESTIARE_SOURCE:-github}" = "gitea" ] && RELEASE_MIRROR=""
 
 	echo "[ * ] Fetching latest release..."
-	local latest tarball_url
+	local latest
 	local -a curl_auth=()
 	[ -n "$HESTIARE_TOKEN" ] && curl_auth=(-H "Authorization: token ${HESTIARE_TOKEN}")
 
 	if [ "${HESTIARE_SOURCE:-github}" = "gitea" ]; then
 		latest=$(curl -fsSL "${curl_auth[@]}" "${HESTIARE_REPO_URL}/releases/latest" \
-			| jq -r '.tag_name')
-		tarball_url="${HESTIARE_REPO_URL}/releases/download/${latest}/hestiare-${latest}.tar.gz"
+			| jq -r '.tag_name') || latest=''
+	elif [ "${HESTIARE_CHANNEL}" = "prerelease" ]; then
+		latest=$(_release_get api "/releases" | jq -r '.[0].tag_name') || latest=''
 	else
-		if [ "${HESTIARE_CHANNEL}" = "prerelease" ]; then
-			latest=$(curl -fsSL "${GITHUB_API}/releases" | jq -r '.[0].tag_name')
-		else
-			latest=$(curl -fsSL "${GITHUB_API}/releases/latest" | jq -r '.tag_name')
-		fi
-		tarball_url="${GITHUB_RAW}/${latest}/hestiare-${latest}.tar.gz"
-		curl_auth=()
+		latest=$(_release_get api "/releases/latest" | jq -r '.tag_name') || latest=''
 	fi
 
-	[ -n "$latest" ] || {
+	# the assignments above absorb their own failure, or set -e would abort before this message
+	{ [ -n "$latest" ] && [ "$latest" != "null" ]; } || {
 		echo "ERROR: Could not determine latest release." >&2
 		exit 1
 	}
 	echo "[ * ] Version: ${latest}"
 
-	curl -fsSL "${curl_auth[@]}" "${tarball_url}" -o /tmp/hestiare.tar.gz
+	if [ "${HESTIARE_SOURCE:-github}" = "gitea" ]; then
+		curl -fsSL "${curl_auth[@]}" \
+			"${HESTIARE_REPO_URL}/releases/download/${latest}/hestiare-${latest}.tar.gz" \
+			-o /tmp/hestiare.tar.gz
+	else
+		_release_get raw "/${latest}/hestiare-${latest}.tar.gz" -o /tmp/hestiare.tar.gz
+	fi
 	tar -xzf /tmp/hestiare.tar.gz -C /tmp
 	rm /tmp/hestiare.tar.gz
+	# A mirror can cache or hand back the wrong asset, and on a v6-only box there is no second
+	# opinion: the extracted tree has to carry the version that was asked for.
+	_got=$(cat "/tmp/hestiare-${latest}/VERSION" 2> /dev/null || echo "")
+	if [ "${_got#v}" != "${latest#v}" ]; then
+		echo "ERROR: fetched release is not ${latest} (tree says '${_got:-nothing}')." >&2
+		rm -rf "/tmp/hestiare-${latest}"
+		exit 1
+	fi
 	mkdir -p "${INSTALL_DIR}"
 	cp -r /tmp/hestiare-${latest}/. "${INSTALL_DIR}/"
 	rm -rf /tmp/hestiare-${latest}

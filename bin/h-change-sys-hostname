@@ -33,7 +33,50 @@ is_format_valid 'domain'
 #----------------------------------------------------------#
 
 current_hostname="$(hostname)"
-if [[ "$current_hostname" == "$domain" ]]; then
+same_name=0
+[[ "$current_hostname" == "$domain" ]] && same_name=1
+
+# Runs on EVERY call, not only on a rename: the ::1 twin is derived from the kernel lage, and a box
+# that gained or lost v6 since needs a way to re-derive it. Idempotent, so a no-op rename is free.
+# Update /etc/hosts. The ::1 twin only where the kernel has v6: a loopback literal the box cannot
+# use turns every lookup of its own hostname into a connect that has to fail first.
+if [ -f /etc/hosts ]; then
+	hosts_addrs="127.0.0.1"
+	[ -e /proc/net/if_inet6 ] && hosts_addrs="$hosts_addrs ::1"
+	# a hostname carries dots too, so every side of the match is escaped, not just the address
+	cur_re="${current_hostname//./\\.}"
+	dom_re="${domain//./\\.}"
+	for addr in $hosts_addrs; do
+		re="${addr//./\\.}"
+		if grep -q -E "^${re}\s{1,}${cur_re}$" /etc/hosts; then
+			sed -i -E "s/^${re}\s{1,}${cur_re}$/${addr} ${domain}/" /etc/hosts
+		elif ! grep -q -E "^${re}\s{1,}${dom_re}$" /etc/hosts; then
+			echo "$addr $domain" >> /etc/hosts
+		fi
+		# Check whether hostname entries are duplicated and remove all but the last one
+		ndup_hosts="$(grep -c -E "^${re}\s{1,}${dom_re}$" /etc/hosts)"
+		if [[ "${ndup_hosts}" -gt "1" ]]; then
+			nlines_to_del="$((ndup_hosts - 1))"
+			lines_to_del="$(grep -n -E "^${re}\s{1,}${dom_re}$" /etc/hosts | head -n${nlines_to_del} | awk -F ':' '{print $1}')"
+			list_lines=""
+			for i in $lines_to_del; do
+				if [[ -z $list_lines ]]; then
+					list_lines="${i}d"
+				else
+					list_lines+=";${i}d"
+				fi
+			done
+			sed -i "${list_lines}" /etc/hosts
+		fi
+	done
+	# The other direction, and the reason this block runs on every call: a box that LOST v6 keeps a
+	# ::1 line nothing can use. Only ours - the distro's own "::1 localhost" is not ours to touch.
+	if [ ! -e /proc/net/if_inet6 ]; then
+		sed -i -E "/^::1\s{1,}(${cur_re}|${dom_re})$/d" /etc/hosts
+	fi
+fi
+
+if [ "$same_name" = 1 ]; then
 	echo "Current hostname \"$current_hostname\" is the same as the new one you want to use"
 	echo "I'm not going to change it"
 	exit
@@ -51,29 +94,6 @@ if [ -d /etc/roundcube/ ]; then
 fi
 if [ -d /etc/tachyon/ ]; then
 	sed -i "/\"hestia_host\":/c\\\"hestia_host\": \"$domain\"," /etc/tachyon/data/_data_/_default_/configs/plugin-change-password.json
-fi
-
-# Update /etc/hosts
-if [ -f /etc/hosts ]; then
-	if grep -q -E "^127\.0\.0\.1\s{1,}${current_hostname}$" /etc/hosts; then
-		sed -i -E "s/127\.0\.0\.1\s{1,}${current_hostname}/127\.0\.0\.1 ${domain}/" /etc/hosts
-	else
-		echo "127.0.0.1 $domain" >> /etc/hosts
-	fi
-	# Check whether hostname entries are duplicated and remove all but the last one
-	ndup_hosts="$(grep -c -E "^127\.0\.0\.1\s{1,}${domain}$" /etc/hosts)"
-	if [[ "${ndup_hosts}" -gt "1" ]]; then
-		nlines_to_del="$((ndup_hosts - 1))"
-		lines_to_del="$(grep -n -E "^127\.0\.0\.1\s{1,}${domain}$" /etc/hosts | head -n${nlines_to_del} | awk -F ':' '{print $1}')"
-		for i in $lines_to_del; do
-			if [[ -z $list_lines ]]; then
-				list_lines="${i}d"
-			else
-				list_lines+=";${i}d"
-			fi
-		done
-		sed -i "${list_lines}" /etc/hosts
-	fi
 fi
 
 #----------------------------------------------------------#

@@ -21,7 +21,7 @@
 # --check additionally covers the share/manifest.json pins (no upstream/* branch,
 # no --fetch - the installer fetches these itself against the pin):
 #
-#   tachyon          software_versions.tachyon           (plugins pin to the same tag)
+#   tachyon          software_versions.tachyon           (tarball sha256 and plugins pin to the same tag)
 #   wp-cli           software_versions.wp_cli.version
 #
 # --check is strictly read-only (network: npm registry / GitHub API only).

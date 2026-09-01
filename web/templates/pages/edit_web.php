@@ -80,6 +80,7 @@
 					<p><?= tohtml(_("If the aliases changes, Let's Encrypt will obtain a new SSL certificate.")) ?></p>
 				</div>
 			<?php } ?>
+			<?php if ($ip_offered) { ?>
 			<div class="u-mb20">
 				<label for="v_ip" class="form-label"><?= tohtml(_("IP Address")) ?></label>
 				<select class="form-select" name="v_ip" id="v_ip">
@@ -92,7 +93,8 @@
 				?>
 				</select>
 			</div>
-			<?php if (!empty($ips_v6)) { ?>
+			<?php } ?>
+			<?php if ($ip6_offered) { ?>
 			<div class="u-mb20">
 				<label for="v_ip6" class="form-label"><?= tohtml(_("IPv6 Address")) ?></label>
 				<select class="form-select" name="v_ip6" id="v_ip6">

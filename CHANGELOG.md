@@ -14,6 +14,41 @@ opens above it.
 
 ### Added
 
+- **A v6-only box installs itself** (#892, part of #602). github.com has no AAAA, so the
+  bootstrap had no way in at all: `install.sh` and `h-update-hestia` now retry the release API
+  and the release asset through the mirror (`dl.hestiare.com/api` and `/raw`, the same repo)
+  whenever the primary does not answer. What runs at install time is a VERSION check - the
+  extracted tree must carry the tag that was asked for; the sha256 comparison against GitHub's own
+  asset was a measurement when the route was set up, not a promise the code keeps making. The two
+  foreign assets are the ones with a checksum: wp-cli and the Tachyon files verify against their
+  manifest pin on every fetch. It is a retry of ONE source, not a second one; a private Gitea release never
+  falls back, and the mirror never sees a token. Both bootstrap paths carry the URL as their own
+  literal (install.sh runs before the tree exists and can read it from nowhere), so a smoke check
+  now measures the two against each other - a drifted or vanished line fails, it does not pass
+  quietly. Discovery learned the `-6` twin (default route, NIC address, the closing Backup URL,
+  which brackets a literal), the nginx resolver harvest keeps v6 nameservers bracketed instead of
+  discarding them (link-local skipped: not addressable from a config) while nginx.conf carries v6
+  fallback resolvers and the installer puts `ipv6=off` back only where the kernel has no v6, and
+  `h-change-sys-hostname` maintains the `::1` record beside `127.0.0.1` - again only with a v6
+  kernel, since a loopback literal the box cannot use makes every lookup of its own name fail first.
+  The deeper change is the v4 SLOT: `get_user_ip` used to hand back a v6 when the box had no v4,
+  and all nine callers write that into an `IP` field or a `%ip%` listen line, both v4-shaped - the
+  result would have been an unbracketed `listen 2a01:db8::1:80`. It now yields the v4 or nothing,
+  the v6 travels in `IP6`, and the callers that could not take an empty v4 followed: add and delete
+  (counters), change-ip (an address the vhost does not contain yet has to be RENDERED, not
+  substituted), change-owner (which never moved the v6 counters at all), the IP name alias (which
+  read the ips DIRECTORY when the slot was empty), and the panel, where the v4 select renders per
+  family and an unoffered control keeps its stored value instead of reading as cleared.
+  `h-add-web-domain` accepts a v6 in the ip argument and sorts it into `IP6`, which is how the
+  installer's own default domain works on a box whose only address is a v6. Both bootstrap paths
+  also compare the extracted tree's VERSION against the tag they asked for: a mirror can cache or
+  answer with the wrong asset, and on a v6-only box there is no second opinion to catch it.
+  Measured on a real v6-only box (no v4 route, github unreachable, `curl` exit 7 as the control):
+  bootstrap over the mirror end to end, then a full `nomail` install; on the dual-stack box the
+  v6-only domain shape end to end - record `IP='' IP6='...'`, only the bracketed listen line,
+  `nginx -t` clean, the v4 handed in afterwards, both counters back to their baseline and the
+  recount authority agreeing.
+
 - **Mail speaks both families - and the v6-less kernel is a measured lage, not a hope**
   (#891, part of #602). The stage OPENED with the measurement the plan demanded: a box
   booted with ipv6.disable=1, exim observed in both states. Result: the full hestia
@@ -72,6 +107,16 @@ opens above it.
   bracketed listen lines in stage 2 (#890).
 
 ### Fixed
+
+- **An installer re-run no longer empties `hestia.conf`** (found while installing a v6-only box,
+  not v6-specific). `seed_hestia_etc` truncated the file on every start of `install.sh`, while a
+  completed stage skips - so the second run left the box with only the keys of the stages that had
+  NOT finished yet: no `WEB_SYSTEM` on a box with a web server, every web command answering "not
+  enabled", and the panel's Let's Encrypt request refused for the same reason. The installer's own
+  error path invites exactly that re-run ("install the package and re-run the installer"). The seed
+  now adds missing keys only, and just the VERSION follows the tree. Second find from the same run:
+  `ip route get 8.8.8.8` exits 2 where there is no v4 route, and under `set -eo pipefail` that
+  aborted the installer one line before its summary - every probe absorbs its own failure now.
 
 - **A v6 panel login is now logged - and every failure class is bannable** (#888, part of
   the IPv6 groundwork #602). `h-log-user-login` validated its address as IPv4-only, so no

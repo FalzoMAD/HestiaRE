@@ -743,11 +743,13 @@ check_panel_php_version() {
 # fatal bind returns with nothing re-deriving. Holds CONFIGURED families against the
 # KERNEL's. Covers dovecot listen + exim dc_local_interfaces, not the hestia template
 # (immune: exim skips a missing family itself).
-check_mail_family_lage() {
-	local kernel6='' hits=0
+# Configured for a family the kernel refuses. Covers the three places WE derive from the kernel
+# lage; the distro's own "::1 localhost" is deliberately not one of them.
+check_family_lage() {
+	local kernel6='' hits=0 fqdn
 	[ -e /proc/net/if_inet6 ] && kernel6=yes
 	if [ -n "$kernel6" ]; then
-		ok "mail family lage: kernel has v6, listed loopbacks cannot be unbindable"
+		ok "family lage: kernel has v6, listed v6 loopbacks cannot be unbindable"
 		return
 	fi
 	if [ -f /etc/dovecot/dovecot.conf ] && grep -qE '^listen *=.*::' /etc/dovecot/dovecot.conf; then
@@ -760,7 +762,14 @@ check_mail_family_lage() {
 			"the stock template dies at start on it - rerun the derivation or re-enable kernel v6"
 		hits=1
 	fi
-	[ "$hits" = 0 ] && ok "mail family lage: v6-less kernel and no v6 loopback listed (dovecot, exim send-only)"
+	# The hosts line is derived ONCE, at hostname time; a box that lost v6 since keeps it.
+	fqdn=$(hostname -f 2> /dev/null || hostname 2> /dev/null)
+	if [ -n "$fqdn" ] && grep -qE "^::1[[:space:]]+${fqdn//./\\.}$" /etc/hosts 2> /dev/null; then
+		no "/etc/hosts names ::1 for $fqdn on a v6-less kernel" \
+			"derived when the box still had v6 - re-derive with: h-change-sys-hostname $fqdn"
+		hits=1
+	fi
+	[ "$hits" = 0 ] && ok "family lage: v6-less kernel, no v6 loopback listed (dovecot, exim send-only, /etc/hosts)"
 }
 
 # Exim refuses a macro whose name contains an EARLIER macro as substring; this closes
@@ -1805,6 +1814,24 @@ check_record_grammar() {
 # check_ip_object_counters - the ip-record counters had an authority but no guard (the
 # IP_AVAIL lage before #867), and the NAT-blind decrease left real backlog. Object list
 # derives from the files; the authority's check mode is the only rule source.
+# The mirror URL is a literal in THREE places - install.sh and h-update-hestia run before or
+# without this tree, main.sh serves the runtime fetches - so this is what measures them against
+# each other. The DEFAULT only: an operator's own HESTIARE_MIRROR in source.conf is not our
+# business. It does not check that the host answers; that is the fetch's own job.
+check_release_mirror() {
+	local a b c
+	a=$(sed -n 's|^RELEASE_MIRROR="\(https://[^"$]*\)"$|\1|p' "$HESTIA/install.sh" 2> /dev/null | head -n1)
+	b=$(sed -n 's|^RELEASE_MIRROR="${HESTIARE_MIRROR-\(https://[^"}]*\)}"$|\1|p' "$HESTIA/sbin/h-update-hestia" 2> /dev/null | head -n1)
+	c=$(sed -n 's|^HESTIA_RELEASE_MIRROR="\(https://[^"$]*\)"$|\1|p' "$HESTIA/include/main.sh" 2> /dev/null | head -n1)
+	if [ -z "$a" ] || [ -z "$b" ] || [ -z "$c" ]; then
+		no "release mirror default unreadable" "install.sh='${a:-none}' h-update-hestia='${b:-none}' main.sh='${c:-none}' - a line moved and this guard now measures nothing"
+	elif [ "$a" != "$b" ] || [ "$a" != "$c" ]; then
+		no "release mirror default drifted" "install.sh=$a, h-update-hestia=$b, main.sh=$c - the bootstrap and the runtime fetches would use different hosts"
+	else
+		ok "release mirror default identical in all three fetch paths ($a)"
+	fi
+}
+
 check_ip_object_counters() {
 	local f addr line k want stored drift=0 checked=0 first='' obj_out obj_lines
 	for f in "$CONF_DIR"/ips/*; do
@@ -2108,7 +2135,7 @@ echo "-- services --"
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_service "$MAIL_SYSTEM" "mail"
 check_notification_mta
 check_exim_sendonly
-check_mail_family_lage
+check_family_lage
 [ -n "$MAIL_SYSTEM" ] && check_exim_macro_names
 [ -n "$MAIL_SYSTEM" ] && check_exim_interface_expansion
 [ -n "$IMAP_SYSTEM" ] && [ "$IMAP_SYSTEM" != 'remote' ] && check_service "$IMAP_SYSTEM" "imap"
@@ -2281,6 +2308,7 @@ check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_ip_object_counters
+check_release_mirror
 check_record_grammar
 check_key_registries
 check_identity_band

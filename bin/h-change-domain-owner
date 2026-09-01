@@ -85,6 +85,17 @@ if [ -n "$web_data" ]; then
 	if [ -n "$ip" ]; then
 		web_data=$(echo "$web_data" | sed "s/IP='$IP'/IP='$ip'/")
 	fi
+
+	# The v6 slot moves the same way. Matched per line, not through a folded list: an
+	# unanchored grep accepts a longer address that merely contains this one.
+	old_ip6="$IP6"
+	new_ip6="$IP6"
+	if [ -n "$IP6" ] && ! get_user_ips 6 | grep -qxF "$IP6"; then
+		echo "[*] IPv6 dedicated to $owner select new ipv6 address..."
+		new_ip6=''
+		get_user_ip6 && new_ip6="$ip6"
+		web_data=$(echo "$web_data" | sed "s/IP6='$IP6'/IP6='$new_ip6'/")
+	fi
 	if [ -n "$new_docroot" ]; then
 		web_data=$(echo "$web_data" | sed "s|CUSTOM_DOCROOT='$CUSTOM_DOCROOT'|CUSTOM_DOCROOT='$new_docroot'|")
 		web_data=$(echo "$web_data" | sed "s|CUSTOM_PHPROOT='$CUSTOM_PHPROOT'|CUSTOM_PHPROOT='$new_php_docroot'|")
@@ -280,6 +291,13 @@ if [ -n "$old_ip" ]; then
 		decrease_ip_value $old_ip $owner
 		increase_ip_value $old_ip
 	fi
+fi
+# Same for the v6 object, which the block above never counted (#602)
+if [ -n "$old_ip6" ] && [ -e "$CONF_DIR/ips/$old_ip6" ]; then
+	decrease_ip_value "$old_ip6" "$owner"
+fi
+if [ -n "$new_ip6" ] && [ -e "$CONF_DIR/ips/$new_ip6" ]; then
+	increase_ip_value "$new_ip6"
 fi
 # Send notification to panel
 if [ -n "$web_data" ] || [ -n "$mail_data" ]; then

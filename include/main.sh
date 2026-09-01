@@ -395,6 +395,28 @@ get_user_owner() {
 	fi
 }
 
+# github.com has no AAAA, so on a v6-only box the two upstream repos below are reachable only
+# through the release mirror, which serves their assets under /wp-cli and /tachyon. Third literal
+# beside install.sh and sbin/h-update-hestia (both run before or without this tree); a smoke check
+# measures the three against each other. Every caller verifies the payload against a manifest pin,
+# which is what makes a second host acceptable here at all.
+HESTIA_RELEASE_MIRROR="https://dl.hestiare.com"
+
+# Bounded fetch with the mirror as the second try. $1 = route below the mirror, $2 = the github.com
+# release URL, $3 = destination. Bounded because wget defaults to 20 tries at a 900s read timeout,
+# so a host that drops SYNs costs ~45 minutes before the first error surfaces. wget -O leaves a
+# 0-byte file behind on failure, which a plain [ -f ] check accepts.
+fetch_release_asset() {
+	local route="$1" url="$2" dest="$3" rest
+	if wget "$url" --timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" && [ -s "$dest" ]; then
+		return 0
+	fi
+	rest="${url#*/releases/download/}"
+	{ [ -n "$HESTIA_RELEASE_MIRROR" ] && [ "$rest" != "$url" ]; } || return 1
+	wget "$HESTIA_RELEASE_MIRROR/$route/$rest" --timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" || return 1
+	[ -s "$dest" ]
+}
+
 # Fetch the wp-cli phar pinned in share/manifest.json (version + sha256) into $1. The phar runs
 # as every customer, so never a moving or unverified source. No partial file on failure; the
 # caller owns chown of the destination.
@@ -404,9 +426,8 @@ fetch_wp_cli_phar() {
 	sum=$(manifest_get '.software_versions.wp_cli.sha256')
 	{ [ -n "$ver" ] && [ "$ver" != "null" ] && [ -n "$sum" ] && [ "$sum" != "null" ]; } || return 1
 	tmp=$(mktemp -t wp-cli.XXXXXX.phar) || return 1
-	if ! wget "https://github.com/wp-cli/wp-cli/releases/download/v${ver}/wp-cli-${ver}.phar" \
-		--timeout=30 --tries=3 --retry-connrefused --quiet -O "$tmp" \
-		|| [ ! -s "$tmp" ] \
+	if ! fetch_release_asset wp-cli \
+		"https://github.com/wp-cli/wp-cli/releases/download/v${ver}/wp-cli-${ver}.phar" "$tmp" \
 		|| ! echo "$sum  $tmp" | sha256sum -c --quiet - 2> /dev/null; then
 		rm -f "$tmp"
 		return 1

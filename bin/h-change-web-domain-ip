@@ -57,13 +57,16 @@ get_domain_values 'web'
 old=$(get_real_ip "$IP")
 new=$(get_real_ip "$ip")
 
-# Replacing vhost
+# Replacing vhost. An empty old address is a domain that has no v4 listen line at all, so
+# there is nothing to substitute - that case renders instead, after the record update below.
 # One .conf holds both server blocks now (#593), so the IP is replaced in both at once
-replace_web_config "$WEB_SYSTEM" "$TPL.tpl"
+if [ -n "$old" ]; then
+	replace_web_config "$WEB_SYSTEM" "$TPL.tpl"
 
-# Replacing proxy vhost
-if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
-	replace_web_config "$PROXY_SYSTEM" "$PROXY.tpl"
+	# Replacing proxy vhost
+	if [ -n "$PROXY_SYSTEM" ] && [ -n "$PROXY" ]; then
+		replace_web_config "$PROXY_SYSTEM" "$PROXY.tpl"
+	fi
 fi
 
 # The HTTP/3 quic listen carries the IP, and its fragment is not a .conf so replace_web_config
@@ -84,9 +87,14 @@ fi
 # Update config
 update_object_value 'web' 'DOMAIN' "$domain" '$IP' "$3"
 
+# the vhosts carry no v4 line yet, so they are rendered from the updated record
+[ -z "$old" ] && $BIN/h-rebuild-web-domain "$user" "$domain" no
+
 # Update counters
 increase_ip_value "$new"
-decrease_ip_value "$old"
+if [ -n "$old" ] && [ -e "$CONF_DIR/ips/$old" ]; then
+	decrease_ip_value "$old"
+fi
 
 # Restart web server
 $BIN/h-restart-web "$restart"

@@ -7,6 +7,8 @@
     "$comment": "Release-shipped third-party version pins (#288, replaces install/upgrade/upgrade.conf). Bump per release. Read at runtime via manifest_get() in include/main.sh.",
     "$comment_tachyon": "3.2.2 pin last verified on 2026-08-27: tarball and all three plugin sha256 still match the published assets. Upstream woke up after six quiet weeks with a MAJOR jump - 4.0.2 through 4.0.4 released 2026-08-25/26. Deliberately NOT bumped here: a fresh major with three patch releases in two days needs its own evaluation round (#846), not a pin bump in release prep.",
     "tachyon": "3.2.2",
+    "$comment_tachyon_sha256": "sha256 over the release tarball, the same bar as the plugins: a v6-only box fetches this asset through the release mirror (dl.hestiare.com/tachyon), and gzip -t passes on any valid gzip. Bump together with the tachyon pin.",
+    "tachyon_sha256": "6042b131f2c1d54fc3ccc49f38fe3dd585aeb774de0040660ee9e34db06d0fba",
     "$comment_wp_cli": "Pinned GitHub release phar (sha256 over the file), fetched by fetch_wp_cli_phar for the system and every per-user copy - never a moving branch address. No OS package exists; this pin is the only patch channel, bump per release. 2.12.0 last verified on 2026-08-27: still the latest release, and the pinned sha256 still matches the published asset.",
     "wp_cli": { "version": "2.12.0", "sha256": "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c" },
     "tachyon_plugins": {

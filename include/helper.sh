@@ -302,10 +302,13 @@ seed_hestia_etc() {
 		fi
 		ln -sfn "$conf_dir" "$hestia_root/conf"
 	fi
-	rm -f "$conf_dir/hestia.conf"
-	touch "$conf_dir/hestia.conf"
+	# SEED, not rewrite: install.sh runs this on every start, and its own error path invites a
+	# re-run. Truncating here left the box with only the keys of the stages that had NOT completed
+	# yet - the completed ones skip - so a resumed install ended with an empty WEB_SYSTEM and every
+	# web command refusing on a box that has a web server.
+	[ -f "$conf_dir/hestia.conf" ] || : > "$conf_dir/hestia.conf"
 	chmod 660 "$conf_dir/hestia.conf"
-	_wcv() { echo "$1='$2'" >> "$conf_dir/hestia.conf"; }
+	_wcv() { grep -q "^$1=" "$conf_dir/hestia.conf" || echo "$1='$2'" >> "$conf_dir/hestia.conf"; }
 	_wcv "BACKEND_PORT" "$port"
 	_wcv "CRON_SYSTEM" "cron"
 	# capability state, not a switch (#211): quota_arm overwrites it from measurement
@@ -325,6 +328,13 @@ seed_hestia_etc() {
 	# seed DB_SYSTEM empty - it is composed from registered hosts by h-add-database-host
 	_wcv "DB_SYSTEM" ""
 	unset -f _wcv
+	# Not a seed value: the version follows the tree that is being installed. Replace OR append -
+	# a bare sed would silently do nothing the day the seed above stops writing the key.
+	if grep -q "^VERSION=" "$conf_dir/hestia.conf"; then
+		sed -i "s|^VERSION=.*|VERSION='$version'|" "$conf_dir/hestia.conf"
+	else
+		echo "VERSION='$version'" >> "$conf_dir/hestia.conf"
+	fi
 }
 
 # ── re-apply what a copy-only update cannot: state outside the install tree ───

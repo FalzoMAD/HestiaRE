@@ -404,13 +404,22 @@ php${PHP_VER}-readline php${PHP_VER}-xml"
 		cp -f "$HESTIA/share/nginx/logrotate" /etc/logrotate.d/nginx
 		mkdir -p /etc/nginx/conf.d/domains /etc/nginx/conf.d/main \
 			/etc/nginx/modules-enabled /var/log/nginx/domains
+		# A v6 nameserver only counts bracketed, and a link-local one is not addressable from
+		# the config at all. Anchored on the directive, so the default list stays nginx.conf's.
 		local resolver="" ns
 		for ns in $(grep -is '^nameserver' /etc/resolv.conf | awk '{print $2}'); do
-			if echo "$ns" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-				resolver="${resolver:+$resolver }$ns"
-			fi
+			case "$ns" in
+				fe80:* | *%*) continue ;;
+				*:*) resolver="${resolver:+$resolver }[$ns]" ;;
+				*) echo "$ns" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}$' \
+					&& resolver="${resolver:+$resolver }$ns" ;;
+			esac
 		done
-		[ -n "$resolver" ] && sed -i "s/1.0.0.1 8.8.4.4 1.1.1.1 8.8.8.8/$resolver/g" /etc/nginx/nginx.conf || true
+		[ -n "$resolver" ] && sed -i "s|^\(\s*resolver\s\+\).*|\1$resolver valid=300s;|" /etc/nginx/nginx.conf
+		# An AAAA answer is a dead upstream where the kernel has no v6.
+		if [ ! -e /proc/net/if_inet6 ]; then
+			sed -i "s|^\(\s*resolver\s\+.*\);|\1 ipv6=off;|" /etc/nginx/nginx.conf
+		fi
 
 		echo "[ * ] Updating Cloudflare IP ranges..."
 		local cf_ips
@@ -825,6 +834,17 @@ init_hestia_structure() {
 	echo "[ OK ] structure ready"
 }
 
+# First global address of NIC $2 in family $1 (-4/-6). Temporary and deprecated v6 addresses
+# rotate, so they are skipped here exactly as in h-update-sys-ip.
+nic_global_addr() {
+	[ -n "$2" ] || return 0
+	# absorbs its own failure: the caller assigns it, and under set -eo pipefail an unknown NIC
+	# would abort the installer instead of leaving the address empty
+	ip "$1" -d -j addr show "$2" 2> /dev/null \
+		| jq -r '.[] | .addr_info[] | if .scope == "global" and .temporary != true and .deprecated != true then .local else empty end' 2> /dev/null \
+		| head -n1 || true
+}
+
 # ════════════════════════════════════════════════════════════════════════════
 # Stage: configure — admin user, SSL, sudoers, firewall, default domain, cron
 # ════════════════════════════════════════════════════════════════════════════
@@ -909,12 +929,17 @@ configure_hestia() {
 	"$BIN/h-update-sys-ip" > /dev/null 2>&1 || true
 	local DEFAULT_NIC IP PUB_IP _reg_ip
 	DEFAULT_NIC="$(ip -d -j route show | jq -r '.[] | if .dst == "default" then .dev else empty end' | head -n1)"
-	IP="$(ip -4 -d -j addr show "$DEFAULT_NIC" 2> /dev/null \
-		| jq -r '.[] | .addr_info[] | if .scope == "global" then .local else empty end' 2> /dev/null \
-		| head -n1 || hostname -I | awk '{print $1}')"
-	# prefer the IP object h-update-sys-ip registered over our NIC detection
+	# A v6-only box has no v4 default route, so NIC and address both come from the -6 twin.
+	[ -z "$DEFAULT_NIC" ] && DEFAULT_NIC="$(ip -6 -d -j route show \
+		| jq -r '.[] | if .dst == "default" then .dev else empty end' | head -n1)"
+	IP="$(nic_global_addr -4 "$DEFAULT_NIC")"
+	[ -z "$IP" ] && IP="$(nic_global_addr -6 "$DEFAULT_NIC")"
+	# prefer the IP object h-update-sys-ip registered over our NIC detection, v4 first: on a
+	# dual-stack box the v4 is the address the default domain and the NAT probe still expect
 	if [ -z "$IP" ] || [ ! -e "$CONF_DIR/ips/$IP" ]; then
-		_reg_ip="$(ls -t "$CONF_DIR/ips/" 2> /dev/null | head -n1)"
+		_reg_ip="$(find "$CONF_DIR/ips" -maxdepth 1 -type f ! -name '*:*' -printf '%T@ %f\n' 2> /dev/null \
+			| sort -rn | head -n1 | cut -d' ' -f2-)" || _reg_ip=''
+		[ -z "$_reg_ip" ] && _reg_ip="$(ls -t "$CONF_DIR/ips/" 2> /dev/null | head -n1)"
 		[ -n "$_reg_ip" ] && IP="$_reg_ip"
 	fi
 	PUB_IP="$(curl -fsLm5 --retry 2 --ipv4 https://ip.hestiacp.com/ 2> /dev/null || echo "")"
@@ -1121,7 +1146,16 @@ finalize_install() {
 	apt-get -qq update || true
 	hestia_apt -y upgrade || true
 	local HOST_IP
-	HOST_IP=$(ip -4 route get 8.8.8.8 2> /dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')
+	# src of the route toward a public address, with the -6 twin for a box that has no v4 route.
+	# Each probe absorbs its own failure, or that lookup's exit 2 aborts the installer right here.
+	HOST_IP=$(ip route get 8.8.8.8 2> /dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}' | head -n1) || HOST_IP=''
+	if [ -z "$HOST_IP" ]; then
+		HOST_IP=$(ip -6 route get 2606:4700:4700::1111 2> /dev/null \
+			| awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}' | head -n1) || HOST_IP=''
+	fi
+	[ -n "$HOST_IP" ] || HOST_IP=$(hostname -I | awk '{print $1}')
+	# a v6 literal is only a URL with brackets
+	case "$HOST_IP" in *:*) HOST_IP="[$HOST_IP]" ;; esac
 	echo ""
 	echo "========================================================================"
 	echo " HestiaRE installation complete!"
