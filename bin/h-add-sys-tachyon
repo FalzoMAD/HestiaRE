@@ -38,14 +38,15 @@ TX_INSTALL_DIR="/var/lib/tachyon"
 TX_CONFIG_DIR="/etc/tachyon"
 TX_LOG="/var/log/tachyon"
 
-# Bounded on purpose: wget's defaults are 20 tries at a 900s read timeout, so a host that
-# drops SYNs costs ~45 minutes before the first error surfaces.
+# fetch_release_asset carries the bound and the mirror fallback (include/main.sh). The tarball
+# is pinned like the plugins: gzip -t passes on ANY valid gzip, and the mirror is a second host.
 tx_fetch() {
-	local dest="$1"
-	wget "$TX_URL" --timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" || return 1
-	# wget -O leaves a 0-byte file behind on failure, which a plain [ -f ] check accepts.
-	[ -s "$dest" ] || return 1
+	local dest="$1" sum
+	sum=$(manifest_get '.software_versions.tachyon_sha256')
+	[ -n "$sum" ] && [ "$sum" != "null" ] || return 1
+	fetch_release_asset tachyon "$TX_URL" "$dest" || return 1
 	gzip -t "$dest" 2> /dev/null || return 1
+	echo "$sum  $dest" | sha256sum -c --quiet - 2> /dev/null || return 1
 }
 
 # Same fail-before-touch bar as the main tarball, plus a pinned sha256: change-password-hestia
@@ -56,9 +57,8 @@ tx_fetch_plugin() {
 	ver=$(manifest_get ".software_versions.tachyon_plugins[\"$name\"].version")
 	sum=$(manifest_get ".software_versions.tachyon_plugins[\"$name\"].sha256")
 	{ [ -n "$ver" ] && [ "$ver" != "null" ] && [ -n "$sum" ] && [ "$sum" != "null" ]; } || return 1
-	wget "https://github.com/kimusan/Tachyon/releases/download/v${tx_v}/${name}-${ver}.tgz" \
-		--timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" || return 1
-	[ -s "$dest" ] || return 1
+	fetch_release_asset tachyon \
+		"https://github.com/kimusan/Tachyon/releases/download/v${tx_v}/${name}-${ver}.tgz" "$dest" || return 1
 	echo "$sum  $dest" | sha256sum -c --quiet - 2> /dev/null || return 1
 }
 
