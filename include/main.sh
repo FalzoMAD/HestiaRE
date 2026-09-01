@@ -1501,6 +1501,10 @@ is_refresh_ipset_format_valid() {
 # list cannot serve here: it rejects the colon and the slash outright, so no v6 address and no
 # network could ever be stored. The panel validates the same shape first for a readable message -
 # this side is the authority.
+# An EMPTY list is legal here on purpose: switching the feature off writes an empty value through
+# this same path. The panel is stricter (it refuses a list that would match nobody), so the
+# authority is the more permissive of the two - fail-closed either way, since an enabled switch
+# with no entry locks the user out rather than letting anyone in.
 is_ip_list_format_valid() {
 	local list="$1" name="${2-ip list}" entry
 	local -a entries

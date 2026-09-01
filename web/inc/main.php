@@ -48,6 +48,11 @@ if (!isset($_SESSION["user_combined_ip"])) {
 // Checking user to use session from the same IP he has been logged in. Compared through
 // session_ip_key, so a v6 client that rotates its address inside its own /64 keeps the session -
 // an exact comparison logged the admin out for something the client does by itself (#894).
+// Both sides come from get_real_user_ip(): the value stored on the first request after login and
+// the one computed here, so the comparison cannot drift between two sources. ("combined" in the
+// name is a leftover - nothing is combined, it is the address.) The day the panel sits behind a
+// proxy (#878) that function returns the PROXY for both sides: they still agree, but the pin
+// stops distinguishing anyone, and this line is one of the places that issue has to look at.
 if (
 	session_ip_key((string) $_SESSION["user_combined_ip"]) !== session_ip_key((string) $user_combined_ip) &&
 	isset($_SESSION["user"]) &&

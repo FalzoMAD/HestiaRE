@@ -322,8 +322,15 @@ function ip_unmap(string $ip): string
  * The identity a session is pinned to. An IPv6 client rotates its address on its own (privacy
  * extensions) WITHIN its /64, so a v6 session is pinned to that prefix - comparing the exact
  * address logs the admin out mid-session for a change the client made by itself. The trade is
- * named: someone inside the client's own /64 could carry a stolen cookie. IPv4 stays exact, and
- * anything that parses as neither is compared as it stands (#894).
+ * named: someone inside the client's own /64 could carry a stolen cookie.
+ *
+ * That trade only holds where a /64 IS one client, which is GLOBAL UNICAST (2000::/3) and nothing
+ * else. Elsewhere a /64 holds arbitrarily many strangers and the pin would quietly become no pin:
+ * ::ffff:0:0/96 is the entire v4 internet in one key, 64:ff9b::/96 every NAT64 destination, and
+ * ::1 - eight zero bytes like the others - is where an admin works through an ssh tunnel. So
+ * everything outside 2000::/3 falls back to the exact address, link-local and ULA included, where
+ * nothing rotates that a panel session would have to follow. IPv4 is exact anyway, and anything
+ * that parses as neither is compared as it stands (#894).
  */
 function session_ip_key(string $ip): string
 {
@@ -331,8 +338,16 @@ function session_ip_key(string $ip): string
 	// same client would get two keys depending on how it happened to arrive
 	$plain = ip_unmap($ip);
 	$bin = @inet_pton($plain);
-	if ($bin === false || strlen($bin) !== 16) {
+	if ($bin === false) {
 		return $plain;
+	}
+	// one spelling per address: 64:ff9b::203.0.113.5 and 64:ff9b::cb00:7105 are the same client
+	$canon = @inet_ntop($bin);
+	if ($canon === false) {
+		$canon = $plain;
+	}
+	if (strlen($bin) !== 16 || (ord($bin[0]) & 0xe0) !== 0x20) {
+		return $canon;
 	}
 	return "v6/64:" . bin2hex(substr($bin, 0, 8));
 }
