@@ -45,9 +45,11 @@ if (!isset($_SESSION["user_combined_ip"])) {
 	$_SESSION["user_combined_ip"] = $user_combined_ip;
 }
 
-// Checking user to use session from the same IP he has been logged in
+// Checking user to use session from the same IP he has been logged in. Compared through
+// session_ip_key, so a v6 client that rotates its address inside its own /64 keeps the session -
+// an exact comparison logged the admin out for something the client does by itself (#894).
 if (
-	$_SESSION["user_combined_ip"] != $user_combined_ip &&
+	session_ip_key((string) $_SESSION["user_combined_ip"]) !== session_ip_key((string) $user_combined_ip) &&
 	isset($_SESSION["user"]) &&
 	$_SESSION["DISABLE_IP_CHECK"] != "yes"
 ) {

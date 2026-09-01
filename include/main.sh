@@ -1497,6 +1497,22 @@ is_refresh_ipset_format_valid() {
 }
 
 # Common format validator
+# A comma-separated allow list of addresses and networks, both families (#894). The common deny
+# list cannot serve here: it rejects the colon and the slash outright, so no v6 address and no
+# network could ever be stored. The panel validates the same shape first for a readable message -
+# this side is the authority.
+is_ip_list_format_valid() {
+	local list="$1" name="${2-ip list}" entry
+	is_no_new_line_format "$list"
+	[ ${#list} -lt 400 ] || check_result "$E_INVALID" "invalid $name format :: $list"
+	IFS=',' read -ra _ip_list_entries <<< "$list"
+	for entry in "${_ip_list_entries[@]}"; do
+		entry="${entry// /}"
+		[ -z "$entry" ] && continue
+		is_ip_cidr_format_valid "$entry" "$name"
+	done
+}
+
 is_common_format_valid() {
 	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
 	exclude="[!|#|$|^|&|(|)|+|=|{|}|:|<|>|?|/|\|\"|'|;|%|\`| ]"

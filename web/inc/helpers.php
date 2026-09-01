@@ -296,3 +296,105 @@ function private_tmpdir()
 	chmod($out[0], 0700);
 	return $out[0];
 }
+
+/**
+ * The identity a session is pinned to. An IPv6 client rotates its address on its own (privacy
+ * extensions) WITHIN its /64, so a v6 session is pinned to that prefix - comparing the exact
+ * address logs the admin out mid-session for a change the client made by itself. The trade is
+ * named: someone inside the client's own /64 could carry a stolen cookie. IPv4 stays exact, and
+ * anything that parses as neither is compared as it stands (#894).
+ */
+function session_ip_key(string $ip): string
+{
+	$bin = @inet_pton($ip);
+	if ($bin === false || strlen($bin) !== 16) {
+		return $ip;
+	}
+	return "v6/64:" . bin2hex(substr($bin, 0, 8));
+}
+
+/**
+ * Is $ip inside $cidr? $cidr is a bare address (exact) or a network in CIDR notation, either
+ * family. The families must agree, so 0.0.0.0/0 never covers a v6 client and ::/0 never a v4 one.
+ * Anything unparseable is NOT a match - a typo must never widen a gate.
+ */
+function ip_in_cidr(string $ip, string $cidr): bool
+{
+	$cidr = trim($cidr);
+	if ($cidr === "") {
+		return false;
+	}
+	$bits = null;
+	$net = $cidr;
+	if (str_contains($cidr, "/")) {
+		[$net, $suffix] = explode("/", $cidr, 2);
+		if (!preg_match('/^\d{1,3}$/', $suffix)) {
+			return false;
+		}
+		$bits = (int) $suffix;
+	}
+	$a = @inet_pton($ip);
+	$b = @inet_pton($net);
+	if ($a === false || $b === false || strlen($a) !== strlen($b)) {
+		return false;
+	}
+	$max = strlen($a) * 8;
+	if ($bits === null) {
+		$bits = $max;
+	}
+	if ($bits > $max) {
+		return false;
+	}
+	$whole = intdiv($bits, 8);
+	$rest = $bits % 8;
+	if ($whole > 0 && substr($a, 0, $whole) !== substr($b, 0, $whole)) {
+		return false;
+	}
+	if ($rest === 0) {
+		return true;
+	}
+	$mask = chr((0xff << (8 - $rest)) & 0xff);
+	return ($a[$whole] & $mask) === ($b[$whole] & $mask);
+}
+
+/**
+ * The login allow list: comma-separated bare addresses or networks, both families.
+ */
+function ip_list_match(string $ip, string $list): bool
+{
+	foreach (explode(",", $list) as $entry) {
+		if (ip_in_cidr($ip, $entry)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Which entries of an allow list are not an address or a network - returned rather than ignored,
+ * because a list that matches nobody locks the user out at the NEXT login, far from the typo.
+ */
+function ip_list_invalid(string $list): array
+{
+	$bad = [];
+	foreach (explode(",", $list) as $entry) {
+		$entry = trim($entry);
+		if ($entry === "") {
+			continue;
+		}
+		$net = $entry;
+		$suffix = null;
+		if (str_contains($entry, "/")) {
+			[$net, $suffix] = explode("/", $entry, 2);
+		}
+		$bin = @inet_pton($net);
+		if ($bin === false) {
+			$bad[] = $entry;
+			continue;
+		}
+		if ($suffix !== null && (!preg_match('/^\d{1,3}$/', $suffix) || (int) $suffix > strlen($bin) * 8)) {
+			$bad[] = $entry;
+		}
+	}
+	return $bad;
+}
