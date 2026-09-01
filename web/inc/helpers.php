@@ -338,13 +338,32 @@ function session_ip_key(string $ip): string
 }
 
 /**
+ * The same reduction for a whole list entry: a mapped NETWORK carries 96 leading bits that vanish
+ * with the prefix, so ::ffff:203.0.113.0/120 is 203.0.113.0/24. Without this the CLI (which sees
+ * a legal 16-byte /120) would store an entry the matcher can never hit.
+ */
+function cidr_unmap(string $cidr): string
+{
+	$cidr = trim($cidr);
+	if (!str_contains($cidr, "/")) {
+		return ip_unmap($cidr);
+	}
+	[$net, $bits] = explode("/", $cidr, 2);
+	$plain = ip_unmap($net);
+	if ($plain !== $net && preg_match('/^\d{1,3}$/', $bits) && (int) $bits >= 96) {
+		$bits = (string) ((int) $bits - 96);
+	}
+	return $plain . "/" . $bits;
+}
+
+/**
  * Is $ip inside $cidr? $cidr is a bare address (exact) or a network in CIDR notation, either
  * family. The families must agree, so 0.0.0.0/0 never covers a v6 client and ::/0 never a v4 one.
  * Anything unparseable is NOT a match - a typo must never widen a gate.
  */
 function ip_in_cidr(string $ip, string $cidr): bool
 {
-	$cidr = trim($cidr);
+	$cidr = cidr_unmap($cidr);
 	if ($cidr === "") {
 		return false;
 	}
@@ -406,12 +425,13 @@ function ip_list_invalid(string $list): array
 		if ($entry === "") {
 			continue;
 		}
-		$net = $entry;
+		$normal = cidr_unmap($entry);
+		$net = $normal;
 		$suffix = null;
-		if (str_contains($entry, "/")) {
-			[$net, $suffix] = explode("/", $entry, 2);
+		if (str_contains($normal, "/")) {
+			[$net, $suffix] = explode("/", $normal, 2);
 		}
-		$bin = @inet_pton(ip_unmap($net));
+		$bin = @inet_pton($net);
 		if ($bin === false) {
 			$bad[] = $entry;
 			continue;
