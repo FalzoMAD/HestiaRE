@@ -33,6 +33,10 @@ if (!is_readable($marker) || (int) trim((string) file_get_contents($marker)) < t
 
 // The source address comes from the connection, both families (#893). A peer that reaches us over
 // v6 is paired on the address it actually used - anything else opens a rule for the wrong path.
+// Deliberately NOT get_real_user_ip(): here the address is IDENTITY, not a display value, so a
+// forwarded header - which the caller sets - must not reach it. The flip side is an assumption
+// that FALLS WITH #878 (panel behind a proxy): REMOTE_ADDR would then be the proxy, and pairing
+// would record and open the wrong path. That issue has to touch this line.
 $ip = $_SERVER["REMOTE_ADDR"] ?? "";
 if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6)) {
 	http_response_code(400);

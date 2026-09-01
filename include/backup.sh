@@ -971,7 +971,9 @@ backup_download_norm() {
 # FTP Functions
 # /usr/bin/ftp exits 0 even when it cannot connect, so failure is read from the output.
 # Host and port are separate arguments here, so a v6 literal goes in BARE - measured: brackets
-# make the client look up "[:" and fail. The opposite of sftpc, which parses host:path.
+# make the client look up "[:" and fail. The opposite of sftpc, which parses host:path. restic is
+# NOT a third case: its repository string is configured whole (h-add-backup-host-restic REPO), so
+# $HOST never reaches it and we compose no address for it.
 ftpc() {
 	/usr/bin/ftp -np $HOST $PORT << EOF
     quote USER $USERNAME

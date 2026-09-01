@@ -122,7 +122,9 @@ peer_ips=${peer_ips% }
 	echo "ERROR: cannot resolve $host to an address."
 	exit "$E_CONNECT"
 }
-# the record keeps the whole set in the usual comma form; nothing reads it back, it is for the admin
+# The record keeps the whole set in the usual comma form. Its only readers are the three output
+# formats of h-list-sys-crowdsec-peers, which print the field as it stands; nothing parses it as a
+# single address, and the panel's mesh page does not show it at all.
 peer_ip="${peer_ips// /,}"
 
 #----------------------------------------------------------#
