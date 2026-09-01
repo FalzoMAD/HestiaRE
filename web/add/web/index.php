@@ -142,6 +142,8 @@ if (!empty($_SESSION["PROXY_SYSTEM"])) {
 $ips = cli_json("h-list-user-ips " . $user . " json");
 $ips_v4 = array_filter($ips, fn($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
 $ips = $ips_v4 ?: $ips;
+// ... and the label follows the list: a v6-only box would otherwise offer v6 under "IP Address"
+$ip_label = $ips_v4 ? _("IP Address") : _("IPv6 Address");
 
 // Get all user domains
 $user_domains = array_keys(cli_json("h-list-web-domains " . $user . " json"));

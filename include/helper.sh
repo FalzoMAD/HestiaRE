@@ -328,8 +328,13 @@ seed_hestia_etc() {
 	# seed DB_SYSTEM empty - it is composed from registered hosts by h-add-database-host
 	_wcv "DB_SYSTEM" ""
 	unset -f _wcv
-	# not a seed value: the version follows the tree that is being installed
-	sed -i "s|^VERSION=.*|VERSION='$version'|" "$conf_dir/hestia.conf"
+	# Not a seed value: the version follows the tree that is being installed. Replace OR append -
+	# a bare sed would silently do nothing the day the seed above stops writing the key.
+	if grep -q "^VERSION=" "$conf_dir/hestia.conf"; then
+		sed -i "s|^VERSION=.*|VERSION='$version'|" "$conf_dir/hestia.conf"
+	else
+		echo "VERSION='$version'" >> "$conf_dir/hestia.conf"
+	fi
 }
 
 # ── re-apply what a copy-only update cannot: state outside the install tree ───

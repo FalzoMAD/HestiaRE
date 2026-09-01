@@ -33,26 +33,11 @@ is_format_valid 'domain'
 #----------------------------------------------------------#
 
 current_hostname="$(hostname)"
-if [[ "$current_hostname" == "$domain" ]]; then
-	echo "Current hostname \"$current_hostname\" is the same as the new one you want to use"
-	echo "I'm not going to change it"
-	exit
-fi
+same_name=0
+[[ "$current_hostname" == "$domain" ]] && same_name=1
 
-hostname "$domain"
-
-# Debian/Ubuntu
-hostnamectl set-hostname "$domain"
-echo "$domain" > /etc/hostname
-
-# Update webmail's password plugin configuration
-if [ -d /etc/roundcube/ ]; then
-	sed -i "/password_hestia_host/c\$rcmail_config['password_hestia_host'] = '$domain';" /etc/roundcube/plugins/password/config.inc.php
-fi
-if [ -d /etc/tachyon/ ]; then
-	sed -i "/\"hestia_host\":/c\\\"hestia_host\": \"$domain\"," /etc/tachyon/data/_data_/_default_/configs/plugin-change-password.json
-fi
-
+# Runs on EVERY call, not only on a rename: the ::1 twin is derived from the kernel lage, and a box
+# that gained or lost v6 since needs a way to re-derive it. Idempotent, so a no-op rename is free.
 # Update /etc/hosts. The ::1 twin only where the kernel has v6: a loopback literal the box cannot
 # use turns every lookup of its own hostname into a connect that has to fail first.
 if [ -f /etc/hosts ]; then
@@ -84,6 +69,31 @@ if [ -f /etc/hosts ]; then
 			sed -i "${list_lines}" /etc/hosts
 		fi
 	done
+	# The other direction, and the reason this block runs on every call: a box that LOST v6 keeps a
+	# ::1 line nothing can use. Only ours - the distro's own "::1 localhost" is not ours to touch.
+	if [ ! -e /proc/net/if_inet6 ]; then
+		sed -i -E "/^::1\s{1,}(${cur_re}|${dom_re})$/d" /etc/hosts
+	fi
+fi
+
+if [ "$same_name" = 1 ]; then
+	echo "Current hostname \"$current_hostname\" is the same as the new one you want to use"
+	echo "I'm not going to change it"
+	exit
+fi
+
+hostname "$domain"
+
+# Debian/Ubuntu
+hostnamectl set-hostname "$domain"
+echo "$domain" > /etc/hostname
+
+# Update webmail's password plugin configuration
+if [ -d /etc/roundcube/ ]; then
+	sed -i "/password_hestia_host/c\$rcmail_config['password_hestia_host'] = '$domain';" /etc/roundcube/plugins/password/config.inc.php
+fi
+if [ -d /etc/tachyon/ ]; then
+	sed -i "/\"hestia_host\":/c\\\"hestia_host\": \"$domain\"," /etc/tachyon/data/_data_/_default_/configs/plugin-change-password.json
 fi
 
 #----------------------------------------------------------#

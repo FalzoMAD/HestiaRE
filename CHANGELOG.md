@@ -16,9 +16,12 @@ opens above it.
 
 - **A v6-only box installs itself** (#892, part of #602). github.com has no AAAA, so the
   bootstrap had no way in at all: `install.sh` and `h-update-hestia` now retry the release API
-  and the release asset through the mirror (`dl.hestiare.com/api` and `/raw`, the same repo,
-  byte-identical payload - verified by sha256 against the GitHub original) whenever the primary
-  does not answer. It is a retry of ONE source, not a second one; a private Gitea release never
+  and the release asset through the mirror (`dl.hestiare.com/api` and `/raw`, the same repo)
+  whenever the primary does not answer. What runs at install time is a VERSION check - the
+  extracted tree must carry the tag that was asked for; the sha256 comparison against GitHub's own
+  asset was a measurement when the route was set up, not a promise the code keeps making. The two
+  foreign assets are the ones with a checksum: wp-cli and the Tachyon files verify against their
+  manifest pin on every fetch. It is a retry of ONE source, not a second one; a private Gitea release never
   falls back, and the mirror never sees a token. Both bootstrap paths carry the URL as their own
   literal (install.sh runs before the tree exists and can read it from nowhere), so a smoke check
   now measures the two against each other - a drifted or vanished line fails, it does not pass
