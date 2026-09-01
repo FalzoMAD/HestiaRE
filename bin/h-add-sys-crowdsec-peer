@@ -148,14 +148,14 @@ reply=$(mktemp)
 chmod 600 "$reply"
 http=$(curl -sS -k --pinnedpubkey "sha256//$pin" --max-time 30 --max-filesize 65536 \
 	-o "$reply" -w '%{http_code}' -H 'Content-Type: application/json' \
-	--data "@$payload" "https://$host:$port/mesh-pair.php" 2> /dev/null)
+	--data "@$payload" "https://$(url_host "$host"):$port/mesh-pair.php" 2> /dev/null)
 rm -f "$payload"
 
 case "$http" in
 	200) ;;
 	404) fail "$host:$port has no open pairing window. Run h-generate-sys-crowdsec-pairing there." "$E_NOTEXIST" ;;
 	403) fail "$host:$port rejected the pairing code (wrong, used or expired)." "$E_PASSWORD" ;;
-	*) fail "pairing call to $host:$port failed (HTTP ${http:-none})." "$E_CONNECT" ;;
+	*) fail "pairing call to $(url_host "$host"):$port failed (HTTP ${http:-none})." "$E_CONNECT" ;;
 esac
 
 pull_token=$(jq -r '.token // empty' "$reply" 2> /dev/null)
