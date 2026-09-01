@@ -31,23 +31,28 @@ if (!is_readable($marker) || (int) trim((string) file_get_contents($marker)) < t
 	exit();
 }
 
+// The source address comes from the connection, both families (#893). A peer that reaches us over
+// v6 is paired on the address it actually used - anything else opens a rule for the wrong path.
 $ip = $_SERVER["REMOTE_ADDR"] ?? "";
-if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-	// The mesh peering flow is IPv4-only for now: peer resolution, host regex and the
-	// LAPI transport all reject v6 literals (#893). Not h-add-firewall-rule - that has
-	// been dual-family since the nftables migration.
+if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6)) {
 	http_response_code(400);
 	exit();
 }
 
 $body = file_get_contents("php://input", false, null, 0, 8192);
 $in = json_decode((string) $body, true);
+// The host the peer names for callbacks: a name, or a bare address - and a v6 literal is all
+// colons, which the name form has none of.
+$in_host = (string) ($in["host"] ?? "");
+$host_ok = str_contains($in_host, ":")
+	? (bool) filter_var($in_host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
+	: (bool) preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,253}$/', $in_host);
 if (
 	!is_array($in) ||
 	!preg_match('/^[A-Za-z0-9-]{16,64}$/', (string) ($in["code"] ?? "")) ||
 	!preg_match('/^[a-f0-9]{32,128}$/', (string) ($in["token"] ?? "")) ||
 	!preg_match('/^[0-9]{1,5}$/', (string) ($in["port"] ?? "")) ||
-	!preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,253}$/', (string) ($in["host"] ?? ""))
+	!$host_ok
 ) {
 	http_response_code(400);
 	exit();

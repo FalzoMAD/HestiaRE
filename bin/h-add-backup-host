@@ -45,7 +45,8 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 if [ "$type" != 'local' ]; then
 	check_args '2' "$#" "TYPE HOST USERNAME PASSWORD [PATH] [PORT] [KEEP]"
-	is_format_valid 'host' 'path' 'port'
+	# host46: a remote may be named or a bare address, and a v6 literal carries colons
+	is_format_valid 'host46' 'path' 'port'
 	if [ -n "$keep" ]; then
 		is_int_format_valid "$keep" 'keep'
 		# 0 is refused, not stored: handed to the rotation it means "delete everything on this

@@ -347,6 +347,9 @@ fw_local_allowed_uids() {
 
 # Every local user reaches every customer's containers (host-local has no owner): one rule per
 # /24, derived from the user records each render. The webserver allowlist keeps the proxy path.
+# Deliberately v4 (#893): the whole per-user model lives inside 127.20.0.0/16 on the loopback, so
+# it works unchanged on a v6-only box. There is nothing to reach it from outside, and a v6 twin
+# would only add a second address family to guard.
 fw_restrict_docker_nets() {
 	local uconf u net uid cuid web uids
 	web="$(id -u www-data 2> /dev/null)"

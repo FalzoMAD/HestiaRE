@@ -1331,12 +1331,15 @@ restic_dump_dir() { echo "$HOMEDIR/$1/.dumps"; }
 # SFTP Functions
 # The rc fallback belongs at the END: eof also arrives after the regular exit.
 sftpc() {
+	# sftp reads host:path, so a v6 literal only works bracketed
+	local sftp_host
+	sftp_host=$(url_host "$HOST")
 	if [ "$PRIVATEKEY" != "yes" ]; then
 		expect -f "-" "$@" << EOF
             set timeout 60
             set count 0
             spawn /usr/bin/sftp -o StrictHostKeyChecking=no \
-                -o Port=$PORT $USERNAME@$HOST
+                -o Port=$PORT $USERNAME@$sftp_host
             expect {
                 -nocase "password:" {
                     send "$PASSWORD\r"
@@ -1401,7 +1404,7 @@ EOF
             set timeout 60
             set count 0
             spawn /usr/bin/sftp -o StrictHostKeyChecking=no \
-                -o Port=$PORT -i $PASSWORD $USERNAME@$HOST
+                -o Port=$PORT -i $PASSWORD $USERNAME@$sftp_host
             expect {
                 -nocase "password:" {
                     send "$PASSWORD\r"

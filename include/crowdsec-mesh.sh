@@ -73,7 +73,8 @@ mesh_token_new() { openssl rand -hex 32; }
 # there is no CA to trust, the pin IS the identity from here on.
 mesh_spki_pin() {
 	local host="$1" port="$2" pin
-	pin=$(echo | timeout 10 openssl s_client -connect "$host:$port" 2> /dev/null \
+	# bracketed for a v6 literal - -connect splits on the last colon, which an address is full of
+	pin=$(echo | timeout 10 openssl s_client -connect "$(url_host "$host"):$port" 2> /dev/null \
 		| openssl x509 -pubkey -noout 2> /dev/null \
 		| openssl pkey -pubin -outform der 2> /dev/null \
 		| openssl dgst -sha256 -binary 2> /dev/null | base64 | tr -d '\n')
@@ -82,23 +83,41 @@ mesh_spki_pin() {
 }
 
 # These rules only ADD to admin access - the panel port is never narrowed to peers-only, which would
-# lock the admin out.
+# lock the admin out. $1 may name SEVERAL addresses: a dual-stack peer usually calls back over v6,
+# and a rule for the other family simply would not match. The v6 twin carries its own comment so
+# closing finds both.
 mesh_fw_open() {
-	local ip="$1" peer="$2"
-	[ -n "$(mesh_fw_rule_id "$peer")" ] && return 0
-	$BIN/h-add-firewall-rule 'ACCEPT' "$ip" "${BACKEND_PORT:-8083}" 'TCP' "$(mesh_fw_comment "$peer")" > /dev/null 2>&1
+	local addr peer="$2" comment opened=0
+	for addr in $1; do
+		case "$addr" in
+			*:*) comment="$(mesh_fw_comment "$peer") v6" ;;
+			*) comment="$(mesh_fw_comment "$peer")" ;;
+		esac
+		if grep -qF "COMMENT='$comment'" "$CONF_DIR/firewall/rules.conf" 2> /dev/null; then
+			opened=1
+			continue
+		fi
+		$BIN/h-add-firewall-rule 'ACCEPT' "$addr" "${BACKEND_PORT:-8083}" 'TCP' "$comment" > /dev/null 2>&1 \
+			&& opened=1
+	done
+	[ "$opened" = 1 ]
 }
 
-mesh_fw_rule_id() {
+# Both comments matched as FIXED strings: a peer id may carry dots and dashes, which an
+# expression would read as metacharacters.
+mesh_fw_rule_ids() {
+	local c
 	[ -f "$CONF_DIR/firewall/rules.conf" ] || return 0
-	grep -m1 "COMMENT='$(mesh_fw_comment "$1")'" "$CONF_DIR/firewall/rules.conf" 2> /dev/null \
+	c=$(mesh_fw_comment "$1")
+	grep -F -e "COMMENT='$c'" -e "COMMENT='$c v6'" "$CONF_DIR/firewall/rules.conf" 2> /dev/null \
 		| sed -n "s/^RULE='\([0-9]*\)'.*/\1/p"
 }
 
 mesh_fw_close() {
 	local id
-	id=$(mesh_fw_rule_id "$1")
-	[ -n "$id" ] && $BIN/h-delete-firewall-rule "$id" > /dev/null 2>&1
+	for id in $(mesh_fw_rule_ids "$1"); do
+		$BIN/h-delete-firewall-rule "$id" > /dev/null 2>&1
+	done
 	return 0
 }
 
@@ -147,7 +166,7 @@ mesh_pull_peers() {
 		cfg=$(mktemp)
 		chmod 600 "$cfg"
 		{
-			echo "url = \"https://$HOST:${PORT:-8083}/mesh-decisions.php\""
+			echo "url = \"https://$(url_host "$HOST"):${PORT:-8083}/mesh-decisions.php\""
 			echo "header = \"Authorization: Bearer $PULL_TOKEN\""
 			[ -n "$PIN" ] && echo "pinnedpubkey = \"sha256//$PIN\""
 		} > "$cfg"

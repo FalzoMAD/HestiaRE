@@ -1859,6 +1859,24 @@ is_object_format_valid() {
 	fi
 }
 
+# A remote host: a name OR a bare address. The name form has no colon, so without this a v6
+# literal can never be a backup host or a mesh peer (#893).
+is_host46_format_valid() {
+	case "$1" in
+		*:*) is_ipv6_format_valid "$1" "${2-host}" ;;
+		*) is_object_format_valid "$1" "${2-host}" ;;
+	esac
+}
+
+# A host as it belongs in a URL or an ssh-style host:path - a v6 literal only works bracketed,
+# because the colon is otherwise the port or path separator.
+url_host() {
+	case "$1" in
+		*:*) echo "[$1]" ;;
+		*) echo "$1" ;;
+	esac
+}
+
 # Role validator
 is_role_valid() {
 	if ! [[ "$1" =~ ^admin$|^user$ ]]; then
@@ -1965,6 +1983,7 @@ is_format_valid() {
 				ftp_user) is_user_format_valid "$arg" "$arg_name" ;;
 				hash) is_hash_format_valid "$arg" "$arg_name" ;;
 				host) is_object_format_valid "$arg" "$arg_name" ;;
+				host46) is_host46_format_valid "$arg" "$arg_name" ;;
 				hour) is_cron_format_valid "$arg" $arg_name ;;
 				id) is_id_format_valid "$arg" 'id' ;;
 				iface) is_interface_format_valid "$arg" ;;

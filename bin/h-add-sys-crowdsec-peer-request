@@ -28,6 +28,8 @@ source /etc/hestia/hestia.env
 source $HESTIA/include/main.sh
 # shellcheck source=/usr/local/hestia/include/crowdsec-mesh.sh
 source $HESTIA/include/crowdsec-mesh.sh
+# shellcheck source=/usr/local/hestia/include/ip.sh
+source $HESTIA/include/ip.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -65,8 +67,8 @@ case "$handoff" in
 	*) fail "handoff file outside $MESH_RUN_DIR/in" ;;
 esac
 
-[[ "$ip" =~ ^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])$ ]] \
-	|| fail "invalid source address"
+# Both families: a peer that reached us over v6 is paired on the address it actually used (#893).
+(is_ip46_format_valid "$ip") > /dev/null 2>&1 || fail "invalid source address"
 
 #----------------------------------------------------------#
 #                       Action                             #
@@ -101,6 +103,15 @@ fi
 pairing_close
 
 [[ "$token" =~ ^[a-f0-9]{32,128}$ ]] || fail "peer sent no usable token" "$E_PARSING"
+# The panel checked the shape, but this side is the authority: the host lands in the record and from
+# there in the pull config, where a newline would read as a second curl directive.
+if [[ "$peer_host" == *:* ]]; then
+	(is_ipv6_format_valid "$peer_host" 'peer host') > /dev/null 2>&1 \
+		|| fail "peer sent no usable host" "$E_PARSING"
+	peer_host=$(ip6_canonical "$peer_host") || fail "cannot canonicalise the peer's v6 host" "$E_PARSING"
+elif ! [[ "$peer_host" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,253}$ ]]; then
+	fail "peer sent no usable host" "$E_PARSING"
+fi
 [[ "$peer_port" =~ ^[0-9]{1,5}$ ]] || peer_port="${BACKEND_PORT:-8083}"
 
 # The peer's own name is only a label; we connect to the observed IP.
