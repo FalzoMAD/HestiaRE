@@ -9,12 +9,26 @@ A leaner, modernized fork of [HestiaCP](https://github.com/hestiacp/hestiacp) fo
 
 It is deliberately scoped for a small, professional fleet — on the order of a few hundred domains across a couple dozen customers and servers — not for a broad community deployment.
 
-### Status: incomplete, not usable yet
+### Status: experimental
 
-HestiaRE is in active, early-stage development. Releases exist (latest tag **v0.17.x**) for development and testing purposes only — **the project is not yet usable for any real hosting environment.** Core components are still being migrated, replaced, or audited, and no install on a production system should be attempted at this stage.
+Nearly all of it is in place, and the test fleet has been through many rounds of it: installer, panel, web, mail, backup, firewall, CrowdSec, Docker, IPv6 — every subsystem exists, and every release is measured on all four target systems before it is cut. That makes HestiaRE **usable**.
+
+It does not make it **stable**. Interfaces still move, a point release can change behaviour, and **v1 is deliberately far away** — the version number is not a countdown. Run it if you are willing to read a changelog and re-test after an update. Don't run it if you need something that stays put while you look elsewhere.
 
 **Target systems** — all first-class, equal priority (every feature must work on all four):
 - Debian 12 (Bookworm), Debian 13 (Trixie), Ubuntu 24.04 LTS (Noble), Ubuntu 26.04 LTS
+
+## Philosophy
+
+**HestiaRE does not want dependent users.**
+
+Most self-hosted panels accumulate them: people running someone else's release pipeline, someone else's apt repository, someone else's opinion about what belongs in the stack. The day that project changes direction or loses interest, its users have nowhere to go — they never had the pieces in their hands.
+
+This one inverts that. No compiled binaries, no private package repository, no build step on the target host: source, a git tag, one tarball, a bootstrap script that extracts it. **Forking HestiaRE costs a `git clone`, not a release infrastructure.** That is the actual offer — not "use my panel", but "take this and run your own".
+
+**It follows exactly one set of requirements: the maintainer's.** This is a personal professional tool that happens to be open source. Features that this fleet does not need do not get built — not "later", not "PRs welcome", simply not here. Bug reports against the four target systems are welcome, and so is anything that makes forking cheaper. A feature request that only makes sense for someone else's fleet will be declined, quickly and without it being personal — because the honest answer to it is better than a maybe: **fork it and build it there.** Your fork, your opinions, without inheriting a toolchain you never signed up for.
+
+That is also why the deliberate omissions below are not a backlog.
 
 ## What makes it different
 
@@ -26,6 +40,7 @@ HestiaCP bundles and compiles a lot of its own stack. HestiaRE inverts that: **O
 - PHP comes from **Sury** as isolated FPM pools instead of a custom compiled PHP.
 - Web, mail, database and firewall tooling (nginx, Apache, exim/dovecot/rspamd, phpMyAdmin, fail2ban, ipset, Composer, WP-CLI, …) is installed straight from distro packages.
 - Optional components (ProFTPD, ClamAV, PostgreSQL, Redis, OpenSearch, Docker proxy, file manager, …) are **individually installable and removable**, so a given host only carries what it uses.
+- **IPv6 is first-class, never presupposed**: a box with both families serves both, a v6-only box installs and runs from the bootstrap onwards, and a box whose kernel has no IPv6 is a supported state rather than an accident.
 
 The result is a smaller, more auditable surface that tracks the distributions' own security updates instead of a private package pipeline.
 

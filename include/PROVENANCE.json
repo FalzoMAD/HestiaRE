@@ -3,9 +3,9 @@
     "folder": "include/",
     "description": "Per-file provenance vs HestiaCP. A file with no upstream_path is HestiaRE-native. Recompute is a manual, occasional job (when we reimplement against upstream or re-measure a snapshot); numbers are a snapshot at each file's upstream_ref + measured_at, not live. HestiaRE does not cherry-pick: every adoption is a reimplementation, compared per function against the upstream diff, so these numbers are orientation for that comparison - not a merge plan.",
     "upstream_branch": "upstream/hestiacp",
-    "upstream_ref": "640220c",
-    "upstream_ref_date": "2026-08-25",
-    "last_updated": "2026-08-27",
+    "upstream_ref": "3614eda7",
+    "upstream_ref_date": "2026-09-01",
+    "last_updated": "2026-09-01",
     "divergence_method": "churn = (added+removed)/(upstream_lines+our_lines)*100, from a line diff between the two blobs. RAW: includes the mechanical v-*->h-* rename + path churn (install/->share/, CONF_DIR, func/->include/), so it OVERSTATES semantic divergence. Triage, not truth. BINARY files are measured by byte identity instead (pct 0 or 100, method \"bytes\"): a line diff on a binary reports nothing at all - git numstat prints \"-\" - which silently read as 0% churn and typed a differing font or image as verbatim.",
     "source_type_values": {
       "verbatim": "Upstream file we track closely (churn <=3%). Mechanical: reseeded from the measured pct on every recompute, never set by hand.",
@@ -21,7 +21,7 @@
     "aggregate": {
       "upstream_mapped_files": 9,
       "eigenbau_files": 13,
-      "weighted_pct": 41,
+      "weighted_pct": 44,
       "weighted_pct_note": "text files only - binary entries are byte-compared, not line-counted"
     },
     "scope": "include",
@@ -32,15 +32,15 @@
       "path": "backup.sh",
       "source_type": "derived",
       "upstream_path": "func/backup.sh",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-18",
+      "upstream_ref": "3614eda7",
+      "last_reconciled": "2026-09-01",
       "divergence": {
         "upstream_lines": 583,
-        "our_lines": 2231,
-        "added": 1786,
-        "removed": 138,
+        "our_lines": 2240,
+        "added": 1797,
+        "removed": 140,
         "pct": 68,
-        "measured_at": "2026-08-27"
+        "measured_at": "2026-09-01"
       },
       "note": "Backup format is bidirectionally compatible with HestiaCP forever, so this stays close to upstream on purpose."
     },
@@ -48,15 +48,15 @@
       "path": "db.sh",
       "source_type": "derived",
       "upstream_path": "func/db.sh",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-18",
+      "upstream_ref": "3614eda7",
+      "last_reconciled": "2026-09-01",
       "divergence": {
         "upstream_lines": 696,
         "our_lines": 715,
         "added": 65,
         "removed": 46,
         "pct": 7,
-        "measured_at": "2026-08-27"
+        "measured_at": "2026-09-01"
       },
       "note": ""
     },
@@ -64,15 +64,15 @@
       "path": "domain.sh",
       "source_type": "derived",
       "upstream_path": "func/domain.sh",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-18",
+      "upstream_ref": "3614eda7",
+      "last_reconciled": "2026-09-01",
       "divergence": {
         "upstream_lines": 1196,
-        "our_lines": 1181,
-        "added": 465,
-        "removed": 480,
-        "pct": 39,
-        "measured_at": "2026-08-27"
+        "our_lines": 1246,
+        "added": 615,
+        "removed": 565,
+        "pct": 48,
+        "measured_at": "2026-09-01"
       },
       "note": "No DNS half (bind9 excluded); web/mail template handling reworked for the Caddy/nginx/apache model."
     },
@@ -80,15 +80,15 @@
       "path": "firewall.sh",
       "source_type": "derived",
       "upstream_path": "func/firewall.sh",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-18",
+      "upstream_ref": "3614eda7",
+      "last_reconciled": "2026-09-01",
       "divergence": {
         "upstream_lines": 25,
-        "our_lines": 685,
-        "added": 673,
+        "our_lines": 688,
+        "added": 676,
         "removed": 13,
         "pct": 96,
-        "measured_at": "2026-08-27"
+        "measured_at": "2026-09-01"
       },
       "note": "Effectively eigenbau: upstream ships 25 lines, this is the 685-line nftables renderer (#495). Kept mapped rather than relabelled so the upstream path stays findable."
     },
@@ -96,15 +96,15 @@
       "path": "ip.sh",
       "source_type": "derived",
       "upstream_path": "func/ip.sh",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-14",
+      "upstream_ref": "3614eda7",
+      "last_reconciled": "2026-09-01",
       "divergence": {
         "upstream_lines": 280,
-        "our_lines": 286,
-        "added": 41,
-        "removed": 35,
-        "pct": 13,
-        "measured_at": "2026-08-27"
+        "our_lines": 323,
+        "added": 113,
+        "removed": 70,
+        "pct": 30,
+        "measured_at": "2026-09-01"
       },
       "note": ""
     },
@@ -112,15 +112,15 @@
       "path": "main.sh",
       "source_type": "derived",
       "upstream_path": "func/main.sh",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-18",
+      "upstream_ref": "3614eda7",
+      "last_reconciled": "2026-09-01",
       "divergence": {
         "upstream_lines": 2154,
-        "our_lines": 2371,
-        "added": 753,
-        "removed": 536,
-        "pct": 28,
-        "measured_at": "2026-08-27"
+        "our_lines": 2425,
+        "added": 838,
+        "removed": 567,
+        "pct": 30,
+        "measured_at": "2026-09-01"
       },
       "note": "Carries the HestiaRE input hardening (single-eval object parser, source_conf, validator char classes) and the BIN/SBIN/CONF_DIR anchors."
     },
@@ -128,15 +128,15 @@
       "path": "rebuild.sh",
       "source_type": "derived",
       "upstream_path": "func/rebuild.sh",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-18",
+      "upstream_ref": "3614eda7",
+      "last_reconciled": "2026-09-01",
       "divergence": {
         "upstream_lines": 938,
-        "our_lines": 1013,
-        "added": 340,
-        "removed": 265,
-        "pct": 31,
-        "measured_at": "2026-08-27"
+        "our_lines": 1039,
+        "added": 374,
+        "removed": 273,
+        "pct": 32,
+        "measured_at": "2026-09-01"
       },
       "note": ""
     },
@@ -144,15 +144,15 @@
       "path": "sanitize_html.php",
       "source_type": "derived",
       "upstream_path": "func/internal/sanitize_html.php",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-14",
+      "upstream_ref": "3614eda7",
+      "last_reconciled": "2026-09-01",
       "divergence": {
         "upstream_lines": 19,
         "our_lines": 145,
         "added": 141,
         "removed": 15,
         "pct": 95,
-        "measured_at": "2026-08-27"
+        "measured_at": "2026-09-01"
       },
       "note": "Own dependency-free DOMDocument allow-list sanitizer (#471); upstream's counterpart is a 19-line wrapper around a bundled library we rejected. Lived in func/internal/ until the subdirectory was dissolved."
     },
@@ -160,15 +160,15 @@
       "path": "syshealth.sh",
       "source_type": "derived",
       "upstream_path": "func/syshealth.sh",
-      "upstream_ref": "640220c",
-      "last_reconciled": "2026-08-14",
+      "upstream_ref": "3614eda7",
+      "last_reconciled": "2026-09-01",
       "divergence": {
         "upstream_lines": 646,
-        "our_lines": 640,
+        "our_lines": 639,
         "added": 389,
-        "removed": 395,
-        "pct": 60,
-        "measured_at": "2026-08-27"
+        "removed": 396,
+        "pct": 61,
+        "measured_at": "2026-09-01"
       },
       "note": "Key registry + repair model reworked (#654: an empty value no longer counts as present)."
     },
