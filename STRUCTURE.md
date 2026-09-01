@@ -609,8 +609,6 @@ nothing to reach them from outside, and a second family would only add a surface
 
 ---
 
----
-
 ## Known inconsistencies (flagged, not yet resolved)
 
 - Per-domain backup special-cases per-domain backend tpls (`h-backup-user`), but the FM
