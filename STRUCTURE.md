@@ -565,6 +565,48 @@ and the customer sites answer 502 instead - which on first sight looks like an F
 not a limit doing its job. Throttled requests also take longer, so they hit
 `request_terminate_timeout` sooner than before.
 
+## 14. IPv6: a family per field, not a parallel world (#602)
+
+**Upstream.** `IP6` sits in the web record and is never filled. One `%ip%` reaches the templates,
+which concatenate `%ip%:%port%`, and the firewall keeps an ip6tables world beside the iptables one.
+The open upstream PR for v6 (#5490) injects a second listen line with `sed` AFTER rendering, bakes
+the brackets into `%ip%`, and gates the whole feature on an `IPV6_SUPPORT` flag.
+
+**HestiaRE.** Each field carries one family and says so. The IP object stays one file per address:
+for a v6 `NETMASK` holds the PREFIX LENGTH and `NAT` is always empty, because NAT is a v4 concept -
+`h-change-sys-ip-nat` refuses a v6 object outright. The family is decided by CONTENT (`ip_family`),
+never by a path or a flag, and a v6 is canonicalised at the door (`ip6_canonical`, RFC 5952) so two
+spellings cannot become two objects. In the web record `IP` is the v4 and `IP6` the v6; either may
+be empty, at least one is set. That is why `get_user_ip` yields the v4 SLOT or nothing: its nine
+callers all write the result into an `IP` field or a `%ip%` listen line, both v4-shaped.
+
+**One renderer, no post-processing.** `web_render_template` substitutes `%ip6%` RAW - the brackets
+are template text (`listen [%ip6%]:443`), because that is where the reader sees them. A repeatable
+line whose family placeholder is unfilled is DELETED before substitution, which is how a v4-only
+domain loses its v6 lines and a v6-only domain its v4 lines. Structure-carrying lines cannot be
+deleted, so they get resolved tokens instead: `%vhost%` for the apache `<VirtualHost>` tag (all
+families in one tag) and `%backend_addr%` for the nginx-to-apache hop.
+
+**No `IPV6_SUPPORT` switch.** The family lage is MEASURED, never configured: the installer derives
+loopback lists from `/proc/net/if_inet6`, the resolver harvest keeps what `resolv.conf` names, and
+`h-change-sys-hostname` derives the `::1` record the same way (and removes it again where the
+kernel lost v6). The firewall invariant from #495 holds mirrored: nothing may REQUIRE v6 - a box
+booted with `ipv6.disable=1` installs and runs, and the v4-only fleet is the regression reference.
+
+**No migration run.** A v6 that appears on a box is adopted by NEW domains at once and by existing
+ones at their next rebuild - deliberately, because a fleet-wide rewrite of live vhosts buys less
+than it risks. A box therefore carries a mixed state for a while, and that is the accepted cost.
+
+**Bootstrap is the one place a second host appears.** `github.com` has no AAAA, so a v6-only box
+cannot reach a release at all; `install.sh` and `h-update-hestia` retry through the release mirror
+(`dl.hestiare.com`), which serves the same repo. It is a retry of one source, not a second trust
+anchor: the extracted tree is checked against the tag that was asked for, and the two foreign
+assets that also travel that way (wp-cli, Tachyon) verify against their manifest sha256.
+
+**Deliberately v4.** The per-user docker model lives in `127.20.0.0/16` on the loopback, as do the
+file manager, webmail and stub_status listeners. They work unchanged on a v6-only box, there is
+nothing to reach them from outside, and a second family would only add a surface to guard.
+
 ---
 
 ## Known inconsistencies (flagged, not yet resolved)
