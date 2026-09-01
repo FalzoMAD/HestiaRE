@@ -45,7 +45,9 @@ source_conf "$HESTIA/conf/hestia.conf"
 
 if [ "$type" != 'local' ]; then
 	check_args '2' "$#" "TYPE HOST USERNAME PASSWORD [PATH] [PORT] [KEEP]"
-	# host46: a remote may be named or a bare address, and a v6 literal carries colons
+	# The dispatch picks the validator by VARIABLE name, so the alias carries the family-open
+	# check while everything below keeps reading $host: a remote may be named or a bare address.
+	host46="$host"
 	is_format_valid 'host46' 'path' 'port'
 	if [ -n "$keep" ]; then
 		is_int_format_valid "$keep" 'keep'

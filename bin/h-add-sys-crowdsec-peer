@@ -177,7 +177,7 @@ echo "$str" >> "$MESH_PEERS_CONF"
 mesh_stage_serve
 $BIN/h-update-crowdsec-mesh > /dev/null 2>&1 || true
 
-echo "Paired with $peer ($host:$peer_port)."
+echo "Paired with $peer ($(url_host "$host"):$peer_port)."
 
 #----------------------------------------------------------#
 #                       Hestia                             #
