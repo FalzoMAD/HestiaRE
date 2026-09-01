@@ -404,8 +404,8 @@ php${PHP_VER}-readline php${PHP_VER}-xml"
 		cp -f "$HESTIA/share/nginx/logrotate" /etc/logrotate.d/nginx
 		mkdir -p /etc/nginx/conf.d/domains /etc/nginx/conf.d/main \
 			/etc/nginx/modules-enabled /var/log/nginx/domains
-		# A v6 nameserver only counts bracketed, and a link-local one is not addressable from
-		# the config at all. Anchored on the directive, so the default list stays nginx.conf's.
+		# a v6 nameserver counts only bracketed, a link-local one not at all; anchored on the
+		# directive so the default list stays nginx.conf's
 		local resolver="" ns
 		for ns in $(grep -is '^nameserver' /etc/resolv.conf | awk '{print $2}'); do
 			case "$ns" in
@@ -834,8 +834,8 @@ init_hestia_structure() {
 	echo "[ OK ] structure ready"
 }
 
-# First global address of NIC $2 in family $1 (-4/-6). Temporary and deprecated v6 addresses
-# rotate, so they are skipped here exactly as in h-update-sys-ip.
+# First global address of NIC $2 in family $1 (-4/-6); temporary and deprecated v6 rotate, so they
+# are skipped as in h-update-sys-ip.
 nic_global_addr() {
 	[ -n "$2" ] || return 0
 	# absorbs its own failure: the caller assigns it, and under set -eo pipefail an unknown NIC
@@ -934,8 +934,8 @@ configure_hestia() {
 		| jq -r '.[] | if .dst == "default" then .dev else empty end' | head -n1)"
 	IP="$(nic_global_addr -4 "$DEFAULT_NIC")"
 	[ -z "$IP" ] && IP="$(nic_global_addr -6 "$DEFAULT_NIC")"
-	# prefer the IP object h-update-sys-ip registered over our NIC detection, v4 first: on a
-	# dual-stack box the v4 is the address the default domain and the NAT probe still expect
+	# prefer the registered IP object over our detection, v4 first: the default domain and the NAT
+	# probe still expect it
 	if [ -z "$IP" ] || [ ! -e "$CONF_DIR/ips/$IP" ]; then
 		_reg_ip="$(find "$CONF_DIR/ips" -maxdepth 1 -type f ! -name '*:*' -printf '%T@ %f\n' 2> /dev/null \
 			| sort -rn | head -n1 | cut -d' ' -f2-)" || _reg_ip=''

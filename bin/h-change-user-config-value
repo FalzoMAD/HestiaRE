@@ -28,7 +28,13 @@ source_conf "$HESTIA/conf/hestia.conf"
 #----------------------------------------------------------#
 
 is_format_valid 'user' 'key'
-is_common_format_valid "$value" "$key"
+# LOGIN_ALLOW_IPS carries addresses and networks; the common deny list rejects them on the colon
+# and the slash alone, so that one key gets the list validator (#894).
+if [ "${key^^}" = 'LOGIN_ALLOW_IPS' ]; then
+	is_ip_list_format_valid "$value" "$key"
+else
+	is_common_format_valid "$value" "$key"
+fi
 is_object_valid 'user' 'USER' "$user"
 is_object_unsuspended 'user' 'USER' "$user"
 

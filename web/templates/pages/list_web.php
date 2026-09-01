@@ -327,8 +327,8 @@
 					<?php
 						// a domain without a v4 shows its v6 - the cell would be blank on a v6-only box
 						$row_ip = $data[$key]["IP"] ?: ($data[$key]["IP6"] ?? "");
-						echo tohtml(empty($ips[$row_ip]["NAT"]) ? $row_ip : "{$ips[$row_ip]["NAT"]}");
-					?>
+				echo tohtml(empty($ips[$row_ip]["NAT"]) ? $row_ip : "{$ips[$row_ip]["NAT"]}");
+				?>
 				</div>
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Disk")) ?>:</span>

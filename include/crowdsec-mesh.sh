@@ -73,7 +73,7 @@ mesh_token_new() { openssl rand -hex 32; }
 # there is no CA to trust, the pin IS the identity from here on.
 mesh_spki_pin() {
 	local host="$1" port="$2" pin
-	# bracketed for a v6 literal - -connect splits on the last colon, which an address is full of
+	# bracketed: -connect splits on the last colon, and an address is full of them
 	pin=$(echo | timeout 10 openssl s_client -connect "$(url_host "$host"):$port" 2> /dev/null \
 		| openssl x509 -pubkey -noout 2> /dev/null \
 		| openssl pkey -pubin -outform der 2> /dev/null \
@@ -82,10 +82,8 @@ mesh_spki_pin() {
 	printf '%s' "$pin"
 }
 
-# These rules only ADD to admin access - the panel port is never narrowed to peers-only, which would
-# lock the admin out. $1 may name SEVERAL addresses: a dual-stack peer usually calls back over v6,
-# and a rule for the other family simply would not match. The v6 twin carries its own comment so
-# closing finds both.
+# Only ADDS to admin access - never narrowed to peers-only, that would lock the admin out. $1 may
+# name several addresses: a dual-stack peer calls back over v6, so one family alone would not match.
 mesh_fw_open() {
 	local addr peer="$2" comment opened=0
 	for addr in $1; do
@@ -103,8 +101,7 @@ mesh_fw_open() {
 	[ "$opened" = 1 ]
 }
 
-# Both comments matched as FIXED strings: a peer id may carry dots and dashes, which an
-# expression would read as metacharacters.
+# FIXED strings: a peer id may carry dots and dashes, which an expression would read as meta.
 mesh_fw_rule_ids() {
 	local c
 	[ -f "$CONF_DIR/firewall/rules.conf" ] || return 0

@@ -97,7 +97,8 @@ function get_real_user_ip()
 		!empty($_SERVER["REMOTE_ADDR"]) &&
 		filter_var($_SERVER["REMOTE_ADDR"], FILTER_VALIDATE_IP)
 	) {
-		$ip = $_SERVER["REMOTE_ADDR"];
+		// unmapped BEFORE the Cloudflare check, or a mapped edge address is not recognised as one
+		$ip = ip_unmap($_SERVER["REMOTE_ADDR"]);
 	}
 
 	if (
@@ -109,11 +110,7 @@ function get_real_user_ip()
 		$ip = $_SERVER["HTTP_CF_CONNECTING_IP"];
 	}
 
-	// Handling IPv4-mapped IPv6 address
-	if (strpos($ip, ":") === 0 && strpos($ip, ".") > 0) {
-		$ip = substr($ip, strrpos($ip, ":") + 1); // Strip IPv4 Compatibility notation
-	}
-	return $ip;
+	return ip_unmap($ip);
 }
 
 /**
@@ -294,5 +291,145 @@ function private_tmpdir()
 		return false;
 	}
 	chmod($out[0], 0700);
+	// same shutdown cover as private_tmpfile: a request that dies would leave certificates in /tmp
+	register_shutdown_function(static function () use ($out) {
+		if (is_dir($out[0])) {
+			foreach (glob($out[0] . "/*") ?: [] as $leftover) {
+				if (is_file($leftover)) {
+					@unlink($leftover);
+				}
+			}
+			@rmdir($out[0]);
+		}
+	});
 	return $out[0];
+}
+
+/**
+ * An IPv4-mapped address (::ffff:1.2.3.4) IS a v4 client: its /64 is all zeroes and a 16-byte
+ * client never matches a 4-byte network. Only the ffff form - ::1 also starts with twelve zero
+ * bytes and must not become 0.0.0.1. A mapped NETWORK is not translated but refused at input.
+ */
+function ip_unmap(string $ip): string
+{
+	$bin = @inet_pton($ip);
+	if ($bin !== false && strlen($bin) === 16 && str_starts_with($bin, str_repeat("\0", 10) . "\xff\xff")) {
+		$v4 = @inet_ntop(substr($bin, 12));
+		if ($v4 !== false) {
+			return $v4;
+		}
+	}
+	return $ip;
+}
+
+/**
+ * The identity a session is pinned to: a v6 client rotates inside its own /64, so an exact
+ * comparison logs it out for something it did by itself - and someone in that /64 could carry a
+ * stolen cookie, which is the trade. Only where a /64 IS one client: global unicast without
+ * Teredo. Everywhere else (::1, NAT64, mapped, link-local, ULA) a /64 holds strangers, so the
+ * exact address decides (#894).
+ */
+function session_ip_key(string $ip): string
+{
+	$plain = ip_unmap($ip);
+	$bin = @inet_pton($plain);
+	if ($bin === false) {
+		return $plain;
+	}
+	// canonical, or one address arrives as two keys (64:ff9b::203.0.113.5 = 64:ff9b::cb00:7105)
+	$canon = @inet_ntop($bin);
+	if ($canon === false) {
+		$canon = $plain;
+	}
+	if (strlen($bin) !== 16 || (ord($bin[0]) & 0xe0) !== 0x20) {
+		return $canon;
+	}
+	// Teredo (2001:0000::/32) is inside 2000::/3 but names the SERVER in its first eight bytes
+	if (str_starts_with($bin, "\x20\x01\x00\x00")) {
+		return $canon;
+	}
+	return "v6/64:" . bin2hex(substr($bin, 0, 8));
+}
+
+/**
+ * Is $ip inside $cidr (bare address = exact)? The families must agree, so 0.0.0.0/0 never covers
+ * a v6 client, and anything unparseable is NOT a match - a typo must never widen a gate.
+ */
+function ip_in_cidr(string $ip, string $cidr): bool
+{
+	$cidr = trim($cidr);
+	if ($cidr === "") {
+		return false;
+	}
+	$bits = null;
+	$net = $cidr;
+	if (str_contains($cidr, "/")) {
+		[$net, $suffix] = explode("/", $cidr, 2);
+		if (!preg_match('/^\d{1,3}$/', $suffix)) {
+			return false;
+		}
+		$bits = (int) $suffix;
+	}
+	$a = @inet_pton(ip_unmap($ip));
+	$b = @inet_pton(ip_unmap($net));
+	if ($a === false || $b === false || strlen($a) !== strlen($b)) {
+		return false;
+	}
+	$max = strlen($a) * 8;
+	if ($bits === null) {
+		$bits = $max;
+	}
+	if ($bits > $max) {
+		return false;
+	}
+	$whole = intdiv($bits, 8);
+	$rest = $bits % 8;
+	if ($whole > 0 && substr($a, 0, $whole) !== substr($b, 0, $whole)) {
+		return false;
+	}
+	if ($rest === 0) {
+		return true;
+	}
+	$mask = chr((0xff << (8 - $rest)) & 0xff);
+	return ($a[$whole] & $mask) === ($b[$whole] & $mask);
+}
+
+/** The login allow list: comma-separated bare addresses or networks, both families. */
+function ip_list_match(string $ip, string $list): bool
+{
+	foreach (explode(",", $list) as $entry) {
+		if (ip_in_cidr($ip, $entry)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * The entries that are neither address nor network - returned, not ignored: a list matching nobody
+ * locks the user out at the next login, far from the typo.
+ */
+function ip_list_invalid(string $list): array
+{
+	$bad = [];
+	foreach (explode(",", $list) as $entry) {
+		$entry = trim($entry);
+		if ($entry === "") {
+			continue;
+		}
+		$net = $entry;
+		$suffix = null;
+		if (str_contains($entry, "/")) {
+			[$net, $suffix] = explode("/", $entry, 2);
+		}
+		$bin = @inet_pton(ip_unmap($net));
+		if ($bin === false) {
+			$bad[] = $entry;
+			continue;
+		}
+		if ($suffix !== null && (!preg_match('/^\d{1,3}$/', $suffix) || (int) $suffix > strlen($bin) * 8)) {
+			$bad[] = $entry;
+		}
+	}
+	return $bad;
 }

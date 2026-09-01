@@ -267,9 +267,9 @@ function authenticate_user($user, $password, $twofa = "")
 				}
 
 				if ($data[$user]["LOGIN_USE_IPLIST"] === "yes") {
-					$v_login_user_allowed_ips = explode(",", $data[$user]["LOGIN_ALLOW_IPS"]);
-					$v_login_user_allowed_ips = array_map("trim", $v_login_user_allowed_ips);
-					if (!in_array($ip, $v_login_user_allowed_ips, true)) {
+					// CIDR in both families, a bare address means the host itself. An exact list
+					// could never hold a v6 client, which rotates its address on its own (#894).
+					if (!ip_list_match($ip, (string) $data[$user]["LOGIN_ALLOW_IPS"])) {
 						sleep(2);
 						$error = _("Invalid username or password");
 						$v_session_id = quoteshellarg($_POST["token"]);

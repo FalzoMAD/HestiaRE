@@ -33,10 +33,8 @@ HESTIARE_CHANNEL="${HESTIARE_CHANNEL:-stable}"
 GITHUB_REPO="HestiaRE/Hestia"
 GITHUB_API="https://api.github.com/repos/$GITHUB_REPO"
 GITHUB_RAW="https://github.com/$GITHUB_REPO/releases/download"
-# github.com has no AAAA: on a v6-only box the primary is unreachable, so the mirror serves the
-# same repo's release API (/api) and assets (/raw) unchanged. Twin literal in install.sh, which
-# runs before this tree exists. Empty HESTIARE_MIRROR in source.conf switches it off, and a
-# private Gitea release never falls back to the public mirror.
+# github.com has no AAAA: the mirror serves the same repo unchanged. Twin literal in install.sh,
+# which runs before this tree exists; a private Gitea release never falls back to it.
 RELEASE_MIRROR="${HESTIARE_MIRROR-https://dl.hestiare.com}"
 [ "$HESTIARE_SOURCE" = "gitea" ] && RELEASE_MIRROR=""
 

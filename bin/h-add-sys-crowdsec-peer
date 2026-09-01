@@ -83,8 +83,7 @@ port="${port:-${BACKEND_PORT:-8083}}"
 	echo "ERROR: invalid port."
 	exit "$E_INVALID"
 }
-# A v6 literal is all colons, which the name form has none of. Canonicalised at the door, so two
-# spellings of one address cannot become two peers.
+# A v6 literal has colons, the name form has none. Canonicalised, or two spellings become two peers.
 if [[ "$host" == *:* ]]; then
 	(is_ipv6_format_valid "$host" 'host') > /dev/null 2>&1 || {
 		echo "ERROR: invalid host."
@@ -109,9 +108,8 @@ if [ -f "$MESH_PEERS_CONF" ] && grep -q "^PEER='$peer'" "$MESH_PEERS_CONF"; then
 	exit "$E_EXISTS"
 fi
 
-# The peer calls back during pairing to record OUR pin, so every address it can arrive from gets a
-# rule. A literal needs no lookup; a name is resolved in BOTH families, because a v6-only peer has
-# no A record at all. Link-local is not routable between boxes.
+# The peer calls back to record OUR pin, so every address it can arrive from gets a rule: a name
+# resolves in BOTH families (a v6-only peer has no A record), a literal needs no lookup.
 if [[ "$host" == *:* ]] || [[ "$host" =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then
 	peer_ips="$host"
 else
@@ -122,9 +120,8 @@ peer_ips=${peer_ips% }
 	echo "ERROR: cannot resolve $host to an address."
 	exit "$E_CONNECT"
 }
-# The record keeps the whole set in the usual comma form. Its only readers are the three output
-# formats of h-list-sys-crowdsec-peers, which print the field as it stands; nothing parses it as a
-# single address, and the panel's mesh page does not show it at all.
+# Comma form. Read only by the three output formats of h-list-sys-crowdsec-peers, which print it
+# as it stands - nothing parses it as a single address.
 peer_ip="${peer_ips// /,}"
 
 #----------------------------------------------------------#
