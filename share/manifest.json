@@ -5,11 +5,11 @@
 
   "software_versions": {
     "$comment": "Release-shipped third-party version pins (#288, replaces install/upgrade/upgrade.conf). Bump per release. Read at runtime via manifest_get() in include/main.sh.",
-    "$comment_tachyon": "3.2.2 pin last verified on 2026-08-27: tarball and all three plugin sha256 still match the published assets. Upstream woke up after six quiet weeks with a MAJOR jump - 4.0.2 through 4.0.4 released 2026-08-25/26. Deliberately NOT bumped here: a fresh major with three patch releases in two days needs its own evaluation round (#846), not a pin bump in release prep.",
+    "$comment_tachyon": "3.2.2 pin last verified on 2026-09-01: tarball and all three plugin sha256 still match the published assets. Upstream is at 4.0.8 by now (eight patch releases since 2026-08-25), still NOT bumped here: a fresh major on the login of every mail customer needs its own evaluation round (#846), not a pin bump in release prep.",
     "tachyon": "3.2.2",
     "$comment_tachyon_sha256": "sha256 over the release tarball, the same bar as the plugins: a v6-only box fetches this asset through the release mirror (dl.hestiare.com/tachyon), and gzip -t passes on any valid gzip. Bump together with the tachyon pin.",
     "tachyon_sha256": "6042b131f2c1d54fc3ccc49f38fe3dd585aeb774de0040660ee9e34db06d0fba",
-    "$comment_wp_cli": "Pinned GitHub release phar (sha256 over the file), fetched by fetch_wp_cli_phar for the system and every per-user copy - never a moving branch address. No OS package exists; this pin is the only patch channel, bump per release. 2.12.0 last verified on 2026-08-27: still the latest release, and the pinned sha256 still matches the published asset.",
+    "$comment_wp_cli": "Pinned GitHub release phar (sha256 over the file), fetched by fetch_wp_cli_phar for the system and every per-user copy - never a moving branch address. No OS package exists; this pin is the only patch channel, bump per release. 2.12.0 last verified on 2026-09-01: still the latest release (2025-05-07), and the pinned sha256 still matches the published asset.",
     "wp_cli": { "version": "2.12.0", "sha256": "ce34ddd838f7351d6759068d09793f26755463b4a4610a5a5c0a97b68220d85c" },
     "tachyon_plugins": {
       "$comment": "Plugin assets from the SAME release tag as the tachyon pin, sha256 over the .tgz. Pinned because change-password-hestia changes system passwords - it must never arrive from a moving address (Tachyon's own Repository::installPackage fetches packages.json from the master branch at install time). h-add-sys-tachyon fetches, verifies and extracts these itself.",
@@ -17,7 +17,7 @@
       "change-password-hestia": { "version": "2.36", "sha256": "794d545c8868cfa55d03316475b3642c03a373ca1448457110a53ef2fb003af0" },
       "add-x-originating-ip-header": { "version": "2.0", "sha256": "49a36cb67b0aed75cee0bd8889b4f9c2a3214b4644a135f3e9e11b8ab239ee3b" }
     },
-    "$comment_php_supported": "The release-tested PHP set: h-add-web-php validates against it, and the wizard offers only the intersection with Sury's packages - Sury ships pre-release builds, so availability alone offered versions the installer refused (#688). Bump per release. Checked 2026-08-27 for v0.17.0: 8.5 is still the newest GA (8.5.9), 8.6 is pre-release - no bump.",
+    "$comment_php_supported": "The release-tested PHP set: h-add-web-php validates against it, and the wizard offers only the intersection with Sury's packages - Sury ships pre-release builds, so availability alone offered versions the installer refused (#688). Bump per release. Checked 2026-09-01 for v0.18.0: 8.5 is still the newest GA (8.5.10), and Sury's php8.6 is 8.6.0~alpha1 - no bump.",
     "php_supported": ["5.6", "7.0", "7.1", "7.2", "7.3", "7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
   },
 
