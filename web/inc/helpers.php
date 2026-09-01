@@ -97,7 +97,8 @@ function get_real_user_ip()
 		!empty($_SERVER["REMOTE_ADDR"]) &&
 		filter_var($_SERVER["REMOTE_ADDR"], FILTER_VALIDATE_IP)
 	) {
-		$ip = $_SERVER["REMOTE_ADDR"];
+		// unmapped BEFORE the Cloudflare check, or a mapped edge address is not recognised as one
+		$ip = ip_unmap($_SERVER["REMOTE_ADDR"]);
 	}
 
 	if (
@@ -109,11 +110,7 @@ function get_real_user_ip()
 		$ip = $_SERVER["HTTP_CF_CONNECTING_IP"];
 	}
 
-	// Handling IPv4-mapped IPv6 address
-	if (strpos($ip, ":") === 0 && strpos($ip, ".") > 0) {
-		$ip = substr($ip, strrpos($ip, ":") + 1); // Strip IPv4 Compatibility notation
-	}
-	return $ip;
+	return ip_unmap($ip);
 }
 
 /**
@@ -294,17 +291,24 @@ function private_tmpdir()
 		return false;
 	}
 	chmod($out[0], 0700);
+	// same shutdown cover as private_tmpfile: a request that dies would leave certificates in /tmp
+	register_shutdown_function(static function () use ($out) {
+		if (is_dir($out[0])) {
+			foreach (glob($out[0] . "/*") ?: [] as $leftover) {
+				if (is_file($leftover)) {
+					@unlink($leftover);
+				}
+			}
+			@rmdir($out[0]);
+		}
+	});
 	return $out[0];
 }
 
 /**
- * An IPv4-mapped IPv6 address (::ffff:1.2.3.4) IS a v4 client, and nothing downstream should have
- * to know that form: the first 8 bytes of a mapped address are all zero, so its /64 would pin
- * EVERY v4 client to one key, and a 16-byte mapped client can never match a 4-byte v4 network.
- * Only the ffff prefix is reduced - the deprecated IPv4-compatible form starts with twelve zero
- * bytes, which ::1 does as well, and that must not become 0.0.0.1. A mapped NETWORK in a list
- * (::ffff:203.0.113.0/120) is not translated but refused at input: its prefix would have to be
- * shifted by 96, and nobody writes an allow list that way.
+ * An IPv4-mapped address (::ffff:1.2.3.4) IS a v4 client: its /64 is all zeroes and a 16-byte
+ * client never matches a 4-byte network. Only the ffff form - ::1 also starts with twelve zero
+ * bytes and must not become 0.0.0.1. A mapped NETWORK is not translated but refused at input.
  */
 function ip_unmap(string $ip): string
 {
@@ -319,29 +323,20 @@ function ip_unmap(string $ip): string
 }
 
 /**
- * The identity a session is pinned to. An IPv6 client rotates its address on its own (privacy
- * extensions) WITHIN its /64, so a v6 session is pinned to that prefix - comparing the exact
- * address logs the admin out mid-session for a change the client made by itself. The trade is
- * named: someone inside the client's own /64 could carry a stolen cookie.
- *
- * That trade only holds where a /64 IS one client, which is GLOBAL UNICAST (2000::/3) and nothing
- * else. Elsewhere a /64 holds arbitrarily many strangers and the pin would quietly become no pin:
- * ::ffff:0:0/96 is the entire v4 internet in one key, 64:ff9b::/96 every NAT64 destination, and
- * ::1 - eight zero bytes like the others - is where an admin works through an ssh tunnel. So
- * everything outside 2000::/3 falls back to the exact address, link-local and ULA included, where
- * nothing rotates that a panel session would have to follow. IPv4 is exact anyway, and anything
- * that parses as neither is compared as it stands (#894).
+ * The identity a session is pinned to: a v6 client rotates inside its own /64, so an exact
+ * comparison logs it out for something it did by itself - and someone in that /64 could carry a
+ * stolen cookie, which is the trade. Only where a /64 IS one client: global unicast without
+ * Teredo. Everywhere else (::1, NAT64, mapped, link-local, ULA) a /64 holds strangers, so the
+ * exact address decides (#894).
  */
 function session_ip_key(string $ip): string
 {
-	// the unmapped form is what the key is built from AND what a v4 client is compared by, or the
-	// same client would get two keys depending on how it happened to arrive
 	$plain = ip_unmap($ip);
 	$bin = @inet_pton($plain);
 	if ($bin === false) {
 		return $plain;
 	}
-	// one spelling per address: 64:ff9b::203.0.113.5 and 64:ff9b::cb00:7105 are the same client
+	// canonical, or one address arrives as two keys (64:ff9b::203.0.113.5 = 64:ff9b::cb00:7105)
 	$canon = @inet_ntop($bin);
 	if ($canon === false) {
 		$canon = $plain;
@@ -349,36 +344,20 @@ function session_ip_key(string $ip): string
 	if (strlen($bin) !== 16 || (ord($bin[0]) & 0xe0) !== 0x20) {
 		return $canon;
 	}
+	// Teredo (2001:0000::/32) is inside 2000::/3 but names the SERVER in its first eight bytes
+	if (str_starts_with($bin, "\x20\x01\x00\x00")) {
+		return $canon;
+	}
 	return "v6/64:" . bin2hex(substr($bin, 0, 8));
 }
 
 /**
- * The same reduction for a whole list entry: a mapped NETWORK carries 96 leading bits that vanish
- * with the prefix, so ::ffff:203.0.113.0/120 is 203.0.113.0/24. Without this the CLI (which sees
- * a legal 16-byte /120) would store an entry the matcher can never hit.
- */
-function cidr_unmap(string $cidr): string
-{
-	$cidr = trim($cidr);
-	if (!str_contains($cidr, "/")) {
-		return ip_unmap($cidr);
-	}
-	[$net, $bits] = explode("/", $cidr, 2);
-	$plain = ip_unmap($net);
-	if ($plain !== $net && preg_match('/^\d{1,3}$/', $bits) && (int) $bits >= 96) {
-		$bits = (string) ((int) $bits - 96);
-	}
-	return $plain . "/" . $bits;
-}
-
-/**
- * Is $ip inside $cidr? $cidr is a bare address (exact) or a network in CIDR notation, either
- * family. The families must agree, so 0.0.0.0/0 never covers a v6 client and ::/0 never a v4 one.
- * Anything unparseable is NOT a match - a typo must never widen a gate.
+ * Is $ip inside $cidr (bare address = exact)? The families must agree, so 0.0.0.0/0 never covers
+ * a v6 client, and anything unparseable is NOT a match - a typo must never widen a gate.
  */
 function ip_in_cidr(string $ip, string $cidr): bool
 {
-	$cidr = cidr_unmap($cidr);
+	$cidr = trim($cidr);
 	if ($cidr === "") {
 		return false;
 	}
@@ -415,9 +394,7 @@ function ip_in_cidr(string $ip, string $cidr): bool
 	return ($a[$whole] & $mask) === ($b[$whole] & $mask);
 }
 
-/**
- * The login allow list: comma-separated bare addresses or networks, both families.
- */
+/** The login allow list: comma-separated bare addresses or networks, both families. */
 function ip_list_match(string $ip, string $list): bool
 {
 	foreach (explode(",", $list) as $entry) {
@@ -429,8 +406,8 @@ function ip_list_match(string $ip, string $list): bool
 }
 
 /**
- * Which entries of an allow list are not an address or a network - returned rather than ignored,
- * because a list that matches nobody locks the user out at the NEXT login, far from the typo.
+ * The entries that are neither address nor network - returned, not ignored: a list matching nobody
+ * locks the user out at the next login, far from the typo.
  */
 function ip_list_invalid(string $list): array
 {
@@ -440,13 +417,12 @@ function ip_list_invalid(string $list): array
 		if ($entry === "") {
 			continue;
 		}
-		$normal = cidr_unmap($entry);
-		$net = $normal;
+		$net = $entry;
 		$suffix = null;
-		if (str_contains($normal, "/")) {
-			[$net, $suffix] = explode("/", $normal, 2);
+		if (str_contains($entry, "/")) {
+			[$net, $suffix] = explode("/", $entry, 2);
 		}
-		$bin = @inet_pton($net);
+		$bin = @inet_pton(ip_unmap($net));
 		if ($bin === false) {
 			$bad[] = $entry;
 			continue;
