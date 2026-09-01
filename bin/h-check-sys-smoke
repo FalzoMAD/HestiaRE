@@ -743,11 +743,13 @@ check_panel_php_version() {
 # fatal bind returns with nothing re-deriving. Holds CONFIGURED families against the
 # KERNEL's. Covers dovecot listen + exim dc_local_interfaces, not the hestia template
 # (immune: exim skips a missing family itself).
-check_mail_family_lage() {
-	local kernel6='' hits=0
+# Configured for a family the kernel refuses - the three places WE derive; the distro's own
+# "::1 localhost" is deliberately not one of them.
+check_family_lage() {
+	local kernel6='' hits=0 fqdn
 	[ -e /proc/net/if_inet6 ] && kernel6=yes
 	if [ -n "$kernel6" ]; then
-		ok "mail family lage: kernel has v6, listed loopbacks cannot be unbindable"
+		ok "family lage: kernel has v6, listed v6 loopbacks cannot be unbindable"
 		return
 	fi
 	if [ -f /etc/dovecot/dovecot.conf ] && grep -qE '^listen *=.*::' /etc/dovecot/dovecot.conf; then
@@ -760,7 +762,14 @@ check_mail_family_lage() {
 			"the stock template dies at start on it - rerun the derivation or re-enable kernel v6"
 		hits=1
 	fi
-	[ "$hits" = 0 ] && ok "mail family lage: v6-less kernel and no v6 loopback listed (dovecot, exim send-only)"
+	# derived once, at hostname time: a box that lost v6 since keeps the line
+	fqdn=$(hostname -f 2> /dev/null || hostname 2> /dev/null)
+	if [ -n "$fqdn" ] && grep -qE "^::1[[:space:]]+${fqdn//./\\.}$" /etc/hosts 2> /dev/null; then
+		no "/etc/hosts names ::1 for $fqdn on a v6-less kernel" \
+			"derived when the box still had v6 - re-derive with: h-change-sys-hostname $fqdn"
+		hits=1
+	fi
+	[ "$hits" = 0 ] && ok "family lage: v6-less kernel, no v6 loopback listed (dovecot, exim send-only, /etc/hosts)"
 }
 
 # Exim refuses a macro whose name contains an EARLIER macro as substring; this closes
@@ -1317,6 +1326,71 @@ check_vhost_nonempty() {
 }
 # check_vhost_upstream_host - "http://:3000" (docker domain, owner without DOCKER_IP) makes nginx
 # and apache reject the whole configuration. Read the rendered files: a custom template does it too.
+# Two silent ways a vhost can be wrong: an UNBRACKETED v6 (nginx reads it as its own address,
+# apache refuses to parse it), and an nginx server block with NO listen - not an error but a
+# WILDCARD bind, which is what a %ip%-only custom template renders to on a v6-only box.
+# Covers the vhosts plus the per-domain http3 fragments; a brace inside a string would miscount,
+# so the number of blocks entered is part of the verdict.
+check_vhost_listen_form() {
+	local f n=0 blocks=0 bare=0 nolisten=0 first="" second="" c out
+	for f in "/etc/$WEB_SYSTEM/conf.d/domains"/*.conf "/etc/${PROXY_SYSTEM:-none}/conf.d/domains"/*.conf \
+		"$HOMEDIR"/*/conf/web/*/*conf_http3; do
+		[ -e "$f" ] || continue
+		n=$((n + 1))
+		c=$(awk '
+			/^[ \t]*(listen|Listen)[ \t]/ || /^[ \t]*<VirtualHost/ {
+				line = $0
+				sub(/^[ \t]*(listen|Listen)[ \t]+/, "", line)
+				sub(/^[ \t]*<VirtualHost[ \t]+/, "", line)
+				sub(/>.*$/, "", line)
+				sub(/;.*$/, "", line)
+				k = split(line, t, /[ \t]+/)
+				for (i = 1; i <= k; i++) {
+					if (gsub(/:/, ":", t[i]) >= 2 && index(t[i], "[") == 0) bad++
+				}
+			}
+			END { print bad + 0 }' "$f")
+		if [ "${c:-0}" -gt 0 ]; then
+			bare=$((bare + c))
+			[ -z "$first" ] && first="$f carries an unbracketed v6 address"
+		fi
+		case "$f" in
+			/etc/nginx/*)
+				# brace may sit on the next line; a comment cannot open a block
+				out=$(awk '
+					{
+						line = $0
+						sub(/#.*/, "", line)
+						if (!inblock) {
+							if (line ~ /^[ \t]*server[ \t]*\{/) { inblock = 1; depth = 0; seen = 0 }
+							else if (line ~ /^[ \t]*server[ \t]*$/) { pending = 1; next }
+							else if (pending && line ~ /\{/) { inblock = 1; depth = 0; seen = 0; pending = 0 }
+							else next
+						}
+						depth += gsub(/\{/, "{", line) - gsub(/\}/, "}", line)
+						if (line ~ /^[ \t]*listen[ \t]/) seen = 1
+						if (depth <= 0) { blocks++; if (!seen) bad++; inblock = 0 }
+					}
+					END { print blocks + 0, bad + 0 }' "$f")
+				blocks=$((blocks + ${out%% *}))
+				c=${out##* }
+				if [ "${c:-0}" -gt 0 ]; then
+					nolisten=$((nolisten + c))
+					[ -z "$second" ] && second="$f has a server block without a listen line - it binds the wildcard"
+				fi
+				;;
+		esac
+	done
+	if [ "$n" -eq 0 ]; then
+		skip "vhost listen form (no rendered web vhost on this box - a mail-only box has none)"
+		return
+	fi
+	[ "$bare" -eq 0 ] || no "$bare unbracketed v6 address(es) in rendered vhosts" "$first"
+	[ "$nolisten" -eq 0 ] || no "$nolisten nginx server block(s) without a listen line" "$second - a custom template with only %ip% renders to this on a v6-only box"
+	{ [ "$bare" -eq 0 ] && [ "$nolisten" -eq 0 ]; } \
+		&& ok "rendered vhosts: every v6 address bracketed, every server block bound ($n file(s), $blocks nginx server block(s) entered)"
+}
+
 check_vhost_upstream_host() {
 	local f n=0 hit=0 first=""
 	for f in "/etc/$WEB_SYSTEM/conf.d/domains"/*.conf "/etc/${PROXY_SYSTEM:-none}/conf.d/domains"/*.conf; do
@@ -1805,6 +1879,62 @@ check_record_grammar() {
 # check_ip_object_counters - the ip-record counters had an authority but no guard (the
 # IP_AVAIL lage before #867), and the NAT-blind decrease left real backlog. Object list
 # derives from the files; the authority's check mode is the only rule source.
+# The mirror URL is a literal in THREE places (install.sh and h-update-hestia run before or
+# without this tree), so this measures them against each other. The DEFAULT only, and it never
+# asks whether the host answers - that is the fetch's job.
+check_release_mirror() {
+	local a b c
+	a=$(sed -n 's|^RELEASE_MIRROR="\(https://[^"$]*\)"$|\1|p' "$HESTIA/install.sh" 2> /dev/null | head -n1)
+	b=$(sed -n 's|^RELEASE_MIRROR="${HESTIARE_MIRROR-\(https://[^"}]*\)}"$|\1|p' "$HESTIA/sbin/h-update-hestia" 2> /dev/null | head -n1)
+	c=$(sed -n 's|^HESTIA_RELEASE_MIRROR="\(https://[^"$]*\)"$|\1|p' "$HESTIA/include/main.sh" 2> /dev/null | head -n1)
+	if [ -z "$a" ] || [ -z "$b" ] || [ -z "$c" ]; then
+		no "release mirror default unreadable" "install.sh='${a:-none}' h-update-hestia='${b:-none}' main.sh='${c:-none}' - a line moved and this guard now measures nothing"
+	elif [ "$a" != "$b" ] || [ "$a" != "$c" ]; then
+		no "release mirror default drifted" "install.sh=$a, h-update-hestia=$b, main.sh=$c - the bootstrap and the runtime fetches would use different hosts"
+	else
+		ok "release mirror default identical in all three fetch paths ($a)"
+	fi
+}
+
+# v6 keeps a PREFIX LENGTH in NETMASK and never a NAT address (NAT is v4-only). Nothing to compare
+# against but the file itself, so an empty set of objects is a finding, not a pass.
+check_ip_object_shape() {
+	local f ip fam nm nat n=0 bad=0 first=""
+	for f in "$CONF_DIR/ips"/*; do
+		[ -f "$f" ] || continue
+		ip=$(basename "$f")
+		n=$((n + 1))
+		fam=$(ip_family "$ip")
+		nm=$(sed -n "s/^NETMASK='\(.*\)'\$/\1/p" "$f" | head -1)
+		nat=$(sed -n "s/^NAT='\(.*\)'\$/\1/p" "$f" | head -1)
+		if [ "$fam" = 6 ]; then
+			if ! [[ "$nm" =~ ^[0-9]{1,3}$ ]] || [ "$nm" -gt 128 ]; then
+				bad=$((bad + 1))
+				[ -z "$first" ] && first="$ip: NETMASK='$nm' is not a prefix length (0-128)"
+			fi
+			if [ -n "$nat" ]; then
+				bad=$((bad + 1))
+				[ -z "$first" ] && first="$ip: NAT='$nat' - NAT does not exist for v6"
+			fi
+		elif [ "$fam" = 4 ]; then
+			if ! [[ "$nm" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+				bad=$((bad + 1))
+				[ -z "$first" ] && first="$ip: NETMASK='$nm' is not a dotted-quad mask"
+			fi
+		else
+			bad=$((bad + 1))
+			[ -z "$first" ] && first="$ip: the object name is neither a v4 nor a v6 address"
+		fi
+	done
+	if [ "$n" -eq 0 ]; then
+		no "no IP object to check" "every box registers at least one - the directory or the guard moved"
+	elif [ "$bad" -gt 0 ]; then
+		no "$bad IP object field(s) do not match their family" "$first"
+	else
+		ok "IP objects match their family ($n checked: netmask form, no NAT on v6)"
+	fi
+}
+
 check_ip_object_counters() {
 	local f addr line k want stored drift=0 checked=0 first='' obj_out obj_lines
 	for f in "$CONF_DIR"/ips/*; do
@@ -2094,6 +2224,13 @@ check_panel_cli_i18n
 check_port "${BACKEND_PORT:-8083}" "panel"
 check_panel_port
 check_http "https://127.0.0.1:${BACKEND_PORT:-8083}/login/" "panel login page"
+# The v6 twin of the same probe: a listener that binds only v4 looks identical from 127.0.0.1.
+# Loopback, so it needs a v6 kernel and nothing else - measured 200 on v4-only, dual and v6-only boxes.
+if [ -e /proc/net/if_inet6 ]; then
+	check_http "https://[::1]:${BACKEND_PORT:-8083}/login/" "panel login page over v6"
+else
+	skip "panel login page over v6 (this kernel has no IPv6)"
+fi
 # invalid sudoers → no privileged panel action works
 check_sudoers /etc/sudoers.d/hestia "hestia grant"
 check_project_quota
@@ -2108,7 +2245,7 @@ echo "-- services --"
 [ -n "$MAIL_SYSTEM" ] && [ "$MAIL_SYSTEM" != 'remote' ] && check_service "$MAIL_SYSTEM" "mail"
 check_notification_mta
 check_exim_sendonly
-check_mail_family_lage
+check_family_lage
 [ -n "$MAIL_SYSTEM" ] && check_exim_macro_names
 [ -n "$MAIL_SYSTEM" ] && check_exim_interface_expansion
 [ -n "$IMAP_SYSTEM" ] && [ "$IMAP_SYSTEM" != 'remote' ] && check_service "$IMAP_SYSTEM" "imap"
@@ -2267,6 +2404,7 @@ check_proc_hardening
 # a record pointing at a removed template only shows up on the next rebuild.
 check_web_templates_resolvable
 check_vhost_upstream_host
+check_vhost_listen_form
 check_web_record_has_vhost
 check_logrotate_parses
 check_restic_mode_supported
@@ -2281,6 +2419,8 @@ check_error_code_registry
 # derived counters drift silently when an increase/decrease pair dies half way.
 check_object_counters
 check_ip_object_counters
+check_ip_object_shape
+check_release_mirror
 check_record_grammar
 check_key_registries
 check_identity_band

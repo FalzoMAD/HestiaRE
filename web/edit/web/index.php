@@ -239,9 +239,14 @@ $v_date = $data[$v_domain]["DATE"];
 // the v6 select h-change-web-domain-ip6 - a mixed list would hand one family's command
 // the other family's address
 $ips = cli_json("h-list-user-ips " . $user . " json");
-$ips_v4 = array_filter($ips, fn($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
-$ips_v6 = array_filter($ips, fn($k) => str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
+$ips_v4 = array_filter($ips, fn ($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
+$ips_v6 = array_filter($ips, fn ($k) => str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
 $v_ip6 = $data[$v_domain]["IP6"] ?? "";
+// One gate per family for the view and the POST: a select with no options (a v6-only box has no
+// v4 to offer) submits no key at all, and an unoffered control must keep the stored value instead
+// of reading as "cleared" (#649).
+$ip_offered = !empty($ips_v4);
+$ip6_offered = !empty($ips_v6);
 
 // A record written by the CLI holds the public address (get_user_ip substitutes NAT), the IP list
 // is keyed by the local one. Unmatched, the select preselects nothing and the save rewrites the IP.
@@ -371,7 +376,9 @@ if (!empty($_POST["save"])) {
 	verify_csrf($_POST);
 
 	// Change web domain IP
-	if ($v_ip != $_POST["v_ip"] && empty($_SESSION["error_msg"])) {
+	$post_ip = post_or_keep("v_ip", $ip_offered, $v_ip);
+	$post_ip6 = post_or_keep("v_ip6", $ip6_offered, $v_ip6);
+	if ($v_ip != $post_ip && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-change-web-domain-ip " .
@@ -379,7 +386,7 @@ if (!empty($_POST["save"])) {
 				" " .
 				quoteshellarg($v_domain) .
 				" " .
-				quoteshellarg($_POST["v_ip"]) .
+				quoteshellarg($post_ip) .
 				" 'no'",
 			$output,
 			$return_var,
@@ -390,13 +397,8 @@ if (!empty($_POST["save"])) {
 		unset($output);
 	}
 
-	// Change web domain IPv6 (control renders only when the user has v6 IPs - read guarded)
-	if (
-		isset($_POST["v_ip6"]) &&
-		$_POST["v_ip6"] !== "" &&
-		$v_ip6 != $_POST["v_ip6"] &&
-		empty($_SESSION["error_msg"])
-	) {
+	// Change web domain IPv6 (control renders only when the user has v6 IPs)
+	if ($post_ip6 !== "" && $v_ip6 != $post_ip6 && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD .
 				"h-change-web-domain-ip6 " .
@@ -404,7 +406,7 @@ if (!empty($_POST["save"])) {
 				" " .
 				quoteshellarg($v_domain) .
 				" " .
-				quoteshellarg($_POST["v_ip6"]) .
+				quoteshellarg($post_ip6) .
 				" 'no'",
 			$output,
 			$return_var,
@@ -416,7 +418,7 @@ if (!empty($_POST["save"])) {
 	}
 
 	// Change mail domain IP
-	if ($v_ip != $_POST["v_ip"] && empty($_SESSION["error_msg"])) {
+	if ($v_ip != $post_ip && empty($_SESSION["error_msg"])) {
 		exec(
 			HESTIA_CMD . "h-list-mail-domain " . $user . " " . quoteshellarg($v_domain) . " json",
 			$output,

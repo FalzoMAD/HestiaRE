@@ -199,7 +199,7 @@
 			<div class="units-table-row <?php if ($data[$key]['SUSPENDED'] == 'yes') {
 				echo 'disabled';
 			} ?> js-unit"
-				data-sort-ip="<?= tohtml(str_replace(".", "", $data[$key]["IP"])) ?>"
+				data-sort-ip="<?= tohtml(str_replace([".", ":"], "", $data[$key]["IP"] ?: ($data[$key]["IP6"] ?? ""))) ?>"
 				data-sort-date="<?= tohtml(strtotime($data[$key]["DATE"] . " " . $data[$key]["TIME"])) ?>"
 				data-sort-name="<?= tohtml($key) ?>"
 				data-sort-bandwidth="<?= tohtml($data[$key]["U_BANDWIDTH"]) ?>"
@@ -324,7 +324,11 @@
 				</div>
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("IP Address")) ?>:</span>
-					<?= tohtml(empty($ips[$data[$key]["IP"]]["NAT"]) ? $data[$key]["IP"] : "{$ips[$data[$key]["IP"]]["NAT"]}") ?>
+					<?php
+						// a domain without a v4 shows its v6 - the cell would be blank on a v6-only box
+						$row_ip = $data[$key]["IP"] ?: ($data[$key]["IP6"] ?? "");
+				echo tohtml(empty($ips[$row_ip]["NAT"]) ? $row_ip : "{$ips[$row_ip]["NAT"]}");
+				?>
 				</div>
 				<div class="units-table-cell u-text-center-desktop">
 					<span class="u-hide-desktop u-text-bold"><?= tohtml(_("Disk")) ?>:</span>

@@ -44,7 +44,7 @@
 					<input type="text" class="form-control" name="v_domain" id="v_domain" value="<?= tohtml(trim($v_domain, "'")) ?>" required>
 				</div>
 				<div class="u-mb20">
-					<label for="v_ip" class="form-label"><?= tohtml(_("IP Address")) ?></label>
+					<label for="v_ip" class="form-label"><?= tohtml($ip_label ?? _("IP Address")) ?></label>
 					<select class="form-select" name="v_ip" id="v_ip">
 						<?php
 							foreach ($ips as $ip => $value) {

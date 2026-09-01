@@ -282,52 +282,51 @@ if (!empty($_POST["save"])) {
 		}
 	}
 
-	// Update IP whitelist option
+	// TWO independent values, switch and list: they shared one branch, so editing only the
+	// addresses saved nothing (#894). Both controls are always in the DOM, Alpine only hides them.
 	if (empty($_SESSION["error_msg"])) {
-		if (empty($_POST["v_login_use_iplist"])) {
-			$_POST["v_login_use_iplist"] = "";
-		}
-		if ($_POST["v_login_use_iplist"] != $v_login_use_iplist) {
-			if ($_POST["v_login_use_iplist"] == "on") {
-				$_POST["v_login_use_iplist"] = "yes";
-			} else {
-				$_POST["v_login_use_iplist"] = "no";
-			}
-			exec(
-				HESTIA_CMD .
-					"h-change-user-config-value " .
-					quoteshellarg($v_username) .
-					" LOGIN_USE_IPLIST " .
-					quoteshellarg($_POST["v_login_use_iplist"]),
-				$output,
-				$return_var,
+		$post_use_iplist = post_checkbox("v_login_use_iplist", true, $v_login_use_iplist, "yes", "no");
+		$post_allowed_ips = trim((string) post_or_keep("v_login_allowed_ips", true, $v_login_allowed_ips), " '");
+		$stored_allowed_ips = trim((string) $v_login_allowed_ips, " '");
+		// refused here, not at the next login: a list matching nobody locks the user out
+		$bad_ip_entries = $post_use_iplist === "yes" ? ip_list_invalid($post_allowed_ips) : [];
+		if (!empty($bad_ip_entries)) {
+			$_SESSION["error_msg"] = sprintf(
+				_("Not an IP address or network: %s"),
+				implode(", ", $bad_ip_entries),
 			);
-			if ($_POST["v_login_use_iplist"] === "no") {
+		} else {
+			if ($post_use_iplist !== trim((string) $v_login_use_iplist, " '")) {
 				exec(
 					HESTIA_CMD .
 						"h-change-user-config-value " .
 						quoteshellarg($v_username) .
-						" LOGIN_ALLOW_IPS ''",
+						" LOGIN_USE_IPLIST " .
+						quoteshellarg($post_use_iplist),
 					$output,
 					$return_var,
 				);
-				$v_login_allowed_ips = "";
-			} else {
+				check_return_code($return_var, $output);
+				unset($output);
+				$v_login_use_iplist = $post_use_iplist;
+				$data[$user]["LOGIN_USE_IPLIST"] = $post_use_iplist;
+			}
+			// switching the list off empties it, so a re-enable cannot resurrect an old allowlist
+			$want_allowed_ips = $post_use_iplist === "yes" ? $post_allowed_ips : "";
+			if ($want_allowed_ips !== $stored_allowed_ips && empty($_SESSION["error_msg"])) {
 				exec(
 					HESTIA_CMD .
 						"h-change-user-config-value " .
 						quoteshellarg($v_username) .
 						" LOGIN_ALLOW_IPS " .
-						quoteshellarg($_POST["v_login_allowed_ips"]),
+						quoteshellarg($want_allowed_ips),
 					$output,
 					$return_var,
 				);
-				unset($v_login_allowed_ips);
-				$v_login_allowed_ips = $_POST["v_login_allowed_ips"];
+				check_return_code($return_var, $output);
+				unset($output);
+				$v_login_allowed_ips = $want_allowed_ips;
 			}
-			check_return_code($return_var, $output);
-			$data[$user]["LOGIN_USE_IPLIST"] = $_POST["v_login_use_iplist"];
-			unset($output);
 		}
 	}
 

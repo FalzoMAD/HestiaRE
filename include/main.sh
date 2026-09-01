@@ -395,6 +395,28 @@ get_user_owner() {
 	fi
 }
 
+# github.com has no AAAA, so on a v6-only box the two upstream repos below are reachable only
+# through the release mirror, which serves their assets under /wp-cli and /tachyon. Third literal
+# beside install.sh and sbin/h-update-hestia (both run before or without this tree); a smoke check
+# measures the three against each other. Every caller verifies the payload against a manifest pin,
+# which is what makes a second host acceptable here at all.
+HESTIA_RELEASE_MIRROR="https://dl.hestiare.com"
+
+# Bounded fetch with the mirror as the second try. $1 = route below the mirror, $2 = the github.com
+# release URL, $3 = destination. Bounded because wget defaults to 20 tries at a 900s read timeout,
+# so a host that drops SYNs costs ~45 minutes before the first error surfaces. wget -O leaves a
+# 0-byte file behind on failure, which a plain [ -f ] check accepts.
+fetch_release_asset() {
+	local route="$1" url="$2" dest="$3" rest
+	if wget "$url" --timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" && [ -s "$dest" ]; then
+		return 0
+	fi
+	rest="${url#*/releases/download/}"
+	{ [ -n "$HESTIA_RELEASE_MIRROR" ] && [ "$rest" != "$url" ]; } || return 1
+	wget "$HESTIA_RELEASE_MIRROR/$route/$rest" --timeout=30 --tries=3 --retry-connrefused --quiet -O "$dest" || return 1
+	[ -s "$dest" ]
+}
+
 # Fetch the wp-cli phar pinned in share/manifest.json (version + sha256) into $1. The phar runs
 # as every customer, so never a moving or unverified source. No partial file on failure; the
 # caller owns chown of the destination.
@@ -404,9 +426,8 @@ fetch_wp_cli_phar() {
 	sum=$(manifest_get '.software_versions.wp_cli.sha256')
 	{ [ -n "$ver" ] && [ "$ver" != "null" ] && [ -n "$sum" ] && [ "$sum" != "null" ]; } || return 1
 	tmp=$(mktemp -t wp-cli.XXXXXX.phar) || return 1
-	if ! wget "https://github.com/wp-cli/wp-cli/releases/download/v${ver}/wp-cli-${ver}.phar" \
-		--timeout=30 --tries=3 --retry-connrefused --quiet -O "$tmp" \
-		|| [ ! -s "$tmp" ] \
+	if ! fetch_release_asset wp-cli \
+		"https://github.com/wp-cli/wp-cli/releases/download/v${ver}/wp-cli-${ver}.phar" "$tmp" \
 		|| ! echo "$sum  $tmp" | sha256sum -c --quiet - 2> /dev/null; then
 		rm -f "$tmp"
 		return 1
@@ -1475,6 +1496,24 @@ is_refresh_ipset_format_valid() {
 	fi
 }
 
+# Addresses and networks, both families (#894): the common deny list rejects colon and slash, so
+# nothing v6 could ever be stored. An empty list is legal - switching the feature off writes one.
+is_ip_list_format_valid() {
+	local list="$1" name="${2-ip list}" entry
+	local -a entries
+	is_no_new_line_format "$list"
+	[ ${#list} -lt 400 ] || check_result "$E_INVALID" "invalid $name format :: $list"
+	IFS=',' read -ra entries <<< "$list"
+	for entry in "${entries[@]}"; do
+		# OUTER whitespace only, like the panel: stripping inner spaces would accept
+		# "192.168.1. 0/24", store it, and the matcher could never hit it
+		entry="${entry#"${entry%%[![:space:]]*}"}"
+		entry="${entry%"${entry##*[![:space:]]}"}"
+		[ -z "$entry" ] && continue
+		is_ip_cidr_format_valid "$entry" "$name"
+	done
+}
+
 # Common format validator
 is_common_format_valid() {
 	# Deny list: the `|` are literal members, not separators. Dropping them drops | too (#661).
@@ -1838,6 +1877,23 @@ is_object_format_valid() {
 	fi
 }
 
+# A remote host: a name OR a bare address - the name form has no colon (#893).
+is_host46_format_valid() {
+	case "$1" in
+		*:*) is_ipv6_format_valid "$1" "${2-host}" ;;
+		*) is_object_format_valid "$1" "${2-host}" ;;
+	esac
+}
+
+# A host for a URL or an ssh-style host:path: a v6 literal needs brackets, or its colons read as
+# the port separator. NOT for expect (Tcl) or the ftp client - see include/backup.sh.
+url_host() {
+	case "$1" in
+		*:*) echo "[$1]" ;;
+		*) echo "$1" ;;
+	esac
+}
+
 # Role validator
 is_role_valid() {
 	if ! [[ "$1" =~ ^admin$|^user$ ]]; then
@@ -1944,6 +2000,7 @@ is_format_valid() {
 				ftp_user) is_user_format_valid "$arg" "$arg_name" ;;
 				hash) is_hash_format_valid "$arg" "$arg_name" ;;
 				host) is_object_format_valid "$arg" "$arg_name" ;;
+				host46) is_host46_format_valid "$arg" "$arg_name" ;;
 				hour) is_cron_format_valid "$arg" $arg_name ;;
 				id) is_id_format_valid "$arg" 'id' ;;
 				iface) is_interface_format_valid "$arg" ;;

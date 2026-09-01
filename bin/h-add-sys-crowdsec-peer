@@ -27,6 +27,8 @@ source /etc/hestia/hestia.env
 source $HESTIA/include/main.sh
 # shellcheck source=/usr/local/hestia/include/crowdsec-mesh.sh
 source $HESTIA/include/crowdsec-mesh.sh
+# shellcheck source=/usr/local/hestia/include/ip.sh
+source $HESTIA/include/ip.sh
 # load config file
 source_conf "$HESTIA/conf/hestia.conf"
 
@@ -81,10 +83,20 @@ port="${port:-${BACKEND_PORT:-8083}}"
 	echo "ERROR: invalid port."
 	exit "$E_INVALID"
 }
-[[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,253}$ ]] || {
+# A v6 literal has colons, the name form has none. Canonicalised, or two spellings become two peers.
+if [[ "$host" == *:* ]]; then
+	(is_ipv6_format_valid "$host" 'host') > /dev/null 2>&1 || {
+		echo "ERROR: invalid host."
+		exit "$E_INVALID"
+	}
+	host=$(ip6_canonical "$host") || {
+		echo "ERROR: cannot canonicalise the v6 host - the panel php backend did not answer."
+		exit "$E_INVALID"
+	}
+elif ! [[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,253}$ ]]; then
 	echo "ERROR: invalid host."
 	exit "$E_INVALID"
-}
+fi
 
 peer=$(mesh_peer_id "$host")
 [ -n "$peer" ] || {
@@ -96,19 +108,28 @@ if [ -f "$MESH_PEERS_CONF" ] && grep -q "^PEER='$peer'" "$MESH_PEERS_CONF"; then
 	exit "$E_EXISTS"
 fi
 
-# The peer calls back during pairing to record OUR pin, so it must reach us by IP.
-peer_ip=$(getent ahostsv4 "$host" 2> /dev/null | awk '{print $1; exit}')
-[ -n "$peer_ip" ] || {
-	echo "ERROR: cannot resolve $host to an IPv4 address."
+# The peer calls back to record OUR pin, so every address it can arrive from gets a rule: a name
+# resolves in BOTH families (a v6-only peer has no A record), a literal needs no lookup.
+if [[ "$host" == *:* ]] || [[ "$host" =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then
+	peer_ips="$host"
+else
+	peer_ips=$(getent ahosts "$host" 2> /dev/null | awk '$1 !~ /^fe80:/ {print $1}' | sort -u | tr '\n' ' ')
+fi
+peer_ips=${peer_ips% }
+[ -n "$peer_ips" ] || {
+	echo "ERROR: cannot resolve $host to an address."
 	exit "$E_CONNECT"
 }
+# Comma form. Read only by the three output formats of h-list-sys-crowdsec-peers, which print it
+# as it stands - nothing parses it as a single address.
+peer_ip="${peer_ips// /,}"
 
 #----------------------------------------------------------#
 #                       Action                             #
 #----------------------------------------------------------#
 
 # 1) Let the peer in first: it connects back for our TLS pin, and later pulls on the same port.
-mesh_fw_open "$peer_ip" "$peer" && fw_added=1
+mesh_fw_open "$peer_ips" "$peer" && fw_added=1
 
 # 2) Pin first, then pair against that pin - even the handshake carrying the code is key-bound.
 pin=$(mesh_spki_pin "$host" "$port") || fail "cannot read the TLS key of $host:$port (reachable? panel up?)" "$E_CONNECT"
@@ -126,14 +147,14 @@ reply=$(mktemp)
 chmod 600 "$reply"
 http=$(curl -sS -k --pinnedpubkey "sha256//$pin" --max-time 30 --max-filesize 65536 \
 	-o "$reply" -w '%{http_code}' -H 'Content-Type: application/json' \
-	--data "@$payload" "https://$host:$port/mesh-pair.php" 2> /dev/null)
+	--data "@$payload" "https://$(url_host "$host"):$port/mesh-pair.php" 2> /dev/null)
 rm -f "$payload"
 
 case "$http" in
 	200) ;;
 	404) fail "$host:$port has no open pairing window. Run h-generate-sys-crowdsec-pairing there." "$E_NOTEXIST" ;;
 	403) fail "$host:$port rejected the pairing code (wrong, used or expired)." "$E_PASSWORD" ;;
-	*) fail "pairing call to $host:$port failed (HTTP ${http:-none})." "$E_CONNECT" ;;
+	*) fail "pairing call to $(url_host "$host"):$port failed (HTTP ${http:-none})." "$E_CONNECT" ;;
 esac
 
 pull_token=$(jq -r '.token // empty' "$reply" 2> /dev/null)
@@ -155,7 +176,7 @@ echo "$str" >> "$MESH_PEERS_CONF"
 mesh_stage_serve
 $BIN/h-update-crowdsec-mesh > /dev/null 2>&1 || true
 
-echo "Paired with $peer ($host:$peer_port)."
+echo "Paired with $peer ($(url_host "$host"):$peer_port)."
 
 #----------------------------------------------------------#
 #                       Hestia                             #

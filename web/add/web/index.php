@@ -136,12 +136,14 @@ if (!empty($_SESSION["PROXY_SYSTEM"])) {
 		: $user_config[$user_plain]["PROXY_TEMPLATE"];
 }
 
-// List IP addresses - v4 only for the select: the v6 side auto-assigns in
-// h-add-web-domain (#602), and h-add-web-domain's ip argument is v4-validated.
-// On a v6-only box this select renders EMPTY while the CLI falls back to the v6
-// correctly - the form's v6-only face is stage-4 territory (#892).
+// List IP addresses - v4 where the box has one: the v6 side auto-assigns in h-add-web-domain
+// (#602). A v6-only box has nothing else to offer, so the v6 list becomes the select and the
+// command sorts that address into IP6 (#892).
 $ips = cli_json("h-list-user-ips " . $user . " json");
-$ips = array_filter($ips, fn($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
+$ips_v4 = array_filter($ips, fn ($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
+$ips = $ips_v4 ?: $ips;
+// ... and the label follows the list: a v6-only box would otherwise offer v6 under "IP Address"
+$ip_label = $ips_v4 ? _("IP Address") : _("IPv6 Address");
 
 // Get all user domains
 $user_domains = array_keys(cli_json("h-list-web-domains " . $user . " json"));

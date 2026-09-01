@@ -47,7 +47,7 @@
 	<form
 		x-data="{
 			loginDisabled: <?= tohtml($v_login_disabled === "yes" ? "true" : "false") ?>,
-			useIpAllowList: <?= tohtml($v_login_use_iplist === "yes" ? "true" : "false") ?>,
+			useIpAllowList: <?= tohtml(trim((string) $v_login_use_iplist, " '") === "yes" ? "true" : "false") ?>,
 			fileManager: <?= tohtml($v_file_manager === "yes" ? "true" : "false") ?>,
 			dockerEnabled: <?= tohtml(!empty($v_docker_ip) ? "true" : "false") ?>,
 			showAdvanced: false,
@@ -137,7 +137,7 @@
 					</div>
 				</div>
 				<div x-cloak x-show="useIpAllowList" id="ip-allowlist" class="u-mt10">
-					<input type="text" class="form-control" name="v_login_allowed_ips" value="<?= tohtml(trim($v_login_allowed_ips, "'")) ?>" placeholder="<?= tohtml(_("For example")) ?>: 127.0.0.1,192.168.1.100">
+					<input type="text" class="form-control" name="v_login_allowed_ips" value="<?= tohtml(trim($v_login_allowed_ips, "'")) ?>" placeholder="<?= tohtml(_("For example")) ?>: 127.0.0.1,192.168.1.0/24,2001:db8::/64">
 				</div>
 			</div>
 			<div class="u-mb10">

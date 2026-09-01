@@ -948,6 +948,7 @@ remote_file_present() {
 			;;
 		rclone)
 			if [ -z "$BPATH" ]; then
+				# $HOST is an rclone REMOTE name from rclone.conf, never an address - nothing to bracket
 				_l=$(rclone lsf "$HOST:" 2> /dev/null | cut -d' ' -f1)
 			else
 				_l=$(rclone lsf "$HOST:$BPATH" 2> /dev/null | cut -d' ' -f1)
@@ -969,6 +970,8 @@ backup_download_norm() {
 
 # FTP Functions
 # /usr/bin/ftp exits 0 even when it cannot connect, so failure is read from the output.
+# Host and port are separate arguments, so a v6 goes in BARE - with brackets the client looks up
+# "[:" (measured). restic composes nothing from $HOST: its repository string is configured whole.
 ftpc() {
 	/usr/bin/ftp -np $HOST $PORT << EOF
     quote USER $USERNAME
@@ -1331,12 +1334,18 @@ restic_dump_dir() { echo "$HOMEDIR/$1/.dumps"; }
 # SFTP Functions
 # The rc fallback belongs at the END: eof also arrives after the regular exit.
 sftpc() {
+	# sftp reads host:path, so a v6 needs brackets - ESCAPED, because the script below is Tcl and a
+	# bare [ starts a command substitution. Not url_host: this quoting is expect's, not a URL's.
+	local sftp_host="$HOST"
+	case "$HOST" in
+		*:*) sftp_host="\\[$HOST\\]" ;;
+	esac
 	if [ "$PRIVATEKEY" != "yes" ]; then
 		expect -f "-" "$@" << EOF
             set timeout 60
             set count 0
             spawn /usr/bin/sftp -o StrictHostKeyChecking=no \
-                -o Port=$PORT $USERNAME@$HOST
+                -o Port=$PORT $USERNAME@$sftp_host
             expect {
                 -nocase "password:" {
                     send "$PASSWORD\r"
@@ -1401,7 +1410,7 @@ EOF
             set timeout 60
             set count 0
             spawn /usr/bin/sftp -o StrictHostKeyChecking=no \
-                -o Port=$PORT -i $PASSWORD $USERNAME@$HOST
+                -o Port=$PORT -i $PASSWORD $USERNAME@$sftp_host
             expect {
                 -nocase "password:" {
                     send "$PASSWORD\r"
