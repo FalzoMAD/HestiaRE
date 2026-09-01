@@ -103,7 +103,7 @@
 						$ip_selected = !empty($v_ip6) && ($ip == $v_ip6 || $v_ip6 == "'{$ip}'") ? "selected" : "";
 						echo "\n\t\t\t\t\t<option value=\"" . htmlentities($ip) . "\" {$ip_selected}>" . htmlentities($ip) . "</option>\n";
 					}
-					?>
+				?>
 				</select>
 			</div>
 			<?php } ?>

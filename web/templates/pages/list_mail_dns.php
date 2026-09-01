@@ -33,15 +33,15 @@ if (!empty($_SESSION["WEBMAIL_ALIAS"])) {
 		// v6 to the A row (lexicographic order). Each row renders only for its own family - an
 		// A record cannot carry a v6, so a box without v4 gets the AAAA row alone.
 		$first_v4 = "";
-		$first_v6 = "";
-		foreach ($ips as $k => $v) {
-			if (str_contains($k, ":")) {
-				$first_v6 = $first_v6 ?: $k;
-			} else {
-				$first_v4 = $first_v4 ?: (empty($v["NAT"]) ? $k : $v["NAT"]);
-			}
-		}
-		?>
+$first_v6 = "";
+foreach ($ips as $k => $v) {
+	if (str_contains($k, ":")) {
+		$first_v6 = $first_v6 ?: $k;
+	} else {
+		$first_v4 = $first_v4 ?: (empty($v["NAT"]) ? $k : $v["NAT"]);
+	}
+}
+?>
 		<?php if ($first_v4 !== "") { ?>
 		<div class="units-table-row js-unit">
 			<div class="units-table-cell">
@@ -175,9 +175,9 @@ if (!empty($_SESSION["WEBMAIL_ALIAS"])) {
 			<div class="units-table-cell u-text-center-desktop">
 				<label class="u-hide-desktop u-text-bold"><?= tohtml(_("IP or Value")) ?>:</label>
 				<?php
-				// Both families in ONE record (#891): exim sends from whichever family the
-				// receiving MX offers, so an SPF naming only one would fail the other's mail.
-				$spf_parts = "v=spf1 a mx";
+		// Both families in ONE record (#891): exim sends from whichever family the
+		// receiving MX offers, so an SPF naming only one would fail the other's mail.
+		$spf_parts = "v=spf1 a mx";
 if ($first_v4 !== "") {
 	$spf_parts .= " ip4:" . $first_v4;
 }

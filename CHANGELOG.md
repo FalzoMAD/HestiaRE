@@ -14,6 +14,24 @@ opens above it.
 
 ### Added
 
+- **A session survives the address rotation it did not ask for** (#894, spin-off from #602). An
+  IPv6 client changes its address on its own - privacy extensions rotate the interface identifier
+  inside the client's own /64 - and the panel compared the exact address, so an admin was thrown
+  out mid-session for something the client did by itself. A v6 session is now pinned to that /64,
+  v4 stays exact, and the trade is written where it is made: someone inside the client's own /64
+  could carry a stolen cookie, which is why `DISABLE_IP_CHECK` remains the other end of the scale.
+  The login allow list (`LOGIN_ALLOW_IPS`) takes CIDR in both families instead of exact strings,
+  which could never hold a rotating client; a bare address still means the host itself, and the
+  families do not cross - `0.0.0.0/0` never covers a v6 client. An entry that does not parse is
+  refused where it is entered (the panel for the message, the CLI as the authority, where the key
+  needed its own validator: the common deny list rejects the colon and the slash outright, so no
+  v6 address and no network could ever be stored). Found on the way and fixed: the panel saved the
+  list only when the SWITCH changed, so editing just the addresses was silently discarded.
+  Measured between two boxes: logged in from one v6 address, the session survives a second address
+  in the same /64 and is destroyed from a different /64; the allow list matches a v6 /64, an exact
+  v6, and a mixed list, and refuses a foreign /64 and a v4-only network for a v6 client - with the
+  v4 side unchanged and now able to take a network too.
+
 - **Three guards for the family lage, and the structure written down** (#602, stage 6). An IP
   object's fields have to match its family: a v6 keeps a PREFIX LENGTH in `NETMASK` and never a
   `NAT` address - the guard reads the objects themselves and an empty set fails rather than passes.

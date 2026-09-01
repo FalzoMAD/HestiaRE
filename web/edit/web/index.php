@@ -239,8 +239,8 @@ $v_date = $data[$v_domain]["DATE"];
 // the v6 select h-change-web-domain-ip6 - a mixed list would hand one family's command
 // the other family's address
 $ips = cli_json("h-list-user-ips " . $user . " json");
-$ips_v4 = array_filter($ips, fn($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
-$ips_v6 = array_filter($ips, fn($k) => str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
+$ips_v4 = array_filter($ips, fn ($k) => !str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
+$ips_v6 = array_filter($ips, fn ($k) => str_contains($k, ":"), ARRAY_FILTER_USE_KEY);
 $v_ip6 = $data[$v_domain]["IP6"] ?? "";
 // One gate per family for the view and the POST: a select with no options (a v6-only box has no
 // v4 to offer) submits no key at all, and an unoffered control must keep the stored value instead
