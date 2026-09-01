@@ -1503,11 +1503,15 @@ is_refresh_ipset_format_valid() {
 # this side is the authority.
 is_ip_list_format_valid() {
 	local list="$1" name="${2-ip list}" entry
+	local -a entries
 	is_no_new_line_format "$list"
 	[ ${#list} -lt 400 ] || check_result "$E_INVALID" "invalid $name format :: $list"
-	IFS=',' read -ra _ip_list_entries <<< "$list"
-	for entry in "${_ip_list_entries[@]}"; do
-		entry="${entry// /}"
+	IFS=',' read -ra entries <<< "$list"
+	for entry in "${entries[@]}"; do
+		# OUTER whitespace only, exactly like the panel's trim(): stripping inner spaces too would
+		# accept "192.168.1. 0/24" here and store it, and the matcher could never hit it again.
+		entry="${entry#"${entry%%[![:space:]]*}"}"
+		entry="${entry%"${entry##*[![:space:]]}"}"
 		[ -z "$entry" ] && continue
 		is_ip_cidr_format_valid "$entry" "$name"
 	done

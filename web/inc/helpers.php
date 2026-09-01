@@ -298,6 +298,27 @@ function private_tmpdir()
 }
 
 /**
+ * An IPv4-mapped IPv6 address (::ffff:1.2.3.4) IS a v4 client, and nothing downstream should have
+ * to know that form: the first 8 bytes of a mapped address are all zero, so its /64 would pin
+ * EVERY v4 client to one key, and a 16-byte mapped client can never match a 4-byte v4 network.
+ * Only the ffff prefix is reduced - the deprecated IPv4-compatible form starts with twelve zero
+ * bytes, which ::1 does as well, and that must not become 0.0.0.1. A mapped NETWORK in a list
+ * (::ffff:203.0.113.0/120) is not translated but refused at input: its prefix would have to be
+ * shifted by 96, and nobody writes an allow list that way.
+ */
+function ip_unmap(string $ip): string
+{
+	$bin = @inet_pton($ip);
+	if ($bin !== false && strlen($bin) === 16 && str_starts_with($bin, str_repeat("\0", 10) . "\xff\xff")) {
+		$v4 = @inet_ntop(substr($bin, 12));
+		if ($v4 !== false) {
+			return $v4;
+		}
+	}
+	return $ip;
+}
+
+/**
  * The identity a session is pinned to. An IPv6 client rotates its address on its own (privacy
  * extensions) WITHIN its /64, so a v6 session is pinned to that prefix - comparing the exact
  * address logs the admin out mid-session for a change the client made by itself. The trade is
@@ -306,9 +327,12 @@ function private_tmpdir()
  */
 function session_ip_key(string $ip): string
 {
-	$bin = @inet_pton($ip);
+	// the unmapped form is what the key is built from AND what a v4 client is compared by, or the
+	// same client would get two keys depending on how it happened to arrive
+	$plain = ip_unmap($ip);
+	$bin = @inet_pton($plain);
 	if ($bin === false || strlen($bin) !== 16) {
-		return $ip;
+		return $plain;
 	}
 	return "v6/64:" . bin2hex(substr($bin, 0, 8));
 }
@@ -333,8 +357,8 @@ function ip_in_cidr(string $ip, string $cidr): bool
 		}
 		$bits = (int) $suffix;
 	}
-	$a = @inet_pton($ip);
-	$b = @inet_pton($net);
+	$a = @inet_pton(ip_unmap($ip));
+	$b = @inet_pton(ip_unmap($net));
 	if ($a === false || $b === false || strlen($a) !== strlen($b)) {
 		return false;
 	}
@@ -387,7 +411,7 @@ function ip_list_invalid(string $list): array
 		if (str_contains($entry, "/")) {
 			[$net, $suffix] = explode("/", $entry, 2);
 		}
-		$bin = @inet_pton($net);
+		$bin = @inet_pton(ip_unmap($net));
 		if ($bin === false) {
 			$bad[] = $entry;
 			continue;
