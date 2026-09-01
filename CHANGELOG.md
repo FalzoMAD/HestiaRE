@@ -14,6 +14,29 @@ opens above it.
 
 ### Added
 
+- **The addons follow the second family** (#893, part of #602). A host that is a bare v6 address
+  needs brackets wherever a colon already means something, and each place means something else:
+  `openssl s_client -connect` and the mesh pull URL take `[addr]:port` (one helper, `url_host`),
+  sftp needs them because it parses `host:path` - but inside `expect` they must be ESCAPED, since
+  that script is Tcl and a bare `[` starts a command substitution ("invalid command name
+  2a01:..."). The ftp client is the opposite case: host and port are separate arguments there, and
+  brackets make it look up `[:` - measured, and said in the code so the next reader does not
+  "fix" it. A new `host46` validator lets a v6 literal be a backup host or a mesh peer at all.
+  Mesh pairing is family-open on both sides now: the accepting side takes the source address it
+  really saw, the initiating side resolves BOTH families and opens a firewall rule per address -
+  a dual-stack peer calls back over v6, where a rule for the other family would simply not match.
+  The peer's host is validated on the CLI side too, which is the authority, and a v6 is
+  canonicalised at the door so two spellings cannot become two peers. Blocklist.de turns out to be
+  a MIXED list (~29400 v4 and ~340 v6 addresses), so it is offered for both families - the loader
+  already filtered by version. Measured between the dual-stack and the v6-only box: pairing over
+  v6 with a bare literal, records and firewall rules on both sides, the decision pull through the
+  bracketed URL against the pin that `s_client` fetched over v6; a banned v6 client gets 403 from
+  the L7 bouncer and 200 again once the ban TTL passes (the LAPI takes raw colons in the query,
+  so the Lua bouncer needed no change); sftp to a v6 literal reaches the password prompt exactly
+  like the v4 control. Two deliberate v4 decisions are now written down where someone would go
+  looking: the docker /24 model on the loopback, and proftpd, which is dual-stack without a
+  directive while `MasqueradeAddress` can never hold a v6.
+
 - **A v6-only box installs itself** (#892, part of #602). github.com has no AAAA, so the
   bootstrap had no way in at all: `install.sh` and `h-update-hestia` now retry the release API
   and the release asset through the mirror (`dl.hestiare.com/api` and `/raw`, the same repo)
